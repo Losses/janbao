@@ -36,6 +36,27 @@ export default defineConfig(
 	{
 		// Override or add rule settings here, such as:
 		// 'svelte/button-has-type': 'error'
-		rules: {}
+		rules: {
+			'@typescript-eslint/no-explicit-any': 'error',
+			'no-restricted-syntax': [
+				'error',
+				{
+					selector: 'TSAsExpression[typeAnnotation.type="TSAnyKeyword"]',
+					message: 'Do not use "as any" assertions.'
+				},
+				{
+					selector: 'TSAsExpression[typeAnnotation.type="TSUnknownKeyword"]',
+					message: 'Do not use "as unknown" assertions.'
+				},
+				{
+					selector: 'TSTypeAssertion[typeAnnotation.type="TSAnyKeyword"]',
+					message: 'Do not use "<any>" type assertions.'
+				},
+				{
+					selector: 'TSTypeAssertion[typeAnnotation.type="TSUnknownKeyword"]',
+					message: 'Do not use "<unknown>" type assertions.'
+				}
+			]
+		}
 	}
 );
