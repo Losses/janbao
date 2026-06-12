@@ -72,3 +72,24 @@ All components and server-side code have been built strictly under typescript co
 ---
 
 ## 4. Audit & Quality History
+
+### Audit Round 1 — 2026-06-12
+
+**Method:** 5 independent full-scope audit agents dispatched in parallel. Each agent read all specification documents and all 27+ C03 code files, producing independent PASS/FAIL/WARN assessments across 13 audit categories.
+
+**Consensus FAIL Items Found: 4**
+| ID | Description | Resolution |
+|----|-------------|------------|
+| F-01 | Discussion ID-only redirect missing `isNull(deletedAt)` filter | Fixed: added `and(eq(...), isNull(...))` to where clause |
+| F-02 | Bookmarks POST discussion existence check missing `isNull(deletedAt)` | Fixed: added `and(eq(...), isNull(...))` to where clause |
+| F-03 | RSS `<atom:link>` self-reference exposed user token in XML body | Fixed: removed token from self-link URL |
+| F-04 | RSS site name hardcoded instead of using `PUBLIC_SITE_NAME` env | Fixed: replaced with `getSiteName()` utility |
+
+**Consensus WARN Items Fixed: 1**
+| ID | Description | Resolution |
+|----|-------------|------------|
+| W-01 | LexicalRenderer renders image/link URLs without protocol validation | Fixed: added `safeUrl()` enforcing `http://`/`https://` only |
+
+**Verification:** `bun run check` = 0 errors/0 warnings; `bun run lint` = clean; `any` grep = zero hits.
+
+**Full Report:** [RV00-C03-Audit-01.md](file:///home/losses/Development/janbao/docs/RV00-C03-Audit-01.md)

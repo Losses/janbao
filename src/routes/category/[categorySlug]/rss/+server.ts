@@ -1,6 +1,7 @@
 import type { RequestHandler } from './$types';
 import { categories, categoryPermissions, discussions, users } from '$lib/server/db/schema';
 import { and, eq, isNull, desc } from 'drizzle-orm';
+import { getSiteName } from '$lib/utils/title';
 
 export const GET: RequestHandler = async (event) => {
 	const { categorySlug } = event.params;
@@ -60,7 +61,7 @@ export const GET: RequestHandler = async (event) => {
 		.orderBy(desc(discussions.createdAt))
 		.limit(20);
 
-	const siteName = 'Janbao';
+	const siteName = getSiteName();
 	const host = event.url.host;
 	const protocol = event.url.protocol;
 	const siteUrl = `${protocol}//${host}`;
@@ -100,7 +101,7 @@ export const GET: RequestHandler = async (event) => {
     <title>${escapedCatTitle} - ${siteName}</title>
     <link>${siteUrl}/category/${categorySlug}</link>
     <description>${escapedCatDesc}</description>
-    <atom:link href="${siteUrl}/category/${categorySlug}/rss?token=${token}" rel="self" type="application/rss+xml" />
+    <atom:link href="${siteUrl}/category/${categorySlug}/rss" rel="self" type="application/rss+xml" />
 ${itemsXml}
   </channel>
 </rss>`;

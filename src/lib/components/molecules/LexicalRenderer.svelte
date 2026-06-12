@@ -25,6 +25,13 @@
 
 	let { contentJson = null, class: className = '' }: LexicalRendererProps = $props();
 
+	/** Defense-in-depth: only allow http/https URLs to prevent Stored XSS */
+	function safeUrl(url: string | undefined): string {
+		if (!url) return '';
+		if (url.startsWith('http://') || url.startsWith('https://')) return url;
+		return '';
+	}
+
 	const rootNode = $derived.by(() => {
 		if (!contentJson) return null;
 		try {
@@ -147,7 +154,7 @@
 			</li>
 		{:else if node.type === 'link' || node.type === 'autolink'}
 			<a
-				href={node.url}
+				href={safeUrl(node.url)}
 				target={node.url?.startsWith('http') ? '_blank' : undefined}
 				rel="noopener noreferrer"
 				class="text-primary hover:underline hover:text-primary-focus transition-colors"
@@ -159,12 +166,14 @@
 				{/if}
 			</a>
 		{:else if node.type === 'image'}
-			<img
-				src={node.src}
-				alt={node.altText || 'Image'}
-				class="max-w-full my-3 rounded-lg border border-base-300 shadow-sm"
-				loading="lazy"
-			/>
+			{#if safeUrl(node.src)}
+				<img
+					src={safeUrl(node.src)}
+					alt={node.altText || 'Image'}
+					class="max-w-full my-3 rounded-lg border border-base-300 shadow-sm"
+					loading="lazy"
+				/>
+			{/if}
 		{:else if node.children}
 			{#each node.children as child, i (i)}
 				{@render renderNode(child)}

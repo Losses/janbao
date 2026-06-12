@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { bookmarks, discussions } from '$lib/server/db/schema';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 export const POST: RequestHandler = async (event) => {
 	const user = event.locals.user;
@@ -16,11 +16,11 @@ export const POST: RequestHandler = async (event) => {
 
 	const db = event.locals.db;
 
-	// Check if discussion exists
+	// Check if discussion exists and is not soft-deleted
 	const discussionExists = await db
 		.select()
 		.from(discussions)
-		.where(eq(discussions.id, discussionId))
+		.where(and(eq(discussions.id, discussionId), isNull(discussions.deletedAt)))
 		.limit(1);
 
 	if (discussionExists.length === 0) {

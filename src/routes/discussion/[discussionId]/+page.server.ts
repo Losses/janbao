@@ -1,7 +1,7 @@
 import { redirect, error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { discussions } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const { discussionId } = params;
@@ -10,7 +10,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const record = await db
 		.select({ slug: discussions.slug })
 		.from(discussions)
-		.where(eq(discussions.id, discussionId))
+		.where(and(eq(discussions.id, discussionId), isNull(discussions.deletedAt)))
 		.limit(1);
 
 	if (record.length === 0) {
