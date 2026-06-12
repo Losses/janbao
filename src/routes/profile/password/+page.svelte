@@ -75,7 +75,7 @@
 			<UserInfoBlock {user} {t} />
 			<div class="divider my-1"></div>
 			<ul class="menu menu-sm w-full gap-1">
-				<li><a href="/profile/{user.id}/{userSlug}">{profileT.dynamics}</a></li>
+				<li><a href="/profile/{user.id}/{userSlug}">{profileT.activities}</a></li>
 				<li><a href="/notifications">{profileT.notifications}</a></li>
 				<li><a href="/profile/invitations">{profileT.invitations}</a></li>
 				<li><a href="/messages/inbox">{profileT.mailbox}</a></li>
