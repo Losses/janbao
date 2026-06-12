@@ -38,6 +38,7 @@ export default defineConfig(
 		// 'svelte/button-has-type': 'error'
 		rules: {
 			'@typescript-eslint/no-explicit-any': 'error',
+				'@typescript-eslint/consistent-type-definitions': ['error', 'interface'],
 			'svelte/no-navigation-without-resolve': 'off',
 			'no-restricted-syntax': [
 				'error',
@@ -56,6 +57,20 @@ export default defineConfig(
 				{
 					selector: 'TSTypeAssertion[typeAnnotation.type="TSUnknownKeyword"]',
 					message: 'Do not use "<unknown>" type assertions.'
+				},
+				{
+					selector: 'TSTypeAnnotation > TSTypeLiteral',
+					message:
+						'Do not use inline object type literals. Extract to a named type or interface.'
+				},
+				{
+					selector: 'TSTypeAnnotation > TSFunctionType',
+					message:
+						'Do not use inline function type literals. Extract to a named type.'
+				},
+				{
+					selector: 'TSTypeAnnotation > TSTupleType',
+					message: 'Do not use inline tuple types. Extract to a named type.'
 				}
 			]
 		}
