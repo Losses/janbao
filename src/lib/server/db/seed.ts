@@ -4,7 +4,7 @@ import type { getDb } from './index';
 
 let seeded = false;
 
-export async function seedCore(db: ReturnType<typeof getDb>) {
+export async function seedCore(db: ReturnType<typeof getDb>, env?: App.Platform['env']) {
 	if (seeded) return;
 
 	try {
@@ -67,8 +67,26 @@ export async function seedCore(db: ReturnType<typeof getDb>) {
 				displayName: 'System',
 				groupSlug: 'system',
 				isStealth: true,
-				rssToken: 'system-rss-token-value'
+				rssToken: crypto.randomUUID()
 			});
+		}
+
+		// 3. Bootstrap admin user from environment variables if no users exist
+		const adminEmail = env?.ADMIN_EMAIL;
+		const adminPassword = env?.ADMIN_PASSWORD;
+		if (adminEmail && adminPassword) {
+			const allUsers = await db.select({ id: users.id }).from(users).limit(1);
+			if (allUsers.length === 0) {
+				const { hashPassword } = await import('$lib/server/auth');
+				const adminPasswordHash = await hashPassword(adminPassword);
+				await db.insert(users).values({
+					username: 'admin',
+					email: adminEmail,
+					passwordHash: adminPasswordHash,
+					displayName: 'Administrator',
+					groupSlug: 'admin'
+				});
+			}
 		}
 
 		seeded = true;

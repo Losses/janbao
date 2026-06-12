@@ -8,13 +8,13 @@
 
 ## 1. Audit Summary
 
-| Agent | Focus Area | Verdict |
-|-------|-----------|---------|
-| Agent 1 | Database Schema & Seeding | FAIL |
-| Agent 2 | Authentication, Cryptography & Security | FAIL |
-| Agent 3 | i18n System, Hooks Middleware & Type Definitions | FAIL |
-| Agent 4 | Frontend Views, Layout Templates & Entry Routes | FAIL |
-| Agent 5 | Project Configuration, ESLint & Code Quality | FAIL |
+| Agent   | Focus Area                                       | Verdict |
+| ------- | ------------------------------------------------ | ------- |
+| Agent 1 | Database Schema & Seeding                        | FAIL    |
+| Agent 2 | Authentication, Cryptography & Security          | FAIL    |
+| Agent 3 | i18n System, Hooks Middleware & Type Definitions | FAIL    |
+| Agent 4 | Frontend Views, Layout Templates & Entry Routes  | FAIL    |
+| Agent 5 | Project Configuration, ESLint & Code Quality     | FAIL    |
 
 **Overall Verdict: FAIL** - 9 Critical/Major defects identified requiring code changes.
 
@@ -112,18 +112,23 @@ The registration form's "Display Name" field uses a hardcoded string with no tra
 ## 4. Minor Defects
 
 ### m1. System user seeded with predictable rssToken (Agent 1)
+
 - `src/lib/server/db/seed.ts:71` - Uses `'system-rss-token-value'` instead of `crypto.randomUUID()`.
 
 ### m2. Journal references non-existent index names (Agent 5)
+
 - `docs/DV00-C01-Journal.md:16` - References `unique_read_idx` and `unread_notifications_idx` which do not exist in the schema.
 
 ### m3. `resolveLang` ignores Accept-Language quality values (Agent 3)
+
 - `src/lib/server/i18n.ts:22-25` - Does not respect `q` values in locale preferences.
 
 ### m4. Login timing attack - no dummy hash for nonexistent users (Agent 2)
+
 - `src/routes/api/auth/login/+server.ts` - PBKDF2 only runs for existing users, creating a timing side-channel.
 
 ### m5. Unused `signoutBtn` i18n key (Agent 4)
+
 - `src/lib/i18n/en.json:22` - Key defined but never referenced in code.
 
 ---
@@ -143,14 +148,14 @@ These are spec requirements not yet implemented but outside Cycle 1 scope:
 
 ## 6. Resolution Plan
 
-| ID | Fix Description | Files Changed |
-|----|----------------|---------------|
-| C1 | Add `exp` claim to JWT tokens | `auth.ts`, `register/+server.ts`, `login/+server.ts` |
-| C2 | Extract JWT_SECRET to shared utility with warning | New `constants.ts`, 3 files updated |
-| C3 | Add admin user bootstrap to seed script | `seed.ts`, `app.d.ts` |
-| C4 | Conditional `secure` cookie flag | `register/+server.ts`, `login/+server.ts` |
-| M1 | Move uniqueness check into transaction | `register/+server.ts` |
-| M2 | Support rememberMe in registration cookie | `register/+server.ts` |
-| M3 | Replace hardcoded strings with i18n keys | 4 page files, 2 JSON files |
-| M4 | Fix color palette to use only permitted colors | 3 entry page files |
-| M5 | Add `auth.displayName` i18n key | 2 JSON files, register page |
+| ID  | Fix Description                                   | Files Changed                                        |
+| --- | ------------------------------------------------- | ---------------------------------------------------- |
+| C1  | Add `exp` claim to JWT tokens                     | `auth.ts`, `register/+server.ts`, `login/+server.ts` |
+| C2  | Extract JWT_SECRET to shared utility with warning | New `constants.ts`, 3 files updated                  |
+| C3  | Add admin user bootstrap to seed script           | `seed.ts`, `app.d.ts`                                |
+| C4  | Conditional `secure` cookie flag                  | `register/+server.ts`, `login/+server.ts`            |
+| M1  | Move uniqueness check into transaction            | `register/+server.ts`                                |
+| M2  | Support rememberMe in registration cookie         | `register/+server.ts`                                |
+| M3  | Replace hardcoded strings with i18n keys          | 4 page files, 2 JSON files                           |
+| M4  | Fix color palette to use only permitted colors    | 3 entry page files                                   |
+| M5  | Add `auth.displayName` i18n key                   | 2 JSON files, register page                          |

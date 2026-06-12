@@ -1,13 +1,15 @@
 import { users } from '$lib/server/db/schema';
-import { verifyPassword, signJwt } from '$lib/server/auth';
+import { verifyPassword, signJwt, createSessionToken } from '$lib/server/auth';
+import { getJwtSecret, getCookieSecure } from '$lib/server/constants';
 import { eq, or } from 'drizzle-orm';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import type { AuthLoginBody, SessionCookieOptions } from '$lib/types/api';
 
 export const POST: RequestHandler = async (event) => {
 	try {
 		const { db } = event.locals;
-		const body = await event.request.json();
+		const body = (await event.request.json()) as AuthLoginBody;
 		const { usernameOrEmail, password, rememberMe } = body;
 
 		if (!usernameOrEmail || !password) {
@@ -33,19 +35,17 @@ export const POST: RequestHandler = async (event) => {
 			return json({ error: 'Invalid credentials.' }, { status: 400 });
 		}
 
-		// Generate token
-		const jwtSecret = event.platform?.env?.JWT_SECRET || 'fallback-secret-key-for-local-dev-only';
-		const token = await signJwt(
-			{ sub: user.id, username: user.username, role: user.groupSlug },
-			jwtSecret
-		);
+		// Generate token with proper expiration
+		const jwtSecret = getJwtSecret(event.platform?.env);
+		const payload = createSessionToken(user.id, user.username, user.groupSlug, !!rememberMe);
+		const token = await signJwt(payload, jwtSecret);
 
 		// Set cookie session settings
-		const cookieOptions: import('@sveltejs/kit').CookieSerializeOptions = {
+		const cookieOptions: SessionCookieOptions = {
 			path: '/',
 			httpOnly: true,
 			sameSite: 'strict',
-			secure: true
+			secure: getCookieSecure(event.url)
 		};
 
 		if (rememberMe) {

@@ -1,3 +1,4 @@
+/// <reference types="@cloudflare/workers-types" />
 import type { getDb } from '$lib/server/db';
 import type en from '$lib/i18n/en.json';
 
@@ -30,6 +31,8 @@ declare global {
 			env: {
 				D1_DB: D1Database;
 				JWT_SECRET: string;
+				ADMIN_EMAIL?: string;
+				ADMIN_PASSWORD?: string;
 				MONTHLY_INVITATION_LIMIT?: string;
 			};
 		}

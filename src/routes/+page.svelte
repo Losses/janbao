@@ -14,7 +14,7 @@
 </script>
 
 <svelte:head>
-	<title>Home - Janbao</title>
+	<title>{t.home.title}</title>
 </svelte:head>
 
 {#snippet sidebar()}
@@ -39,7 +39,7 @@
 			</div>
 		{:else}
 			<div class="space-y-2">
-				<h3 class="font-semibold text-sm text-base-content/70">Welcome to Janbao</h3>
+				<h3 class="font-semibold text-sm text-base-content/70">{t.home.welcomeTo}</h3>
 				<div class="flex gap-2">
 					<a href="/entry/signin" class="btn btn-sm btn-primary flex-1">{t.nav.signin}</a>
 					<a href="/entry/register" class="btn btn-sm btn-outline flex-1">{t.nav.register}</a>
@@ -73,11 +73,11 @@
 					<h1 class="text-4xl font-extrabold text-neutral-content">{t.common.welcome}</h1>
 					<p class="py-6 text-base-content/85">
 						{#if user}
-							Logged in as <strong class="text-primary">{user.displayName}</strong> ({user.email}).
-							Last active: {new Date(user.lastActiveTime).toLocaleTimeString()}.
+							{t.home.loggedInAs}
+							<strong class="text-primary">{user.displayName}</strong> ({user.email}).
+							{t.home.lastActive}: {new Date(user.lastActiveTime).toLocaleTimeString()}.
 						{:else}
-							Welcome to the Janbao Forum System. Please sign in or register to participate in
-							discussions.
+							{t.home.guestPrompt}
 						{/if}
 					</p>
 				</div>

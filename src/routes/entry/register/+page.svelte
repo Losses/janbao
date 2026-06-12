@@ -2,6 +2,7 @@
 	import SingleColumnLayout from '$lib/components/templates/SingleColumnLayout.svelte';
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
+	import type { ApiResponse } from '$lib/types/api';
 
 	let { data } = $props<{ data: PageData }>();
 	const t = $derived(data.t);
@@ -15,24 +16,23 @@
 	let errorMessage = $state('');
 	let loading = $state(false);
 
-	// Client-side strength indicator: check if password length is at least 5
 	const isPasswordStrong = $derived(password.length >= 5);
 
 	async function handleSubmit(e: SubmitEvent) {
 		e.preventDefault();
 
 		if (!invitationCode || !username || !displayName || !email || !password || !confirmPassword) {
-			errorMessage = 'All fields are required.';
+			errorMessage = t.auth.fillAllFields;
 			return;
 		}
 
 		if (!isPasswordStrong) {
-			errorMessage = 'Password must be at least 5 characters long.';
+			errorMessage = t.auth.passwordTooShort;
 			return;
 		}
 
 		if (password !== confirmPassword) {
-			errorMessage = 'Passwords do not match.';
+			errorMessage = t.auth.passwordsMismatch;
 			return;
 		}
 
@@ -53,14 +53,14 @@
 				})
 			});
 
-			const result = await res.json();
+			const result = (await res.json()) as ApiResponse;
 			if (res.ok && result.success) {
 				await goto('/', { invalidateAll: true });
 			} else {
-				errorMessage = result.error || 'Registration failed.';
+				errorMessage = result.error || t.auth.registrationFailed;
 			}
 		} catch {
-			errorMessage = 'Network error. Please try again.';
+			errorMessage = t.auth.networkError;
 		} finally {
 			loading = false;
 		}
@@ -78,7 +78,7 @@
 
 	<form class="mt-8 space-y-4" onsubmit={handleSubmit}>
 		{#if errorMessage}
-			<div class="alert alert-error text-sm rounded-lg py-2">
+			<div class="alert alert-warning text-sm rounded-lg py-2">
 				<span>{errorMessage}</span>
 			</div>
 		{/if}
@@ -114,7 +114,7 @@
 
 			<div class="form-control">
 				<label class="label text-sm font-semibold" for="displayName">
-					<span class="label-text">Display Name</span>
+					<span class="label-text">{t.auth.displayName}</span>
 				</label>
 				<input
 					id="displayName"
@@ -122,7 +122,7 @@
 					required
 					bind:value={displayName}
 					class="input input-bordered w-full"
-					placeholder="Display Name"
+					placeholder={t.auth.displayName}
 				/>
 			</div>
 
@@ -152,12 +152,9 @@
 					class="input input-bordered w-full"
 					placeholder="••••••••"
 				/>
-				<!-- Password Strength Indicator -->
 				{#if password.length > 0}
-					<span class="text-xs mt-1 {isPasswordStrong ? 'text-success' : 'text-error'}">
-						{isPasswordStrong
-							? 'Password length meets requirements'
-							: 'Password must be at least 5 characters long'}
+					<span class="text-xs mt-1 {isPasswordStrong ? 'text-primary' : 'text-warning'}">
+						{isPasswordStrong ? t.auth.passwordStrengthOk : t.auth.passwordTooShort}
 					</span>
 				{/if}
 			</div>
@@ -192,7 +189,7 @@
 	</form>
 
 	<div class="text-center text-sm">
-		<span class="text-base-content/60">Already have an account?</span>
+		<span class="text-base-content/60">{t.auth.alreadyHaveAccount}</span>
 		<a href="/entry/signin" class="link link-primary font-medium ml-1">{t.nav.signin}</a>
 	</div>
 </SingleColumnLayout>

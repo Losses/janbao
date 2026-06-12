@@ -2,6 +2,7 @@
 	import SingleColumnLayout from '$lib/components/templates/SingleColumnLayout.svelte';
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
+	import type { ApiResponse } from '$lib/types/api';
 
 	let { data } = $props<{ data: PageData }>();
 	const t = $derived(data.t);
@@ -18,14 +19,14 @@
 				method: 'POST'
 			});
 
-			const result = await res.json();
+			const result = (await res.json()) as ApiResponse;
 			if (res.ok && result.success) {
 				await goto('/', { invalidateAll: true });
 			} else {
-				errorMessage = result.error || 'Logout failed.';
+				errorMessage = result.error || t.auth.logoutConfirm;
 			}
 		} catch {
-			errorMessage = 'Network error. Please try again.';
+			errorMessage = t.auth.networkError;
 		} finally {
 			loading = false;
 		}
@@ -51,7 +52,7 @@
 	</div>
 
 	{#if errorMessage}
-		<div class="alert alert-error text-sm rounded-lg py-2 mt-4">
+		<div class="alert alert-warning text-sm rounded-lg py-2 mt-4">
 			<span>{errorMessage}</span>
 		</div>
 	{/if}

@@ -2,6 +2,7 @@
 	import SingleColumnLayout from '$lib/components/templates/SingleColumnLayout.svelte';
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
+	import type { ApiResponse } from '$lib/types/api';
 
 	let { data } = $props<{ data: PageData }>();
 	const t = $derived(data.t);
@@ -15,7 +16,7 @@
 	async function handleSubmit(e: SubmitEvent) {
 		e.preventDefault();
 		if (!usernameOrEmail || !password) {
-			errorMessage = 'Please fill out all fields.';
+			errorMessage = t.auth.fillAllFields;
 			return;
 		}
 
@@ -29,14 +30,14 @@
 				body: JSON.stringify({ usernameOrEmail, password, rememberMe })
 			});
 
-			const result = await res.json();
+			const result = (await res.json()) as ApiResponse;
 			if (res.ok && result.success) {
 				await goto('/', { invalidateAll: true });
 			} else {
-				errorMessage = result.error || 'Invalid credentials.';
+				errorMessage = result.error || t.auth.invalidCredentials;
 			}
 		} catch {
-			errorMessage = 'Network error. Please try again.';
+			errorMessage = t.auth.networkError;
 		} finally {
 			loading = false;
 		}
@@ -54,7 +55,7 @@
 
 	<form class="mt-8 space-y-6" onsubmit={handleSubmit}>
 		{#if errorMessage}
-			<div class="alert alert-error text-sm rounded-lg py-2">
+			<div class="alert alert-warning text-sm rounded-lg py-2">
 				<span>{errorMessage}</span>
 			</div>
 		{/if}
@@ -115,7 +116,7 @@
 	</form>
 
 	<div class="text-center text-sm">
-		<span class="text-base-content/60">New here?</span>
+		<span class="text-base-content/60">{t.auth.newHere}</span>
 		<a href="/entry/register" class="link link-primary font-medium ml-1">{t.nav.register}</a>
 	</div>
 </SingleColumnLayout>

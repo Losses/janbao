@@ -8,7 +8,7 @@ function bufferToHex(buffer: ArrayBuffer): string {
 		.join('');
 }
 
-function hexToBuffer(hex: string): Uint8Array {
+function hexToBuffer(hex: string): Uint8Array<ArrayBuffer> {
 	const len = hex.length;
 	const view = new Uint8Array(len / 2);
 	for (let i = 0; i < len; i += 2) {
@@ -57,6 +57,17 @@ export interface JwtPayload {
 	exp?: number;
 	iat?: number;
 	[key: string]: unknown;
+}
+
+export function createSessionToken(
+	sub: string,
+	username: string,
+	role: string,
+	rememberMe: boolean
+): JwtPayload {
+	const now = Math.floor(Date.now() / 1000);
+	const exp = rememberMe ? now + 2592000 : now + 86400;
+	return { sub, username, role, iat: now, exp };
 }
 
 export async function signJwt(payload: JwtPayload, secret: string): Promise<string> {

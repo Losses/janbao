@@ -15,17 +15,34 @@
 		"password": "密码",
 		"confirmPassword": "确认密码",
 		"invitationCode": "邀请码",
+		"displayName": "显示名称",
 		"rememberMe": "记住登录状态",
 		"signinBtn": "登录",
 		"registerBtn": "注册",
 		"signoutBtn": "确认登出",
 		"logoutConfirm": "确认登出",
 		"logoutCancel": "取消",
-		"logoutPrompt": "确认是否登出？"
+		"logoutPrompt": "确认是否登出？",
+		"fillAllFields": "请填写所有字段。",
+		"networkError": "网络错误，请重试。",
+		"invalidCredentials": "无效的凭据。",
+		"passwordTooShort": "密码至少需要 5 个字符。",
+		"passwordsMismatch": "两次输入的密码不一致。",
+		"passwordStrengthOk": "密码长度符合要求",
+		"registrationFailed": "注册失败。",
+		"newHere": "新用户？",
+		"alreadyHaveAccount": "已有账号？"
 	},
 	"common": {
 		"welcome": "欢迎加入！",
 		"error": "发生错误",
 		"success": "操作成功"
+	},
+	"home": {
+		"title": "首页 - Janbao",
+		"welcomeTo": "欢迎来到 Janbao",
+		"loggedInAs": "当前登录为",
+		"lastActive": "最后活跃",
+		"guestPrompt": "欢迎使用 Janbao 论坛系统。请登录或注册以参与讨论。"
 	}
 }

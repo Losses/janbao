@@ -3,6 +3,7 @@ import { seedCore } from '$lib/server/db/seed';
 import { verifyJwt } from '$lib/server/auth';
 import { users } from '$lib/server/db/schema';
 import { resolveLang, getTranslation } from '$lib/server/i18n';
+import { getJwtSecret } from '$lib/server/constants';
 import { eq } from 'drizzle-orm';
 import type { Handle } from '@sveltejs/kit';
 
@@ -19,13 +20,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.db = db;
 
 	// 2. Perform Core Database Seeding (Atomic check & execute)
-	await seedCore(db);
+	await seedCore(db, event.platform?.env);
 
 	// 3. Retrieve and Verify JWT Cookie
 	const token = event.cookies.get('session_token');
 	event.locals.user = null;
 
-	const jwtSecret = event.platform?.env?.JWT_SECRET || 'fallback-secret-key-for-local-dev-only';
+	const jwtSecret = getJwtSecret(event.platform?.env);
 
 	if (token) {
 		const payload = await verifyJwt(token, jwtSecret);
