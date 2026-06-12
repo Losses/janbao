@@ -13,6 +13,7 @@
 	import { enhance } from '$app/forms';
 	import { mdiPencilOutline } from '@mdi/js';
 	import Icon from '$lib/components/atoms/Icon.svelte';
+	import type { TranslationDict } from '$lib/types/translation';
 
 	interface PrivateMessage {
 		id: string;
@@ -24,10 +25,6 @@
 		contentJson: string;
 		createdAt: Date;
 		updatedAt: Date;
-	}
-
-	interface TranslationDict {
-		[key: string]: string | Record<string, string>;
 	}
 
 	interface PrivateMessageWindowProps {
@@ -54,9 +51,9 @@
 	let editContent = $state('');
 	let isSavingEdit = $state(false);
 
-	const common = $derived((t['common'] as Record<string, string> | undefined) ?? {});
-	const messageT = $derived((t['message'] as Record<string, string> | undefined) ?? {});
-	const editorT = $derived((t['editor'] as Record<string, string> | undefined) ?? {});
+	const common = $derived((t.common ?? {}) as Record<string, string>);
+	const messageT = $derived((t.message ?? {}) as Record<string, string>);
+	const editorT = $derived((t.editor ?? {}) as Record<string, string>);
 
 	function gtc(key: string): string {
 		return common[key] ?? key;

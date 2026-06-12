@@ -50,6 +50,7 @@
 	} from 'svelte-lexical';
 	import { CodeNode, CodeHighlightNode } from '@lexical/code';
 	import type { VoidHandler } from '$lib/types/handlers';
+	import type { TranslationDict } from '$lib/types/translation';
 
 	type ContentChangeHandler = (json: string) => void;
 	type NodeTransformFn = (node: unknown) => void;
@@ -85,7 +86,7 @@
 		/** Called when content changes with serialized JSON string */
 		onContentChange?: ContentChangeHandler;
 		/** Translation dictionary for i18n strings */
-		t?: Record<string, Record<string, string> | string> | null;
+		t?: TranslationDict | null;
 		/** Class override for container */
 		class?: string;
 	}
@@ -103,7 +104,7 @@
 		class: className = ''
 	}: LexicalEditorProps = $props();
 
-	const tEditor = $derived((t as Record<string, Record<string, string>> | null)?.editor ?? {});
+	const tEditor = $derived((t?.editor ?? {}) as Record<string, string>);
 
 	// Use i18n placeholder if no override provided
 	const resolvedPlaceholder = $derived(
