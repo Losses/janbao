@@ -46,7 +46,12 @@ export const load: PageServerLoad = async (event) => {
 		.map((a) => a.recipientId)
 		.filter((id): id is string => id !== null && id !== SYSTEM_USER_ID);
 
-	const recipientMap = new Map<string, { displayName: string; username: string }>();
+	interface RecipientInfo {
+		displayName: string;
+		username: string;
+	}
+
+	const recipientMap = new Map<string, RecipientInfo>();
 	if (recipientIds.length > 0) {
 		const uniqueIds = [...new Set(recipientIds)];
 		const recipients = await db

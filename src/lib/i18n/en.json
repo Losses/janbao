@@ -213,12 +213,20 @@
 		"invalidBody": "Invalid request body",
 		"fieldsRequired": "contextType and contentJson are required",
 		"invalidContextType": "Invalid contextType",
-		"contentTooLarge": "Draft content exceeds maximum size"
+		"contentTooLarge": "Draft content exceeds maximum size",
+		"myDrafts": "My Drafts",
+		"noDrafts": "No drafts",
+		"jumpTo": "Continue",
+		"discussionDraft": "Discussion draft",
+		"replyDraft": "Reply draft",
+		"editedAt": "Last edited"
 	},
 	"bookmark": {
 		"discussionRequired": "Missing discussionId",
 		"notFound": "Discussion not found",
-		"dbError": "Database error"
+		"dbError": "Database error",
+		"myBookmarks": "Bookmarks",
+		"noBookmarks": "You have no bookmarks yet"
 	},
 	"upload": {
 		"noFile": "No file uploaded",
@@ -232,5 +240,62 @@
 	},
 	"rss": {
 		"unauthorized": "Unauthorized"
+	},
+	"message": {
+		"inbox": "Messages",
+		"newMessage": "New Message",
+		"send": "Send",
+		"composeTitle": "New Conversation",
+		"title": "Subject",
+		"recipients": "Recipients",
+		"recipientPlaceholder": "Add a recipient...",
+		"searchUser": "Search users",
+		"content": "Message",
+		"participants": "Participants",
+		"addParticipant": "Add Participant",
+		"addParticipantPlaceholder": "Search a user to add...",
+		"noConversations": "No conversations yet",
+		"conversationNotFound": "Conversation not found",
+		"titleRequired": "Subject is required",
+		"recipientsRequired": "At least one recipient is required",
+		"tooManyRecipients": "Too many recipients",
+		"recipientNotFound": "Recipient not found",
+		"userIdRequired": "User ID is required",
+		"cannotDelete": "Messages cannot be deleted",
+		"startedBy": "Started by",
+		"participantAdded": "Participant added",
+		"participantExists": "User is already a participant"
+	},
+	"invitation": {
+		"thisMonthAllowance": "This month you have {count} invitation code(s) available.",
+		"requestCode": "Request Invitation Code",
+		"code": "Code",
+		"usedBy": "Used By",
+		"unused": "Unused",
+		"requestedAt": "Requested At",
+		"status": "Status",
+		"expiresAt": "Expires At",
+		"statusUsed": "Used",
+		"statusUnused": "Unused",
+		"statusExpired": "Expired",
+		"monthlyLimitExceeded": "Monthly invitation limit reached",
+		"noInvitations": "You have no invitation codes"
+	},
+	"notification": {
+		"title": "Notifications",
+		"markAllRead": "Mark all as read",
+		"noNotifications": "No notifications",
+		"mention": "mentioned you",
+		"reply": "replied to your discussion",
+		"discussionComment": "posted in a discussion you follow",
+		"message": "sent you a message",
+		"profileComment": "posted on your profile",
+		"in": "in",
+		"allCaughtUp": "You're all caught up"
+	},
+	"comment": {
+		"replyIn": "Reply in",
+		"onActivity": "Comment on Activity",
+		"noComments": "No comments yet"
 	}
 }

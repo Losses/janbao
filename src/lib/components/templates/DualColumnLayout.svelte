@@ -1,15 +1,13 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 
-	let {
-		children,
-		sidebar,
-		isDrawerOpen = $bindable(false)
-	} = $props<{
+	interface DualColumnLayoutProps {
 		children: Snippet;
 		sidebar?: Snippet;
 		isDrawerOpen?: boolean;
-	}>();
+	}
+
+	let { children, sidebar, isDrawerOpen = $bindable(false) }: DualColumnLayoutProps = $props();
 </script>
 
 <div class="drawer drawer-end">

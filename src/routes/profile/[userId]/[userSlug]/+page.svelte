@@ -9,7 +9,11 @@
 	import { generateSlug } from '$lib/utils/slug';
 	import type { PageData } from './$types';
 
-	let { data } = $props<{ data: PageData }>();
+	interface PageProps {
+		data: PageData;
+	}
+
+	let { data }: PageProps = $props();
 
 	const t = $derived(data.t);
 	const profileT = $derived(t.profile);

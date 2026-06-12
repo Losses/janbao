@@ -67,3 +67,16 @@ export function getActivitiesLimit(platformEnv: App.Platform['env'] | undefined)
 	}
 	return 15;
 }
+
+export function getMonthlyInvitationLimit(platformEnv: App.Platform['env'] | undefined): number {
+	const raw = platformEnv?.MONTHLY_INVITATION_LIMIT || process.env.MONTHLY_INVITATION_LIMIT;
+	if (raw) {
+		const parsed = parseInt(raw, 10);
+		if (!isNaN(parsed) && parsed >= 0) return parsed;
+	}
+	return 5;
+}
+
+export function getForumTimezone(platformEnv: App.Platform['env'] | undefined): string {
+	return platformEnv?.FORUM_TIMEZONE || process.env.FORUM_TIMEZONE || 'UTC';
+}

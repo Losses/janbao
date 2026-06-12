@@ -213,12 +213,20 @@
 		"invalidBody": "请求格式无效",
 		"fieldsRequired": "缺少 contextType 和 contentJson",
 		"invalidContextType": "无效的 contextType",
-		"contentTooLarge": "草稿内容超出大小限制"
+		"contentTooLarge": "草稿内容超出大小限制",
+		"myDrafts": "我的草稿",
+		"noDrafts": "暂无草稿",
+		"jumpTo": "继续编辑",
+		"discussionDraft": "讨论草稿",
+		"replyDraft": "回复草稿",
+		"editedAt": "最后编辑"
 	},
 	"bookmark": {
 		"discussionRequired": "缺少 discussionId",
 		"notFound": "讨论未找到",
-		"dbError": "数据库错误"
+		"dbError": "数据库错误",
+		"myBookmarks": "收藏",
+		"noBookmarks": "暂无收藏"
 	},
 	"upload": {
 		"noFile": "未上传文件",
@@ -232,5 +240,62 @@
 	},
 	"rss": {
 		"unauthorized": "未授权"
+	},
+	"message": {
+		"inbox": "站内信",
+		"newMessage": "新建消息",
+		"send": "发送",
+		"composeTitle": "新建会话",
+		"title": "主题",
+		"recipients": "收件人",
+		"recipientPlaceholder": "添加收件人...",
+		"searchUser": "搜索用户",
+		"content": "消息内容",
+		"participants": "参与者",
+		"addParticipant": "添加参与者",
+		"addParticipantPlaceholder": "搜索要添加的用户...",
+		"noConversations": "暂无会话",
+		"conversationNotFound": "会话未找到",
+		"titleRequired": "主题不能为空",
+		"recipientsRequired": "至少需要一位收件人",
+		"tooManyRecipients": "收件人过多",
+		"recipientNotFound": "收件人未找到",
+		"userIdRequired": "缺少用户 ID",
+		"cannotDelete": "消息不可删除",
+		"startedBy": "发起人",
+		"participantAdded": "参与者已添加",
+		"participantExists": "该用户已是参与者"
+	},
+	"invitation": {
+		"thisMonthAllowance": "本月你还有 {count} 个邀请码可用。",
+		"requestCode": "申请邀请码",
+		"code": "邀请码",
+		"usedBy": "使用者",
+		"unused": "未使用",
+		"requestedAt": "申请时间",
+		"status": "状态",
+		"expiresAt": "过期时间",
+		"statusUsed": "已使用",
+		"statusUnused": "未使用",
+		"statusExpired": "已过期",
+		"monthlyLimitExceeded": "本月邀请码申请次数已达上限",
+		"noInvitations": "你还没有邀请码"
+	},
+	"notification": {
+		"title": "通知",
+		"markAllRead": "全部标记为已读",
+		"noNotifications": "暂无通知",
+		"mention": "提及了你",
+		"reply": "回复了你的讨论",
+		"discussionComment": "在你关注的讨论中发了消息",
+		"message": "给你发了站内信",
+		"profileComment": "在你的主页留言",
+		"in": "于",
+		"allCaughtUp": "已全部阅读完毕"
+	},
+	"comment": {
+		"replyIn": "回复于",
+		"onActivity": "动态评论",
+		"noComments": "暂无评论"
 	}
 }

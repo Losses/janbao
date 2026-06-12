@@ -9,9 +9,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	return {
 		user: {
+			id: user.id,
 			username: user.username,
 			email: user.email,
 			displayName: user.displayName,
+			avatarFileId: user.avatarFileId,
 			showEmail: user.showEmail,
 			languagePreference: user.languagePreference,
 			groupSlug: user.groupSlug

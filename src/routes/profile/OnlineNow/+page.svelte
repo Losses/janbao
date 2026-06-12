@@ -6,7 +6,11 @@
 	import type { ApiResult, FeedbackMessage } from '$lib/types/api';
 	import type { PageData } from './$types';
 
-	let { data } = $props<{ data: PageData }>();
+	interface PageProps {
+		data: PageData;
+	}
+
+	let { data }: PageProps = $props();
 
 	const t = $derived(data.t);
 	const user = $derived(data.user);

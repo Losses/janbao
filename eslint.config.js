@@ -63,12 +63,26 @@ export default defineConfig(
 					message: 'Do not use inline object type literals. Extract to a named type or interface.'
 				},
 				{
+					selector: 'TSTypeParameterInstantiation > TSTypeLiteral',
+					message:
+						'Do not use inline object type literals in type arguments. Extract to a named type or interface.'
+				},
+				{
 					selector: 'TSTypeAnnotation > TSFunctionType',
 					message: 'Do not use inline function type literals. Extract to a named type.'
 				},
 				{
+					selector: 'TSTypeParameterInstantiation > TSFunctionType',
+					message:
+						'Do not use inline function type literals in type arguments. Extract to a named type.'
+				},
+				{
 					selector: 'TSTypeAnnotation > TSTupleType',
 					message: 'Do not use inline tuple types. Extract to a named type.'
+				},
+				{
+					selector: 'TSTypeParameterInstantiation > TSTupleType',
+					message: 'Do not use inline tuple types in type arguments. Extract to a named type.'
 				}
 			]
 		}

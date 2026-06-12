@@ -6,7 +6,11 @@
 	import type { PageData } from './$types';
 	import type { ApiResponse } from '$lib/types/api';
 
-	let { data } = $props<{ data: PageData }>();
+	interface PageProps {
+		data: PageData;
+	}
+
+	let { data }: PageProps = $props();
 	const t = $derived(data.t);
 
 	let loading = $state(false);
