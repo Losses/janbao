@@ -74,13 +74,15 @@ The site enforces a responsive grid that values whitespace and screen ergonomics
 ### 3.1 Adaptive Column System
 
 - **Wide Screens (>= 768px):** Dual-column layout. The overall page container is restricted to `max-width: 960px` centered on the screen, with padding on the left and right. The main content column takes up the left portion, and the fixed-width sidebar (`320px`) occupies the right.
-- **Narrow/Mobile Screens (< 768px):** Single-column layout. The sidebar collapses and becomes accessible as an off-canvas drawer that slides out from the right upon tapping the user profile avatar in the header.
-- **Entry Layout Exception (`/entry/*`):** All sign-in, registration, and logout routes are forced into a single-column layout centered on the screen, without any right sidebar or sidebar drawer.
+- **Narrow/Mobile Screens (< 768px):** Single-column layout. The sidebar collapses and becomes accessible as an off-canvas drawer that slides out from the right upon tapping the user profile avatar or trigger button in the Header.
+- **Entry Layout Exception (`/entry/*`):** All sign-in, registration, and logout routes are forced into a single-column layout centered on the screen, without any Header, right sidebar, or sidebar drawer.
 
 ### 3.2 Header Layout
 
+- Renders a sticky global Header at the top of the viewport on all routes (except `/entry/*` routes). Features glassmorphism effects (`backdrop-blur bg-base-100/80 border-b border-base-200`).
 - **Logo Component:** Renders either a custom SVG logo (tailored to the active DaisyUI theme) or fallback pure text.
 - **Main Navigation:** Direct links to Home (`/`), Categories (`/categories`), Activity Square (`/activity`), and Messages (`/messages/inbox`).
+- **Mobile Menu Button:** An avatar placeholder or hamburger menu button (visible only on screens `< 768px`) that programmatically sets `isDrawerOpen = true` on the parent layout to open the sidebar.
 
 ### 3.3 Sidebar Layout Variations
 
@@ -92,23 +94,29 @@ The Right Sidebar remains fixed in size but changes content dynamically based on
    - **Category List Widget:** Vertical navigation list of categories.
    - **Quick Links:** Shortcuts to "My Discussions" (`/profile/discussions/:userId/:userSlug`) and "My Drafts" (`/drafts`).
    - **Active Users Wall:** Avatar wall of users active in the last 10 minutes (respecting stealth mode).
-2. **Profile Routes (`/profile/*`):**
+2. **Profile Routes & Core Pages (`/profile/:userId/:userSlug`, `/notifications`, `/profile/invitations`, `/messages/inbox`, `/profile/discussions/*`, `/profile/comments/*`):**
    - The Profile sidebar is split into two layout states depending on the target user context:
-     - **Owner View (active when `currentUserId === profileOwnerId`):** Renders the full functional menu sidebar containing:
-       - Dynamics (`/profile/:userId/:userSlug`)
-       - Notifications (`/notifications`)
-       - Invitations (`/profile/invitations`)
-       - Mailbox/PMs (`/messages/inbox`)
-       - Discussions (`/profile/discussions/:userId/:userSlug`)
-       - Comments (`/profile/comments/:userId/:userSlug`)
-       - Account Settings shortcuts nested below (Edit Account, Change Password, preferences, avatar, stealth settings).
+     - **Owner View (active when `currentUserId === profileOwnerId`):** Renders the **Profile Navigation Sidebar** menu containing:
+       - Activities
+       - Notifications
+       - Invitations
+       - Mailbox/PMs
+       - Discussions
+       - Comments
+       - A standalone button "Account Settings" (routing to `/profile/edit`).
      - **Visitor View (active when viewing another user's profile):** Renders _only_ public navigation widgets:
-       - Dynamics (`/profile/:userId/:userSlug`)
-       - Discussions (`/profile/discussions/:userId/:userSlug`)
-       - Comments (`/profile/comments/:userId/:userSlug`)
-       - Hides all private paths (Notifications, Invitations, Mailbox/PMs) and settings widgets.
-3. **Private Messages Inbox (`/messages/inbox`, `/messages/new`):**
-   - Renders a "Send Private Message" button and the active users wall.
+       - Activities
+       - Discussions
+       - Comments
+       - Hides all private paths (Notifications, Invitations, Mailbox/PMs) and settings.
+3. **Settings Pages (`/profile/edit`, `/profile/password`, `/profile/preferences`, `/profile/picture`, `/profile/onlineNow`):**
+   - Renders the **Settings Navigation Sidebar** containing:
+     - Edit Account
+     - Change Password
+     - Notification Preferences
+     - Edit Avatar
+     - Online Status
+     - A standalone button "Back to Profile" (routing to `/profile/:userId/:userSlug`).
 4. **Private Message Details (`/messages/:id`):**
    - **Special PM Sidebar:** Displays avatars and nicknames of all conversation participants.
    - **Participant Adder Widget:** Auto-complete text input with search suggestions. Add users as chips. Pressing the "Add" button sends a call to the backend to add the user.
@@ -119,7 +127,7 @@ The Right Sidebar remains fixed in size but changes content dynamically based on
 
 ### 3.4 User Info Block Popover Tooltips
 
-Clicking the row icon buttons inside the User Info Block triggers absolute-positioned overlay tooltips:
+Clicking the row icon buttons inside the User Info Block triggers absolute-positioned overlay tooltips. All tooltips must be horizontally center-aligned relative to their triggering icon buttons (using `left-1/2 -translate-x-1/2` positioning):
 
 1. **Notifications Tooltip:**
    - Queries `/api/notifications?limit=5` to fetch the 5 most recent notification records.
@@ -179,7 +187,10 @@ Rich text editing across the forum is powered by Svelte wrappers around the Lexi
 
 ### 5.1 Configuration & Markdown Support
 
-- **Supported Formats:** H1 to H4 headers, bold, italic, underline, strikethrough, marker highlight, image uploads, and external image hotlinking.
+- **Supported Formats:** H1 to H4 headers, bold, italic, underline, strikethrough, marker highlight, image uploads, external image hotlinking, auto-linking, and spoiler inline styles.
+- **Auto-linking:** The editor and renderer support auto-linking. Any raw, plain-text URL (starting with `http://` or `https://`) typed into the editor is automatically parsed and wrapped in a clickable link node.
+- **Text Selection Hyperlinks:** Highlighted text in the editor can have custom link attributes applied via the `InsertLink` button in the editor toolbar.
+- **Spoiler Inline Style:** The editor toolbar includes a "Spoiler" button. Clicking this wraps the selected text node in a spoiler formatting block. In both the editor and renderer, spoiler text is styled with matching background and text colors (e.g. `bg-current text-current`) by default, revealing the text with `hover:bg-transparent hover:text-base-content` transitions on hover.
 - **Activity Editor Constraint:** The editor loaded on the Activity Square page (`/activity`) and profile activity composer blocks all headers (H1-H4) and forces single-level body paragraph structures.
 - **Private Message Constraint:** The PM editor disables local image uploading (the upload action/button is hidden). Users can only insert external images via URL hotlinking.
 - **Image URL Validation:** The Svelte-Lexical parser/renderer enforces strict protocol validation on hotlinked image source URLs. Only links prefixing `http://` or `https://` are permitted; all others (such as `javascript:` or data-URIs) are rejected to prevent Stored XSS.
@@ -189,12 +200,13 @@ Rich text editing across the forum is powered by Svelte wrappers around the Lexi
 
 - Triggers on typing the `@` character.
 - Invokes a search query against the global user directory to return matched users in a dropdown overlay.
-- Clicking a user inserts a non-editable mention node (styled as a custom CSS chip).
+- **Mention Chip Nickname Conversion:** Mentions are saved as plain-text references (`@username`) in the Lexical JSON. When rendering content, the frontend looks up usernames from the backend-provided `mentionedUsers` dataset and automatically replaces plain-text `@username` references with styled inline Badge/Chip elements displaying their display name nickname.
 - Clicking the "Reply" button on any post or comment automatically focuses the editor, scrolls the window to it, and appends the target author's `@username` mention node at the end of the content.
 
 ### 5.3 Context-Aware Draft Autosave
 
 - The rich text editor triggers a background autosave request to `/api/drafts/save` every 30 seconds.
+- **Draft State Synchronization:** When a draft is loaded from the backend (i.e. `initialContent` is passed to the editor), the editor state is hydrated, and the parent Svelte page immediately synchronizes its internal `contentJson` / `replyContent` state with the draft JSON. This ensures that the submit buttons ("Publish" and "Send") are enabled immediately upon page load without requiring the user to type.
 - **Context Association:** Drafts are saved along with their specific context (e.g., specific `discussionId` for reply drafts, `categoryId` for discussion drafts, `conversationId` for private message drafts).
 - **UX Loading Block:** Upon loading an editor, the system fetches active drafts for the matching context. During this network check, the editor is disabled, showing a loader, and is unlocked once the check completes. If a draft is found, it automatically overwrites the editor state.
 - **Draft Cleanup:** Upon successful submission of a post, reply, or message, the local cache and backend database are cleared of the corresponding draft.
