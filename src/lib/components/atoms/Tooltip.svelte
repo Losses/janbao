@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * Tooltip Atom — Click-triggered absolute-positioned overlay wrapper.
-	 * Renders children as the trigger and exposes a popover via snippet.
+	 * Accepts default children as the trigger button content, and a `popover` snippet for the overlay.
 	 */
 	interface TooltipProps {
 		isOpen?: boolean;

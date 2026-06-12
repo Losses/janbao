@@ -132,8 +132,7 @@
 	// between our direct lexical dependency and svelte-lexical's internal version.
 	function handleChange(
 		editorState: { toJSON: () => unknown },
-		editor: { getEditorState: () => { toJSON: () => unknown } },
-		_tags: Set<string>
+		editor: { getEditorState: () => { toJSON: () => unknown } }
 	) {
 		editorStateGetter = () => JSON.stringify(editor.getEditorState().toJSON());
 		const json = JSON.stringify(editorState.toJSON());

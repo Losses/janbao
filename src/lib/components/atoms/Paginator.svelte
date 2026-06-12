@@ -60,7 +60,7 @@
 			‹
 		</button>
 
-		{#each pageNumbers as page}
+		{#each pageNumbers as page, i (i)}
 			{#if page === '...'}
 				<span class="px-1 text-base-content/40">…</span>
 			{:else}

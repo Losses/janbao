@@ -34,26 +34,24 @@
 </script>
 
 <Tooltip {isOpen} {onToggle} {onClose}>
-	{#snippet children()}
-		<button
-			type="button"
-			class="btn btn-ghost btn-xs"
-			aria-label={tSidebar['bookmarks'] ?? 'Bookmarks'}
-			title={tSidebar['bookmarks'] ?? 'Bookmarks'}
-		>
-			<Icon path={mdiBookmark} size={16} />
-		</button>
-	{/snippet}
+	<button
+		type="button"
+		class="btn btn-ghost btn-xs"
+		aria-label={tSidebar['bookmarks'] ?? 'Bookmarks'}
+		title={tSidebar['bookmarks'] ?? 'Bookmarks'}
+	>
+		<Icon path={mdiBookmark} size={16} />
+	</button>
 
 	{#snippet popover()}
 		<div class="flex flex-col">
 			<!-- Header -->
-			<div class="border-t border-base-300 px-4 py-2">
+			<div class="border-b border-base-300 px-4 py-2">
 				<span class="text-sm font-medium">{tSidebar['bookmarks'] ?? 'Bookmarks'}</span>
 			</div>
 			<!-- Bookmark List -->
 			<ul class="max-h-64 overflow-y-auto">
-				{#each mockBookmarks as bookmark}
+				{#each mockBookmarks as bookmark (bookmark.id)}
 					<li
 						class="border-b border-base-200 px-4 py-2 transition-colors duration-150 hover:bg-base-200"
 					>

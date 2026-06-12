@@ -39,16 +39,14 @@
 </script>
 
 <Tooltip {isOpen} {onToggle} {onClose}>
-	{#snippet children()}
-		<button
-			type="button"
-			class="btn btn-ghost btn-xs"
-			aria-label={tSidebar['notifications'] ?? 'Notifications'}
-			title={tSidebar['notifications'] ?? 'Notifications'}
-		>
-			<Icon path={mdiBell} size={16} />
-		</button>
-	{/snippet}
+	<button
+		type="button"
+		class="btn btn-ghost btn-xs"
+		aria-label={tSidebar['notifications'] ?? 'Notifications'}
+		title={tSidebar['notifications'] ?? 'Notifications'}
+	>
+		<Icon path={mdiBell} size={16} />
+	</button>
 
 	{#snippet popover()}
 		<div class="flex flex-col">
@@ -65,7 +63,7 @@
 			</div>
 			<!-- Notification List -->
 			<ul class="max-h-64 overflow-y-auto">
-				{#each mockNotifications as notification}
+				{#each mockNotifications as notification (notification.id)}
 					<li
 						class="border-b border-base-200 px-4 py-2 transition-colors duration-150 hover:bg-base-200"
 					>
