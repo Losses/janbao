@@ -1,0 +1,286 @@
+import { error, redirect } from '@sveltejs/kit';
+import type { PageServerLoad, Actions } from './$types';
+import {
+	discussions,
+	categories,
+	replies,
+	users,
+	discussionReads,
+	notifications,
+	categoryPermissions,
+	drafts
+} from '$lib/server/db/schema';
+import { eq, and, isNull, count, ne, sql } from 'drizzle-orm';
+
+export const load: PageServerLoad = async (event) => {
+	const { discussionId, slug } = event.params;
+	const db = event.locals.db;
+	const user = event.locals.user;
+	const groupSlug = user?.groupSlug || 'member';
+
+	// 1. Fetch discussion, category, and author details
+	const discussionRecords = await db
+		.select({
+			id: discussions.id,
+			title: discussions.title,
+			slug: discussions.slug,
+			categorySlug: discussions.categorySlug,
+			authorId: discussions.authorId,
+			viewCount: discussions.viewCount,
+			commentCount: discussions.commentCount,
+			isPinned: discussions.isPinned,
+			themeName: discussions.themeName,
+			createdAt: discussions.createdAt,
+			updatedAt: discussions.updatedAt,
+			categoryTitle: categories.title,
+			categoryDescription: categories.description,
+			categoryTheme: categories.themeName,
+			authorDisplayName: users.displayName,
+			authorUsername: users.username,
+			authorAvatarFileId: users.avatarFileId
+		})
+		.from(discussions)
+		.innerJoin(categories, eq(discussions.categorySlug, categories.slug))
+		.innerJoin(users, eq(discussions.authorId, users.id))
+		.where(and(eq(discussions.id, discussionId), isNull(discussions.deletedAt)))
+		.limit(1);
+
+	if (discussionRecords.length === 0) {
+		error(404, 'Discussion Not Found');
+	}
+	const discussion = discussionRecords[0];
+
+	// Canonical slug redirect if slug in URL is mismatch
+	if (discussion.slug !== slug) {
+		redirect(302, `/discussion/${discussionId}/${discussion.slug}`);
+	}
+
+	// 2. Check read permissions for this category
+	const perm = await db
+		.select()
+		.from(categoryPermissions)
+		.where(
+			and(
+				eq(categoryPermissions.categorySlug, discussion.categorySlug),
+				eq(categoryPermissions.groupSlug, groupSlug)
+			)
+		)
+		.limit(1);
+
+	const canRead = perm.length === 0 ? true : perm[0].canRead;
+	if (!canRead) {
+		error(403, 'Forbidden');
+	}
+
+	// 3. Resolve page number
+	const pageParam = event.params.page;
+	let page = 1;
+	if (pageParam) {
+		const parsed = parseInt(pageParam.substring(1), 10);
+		if (!isNaN(parsed) && parsed >= 1) {
+			page = parsed;
+		}
+	}
+
+	const limit = 50; // PAGINATION_LIMIT
+
+	// 4. Fetch the Original Post (OP) (earliest reply chronologically)
+	const opRecord = await db
+		.select({
+			id: replies.id,
+			contentJson: replies.contentJson,
+			createdAt: replies.createdAt,
+			updatedAt: replies.updatedAt,
+			authorId: replies.authorId,
+			authorDisplayName: users.displayName,
+			authorUsername: users.username,
+			authorAvatarFileId: users.avatarFileId
+		})
+		.from(replies)
+		.innerJoin(users, eq(replies.authorId, users.id))
+		.where(and(eq(replies.discussionId, discussionId), isNull(replies.deletedAt)))
+		.orderBy(replies.createdAt)
+		.limit(1);
+
+	const opReply = opRecord.length > 0 ? opRecord[0] : null;
+
+	// 5. Fetch total count of replies excluding the OP
+	let totalRepliesCount = 0;
+	if (opReply) {
+		const totalRes = await db
+			.select({ count: count() })
+			.from(replies)
+			.where(
+				and(
+					eq(replies.discussionId, discussionId),
+					isNull(replies.deletedAt),
+					ne(replies.id, opReply.id)
+				)
+			);
+		totalRepliesCount = totalRes[0]?.count || 0;
+	}
+
+	const totalPages = Math.max(1, Math.ceil(totalRepliesCount / limit));
+
+	// 6. Fetch paginated replies stream excluding the OP
+	let repliesStream: typeof opRecord = [];
+	if (opReply) {
+		repliesStream = await db
+			.select({
+				id: replies.id,
+				contentJson: replies.contentJson,
+				createdAt: replies.createdAt,
+				updatedAt: replies.updatedAt,
+				authorId: replies.authorId,
+				authorDisplayName: users.displayName,
+				authorUsername: users.username,
+				authorAvatarFileId: users.avatarFileId
+			})
+			.from(replies)
+			.innerJoin(users, eq(replies.authorId, users.id))
+			.where(
+				and(
+					eq(replies.discussionId, discussionId),
+					isNull(replies.deletedAt),
+					ne(replies.id, opReply.id)
+				)
+			)
+			.orderBy(replies.createdAt)
+			.limit(limit)
+			.offset((page - 1) * limit);
+	}
+
+	// 7. Update view count
+	await db
+		.update(discussions)
+		.set({ viewCount: sql`${discussions.viewCount} + 1` })
+		.where(eq(discussions.id, discussionId));
+
+	// 8. Update reading history for logged-in user
+	if (user) {
+		const lastReplyId =
+			repliesStream.length > 0
+				? repliesStream[repliesStream.length - 1].id
+				: opReply
+					? opReply.id
+					: null;
+
+		await db
+			.insert(discussionReads)
+			.values({
+				userId: user.id,
+				discussionId,
+				lastReadAt: new Date(),
+				lastReadPage: page,
+				lastReadReplyId: lastReplyId
+			})
+			.onConflictDoUpdate({
+				target: [discussionReads.userId, discussionReads.discussionId],
+				set: {
+					lastReadAt: new Date(),
+					lastReadPage: page,
+					lastReadReplyId: lastReplyId
+				}
+			});
+
+		// 9. Resolve notifications for this discussion
+		await db
+			.update(notifications)
+			.set({ isRead: true })
+			.where(
+				and(
+					eq(notifications.userId, user.id),
+					eq(notifications.discussionId, discussionId),
+					eq(notifications.isRead, false)
+				)
+			);
+	}
+
+	// 10. Resolve theme: Discussion Theme -> Category Theme -> default
+	const resolvedTheme = discussion.themeName || discussion.categoryTheme || null;
+
+	// Fetch existing draft for bottom reply editor if logged in
+	let replyDraft = null;
+	if (user) {
+		const draftRecords = await db
+			.select({ contentJson: drafts.contentJson })
+			.from(drafts)
+			.where(
+				and(
+					eq(drafts.authorId, user.id),
+					eq(drafts.contextType, 'reply'),
+					eq(drafts.contextId, discussionId)
+				)
+			)
+			.limit(1);
+		if (draftRecords.length > 0) {
+			replyDraft = draftRecords[0].contentJson;
+		}
+	}
+
+	return {
+		discussion,
+		opReply,
+		replies: repliesStream,
+		page,
+		totalPages,
+		totalRepliesCount,
+		theme: resolvedTheme,
+		replyDraft
+	};
+};
+
+export const actions: Actions = {
+	reply: async ({ request, locals, params }) => {
+		const user = locals.user;
+		if (!user) {
+			error(401, 'Unauthorized');
+		}
+
+		const db = locals.db;
+		const { discussionId } = params;
+		if (!discussionId) {
+			error(400, 'Bad Request');
+		}
+
+		const data = await request.formData();
+		const contentJson = data.get('contentJson') as string;
+
+		if (!contentJson) {
+			return { success: false, error: 'Reply content cannot be empty' };
+		}
+
+		// Insert the reply
+		const replyId = crypto.randomUUID();
+		await db.insert(replies).values({
+			id: replyId,
+			discussionId,
+			authorId: user.id,
+			contentJson,
+			createdAt: new Date(),
+			updatedAt: new Date()
+		});
+
+		// Update discussion commentCount and updatedAt timestamp
+		await db
+			.update(discussions)
+			.set({
+				commentCount: sql`${discussions.commentCount} + 1`,
+				updatedAt: new Date()
+			})
+			.where(eq(discussions.id, discussionId));
+
+		// Clear the draft from DB
+		await db
+			.delete(drafts)
+			.where(
+				and(
+					eq(drafts.authorId, user.id),
+					eq(drafts.contextType, 'reply'),
+					eq(drafts.contextId, discussionId)
+				)
+			);
+
+		return { success: true, replyId };
+	}
+};

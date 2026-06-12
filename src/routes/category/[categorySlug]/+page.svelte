@@ -3,7 +3,9 @@
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import DiscussionRow from '$lib/components/organisms/DiscussionRow.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
-	import { formatTitle, getSiteName } from '$lib/utils/title';
+	import Icon from '$lib/components/atoms/Icon.svelte';
+	import { mdiRss } from '@mdi/js';
+	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
@@ -12,6 +14,7 @@
 
 	const t = $derived(data.t);
 	const user = $derived(data.user);
+	const category = $derived(data.category);
 	const discussionsList = $derived(data.discussions);
 	const currentPage = $derived(data.page);
 	const totalPages = $derived(data.totalPages);
@@ -24,7 +27,7 @@
 </script>
 
 <svelte:head>
-	<title>{formatTitle(t.nav.home)}</title>
+	<title>{formatTitle(category.title)}</title>
 </svelte:head>
 
 {#snippet sidebar()}
@@ -33,7 +36,7 @@
 			<UserInfoBlock {user} {t} />
 			<div class="divider my-1"></div>
 			<div class="flex flex-col gap-2">
-				<a href="/post/discussion" class="btn btn-primary btn-sm w-full">
+				<a href="/post/discussion?category={category.slug}" class="btn btn-primary btn-sm w-full">
 					{t.sidebar.createDiscussion ?? 'Create Discussion'}
 				</a>
 				<a
@@ -60,29 +63,35 @@
 
 <DualColumnLayout {sidebar} bind:isDrawerOpen>
 	<div class="space-y-6">
-		<!-- Mobile Header Toolbar -->
-		<div
-			class="flex items-center justify-between md:hidden bg-base-200 border border-base-300 p-3 rounded-lg"
-		>
-			<span class="font-bold text-lg">{getSiteName()}</span>
-			<button onclick={() => (isDrawerOpen = true)} class="btn btn-sm btn-ghost avatar placeholder">
-				<div class="bg-neutral text-neutral-content rounded-full w-8">
-					{#if user}
-						<span>{user.displayName?.[0]?.toUpperCase() ?? '?'}</span>
-					{:else}
-						<span>G</span>
-					{/if}
-				</div>
-			</button>
+		<!-- Category Title + Description + RSS Link -->
+		<div class="border-b border-base-300 pb-4">
+			<div class="flex items-center gap-3 flex-wrap">
+				<h1 class="text-3xl font-extrabold tracking-tight text-base-content">{category.title}</h1>
+
+				{#if user && user.rssToken}
+					<a
+						href="/category/{category.slug}/rss?token={user.rssToken}"
+						target="_blank"
+						class="btn btn-ghost btn-circle btn-sm text-warning hover:bg-warning/10"
+						title="Subscribe to RSS Feed"
+						aria-label="RSS Feed"
+					>
+						<Icon path={mdiRss} size={20} />
+					</a>
+				{/if}
+			</div>
+			<p class="text-base-content/70 text-sm mt-1">{category.description}</p>
 		</div>
 
-		<!-- Title Banner -->
-		<div class="flex items-center justify-between border-b border-base-300 pb-4">
-			<h1 class="text-3xl font-extrabold tracking-tight">{t.nav.home}</h1>
+		<!-- Paginator Top -->
+		<div class="flex justify-between items-center gap-4 flex-wrap">
+			<span class="text-xs text-base-content/50">
+				Total: {data.totalCount}
+			</span>
 			<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
 		</div>
 
-		<!-- Discussions Stream -->
+		<!-- Discussions Listing -->
 		{#if discussionsList.length === 0}
 			<div
 				class="card bg-base-200/40 border border-base-200 p-10 text-center text-base-content/50 rounded-xl"
@@ -105,7 +114,7 @@
 				</div>
 			</div>
 
-			<!-- Bottom Paginator -->
+			<!-- Paginator Bottom -->
 			<div class="flex justify-end pt-2">
 				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
 			</div>

@@ -34,6 +34,10 @@ declare global {
 				ADMIN_EMAIL?: string;
 				ADMIN_PASSWORD?: string;
 				MONTHLY_INVITATION_LIMIT?: string;
+				FORUM_TIMEZONE?: string;
+				WELCOME_TEXT?: string;
+				PCLOUD_TOKEN?: string;
+				PCLOUD_FOLDER_ID?: string;
 			};
 			context?: {
 				waitUntil: (promise: Promise<unknown>) => void;
