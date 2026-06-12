@@ -208,7 +208,9 @@
 		"publishFailed": "发布讨论失败",
 		"alreadyExists": "用户名或邮箱已存在",
 		"replies": "回复",
-		"signInToReply": "请登录后回复。"
+		"signInToReply": "请登录后回复。",
+		"sticky": "置顶",
+		"unsticky": "取消置顶"
 	},
 	"category": {
 		"notFound": "话题分类未找到",

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import SingleColumnLayout from '$lib/components/templates/SingleColumnLayout.svelte';
+	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import { formatTitle } from '$lib/utils/title';
@@ -84,8 +84,8 @@
 	<title>{formatTitle(t.sidebar.createDiscussion)}</title>
 </svelte:head>
 
-<SingleColumnLayout>
-	<div class="space-y-6 max-w-4xl mx-auto py-8">
+<DualColumnLayout {t}>
+	<div class="space-y-6 py-2">
 		<!-- Header -->
 		<div class="flex items-center justify-between border-b border-base-300 pb-4">
 			<h1 class="text-3xl font-extrabold tracking-tight text-base-content">
@@ -248,4 +248,4 @@
 			</div>
 		</form>
 	</div>
-</SingleColumnLayout>
+</DualColumnLayout>

@@ -27,9 +27,11 @@
 	const repliesList = $derived(data.replies);
 	const currentPage = $derived(data.page);
 	const totalPages = $derived(data.totalPages);
+	const canDelete = $derived(data.canDelete);
 
 	let replyContent = $state('');
 	let isSubmitting = $state(false);
+	let isTogglingPin = $state(false);
 	let editorKey = $state(0);
 
 	function handlePageChange(newPage: number) {
@@ -146,6 +148,32 @@
 				/>
 				<div class="divider my-1"></div>
 				<LexicalRenderer contentJson={opReply.contentJson} />
+				{#if canDelete}
+					<div class="flex justify-end pt-2">
+						<form
+							method="POST"
+							action="?/togglePin"
+							use:enhance={() => {
+								isTogglingPin = true;
+								return async ({ update }) => {
+									isTogglingPin = false;
+									update();
+								};
+							}}
+						>
+							<button
+								type="submit"
+								class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
+								disabled={isTogglingPin}
+							>
+								{#if isTogglingPin}
+									<span class="loading loading-spinner loading-xs"></span>
+								{/if}
+								{discussion.isPinned ? t.discussion.unsticky : t.discussion.sticky}
+							</button>
+						</form>
+					</div>
+				{/if}
 			</div>
 		{/if}
 
