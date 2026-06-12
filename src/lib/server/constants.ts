@@ -17,6 +17,9 @@ export function getCookieSecure(url: URL): boolean {
 
 export const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 
+/** Allowlist of valid draft context types, shared by the save/clear/delete endpoints. */
+export const DRAFT_CONTEXT_TYPES = ['discussion', 'reply', 'message', 'activity'] as const;
+
 /**
  * Pagination limit helpers. Read from platform env (Cloudflare) or process.env (local),
  * falling back to spec defaults.

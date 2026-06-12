@@ -5,7 +5,8 @@ import {
 	conversationParticipants,
 	messages,
 	users,
-	drafts
+	drafts,
+	conversationReads
 } from '$lib/server/db/schema';
 import { eq, inArray, and } from 'drizzle-orm';
 import { dispatchMessageNotifications } from '$lib/server/db/notifications';
@@ -104,6 +105,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				eq(drafts.contextId, 'new')
 			)
 		);
+
+	// Mark the conversation as read for the author so their own opening message
+	// does not inflate their inbox unread badge.
+	await db
+		.insert(conversationReads)
+		.values({
+			userId: user.id,
+			conversationId,
+			lastReadAt: now
+		})
+		.onConflictDoUpdate({
+			target: [conversationReads.userId, conversationReads.conversationId],
+			set: { lastReadAt: now }
+		});
 
 	// Notify other participants (PM @mention notifications are bypassed inside)
 	await dispatchMessageNotifications(db, {

@@ -6,13 +6,7 @@
 	 * /messages/[id] sidebar "add participant" widget (RQ00-Frontend §3.3.4).
 	 */
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
-
-	interface UserSearchResult {
-		id: string;
-		username: string;
-		displayName: string;
-		avatarFileId: string | null;
-	}
+	import type { UserSearchResult } from '$lib/types/api';
 
 	interface UserSelectHandler {
 		(user: UserSearchResult): void;

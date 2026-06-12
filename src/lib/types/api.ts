@@ -157,6 +157,10 @@ export interface BookmarkListItem {
 	bookmarkedAt: Date;
 }
 
+export interface BookmarkToggleBody {
+	discussionId?: string;
+}
+
 // --- Messaging API Types ---
 
 export interface ConversationListItem {

@@ -2,6 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { drafts, users } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
+import type { UserSearchResult } from '$lib/types/api';
 
 export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user;
@@ -29,12 +30,7 @@ export const load: PageServerLoad = async (event) => {
 
 	// Optional ?recipient=<userId> prefill (from the Active Users Wall)
 	const recipientId = event.url.searchParams.get('recipient');
-	let prefillRecipient: {
-		id: string;
-		username: string;
-		displayName: string;
-		avatarFileId: string | null;
-	} | null = null;
+	let prefillRecipient: UserSearchResult | null = null;
 	if (recipientId && recipientId !== user.id) {
 		const recipientRows = await db
 			.select({

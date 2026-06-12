@@ -110,31 +110,30 @@ export async function getConversations(
 		.innerJoin(users, eq(messages.authorId, users.id));
 	const latestMap = new Map(latestDetails.map((l) => [l.conversationId, l]));
 
-	// 6. Unread counts: messages newer than the user's lastReadAt per conversation
-	const readRows = await db
+	// 6. Unread counts (pushed into SQL): count messages newer than the user's
+	// lastReadAt per conversation. COALESCE(lastReadAt, 0) treats never-read
+	// conversations as unread-from-epoch, so all their messages count.
+	const unreadRows = await db
 		.select({
-			conversationId: conversationReads.conversationId,
-			lastReadAt: conversationReads.lastReadAt
+			conversationId: messages.conversationId,
+			count: sql<number>`COUNT(*)`
 		})
-		.from(conversationReads)
-		.where(eq(conversationReads.userId, userId));
-	const readMap = new Map(readRows.map((r) => [r.conversationId, r.lastReadAt]));
-
-	const pageMessageTimes = await db
-		.select({ conversationId: messages.conversationId, createdAt: messages.createdAt })
 		.from(messages)
-		.where(inArray(messages.conversationId, pageIds));
-
-	const unreadMap = new Map<string, number>();
-	for (const id of pageIds) {
-		const threshold = readMap.get(id);
-		const unreadCount = pageMessageTimes.filter((m) => {
-			if (m.conversationId !== id) return false;
-			if (!threshold) return true;
-			return m.createdAt > threshold;
-		}).length;
-		unreadMap.set(id, unreadCount);
-	}
+		.leftJoin(
+			conversationReads,
+			and(
+				eq(conversationReads.conversationId, messages.conversationId),
+				eq(conversationReads.userId, userId)
+			)
+		)
+		.where(
+			and(
+				inArray(messages.conversationId, pageIds),
+				sql`${messages.createdAt} > COALESCE(${conversationReads.lastReadAt}, 0)`
+			)
+		)
+		.groupBy(messages.conversationId);
+	const unreadMap = new Map<string, number>(unreadRows.map((u) => [u.conversationId, u.count]));
 
 	const items: ConversationListItem[] = pageIds.map((id) => {
 		const latest = latestMap.get(id);

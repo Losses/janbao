@@ -27,12 +27,6 @@ export const load: PageServerLoad = async (event) => {
 
 	const targetUser = targetUserRecords[0];
 
-	// Slug is cosmetic for SEO — accept regardless of match
-	const expectedSlug = generateSlug(targetUser.username);
-	if (userSlug !== expectedSlug) {
-		// accepted anyway
-	}
-
 	// 2. Fetch merged comments (replies + activity comments), sorted chronologically
 	const comments = await getUserComments(db, userId);
 

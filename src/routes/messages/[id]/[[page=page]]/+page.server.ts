@@ -185,10 +185,12 @@ export const actions: Actions = {
 		const participantCheck = await db
 			.select({ userId: conversationParticipants.userId })
 			.from(conversationParticipants)
+			.innerJoin(conversations, eq(conversationParticipants.conversationId, conversations.id))
 			.where(
 				and(
 					eq(conversationParticipants.conversationId, conversationId),
-					eq(conversationParticipants.userId, user.id)
+					eq(conversationParticipants.userId, user.id),
+					isNull(conversations.deletedAt)
 				)
 			)
 			.limit(1);
@@ -287,6 +289,20 @@ export const actions: Actions = {
 				)
 			);
 
+		// Keep the author's read pointer at "now" so their own reply does not
+		// inflate their inbox unread badge.
+		await db
+			.insert(conversationReads)
+			.values({
+				userId: user.id,
+				conversationId,
+				lastReadAt: now
+			})
+			.onConflictDoUpdate({
+				target: [conversationReads.userId, conversationReads.conversationId],
+				set: { lastReadAt: now }
+			});
+
 		// Notify other participants (PM @mention notifications are bypassed)
 		await dispatchMessageNotifications(db, {
 			conversationId,
@@ -299,12 +315,13 @@ export const actions: Actions = {
 
 	// Edit a message authored by the active user. PMs can be edited but never
 	// deleted (no ConfirmationModal), per RQ00-Frontend §6.5.
-	editMessage: async ({ request, locals }) => {
+	editMessage: async ({ request, locals, params }) => {
 		const user = locals.user;
 		if (!user) {
 			error(401, locals.t.common.unauthorized);
 		}
 
+		const { id: conversationId } = params;
 		const db = locals.db;
 		const t = locals.t;
 
@@ -319,11 +336,18 @@ export const actions: Actions = {
 			return { success: false, error: t.common.contentTooLarge };
 		}
 
-		// Only the author may edit their own message
+		// Only the author may edit, and only within an active conversation
 		const messageRecords = await db
 			.select({ authorId: messages.authorId })
 			.from(messages)
-			.where(eq(messages.id, messageId))
+			.innerJoin(conversations, eq(messages.conversationId, conversations.id))
+			.where(
+				and(
+					eq(messages.id, messageId),
+					eq(messages.conversationId, conversationId),
+					isNull(conversations.deletedAt)
+				)
+			)
 			.limit(1);
 
 		if (messageRecords.length === 0) {

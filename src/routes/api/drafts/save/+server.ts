@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { jsonError } from '$lib/server/errors';
 import { drafts } from '$lib/server/db/schema';
+import { DRAFT_CONTEXT_TYPES } from '$lib/server/constants';
 import type { RequestHandler } from './$types';
 
 interface DraftSaveBody {
@@ -9,7 +10,6 @@ interface DraftSaveBody {
 	contentJson?: string;
 }
 
-const VALID_CONTEXT_TYPES = ['discussion', 'reply', 'message', 'activity'];
 const MAX_CONTENT_SIZE = 512 * 1024; // 512 KiB limit for draft content
 
 // POST /api/drafts/save — Atomic upsert draft record for the authenticated user.
@@ -35,7 +35,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		return jsonError(t, 'draft.fieldsRequired', 400);
 	}
 
-	if (!VALID_CONTEXT_TYPES.includes(contextType)) {
+	if (!DRAFT_CONTEXT_TYPES.includes(contextType as (typeof DRAFT_CONTEXT_TYPES)[number])) {
 		return jsonError(t, 'draft.invalidContextType', 400);
 	}
 

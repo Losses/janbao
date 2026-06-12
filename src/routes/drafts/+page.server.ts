@@ -6,6 +6,7 @@ import { eq, and, inArray, desc } from 'drizzle-orm';
 // Per RQ00-Frontend §6.10, the drafts list only shows thread-creation drafts
 // and discussion-reply drafts (filtering out private-message and activity drafts).
 const VISIBLE_CONTEXT_TYPES = ['discussion', 'reply'];
+const DRAFT_LIST_LIMIT = 100; // Defensive cap; drafts are bounded by active editing sessions
 
 export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user;
@@ -23,7 +24,8 @@ export const load: PageServerLoad = async (event) => {
 		})
 		.from(drafts)
 		.where(and(eq(drafts.authorId, user.id), inArray(drafts.contextType, VISIBLE_CONTEXT_TYPES)))
-		.orderBy(desc(drafts.updatedAt));
+		.orderBy(desc(drafts.updatedAt))
+		.limit(DRAFT_LIST_LIMIT);
 
 	return { drafts: rows };
 };
