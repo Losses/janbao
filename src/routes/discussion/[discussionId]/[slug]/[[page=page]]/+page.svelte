@@ -7,7 +7,7 @@
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
-	import { page as pageStore } from '$app/stores';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { enhance } from '$app/forms';
 	import type { PageData } from './$types';
@@ -48,7 +48,7 @@
 
 	// 2. Navigation Anchor Smooth Scroll
 	$effect(() => {
-		const hash = $pageStore.url.hash;
+		const hash = page.url.hash;
 		if (hash) {
 			const targetId = hash.startsWith('#') ? hash.substring(1) : hash;
 			// Match either exactly targetId or reply-targetId
