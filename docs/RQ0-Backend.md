@@ -29,7 +29,7 @@ The schema defines the relational layout for users, categories, discussions, mes
 The schema definition maps directly to SQLite data types:
 
 ```typescript
-import { sqliteTable, text, integer, primaryKey, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, primaryKey, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
 // --- User & Group Schemas ---
@@ -96,6 +96,9 @@ export const discussions = sqliteTable('discussions', {
   categoryIdx: index('discussions_category_idx').on(table.categorySlug),
   authorIdx: index('discussions_author_idx').on(table.authorId),
   createdIdx: index('discussions_created_idx').on(table.createdAt),
+  // Index on updatedAt to optimize homepage and category listing sorting (updatedAt DESC)
+  updatedIdx: index('discussions_updated_idx').on(table.updatedAt),
+  categoryUpdatedIdx: index('discussions_category_updated_idx').on(table.categorySlug, table.updatedAt),
 }));
 
 export const replies = sqliteTable('replies', {
@@ -110,6 +113,8 @@ export const replies = sqliteTable('replies', {
   discussionIdx: index('replies_discussion_idx').on(table.discussionId),
   authorIdx: index('replies_author_idx').on(table.authorId),
   createdIdx: index('replies_created_idx').on(table.createdAt),
+  // Composite index to optimize paginated reply fetches sorted by createdAt
+  discussionCreatedIdx: index('replies_discussion_created_idx').on(table.discussionId, table.createdAt),
 }));
 
 // --- User Context States ---
@@ -142,6 +147,8 @@ export const drafts = sqliteTable('drafts', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
 }, (table) => ({
   authorIdx: index('drafts_author_idx').on(table.authorId),
+  // Composite unique constraint to support atomic upsert conflict targets
+  uniqDraftIdx: uniqueIndex('drafts_uniq_idx').on(table.authorId, table.contextType, table.contextId),
 }));
 
 // --- Private Messaging ---
@@ -196,6 +203,8 @@ export const activities = sqliteTable('activities', {
   parentIdx: index('activities_parent_idx').on(table.parentActivityId),
   recipientIdx: index('activities_recipient_idx').on(table.recipientId), // Optimizes profile activity query
   createdIdx: index('activities_created_idx').on(table.createdAt),
+  // Composite index to optimize activity comment fetches (ordered by createdAt) under a parent activity
+  parentCreatedIdx: index('activities_parent_created_idx').on(table.parentActivityId, table.createdAt),
 }));
 
 // --- Notification Engine ---
@@ -242,8 +251,6 @@ export const invitations = sqliteTable('invitations', {
   usedById: text('used_by_id').references(() => users.id, { onDelete: 'set null' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
   expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
-  // The status is resolved dynamically in queries; SQLite schema uses this to store state default
-  status: text('status').notNull().default('unused'), // 'unused', 'used', 'expired'
 }, (table) => ({
   creatorIdx: index('invitations_creator_idx').on(table.creatorId),
 }));
@@ -369,7 +376,7 @@ When content is created:
 2. **Mentions in Private Messages Bypass:** If the context type is a PM (`contextType === 'message'`), the parser **bypasses** sending `@mention` notifications to avoid leaking private message content to outside users.
 3. Dispatch notifications to:
    - Mentioned users (if `mention` preference is true).
-   - Discussion owner on new reply (if `discussionReply` preference is true).
+   - Discussion owner on new reply (if `discussionReply` OR `discussionComment` preference is true. Both preference settings trigger the same discussion owner notification event).
    - Thread participants on new reply (if `participatedComment` preference is true).
    - Bookmark subscribers on category/thread activity (if `bookmarkedDiscussionComment` preference is true).
    - Target recipient on directed activity (if `profileComment` preference is true).
@@ -387,7 +394,7 @@ The frontend interfaces with the following core backend routes:
   1. Validates the provided `invitationCode`. Checks if it exists in `invitations`, has status `'unused'` (based on dynamic checks), and `expiresAt > now`. If invalid/expired/used, returns `400 Bad Request`.
   2. Enforces username/email checks and password validation (>= 5 chars).
   3. Hashes password via Web Crypto PBKDF2/scrypt.
-  4. Creates the user record, updates the invitation status to `'used'`, sets `usedById` to the new user ID.
+  4. Creates the user record, and sets `usedById` on the invitation record to the new user ID.
   5. Signs JWT, sets session cookie (respecting Remember Me settings).
 - `/api/auth/login` (POST): Verifies credentials, sets session cookie. If `rememberMe` checkbox is checked, configures cookie with `maxAge: 2592000` (30 days).
 - `/api/auth/logout` (POST): Clears session cookie.
@@ -404,10 +411,11 @@ The frontend interfaces with the following core backend routes:
 - `/messages/[id]` server load handler updates `conversationReads` setting `lastReadAt = now`.
 - `/profile/[id]` server load handler increments `users.viewCount` by 1. Self-views (if authenticated user ID matches profile ID) are ignored.
 - `/profile/discussions/[userId]` server load handler fetches discussions authored by target user (20 items per page limit, filters out deleted posts).
-- `/profile/comments/[userId]` server load handler queries only discussion replies (`replies` table) authored by the target user, returning them sorted by creation time. Activity comments are excluded from this profile view to align with discussion links.
+- `/profile/comments/[userId]` server load handler queries both discussion replies (`replies` table) and activity comments (rows in the `activities` table where `parentActivityId` is NOT NULL) authored by the target user. The two datasets are merged and returned sorted by creation time. Each result includes the content JSON, timestamp, and a contextual indicator (for replies: discussion ID/title/slug; for activity comments: parent activity ID).
 
 ### 6.4 API Endpoints
 - `/api/drafts/save` (POST): Upserts draft records containing user id, context, and JSON.
+- `/api/drafts` (DELETE) or `/api/drafts/clear` (POST): Deletes specific drafts based on context parameters (`contextType` and `contextId`) for the authenticated user, triggered upon successful post submission.
 - `/api/notifications` (GET): Fetches notifications list for the active user, sorted by creation timestamp.
 - `/api/notifications` (PUT): Accepts an array of notification IDs or a global parameter to mark notifications as read.
 - `/api/bookmarks` (GET): Fetches the user's bookmarked discussions. Supports `page` and `limit` query parameters for full listing. Tooltips widget fetches with `limit=5`.
