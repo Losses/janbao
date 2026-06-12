@@ -2,11 +2,12 @@
 	"nav": {
 		"home": "Home",
 		"categories": "Categories",
-		"activity": "Activity Square",
+		"activity": "Activity",
 		"messages": "Messages",
 		"signin": "Sign In",
 		"register": "Register",
-		"signout": "Sign Out"
+		"signout": "Sign Out",
+		"menu": "Open menu"
 	},
 	"auth": {
 		"usernameOrEmail": "Email or Username",
@@ -205,10 +206,14 @@
 		"categoryEmpty": "Category must be selected",
 		"noPermission": "You do not have permission to post in this category",
 		"publishFailed": "Failed to publish discussion",
-		"alreadyExists": "Username or email already exists"
+		"alreadyExists": "Username or email already exists",
+		"replies": "Replies",
+		"signInToReply": "Please sign in to reply."
 	},
 	"category": {
-		"notFound": "Category not found"
+		"notFound": "Category not found",
+		"subscribeRss": "Subscribe to RSS Feed",
+		"total": "Total"
 	},
 	"draft": {
 		"invalidBody": "Invalid request body",

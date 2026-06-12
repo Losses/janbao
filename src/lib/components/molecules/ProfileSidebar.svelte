@@ -8,10 +8,11 @@
 	 */
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import type { UserInfoSummary } from '$lib/types/api';
+	import type { TranslationDict } from '$lib/types/translation';
 
 	interface ProfileSidebarProps {
 		user: UserInfoSummary | null;
-		t: Record<string, Record<string, string> | string>;
+		t: TranslationDict;
 		activeItem?: string;
 		targetUserId: string;
 		targetUserSlug: string;
@@ -19,8 +20,8 @@
 
 	let { user, t, activeItem = '', targetUserId, targetUserSlug }: ProfileSidebarProps = $props();
 
-	const profileT = $derived((t as Record<string, Record<string, string>>).profile ?? {});
-	const tNav = $derived((t as Record<string, Record<string, string>>).nav ?? {});
+	const profileT = $derived(t.profile);
+	const tNav = $derived(t.nav);
 
 	const isOwner = $derived(!!user && user.id === targetUserId);
 </script>

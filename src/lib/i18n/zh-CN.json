@@ -2,11 +2,12 @@
 	"nav": {
 		"home": "首页",
 		"categories": "话题列表",
-		"activity": "动态广场",
+		"activity": "动态",
 		"messages": "站内信",
 		"signin": "登录",
 		"register": "注册",
-		"signout": "登出"
+		"signout": "登出",
+		"menu": "打开菜单"
 	},
 	"auth": {
 		"usernameOrEmail": "Email/用户名",
@@ -205,10 +206,14 @@
 		"categoryEmpty": "必须选择话题分类",
 		"noPermission": "没有在此分类发帖的权限",
 		"publishFailed": "发布讨论失败",
-		"alreadyExists": "用户名或邮箱已存在"
+		"alreadyExists": "用户名或邮箱已存在",
+		"replies": "回复",
+		"signInToReply": "请登录后回复。"
 	},
 	"category": {
-		"notFound": "话题分类未找到"
+		"notFound": "话题分类未找到",
+		"subscribeRss": "订阅 RSS 订阅源",
+		"total": "总计"
 	},
 	"draft": {
 		"invalidBody": "请求格式无效",

@@ -54,11 +54,7 @@
 	<title>{formatTitle(t.nav.activity)}</title>
 </svelte:head>
 
-{#snippet sidebar()}
-	<!-- Activity Square sidebar intentionally left empty per RQ00-Frontend §3.3.5 -->
-{/snippet}
-
-<DualColumnLayout {sidebar} {user} {t}>
+<DualColumnLayout {user} {t}>
 	<div class="space-y-6">
 		<!-- Activity Composer -->
 		{#if user}

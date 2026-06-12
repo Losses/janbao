@@ -39,7 +39,7 @@
 	<div class="space-y-6">
 		<div class="border-b border-base-300 pb-4">
 			<h1 class="text-3xl font-extrabold tracking-tight">
-				{t.sidebar.categoryList ?? 'Categories'}
+				{t.sidebar.categoryList}
 			</h1>
 		</div>
 
