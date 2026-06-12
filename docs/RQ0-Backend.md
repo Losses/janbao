@@ -184,7 +184,7 @@ export const conversationReads = sqliteTable('conversation_reads', {
 
 // --- Activities (Microblog) ---
 export const activities = sqliteTable('activities', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  id: text('id').primaryKey(), // Using deterministic welcome keys (e.g. welcome-YYYY-MM-DD) or UUIDs
   authorId: text('author_id').notNull().references(() => users.id),
   recipientId: text('recipient_id').references(() => users.id), // For A -> B dynamic target
   contentJson: text('content_json').notNull(),
@@ -234,6 +234,19 @@ export const attachments = sqliteTable('attachments', {
 }, (table) => ({
   uploaderIdx: index('attachments_uploader_idx').on(table.uploaderId),
 }));
+
+// --- Invitations Registry (System Register Core) ---
+export const invitations = sqliteTable('invitations', {
+  code: text('code').primaryKey(),
+  creatorId: text('creator_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  usedById: text('used_by_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
+  expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  // The status is resolved dynamically in queries; SQLite schema uses this to store state default
+  status: text('status').notNull().default('unused'), // 'unused', 'used', 'expired'
+}, (table) => ({
+  creatorIdx: index('invitations_creator_idx').on(table.creatorId),
+}));
 ```
 
 ---
@@ -244,7 +257,8 @@ Instead of utilizing heavy framework bindings, a custom JWT mechanism is impleme
 
 ### 3.1 Session Verification Flow
 - **Token Type:** JSON Web Token (JWT) signed using a secret key defined in environment variables (`JWT_SECRET`) utilizing `HMAC SHA-256`.
-- **Token Delivery:** Stored in a secure, `HttpOnly`, `SameSite=Strict`, `Secure` cookie named `session_token`.
+- **Token Cookie Injection:** Stored in a secure, `HttpOnly`, `SameSite=Strict`, `Secure` cookie named `session_token`.
+- **Remember Me Logic:** If "Remember Me" is activated on sign-in, the cookie parameter is configured with `maxAge: 2592000` (30 days). Otherwise, it is a session cookie (omitting `maxAge`).
 - **JWT Content Structure:**
   ```json
   {
@@ -258,8 +272,9 @@ Instead of utilizing heavy framework bindings, a custom JWT mechanism is impleme
   On every server request:
   1. Retrieve `session_token` cookie.
   2. If present, verify signature and expiration.
-  3. Resolve user details from the database (including their `passwordHash` or `tokenVersion` check to allow immediate session revocation on password updates).
-  4. Inject user data into `event.locals.user`. If invalid or expired, clear the cookie and set `event.locals.user = null`.
+  3. Resolve user details from the database.
+     - **Security Redaction:** The user object is queried from the database, and the sensitive `passwordHash` field is **explicitly deleted/redacted** from the object before assigning it to SvelteKit's `event.locals.user` to prevent leakage.
+  4. If invalid or expired, clear the cookie and set `event.locals.user = null`.
 
 ### 3.2 Authorization Gates & Mutations Controls
 Routes and server actions check the active session:
@@ -268,7 +283,7 @@ Routes and server actions check the active session:
 - **Validation Rules on Mutations:**
   - **Password Strength:** Password length validation check requires `password.length >= 5` on both register and password update actions. Returns `400 Bad Request` if fails.
   - **Account Username Update:** Username field updates are rejected on `/profile/edit` action unless the active user has an admin role.
-  - **Reply Mutations:** Updates to reply strings are allowed only if `reply.authorId === currentUserId` or the user group has category management permissions. Deletions are allowed only if the user group has category management permissions.
+  - **Reply Mutations:** Updates to reply strings are allowed only if `reply.authorId === currentUserId` or the user group has category management permissions. Deletions are allowed only if the user group has category management permissions. All queries filter out deleted rows using Drizzle `isNull(replies.deletedAt)`.
   - **Activity Comment Deletions:** Allowed only if the user is the comment author, the target profile recipient, the original activity author, or an admin.
 
 ---
@@ -326,7 +341,9 @@ export function generateSlug(text: string): string {
   // 4. Squeeze multiple hyphens, convert to lowercase, trim hyphens
   cleaned = cleaned.replace(/-+/g, '-').toLowerCase();
   
-  return encodeURIComponent(cleaned.replace(/^-+|-+$/g, ''));
+  const result = encodeURIComponent(cleaned.replace(/^-+|-+$/g, ''));
+  // Unicode preservation fallback to ensure routing does not break on purely Chinese/Non-Latin titles
+  return result || 'discussion';
 }
 ```
 
@@ -342,7 +359,8 @@ Instead of running on every authenticated API hook, the check-on-access runs onl
    - Queries users created during the yesterday timezone period.
    - If count > 0:
      - Constructs a structured Lexical JSON state. This JSON state generates text nodes with nested link nodes pointing to each user's profile path `/profile/:id/:slug`.
-     - Inserts the activity post entry into `activities` with `authorId = "00000000-0000-0000-0000-000000000000"` (System User).
+     - Inserts the activity post entry into `activities` with a deterministic primary key id: `welcome-YYYY-MM-DD` (where YYYY-MM-DD is yesterday's date string). If concurrent requests attempt to insert this entry, D1/SQLite throws a primary key uniqueness constraint error which the worker catches and ignores, preventing duplication.
+     - Author is set to `authorId = "00000000-0000-0000-0000-000000000000"` (System User).
 4. A simple in-memory caching key prevents redundant database evaluations for the remainder of the calendar day.
 
 ### 5.4 Notification Dispatcher & Read Updates
@@ -365,8 +383,13 @@ When content is created:
 The frontend interfaces with the following core backend routes:
 
 ### 6.1 Authentication Endpoints
-- `/api/auth/register` (POST): Enforces username/email checks and password validation (>= 5 chars). Hashes passwords via Web Crypto PBKDF2/scrypt, signs JWT, sets session cookie.
-- `/api/auth/login` (POST): Verifies user hash, sets session cookie.
+- `/api/auth/register` (POST):
+  1. Validates the provided `invitationCode`. Checks if it exists in `invitations`, has status `'unused'` (based on dynamic checks), and `expiresAt > now`. If invalid/expired/used, returns `400 Bad Request`.
+  2. Enforces username/email checks and password validation (>= 5 chars).
+  3. Hashes password via Web Crypto PBKDF2/scrypt.
+  4. Creates the user record, updates the invitation status to `'used'`, sets `usedById` to the new user ID.
+  5. Signs JWT, sets session cookie (respecting Remember Me settings).
+- `/api/auth/login` (POST): Verifies credentials, sets session cookie. If `rememberMe` checkbox is checked, configures cookie with `maxAge: 2592000` (30 days).
 - `/api/auth/logout` (POST): Clears session cookie.
 
 ### 6.2 RSS Feed API (`/category/[categorySlug]/rss/+server.ts`)
@@ -374,29 +397,52 @@ The frontend interfaces with the following core backend routes:
 - Server logic:
   1. Resolves user matching `rssToken`. Returns `401 Unauthorized` if not matched.
   2. Queries `categoryPermissions` checking if the user's `groupSlug` can read the requested category. Returns `403 Forbidden` if denied.
-  3. Formulates category metadata and lists the 50 most recent discussions, generating XML response payload.
+  3. Formulates category metadata and lists the 20 most recent discussions, generating XML response payload.
 
 ### 6.3 Page Load Helpers (Automatic Resume & Updates)
 - `/discussion/[id]` server load handler updates `discussionReads` setting `lastReadAt = now`, `lastReadPage = page`, and `lastReadReplyId = lastReplyIdOnPage`. It also resolves all pending user notifications for this thread and marks them as read. It increments `discussions.viewCount` by 1.
 - `/messages/[id]` server load handler updates `conversationReads` setting `lastReadAt = now`.
 - `/profile/[id]` server load handler increments `users.viewCount` by 1. Self-views (if authenticated user ID matches profile ID) are ignored.
+- `/profile/discussions/[userId]` server load handler fetches discussions authored by target user (20 items per page limit, filters out deleted posts).
+- `/profile/comments/[userId]` server load handler queries only discussion replies (`replies` table) authored by the target user, returning them sorted by creation time. Activity comments are excluded from this profile view to align with discussion links.
 
 ### 6.4 API Endpoints
 - `/api/drafts/save` (POST): Upserts draft records containing user id, context, and JSON.
 - `/api/notifications` (GET): Fetches notifications list for the active user, sorted by creation timestamp.
 - `/api/notifications` (PUT): Accepts an array of notification IDs or a global parameter to mark notifications as read.
-- `/api/bookmarks` (GET): Fetches the 5 most recent bookmarks for user widget layout popovers.
+- `/api/bookmarks` (GET): Fetches the user's bookmarked discussions. Supports `page` and `limit` query parameters for full listing. Tooltips widget fetches with `limit=5`.
 - `/api/messages/recent` (GET): Fetches the 5 most recent active conversations.
+- `/api/invitations` (GET): Queries all invitation codes generated by the active user. Dynamically evaluates the status of each record:
+  - If `usedById !== null` -> `'used'`
+  - If `usedById === null && expiresAt < now` -> `'expired'`
+  - Otherwise -> `'unused'`
+- `/api/invitations/request` (POST):
+  1. Validates authentication status.
+  2. Queries invitation table to count codes requested by the user in the current calendar month (using timezone configured via `FORUM_TIMEZONE` variables).
+  3. If count >= `MONTHLY_INVITATION_LIMIT`, returns `400 Bad Request`.
+  4. Generates unique 12-char invitation code, sets creator ID, `createdAt = now`, `expiresAt = now + 7 days` (1 week validity), and inserts.
 
 ### 6.5 SvelteKit Actions
 - `addParticipant` (Action in `/messages/[id]`): Accepts target user ID, validates that the active user requesting addition is currently a participant in the conversation, and adds the target user to the conversation.
 
 ### 6.6 Configuration Environment Variables
 - `PAGINATION_LIMIT`: Integer controlling replies per page (defaults to `50`).
+- `DISCUSSIONS_LIMIT`: Integer controlling discussions per page (defaults to `20`).
+- `ACTIVITIES_LIMIT`: Integer controlling activity square items per page (defaults to `15`).
 - `FORUM_TIMEZONE`: String representing regional timezone (e.g. `Asia/Shanghai`, defaults to `UTC`).
 - `WELCOME_TEXT`: String representing localized welcome header format.
 - `JWT_SECRET`: Secret key for token verification.
 - `PCLOUD_TOKEN`, `PCLOUD_FOLDER_ID`: Access values for image reverse proxying.
+- `MONTHLY_INVITATION_LIMIT`: Integer representing the monthly request limit of invitation codes per user (defaults to `5`).
+
+### 6.7 SvelteKit Parameter Matchers
+To prevent route collisions on optional SvelteKit parameters (e.g. in `/discussion/[discussionId]/[slug]/[[page]]`), the page parameter is configured with a parameter matcher in `src/params/page.ts`:
+```typescript
+export function match(param) {
+  return /^p\d+$/.test(param);
+}
+```
+This forces optional parameters to match directories structured as `[[page=page]]`.
 
 ---
 

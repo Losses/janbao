@@ -66,6 +66,7 @@ The site enforces a responsive grid that values whitespace and screen ergonomics
 ### 3.1 Adaptive Column System
 - **Wide Screens (>= 768px):** Dual-column layout. The overall page container is restricted to `max-width: 960px` centered on the screen, with padding on the left and right. The main content column takes up the left portion, and the fixed-width sidebar (`320px`) occupies the right.
 - **Narrow/Mobile Screens (< 768px):** Single-column layout. The sidebar collapses and becomes accessible as an off-canvas drawer that slides out from the right upon tapping the user profile avatar in the header.
+- **Entry Layout Exception (`/entry/*`):** All sign-in, registration, and logout routes are forced into a single-column layout centered on the screen, without any right sidebar or sidebar drawer.
 
 ### 3.2 Header Layout
 - **Logo Component:** Renders either a custom SVG logo (tailored to the active DaisyUI theme) or fallback pure text.
@@ -77,10 +78,23 @@ The Right Sidebar remains fixed in size but changes content dynamically based on
    - **User Info Block:** Renders current user's profile (avatar, display name, and row of 4 icon buttons: Notifications, PMs, Bookmarks, and Settings).
    - **Create Discussion Button:** Primary button routing to `/post/discussion`.
    - **Category List Widget:** Vertical navigation list of categories.
-   - **Quick Links:** Shortcuts to "My Discussions" (`/discussions/mine`) and "My Drafts" (`/drafts`).
+   - **Quick Links:** Shortcuts to "My Discussions" (`/profile/discussions/:userId/:userSlug`) and "My Drafts" (`/drafts`).
    - **Active Users Wall:** Avatar wall of users active in the last 10 minutes (respecting stealth mode).
-2. **Profile Routes (`/profile/:id/:slug`, `/profile/edit`, etc.):**
-   - Renders a setting navigation widget linking to account edit, password reset, preferences, avatar management, and stealth settings.
+2. **Profile Routes (`/profile/*`):**
+   - The Profile sidebar is split into two layout states depending on the target user context:
+     - **Owner View (active when `currentUserId === profileOwnerId`):** Renders the full functional menu sidebar containing:
+       - Dynamics (`/profile/:userId/:userSlug`)
+       - Notifications (`/notifications`)
+       - Invitations (`/profile/invitations`)
+       - Mailbox/PMs (`/messages/inbox`)
+       - Discussions (`/profile/discussions/:userId/:userSlug`)
+       - Comments (`/profile/comments/:userId/:userSlug`)
+       - Account Settings shortcuts nested below (Edit Account, Change Password, preferences, avatar, stealth settings).
+     - **Visitor View (active when viewing another user's profile):** Renders *only* public navigation widgets:
+       - Dynamics (`/profile/:userId/:userSlug`)
+       - Discussions (`/profile/discussions/:userId/:userSlug`)
+       - Comments (`/profile/comments/:userId/:userSlug`)
+       - Hides all private paths (Notifications, Invitations, Mailbox/PMs) and settings widgets.
 3. **Private Messages Inbox (`/messages/inbox`, `/messages/new`):**
    - Renders a "Send Private Message" button and the active users wall.
 4. **Private Message Details (`/messages/:id`):**
@@ -88,6 +102,8 @@ The Right Sidebar remains fixed in size but changes content dynamically based on
    - **Participant Adder Widget:** Auto-complete text input with search suggestions. Add users as chips. Pressing the "Add" button sends a call to the backend to add the user.
 5. **Activity Square (`/activity`):**
    - Sidebar is left completely empty as specified.
+6. **Entry Views (`/entry/*`):**
+   - Sidebar is completely disabled.
 
 ### 3.4 User Info Block Popover Tooltips
 Clicking the row icon buttons inside the User Info Block triggers absolute-positioned overlay tooltips:
@@ -100,6 +116,8 @@ Clicking the row icon buttons inside the User Info Block triggers absolute-posit
 3. **Bookmarks Tooltip:**
    - Queries `/api/bookmarks?limit=5` to fetch the 5 most recent bookmarked discussions.
    - Layout: Header displaying "Bookmarks" with title text; list of bookmarked titles; footer containing a "Show All" link pointing to `/bookmarks`.
+4. **Settings Icon Button:**
+   - Clicks on the Settings icon link route the user directly to the Account Edit page (`/profile/edit`).
 
 ---
 
@@ -121,12 +139,12 @@ Clicking the row icon buttons inside the User Info Block triggers absolute-posit
 ### 4.4 Confirmation Modal Component
 - Standardized modal for destructive actions (deletions of posts, activities, comments, etc.).
 - Wrapped dynamically. It requires a `title`, a `message` explaining the deletion context, and callbacks for `onConfirm` and `onCancel`. Renders using standard accessibility traits (ARIA focus traps).
-- **Scope Restriction:** Private message (PM) comments/messages can be edited by their authors but cannot be deleted by users. Thus, this modal is not applicable to PM messages.
+- **Scope Restriction:** PM messages can be edited by their authors but cannot be deleted by users. Thus, this modal is not applicable to PM messages.
 
 ### 4.5 DiscussionMetadata Component
 - Displays a unified header for threads and replies.
 - Layout: Left is Avatar; right is a vertical stack:
-  - Top: User Display Name (links to `/profile/:id/:slug`).
+  - Top: User Display Name (links to `/profile/:userId/:userSlug`).
   - Bottom: Relative date (via `Date` component), last edited indicator (if edited), and an optional Category Name link (only shown on the original post).
 
 ### 4.6 LinkButton Component
@@ -143,6 +161,7 @@ Rich text editing across the forum is powered by Svelte wrappers around the Lexi
 - **Supported Formats:** H1 to H4 headers, bold, italic, underline, strikethrough, marker highlight, image uploads, and external image hotlinking.
 - **Activity Editor Constraint:** The editor loaded on the Activity Square page (`/activity`) and profile activity composer blocks all headers (H1-H4) and forces single-level body paragraph structures.
 - **Private Message Constraint:** The PM editor disables local image uploading (the upload action/button is hidden). Users can only insert external images via URL hotlinking.
+- **Image URL Validation:** The Svelte-Lexical parser/renderer enforces strict protocol validation on hotlinked image source URLs. Only links prefixing `http://` or `https://` are permitted; all others (such as `javascript:` or data-URIs) are rejected to prevent Stored XSS.
 - **Upload Action:** Integrated with the backend `/upload` proxy route. Uploading an image triggers a `FormData` upload request, yielding the local proxied URL `https://${host}/img/${fileid}` which is embedded into the editor nodes.
 
 ### 5.2 User Mention Chip (`@mention`)
@@ -163,6 +182,7 @@ Rich text editing across the forum is powered by Svelte wrappers around the Lexi
 
 ### 6.1 Home (`/`)
 - Displays a unified list of discussions across all categories.
+- Default Pagination: Renders exactly 20 discussions per page.
 - Includes pagination at the top and bottom.
 
 ### 6.2 Category List (`/categories`)
@@ -171,6 +191,7 @@ Rich text editing across the forum is powered by Svelte wrappers around the Lexi
 
 ### 6.3 Category Discussions (`/category/:categorySlug`)
 - Displays the discussion list within the category.
+- Default Pagination: Renders exactly 20 discussions per page.
 - **Paginators:** A `Paginator` component is rendered at both the top and the bottom of the discussion list.
 - **Discussion List Item Components:**
   - Left: User avatar.
@@ -180,13 +201,15 @@ Rich text editing across the forum is powered by Svelte wrappers around the Lexi
   - **Pin State:** Pinned discussions show a label before the author. Color scheme: background = component text color, text color = component background.
   - **RSS Subscription:** An RSS subscription link/icon is placed near the category title, pointing to `/category/:categorySlug/rss?token=USER_RSS_TOKEN`.
 
-### 6.4 Discussion Details (`/discussion/:discussionId/slug/(p:page)#:replyId`)
+### 6.4 Discussion Details (`/discussion/:discussionId/slug/[[page=page]]#:replyId`)
+- Optional `page` parameter uses SvelteKit parameter matchers (e.g. matching `p[0-9]+` to validate integer pages, routing folder structured as `[[page=page]]`) to prevent collisions with actions.
+- Default Pagination: Renders exactly 50 replies per page.
 - **Page 1 Layout:** Renders the main discussion title, the original post content, a paginator, the replies stream, another paginator, and the reply editor.
 - **Page 2+ Layout:** Hides the original post content; only displays the replies stream and the editors.
 - **Navigation Anchor:** If `replyId` is provided in the URL fragment (`#:replyId`), SvelteKit triggers an automatic smooth scroll directly to the corresponding reply node after rendering completes.
 - **Theme Override:** Applies the discussion’s custom theme (if configured), overriding any category-wide theme.
 
-### 6.5 Private Messages (`/messages/inbox`, `/messages/new` & `/messages/:id/(p:page)#:replyId`)
+### 6.5 Private Messages (`/messages/inbox`, `/messages/new` & `/messages/:id/[[page=page]]#:replyId`)
 - **Inbox:** Replicates the layout of the category discussions view but displays active threads. Includes pagination at the top and bottom.
 - **New Conversation (`/messages/new`):** Contains an autocomplete recipient search field allowing multiple user chips to be entered, along with a rich text editor (without upload capabilities). Pressing "Send" creates the thread.
 - **PM Detail View:** Displays the message stream. Messages can be edited by the author but cannot be deleted. The sidebar displays all participants with an auto-complete box to add new contacts.
@@ -195,9 +218,10 @@ Rich text editing across the forum is powered by Svelte wrappers around the Lexi
 ### 6.6 Activity Square (`/activity`)
 - Contains a header paragraph editor (no formatting headers allowed) to post new microblogs.
 - Has no recipient or target user selector in the main editor.
+- Default Pagination: Renders exactly 15 activity items per page.
 - **Comments Block:** Clicking "Comment" on an activity opens an inline editor directly below the post. Sub-comments are displayed in a single-level nested comment block (no further nesting) with a light background. Deleting an activity comment opens the deletion confirmation modal.
 
-### 6.7 Profile Views (`/profile/:id/:slug`)
+### 6.7 Profile Views (`/profile/:userId/:userSlug`)
 - **Metadata Subheader:** Displays user statistics including join date, profile view count (increments on visit), last active time, and user group.
 - **Directed Activity Composer:** The bottom of the profile page features a full rich text editor. Typing and submitting here posts a directed activity (`User A -> User B`) directly to the target user's profile stream.
 - **Settings Routes:** Includes `/profile/edit` (username input disabled unless logged-in user is an admin), `/profile/password` (password strength validation enforces a minimum of 5 characters), `/profile/preferences` (toggles for PMs, bookmarks, mentions, and replies), `/profile/picture` (avatar upload <= 1MB), and `/profile/OnlineNow` (stealth settings).
@@ -206,8 +230,8 @@ Rich text editing across the forum is powered by Svelte wrappers around the Lexi
 - Features inputs for Title, Category selector (which defaults to the category with the highest `priority` value), Theme dropdown, and a full `svelte-lexical` editor.
 - Bottom actions: "Publish" (POST to backend API), "Save Draft" (manual override for autosave), and "Preview" (renders a read-only Svelte components mockup container).
 
-### 6.9 My Discussions (`/discussions/mine`)
-- Displays all discussions authored by the active user in a paginated list layout identical to `/category/:slug`.
+### 6.9 User Discussions Page (`/profile/discussions/:userId/:userSlug`)
+- Displays all discussions authored by the target user in a paginated list layout identical to `/category/:slug` (20 items per page).
 
 ### 6.10 My Drafts (`/drafts`)
 - Displays a lists of active drafts. 
@@ -222,9 +246,56 @@ Rich text editing across the forum is powered by Svelte wrappers around the Lexi
 - Accessible via the "Show All" link in the bookmarks tooltip.
 - Displays a paginated list of all conversations bookmarked by the user, sorted by bookmark timestamp.
 
+### 6.13 User Comments Page (`/profile/comments/:userId/:userSlug`)
+- Displays a list of all comments and replies published by the target user.
+- **Layout:** Individual comments are stacked vertically.
+  - **Top:** The comment body content rendered via the Lexical renderer.
+  - **Bottom:** Small, light text containing context indicators:
+    - If the comment is a discussion reply: displays "Reply in: Discussion Title" (links directly to the discussion detail view).
+    - If the comment is an activity comment: displays "Comment on Activity" (links back to the parent Activity Square post anchor).
+    - Relative date of the comment (via the `Date` component).
+
+### 6.14 User Invitations Page (`/profile/invitations`)
+- Accessible only to the logged-in user.
+- **Header:** Informative text displaying the current month's allowance: "This month you have N invitation codes."
+  - Includes a prominent "Request Invitation Code" button. Clicking this triggers a POST call to `/api/invitations/request` and reactively updates the list. If the monthly limit is exceeded, the button shows a disabled, muted state.
+- **Invitations Table:** Lists all invitation codes requested or owned by the user. Columns include:
+  - **Code:** The invitation code string.
+  - **Used By:** Username/Link of the user who registered using this code (displays "Unused" if empty).
+  - **Requested At:** Date requested (using the Date component).
+  - **Status:** Badge reflecting the status: 'Used' (primary color), 'Unused' (neutral), or 'Expired' (warning color). Status is dynamically resolved on fetch depending on expiration time bounds.
+  - **Expires At:** Expiry date (using the Date component).
+
 ---
 
-## 7. Internationalization (i18n)
+## 7. Entry Routes (Authentication Views)
+
+These views reside under the `/entry/*` path, rendering in a single-column container without any sidebars or drawers.
+
+### 7.1 Sign-In View (`/entry/signin`)
+- Form components:
+  - Username or Email text field.
+  - Password password field.
+  - "Remember Me" checkbox.
+  - "Log In" submit button.
+- Submitting posts data to the `/api/auth/login` endpoint, specifying remember-state age configuration.
+
+### 7.2 Registration View (`/entry/register`)
+- Form components:
+  - Invitation Code text field.
+  - Username text field.
+  - Password password field.
+  - Confirm Password password field.
+  - "Register" submit button.
+- Submitting posts data to `/api/auth/register`. Enforces client password validation parameters.
+
+### 7.3 Logout View (`/entry/signout`)
+- Confirmation prompt: "Are you sure you want to log out?"
+- Buttons: "Confirm Logout" (POST to logout endpoint) and "Cancel" (redirects back to previous page).
+
+---
+
+## 8. Internationalization (i18n)
 
 Janbao Forum uses a static i18n dictionary system to avoid hardcoded UI strings.
 - **Supported Languages:** English (`en`) and Simplified Chinese (`zh-CN`).
@@ -236,7 +307,7 @@ Janbao Forum uses a static i18n dictionary system to avoid hardcoded UI strings.
 
 ---
 
-## 8. Client Performance & Optimization
+## 9. Client Performance & Optimization
 
 1. **Mention Suggestion Cache:** User lookup lists are cached in memory for the duration of the editing session to minimize API roundtrips.
 2. **Debounced/Throttled Actions:** Typing updates to drafts are throttled to a strict 30-second interval. Bookmark clicks are debounced (300ms) to prevent double-click database spikes.
