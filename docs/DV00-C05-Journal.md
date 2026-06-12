@@ -142,8 +142,32 @@ i18n fallbacks removed (ActiveUsersWall), recipient-remove i18n+Icon, shared `Us
 | R2-F-08 | `/api/notifications` PUT accepted an unbounded `ids` array | Capped at `MAX_MARK_READ_IDS` (500) |
 | R2-F-09 | `/profile/invitations` `requestCode` swallowed server errors | Surfaces `result.error` in an alert |
 
-**Accepted as-is (defensible / out of scope):** invitations header shows *remaining* (keyed with "available"); `editMessage` empty-result copy; draft empty-`contextId` autosave convention; recipient-existence check (no `users.deletedAt` column yet); tooltip `loaded` latch; `notificationTypeFor` participant/bookmarker collapse.
+**Accepted as-is (defensible / out of scope):** invitations header shows _remaining_ (keyed with "available"); `editMessage` empty-result copy; draft empty-`contextId` autosave convention; recipient-existence check (no `users.deletedAt` column yet); tooltip `loaded` latch; `notificationTypeFor` participant/bookmarker collapse.
 
 **Verification:** `bun run check` = 0 errors/0 warnings across 1041 files; `bun run lint` = clean (similarity-ts "No similar types found!"); i18n parity exact (260 = 260 keys, zero duplicates).
 
 **Full Report:** [RV00-C05-Audit-02.md](file:///home/losses/Development/janbao/docs/RV00-C05-Audit-02.md)
+
+### Audit Round 3 (Final) — 2026-06-12
+
+**Method:** 5 independent full-scope audit agents dispatched in parallel. Each verified all Round-1 + Round-2 fixes and re-audited the entire C05 codebase.
+
+**Agent Verdicts:** R3-A1 PASS · R3-A2 PASS-WITH-WARNINGS · R3-A3 PASS-WITH-WARNINGS · R3-A4 PASS · R3-A5 PASS. **0 CRITICAL, 0 MAJOR, 0 FAIL.** Round-1 + Round-2 fixes **unanimously VERIFIED-CORRECT**.
+
+**Round-3 items fixed: 2 (both MINOR)**
+| ID | Description | Resolution |
+|----|-------------|------------|
+| R3-F-01 | `dispatchMessageNotifications` `rows` array used an inline object-type literal nested under `TSArrayType` (bypassed the no-inline-typing selector) | Extracted named `MessageNotificationRow` interface |
+| R3-F-02 | `DV00-C05-Journal.md` had a Prettier markdown emphasis nit making `bun run lint` exit 1 (doc only) | `prettier --write` applied; lint clean |
+
+Both were fixed **before** dispatching the final two agents (R3-A4, R3-A5), which audited the resolved state and returned **PASS with zero findings** — confirming no inline-typing escapes remain and `bun run lint` is green.
+
+**Final Verification:** `bun run check` = 0 errors/0 warnings (1041 files); `bun run lint` = exit 0 (similarity-ts "No similar types found!"); i18n parity exact (260 = 260 keys); zero `any`/`as any`/`as unknown` and zero inline-object-typing across C05.
+
+**Full Report:** [RV00-C05-Audit-03.md](file:///home/losses/Development/janbao/docs/RV00-C05-Audit-03.md)
+
+---
+
+## 5. Cycle 5 Status: CLOSED
+
+Three consecutive 5-agent audit rounds progressively resolved every defect: Round 1 fixed 3 MAJOR + 15 MINOR/WARN; Round 2 fixed 9 hardening items; Round 3 fixed 2 final MINOR items. The final-state agents confirm a unanimous clean PASS. All RQ00-Plan §4 (Cycle 5) deliverables are present, wired, spec-compliant, and verified. The codebase is ready for Cycle 6.
