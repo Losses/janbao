@@ -306,5 +306,11 @@
 		"replyIn": "回复于",
 		"onActivity": "动态评论",
 		"noComments": "暂无评论"
+	},
+	"forum": {
+		"views": "浏览",
+		"replies": "回复",
+		"lastReplyBy": "最后回复",
+		"pinned": "置顶"
 	}
 }

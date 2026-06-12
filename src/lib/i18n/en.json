@@ -306,5 +306,11 @@
 		"replyIn": "Reply in",
 		"onActivity": "Comment on Activity",
 		"noComments": "No comments yet"
+	},
+	"forum": {
+		"views": "views",
+		"replies": "replies",
+		"lastReplyBy": "last reply by",
+		"pinned": "PIN"
 	}
 }

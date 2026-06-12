@@ -1,6 +1,8 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
+	import ActiveUsersWall from '$lib/components/molecules/ActiveUsersWall.svelte';
+	import CategoryListWidget from '$lib/components/molecules/CategoryListWidget.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import type { PageData } from './$types';
 
@@ -32,6 +34,10 @@
 				</div>
 			</div>
 		{/if}
+		<div class="divider my-1"></div>
+		<CategoryListWidget {t} />
+		<div class="divider my-1"></div>
+		<ActiveUsersWall {t} />
 	</div>
 {/snippet}
 
