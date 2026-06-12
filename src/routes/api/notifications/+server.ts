@@ -8,6 +8,7 @@ import type { NotificationMarkReadBody } from '$lib/types/api';
 
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 50;
+const MAX_MARK_READ_IDS = 500;
 
 // GET /api/notifications - List the active user's notifications, newest first.
 // Supports an optional `limit` query (capped at 100). The sidebar tooltip
@@ -55,7 +56,9 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		return json({ success: true });
 	}
 
-	const ids = Array.isArray(body.ids) ? body.ids.filter((id) => typeof id === 'string') : [];
+	const ids = Array.isArray(body.ids)
+		? body.ids.filter((id) => typeof id === 'string').slice(0, MAX_MARK_READ_IDS)
+		: [];
 	if (ids.length === 0) {
 		return jsonError(t, 'common.badRequest', 400);
 	}

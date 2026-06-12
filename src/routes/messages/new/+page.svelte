@@ -11,13 +11,6 @@
 	import type { UserSearchResult, ApiResult } from '$lib/types/api';
 	import type { PageData } from './$types';
 
-	interface SelectedRecipient {
-		id: string;
-		username: string;
-		displayName: string;
-		avatarFileId: string | null;
-	}
-
 	interface PageProps {
 		data: PageData;
 	}
@@ -28,9 +21,7 @@
 	const messageT = $derived(t.message);
 
 	// svelte-ignore state_referenced_locally
-	let recipients = $state<SelectedRecipient[]>(
-		data.prefillRecipient ? [data.prefillRecipient] : []
-	);
+	let recipients = $state<UserSearchResult[]>(data.prefillRecipient ? [data.prefillRecipient] : []);
 	let title = $state('');
 	let content = $state('');
 	let sending = $state(false);
