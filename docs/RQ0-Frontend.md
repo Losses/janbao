@@ -67,23 +67,27 @@ The site enforces a responsive grid that values whitespace and screen ergonomics
 - **Wide Screens (>= 768px):** Dual-column layout. The overall page container is restricted to `max-width: 960px` centered on the screen, with padding on the left and right. The main content column takes up the left portion, and the fixed-width sidebar (`320px`) occupies the right.
 - **Narrow/Mobile Screens (< 768px):** Single-column layout. The sidebar collapses and becomes accessible as an off-canvas drawer that slides out from the right upon tapping the user profile avatar in the header.
 
-### 3.2 Main Layout Components
-1. **Header:**
-   - **Logo Component:** Renders either a custom SVG logo (tailored to the active DaisyUI theme) or fallback pure text.
-   - **Main Navigation:** Direct links to Home (`/`), Categories (`/categories`), Activity Square (`/activity`), and Messages (`/messages/inbox`).
-2. **Right Sidebar:**
-   - **User Info Block:** Renders the current user's profile.
-     - Left: `Avatar` component (circular profile picture).
-     - Right (top): User Profile display name.
-     - Right (bottom): Row of 4 icon buttons: Notifications, Private Messages, Bookmarks, and Settings.
-   - **Tooltip Popups:** Clicking Notifications, Private Messages, or Bookmarks triggers a local tooltip overlay.
-     - **Constraint:** Renders exactly the 5 most recent items.
-     - **Action Links:** Headers contain text buttons linking to detailed configuration or creation pages. The footer contains a "Show All" link.
-     - **Favorite Bookmarks:** Bookmarks tooltip displays the recently bookmarked discussions (requires recording bookmark time in the database).
-   - **Create Discussion Button:** Large primary button routing to `/post/discussion`.
-   - **Category Widget:** A vertical navigation list of categories.
+### 3.2 Header Layout
+- **Logo Component:** Renders either a custom SVG logo (tailored to the active DaisyUI theme) or fallback pure text.
+- **Main Navigation:** Direct links to Home (`/`), Categories (`/categories`), Activity Square (`/activity`), and Messages (`/messages/inbox`).
+
+### 3.3 Sidebar Layout Variations
+The Right Sidebar remains fixed in size but changes content dynamically based on the active route:
+1. **Forum Routes (`/`, `/categories`, `/category/:slug`, `/discussion/:id`):**
+   - **User Info Block:** Renders current user's profile (avatar, display name, and row of 4 icon buttons: Notifications, PMs, Bookmarks, and Settings).
+   - **Create Discussion Button:** Primary button routing to `/post/discussion`.
+   - **Category List Widget:** Vertical navigation list of categories.
    - **Quick Links:** Shortcuts to "My Discussions" (`/discussions/mine`) and "My Drafts" (`/drafts`).
-   - **Active Users Wall:** A grid of user avatars representing users who made a read request within the last 10 minutes. If the user has enabled Stealth Mode, they are hidden from this wall.
+   - **Active Users Wall:** Avatar wall of users active in the last 10 minutes (respecting stealth mode).
+2. **Profile Routes (`/profile/:id/:slug`, `/profile/edit`, etc.):**
+   - Renders a setting navigation widget linking to account edit, password reset, preferences, avatar management, and stealth settings.
+3. **Private Messages Inbox (`/messages/inbox`, `/messages/new`):**
+   - Renders a "Send Private Message" button and the active users wall.
+4. **Private Message Details (`/messages/:id`):**
+   - **Special PM Sidebar:** Displays avatars and nicknames of all conversation participants.
+   - **Participant Adder Widget:** Auto-complete text input with search suggestions. Add users as chips. Pressing the "Add" button sends a call to the backend to add the user.
+5. **Activity Square (`/activity`):**
+   - Sidebar is left completely empty as specified.
 
 ---
 
@@ -103,8 +107,19 @@ The site enforces a responsive grid that values whitespace and screen ergonomics
 - Default alignments: Right-aligned on content lists.
 
 ### 4.4 Confirmation Modal Component
-- Standardized modal for destructive actions (deletions of posts, activities, messages, comments, etc.).
+- Standardized modal for destructive actions (deletions of posts, activities, comments, etc.).
 - Wrapped dynamically. It requires a `title`, a `message` explaining the deletion context, and callbacks for `onConfirm` and `onCancel`. Renders using standard accessibility traits (ARIA focus traps).
+- **Scope Restriction:** PM messages are read-only and cannot be deleted by users. Thus, this modal is not applicable to messages.
+
+### 4.5 DiscussionMetadata Component
+- Displays a unified header for threads and replies.
+- Layout: Left is Avatar; right is a vertical stack:
+  - Top: User Display Name (links to `/profile/:id/:slug`).
+  - Bottom: Relative date (via `Date` component), last edited indicator (if edited), and an optional Category Name link (only shown on the original post).
+
+### 4.6 LinkButton Component
+- A unified minimalist link styled to look like text but functioning as an interactive button.
+- Used in footer metadata blocks, inline comments, and lists. Enforces primary text color, bold font on hover, and light default color.
 
 ---
 
@@ -114,7 +129,8 @@ Rich text editing across the forum is powered by Svelte wrappers around the Lexi
 
 ### 5.1 Configuration & Markdown Support
 - **Supported Formats:** H1 to H4 headers, bold, italic, underline, strikethrough, marker highlight, image uploads, and external image hotlinking.
-- **Activity Editor Constraint:** The editor loaded on the Activity Square page (`/activity`) blocks all headers (H1-H4) and forces single-level body paragraph structures.
+- **Activity Editor Constraint:** The editor loaded on the Activity Square page (`/activity`) and profile activity composer blocks all headers (H1-H4) and forces single-level body paragraph structures.
+- **Private Message Constraint:** The PM editor disables local image uploading (the upload action/button is hidden). Users can only insert external images via URL hotlinking.
 - **Upload Action:** Integrated with the backend `/upload` proxy route. Uploading an image triggers a `FormData` upload request, yielding the local proxied URL `https://${host}/img/${fileid}` which is embedded into the editor nodes.
 
 ### 5.2 User Mention Chip (`@mention`)
@@ -127,6 +143,7 @@ Rich text editing across the forum is powered by Svelte wrappers around the Lexi
 - The rich text editor triggers a background autosave request to `/api/drafts/save` every 30 seconds.
 - **Context Association:** Drafts are saved along with their specific context (e.g., specific `discussionId` for reply drafts, `categoryId` for discussion drafts, `conversationId` for private message drafts).
 - **UX Loading Block:** Upon loading an editor, the system fetches active drafts for the matching context. During this network check, the editor is disabled, showing a loader, and is unlocked once the check completes. If a draft is found, it automatically overwrites the editor state.
+- **Draft Cleanup:** Upon successful submission of a post, reply, or message, the local cache and backend database are cleared of the corresponding draft.
 
 ---
 
@@ -144,10 +161,11 @@ Rich text editing across the forum is powered by Svelte wrappers around the Lexi
 - Displays the discussion list within the category.
 - **Discussion List Item Components:**
   - Left: User avatar.
-  - Center: Discussion title (link) above a metadata row (author, views, replies, last replier, updated date).
-  - Right: Star bookmark toggle button.
+  - Center: Discussion title (links to the discussion, using reading history to build the exact page and reply ID URL, e.g., `/discussion/:id/slug/p2#reply-123`). Under the title: author, views, replies, last replier, updated date.
+  - Right: Star bookmark toggle button (primary color if active).
   - **Read/Unread Status:** If the discussion has new replies since the user's last read timestamp, the row displays without a background and renders a primary-colored badge with the unread count. If read, it displays with a light background.
-  - **Pin State:** Pinned discussions show a label before the author. Color scheme: background = text color, text color = page background.
+  - **Pin State:** Pinned discussions show a label before the author. Color scheme: background = component text color, text color = component background.
+  - **RSS Subscription:** An RSS subscription link/icon is placed near the category title, pointing to `/category/:categorySlug/rss?token=USER_RSS_TOKEN`.
 
 ### 6.4 Discussion Details (`/discussion/:discussionId/slug/(p:page)#:replyId`)
 - **Page 1 Layout:** Renders the main discussion title, the original post content, a paginator, the replies stream, another paginator, and the reply editor.
@@ -155,23 +173,33 @@ Rich text editing across the forum is powered by Svelte wrappers around the Lexi
 - **Navigation Anchor:** If `replyId` is provided in the URL fragment (`#:replyId`), SvelteKit triggers an automatic smooth scroll directly to the corresponding reply node after rendering completes.
 - **Theme Override:** Applies the discussion’s custom theme (if configured), overriding any category-wide theme.
 
-### 6.5 Private Messages (`/messages/inbox` & `/messages/:id/(p:page)#:replyId`)
-- Inbox replicates the layout of the category discussions view.
-- Detail pages display the private message streams.
-- **Special Sidebar:** Displays avatars and names of all participants instead of regular widgets.
-- **Participant Adder Widget:** Includes an autocomplete input box to search and append new participants as chips. Clicking "Add" posts an update to the backend, enabling the new user to view the full dialogue history.
+### 6.5 Private Messages (`/messages/inbox`, `/messages/new` & `/messages/:id/(p:page)#:replyId`)
+- **Inbox:** Replicates the layout of the category discussions view but displays active threads.
+- **New Conversation (`/messages/new`):** Contains an autocomplete recipient search field allowing multiple user chips to be entered, along with a rich text editor (without upload capabilities). Pressing "Send" creates the thread.
+- **PM Detail View:** Displays the message stream. Messages can be edited by the author but cannot be deleted. The sidebar displays all participants with an auto-complete box to add new contacts.
+- **Deletion Scope:** The deletion confirmation modal is not available on PM views.
 
 ### 6.6 Activity Square (`/activity`)
 - Contains a header paragraph editor (no formatting headers allowed) to post new microblogs.
-- Supports target addressing: User A -> User B.
-- **Comments Block:** Renders 1-level deep nested comments with a light background. Deleting a comment opens the deletion confirmation modal.
+- Supports target addressing: User A -> User B (dynamic display).
+- **Comments Block:** Clicking "Comment" on an activity opens an inline editor directly below the post. Sub-comments are displayed in a single-level nested comment block (no further nesting) with a light background. Deleting an activity comment opens the deletion confirmation modal.
 
-### 6.7 Profile views (`/profile/:id/:slug`, `/profile/edit`, `/profile/password`, `/profile/preferences`, `/profile/picture`, `/profile/OnlineNow`)
-- Renders user statistics and their dynamic activity logs.
-- Preferences page displays toggle options for mentions, replies, messages, and comment notifications.
-- Password change forces a strength check requiring a minimum of 5 characters.
-- Picture page handles avatar uploads restricted to a maximum size of 1MB.
-- OnlineNow manages stealth visibility toggling.
+### 6.7 Profile Views (`/profile/:id/:slug`)
+- **Metadata Subheader:** Displays user statistics including join date, profile view count, last active time, and user group.
+- **Directed Activity Composer:** The bottom of the profile page features a full rich text editor. Typing and submitting here posts a directed activity (`User A -> User B`) directly to the target user's profile stream.
+- **Settings Routes:** Includes `/profile/edit` (username input disabled unless logged-in user is an admin), `/profile/password` (password strength validation enforces a minimum of 5 characters), `/profile/preferences` (toggles for PMs, bookmarks, mentions, and replies), `/profile/picture` (avatar upload <= 1MB), and `/profile/OnlineNow` (stealth settings).
+
+### 6.8 New Discussion (`/post/discussion`)
+- Features inputs for Title, Category selector (which defaults to the category with the highest `priority` value), Theme dropdown, and a full `svelte-lexical` editor.
+- Bottom actions: "Publish" (POST to backend API), "Save Draft" (manual override for autosave), and "Preview" (renders a read-only Svelte components mockup container).
+
+### 6.9 My Discussions (`/discussions/mine`)
+- Displays all discussions authored by the active user in a paginated list layout identical to `/category/:slug`.
+
+### 6.10 My Drafts (`/drafts`)
+- Displays a lists of active drafts. 
+- Filters drafts to only show thread creation drafts and discussion replies (filtering out private message or activity drafts).
+- Each entry contains a contextual jump-link pointing directly back to the creation/reply target (e.g. linking to `/post/discussion` with draft ID parameters, or `/discussion/:id/slug/p1` with active editor states).
 
 ---
 
