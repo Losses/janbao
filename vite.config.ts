@@ -13,9 +13,10 @@ export default defineConfig({
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
 
-			// adapter-auto only supports some environments, see https://svelte.dev/docs/kit/adapter-auto for a list.
-			// If your environment is not supported, or you settled on a specific environment, switch out the adapter.
-			// See https://svelte.dev/docs/kit/adapters for more information about adapters.
+			// adapter-auto detects Cloudflare Pages via CF_PAGES env var and uses
+			// @sveltejs/adapter-cloudflare when deployed. Both adapters are installed
+			// to ensure the Cloudflare adapter is available at build time.
+			// See https://svelte.dev/docs/kit/adapter-auto for supported environments.
 			adapter: adapter(),
 
 			typescript: {
