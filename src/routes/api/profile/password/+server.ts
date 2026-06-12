@@ -3,13 +3,14 @@ import type { RequestHandler } from './$types';
 import { users } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { verifyPassword, hashPassword } from '$lib/server/auth';
+import { jsonError } from '$lib/server/errors';
 import type { ProfilePasswordBody } from '$lib/types/api';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const user = locals.user;
 	const t = locals.t;
 	if (!user) {
-		return json({ error: t.common.unauthorized }, { status: 401 });
+		return jsonError(t, 'common.unauthorized', 401);
 	}
 
 	const body: ProfilePasswordBody = await request.json();
@@ -17,15 +18,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const newPassword = body.newPassword;
 
 	if (!currentPassword) {
-		return json({ error: t.profile.currentPasswordRequired }, { status: 400 });
+		return jsonError(t, 'profile.currentPasswordRequired', 400);
 	}
 
 	if (!newPassword) {
-		return json({ error: t.profile.newPasswordRequired }, { status: 400 });
+		return jsonError(t, 'profile.newPasswordRequired', 400);
 	}
 
 	if (newPassword.length < 5) {
-		return json({ error: t.auth.passwordTooShort }, { status: 400 });
+		return jsonError(t, 'auth.passwordTooShort', 400);
 	}
 
 	const userRecords = await locals.db
@@ -35,12 +36,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		.limit(1);
 
 	if (userRecords.length === 0) {
-		return json({ error: t.profile.userNotFound }, { status: 404 });
+		return jsonError(t, 'profile.userNotFound', 404);
 	}
 
 	const isValid = await verifyPassword(currentPassword, userRecords[0].passwordHash);
 	if (!isValid) {
-		return json({ error: t.profile.currentPasswordIncorrect }, { status: 400 });
+		return jsonError(t, 'profile.currentPasswordIncorrect', 400);
 	}
 
 	const newHash = await hashPassword(newPassword);

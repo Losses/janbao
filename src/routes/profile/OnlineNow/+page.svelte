@@ -3,7 +3,7 @@
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
-	import type { ApiResult } from '$lib/types/api';
+	import type { ApiResult, FeedbackMessage } from '$lib/types/api';
 	import type { PageData } from './$types';
 
 	let { data } = $props<{ data: PageData }>();
@@ -15,7 +15,7 @@
 	// svelte-ignore state_referenced_locally
 	let isStealth = $state(data.isStealth);
 	let saving = $state(false);
-	let message = $state<{ type: 'success' | 'error'; text: string } | null>(null);
+	let message = $state<FeedbackMessage | null>(null);
 	let isDrawerOpen = $state(false);
 
 	const userSlug = $derived(generateSlug(user?.username || ''));

@@ -2,13 +2,14 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { activities, users, notificationPreferences, notifications } from '$lib/server/db/schema';
 import { eq, and, isNull, asc } from 'drizzle-orm';
+import { jsonError } from '$lib/server/errors';
 import type { ActivityCreateBody, ActivityDeleteBody } from '$lib/types/api';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
 	const t = locals.t;
 	const parentId = url.searchParams.get('parentId');
 	if (!parentId) {
-		return json({ error: t.activity.parentIdRequired }, { status: 400 });
+		return jsonError(t, 'activity.parentIdRequired', 400);
 	}
 
 	const parentRecords = await locals.db
@@ -18,7 +19,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		.limit(1);
 
 	if (parentRecords.length === 0) {
-		return json({ error: t.activity.parentNotFound }, { status: 404 });
+		return jsonError(t, 'activity.parentNotFound', 404);
 	}
 
 	const comments = await locals.db
@@ -43,7 +44,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const user = locals.user;
 	const t = locals.t;
 	if (!user) {
-		return json({ error: t.common.unauthorized }, { status: 401 });
+		return jsonError(t, 'common.unauthorized', 401);
 	}
 
 	const body: ActivityCreateBody = await request.json();
@@ -51,11 +52,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const recipientId = body.recipientId;
 
 	if (!contentJson) {
-		return json({ error: t.common.contentRequired }, { status: 400 });
+		return jsonError(t, 'common.contentRequired', 400);
 	}
 
 	if (contentJson.length > 512 * 1024) {
-		return json({ error: t.common.contentTooLarge }, { status: 400 });
+		return jsonError(t, 'common.contentTooLarge', 400);
 	}
 
 	if (recipientId) {
@@ -66,7 +67,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			.limit(1);
 
 		if (recipient.length === 0) {
-			return json({ error: t.activity.recipientNotFound }, { status: 404 });
+			return jsonError(t, 'activity.recipientNotFound', 404);
 		}
 	}
 
@@ -108,14 +109,14 @@ export const DELETE: RequestHandler = async ({ request, locals }) => {
 	const user = locals.user;
 	const t = locals.t;
 	if (!user) {
-		return json({ error: t.common.unauthorized }, { status: 401 });
+		return jsonError(t, 'common.unauthorized', 401);
 	}
 
 	const body: ActivityDeleteBody = await request.json();
 	const activityId = body.activityId;
 
 	if (!activityId) {
-		return json({ error: t.activity.activityIdRequired }, { status: 400 });
+		return jsonError(t, 'activity.activityIdRequired', 400);
 	}
 
 	const activityRecords = await locals.db
@@ -130,7 +131,7 @@ export const DELETE: RequestHandler = async ({ request, locals }) => {
 		.limit(1);
 
 	if (activityRecords.length === 0) {
-		return json({ error: t.activity.activityNotFound }, { status: 404 });
+		return jsonError(t, 'activity.activityNotFound', 404);
 	}
 
 	const activity = activityRecords[0];
@@ -144,18 +145,20 @@ export const DELETE: RequestHandler = async ({ request, locals }) => {
 
 	if (!isAuthorized && activity.parentActivityId) {
 		const parentActivity = await locals.db
-			.select({ authorId: activities.authorId })
+			.select({ authorId: activities.authorId, recipientId: activities.recipientId })
 			.from(activities)
-			.where(eq(activities.id, activity.parentActivityId))
+			.where(and(eq(activities.id, activity.parentActivityId), isNull(activities.deletedAt)))
 			.limit(1);
 
-		if (parentActivity.length > 0 && parentActivity[0].authorId === user.id) {
-			isAuthorized = true;
+		if (parentActivity.length > 0) {
+			if (parentActivity[0].authorId === user.id || parentActivity[0].recipientId === user.id) {
+				isAuthorized = true;
+			}
 		}
 	}
 
 	if (!isAuthorized) {
-		return json({ error: t.common.forbidden }, { status: 403 });
+		return jsonError(t, 'common.forbidden', 403);
 	}
 
 	await locals.db

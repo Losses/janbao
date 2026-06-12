@@ -1,11 +1,9 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
-	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import ActivityRow from '$lib/components/organisms/ActivityRow.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
 	import { formatTitle } from '$lib/utils/title';
-	import { generateSlug } from '$lib/utils/slug';
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
 
@@ -54,31 +52,7 @@
 </svelte:head>
 
 {#snippet sidebar()}
-	<div class="card bg-base-200 border border-base-300 p-4 space-y-4">
-		{#if user}
-			<UserInfoBlock {user} {t} />
-			<div class="divider my-1"></div>
-			<div class="flex flex-col gap-2">
-				<a href="/post/discussion" class="btn btn-primary btn-sm w-full">
-					{t.sidebar.createDiscussion}
-				</a>
-				<a
-					href="/profile/discussions/{user.id}/{generateSlug(user.username)}"
-					class="btn btn-outline btn-sm w-full"
-				>
-					{t.sidebar.myDiscussions}
-				</a>
-			</div>
-		{:else}
-			<div class="space-y-2">
-				<h3 class="font-semibold text-sm text-base-content/70">{t.home.welcomeTo}</h3>
-				<div class="flex gap-2">
-					<a href="/entry/signin" class="btn btn-sm btn-primary flex-1">{t.nav.signin}</a>
-					<a href="/entry/register" class="btn btn-sm btn-outline flex-1">{t.nav.register}</a>
-				</div>
-			</div>
-		{/if}
-	</div>
+	<!-- Activity Square sidebar intentionally left empty per RQ00-Frontend §3.3.5 -->
 {/snippet}
 
 <DualColumnLayout {sidebar} bind:isDrawerOpen>

@@ -104,3 +104,10 @@ export interface ApiResult {
 	id?: string;
 	fileId?: string;
 }
+
+// --- Frontend Feedback Message Type ---
+
+export interface FeedbackMessage {
+	type: 'success' | 'error';
+	text: string;
+}

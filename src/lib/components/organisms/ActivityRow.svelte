@@ -215,7 +215,7 @@
 					<Icon path={mdiCommentOutline} size={0.9} />
 					{commentCountState > 0 ? commentCountState : ''}
 				</LinkButton>
-				{#if resolvedCurrentUserId === resolvedAuthorId || resolvedIsAdmin}
+				{#if resolvedCurrentUserId === resolvedAuthorId || resolvedIsAdmin || resolvedCurrentUserId === recipientId}
 					<LinkButton onclick={() => confirmDelete(id)} class="text-sm text-warning">
 						<Icon path={mdiDeleteOutline} size={0.9} />
 					</LinkButton>
@@ -254,7 +254,7 @@
 												{t}
 												class="text-base-content/50 text-xs"
 											/>
-											{#if resolvedCurrentUserId === comment.authorId || resolvedIsAdmin}
+											{#if resolvedCurrentUserId === comment.authorId || resolvedIsAdmin || resolvedCurrentUserId === resolvedAuthorId || resolvedCurrentUserId === recipientId}
 												<LinkButton
 													onclick={() => confirmDelete(comment.id)}
 													class="text-xs text-warning ml-1"

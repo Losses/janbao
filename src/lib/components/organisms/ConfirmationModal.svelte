@@ -42,7 +42,7 @@
 			onkeydown={() => {}}
 			role="button"
 			tabindex="-1"
-			aria-label="Close modal"
+			aria-label={cancelLabel}
 		></div>
 	</div>
 {/if}

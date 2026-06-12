@@ -148,6 +148,8 @@
 		"usernameAdminOnly": "Only admins can change usernames",
 		"showEmail": "Show email publicly",
 		"language": "Language",
+		"languageEnglish": "English",
+		"languageChinese": "简体中文",
 		"group": "Group",
 		"joined": "Joined",
 		"lastActive": "Last Active",

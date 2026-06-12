@@ -1,8 +1,9 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { users, activities, drafts } from '$lib/server/db/schema';
-import { eq, and, isNull, desc, sql } from 'drizzle-orm';
+import { eq, and, isNull, desc, sql, or } from 'drizzle-orm';
 import { generateSlug } from '$lib/utils/slug';
+import { SYSTEM_USER_ID } from '$lib/server/constants';
 
 export const load: PageServerLoad = async (event) => {
 	const { userId } = event.params;
@@ -29,8 +30,6 @@ export const load: PageServerLoad = async (event) => {
 	if (targetUserRecords.length === 0) {
 		error(404, event.locals.t.common.notFound);
 	}
-
-	// Validate slug matches (slug is for SEO — accept anyway)
 
 	const targetUser = targetUserRecords[0];
 
@@ -70,16 +69,57 @@ export const load: PageServerLoad = async (event) => {
 			and(
 				isNull(activities.deletedAt),
 				isNull(activities.parentActivityId),
-				sql`(${activities.authorId} = ${userId} OR ${activities.recipientId} = ${userId})`
+				or(eq(activities.authorId, userId), eq(activities.recipientId, userId))
 			)
 		)
 		.orderBy(desc(activities.createdAt))
 		.limit(20);
 
-	// 4. Determine if current user is the owner
+	// 4. Batch-fetch recipient display names for directed activities
+	const recipientIds = profileActivities
+		.map((a) => a.recipientId)
+		.filter((id): id is string => id !== null && id !== SYSTEM_USER_ID);
+
+	const recipientMap = new Map<string, { displayName: string; username: string }>();
+	if (recipientIds.length > 0) {
+		const uniqueIds = [...new Set(recipientIds)];
+		const recipients = await db
+			.select({ id: users.id, displayName: users.displayName, username: users.username })
+			.from(users)
+			.where(sql`${users.id} IN ${uniqueIds}`);
+
+		for (const r of recipients) {
+			recipientMap.set(r.id, { displayName: r.displayName, username: r.username });
+		}
+	}
+
+	// 5. Batch-fetch comment counts per activity
+	const activityIds = profileActivities.map((a) => a.id);
+	const commentCountMap = new Map<string, number>();
+
+	if (activityIds.length > 0) {
+		const commentCounts = await db
+			.select({
+				parentActivityId: activities.parentActivityId,
+				count: sql<number>`COUNT(*)`
+			})
+			.from(activities)
+			.where(
+				and(sql`${activities.parentActivityId} IN ${activityIds}`, isNull(activities.deletedAt))
+			)
+			.groupBy(activities.parentActivityId);
+
+		for (const cc of commentCounts) {
+			if (cc.parentActivityId) {
+				commentCountMap.set(cc.parentActivityId, cc.count);
+			}
+		}
+	}
+
+	// 6. Determine if current user is the owner
 	const isOwner = currentUser ? currentUser.id === userId : false;
 
-	// 5. Fetch existing draft for directed activity composer
+	// 7. Fetch existing draft for directed activity composer
 	let activityDraft: string | null = null;
 	if (currentUser) {
 		const draftRecords = await db
@@ -101,7 +141,14 @@ export const load: PageServerLoad = async (event) => {
 
 	return {
 		targetUser,
-		activities: profileActivities,
+		activities: profileActivities.map((a) => ({
+			...a,
+			recipientDisplayName: a.recipientId
+				? recipientMap.get(a.recipientId)?.displayName || null
+				: null,
+			recipientUsername: a.recipientId ? recipientMap.get(a.recipientId)?.username || null : null,
+			commentCount: commentCountMap.get(a.id) || 0
+		})),
 		isOwner,
 		activityDraft
 	};

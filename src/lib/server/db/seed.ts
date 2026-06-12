@@ -73,8 +73,8 @@ export async function seedCore(db: D1Db, env?: App.Platform['env']) {
 		}
 
 		// 3. Bootstrap admin user from environment variables if no real users exist
-		const adminEmail = env?.ADMIN_EMAIL;
-		const adminPassword = env?.ADMIN_PASSWORD;
+		const adminEmail = env?.ADMIN_EMAIL || process.env.ADMIN_EMAIL;
+		const adminPassword = env?.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD;
 		if (adminEmail && adminPassword) {
 			// Check for non-system users only (system user is always present)
 			const realUsers = await db

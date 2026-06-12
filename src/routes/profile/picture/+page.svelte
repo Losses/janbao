@@ -4,7 +4,7 @@
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
-	import type { ApiResult } from '$lib/types/api';
+	import type { ApiResult, FeedbackMessage } from '$lib/types/api';
 	import type { PageData } from './$types';
 
 	let { data } = $props<{ data: PageData }>();
@@ -16,7 +16,7 @@
 	let avatarFileId = $state(data.avatarFileId);
 
 	let saving = $state(false);
-	let message = $state<{ type: 'success' | 'error'; text: string } | null>(null);
+	let message = $state<FeedbackMessage | null>(null);
 	let isDrawerOpen = $state(false);
 	let fileInput: HTMLInputElement | undefined = $state();
 
