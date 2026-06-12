@@ -7,10 +7,22 @@
 		currentPage: number;
 		totalPages: number;
 		onPageChange: (page: number) => void;
+		/** Translation dictionary for i18n aria-labels */
+		t?: Record<string, Record<string, string> | string> | null;
 		class?: string;
 	}
 
-	let { currentPage, totalPages, onPageChange, class: className = '' }: PaginatorProps = $props();
+	let {
+		currentPage,
+		totalPages,
+		onPageChange,
+		t = null,
+		class: className = ''
+	}: PaginatorProps = $props();
+
+	const tPagination = $derived(
+		(t as Record<string, Record<string, string>> | null)?.pagination ?? {}
+	);
 
 	// Build page number list with ellipsis for large ranges
 	const pageNumbers = $derived.by(() => {
@@ -55,7 +67,7 @@
 			class="px-2 py-1 text-base-content/60 transition-colors duration-150 hover:text-base-content disabled:opacity-30"
 			disabled={currentPage <= 1}
 			onclick={() => goTo(currentPage - 1)}
-			aria-label="Previous page"
+			aria-label={tPagination['previous'] ?? 'Previous page'}
 		>
 			‹
 		</button>
@@ -83,7 +95,7 @@
 			class="px-2 py-1 text-base-content/60 transition-colors duration-150 hover:text-base-content disabled:opacity-30"
 			disabled={currentPage >= totalPages}
 			onclick={() => goTo(currentPage + 1)}
-			aria-label="Next page"
+			aria-label={tPagination['next'] ?? 'Next page'}
 		>
 			›
 		</button>

@@ -2,10 +2,9 @@
 	/**
 	 * LexicalEditor Organism — Svelte-Lexical editor wrapper with:
 	 * - Markdown shortcut parsers (H1-H4, bold, italic, underline, strikethrough)
-	 * - Protocol-level image source validation (only http:// https:// allowed, blocking XSS)
-	 * - @mention autocomplete chip search listener
+	 * - Protocol-level URL validation (only http:// https:// allowed, blocking XSS)
 	 * - Context-aware autosave (POST to /api/drafts/save every 30s)
-	 * - Editor locking during draft loading
+	 * - Editor locking during initial loading
 	 */
 	import {
 		Composer,
@@ -58,9 +57,9 @@
 		contextType?: string;
 		/** Context ID for draft autosave: categorySlug, discussionId, conversationId */
 		contextId?: string;
-		/** Placeholder text */
+		/** Placeholder text (overrides i18n default) */
 		placeholder?: string;
-		/** Disable the editor (e.g. during draft loading) */
+		/** Disable the editor (e.g. during initial data loading) */
 		disabled?: boolean;
 		/** Restrict headings (for activity editor) */
 		disableHeadings?: boolean;
@@ -68,6 +67,8 @@
 		disableImageUpload?: boolean;
 		/** Called when content changes with serialized JSON string */
 		onContentChange?: (json: string) => void;
+		/** Translation dictionary for i18n strings */
+		t?: Record<string, Record<string, string> | string> | null;
 		/** Class override for container */
 		class?: string;
 	}
@@ -76,13 +77,21 @@
 		initialContent = null,
 		contextType,
 		contextId,
-		placeholder = 'Write something...',
+		placeholder,
 		disabled = false,
 		disableHeadings = false,
 		disableImageUpload = false,
 		onContentChange,
+		t = null,
 		class: className = ''
 	}: LexicalEditorProps = $props();
+
+	const tEditor = $derived((t as Record<string, Record<string, string>> | null)?.editor ?? {});
+
+	// Use i18n placeholder if no override provided
+	const resolvedPlaceholder = $derived(
+		placeholder ?? tEditor['placeholder'] ?? 'Write something...'
+	);
 
 	// Internal state
 	let isLoading = $state(false);
@@ -122,8 +131,8 @@
 		CHECK_LIST
 	];
 
-	// Protocol-level image source validation — only http:// and https:// allowed
-	function validateImageSrc(src: string): boolean {
+	// Protocol-level URL validation — only http:// and https:// allowed (blocks XSS)
+	function validateUrl(src: string): boolean {
 		return src.startsWith('http://') || src.startsWith('https://');
 	}
 
@@ -187,42 +196,20 @@
 		}
 	}
 
-	// Load initial draft on mount
-	async function loadDraft() {
-		if (!contextType) {
-			return;
-		}
-
-		try {
-			const params = new URLSearchParams({
-				contextType,
-				contextId: contextId ?? ''
-			});
-			const response = await fetch(`/api/drafts?${params}`);
-			if (response.ok) {
-				const data: unknown = await response.json();
-				if (data && typeof data === 'object' && 'contentJson' in data) {
-					// Draft exists — editor state will be set via initialContent prop
-					// The parent component handles this flow
-				}
-			}
-		} catch {
-			// Silently fail — editor is still usable
-		}
-	}
+	// Note: Draft loading (GET /api/drafts) is deferred to Cycle 5.
+	// The parent component is responsible for providing initialContent
+	// via server-side data loading in future cycles.
 
 	$effect(() => {
-		// Initialize loading state from disabled prop
 		isLoading = disabled;
-		loadDraft();
 		startAutosave();
 		return () => stopAutosave();
 	});
 
-	// Derived save status label
+	// Derived save status label — uses i18n keys
 	const saveStatusLabel = $derived.by(() => {
-		if (saveStatus === 'saving') return 'Saving...';
-		if (saveStatus === 'saved') return 'Draft saved';
+		if (saveStatus === 'saving') return tEditor['saving'] ?? 'Saving...';
+		if (saveStatus === 'saved') return tEditor['saved'] ?? 'Draft saved';
 		return '';
 	});
 
@@ -261,10 +248,10 @@
 
 <div class="rounded-lg border border-base-300 {className}">
 	{#if isLoading}
-		<!-- Editor locked during draft loading -->
+		<!-- Editor locked during initial loading -->
 		<div class="flex min-h-[200px] items-center justify-center bg-base-200">
 			<span class="loading loading-spinner loading-sm text-primary"></span>
-			<span class="ml-2 text-sm text-base-content/60">Loading draft...</span>
+			<span class="ml-2 text-sm text-base-content/60">{tEditor['loading'] ?? 'Loading...'}</span>
 		</div>
 	{:else}
 		<!-- Toolbar -->
@@ -304,7 +291,7 @@
 				<HistoryPlugin />
 				<ListPlugin />
 				<ImagePlugin />
-				<LinkPlugin validateUrl={validateImageSrc} />
+				<LinkPlugin {validateUrl} />
 				<MarkdownShortcutPlugin transformers={markdownTransformers} />
 				<OnChangePlugin
 					ignoreHistoryMergeTagChange={true}
@@ -312,7 +299,7 @@
 					onChange={handleChange}
 				/>
 				<PlaceHolder>
-					{placeholder}
+					{resolvedPlaceholder}
 				</PlaceHolder>
 			</div>
 		</Composer>

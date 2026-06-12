@@ -1,7 +1,8 @@
 <script lang="ts">
 	/**
 	 * Tooltip Atom — Click-triggered absolute-positioned overlay wrapper.
-	 * Accepts default children as the trigger button content, and a `popover` snippet for the overlay.
+	 * Children are rendered directly as the trigger element (no wrapping button).
+	 * Expects children to be an interactive element (button, link, etc.).
 	 */
 	interface TooltipProps {
 		isOpen?: boolean;
@@ -30,21 +31,33 @@
 			onClose();
 		}
 	}}
+	onkeydown={(e) => {
+		if (e.key === 'Escape' && isOpen) {
+			onClose();
+		}
+	}}
 />
 
-<div class="relative {className}" bind:this={containerRef}>
-	<!-- Trigger element -->
-	<button
-		type="button"
-		class="inline-flex items-center"
+<div class="relative inline-flex {className}" bind:this={containerRef}>
+	<!-- Trigger wrapper — uses role="button" for a11y since children may be interactive elements -->
+	<div
+		class="inline-flex cursor-pointer"
+		role="button"
+		tabindex="0"
 		onclick={(e) => {
 			e.stopPropagation();
 			onToggle();
 		}}
-		aria-expanded={isOpen}
+		onkeydown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.stopPropagation();
+				e.preventDefault();
+				onToggle();
+			}
+		}}
 	>
 		{@render children()}
-	</button>
+	</div>
 
 	<!-- Popover content -->
 	{#if isOpen}

@@ -2,15 +2,20 @@
 	/**
 	 * Date Atom — Renders a human-friendly relative date (e.g. "3 minutes ago").
 	 * Hovering displays the exact browser-localized date and time via native `title` attribute.
+	 * Accepts a `t` translation dictionary to support i18n relative time strings.
 	 */
 	interface DateProps {
 		value: Date | string | number;
+		/** Translation dictionary (from locals.t). Falls back to English if not provided. */
+		t?: Record<string, Record<string, string> | string> | null;
 		class?: string;
 	}
 
-	let { value, class: className = '' }: DateProps = $props();
+	let { value, t = null, class: className = '' }: DateProps = $props();
 
 	const dateObj = $derived(new Date(value));
+
+	const tDate = $derived((t as Record<string, Record<string, string>> | null)?.date ?? {});
 
 	const absoluteString = $derived(
 		dateObj.toLocaleString(undefined, {
@@ -22,6 +27,16 @@
 			second: '2-digit'
 		})
 	);
+
+	// Helper: build relative string using i18n keys with number prefix
+	function rel(n: number, singularKey: string, pluralKey: string): string {
+		const template =
+			n === 1
+				? (tDate[singularKey] ?? `${n} ${singularKey}`)
+				: (tDate[pluralKey] ?? `${n} ${pluralKey}`);
+		// Templates like "分钟前" or "minutes ago" — prepend the number
+		return `${n} ${template}`;
+	}
 
 	// Compute relative time string
 	const relativeString = $derived.by(() => {
@@ -38,20 +53,25 @@
 		const months = Math.floor(days / 30);
 		const years = Math.floor(days / 365);
 
-		if (years > 0) return `${years} year${years > 1 ? 's' : ''} ago`;
-		if (months > 0) return `${months} month${months > 1 ? 's' : ''} ago`;
-		if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`;
-		if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-		if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
-		return 'just now';
+		if (years > 0) return rel(years, 'yearAgo', 'yearsAgo');
+		if (months > 0) return rel(months, 'monthAgo', 'monthsAgo');
+		if (days > 0) return rel(days, 'dayAgo', 'daysAgo');
+		if (hours > 0) return rel(hours, 'hourAgo', 'hoursAgo');
+		if (minutes > 0) return rel(minutes, 'minuteAgo', 'minutesAgo');
+		return tDate['justNow'] ?? 'just now';
 	});
 
 	function formatFuture(diffMs: number): string {
 		const absDiff = Math.abs(diffMs);
 		const seconds = Math.floor(absDiff / 1000);
 		const minutes = Math.floor(seconds / 60);
-		if (minutes > 0) return `in ${minutes} minute${minutes > 1 ? 's' : ''}`;
-		return 'just now';
+		const hours = Math.floor(minutes / 60);
+		const days = Math.floor(hours / 24);
+
+		if (days > 0) return rel(days, 'dayAgo', 'daysAgo');
+		if (hours > 0) return rel(hours, 'hourAgo', 'hoursAgo');
+		if (minutes > 0) return rel(minutes, 'minuteAgo', 'minutesAgo');
+		return tDate['justNow'] ?? 'just now';
 	}
 </script>
 

@@ -1,6 +1,5 @@
 import { json } from '@sveltejs/kit';
 import { drafts } from '$lib/server/db/schema';
-import { eq, and } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
 interface DraftSaveBody {
@@ -9,8 +8,12 @@ interface DraftSaveBody {
 	contentJson?: string;
 }
 
-// POST /api/drafts/save — Upsert draft record for the authenticated user.
-// Uses the unique composite index (authorId, contextType, contextId) as conflict target.
+const VALID_CONTEXT_TYPES = ['discussion', 'reply', 'message', 'activity'];
+const MAX_CONTENT_SIZE = 512 * 1024; // 512 KiB limit for draft content
+
+// POST /api/drafts/save — Atomic upsert draft record for the authenticated user.
+// Uses Drizzle's onConflictDoUpdate targeting the unique composite index
+// (authorId, contextType, contextId) to eliminate race conditions.
 export const POST: RequestHandler = async ({ locals, request }) => {
 	if (!locals.user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
@@ -29,43 +32,36 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		return json({ error: 'contextType and contentJson are required' }, { status: 400 });
 	}
 
+	if (!VALID_CONTEXT_TYPES.includes(contextType)) {
+		return json({ error: 'Invalid contextType' }, { status: 400 });
+	}
+
+	if (contentJson.length > MAX_CONTENT_SIZE) {
+		return json({ error: 'Draft content exceeds maximum allowed size' }, { status: 400 });
+	}
+
 	const db = locals.db;
 	const authorId = locals.user.id;
-
-	// Attempt to find an existing draft for this author + context combination
-	const existing = await db
-		.select({ id: drafts.id })
-		.from(drafts)
-		.where(
-			and(
-				eq(drafts.authorId, authorId),
-				eq(drafts.contextType, contextType),
-				contextId ? eq(drafts.contextId, contextId) : eq(drafts.contextId, '')
-			)
-		)
-		.limit(1);
-
+	const normalizedContextId = contextId ?? '';
 	const now = new Date();
 
-	if (existing.length > 0) {
-		// Update existing draft
-		await db
-			.update(drafts)
-			.set({
-				contentJson,
-				updatedAt: now
-			})
-			.where(eq(drafts.id, existing[0].id));
-	} else {
-		// Insert new draft
-		await db.insert(drafts).values({
+	// Atomic upsert — on conflict over (authorId, contextType, contextId), update content
+	await db
+		.insert(drafts)
+		.values({
 			authorId,
 			contextType,
-			contextId: contextId ?? '',
+			contextId: normalizedContextId,
 			contentJson,
 			updatedAt: now
+		})
+		.onConflictDoUpdate({
+			target: [drafts.authorId, drafts.contextType, drafts.contextId],
+			set: {
+				contentJson,
+				updatedAt: now
+			}
 		});
-	}
 
 	return json({ success: true });
 };

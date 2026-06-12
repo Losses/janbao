@@ -134,4 +134,19 @@ All code has been developed adhering to the strict architectural paradigms of **
 
 ## 4. Audit & Quality History
 
-_Audit rounds to be appended after independent agent review._
+### Round 1 Audit (2026-06-12)
+
+- **Status:** Completed
+- **Audit File:** [RV00-C02-Audit-01.md](file:///home/losses/Development/janbao/docs/RV00-C02-Audit-01.md)
+- **Verdict:** FAIL → Fixed
+- **Agents Summary:** 5/5 FAIL — unanimous consensus on critical issues
+- **Defects Identified:** 2 CRITICAL, 4 MAJOR, 12 MINOR
+- **Resolutions Applied:**
+  - **C1 (Draft save race condition):** Replaced manual SELECT+INSERT with Drizzle `onConflictDoUpdate()` targeting unique composite index. Added `contextType` allowlist validation, `contentJson` 512 KiB size limit, and `contextId` normalization to empty string.
+  - **C2 (Dead loadDraft code):** Removed `loadDraft()` function calling non-existent `GET /api/drafts`. Draft loading deferred to Cycle 5.
+  - **M1 (Date.svelte i18n):** Added `t` prop. All relative time strings now use `t.date.*` keys. Fixed `formatFuture()` for hours/days.
+  - **M2 (LexicalEditor i18n):** Added `t` prop. Save status labels, loading text, and placeholder use `t.editor.*` keys. Renamed `validateImageSrc` → `validateUrl`.
+  - **M3 (Paginator i18n):** Added `t` prop. Previous/Next aria-labels use `t.pagination.*` keys with English fallback.
+  - **M4 (Draft input validation):** `contextType` allowlist + `contentJson` size limit + `contextId` normalization.
+  - **m1 (Nested button):** Replaced Tooltip's internal `<button>` wrapper with `<div role="button" tabindex="0">` to prevent nested `<button>` invalid HTML.
+- **Verification:** `bun run check` (0 errors, 0 warnings), `bun run lint` (clean).
