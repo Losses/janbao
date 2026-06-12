@@ -64,8 +64,8 @@ All components and server-side code have been built strictly under typescript co
 
 ## 3. Verification & Compliance Checklist
 
-- **Type Check:** `bun run check` — 0 errors, 0 warnings.
-- **Lint Check:** `bun run lint` — 0 errors, 0 warnings.
+- **Type Check:** `bun run check` - 0 errors, 0 warnings.
+- **Lint Check:** `bun run lint` - 0 errors, 0 warnings.
 - **Strict Typing:** No `any`, `as any`, or `<any>` assertions across the new codebase.
 - **Soft Deletion Safety:** All queries on discussions, replies, and activities apply Drizzle soft-delete queries `isNull(...)`.
 
@@ -73,7 +73,7 @@ All components and server-side code have been built strictly under typescript co
 
 ## 4. Audit & Quality History
 
-### Audit Round 1 — 2026-06-12
+### Audit Round 1 - 2026-06-12
 
 **Method:** 5 independent full-scope audit agents dispatched in parallel. Each agent read all specification documents and all 27+ C03 code files, producing independent PASS/FAIL/WARN assessments across 13 audit categories.
 
@@ -84,7 +84,7 @@ All components and server-side code have been built strictly under typescript co
 | F-02 | Bookmarks POST discussion existence check missing `isNull(deletedAt)` | Fixed: added `and(eq(...), isNull(...))` to where clause |
 | F-03 | RSS `<atom:link>` self-reference exposed user token in XML body | Fixed: removed token from self-link URL |
 | F-04 | RSS title manually concatenated instead of using `formatTitle()` utility | Fixed: replaced with `formatTitle()` |
-| F-05 | RSS feed built by string concatenation — fragile, inconsistent escaping, no structured XML generation | Fixed: replaced with `fast-xml-parser` XMLBuilder; all text auto-escaped by library |
+| F-05 | RSS feed built by string concatenation - fragile, inconsistent escaping, no structured XML generation | Fixed: replaced with `fast-xml-parser` XMLBuilder; all text auto-escaped by library |
 
 **Consensus WARN Items Fixed: 1**
 | ID | Description | Resolution |
@@ -95,7 +95,7 @@ All components and server-side code have been built strictly under typescript co
 
 **Full Report:** [RV00-C03-Audit-01.md](file:///home/losses/Development/janbao/docs/RV00-C03-Audit-01.md)
 
-### Audit Round 2 — 2026-06-12
+### Audit Round 2 - 2026-06-12
 
 **Method:** 5 independent full-scope audit agents dispatched in parallel. Each agent read all specification documents and all 27+ C03 code files, producing independent PASS/FAIL/WARN assessments across 13 audit categories.
 
@@ -104,7 +104,7 @@ All components and server-side code have been built strictly under typescript co
 **Consensus FAIL Items Found: 1**
 | ID | Description | Resolution |
 |----|-------------|------------|
-| R2-F-01 | Reply action missing discussion existence, soft-delete, and write-permission checks — any authenticated user can POST replies to soft-deleted discussions or unauthorized categories | Fixed: added discussion existence check with `isNull(deletedAt)` and `categoryPermissions.canCreate` check before inserting reply |
+| R2-F-01 | Reply action missing discussion existence, soft-delete, and write-permission checks - any authenticated user can POST replies to soft-deleted discussions or unauthorized categories | Fixed: added discussion existence check with `isNull(deletedAt)` and `categoryPermissions.canCreate` check before inserting reply |
 
 **Majority FAIL Items Found: 3**
 | ID | Description | Resolution |
@@ -117,7 +117,7 @@ All components and server-side code have been built strictly under typescript co
 
 **Full Report:** [RV00-C03-Audit-02.md](file:///home/losses/Development/janbao/docs/RV00-C03-Audit-02.md)
 
-### Audit Round 3 — 2026-06-12
+### Audit Round 3 - 2026-06-12
 
 **Method:** Full-scope single-agent audit. All specification documents and all 27+ C03 code files read in full. 13 audit categories evaluated.
 
@@ -127,9 +127,9 @@ All components and server-side code have been built strictly under typescript co
 
 | ID      | Description                                                                                                                                         | Resolution                                                                                                                                                                                                |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R3-W-01 | N+1 query pattern in `getDiscussionsList` — ~41 sequential queries per page load (1 main + 20x2 per-row detail queries)                             | Fixed: replaced with batch queries using `MAX(createdAt)` subquery for last-reply author and bulk reply fetch with in-memory threshold filtering for unread counts. Reduced to 3-4 queries per page load. |
+| R3-W-01 | N+1 query pattern in `getDiscussionsList` - ~41 sequential queries per page load (1 main + 20x2 per-row detail queries)                             | Fixed: replaced with batch queries using `MAX(createdAt)` subquery for last-reply author and bulk reply fetch with in-memory threshold filtering for unread counts. Reduced to 3-4 queries per page load. |
 | R3-W-02 | Pagination limits hardcoded as constants (`20`, `50`) instead of reading from `DISCUSSIONS_LIMIT`/`PAGINATION_LIMIT` env vars per RQ00-Backend §6.6 | Fixed: added `getDiscussionsLimit()`, `getPaginationLimit()`, `getActivitiesLimit()` to `constants.ts` with platform env + process.env fallback. Updated 3 consumers. Added types to `app.d.ts`.          |
-| R3-W-03 | N+1 permission query in `/categories` and `/post/discussion` — each category triggered a separate `categoryPermissions` query                       | Fixed: replaced with single batch query for the user's group, in-memory `Map` lookup for filtering.                                                                                                       |
+| R3-W-03 | N+1 permission query in `/categories` and `/post/discussion` - each category triggered a separate `categoryPermissions` query                       | Fixed: replaced with single batch query for the user's group, in-memory `Map` lookup for filtering.                                                                                                       |
 
 **Verification:** `bun run check` = 0 errors/0 warnings across 935 files; `bun run lint` = clean; `any` grep = zero hits.
 

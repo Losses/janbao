@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Paginator Atom — Minimalist page navigation using text-link style.
+	 * Paginator Atom - Minimalist page navigation using text-link style.
 	 * Self-conditional rendering: renders nothing if totalPages <= 1.
 	 */
 	type PageChangeHandler = (page: number) => void;

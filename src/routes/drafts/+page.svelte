@@ -35,7 +35,7 @@
 		if (draft.contextType === 'discussion') {
 			return { draft, label: draftT.discussionDraft, href: '/post/discussion' };
 		}
-		// reply draft — contextId is the discussionId; the ID-only route
+		// reply draft - contextId is the discussionId; the ID-only route
 		// redirects to the canonical slug.
 		return {
 			draft,

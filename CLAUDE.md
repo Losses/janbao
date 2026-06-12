@@ -1,13 +1,13 @@
-# Janbao Forum — Project Instructions
+# Janbao Forum - Project Instructions
 
 ## Linting
 
-Run `bun run lint` — it chains prettier → eslint → similarity-ts.
+Run `bun run lint` - it chains prettier → eslint → similarity-ts.
 
 ### Type rules (zero tolerance)
 
-- **No inline typing** — all types must be named. Object shapes → `interface`, function signatures → `type`.
-- **`interface` over `type`** — use `interface` for any object shape; `type` only for unions, function types, and other non-object forms.
+- **No inline typing** - all types must be named. Object shapes → `interface`, function signatures → `type`.
+- **`interface` over `type`** - use `interface` for any object shape; `type` only for unions, function types, and other non-object forms.
 - Even `() => void` inside an interface property must reference a named type.
 - Shared callback types: import from `$lib/types/handlers` (`VoidHandler`, `MouseEventHandler`).
 - See `eslint.config.js` `no-restricted-syntax` rules for exact selectors.
@@ -15,7 +15,7 @@ Run `bun run lint` — it chains prettier → eslint → similarity-ts.
 ### similarity-ts
 
 - Binary auto-downloaded to `bin/` (gitignored) by `scripts/ensure-similarity.ts`.
-- Type duplicates must be 0. Function-level similarities are informational — auth guard patterns in API handlers are intentionally duplicated.
+- Type duplicates must be 0. Function-level similarities are informational - auth guard patterns in API handlers are intentionally duplicated.
 
 ## Architecture
 

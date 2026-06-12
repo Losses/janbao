@@ -25,7 +25,7 @@ function generateInvitationCode(): string {
 	return code;
 }
 
-// POST /api/invitations/request — Mint a new invitation code for the active
+// POST /api/invitations/request - Mint a new invitation code for the active
 // user, enforcing the per-month limit defined by MONTHLY_INVITATION_LIMIT.
 export const POST: RequestHandler = async ({ locals, platform }) => {
 	const user = locals.user;

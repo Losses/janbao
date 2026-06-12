@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-12
 **Auditors:** 5 Independent Sub-Agents (full-scope audit, no division of labor)
-**Scope:** All Cycle 3 (C03) implementation — Forums Core & pCloud Proxy
+**Scope:** All Cycle 3 (C03) implementation - Forums Core & pCloud Proxy
 
 ---
 
@@ -32,7 +32,7 @@ Five independent audit agents were dispatched in parallel. Each agent read all f
 
 | ID   | File                                    | Issue                                                                                                                                |
 | ---- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| W-01 | `LexicalRenderer.svelte`                | Image `src` and link `href` rendered without URL protocol validation. Stored XSS defense-in-depth gap — renderer trusts stored JSON. |
+| W-01 | `LexicalRenderer.svelte`                | Image `src` and link `href` rendered without URL protocol validation. Stored XSS defense-in-depth gap - renderer trusts stored JSON. |
 | W-02 | All `+page.server.ts` with pagination   | `DISCUSSIONS_LIMIT` and `PAGINATION_LIMIT` hardcoded instead of read from environment variables (RQ00-Backend §6.6).                 |
 | W-03 | `post/discussion/+page.server.ts:82-85` | Five `as string` casts on `FormData.get()` without null guards. `FormData.get()` returns `string \| File \| null`.                   |
 
@@ -66,8 +66,8 @@ Five independent audit agents were dispatched in parallel. Each agent read all f
 
 ### Fix F-05: RSS feed rebuilt with fast-xml-parser, eliminating all string concatenation
 
-- **Problem:** RSS endpoint built XML by string concatenation — fragile, dangerous, and reckless. Three separate inline `.replace()` chains with inconsistent entity coverage. No structured XML generation.
-- **Dependency:** Added `fast-xml-parser` (v5) — mature, high-performance library with automatic escaping
+- **Problem:** RSS endpoint built XML by string concatenation - fragile, dangerous, and reckless. Three separate inline `.replace()` chains with inconsistent entity coverage. No structured XML generation.
+- **Dependency:** Added `fast-xml-parser` (v5) - mature, high-performance library with automatic escaping
 - **File:** `src/routes/category/[categorySlug]/rss/+server.ts`
 - **Change:** Replaced all string-concatenated XML with `XMLBuilder` from `fast-xml-parser`, building a structured JS object that the library serializes with automatic entity escaping. It is now structurally impossible to output unescaped text content.
 - **Utility:** `src/lib/utils/escape.ts` retained with `escapeXml()` for non-RSS edge cases only

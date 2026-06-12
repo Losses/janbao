@@ -9,7 +9,7 @@ import type { UserSearchResult } from '$lib/types/api';
 const MAX_RESULTS = 10;
 const MIN_QUERY_LENGTH = 1;
 
-// GET /api/users/search?q=<term> — Username autocomplete for @mention chips,
+// GET /api/users/search?q=<term> - Username autocomplete for @mention chips,
 // PM recipient selection, and the ParticipantAdder widget. Excludes the caller
 // and the System User. Prefix-matches on username.
 export const GET: RequestHandler = async ({ url, locals }) => {

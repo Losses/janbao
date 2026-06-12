@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * BookmarkTooltip Molecule — Popover displaying the 5 most recently
+	 * BookmarkTooltip Molecule - Popover displaying the 5 most recently
 	 * bookmarked discussions. Lazily fetches `/api/bookmarks?limit=5` when opened.
 	 */
 	import Tooltip from '$lib/components/atoms/Tooltip.svelte';

@@ -4,7 +4,7 @@
 
 This journal documents the design, implementation, and verification of **Cycle 5: Messaging, Bookmarks & Notices (Inbox / Preferences / Comments UNION)** as defined in [RQ00-Plan.md](file:///home/losses/Development/janbao/docs/RQ00-Plan.md).
 
-All server-side code has been built strictly under TypeScript compile-safe boundaries and lint-safe patterns (no `any`, `as any`, or `<any>` overrides). All database queries on soft-deletable tables apply Drizzle `isNull(deletedAt)` filters. All user-facing strings resolve from the i18n dictionary — zero hardcoded English strings exist in C05 code. All API error responses go through `jsonError(t, key, status)`; `new Response()` / raw `json({ error })` are absent from C05 API routes.
+All server-side code has been built strictly under TypeScript compile-safe boundaries and lint-safe patterns (no `any`, `as any`, or `<any>` overrides). All database queries on soft-deletable tables apply Drizzle `isNull(deletedAt)` filters. All user-facing strings resolve from the i18n dictionary - zero hardcoded English strings exist in C05 code. All API error responses go through `jsonError(t, key, status)`; `new Response()` / raw `json({ error })` are absent from C05 API routes.
 
 ---
 
@@ -16,8 +16,8 @@ All server-side code has been built strictly under TypeScript compile-safe bound
   - `extractMentions(contentJson)` recursively walks the Lexical node tree, collects text payloads, and matches `@username` tokens against the canonical username charset. Returns a de-duplicated username list.
   - `extractPlainText(contentJson, maxLen)` collapses the tree to a single-line preview for message inbox previews.
 - **[`src/lib/server/db/notifications.ts`](file:///home/losses/Development/janbao/src/lib/server/db/notifications.ts):** Centralized dispatcher (RQ00-Backend §5.4).
-  - `dispatchReplyNotifications` — on a new discussion reply, resolves and notifies (with per-category preference gating): mentioned users (`mention`), the discussion owner (`discussionReply || discussionComment`), thread participants (`participatedComment`), and bookmark subscribers (`bookmarkedDiscussionComment`). A user receives at most one notification per event (mention > owner > participant > bookmarker priority).
-  - `dispatchMessageNotifications` — on a new private message, notifies the other participants (`privateMessage`). **PM `@mention` notifications are intentionally bypassed** so private content is never leaked outside the conversation (§5.4).
+  - `dispatchReplyNotifications` - on a new discussion reply, resolves and notifies (with per-category preference gating): mentioned users (`mention`), the discussion owner (`discussionReply || discussionComment`), thread participants (`participatedComment`), and bookmark subscribers (`bookmarkedDiscussionComment`). A user receives at most one notification per event (mention > owner > participant > bookmarker priority).
+  - `dispatchMessageNotifications` - on a new private message, notifies the other participants (`privateMessage`). **PM `@mention` notifications are intentionally bypassed** so private content is never leaked outside the conversation (§5.4).
   - Both skip soft-deleted discussions/conversations and never self-notify the author.
 
 ### 2.2 Backend API Endpoints
@@ -33,7 +33,7 @@ All server-side code has been built strictly under TypeScript compile-safe bound
 
 ### 2.3 Server Loaders & Actions
 
-- **[`/messages/[id]/[[page=page]]` load + actions](file:///home/losses/Development/janbao/src/routes/messages/%5Bid%5D/%5B%5Bpage=page%5D%5D/+page.server.ts):** Participant-gated conversation view. Marks `conversationReads` and clears pending `message`-type notifications for the conversation on visit. Actions: `addParticipant` (participant-gated, target-existence checked, `onConflictDoNothing`), `post` (insert message + clear draft + dispatch notifications), `editMessage` (author-only content update — PMs are editable but never deleted, §6.5).
+- **[`/messages/[id]/[[page=page]]` load + actions](file:///home/losses/Development/janbao/src/routes/messages/%5Bid%5D/%5B%5Bpage=page%5D%5D/+page.server.ts):** Participant-gated conversation view. Marks `conversationReads` and clears pending `message`-type notifications for the conversation on visit. Actions: `addParticipant` (participant-gated, target-existence checked, `onConflictDoNothing`), `post` (insert message + clear draft + dispatch notifications), `editMessage` (author-only content update - PMs are editable but never deleted, §6.5).
 - **[`/messages/inbox` load](file:///home/losses/Development/janbao/src/routes/messages/inbox/+page.server.ts):** Paginated conversation list via the messages DAO.
 - **[`/messages/new` load](file:///home/losses/Development/janbao/src/routes/messages/new/+page.server.ts):** Loads the composer draft and an optional `?recipient=` prefill (from the Active Users Wall).
 - **[`/notifications` load](file:///home/losses/Development/janbao/src/routes/notifications/+page.server.ts):** Full notification list + `hasUnread` flag.
@@ -41,15 +41,15 @@ All server-side code has been built strictly under TypeScript compile-safe bound
 - **[`/drafts` load](file:///home/losses/Development/janbao/src/routes/drafts/+page.server.ts):** Lists only `discussion` and `reply` drafts (filters out PM/activity drafts, §6.10).
 - **[`/profile/comments/[userId]/[userSlug]` load](file:///home/losses/Development/janbao/src/routes/profile/comments/%5BuserId%5D/%5BuserSlug%5D/+page.server.ts):** Merged comments UNION query.
 - **[`/profile/invitations` load](file:///home/losses/Development/janbao/src/routes/profile/invitations/+page.server.ts):** Invitations + monthly allowance + remaining count.
-- **Discussion reply action (C03) — wired:** `src/routes/discussion/.../+page.server.ts` now invokes `dispatchReplyNotifications` after inserting a reply (previously no notifications were dispatched).
+- **Discussion reply action (C03) - wired:** `src/routes/discussion/.../+page.server.ts` now invokes `dispatchReplyNotifications` after inserting a reply (previously no notifications were dispatched).
 
 ### 2.4 Data Access Objects (Atomic Backend)
 
-- **[`dao/notifications.ts`](file:///home/losses/Development/janbao/src/lib/server/db/dao/notifications.ts):** `getNotifications` — batch-resolves source-user display info, discussion titles, and message→conversation links.
-- **[`dao/messages.ts`](file:///home/losses/Development/janbao/src/lib/server/db/dao/messages.ts):** `getConversations` — sorts conversation ids by last-message time, paginates, then expands only the page's conversations (title / participant-count / latest-message / unread). Avoids N+1.
+- **[`dao/notifications.ts`](file:///home/losses/Development/janbao/src/lib/server/db/dao/notifications.ts):** `getNotifications` - batch-resolves source-user display info, discussion titles, and message→conversation links.
+- **[`dao/messages.ts`](file:///home/losses/Development/janbao/src/lib/server/db/dao/messages.ts):** `getConversations` - sorts conversation ids by last-message time, paginates, then expands only the page's conversations (title / participant-count / latest-message / unread). Avoids N+1.
 - **[`dao/bookmarks.ts`](file:///home/losses/Development/janbao/src/lib/server/db/dao/bookmarks.ts):** `getBookmarks` + `getBookmarksCount`.
 - **[`dao/invitations.ts`](file:///home/losses/Development/janbao/src/lib/server/db/dao/invitations.ts):** `getInvitations` (status resolution) + `getMonthlyRequestCount`.
-- **[`dao/comments.ts`](file:///home/losses/Development/janbao/src/lib/server/db/dao/comments.ts):** `getUserComments` — UNION-merges discussion replies and activity comments, sorted chronologically (§6.3). Exports `UserCommentItem`.
+- **[`dao/comments.ts`](file:///home/losses/Development/janbao/src/lib/server/db/dao/comments.ts):** `getUserComments` - UNION-merges discussion replies and activity comments, sorted chronologically (§6.3). Exports `UserCommentItem`.
 
 ### 2.5 Shared Types (`src/lib/types/api.ts`)
 
@@ -59,7 +59,7 @@ Added: `ListOffsetOptions`, `NotificationItem`, `NotificationMarkReadBody`, `Boo
 
 - **[`ParticipantAdder.svelte`](file:///home/losses/Development/janbao/src/lib/components/molecules/ParticipantAdder.svelte) (Molecule):** Debounced username autocomplete (queries `/api/users/search`), excludes already-selected ids, emits selected users. Reused by `/messages/new` and the `/messages/[id]` sidebar.
 - **[`ActiveUsersWall.svelte`](file:///home/losses/Development/janbao/src/lib/components/molecules/ActiveUsersWall.svelte) (Molecule):** Fetches `/api/users/online` and renders an avatar grid; each avatar links to start a PM.
-- **[`PrivateMessageWindow.svelte`](file:///home/losses/Development/janbao/src/lib/components/organisms/PrivateMessageWindow.svelte) (Organism):** Conversation stream + composer (image-upload disabled) + author-only inline editing. **No ConfirmationModal** — PMs are not deletable (§6.5).
+- **[`PrivateMessageWindow.svelte`](file:///home/losses/Development/janbao/src/lib/components/organisms/PrivateMessageWindow.svelte) (Organism):** Conversation stream + composer (image-upload disabled) + author-only inline editing. **No ConfirmationModal** - PMs are not deletable (§6.5).
 
 ### 2.7 Frontend Pages
 
@@ -82,8 +82,8 @@ Added: `ListOffsetOptions`, `NotificationItem`, `NotificationMarkReadBody`, `Boo
 
 ## 3. Verification & Compliance Checklist
 
-- **Type Check:** `bun run check` — 1041 files, **0 errors, 0 warnings**.
-- **Lint:** `bun run lint` (prettier → eslint → similarity-ts) — **exit 0**, clean. similarity-ts type duplicates = **0** (`Found 0 type literals`, `No similar types found!`).
+- **Type Check:** `bun run check` - 1041 files, **0 errors, 0 warnings**.
+- **Lint:** `bun run lint` (prettier → eslint → similarity-ts) - **exit 0**, clean. similarity-ts type duplicates = **0** (`Found 0 type literals`, `No similar types found!`).
 - **Strict Typing:** Zero occurrences of `any`, `as any`, or `as unknown as` across all C05 files.
 - **Inline Types:** All request/response/DAO shapes use named interfaces or imported shared types. Zero inline type literals in type-argument position.
 - **i18n Compliance:** Zero hardcoded English strings in C05 code; all API errors use `locals.t.*`, all UI uses `t.*` keys.
@@ -94,11 +94,31 @@ Added: `ListOffsetOptions`, `NotificationItem`, `NotificationMarkReadBody`, `Boo
 
 During this cycle, repo-wide stricter type-checking (the `no-inline-typing` rule extended to type arguments) surfaced two pre-existing latent type mismatches in committed-but-unmodified files. They blocked `bun run check`, so they were fixed with minimal, correct changes:
 
-- **`DiscussionRow.svelte` `DiscussionReadHistory.lastReadAt`** — widened to `Date | string | number | null` to match the DAO `ReadHistory.lastReadAt: Date | null`.
-- **`profile/edit/+page.server.ts`** — the page's load shadowed the layout's full `user` with a partial object; added the `id` and `avatarFileId` fields so the `UserInfoBlock` molecule receives a complete `UserInfoSummary`.
+- **`DiscussionRow.svelte` `DiscussionReadHistory.lastReadAt`** - widened to `Date | string | number | null` to match the DAO `ReadHistory.lastReadAt: Date | null`.
+- **`profile/edit/+page.server.ts`** - the page's load shadowed the layout's full `user` with a partial object; added the `id` and `avatarFileId` fields so the `UserInfoBlock` molecule receives a complete `UserInfoSummary`.
 
 ---
 
 ## 4. Audit & Quality History
 
-_Audit rounds will be appended here as 5-agent independent reviews complete._
+### Audit Round 1 - 2026-06-12
+
+**Method:** 5 independent full-scope audit agents dispatched in parallel. Each read all specification documents and every C05 source file, producing independent PASS/FAIL/WARN assessments across correctness, security, soft-delete, i18n, error convention, spec compliance, type-safety, performance, and notification-correctness categories.
+
+**Agent Verdicts:** 5/5 PASS-WITH-WARNINGS. **0 CRITICAL.**
+
+**Consensus MAJOR defects fixed: 3**
+| ID | Description | Resolution |
+|----|-------------|------------|
+| F-01 | Self-authored PMs inflated the author's own unread badge - neither `/api/messages` POST nor the `post` action seeded `conversationReads.lastReadAt` for the sender | Both now upsert `conversationReads` for the author (`lastReadAt = now`) after insert |
+| F-02 | `addParticipant` + `editMessage` actions skipped the conversation soft-delete / scope guard (only `post` had it) | Both now inner-join `conversations` with `isNull(deletedAt)`; `editMessage` scopes by `messages.conversationId` |
+| F-03 | Header tooltip molecules (`NotificationTooltip`/`MessageTooltip`/`BookmarkTooltip`) still rendered Cycle-2 mock data, never consuming the C05 endpoints | All three now `$effect`-fetch `/api/notifications?limit=5`, `/api/messages/recent?limit=5`, `/api/bookmarks?limit=5` and render real items |
+
+**Consensus MINOR/WARN items fixed: 15**
+i18n fallbacks removed (ActiveUsersWall), recipient-remove i18n+Icon, shared `UserSearchResult` import in ParticipantAdder, dedicated `bookmark.startedBy` key, `draft.contextFieldsRequired` for clear/delete endpoints, hoisted `DRAFT_CONTEXT_TYPES` to constants, `ne()` in user search, dead-code removal, `getUserComments` defensive cap + parent-soft-delete filter (`NOT EXISTS`), `/drafts` defensive `LIMIT`, `getConversations` unread-count pushed into a grouped SQL `COUNT`, `/api/invitations/request` PK-collision retry, `DateBoundary` end-semantics documented, `prefillRecipient` typed as `UserSearchResult`, extracted `BookmarkToggleBody`.
+
+**Excluded:** A5's `/profile/onlineNow` casing finding is the user's own in-progress route-style refactor, not a C05 defect.
+
+**Verification:** `bun run check` = 0 errors/0 warnings across 1041 files; `bun run lint` = clean (similarity-ts "No similar types found!"); `any` grep = zero hits across C05 files.
+
+**Full Report:** [RV00-C05-Audit-01.md](file:///home/losses/Development/janbao/docs/RV00-C05-Audit-01.md)

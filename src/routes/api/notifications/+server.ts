@@ -9,7 +9,7 @@ import type { NotificationMarkReadBody } from '$lib/types/api';
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 50;
 
-// GET /api/notifications — List the active user's notifications, newest first.
+// GET /api/notifications - List the active user's notifications, newest first.
 // Supports an optional `limit` query (capped at 100). The sidebar tooltip
 // requests `limit=5`.
 export const GET: RequestHandler = async ({ url, locals }) => {
@@ -28,7 +28,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	return json({ notifications: items });
 };
 
-// PUT /api/notifications — Mark notifications as read.
+// PUT /api/notifications - Mark notifications as read.
 // Accepts either a discrete list of `ids` or `{ all: true }` to mark every
 // notification for the active user as read.
 export const PUT: RequestHandler = async ({ request, locals }) => {

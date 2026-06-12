@@ -102,7 +102,7 @@
 <DualColumnLayout {sidebar} bind:isDrawerOpen>
 	<div class="space-y-6">
 		<h1 class="text-2xl font-bold border-b border-base-300 pb-4">
-			{targetUser.displayName} — {profileT.comments}
+			{targetUser.displayName} - {profileT.comments}
 		</h1>
 
 		{#if views.length === 0}

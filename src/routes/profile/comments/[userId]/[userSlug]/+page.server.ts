@@ -3,10 +3,9 @@ import type { PageServerLoad } from './$types';
 import { users } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { getUserComments } from '$lib/server/db/dao/comments';
-import { generateSlug } from '$lib/utils/slug';
 
 export const load: PageServerLoad = async (event) => {
-	const { userId, userSlug } = event.params;
+	const { userId } = event.params;
 	const db = event.locals.db;
 
 	// 1. Fetch target user

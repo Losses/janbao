@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Date Atom — Renders a human-friendly relative date (e.g. "3 minutes ago").
+	 * Date Atom - Renders a human-friendly relative date (e.g. "3 minutes ago").
 	 * Hovering displays the exact browser-localized date and time via native `title` attribute.
 	 * Accepts a `t` translation dictionary to support i18n relative time strings.
 	 */

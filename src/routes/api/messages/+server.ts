@@ -17,7 +17,7 @@ import type { MessageCreateBody } from '$lib/types/api';
 const MAX_CONTENT_SIZE = 512 * 1024;
 const MAX_RECIPIENTS = 20;
 
-// POST /api/messages — Create a new private conversation with an initial
+// POST /api/messages - Create a new private conversation with an initial
 // message authored by the active user and the selected recipients.
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const user = locals.user;

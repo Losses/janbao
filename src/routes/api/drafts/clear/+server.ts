@@ -6,7 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import type { DraftClearBody } from '$lib/types/api';
 
-// POST /api/drafts/clear — Delete a draft for the authenticated user by
+// POST /api/drafts/clear - Delete a draft for the authenticated user by
 // (contextType, contextId). Invoked from the client after a successful post /
 // reply / message submission. Mirrors DELETE /api/drafts as a POST alternative
 // per the spec, since fetch DELETE-with-body is not universally supported.

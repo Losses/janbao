@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * LexicalRenderer Molecule — Recursively renders Lexical JSON states securely on the client.
+	 * LexicalRenderer Molecule - Recursively renders Lexical JSON states securely on the client.
 	 * Supports standard text formats (bold, italic, underline, strikethrough, inline code),
 	 * paragraphs, headings (h1-h4), quotes, lists (numbered, bulleted), links, and images.
 	 */

@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * LexicalEditor Organism — Svelte-Lexical editor wrapper with:
+	 * LexicalEditor Organism - Svelte-Lexical editor wrapper with:
 	 * - Markdown shortcut parsers (H1-H4, bold, italic, underline, strikethrough)
 	 * - Protocol-level URL validation (only http:// https:// allowed, blocking XSS)
 	 * - Context-aware autosave (POST to /api/drafts/save every 30s)
@@ -118,7 +118,7 @@
 
 	type EditorStateGetter = () => string;
 
-	// Track editor instance for autosave — store JSON getter, not typed editor ref
+	// Track editor instance for autosave - store JSON getter, not typed editor ref
 	// to avoid cross-version type mismatches from svelte-lexical's lexical dependency
 	let editorStateGetter: EditorStateGetter | undefined = $state();
 
@@ -177,7 +177,7 @@
 		CHECK_LIST
 	]);
 
-	// Protocol-level URL validation — only http://, https://, and relative paths (starting with /, ., #) allowed
+	// Protocol-level URL validation - only http://, https://, and relative paths (starting with /, ., #) allowed
 	function validateUrl(src: string): boolean {
 		const lower = src.trim().toLowerCase();
 		if (lower.startsWith('http://') || lower.startsWith('https://')) {
@@ -194,7 +194,7 @@
 		return false;
 	}
 
-	// Handle content changes — OnChangePlugin signature: (editorState, editor, tags)
+	// Handle content changes - OnChangePlugin signature: (editorState, editor, tags)
 	// We use structural types to avoid cross-package EditorState type conflicts
 	// between our direct lexical dependency and svelte-lexical's internal version.
 	function handleChange(editorState: EditorStateLike, editor: unknown) {
@@ -262,14 +262,14 @@
 		return () => stopAutosave();
 	});
 
-	// Derived save status label — uses i18n keys
+	// Derived save status label - uses i18n keys
 	const saveStatusLabel = $derived.by(() => {
 		if (saveStatus === 'saving') return tEditor['saving'] ?? 'Saving...';
 		if (saveStatus === 'saved') return tEditor['saved'] ?? 'Draft saved';
 		return '';
 	});
 
-	// Build Composer initialConfig object — recompute when initialContent changes
+	// Build Composer initialConfig object - recompute when initialContent changes
 	const initialConfig = $derived({
 		namespace: 'JanbaoEditor',
 		theme: {

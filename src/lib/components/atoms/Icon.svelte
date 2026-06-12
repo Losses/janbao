@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Icon Atom — Renders a Material Design Icon (MDI) as an inline SVG.
+	 * Icon Atom - Renders a Material Design Icon (MDI) as an inline SVG.
 	 * Uses @mdi/js path data to avoid external resource loading.
 	 */
 	interface IconProps {

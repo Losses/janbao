@@ -4,7 +4,7 @@
 	import { generateSlug } from '$lib/utils/slug';
 
 	/**
-	 * DiscussionMetadata Molecule — Displays a unified header for threads and replies.
+	 * DiscussionMetadata Molecule - Displays a unified header for threads and replies.
 	 * Layout: Left is Avatar; right is a vertical stack:
 	 *   - Top: User Display Name (links to /profile/:userId/:userSlug)
 	 *   - Bottom: Relative date (via Date component), last edited indicator, and optional Category link.

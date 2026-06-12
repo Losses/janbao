@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * NotificationTooltip Molecule — Popover displaying the 5 most recent
+	 * NotificationTooltip Molecule - Popover displaying the 5 most recent
 	 * notifications. Lazily fetches `/api/notifications?limit=5` when opened.
 	 */
 	import Tooltip from '$lib/components/atoms/Tooltip.svelte';
@@ -8,7 +8,6 @@
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import DateComponent from '$lib/components/atoms/Date.svelte';
 	import { mdiBell, mdiCog } from '@mdi/js';
-	import { generateSlug } from '$lib/utils/slug';
 	import type { VoidHandler } from '$lib/types/handlers';
 	import type { NotificationItem } from '$lib/types/api';
 

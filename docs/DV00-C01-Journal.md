@@ -97,8 +97,8 @@ This section lists the consecutive audit logs and resolutions.
   - **m1 (System rssToken):** Changed from hardcoded string to `crypto.randomUUID()`.
   - **m2 (Journal index names):** Corrected inaccurate table/index references in Section 2.1.
 - **New Files Created:**
-  - `src/lib/server/constants.ts` — Shared security constants (`getJwtSecret`, `getCookieSecure`).
-  - `src/lib/types/api.ts` — Shared API request/response interfaces (`AuthRegisterBody`, `AuthLoginBody`, `ApiResponse`, `SessionCookieOptions`).
+  - `src/lib/server/constants.ts` - Shared security constants (`getJwtSecret`, `getCookieSecure`).
+  - `src/lib/types/api.ts` - Shared API request/response interfaces (`AuthRegisterBody`, `AuthLoginBody`, `ApiResponse`, `SessionCookieOptions`).
 - **Dependencies Added:** `@cloudflare/workers-types` for `D1Database` global type.
 - **Verification:** `bun run check` (0 errors), `bun run lint` (clean).
 
@@ -114,7 +114,7 @@ This section lists the consecutive audit logs and resolutions.
   - **Dead code removal:** Removed unused `auth.signoutBtn` i18n key from both `en.json` and `zh-CN.json`.
   - **Null safety:** Added null-safe `displayName?.[0]?.toUpperCase() ?? '?'` guards on home page avatar rendering.
 - **Verification:** `bun run check` (0 errors), `bun run lint` (clean).
-- **Cycle 1 Status:** COMPLETE — All 5 audit agents in Round 2 confirmed Cycle 1 scope is fully implemented per specification. Remaining items are correctly deferred to future cycles.
+- **Cycle 1 Status:** COMPLETE - All 5 audit agents in Round 2 confirmed Cycle 1 scope is fully implemented per specification. Remaining items are correctly deferred to future cycles.
 
 ### Round 3 Audit (2026-06-12)
 
@@ -125,18 +125,18 @@ This section lists the consecutive audit logs and resolutions.
 - **Defects Identified:** 1 Major, 2 Minor
 - **Resolutions Applied:**
   - **MAJOR-1 (Missing adapter-cloudflare):** Installed `@sveltejs/adapter-cloudflare` as a devDependency alongside `adapter-auto`. The project uses `adapter-auto` which auto-detects Cloudflare Pages at deploy time and delegates to `adapter-cloudflare`. Updated `vite.config.ts` adapter comment to document the Cloudflare target. Retained `adapter-auto` (instead of switching to `adapter-cloudflare` directly) because the adapter's ambient type declarations declare `Platform.env` as `unknown`, which conflicts with the project's custom typed env interface in `app.d.ts`.
-  - **MINOR-1 (.env.example missing vars):** Deferred — `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` are Cloudflare platform bindings configured via dashboard/wrangler.toml.
-  - **MINOR-2 (Registration rememberMe=true):** Acknowledged as intentional design decision — new users are automatically given persistent sessions.
+  - **MINOR-1 (.env.example missing vars):** Deferred - `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` are Cloudflare platform bindings configured via dashboard/wrangler.toml.
+  - **MINOR-2 (Registration rememberMe=true):** Acknowledged as intentional design decision - new users are automatically given persistent sessions.
 - **Re-verification:** All 14 fixes from Rounds 1–2 confirmed intact with zero regressions across all 5 audit agents.
 - **Verification:** `bun run check` (0 errors, 0 warnings), `bun run lint` (clean).
-- **Cycle 1 Status:** COMPLETE — Three consecutive audit rounds have progressively resolved all defects. All 5 agents confirm Cycle 1 is ready for closure.
+- **Cycle 1 Status:** COMPLETE - Three consecutive audit rounds have progressively resolved all defects. All 5 agents confirm Cycle 1 is ready for closure.
 
 ### Round 4 Final Audit (2026-06-12)
 
-- **Status:** Completed — UNANIMOUS PASS
+- **Status:** Completed - UNANIMOUS PASS
 - **Audit File:** [RV00-C01-Audit-04.md](file:///home/losses/Development/janbao/docs/RV00-C01-Audit-04.md)
 - **Verdict:** UNANIMOUS PASS (5/5 agents)
 - **Defects Identified:** 0
 - **All 15 cumulative fixes from Rounds 1–3 confirmed intact with zero regressions.**
 - **Verification:** `bun run check` (600 files, 0 errors, 0 warnings), `bun run lint` (clean).
-- **Cycle 1 Status:** CLOSED — All 5 audit agents independently confirm Cycle 1 implementation is complete. No outstanding Critical, Major, or actionable Minor defects remain. Codebase is ready for Cycle 2 development.
+- **Cycle 1 Status:** CLOSED - All 5 audit agents independently confirm Cycle 1 implementation is complete. No outstanding Critical, Major, or actionable Minor defects remain. Codebase is ready for Cycle 2 development.

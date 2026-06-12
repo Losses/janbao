@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-12
 **Auditors:** 5 Independent Sub-Agents (full-scope audit, no division of labor)
-**Scope:** All Cycle 3 (C03) implementation — Forums Core & pCloud Proxy
+**Scope:** All Cycle 3 (C03) implementation - Forums Core & pCloud Proxy
 
 ---
 

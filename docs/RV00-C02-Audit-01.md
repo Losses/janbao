@@ -28,7 +28,7 @@
 
 | ID  | Description                                                 | Agents |
 | --- | ----------------------------------------------------------- | ------ |
-| m1  | Tooltip nested `<button>` inside `<button>` — invalid HTML  | 1/5    |
+| m1  | Tooltip nested `<button>` inside `<button>` - invalid HTML  | 1/5    |
 | m2  | Tooltip lacks `aria-haspopup` and focus trap on popover     | 3/5    |
 | m3  | Mock tooltip data in English only                           | 2/5    |
 | m4  | No `Cache-Control` header on `/api/users/online`            | 2/5    |

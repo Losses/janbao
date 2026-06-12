@@ -436,7 +436,7 @@ All server-side error responses must follow a strict, i18n-compliant convention.
 
 1. **i18n-First:** Every user-facing error message must be resolved from the translation dictionary (`locals.t.*`). No raw English/Chinese strings in `error()`, `json()`, `new Response()`, or form action return values.
 2. **Page Loads (`+page.server.ts`):** Use SvelteKit's `error(status, event.locals.t.key)` to throw HTTP errors. The framework renders these as error pages.
-3. **API Endpoints (`src/routes/api/**/+server.ts`):** Must use `jsonError(t, 'key.path', status)`from`$lib/server/errors`. This returns a `json({ error: resolvedMessage }, { status })` response. **`new Response()`is banned in API routes** — all error and success responses must go through`json()`or`jsonError()`.
+3. **API Endpoints (`src/routes/api/**/+server.ts`):** Must use `jsonError(t, 'key.path', status)`from`$lib/server/errors`. This returns a `json({ error: resolvedMessage }, { status })` response. **`new Response()`is banned in API routes** - all error and success responses must go through`json()`or`jsonError()`.
 4. **Form Actions:** Return `{ success: false, error: event.locals.t.key }` with i18n-resolved messages.
 5. **Proxy Routes (non-API `+server.ts`):** Endpoints that serve non-JSON content (XML feeds, binary files) must match the error response Content-Type to the success response Content-Type. Specifically:
    - **XML endpoints** (e.g. RSS): Return plain-text error bodies with i18n messages: `new Response(t.key, { status })`. Do **not** return JSON errors to XML consumers.
@@ -728,16 +728,16 @@ Additionally, `bun run check` runs `svelte-check` for Svelte-specific TypeScript
 | `[string, number]` in annotations                | Extract to `type` alias |
 | `as any`, `as unknown`, `<any>`, `<unknown>`     | Use proper typing       |
 
-This rule applies **everywhere** — variable annotations, function parameters, return types, and even **inside** interface property types:
+This rule applies **everywhere** - variable annotations, function parameters, return types, and even **inside** interface property types:
 
 ```typescript
-// ❌ BAD — inline function type inside interface
+// ❌ BAD - inline function type inside interface
 interface TooltipProps {
 	onToggle: () => void;
 	onClose: () => void;
 }
 
-// ✅ GOOD — every function type is named
+// ✅ GOOD - every function type is named
 import type { VoidHandler } from '$lib/types/handlers';
 
 interface TooltipProps {
@@ -771,11 +771,11 @@ The project integrates [mizchi/similarity-ts](https://github.com/mizchi/similari
 
 - **Binary:** `bin/similarity-ts` (auto-downloaded by `scripts/ensure-similarity.ts` based on OS/architecture).
 - **Type duplicates:** Must be **zero**. Run as part of `bun run lint`.
-- **Function duplicates:** Informational. API handler auth guard patterns (~88-90% similarity) are **intentionally duplicated** — each handler independently verifies authentication for type safety and clarity.
+- **Function duplicates:** Informational. API handler auth guard patterns (~88-90% similarity) are **intentionally duplicated** - each handler independently verifies authentication for type safety and clarity.
 
 #### Known Acceptable Patterns (Do Not Consolidate)
 
-1. **API Auth Guard Prefix** — Every `RequestHandler` starts with:
+1. **API Auth Guard Prefix** - Every `RequestHandler` starts with:
    ```typescript
    const user = locals.user;
    const t = locals.t;
@@ -789,7 +789,7 @@ The project integrates [mizchi/similarity-ts](https://github.com/mizchi/similari
 
 #### `state_referenced_locally` Warnings
 
-When initializing editable form state from props data, Svelte warns that `$state()` only captures the initial value. This is **intentional** for form fields — the state starts from the server value and is then independently modified by the user.
+When initializing editable form state from props data, Svelte warns that `$state()` only captures the initial value. This is **intentional** for form fields - the state starts from the server value and is then independently modified by the user.
 
 Always suppress with an explicit `svelte-ignore` comment:
 
@@ -804,7 +804,7 @@ Always suppress with an explicit `svelte-ignore` comment:
 </script>
 ```
 
-Never omit the comment — zero warnings is enforced by `bun run check`.
+Never omit the comment - zero warnings is enforced by `bun run check`.
 
 ### 8.6 Shared Type Registry
 

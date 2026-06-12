@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Badge Atom — Status label for unread counts, pin states, etc.
+	 * Badge Atom - Status label for unread counts, pin states, etc.
 	 * Supports variants: primary, neutral, warning, accent.
 	 */
 	interface BadgeProps {

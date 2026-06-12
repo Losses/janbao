@@ -32,7 +32,7 @@ export const load: PageServerLoad = async (event) => {
 	// Validate slug
 	const expectedSlug = generateSlug(targetUser.username);
 	if (userSlug !== expectedSlug) {
-		// Accept anyway — slug is for SEO
+		// Accept anyway - slug is for SEO
 	}
 
 	// 2. Parse pagination

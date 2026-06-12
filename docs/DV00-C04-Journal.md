@@ -4,7 +4,7 @@
 
 This journal documents the design, implementation, and verification of **Cycle 4: Activity Square & Profiles (Dynamic Welcome / Settings / Pages)** as defined in [RQ00-Plan.md](file:///home/losses/Development/janbao/docs/RQ00-Plan.md).
 
-All components and server-side code have been built strictly under TypeScript compile-safe boundaries and lint-safe patterns (no `any`, `as any`, or `<any>` overrides). All database queries explicitly filter deleted records using Drizzle soft-delete queries `isNull(deletedAt)`. All user-facing strings use the i18n translation dictionary — zero hardcoded English strings exist in C04 code.
+All components and server-side code have been built strictly under TypeScript compile-safe boundaries and lint-safe patterns (no `any`, `as any`, or `<any>` overrides). All database queries explicitly filter deleted records using Drizzle soft-delete queries `isNull(deletedAt)`. All user-facing strings use the i18n translation dictionary - zero hardcoded English strings exist in C04 code.
 
 ---
 
@@ -72,8 +72,8 @@ All components and server-side code have been built strictly under TypeScript co
 
 ## 3. Verification & Compliance Checklist
 
-- **Type Check:** `bun run check` — 981 files, 0 errors, 14 warnings.
-- **Lint Check (C04 files only):** `bun run lint` — 0 errors in all C04 files. (31 pre-existing errors in C01-C03 legacy code.)
+- **Type Check:** `bun run check` - 981 files, 0 errors, 14 warnings.
+- **Lint Check (C04 files only):** `bun run lint` - 0 errors in all C04 files. (31 pre-existing errors in C01-C03 legacy code.)
 - **Strict Typing:** Zero occurrences of `any`, `as any`, or `as unknown as` across all C04 files.
 - **Inline Types:** All request/response body types extracted to named interfaces in `src/lib/types/api.ts`. Zero inline type literals in C04 code.
 - **i18n Compliance:** Zero hardcoded English strings in C04 code. All API error messages use `locals.t.*`. All UI text uses `t.*` dictionary keys without fallback strings.
@@ -83,7 +83,7 @@ All components and server-side code have been built strictly under TypeScript co
 
 ## 4. Audit & Quality History
 
-### Audit Round 1 — 2026-06-12
+### Audit Round 1 - 2026-06-12
 
 **Method:** 5 independent full-scope audit agents dispatched in parallel. Each agent read all specification documents and all 27+ C04 code files, producing independent PASS/FAIL/WARN assessments across 13 audit categories.
 
@@ -92,16 +92,16 @@ All components and server-side code have been built strictly under TypeScript co
 **Consensus FAIL Items Found: 4**
 | ID | Description | Resolution |
 |----|-------------|------------|
-| F-01 | All 6 C04 API endpoints use raw `json({ error: t.* })` instead of `jsonError(t, 'key.path', status)` — violates RQ00-Backend §2.8 | Fixed: replaced all error calls with `jsonError()` in all 6 API files |
+| F-01 | All 6 C04 API endpoints use raw `json({ error: t.* })` instead of `jsonError(t, 'key.path', status)` - violates RQ00-Backend §2.8 | Fixed: replaced all error calls with `jsonError()` in all 6 API files |
 | F-02 | Activity Square sidebar renders UserInfoBlock + navigation, contradicting RQ00-Frontend §3.3.5 ("sidebar is left completely empty") | Fixed: emptied sidebar content per spec |
-| F-03 | Profile page server load missing batch recipient display names and comment counts for ActivityRow — directed indicator never renders on profile pages | Fixed: added batch recipient name fetch + comment count query; replaced raw `sql` OR with Drizzle `or(eq(), eq())` |
+| F-03 | Profile page server load missing batch recipient display names and comment counts for ActivityRow - directed indicator never renders on profile pages | Fixed: added batch recipient name fetch + comment count query; replaced raw `sql` OR with Drizzle `or(eq(), eq())` |
 | F-04 | DELETE handler parent activity lookup missing `isNull(deletedAt)` filter and parent `recipientId` authorization check | Fixed: added soft-delete filter + recipient check on parent lookup |
 
 **Majority WARN Items Fixed: 5**
 | ID | Description | Resolution |
 |----|-------------|------------|
 | W-01 | ConfirmationModal backdrop hardcoded `aria-label="Close modal"` | Fixed: replaced with `{cancelLabel}` prop |
-| W-02 | ActivityRow delete button visibility only checks author/admin — missing recipient and parent author | Fixed: added `recipientId`, `resolvedAuthorId` checks to button visibility |
+| W-02 | ActivityRow delete button visibility only checks author/admin - missing recipient and parent author | Fixed: added `recipientId`, `resolvedAuthorId` checks to button visibility |
 | W-03 | Profile edit language selector hardcoded "English" / "简体中文" | Fixed: added `languageEnglish` / `languageChinese` i18n keys to both dictionaries |
 | W-04 | 5 Svelte settings pages use inline type literal `$state<{ type: ... }>` | Fixed: extracted `FeedbackMessage` interface to `src/lib/types/api.ts` |
 | W-05 | `ProfileEditUpdates` and `PreferenceUpdates` duplicate `ProfileEditBody` and `ProfilePreferencesBody` | Fixed: removed local interfaces, use `Partial<ProfileEditBody>` and `Partial<ProfilePreferencesBody>` |
@@ -110,7 +110,7 @@ All components and server-side code have been built strictly under TypeScript co
 
 **Full Report:** [RV00-C04-Audit-01.md](file:///home/losses/Development/janbao/docs/RV00-C04-Audit-01.md)
 
-### Audit Round 2 — 2026-06-12
+### Audit Round 2 - 2026-06-12
 
 **Method:** 5 independent full-scope audit agents dispatched in parallel. Each agent verified all 9 Round 1 fixes and performed a fresh full-scope audit across 13 categories.
 
@@ -119,7 +119,7 @@ All components and server-side code have been built strictly under TypeScript co
 **New Consensus WARN Items Found: 1**
 | ID | Description | Resolution |
 |----|-------------|------------|
-| R2-W-01 | Batch queries use raw `sql\`${column} IN ${array}\``instead of Drizzle's idiomatic`inArray()`— 4 instances across activity and profile page server loads | Fixed: replaced with`inArray(column, array)` from drizzle-orm |
+| R2-W-01 | Batch queries use raw `sql\`${column} IN ${array}\``instead of Drizzle's idiomatic`inArray()`- 4 instances across activity and profile page server loads | Fixed: replaced with`inArray(column, array)` from drizzle-orm |
 
 **Verification:** `bun run check` = 0 errors/0 warnings across 983 files; `bun run lint` = clean (similarity-ts type duplicates = 0); `any` grep = zero hits.
 

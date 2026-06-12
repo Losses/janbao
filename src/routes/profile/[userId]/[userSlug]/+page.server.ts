@@ -33,11 +33,11 @@ export const load: PageServerLoad = async (event) => {
 
 	const targetUser = targetUserRecords[0];
 
-	// Validate slug matches (slug is for SEO — accept anyway)
+	// Validate slug matches (slug is for SEO - accept anyway)
 	const expectedSlug = generateSlug(targetUser.username);
 	const { userSlug } = event.params;
 	if (userSlug !== expectedSlug) {
-		// Slug mismatch is accepted — slug is cosmetic for SEO
+		// Slug mismatch is accepted - slug is cosmetic for SEO
 	}
 
 	// 2. Increment view count (exclude self-visits)

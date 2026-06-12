@@ -16,7 +16,7 @@
 | Agent 4 | Frontend Views & Design System          | PASS (5 deferred MINOR items)   |
 | Agent 5 | Full Integration & Configuration        | FAIL → Fixed (1 MAJOR, 2 MINOR) |
 
-**Overall Verdict: PASS** — All Critical and Major defects from Rounds 1–2 remain fixed. One new MAJOR defect found and resolved in this round. All remaining items are either explicitly deferred to future cycles or represent acceptable technical debt for Cycle 1.
+**Overall Verdict: PASS** - All Critical and Major defects from Rounds 1–2 remain fixed. One new MAJOR defect found and resolved in this round. All remaining items are either explicitly deferred to future cycles or represent acceptable technical debt for Cycle 1.
 
 ---
 
@@ -63,14 +63,14 @@ The specification (RQ00-Backend Section 1) targets Cloudflare Pages/Workers. The
 
 The `.env.example` file only documents Cloudflare D1 variables but is missing `JWT_SECRET`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`. These are Cloudflare platform bindings rather than process.env variables, so this is documentation-only.
 
-**Resolution:** Deferred — these are configured via Cloudflare dashboard/wrangler.toml, not `.env`.
+**Resolution:** Deferred - these are configured via Cloudflare dashboard/wrangler.toml, not `.env`.
 
 ### MINOR-2: Registration endpoint hardcodes `rememberMe=true` (Agent 5)
 
 **Classification:** MINOR (Acknowledged)
 **File:** `src/routes/api/auth/register/+server.ts:105`
 
-Registration always creates a 30-day persistent session. The registration form does not expose a "remember me" toggle. This is an intentional design decision — new users are automatically remembered.
+Registration always creates a 30-day persistent session. The registration form does not expose a "remember me" toggle. This is an intentional design decision - new users are automatically remembered.
 
 **Resolution:** Acknowledged as acceptable behavior per Round 2.
 

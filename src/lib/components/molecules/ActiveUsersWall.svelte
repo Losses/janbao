@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * ActiveUsersWall Molecule — Grid of avatars for users active in the last
+	 * ActiveUsersWall Molecule - Grid of avatars for users active in the last
 	 * 10 minutes (stealth users excluded server-side). Fetches /api/users/online
 	 * on mount. Rendered in the Messages inbox sidebar per RQ00-Frontend §3.3.3.
 	 */
@@ -41,7 +41,7 @@
 				users = (await res.json()) as OnlineUser[];
 			}
 		} catch {
-			// Silently fail — the wall is non-critical
+			// Silently fail - the wall is non-critical
 		}
 		loaded = true;
 	}
@@ -56,7 +56,7 @@
 			{/each}
 		</div>
 	{:else if users.length === 0}
-		<p class="text-xs text-base-content/40">—</p>
+		<p class="text-xs text-base-content/40">-</p>
 	{:else}
 		<div class="flex flex-wrap gap-2">
 			{#each users as u (u.id)}

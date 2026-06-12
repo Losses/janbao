@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Tooltip Atom — Click-triggered absolute-positioned overlay wrapper.
+	 * Tooltip Atom - Click-triggered absolute-positioned overlay wrapper.
 	 * Children are rendered directly as the trigger element (no wrapping button).
 	 * Expects children to be an interactive element (button, link, etc.).
 	 */

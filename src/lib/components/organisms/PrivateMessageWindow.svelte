@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * PrivateMessageWindow Organism — Conversation message stream with a
+	 * PrivateMessageWindow Organism - Conversation message stream with a
 	 * composer and author-only inline editing. PMs can be edited but never
 	 * deleted, so no ConfirmationModal is rendered (RQ00-Frontend §6.5).
 	 */
@@ -47,7 +47,7 @@
 	let composeContent = $state('');
 	let isPosting = $state(false);
 
-	// Inline edit state — only one message edited at a time
+	// Inline edit state - only one message edited at a time
 	let editingMessageId = $state<string | null>(null);
 	let editContent = $state('');
 	let isSavingEdit = $state(false);

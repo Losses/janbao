@@ -67,7 +67,7 @@ export const GET: RequestHandler = async (event) => {
 	const protocol = event.url.protocol;
 	const siteUrl = `${protocol}//${host}`;
 
-	// 4. Build structured feed object — all text is auto-escaped by XMLBuilder
+	// 4. Build structured feed object - all text is auto-escaped by XMLBuilder
 	const items: Record<string, unknown>[] = recentDiscussions.map((d) => {
 		const link = `${siteUrl}/discussion/${d.id}/${d.slug}`;
 		return {

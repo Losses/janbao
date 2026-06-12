@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * ParticipantAdder Molecule — Username autocomplete that queries
+	 * ParticipantAdder Molecule - Username autocomplete that queries
 	 * /api/users/search and emits a selected user. The parent owns the chip list
 	 * and submission. Used by the /messages/new recipient field and the
 	 * /messages/[id] sidebar "add participant" widget (RQ00-Frontend §3.3.4).
