@@ -77,7 +77,7 @@
 				<li><a href="/profile/password">{profileT.changePassword}</a></li>
 				<li><a href="/profile/preferences">{profileT.preferences}</a></li>
 				<li><a href="/profile/picture">{profileT.avatar}</a></li>
-				<li><a href="/profile/OnlineNow">{profileT.stealthSettings}</a></li>
+				<li><a href="/profile/onlineNow">{profileT.stealthSettings}</a></li>
 			</ul>
 		{/if}
 	</div>

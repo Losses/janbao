@@ -30,7 +30,7 @@ All components and server-side code have been built strictly under TypeScript co
 - **[`/profile/password` +page.server.ts](file:///home/losses/Development/janbao/src/routes/profile/password/+page.server.ts):** Password change page load. Redirects unauthenticated users.
 - **[`/profile/preferences` +page.server.ts](file:///home/losses/Development/janbao/src/routes/profile/preferences/+page.server.ts):** Preferences page load. Fetches current notification preferences from database.
 - **[`/profile/picture` +page.server.ts](file:///home/losses/Development/janbao/src/routes/profile/picture/+page.server.ts):** Avatar upload page load. Returns current `avatarFileId`.
-- **[`/profile/OnlineNow` +page.server.ts](file:///home/losses/Development/janbao/src/routes/profile/OnlineNow/+page.server.ts):** Stealth settings page load. Returns current `isStealth` state.
+- **[`/profile/onlineNow` +page.server.ts](file:///home/losses/Development/janbao/src/routes/profile/onlineNow/+page.server.ts):** Stealth settings page load. Returns current `isStealth` state.
 
 ### 2.3 Type Definitions
 
@@ -59,7 +59,7 @@ All components and server-side code have been built strictly under TypeScript co
 - **[`/profile/password`](file:///home/losses/Development/janbao/src/routes/profile/password/+page.svelte):** Password change form with client-side validation (>= 5 chars, match check).
 - **[`/profile/preferences`](file:///home/losses/Development/janbao/src/routes/profile/preferences/+page.svelte):** 7 notification preference toggles with descriptions.
 - **[`/profile/picture`](file:///home/losses/Development/janbao/src/routes/profile/picture/+page.svelte):** Avatar upload with client-side validation (max 1MB, MIME type check). Uploads via `/upload` then updates `avatarFileId`.
-- **[`/profile/OnlineNow`](file:///home/losses/Development/janbao/src/routes/profile/OnlineNow/+page.svelte):** Stealth mode toggle with status indicator.
+- **[`/profile/onlineNow`](file:///home/losses/Development/janbao/src/routes/profile/onlineNow/+page.svelte):** Stealth mode toggle with status indicator.
 
 ### 2.6 Localization Updates
 

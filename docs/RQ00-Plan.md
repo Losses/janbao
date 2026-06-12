@@ -171,7 +171,7 @@ To guarantee that no loose type assertions occur, the linter configurations in `
     - `/activity` view.
     - `/profile/:userId/:userSlug` view.
     - `/profile/discussions/:userId/:userSlug` (User Discussions page).
-    - **Settings Pages:** `/profile/edit` (disabled username input, admin check validation guard), `/profile/password` (client/server-side length checker >= 5 characters), `/profile/preferences`, `/profile/picture` (size restriction <= 1MB), `/profile/OnlineNow` (stealth settings).
+    - **Settings Pages:** `/profile/edit` (disabled username input, admin check validation guard), `/profile/password` (client/server-side length checker >= 5 characters), `/profile/preferences`, `/profile/picture` (size restriction <= 1MB), `/profile/onlineNow` (stealth settings).
 - **Verification Checklist:**
   - Verify that stealth mode user exclusion works on the active users wall.
   - E2E test welcome post deterministic primary key creation and unique key constraint exception handling (forcing concurrent insert attempts).
