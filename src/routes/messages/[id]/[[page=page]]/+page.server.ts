@@ -9,7 +9,7 @@ import {
 	notifications,
 	drafts
 } from '$lib/server/db/schema';
-import { eq, and, isNull, inArray, count } from 'drizzle-orm';
+import { eq, and, isNull, count, sql } from 'drizzle-orm';
 import { getPaginationLimit } from '$lib/server/constants';
 import { dispatchMessageNotifications } from '$lib/server/db/notifications';
 
@@ -122,24 +122,18 @@ export const load: PageServerLoad = async (event) => {
 			set: { lastReadAt: new Date() }
 		});
 
-	// 7. Resolve pending message notifications for this conversation
-	const allMessageIdRows = await db
-		.select({ id: messages.id })
-		.from(messages)
-		.where(eq(messages.conversationId, conversationId));
-	const allMessageIds = allMessageIdRows.map((r) => r.id);
-	if (allMessageIds.length > 0) {
-		await db
-			.update(notifications)
-			.set({ isRead: true })
-			.where(
-				and(
-					eq(notifications.userId, user.id),
-					eq(notifications.isRead, false),
-					inArray(notifications.messageId, allMessageIds)
-				)
-			);
-	}
+	// 7. Resolve pending message notifications for this conversation (single
+	// UPDATE with a subquery — no id round-trip, no bind-variable ceiling).
+	await db
+		.update(notifications)
+		.set({ isRead: true })
+		.where(
+			and(
+				eq(notifications.userId, user.id),
+				eq(notifications.isRead, false),
+				sql`${notifications.messageId} IN (SELECT id FROM messages WHERE conversation_id = ${conversationId})`
+			)
+		);
 
 	// 8. Load composer draft
 	let messageDraft: string | null = null;

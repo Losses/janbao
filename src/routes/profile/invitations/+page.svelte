@@ -6,7 +6,7 @@
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
 	import { goto } from '$app/navigation';
-	import type { InvitationItem, ApiResult } from '$lib/types/api';
+	import type { InvitationItem, ApiResult, FeedbackMessage } from '$lib/types/api';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -22,6 +22,7 @@
 	const invitations = $derived(data.invitations as InvitationItem[]);
 	let isDrawerOpen = $state(false);
 	let requesting = $state(false);
+	let feedback = $state<FeedbackMessage | null>(null);
 
 	const userSlug = $derived(generateSlug(user?.username || ''));
 	const remaining = $derived(Math.max(0, data.monthlyLimit - data.requestedThisMonth));
@@ -43,14 +44,17 @@
 
 	async function requestCode() {
 		requesting = true;
+		feedback = null;
 		try {
 			const res = await fetch('/api/invitations/request', { method: 'POST' });
 			const result: ApiResult = await res.json();
 			if (result.success) {
 				goto(window.location.pathname);
+				return;
 			}
+			feedback = { type: 'error', text: result.error || t.common.error };
 		} catch {
-			// silently fail
+			feedback = { type: 'error', text: t.auth.networkError };
 		}
 		requesting = false;
 	}
@@ -86,6 +90,15 @@
 <DualColumnLayout {sidebar} bind:isDrawerOpen>
 	<div class="space-y-6">
 		<h1 class="text-2xl font-bold border-b border-base-300 pb-4">{profileT.invitations}</h1>
+
+		{#if feedback}
+			<div
+				class="alert {feedback.type === 'success' ? 'alert-primary' : 'alert-warning'}"
+				role="alert"
+			>
+				{feedback.text}
+			</div>
+		{/if}
 
 		<div class="card bg-base-100 border border-base-200 rounded-xl p-5 shadow-sm space-y-3">
 			<p class="text-sm text-base-content/80">{allowanceText}</p>

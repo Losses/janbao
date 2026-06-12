@@ -8,15 +8,8 @@
 	import { generateSlug } from '$lib/utils/slug';
 	import { goto } from '$app/navigation';
 	import { enhance } from '$app/forms';
-	import type { UserSearchResult } from '$lib/types/api';
+	import type { UserSearchResult, ParticipantItem } from '$lib/types/api';
 	import type { PageData } from './$types';
-
-	interface Participant {
-		userId: string;
-		username: string;
-		displayName: string;
-		avatarFileId: string | null;
-	}
 
 	interface PageProps {
 		data: PageData;
@@ -28,7 +21,7 @@
 	const messageT = $derived(t.message);
 	const user = $derived(data.user);
 	const conversation = $derived(data.conversation);
-	const participants = $derived(data.participants as Participant[]);
+	const participants = $derived(data.participants as ParticipantItem[]);
 	const totalPages = $derived(data.totalPages);
 	const currentPage = $derived(data.page);
 	let isDrawerOpen = $state(false);
@@ -121,6 +114,7 @@
 
 		<PrivateMessageWindow
 			messages={data.messages}
+			conversationId={conversation.id}
 			currentUserId={user?.id ?? null}
 			messageDraft={data.messageDraft}
 			{t}

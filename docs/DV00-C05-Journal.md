@@ -122,3 +122,28 @@ i18n fallbacks removed (ActiveUsersWall), recipient-remove i18n+Icon, shared `Us
 **Verification:** `bun run check` = 0 errors/0 warnings across 1041 files; `bun run lint` = clean (similarity-ts "No similar types found!"); `any` grep = zero hits across C05 files.
 
 **Full Report:** [RV00-C05-Audit-01.md](file:///home/losses/Development/janbao/docs/RV00-C05-Audit-01.md)
+
+### Audit Round 2 — 2026-06-12
+
+**Method:** 5 independent full-scope audit agents dispatched in parallel. Each verified the Round-1 fixes (F-01/F-02/F-03, W-11/W-12/W-13) and re-audited the entire C05 codebase.
+
+**Agent Verdicts:** R2-A1 PASS · R2-A2 PASS · R2-A3 PASS-WITH-WARNINGS · R2-A4 PASS-WITH-WARNINGS · R2-A5 PASS-WITH-WARNINGS. **0 CRITICAL, 0 MAJOR, 0 FAIL.** Round-1 fixes **unanimously VERIFIED-CORRECT, no regressions**.
+
+**Round-2 hardening items fixed: 9**
+| ID | Description | Resolution |
+|----|-------------|------------|
+| R2-F-01 | `getConversations` latest-message join non-deterministic on `createdAt` ties | Select includes `messages.id`; latest map keeps the **largest id** per conversation (deterministic tie-break) |
+| R2-F-02 | `/messages/[id]` visit-marks-read built an unbounded `IN(...)` from all message ids | Single SQL `UPDATE ... WHERE messageId IN (SELECT id FROM messages WHERE conversation_id = ?)` — no id round-trip, no bind ceiling |
+| R2-F-03 | `PrivateMessageWindow` composer `contextId` collapsed to `''` on a zero-message page | Added an explicit `conversationId` prop sourced from `data.conversation.id` |
+| R2-F-04 | `isEligible` param used an inline type literal bypassing the no-inline-typing selector | Extracted named `NotificationPreferenceFields` interface |
+| R2-F-05 | `SelectedRecipient` / `Participant` local interfaces duplicated shared types | Reuse `UserSearchResult` / `ParticipantItem` |
+| R2-F-06 | Unread count included the author's own messages (defense-in-depth) | Added `ne(messages.authorId, userId)` to the unread predicate |
+| R2-F-07 | `ActiveUsersWall` empty-state hardcoded `"-"` glyph | Neutral empty placeholder (no literal) |
+| R2-F-08 | `/api/notifications` PUT accepted an unbounded `ids` array | Capped at `MAX_MARK_READ_IDS` (500) |
+| R2-F-09 | `/profile/invitations` `requestCode` swallowed server errors | Surfaces `result.error` in an alert |
+
+**Accepted as-is (defensible / out of scope):** invitations header shows *remaining* (keyed with "available"); `editMessage` empty-result copy; draft empty-`contextId` autosave convention; recipient-existence check (no `users.deletedAt` column yet); tooltip `loaded` latch; `notificationTypeFor` participant/bookmarker collapse.
+
+**Verification:** `bun run check` = 0 errors/0 warnings across 1041 files; `bun run lint` = clean (similarity-ts "No similar types found!"); i18n parity exact (260 = 260 keys, zero duplicates).
+
+**Full Report:** [RV00-C05-Audit-02.md](file:///home/losses/Development/janbao/docs/RV00-C05-Audit-02.md)

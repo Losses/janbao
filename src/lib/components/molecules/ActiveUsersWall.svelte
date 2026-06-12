@@ -56,7 +56,7 @@
 			{/each}
 		</div>
 	{:else if users.length === 0}
-		<p class="text-xs text-base-content/40">-</p>
+		<div class="h-4"></div>
 	{:else}
 		<div class="flex flex-wrap gap-2">
 			{#each users as u (u.id)}

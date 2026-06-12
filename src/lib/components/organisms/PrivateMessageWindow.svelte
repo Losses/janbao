@@ -32,6 +32,7 @@
 
 	interface PrivateMessageWindowProps {
 		messages: PrivateMessage[];
+		conversationId: string;
 		currentUserId?: string | null;
 		messageDraft?: string | null;
 		t: TranslationDict;
@@ -39,6 +40,7 @@
 
 	let {
 		messages,
+		conversationId,
 		currentUserId = null,
 		messageDraft = null,
 		t
@@ -188,7 +190,7 @@
 			>
 				<LexicalEditor
 					contextType="message"
-					contextId={messages[0]?.conversationId ?? ''}
+					contextId={conversationId}
 					initialContent={messageDraft}
 					placeholder={editorT['placeholderMessage'] ?? messageT['content'] ?? ''}
 					disableImageUpload={true}

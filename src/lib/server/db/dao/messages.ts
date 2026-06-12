@@ -5,7 +5,7 @@ import {
 	users,
 	conversationReads
 } from '../schema';
-import { eq, and, isNull, inArray, sql } from 'drizzle-orm';
+import { eq, and, isNull, inArray, ne, sql } from 'drizzle-orm';
 import type { D1Db } from '../index';
 import type { ConversationListItem, ListOffsetOptions } from '$lib/types/api';
 import { extractPlainText } from '$lib/utils/mentions';
@@ -96,6 +96,7 @@ export async function getConversations(
 		.select({
 			conversationId: latestSubq.conversationId,
 			maxAt: latestSubq.maxAt,
+			id: messages.id,
 			contentJson: messages.contentJson,
 			authorDisplayName: users.displayName
 		})
@@ -108,11 +109,21 @@ export async function getConversations(
 			)
 		)
 		.innerJoin(users, eq(messages.authorId, users.id));
-	const latestMap = new Map(latestDetails.map((l) => [l.conversationId, l]));
+	// Tie-break on timestamp ties: keep the row with the largest message id per
+	// conversation so the "latest" preview/author is deterministic.
+	const latestMap = new Map<string, (typeof latestDetails)[number]>();
+	for (const row of latestDetails) {
+		const existing = latestMap.get(row.conversationId);
+		if (!existing || row.id > existing.id) {
+			latestMap.set(row.conversationId, row);
+		}
+	}
 
 	// 6. Unread counts (pushed into SQL): count messages newer than the user's
-	// lastReadAt per conversation. COALESCE(lastReadAt, 0) treats never-read
-	// conversations as unread-from-epoch, so all their messages count.
+	// lastReadAt per conversation, excluding the user's OWN messages (so the
+	// count is self-contained and does not depend on every writer advancing the
+	// read pointer). COALESCE(lastReadAt, 0) treats never-read conversations as
+	// unread-from-epoch, so all their messages count.
 	const unreadRows = await db
 		.select({
 			conversationId: messages.conversationId,
@@ -129,6 +140,7 @@ export async function getConversations(
 		.where(
 			and(
 				inArray(messages.conversationId, pageIds),
+				ne(messages.authorId, userId),
 				sql`${messages.createdAt} > COALESCE(${conversationReads.lastReadAt}, 0)`
 			)
 		)

@@ -237,17 +237,17 @@ export async function dispatchMessageNotifications(
 	}
 }
 
+interface NotificationPreferenceFields {
+	mention: boolean;
+	discussionReply: boolean;
+	discussionComment: boolean;
+	participatedComment: boolean;
+	bookmarkedDiscussionComment: boolean;
+}
+
 function isEligible(
 	category: ReplyNotifCategory,
-	pref:
-		| {
-				mention: boolean;
-				discussionReply: boolean;
-				discussionComment: boolean;
-				participatedComment: boolean;
-				bookmarkedDiscussionComment: boolean;
-		  }
-		| undefined
+	pref: NotificationPreferenceFields | undefined
 ): boolean {
 	// No preference row means default-true for every category.
 	if (!pref) return true;
