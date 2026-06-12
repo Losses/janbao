@@ -254,7 +254,7 @@ Rich text editing across the forum is powered by Svelte wrappers around the Lexi
 
 - **Metadata Subheader:** Displays user statistics including join date, profile view count (increments on visit), last active time, and user group.
 - **Directed Activity Composer:** The bottom of the profile page features a full rich text editor. Typing and submitting here posts a directed activity (`User A -> User B`) directly to the target user's profile stream.
-- **Settings Routes:** Includes `/profile/edit` (username input disabled unless logged-in user is an admin), `/profile/password` (password strength validation enforces a minimum of 5 characters), `/profile/preferences` (toggles for PMs, bookmarks, mentions, and replies), `/profile/picture` (avatar upload <= 1MB), and `/profile/OnlineNow` (stealth settings).
+- **Settings Routes:** Includes `/profile/edit` (username input disabled unless logged-in user is an admin), `/profile/password` (password strength validation enforces a minimum of 5 characters), `/profile/preferences` (toggles for PMs, bookmarks, mentions, and replies), `/profile/picture` (avatar upload <= 1MB), and `/profile/onlineNow` (stealth settings).
 
 ### 6.8 New Discussion (`/post/discussion`)
 
