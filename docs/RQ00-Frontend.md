@@ -1,4 +1,4 @@
-# RQ0-Frontend: Frontend Architecture Document
+# RQ00-Frontend: Frontend Architecture Document
 
 ## 1. System Overview & Technology Stack
 
