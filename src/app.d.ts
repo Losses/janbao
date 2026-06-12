@@ -1,12 +1,12 @@
 /// <reference types="@cloudflare/workers-types" />
-import type { getDb } from '$lib/server/db';
+import type { D1Db } from '$lib/server/db';
 import type en from '$lib/i18n/en.json';
 
 declare global {
 	namespace App {
 		// interface Error {}
 		interface Locals {
-			db: ReturnType<typeof getDb>;
+			db: D1Db;
 			user: {
 				id: string;
 				username: string;
@@ -29,7 +29,7 @@ declare global {
 		// interface PageState {}
 		interface Platform {
 			env: {
-				D1_DB: D1Database;
+				D1_DB?: D1Database;
 				JWT_SECRET: string;
 				ADMIN_EMAIL?: string;
 				ADMIN_PASSWORD?: string;

@@ -35,7 +35,18 @@
 	"common": {
 		"welcome": "Welcome!",
 		"error": "An error occurred",
-		"success": "Success"
+		"success": "Success",
+		"loading": "Loading...",
+		"saving": "Saving...",
+		"saved": "Saved",
+		"cancel": "Cancel",
+		"confirm": "Confirm",
+		"delete": "Delete",
+		"edit": "Edit",
+		"reply": "Reply",
+		"submit": "Submit",
+		"showAll": "Show All",
+		"noResults": "No results found"
 	},
 	"home": {
 		"title": "Home - Janbao",
@@ -43,5 +54,57 @@
 		"loggedInAs": "Logged in as",
 		"lastActive": "Last active",
 		"guestPrompt": "Welcome to the Janbao Forum System. Please sign in or register to participate in discussions."
+	},
+	"sidebar": {
+		"notifications": "Notifications",
+		"messages": "Messages",
+		"bookmarks": "Bookmarks",
+		"settings": "Settings",
+		"sendMessage": "Send Message",
+		"showAll": "Show All",
+		"createDiscussion": "Create Discussion",
+		"myDiscussions": "My Discussions",
+		"myDrafts": "My Drafts",
+		"activeUsers": "Active Users",
+		"categoryList": "Categories",
+		"quickLinks": "Quick Links"
+	},
+	"editor": {
+		"placeholder": "Write something...",
+		"placeholderActivity": "What's on your mind?",
+		"placeholderReply": "Write your reply...",
+		"placeholderMessage": "Write your message...",
+		"saving": "Saving draft...",
+		"saved": "Draft saved",
+		"loading": "Loading draft...",
+		"publish": "Publish",
+		"saveDraft": "Save Draft",
+		"preview": "Preview",
+		"bold": "Bold",
+		"italic": "Italic",
+		"underline": "Underline",
+		"strikethrough": "Strikethrough",
+		"heading": "Heading",
+		"link": "Insert Link",
+		"image": "Insert Image",
+		"mentionHint": "Type @ to mention someone"
+	},
+	"pagination": {
+		"previous": "Previous",
+		"next": "Next",
+		"page": "Page"
+	},
+	"date": {
+		"justNow": "just now",
+		"minuteAgo": "minute ago",
+		"minutesAgo": "minutes ago",
+		"hourAgo": "hour ago",
+		"hoursAgo": "hours ago",
+		"dayAgo": "day ago",
+		"daysAgo": "days ago",
+		"monthAgo": "month ago",
+		"monthsAgo": "months ago",
+		"yearAgo": "year ago",
+		"yearsAgo": "years ago"
 	}
 }

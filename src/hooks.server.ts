@@ -1,4 +1,4 @@
-import { getDb } from '$lib/server/db';
+import { getDb, getLocalDb } from '$lib/server/db';
 import { seedCore } from '$lib/server/db/seed';
 import { verifyJwt } from '$lib/server/auth';
 import { users } from '$lib/server/db/schema';
@@ -10,13 +10,16 @@ import type { Handle } from '@sveltejs/kit';
 export const handle: Handle = async ({ event, resolve }) => {
 	// 1. Initialize Database Client
 	const d1 = event.platform?.env?.D1_DB;
-	if (!d1) {
-		return new Response('Database configuration is missing. D1_DB binding is required.', {
-			status: 500
-		});
+	let db;
+
+	if (d1) {
+		// Production: Cloudflare D1 binding
+		db = getDb(d1);
+	} else {
+		// Local development: bun:sqlite fallback
+		db = await getLocalDb();
 	}
 
-	const db = getDb(d1);
 	event.locals.db = db;
 
 	// 2. Perform Core Database Seeding (Atomic check & execute)

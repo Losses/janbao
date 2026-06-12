@@ -1,10 +1,10 @@
 import { userGroups, users } from './schema';
 import { eq, ne } from 'drizzle-orm';
-import type { getDb } from './index';
+import type { D1Db } from './index';
 
 let seeded = false;
 
-export async function seedCore(db: ReturnType<typeof getDb>, env?: App.Platform['env']) {
+export async function seedCore(db: D1Db, env?: App.Platform['env']) {
 	if (seeded) return;
 
 	try {

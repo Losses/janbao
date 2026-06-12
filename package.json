@@ -14,6 +14,7 @@
 		"format": "prettier --write .",
 		"db:push": "drizzle-kit push",
 		"db:generate": "drizzle-kit generate",
+		"db:generate:local": "drizzle-kit generate --config=drizzle.config.local.ts",
 		"db:migrate": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio"
 	},
@@ -24,7 +25,9 @@
 		"@sveltejs/adapter-cloudflare": "^7.2.8",
 		"@sveltejs/kit": "^2.63.0",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
+		"@types/better-sqlite3": "^7.6.13",
 		"@types/node": "^22",
+		"better-sqlite3": "^12.10.0",
 		"daisyui": "^5.5.23",
 		"drizzle-kit": "^0.31.10",
 		"drizzle-orm": "^0.45.2",
@@ -41,7 +44,11 @@
 		"vite": "^8.0.16"
 	},
 	"dependencies": {
+		"@libsql/client": "^0.17.3",
+		"@mdi/js": "^7.4.47",
 		"@tailwindcss/vite": "^4.3.0",
+		"lexical": "^0.45.0",
+		"svelte-lexical": "^0.6.4",
 		"tailwindcss": "^4.3.0"
 	}
 }

@@ -26,5 +26,11 @@ export default defineConfig({
 				})
 			}
 		})
-	]
+	],
+	ssr: {
+		// Prevent Vite from bundling libsql during production builds.
+		// These modules are dynamically imported in the local development
+		// database path (never reached in Cloudflare production).
+		external: ['@libsql/client']
+	}
 });

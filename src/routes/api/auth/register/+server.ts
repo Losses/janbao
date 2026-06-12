@@ -1,4 +1,5 @@
 import { users, invitations, notificationPreferences } from '$lib/server/db/schema';
+import type { DbTransaction } from '$lib/server/db';
 import { hashPassword, signJwt, createSessionToken } from '$lib/server/auth';
 import { getJwtSecret, getCookieSecure } from '$lib/server/constants';
 import { eq, or } from 'drizzle-orm';
@@ -67,7 +68,7 @@ export const POST: RequestHandler = async (event) => {
 		// 4. Database execution: uniqueness check + create user inside a single transaction
 		let jwtToken: string;
 		try {
-			await db.transaction(async (tx) => {
+			await db.transaction(async (tx: DbTransaction) => {
 				// Check for existing username or email inside the transaction
 				const existingUser = await tx
 					.select()
