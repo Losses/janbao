@@ -1,5 +1,6 @@
 <script lang="ts">
 	import SingleColumnLayout from '$lib/components/templates/SingleColumnLayout.svelte';
+	import AlertMessage from '$lib/components/AlertMessage.svelte';
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
 	import type { ApiResponse } from '$lib/types/api';
@@ -51,11 +52,7 @@
 		<p class="text-base-content/75">{t.auth.logoutPrompt}</p>
 	</div>
 
-	{#if errorMessage}
-		<div class="alert alert-warning text-sm rounded-lg py-2 mt-4" role="alert">
-			<span>{errorMessage}</span>
-		</div>
-	{/if}
+	<AlertMessage message={errorMessage} class="mt-4" />
 
 	<div class="mt-8 flex flex-col gap-3">
 		<button

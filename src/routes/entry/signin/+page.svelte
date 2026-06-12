@@ -1,5 +1,6 @@
 <script lang="ts">
 	import SingleColumnLayout from '$lib/components/templates/SingleColumnLayout.svelte';
+	import AlertMessage from '$lib/components/AlertMessage.svelte';
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
 	import type { ApiResponse } from '$lib/types/api';
@@ -54,11 +55,7 @@
 	</div>
 
 	<form class="mt-8 space-y-6" onsubmit={handleSubmit}>
-		{#if errorMessage}
-			<div class="alert alert-warning text-sm rounded-lg py-2" role="alert">
-				<span>{errorMessage}</span>
-			</div>
-		{/if}
+		<AlertMessage message={errorMessage} />
 
 		<div class="space-y-4 rounded-md shadow-sm">
 			<div class="form-control">
