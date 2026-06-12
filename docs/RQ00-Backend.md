@@ -476,7 +476,14 @@ Instead of utilizing heavy framework bindings, a custom JWT mechanism is impleme
 Routes and server actions check the active session:
 
 - **Admin Section Protection:** Verifies if `event.locals.user.role === 'admin'`. If not, throws a 403 Forbidden error.
-- **Category CRUD Permissions:** Queries the `categoryPermissions` table matching the user's `groupSlug` to check authorization flag states before servicing read or write mutations.
+- **Category CRUD & Guest Permissions:** Queries the `categoryPermissions` table matching the user's `groupSlug` to check authorization flag states before servicing read or write mutations.
+  - **Guest Permission Model:** If the request is unauthenticated (`event.locals.user` is null), the system maps the check to `groupSlug = 'guest'`.
+  - **Fallback Permission Resolution:** If no database record is found in `categoryPermissions` for the target `categorySlug` and `groupSlug`:
+    - For `guest`: `canRead` defaults to `true` (public categories), while `canCreate`, `canUpdate`, and `canDelete` default to `false`.
+    - For `member`: `canRead` and `canCreate` default to `true`, while `canUpdate` and `canDelete` default to `false`.
+    - For `admin`/`moderator`: `canRead`, `canCreate`, `canUpdate`, and `canDelete` all default to `true`.
+- **Discussion Pinning (Sticky/Unsticky):** Toggling a discussion's pin status (`isPinned` boolean) is allowed only if the user has category-level `canDelete` permission. A SvelteKit server action `togglePin` on the discussion details route handles this mutation.
+- **Mention Resolution on Load:** When loading discussions or replies, the server parses usernames from content JSONs matching the `@username` pattern. It queries the matching user records (ID, displayName, avatarFileId) and returns them in a `mentionedUsers` map to enable nickname conversion on the frontend.
 - **Validation Rules on Mutations:**
   - **Password Strength:** Password length validation check requires `password.length >= 5` on both register and password update actions. Returns `400 Bad Request` if fails.
   - **Account Username Update:** Username field updates are rejected on `/profile/edit` action unless the active user has an admin role.
