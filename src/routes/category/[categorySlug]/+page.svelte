@@ -39,16 +39,16 @@
 			<div class="divider my-1"></div>
 			<div class="flex flex-col gap-2">
 				<a href="/post/discussion?category={category.slug}" class="btn btn-primary btn-sm w-full">
-					{t.sidebar.createDiscussion ?? 'Create Discussion'}
+					{t.sidebar.createDiscussion}
 				</a>
 				<a
 					href="/profile/discussions/{user.id}/{generateSlug(user.username)}"
 					class="btn btn-outline btn-sm w-full"
 				>
-					{t.sidebar.myDiscussions ?? 'My Discussions'}
+					{t.sidebar.myDiscussions}
 				</a>
 				<a href="/drafts" class="btn btn-outline btn-sm w-full">
-					{t.sidebar.myDrafts ?? 'My Drafts'}
+					{t.sidebar.myDrafts}
 				</a>
 			</div>
 		{:else}
@@ -75,8 +75,8 @@
 						href="/category/{category.slug}/rss?token={user.rssToken}"
 						target="_blank"
 						class="btn btn-ghost btn-circle btn-sm text-warning hover:bg-warning/10"
-						title="Subscribe to RSS Feed"
-						aria-label="RSS Feed"
+						title={t.category.subscribeRss}
+						aria-label={t.category.subscribeRss}
 					>
 						<Icon path={mdiRss} size={20} />
 					</a>
@@ -88,7 +88,7 @@
 		<!-- Paginator Top -->
 		<div class="flex justify-between items-center gap-4 flex-wrap">
 			<span class="text-xs text-base-content/50">
-				Total: {data.totalCount}
+				{t.category.total}: {data.totalCount}
 			</span>
 			<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
 		</div>

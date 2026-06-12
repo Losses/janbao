@@ -56,6 +56,7 @@
 - Computes `userSlug` internally via `generateSlug`
 
 **Pages migrated to ProfileSidebar:**
+
 - `/notifications` — activeItem: `notifications`
 - `/profile/invitations` — activeItem: `invitations`
 - `/messages/inbox` — activeItem: `mailbox` (moved "New Message" button to content area)
@@ -66,6 +67,7 @@
 - `/profile/comments/[userId]/[userSlug]` — activeItem: `comments` (with owner/visitor guard)
 
 **Pages migrated to SettingsSidebar:**
+
 - `/profile/edit` — activeItem: `editAccount`
 - `/profile/password` — activeItem: `changePassword`
 - `/profile/preferences` — activeItem: `preferences`
@@ -77,11 +79,13 @@
 **Shared type:** Added `UserInfoSummary` interface to `src/lib/types/api.ts` — used by Header, DualColumnLayout, ProfileSidebar, SettingsSidebar, and UserInfoBlock.
 
 **i18n keys added:**
+
 - `profile.backToProfile`: "Back to Profile" (en) / "返回个人主页" (zh-CN)
 
 **Updated `UserInfoBlock.svelte`:** Now imports `UserInfoSummary` from `$lib/types/api` instead of defining it locally.
 
 **Pages keeping custom sidebars** (forum routes, message detail, activity):
+
 - Updated to pass `{user} {t}` to DualColumnLayout
 - Removed `isDrawerOpen` state
 - No sidebar content changes
@@ -90,21 +94,23 @@
 
 ## 2. Verification Results
 
-| Check | Result |
-|-------|--------|
-| `bun run check` (svelte-check) | ✅ 0 errors, 0 warnings |
-| `bun run lint` (prettier → eslint → similarity-ts) | ✅ Exit code 0 |
+| Check                                              | Result                  |
+| -------------------------------------------------- | ----------------------- |
+| `bun run check` (svelte-check)                     | ✅ 0 errors, 0 warnings |
+| `bun run lint` (prettier → eslint → similarity-ts) | ✅ Exit code 0          |
 
 ---
 
 ## 3. Files Changed
 
 ### New Files
+
 - `src/lib/components/organisms/Header.svelte`
 - `src/lib/components/molecules/ProfileSidebar.svelte`
 - `src/lib/components/molecules/SettingsSidebar.svelte`
 
 ### Modified Files
+
 - `src/lib/types/api.ts` — Added `UserInfoSummary` interface
 - `src/lib/i18n/en.json` — Added `profile.backToProfile`
 - `src/lib/i18n/zh-CN.json` — Added `profile.backToProfile`
@@ -135,4 +141,24 @@
 
 ## 4. Audit Log
 
-*(Audit entries will be appended after each audit round)*
+### Audit Round 1 — 2026-06-12
+
+**Method:** 5 independent audit agents reviewed all Cycle 1 files, findings consolidated into `docs/RV01-C01-Audit-01.md`.
+
+**Consensus Verdict:** PASS WITH NOTES (all 5 agents)
+
+**Post-audit fixes applied:**
+
+| Fix                                 | Description                                                                                                                                         |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Header Logo icon removed            | Per user feedback: requirements demand simplicity, removed the Material Design book icon from Header, now plain text site name only                 |
+| Header Avatar + displayName removed | Per user feedback: original requirements don't ask for user avatar/name in header. Desktop header now only shows nav links + guest sign-in/register |
+| i18n: "动态广场" → "动态"           | Per user feedback: "动态就是动态", removed the modifier "广场". En: "Activity Square" → "Activity"                                                  |
+| i18n: added `nav.menu`              | Hamburger `aria-label` now uses i18n key instead of hardcoded English                                                                               |
+| Sidebar sticky removed              | Per user feedback: sidebar sticky positioning is an unnecessary design, removed `sticky top-*` from aside wrapper                                   |
+| Audit docs consolidated             | Per user feedback: all agent findings merged into single `RV01-C01-Audit-01.md`, individual agent docs deleted                                      |
+
+**Final verification:**
+
+- `bun run check` — 0 errors, 0 warnings
+- `bun run lint` — exit code 0

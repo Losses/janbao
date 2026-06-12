@@ -81,16 +81,16 @@
 					href="/post/discussion?category={discussion.categorySlug}"
 					class="btn btn-primary btn-sm w-full"
 				>
-					{t.sidebar.createDiscussion ?? 'Create Discussion'}
+					{t.sidebar.createDiscussion}
 				</a>
 				<a
 					href="/profile/discussions/{user.id}/{generateSlug(user.username)}"
 					class="btn btn-outline btn-sm w-full"
 				>
-					{t.sidebar.myDiscussions ?? 'My Discussions'}
+					{t.sidebar.myDiscussions}
 				</a>
 				<a href="/drafts" class="btn btn-outline btn-sm w-full">
-					{t.sidebar.myDrafts ?? 'My Drafts'}
+					{t.sidebar.myDrafts}
 				</a>
 			</div>
 		{:else}
@@ -179,7 +179,7 @@
 		<!-- Paginator Bottom -->
 		<div class="flex justify-between items-center gap-4 pt-2">
 			<span class="text-xs text-base-content/50">
-				{t.common.reply ?? 'Replies'}: {data.totalRepliesCount}
+				{t.discussion.replies}: {data.totalRepliesCount}
 			</span>
 			<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
 		</div>
@@ -187,13 +187,13 @@
 		<!-- Reply Composer at the bottom -->
 		<div class="border-t border-base-300 pt-6">
 			{#if user}
-				<h3 class="text-lg font-bold mb-3 text-base-content">{t.common.reply ?? 'Reply'}</h3>
+				<h3 class="text-lg font-bold mb-3 text-base-content">{t.common.reply}</h3>
 				{#key editorKey}
 					<LexicalEditor
 						contextType="reply"
 						contextId={discussion.id}
 						initialContent={data.replyDraft}
-						placeholder={t.editor.placeholderReply ?? 'Write your reply...'}
+						placeholder={t.editor.placeholderReply}
 						onContentChange={(json) => (replyContent = json)}
 						{t}
 						class="mb-3"
@@ -222,13 +222,13 @@
 						{#if isSubmitting}
 							<span class="loading loading-spinner loading-xs"></span>
 						{/if}
-						{t.common.submit ?? 'Submit'}
+						{t.common.submit}
 					</button>
 				</form>
 			{:else}
 				<div class="card bg-base-200 border border-base-300 p-6 text-center rounded-xl">
 					<p class="text-base-content/70 mb-3">
-						{t.home.guestPrompt ?? 'Please sign in to reply.'}
+						{t.discussion.signInToReply}
 					</p>
 					<div class="flex justify-center gap-2">
 						<a href="/entry/signin" class="btn btn-sm btn-primary">{t.nav.signin}</a>

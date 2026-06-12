@@ -6,16 +6,17 @@
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import { generateSlug } from '$lib/utils/slug';
 	import type { UserInfoSummary } from '$lib/types/api';
+	import type { TranslationDict } from '$lib/types/translation';
 
 	interface SettingsSidebarProps {
 		user: UserInfoSummary;
-		t: Record<string, Record<string, string> | string>;
+		t: TranslationDict;
 		activeItem?: string;
 	}
 
 	let { user, t, activeItem = '' }: SettingsSidebarProps = $props();
 
-	const profileT = $derived((t as Record<string, Record<string, string>>).profile ?? {});
+	const profileT = $derived(t.profile);
 
 	const userSlug = $derived(generateSlug(user.username));
 </script>

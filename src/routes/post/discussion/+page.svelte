@@ -81,7 +81,7 @@
 </script>
 
 <svelte:head>
-	<title>{formatTitle(t.sidebar.createDiscussion ?? 'New Discussion')}</title>
+	<title>{formatTitle(t.sidebar.createDiscussion)}</title>
 </svelte:head>
 
 <SingleColumnLayout>
@@ -89,10 +89,10 @@
 		<!-- Header -->
 		<div class="flex items-center justify-between border-b border-base-300 pb-4">
 			<h1 class="text-3xl font-extrabold tracking-tight text-base-content">
-				{t.sidebar.createDiscussion ?? 'Create Discussion'}
+				{t.sidebar.createDiscussion}
 			</h1>
 			<a href="/" class="btn btn-sm btn-ghost">
-				{t.common.cancel ?? 'Cancel'}
+				{t.common.cancel}
 			</a>
 		</div>
 
@@ -192,7 +192,7 @@
 							contextId="new"
 							initialContent={draftContent}
 							onContentChange={(json) => (contentJson = json)}
-							placeholder={t.editor.placeholder ?? 'Write something...'}
+							placeholder={t.editor.placeholder}
 							{t}
 						/>
 					</div>
@@ -209,7 +209,7 @@
 						class="btn btn-sm {isPreview ? 'btn-active' : 'btn-outline'}"
 						disabled={isSubmitting}
 					>
-						{t.editor.preview ?? 'Preview'}
+						{t.editor.preview}
 					</button>
 
 					{#if !isPreview}
@@ -222,11 +222,11 @@
 							{#if isSavingManualDraft}
 								<span class="loading loading-spinner loading-xs"></span>
 							{/if}
-							{t.editor.saveDraft ?? 'Save Draft'}
+							{t.editor.saveDraft}
 						</button>
 						{#if showSaveSuccess}
 							<span class="text-xs text-success font-medium transition-opacity duration-300">
-								{t.editor.saved ?? 'Draft saved'}
+								{t.editor.saved}
 							</span>
 						{/if}
 					{/if}
@@ -242,7 +242,7 @@
 						{#if isSubmitting}
 							<span class="loading loading-spinner loading-xs"></span>
 						{/if}
-						{t.editor.publish ?? 'Publish'}
+						{t.editor.publish}
 					</button>
 				</div>
 			</div>

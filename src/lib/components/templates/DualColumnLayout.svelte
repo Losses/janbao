@@ -2,13 +2,14 @@
 	import type { Snippet } from 'svelte';
 	import Header from '$lib/components/organisms/Header.svelte';
 	import type { UserInfoSummary } from '$lib/types/api';
+	import type { TranslationDict } from '$lib/types/translation';
 
 	interface DualColumnLayoutProps {
 		children: Snippet;
 		sidebar?: Snippet;
 		isDrawerOpen?: boolean;
 		user?: UserInfoSummary | null;
-		t?: Record<string, Record<string, string> | string>;
+		t: TranslationDict;
 	}
 
 	let {
@@ -29,10 +30,8 @@
 	<input id="sidebar-drawer" type="checkbox" class="drawer-toggle" bind:checked={isDrawerOpen} />
 
 	<div class="drawer-content flex min-h-screen flex-col bg-base-100 text-base-content">
-		<!-- Global Header (rendered when translations are available) -->
-		{#if t}
-			<Header user={user ?? null} {t} onToggleDrawer={openDrawer} />
-		{/if}
+		<!-- Global Header -->
+		<Header user={user ?? null} {t} onToggleDrawer={openDrawer} />
 
 		<!-- Main Content Container -->
 		<div class="mx-auto w-full max-w-[960px] flex-1 px-4 py-6 md:px-6">
@@ -45,7 +44,7 @@
 				<!-- Right Column (Desktop Sidebar) -->
 				{#if sidebar}
 					<aside class="hidden w-full shrink-0 md:block md:w-[320px]">
-						<div class="sticky top-6 space-y-6">
+						<div class="space-y-6">
 							{@render sidebar()}
 						</div>
 					</aside>

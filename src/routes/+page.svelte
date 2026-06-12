@@ -36,16 +36,16 @@
 			<div class="divider my-1"></div>
 			<div class="flex flex-col gap-2">
 				<a href="/post/discussion" class="btn btn-primary btn-sm w-full">
-					{t.sidebar.createDiscussion ?? 'Create Discussion'}
+					{t.sidebar.createDiscussion}
 				</a>
 				<a
 					href="/profile/discussions/{user.id}/{generateSlug(user.username)}"
 					class="btn btn-outline btn-sm w-full"
 				>
-					{t.sidebar.myDiscussions ?? 'My Discussions'}
+					{t.sidebar.myDiscussions}
 				</a>
 				<a href="/drafts" class="btn btn-outline btn-sm w-full">
-					{t.sidebar.myDrafts ?? 'My Drafts'}
+					{t.sidebar.myDrafts}
 				</a>
 			</div>
 		{:else}

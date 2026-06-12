@@ -1,6 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 import type { D1Db } from '$lib/server/db';
-import type en from '$lib/i18n/en.json';
+import type { TranslationDict } from '$lib/types/translation';
 
 interface PlatformEnv {
 	D1_DB?: D1Database;
@@ -38,8 +38,6 @@ interface UserData {
 	rssToken: string;
 	viewCount: number;
 }
-
-type TranslationDict = typeof en;
 
 declare global {
 	namespace App {

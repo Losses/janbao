@@ -8,12 +8,14 @@
 	import NotificationTooltip from '$lib/components/molecules/NotificationTooltip.svelte';
 	import MessageTooltip from '$lib/components/molecules/MessageTooltip.svelte';
 	import BookmarkTooltip from '$lib/components/molecules/BookmarkTooltip.svelte';
+	import { generateSlug } from '$lib/utils/slug';
 	import type { UserInfoSummary } from '$lib/types/api';
+	import type { TranslationDict } from '$lib/types/translation';
 	import { mdiCog } from '@mdi/js';
 
 	interface UserInfoBlockProps {
 		user: UserInfoSummary;
-		t: Record<string, Record<string, string> | string>;
+		t: TranslationDict;
 		class?: string;
 	}
 
@@ -22,7 +24,8 @@
 	// Track which tooltip popover is open (only one at a time)
 	let openTooltip: 'notifications' | 'messages' | 'bookmarks' | null = $state(null);
 
-	const tSidebar = $derived((t as Record<string, Record<string, string>>).sidebar ?? {});
+	const tSidebar = $derived(t.sidebar);
+	const userSlug = $derived(generateSlug(user.username));
 
 	function toggleTooltip(name: 'notifications' | 'messages' | 'bookmarks') {
 		if (openTooltip === name) {
@@ -47,7 +50,7 @@
 		/>
 		<div>
 			<a
-				href="/profile/{user.id}/{user.username}"
+				href="/profile/{user.id}/{userSlug}"
 				class="font-medium text-base-content hover:text-primary"
 			>
 				{user.displayName}
@@ -86,8 +89,8 @@
 		<a
 			href="/profile/edit"
 			class="btn btn-ghost btn-xs"
-			aria-label={tSidebar['settings'] ?? 'Settings'}
-			title={tSidebar['settings'] ?? 'Settings'}
+			aria-label={tSidebar['settings']}
+			title={tSidebar['settings']}
 		>
 			<Icon path={mdiCog} size={16} />
 		</a>
