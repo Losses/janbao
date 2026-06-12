@@ -23,7 +23,7 @@
 			<div class="flex items-center gap-3">
 				<div class="avatar placeholder">
 					<div class="bg-neutral text-neutral-content rounded-full w-12">
-						<span class="text-xl">{user.displayName[0].toUpperCase()}</span>
+						<span class="text-xl">{user.displayName?.[0]?.toUpperCase() ?? '?'}</span>
 					</div>
 				</div>
 				<div>
@@ -59,7 +59,7 @@
 			<button onclick={() => (isDrawerOpen = true)} class="btn btn-sm btn-ghost avatar placeholder">
 				<div class="bg-neutral text-neutral-content rounded-full w-8">
 					{#if user}
-						<span>{user.displayName[0].toUpperCase()}</span>
+						<span>{user.displayName?.[0]?.toUpperCase() ?? '?'}</span>
 					{:else}
 						<span>G</span>
 					{/if}

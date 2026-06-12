@@ -1,5 +1,5 @@
 import { userGroups, users } from './schema';
-import { eq } from 'drizzle-orm';
+import { eq, ne } from 'drizzle-orm';
 import type { getDb } from './index';
 
 let seeded = false;
@@ -71,12 +71,17 @@ export async function seedCore(db: ReturnType<typeof getDb>, env?: App.Platform[
 			});
 		}
 
-		// 3. Bootstrap admin user from environment variables if no users exist
+		// 3. Bootstrap admin user from environment variables if no real users exist
 		const adminEmail = env?.ADMIN_EMAIL;
 		const adminPassword = env?.ADMIN_PASSWORD;
 		if (adminEmail && adminPassword) {
-			const allUsers = await db.select({ id: users.id }).from(users).limit(1);
-			if (allUsers.length === 0) {
+			// Check for non-system users only (system user is always present)
+			const realUsers = await db
+				.select({ id: users.id })
+				.from(users)
+				.where(ne(users.id, systemUserId))
+				.limit(1);
+			if (realUsers.length === 0) {
 				const { hashPassword } = await import('$lib/server/auth');
 				const adminPasswordHash = await hashPassword(adminPassword);
 				await db.insert(users).values({

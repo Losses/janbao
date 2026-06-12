@@ -101,3 +101,17 @@ This section lists the consecutive audit logs and resolutions.
   - `src/lib/types/api.ts` — Shared API request/response interfaces (`AuthRegisterBody`, `AuthLoginBody`, `ApiResponse`, `SessionCookieOptions`).
 - **Dependencies Added:** `@cloudflare/workers-types` for `D1Database` global type.
 - **Verification:** `bun run check` (0 errors), `bun run lint` (clean).
+
+### Round 2 Audit (2026-06-12)
+
+- **Status:** Completed
+- **Audit File:** [RV00-C01-Audit-02.md](file:///home/losses/Development/janbao/docs/RV00-C01-Audit-02.md)
+- **Verdict:** FAIL → Fixed
+- **Defects Identified:** 1 Critical (C3 regression), 4 Minor
+- **Resolutions Applied:**
+  - **C3-fix (Admin bootstrap unreachable):** Changed seed check from `allUsers.length === 0` to filtering non-system users with `ne(users.id, systemUserId)`. Admin user now correctly bootstraps when `ADMIN_EMAIL`/`ADMIN_PASSWORD` env vars are set and no real users exist.
+  - **Accessibility:** Added `role="alert"` to all error alert containers in signin, register, and signout pages.
+  - **Dead code removal:** Removed unused `auth.signoutBtn` i18n key from both `en.json` and `zh-CN.json`.
+  - **Null safety:** Added null-safe `displayName?.[0]?.toUpperCase() ?? '?'` guards on home page avatar rendering.
+- **Verification:** `bun run check` (0 errors), `bun run lint` (clean).
+- **Cycle 1 Status:** COMPLETE — All 5 audit agents in Round 2 confirmed Cycle 1 scope is fully implemented per specification. Remaining items are correctly deferred to future cycles.

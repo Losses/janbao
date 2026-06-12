@@ -52,7 +52,7 @@
 	</div>
 
 	{#if errorMessage}
-		<div class="alert alert-warning text-sm rounded-lg py-2 mt-4">
+		<div class="alert alert-warning text-sm rounded-lg py-2 mt-4" role="alert">
 			<span>{errorMessage}</span>
 		</div>
 	{/if}

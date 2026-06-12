@@ -55,7 +55,7 @@
 
 	<form class="mt-8 space-y-6" onsubmit={handleSubmit}>
 		{#if errorMessage}
-			<div class="alert alert-warning text-sm rounded-lg py-2">
+			<div class="alert alert-warning text-sm rounded-lg py-2" role="alert">
 				<span>{errorMessage}</span>
 			</div>
 		{/if}

@@ -19,7 +19,6 @@
 		"rememberMe": "Remember login state",
 		"signinBtn": "Sign In",
 		"registerBtn": "Register",
-		"signoutBtn": "Sign Out",
 		"logoutConfirm": "Confirm Logout",
 		"logoutCancel": "Cancel",
 		"logoutPrompt": "Are you sure you want to log out?",

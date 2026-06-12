@@ -19,7 +19,6 @@
 		"rememberMe": "记住登录状态",
 		"signinBtn": "登录",
 		"registerBtn": "注册",
-		"signoutBtn": "确认登出",
 		"logoutConfirm": "确认登出",
 		"logoutCancel": "取消",
 		"logoutPrompt": "确认是否登出？",
