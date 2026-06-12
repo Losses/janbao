@@ -243,6 +243,36 @@ export const actions: Actions = {
 			error(400, 'Bad Request');
 		}
 
+		// Verify discussion exists and is not soft-deleted
+		const discussionRecords = await db
+			.select({
+				categorySlug: discussions.categorySlug
+			})
+			.from(discussions)
+			.where(and(eq(discussions.id, discussionId), isNull(discussions.deletedAt)))
+			.limit(1);
+
+		if (discussionRecords.length === 0) {
+			error(404, 'Discussion Not Found');
+		}
+
+		// Verify user's group has write permission for this category
+		const perm = await db
+			.select()
+			.from(categoryPermissions)
+			.where(
+				and(
+					eq(categoryPermissions.categorySlug, discussionRecords[0].categorySlug),
+					eq(categoryPermissions.groupSlug, user.groupSlug)
+				)
+			)
+			.limit(1);
+
+		const canCreate = perm.length === 0 ? true : perm[0].canCreate;
+		if (!canCreate) {
+			error(403, 'Forbidden');
+		}
+
 		const data = await request.formData();
 		const contentJson = data.get('contentJson') as string;
 

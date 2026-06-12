@@ -100,6 +100,7 @@ export const GET: RequestHandler = async (event) => {
 		attributeNamePrefix: '@_',
 		textNodeName: '#text',
 		ignoreAttributes: false,
+		suppressBooleanAttributes: false,
 		format: true
 	});
 

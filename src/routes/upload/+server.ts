@@ -69,8 +69,7 @@ export const POST: RequestHandler = async (event) => {
 		});
 
 		if (!pcloudRes.ok) {
-			const text = await pcloudRes.text();
-			return new Response(JSON.stringify({ error: `pCloud upload failed: ${text}` }), {
+			return new Response(JSON.stringify({ error: 'pCloud upload failed' }), {
 				status: 502
 			});
 		}

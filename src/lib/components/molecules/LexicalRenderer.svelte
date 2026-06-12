@@ -153,18 +153,28 @@
 				{/if}
 			</li>
 		{:else if node.type === 'link' || node.type === 'autolink'}
-			<a
-				href={safeUrl(node.url)}
-				target={node.url?.startsWith('http') ? '_blank' : undefined}
-				rel="noopener noreferrer"
-				class="text-primary hover:underline hover:text-primary-focus transition-colors"
-			>
-				{#if node.children}
-					{#each node.children as child, i (i)}
-						{@render renderNode(child)}
-					{/each}
-				{/if}
-			</a>
+			{#if safeUrl(node.url)}
+				<a
+					href={safeUrl(node.url)}
+					target="_blank"
+					rel="noopener noreferrer"
+					class="text-primary hover:underline hover:text-primary-focus transition-colors"
+				>
+					{#if node.children}
+						{#each node.children as child, i (i)}
+							{@render renderNode(child)}
+						{/each}
+					{/if}
+				</a>
+			{:else}
+				<span>
+					{#if node.children}
+						{#each node.children as child, i (i)}
+							{@render renderNode(child)}
+						{/each}
+					{/if}
+				</span>
+			{/if}
 		{:else if node.type === 'image'}
 			{#if safeUrl(node.src)}
 				<img
