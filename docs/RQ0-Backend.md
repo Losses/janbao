@@ -120,6 +120,7 @@ export const bookmarks = sqliteTable('bookmarks', {
 }, (table) => ({
   pk: primaryKey({ columns: [table.userId, table.discussionId] }),
   discussionIdx: index('bookmarks_discussion_idx').on(table.discussionId),
+  userBookmarkedIdx: index('bookmarks_user_bookmarked_idx').on(table.userId, table.bookmarkedAt), // Optimizes bookmarks sidebar tooltip
 }));
 
 export const discussionReads = sqliteTable('discussion_reads', {
@@ -157,6 +158,7 @@ export const conversationParticipants = sqliteTable('conversation_participants',
   joinedAt: integer('joined_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
 }, (table) => ({
   pk: primaryKey({ columns: [table.conversationId, table.userId] }),
+  userIdIdx: index('conversation_participants_user_idx').on(table.userId), // Optimizes user conversation query
 }));
 
 export const messages = sqliteTable('messages', {
@@ -172,6 +174,14 @@ export const messages = sqliteTable('messages', {
   authorIdx: index('messages_author_idx').on(table.authorId),
 }));
 
+export const conversationReads = sqliteTable('conversation_reads', {
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  conversationId: text('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
+  lastReadAt: integer('last_read_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.userId, table.conversationId] }),
+}));
+
 // --- Activities (Microblog) ---
 export const activities = sqliteTable('activities', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -184,6 +194,7 @@ export const activities = sqliteTable('activities', {
 }, (table) => ({
   authorIdx: index('activities_author_idx').on(table.authorId),
   parentIdx: index('activities_parent_idx').on(table.parentActivityId),
+  recipientIdx: index('activities_recipient_idx').on(table.recipientId), // Optimizes profile activity query
   createdIdx: index('activities_created_idx').on(table.createdAt),
 }));
 
@@ -201,6 +212,7 @@ export const notifications = sqliteTable('notifications', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
 }, (table) => ({
   userReadIdx: index('notifications_user_read_idx').on(table.userId, table.isRead),
+  userCreatedIdx: index('notifications_user_created_idx').on(table.userId, table.createdAt), // Optimizes notifications sidebar tooltip
 }));
 
 export const notificationPreferences = sqliteTable('notification_preferences', {
@@ -246,8 +258,8 @@ Instead of utilizing heavy framework bindings, a custom JWT mechanism is impleme
   On every server request:
   1. Retrieve `session_token` cookie.
   2. If present, verify signature and expiration.
-  3. Resolve user details from the payload and inject them into `event.locals.user`.
-  4. If invalid or expired, clear the cookie and set `event.locals.user = null`.
+  3. Resolve user details from the database (including their `passwordHash` or `tokenVersion` check to allow immediate session revocation on password updates).
+  4. Inject user data into `event.locals.user`. If invalid or expired, clear the cookie and set `event.locals.user = null`.
 
 ### 3.2 Authorization Gates & Mutations Controls
 Routes and server actions check the active session:
@@ -268,7 +280,8 @@ To circumvent domain-level network blocks, SvelteKit functions as an inline reve
 ### 4.1 Proxy Route: Image Upload (`/upload/+server.ts`)
 1. Receives upload payload (e.g. `multipart/form-data`).
 2. **File Size Limit Enforced:** Max 1MB for user avatars; max 5MB for standard discussion/activity images.
-3. **Mime-Type Whitelist Filtering:** Restricts uploads strictly to web-safe image formats (`image/png`, `image/jpeg`, `image/webp`, `image/gif`, `image/svg+xml`, `image/avif`, `image/bmp`). Returns `400 Bad Request` on mismatch.
+3. **Mime-Type Whitelist Filtering:** Restricts uploads strictly to web-safe image formats (`image/png`, `image/jpeg`, `image/webp`, `image/gif`, `image/avif`, `image/bmp`).
+   - **Stored XSS Mitigation:** The MIME-type `image/svg+xml` is explicitly excluded from the upload whitelist because SVGs can execute embedded script blocks.
 4. Forwards content to pCloud API `https://api.pcloud.com/uploadfile?auth=${PCLOUD_TOKEN}&folderid=${PCLOUD_FOLDER_ID}`.
 5. Receives JSON output from pCloud containing the generated `fileid`.
 6. Logs the `fileid` and the `uploaderId` in the `attachments` table.
@@ -326,24 +339,24 @@ Instead of running on every authenticated API hook, the check-on-access runs onl
 1. When loading public indexes, SvelteKit resolves the boundaries of "yesterday" using the configured `FORUM_TIMEZONE` (defaulting to UTC if not set).
 2. The server checks the database to verify if a welcome post for the current day exists in the `activities` table.
 3. If not found:
-   - Seed script creates a dedicated System User with UUID `00000000-0000-0000-0000-000000000000`.
    - Queries users created during the yesterday timezone period.
    - If count > 0:
      - Constructs a structured Lexical JSON state. This JSON state generates text nodes with nested link nodes pointing to each user's profile path `/profile/:id/:slug`.
-     - Inserts the activity post entry into `activities` with `authorId = "00000000-0000-0000-0000-000000000000"`.
+     - Inserts the activity post entry into `activities` with `authorId = "00000000-0000-0000-0000-000000000000"` (System User).
 4. A simple in-memory caching key prevents redundant database evaluations for the remainder of the calendar day.
 
 ### 5.4 Notification Dispatcher & Read Updates
 When content is created:
 1. Parse the Rich Text Lexical JSON structure to resolve mentioned `@username` profiles.
-2. Dispatch notifications to:
+2. **Mentions in Private Messages Bypass:** If the context type is a PM (`contextType === 'message'`), the parser **bypasses** sending `@mention` notifications to avoid leaking private message content to outside users.
+3. Dispatch notifications to:
    - Mentioned users (if `mention` preference is true).
    - Discussion owner on new reply (if `discussionReply` preference is true).
    - Thread participants on new reply (if `participatedComment` preference is true).
    - Bookmark subscribers on category/thread activity (if `bookmarkedDiscussionComment` preference is true).
    - Target recipient on directed activity (if `profileComment` preference is true).
    - Private message thread recipients (if `privateMessage` preference is true).
-3. **Automatic Notification Clearance:** When a user visits `/discussion/:id` or `/messages/:id`, SvelteKit server load function executes a database update setting `isRead = true` for all active notification records linked to the user and the thread.
+4. **Automatic Notification Clearance:** When a user visits `/discussion/:id` or `/messages/:id`, SvelteKit server load function executes a database update setting `isRead = true` for all active notification records linked to the user and the thread.
 
 ---
 
@@ -364,11 +377,37 @@ The frontend interfaces with the following core backend routes:
   3. Formulates category metadata and lists the 50 most recent discussions, generating XML response payload.
 
 ### 6.3 Page Load Helpers (Automatic Resume & Updates)
-- `/discussion/[id]` server load handler updates `discussionReads` setting `lastReadAt = now`, `lastReadPage = page`, and `lastReadReplyId = lastReplyIdOnPage`. It also resolves all pending user notifications for this thread and marks them as read.
+- `/discussion/[id]` server load handler updates `discussionReads` setting `lastReadAt = now`, `lastReadPage = page`, and `lastReadReplyId = lastReplyIdOnPage`. It also resolves all pending user notifications for this thread and marks them as read. It increments `discussions.viewCount` by 1.
+- `/messages/[id]` server load handler updates `conversationReads` setting `lastReadAt = now`.
+- `/profile/[id]` server load handler increments `users.viewCount` by 1. Self-views (if authenticated user ID matches profile ID) are ignored.
 
-### 6.4 Configuration Environment Variables
+### 6.4 API Endpoints
+- `/api/drafts/save` (POST): Upserts draft records containing user id, context, and JSON.
+- `/api/notifications` (GET): Fetches notifications list for the active user, sorted by creation timestamp.
+- `/api/notifications` (PUT): Accepts an array of notification IDs or a global parameter to mark notifications as read.
+- `/api/bookmarks` (GET): Fetches the 5 most recent bookmarks for user widget layout popovers.
+- `/api/messages/recent` (GET): Fetches the 5 most recent active conversations.
+
+### 6.5 SvelteKit Actions
+- `addParticipant` (Action in `/messages/[id]`): Accepts target user ID, validates that the active user requesting addition is currently a participant in the conversation, and adds the target user to the conversation.
+
+### 6.6 Configuration Environment Variables
 - `PAGINATION_LIMIT`: Integer controlling replies per page (defaults to `50`).
 - `FORUM_TIMEZONE`: String representing regional timezone (e.g. `Asia/Shanghai`, defaults to `UTC`).
 - `WELCOME_TEXT`: String representing localized welcome header format.
 - `JWT_SECRET`: Secret key for token verification.
 - `PCLOUD_TOKEN`, `PCLOUD_FOLDER_ID`: Access values for image reverse proxying.
+
+---
+
+## 7. Database Migration & Seeding Specification
+
+### 7.1 Seeding Operations
+To satisfy foreign key constraints and prevent database crashes, a seed script is executed post-migration:
+1. Provisions default user groups in the `user_groups` table:
+   - `system`: Slug for automation bots.
+   - `admin`: Super-administrators with full permission scopes.
+   - `moderator`: Forum moderators with intermediate permissions.
+   - `member`: Standard user role.
+2. Seeds the System User (`00000000-0000-0000-0000-000000000000`) linked to the `system` group slug.
+3. If no accounts exist in `users`, parses `ADMIN_EMAIL` and `ADMIN_PASSWORD` from environmental variables to bootstrap the root administrator user under the `admin` group slug.

@@ -89,6 +89,18 @@ The Right Sidebar remains fixed in size but changes content dynamically based on
 5. **Activity Square (`/activity`):**
    - Sidebar is left completely empty as specified.
 
+### 3.4 User Info Block Popover Tooltips
+Clicking the row icon buttons inside the User Info Block triggers absolute-positioned overlay tooltips:
+1. **Notifications Tooltip:**
+   - Queries `/api/notifications?limit=5` to fetch the 5 most recent notification records.
+   - Layout: Header displaying "Notifications" with a tiny settings button (linking to `/profile/preferences`); list of notification items; footer containing a "Show All" link pointing to `/notifications`.
+2. **Private Messages Tooltip:**
+   - Queries `/api/messages/recent?limit=5` to fetch the 5 most recent active PM conversations.
+   - Layout: Header displaying "Messages" with a "Send Message" button (linking to `/messages/new`); list of conversation items; footer containing a "Show All" link pointing to `/messages/inbox`.
+3. **Bookmarks Tooltip:**
+   - Queries `/api/bookmarks?limit=5` to fetch the 5 most recent bookmarked discussions.
+   - Layout: Header displaying "Bookmarks" with title text; list of bookmarked titles; footer containing a "Show All" link pointing to `/bookmarks`.
+
 ---
 
 ## 4. Reusable Frontend Components
@@ -109,7 +121,7 @@ The Right Sidebar remains fixed in size but changes content dynamically based on
 ### 4.4 Confirmation Modal Component
 - Standardized modal for destructive actions (deletions of posts, activities, comments, etc.).
 - Wrapped dynamically. It requires a `title`, a `message` explaining the deletion context, and callbacks for `onConfirm` and `onCancel`. Renders using standard accessibility traits (ARIA focus traps).
-- **Scope Restriction:** PM messages are read-only and cannot be deleted by users. Thus, this modal is not applicable to messages.
+- **Scope Restriction:** Private message (PM) comments/messages can be edited by their authors but cannot be deleted by users. Thus, this modal is not applicable to PM messages.
 
 ### 4.5 DiscussionMetadata Component
 - Displays a unified header for threads and replies.
@@ -159,6 +171,7 @@ Rich text editing across the forum is powered by Svelte wrappers around the Lexi
 
 ### 6.3 Category Discussions (`/category/:categorySlug`)
 - Displays the discussion list within the category.
+- **Paginators:** A `Paginator` component is rendered at both the top and the bottom of the discussion list.
 - **Discussion List Item Components:**
   - Left: User avatar.
   - Center: Discussion title (links to the discussion, using reading history to build the exact page and reply ID URL, e.g., `/discussion/:id/slug/p2#reply-123`). Under the title: author, views, replies, last replier, updated date.
@@ -174,18 +187,18 @@ Rich text editing across the forum is powered by Svelte wrappers around the Lexi
 - **Theme Override:** Applies the discussion’s custom theme (if configured), overriding any category-wide theme.
 
 ### 6.5 Private Messages (`/messages/inbox`, `/messages/new` & `/messages/:id/(p:page)#:replyId`)
-- **Inbox:** Replicates the layout of the category discussions view but displays active threads.
+- **Inbox:** Replicates the layout of the category discussions view but displays active threads. Includes pagination at the top and bottom.
 - **New Conversation (`/messages/new`):** Contains an autocomplete recipient search field allowing multiple user chips to be entered, along with a rich text editor (without upload capabilities). Pressing "Send" creates the thread.
 - **PM Detail View:** Displays the message stream. Messages can be edited by the author but cannot be deleted. The sidebar displays all participants with an auto-complete box to add new contacts.
 - **Deletion Scope:** The deletion confirmation modal is not available on PM views.
 
 ### 6.6 Activity Square (`/activity`)
 - Contains a header paragraph editor (no formatting headers allowed) to post new microblogs.
-- Supports target addressing: User A -> User B (dynamic display).
+- Has no recipient or target user selector in the main editor.
 - **Comments Block:** Clicking "Comment" on an activity opens an inline editor directly below the post. Sub-comments are displayed in a single-level nested comment block (no further nesting) with a light background. Deleting an activity comment opens the deletion confirmation modal.
 
 ### 6.7 Profile Views (`/profile/:id/:slug`)
-- **Metadata Subheader:** Displays user statistics including join date, profile view count, last active time, and user group.
+- **Metadata Subheader:** Displays user statistics including join date, profile view count (increments on visit), last active time, and user group.
 - **Directed Activity Composer:** The bottom of the profile page features a full rich text editor. Typing and submitting here posts a directed activity (`User A -> User B`) directly to the target user's profile stream.
 - **Settings Routes:** Includes `/profile/edit` (username input disabled unless logged-in user is an admin), `/profile/password` (password strength validation enforces a minimum of 5 characters), `/profile/preferences` (toggles for PMs, bookmarks, mentions, and replies), `/profile/picture` (avatar upload <= 1MB), and `/profile/OnlineNow` (stealth settings).
 
@@ -200,6 +213,14 @@ Rich text editing across the forum is powered by Svelte wrappers around the Lexi
 - Displays a lists of active drafts. 
 - Filters drafts to only show thread creation drafts and discussion replies (filtering out private message or activity drafts).
 - Each entry contains a contextual jump-link pointing directly back to the creation/reply target (e.g. linking to `/post/discussion` with draft ID parameters, or `/discussion/:id/slug/p1` with active editor states).
+
+### 6.11 Notifications Page (`/notifications`)
+- Accessible via the "Show All" link in the notifications tooltip.
+- Renders a clean list of all user notifications, sorted by timestamp, showing the event details (e.g., "@user replied to your post") with links to the context. Contains a "Mark all as read" button.
+
+### 6.12 Bookmarked Discussions (`/bookmarks`)
+- Accessible via the "Show All" link in the bookmarks tooltip.
+- Displays a paginated list of all conversations bookmarked by the user, sorted by bookmark timestamp.
 
 ---
 
