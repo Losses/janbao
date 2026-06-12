@@ -1,6 +1,8 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
+	import ActiveUsersWall from '$lib/components/molecules/ActiveUsersWall.svelte';
+	import CategoryListWidget from '$lib/components/molecules/CategoryListWidget.svelte';
 	import DiscussionMetadata from '$lib/components/molecules/DiscussionMetadata.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
@@ -102,6 +104,10 @@
 				</div>
 			</div>
 		{/if}
+		<div class="divider my-1"></div>
+		<CategoryListWidget {t} activeSlug={discussion.categorySlug} />
+		<div class="divider my-1"></div>
+		<ActiveUsersWall {t} />
 	</div>
 {/snippet}
 

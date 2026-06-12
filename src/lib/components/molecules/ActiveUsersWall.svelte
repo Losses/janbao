@@ -2,19 +2,16 @@
 	/**
 	 * ActiveUsersWall Molecule - Grid of avatars for users active in the last
 	 * 10 minutes (stealth users excluded server-side). Fetches /api/users/online
-	 * on mount. Rendered in the Messages inbox sidebar per RQ00-Frontend §3.3.3.
+	 * on mount. Rendered in forum route sidebars per RQ00-Frontend §3.3.1.
 	 */
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
+	import type { TranslationDict } from '$lib/types/translation';
 
 	interface OnlineUser {
 		id: string;
 		username: string;
 		displayName: string;
 		avatarFileId: string | null;
-	}
-
-	interface TranslationDict {
-		[key: string]: string | Record<string, string>;
 	}
 
 	interface ActiveUsersWallProps {
@@ -26,9 +23,7 @@
 	let users = $state<OnlineUser[]>([]);
 	let loaded = $state(false);
 
-	const title = $derived(
-		((t['sidebar'] as Record<string, string> | undefined) ?? {})['activeUsers'] ?? ''
-	);
+	const title = $derived(t.sidebar.activeUsers);
 
 	$effect(() => {
 		void fetchOnline();

@@ -5,6 +5,7 @@
 	import DateAtom from '$lib/components/atoms/Date.svelte';
 	import Badge from '$lib/components/atoms/Badge.svelte';
 	import { generateSlug } from '$lib/utils/slug';
+	import type { TranslationDict } from '$lib/types/translation';
 
 	/**
 	 * DiscussionRow Organism - Renders a discussion title, badges, bookmark star, and metadata.
@@ -36,7 +37,7 @@
 		unreadCount?: number;
 		lastReplyAuthorDisplayName?: string | null;
 		/** Translation dictionary */
-		t?: Record<string, Record<string, string> | string> | null;
+		t?: TranslationDict | null;
 		class?: string;
 	}
 
@@ -68,25 +69,10 @@
 	const authorSlug = $derived(generateSlug(discussion.authorUsername || 'user'));
 
 	// I18n translations with defaults
-	const viewsText = $derived.by(() => {
-		const forum = (t as Record<string, Record<string, string>> | null)?.forum ?? {};
-		return forum.views ?? 'views';
-	});
-
-	const repliesText = $derived.by(() => {
-		const forum = (t as Record<string, Record<string, string>> | null)?.forum ?? {};
-		return forum.replies ?? 'replies';
-	});
-
-	const lastReplierText = $derived.by(() => {
-		const forum = (t as Record<string, Record<string, string>> | null)?.forum ?? {};
-		return forum.lastReplyBy ?? 'last reply by';
-	});
-
-	const pinnedText = $derived.by(() => {
-		const forum = (t as Record<string, Record<string, string>> | null)?.forum ?? {};
-		return forum.pinned ?? 'PIN';
-	});
+	const viewsText = $derived(t?.forum?.views ?? 'views');
+	const repliesText = $derived(t?.forum?.replies ?? 'replies');
+	const lastReplierText = $derived(t?.forum?.lastReplyBy ?? 'last reply by');
+	const pinnedText = $derived(t?.forum?.pinned ?? 'PIN');
 
 	async function toggleBookmark(e: Event) {
 		e.preventDefault();
