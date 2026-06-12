@@ -13,8 +13,6 @@
 	const t = $derived(data.t);
 	const user = $derived(data.user);
 	const categoriesList = $derived(data.categories);
-
-	let isDrawerOpen = $state(false);
 </script>
 
 <svelte:head>
@@ -37,7 +35,7 @@
 	</div>
 {/snippet}
 
-<DualColumnLayout {sidebar} bind:isDrawerOpen>
+<DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-6">
 		<div class="border-b border-base-300 pb-4">
 			<h1 class="text-3xl font-extrabold tracking-tight">

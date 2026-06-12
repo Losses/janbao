@@ -26,7 +26,6 @@
 	const currentPage = $derived(data.page);
 	const totalPages = $derived(data.totalPages);
 
-	let isDrawerOpen = $state(false);
 	let replyContent = $state('');
 	let isSubmitting = $state(false);
 	let editorKey = $state(0);
@@ -106,7 +105,7 @@
 	</div>
 {/snippet}
 
-<DualColumnLayout {sidebar} bind:isDrawerOpen>
+<DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-6">
 		<!-- Discussion Header -->
 		<div class="border-b border-base-300 pb-4">

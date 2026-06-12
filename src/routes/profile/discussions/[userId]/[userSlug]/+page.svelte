@@ -1,6 +1,6 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
-	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
+	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import DiscussionRow from '$lib/components/organisms/DiscussionRow.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
 	import { formatTitle } from '$lib/utils/title';
@@ -22,9 +22,7 @@
 	const currentPage = $derived(data.page);
 	const totalPages = $derived(data.totalPages);
 
-	let isDrawerOpen = $state(false);
 	const targetUserSlug = $derived(generateSlug(targetUser.username));
-	const isOwner = $derived(user ? user.id === targetUser.id : false);
 
 	function handlePageChange(newPage: number) {
 		goto(`?page=${newPage}`);
@@ -36,61 +34,16 @@
 </svelte:head>
 
 {#snippet sidebar()}
-	<div class="card bg-base-200 border border-base-300 p-4 space-y-4">
-		{#if user}
-			<UserInfoBlock {user} {t} />
-			<div class="divider my-1"></div>
-			{#if isOwner}
-				<ul class="menu menu-sm w-full gap-1">
-					<li><a href="/profile/{user.id}/{targetUserSlug}">{profileT.activities}</a></li>
-					<li><a href="/notifications">{profileT.notifications}</a></li>
-					<li><a href="/profile/invitations">{profileT.invitations}</a></li>
-					<li><a href="/messages/inbox">{profileT.mailbox}</a></li>
-					<li>
-						<a href="/profile/discussions/{user.id}/{targetUserSlug}" class="active"
-							>{profileT.discussions}</a
-						>
-					</li>
-					<li><a href="/profile/comments/{user.id}/{targetUserSlug}">{profileT.comments}</a></li>
-					<li class="menu-title mt-2">{profileT.accountSettings}</li>
-					<li><a href="/profile/edit">{profileT.editAccount}</a></li>
-					<li><a href="/profile/password">{profileT.changePassword}</a></li>
-					<li><a href="/profile/preferences">{profileT.preferences}</a></li>
-					<li><a href="/profile/picture">{profileT.avatar}</a></li>
-					<li><a href="/profile/onlineNow">{profileT.stealthSettings}</a></li>
-				</ul>
-			{:else}
-				<ul class="menu menu-sm w-full gap-1">
-					<li><a href="/profile/{targetUser.id}/{targetUserSlug}">{profileT.activities}</a></li>
-					<li>
-						<a href="/profile/discussions/{targetUser.id}/{targetUserSlug}" class="active"
-							>{profileT.discussions}</a
-						>
-					</li>
-					<li>
-						<a href="/profile/comments/{targetUser.id}/{targetUserSlug}">{profileT.comments}</a>
-					</li>
-				</ul>
-			{/if}
-		{:else}
-			<ul class="menu menu-sm w-full gap-1">
-				<li><a href="/profile/{targetUser.id}/{targetUserSlug}">{profileT.activities}</a></li>
-				<li>
-					<a href="/profile/discussions/{targetUser.id}/{targetUserSlug}" class="active"
-						>{profileT.discussions}</a
-					>
-				</li>
-			</ul>
-			<div class="divider my-1"></div>
-			<div class="flex gap-2">
-				<a href="/entry/signin" class="btn btn-sm btn-primary flex-1">{t.nav.signin}</a>
-				<a href="/entry/register" class="btn btn-sm btn-outline flex-1">{t.nav.register}</a>
-			</div>
-		{/if}
-	</div>
+	<ProfileSidebar
+		{user}
+		{t}
+		activeItem="discussions"
+		targetUserId={targetUser.id}
+		{targetUserSlug}
+	/>
 {/snippet}
 
-<DualColumnLayout {sidebar} bind:isDrawerOpen>
+<DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-6">
 		<!-- Title Banner -->
 		<div class="flex items-center justify-between border-b border-base-300 pb-4">

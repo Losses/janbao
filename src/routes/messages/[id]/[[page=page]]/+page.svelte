@@ -24,7 +24,6 @@
 	const participants = $derived(data.participants as ParticipantItem[]);
 	const totalPages = $derived(data.totalPages);
 	const currentPage = $derived(data.page);
-	let isDrawerOpen = $state(false);
 
 	const participantIds = $derived(participants.map((p) => p.userId));
 	let pendingParticipant = $state<UserSearchResult | null>(null);
@@ -102,7 +101,7 @@
 	</div>
 {/snippet}
 
-<DualColumnLayout {sidebar} bind:isDrawerOpen>
+<DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-6">
 		<div class="flex items-center justify-between border-b border-base-300 pb-4">
 			<h1 class="text-2xl font-bold truncate">{conversation.title}</h1>

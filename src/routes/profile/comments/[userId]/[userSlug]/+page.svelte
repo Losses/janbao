@@ -1,7 +1,7 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
+	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
-	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import DateComponent from '$lib/components/atoms/Date.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
@@ -20,10 +20,8 @@
 	const user = $derived(data.user);
 	const targetUser = $derived(data.targetUser);
 	const comments = $derived(data.comments as UserCommentItem[]);
-	let isDrawerOpen = $state(false);
 
 	const targetSlug = $derived(generateSlug(targetUser.username));
-	const isOwner = $derived(user?.id === targetUser.id);
 
 	interface CommentView {
 		comment: UserCommentItem;
@@ -54,52 +52,16 @@
 </svelte:head>
 
 {#snippet sidebar()}
-	<div class="card bg-base-200 border border-base-300 p-4 space-y-4">
-		<div class="flex items-center gap-3">
-			<Avatar
-				src={targetUser.avatarFileId ? `/img/${targetUser.avatarFileId}` : null}
-				displayName={targetUser.displayName}
-				size="md"
-			/>
-			<div class="min-w-0">
-				<a
-					href="/profile/{targetUser.id}/{targetSlug}"
-					class="font-semibold text-base-content hover:text-primary transition-colors block truncate"
-				>
-					{targetUser.displayName}
-				</a>
-				<span class="text-xs text-base-content/50">@{targetUser.username}</span>
-			</div>
-		</div>
-		<div class="divider my-1"></div>
-		<ul class="menu menu-sm w-full gap-1">
-			<li><a href="/profile/{targetUser.id}/{targetSlug}">{profileT.activities}</a></li>
-			{#if isOwner}
-				<li><a href="/notifications">{profileT.notifications}</a></li>
-				<li><a href="/profile/invitations">{profileT.invitations}</a></li>
-				<li><a href="/messages/inbox">{profileT.mailbox}</a></li>
-			{/if}
-			<li>
-				<a href="/profile/discussions/{targetUser.id}/{targetSlug}">{profileT.discussions}</a>
-			</li>
-			<li>
-				<a href="/profile/comments/{targetUser.id}/{targetSlug}" class="active">
-					{profileT.comments}
-				</a>
-			</li>
-			{#if isOwner}
-				<li class="menu-title mt-2">{profileT.accountSettings}</li>
-				<li><a href="/profile/edit">{profileT.editAccount}</a></li>
-				<li><a href="/profile/password">{profileT.changePassword}</a></li>
-				<li><a href="/profile/preferences">{profileT.preferences}</a></li>
-				<li><a href="/profile/picture">{profileT.avatar}</a></li>
-				<li><a href="/profile/onlineNow">{profileT.stealthSettings}</a></li>
-			{/if}
-		</ul>
-	</div>
+	<ProfileSidebar
+		{user}
+		{t}
+		activeItem="comments"
+		targetUserId={targetUser.id}
+		targetUserSlug={targetSlug}
+	/>
 {/snippet}
 
-<DualColumnLayout {sidebar} bind:isDrawerOpen>
+<DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-6">
 		<h1 class="text-2xl font-bold border-b border-base-300 pb-4">
 			{targetUser.displayName} - {profileT.comments}
