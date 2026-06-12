@@ -7,22 +7,15 @@ import { generateSlug } from '$lib/utils/slug';
 let lastCheckedDateStr = '';
 
 /**
- * Calculates start and end Date objects for a date string in a given timezone.
+ * Resolve the UTC offset (in minutes) of `referenceDate` as observed in `tz`.
+ * Falls back to 0 (UTC) when the timezone is invalid.
  */
-export function getTzBoundaries(dateStr: string, tz: string) {
-	const datePart = dateStr.split('-');
-	const year = parseInt(datePart[0], 10);
-	const month = parseInt(datePart[1], 10) - 1;
-	const day = parseInt(datePart[2], 10);
-
-	const dateUtc = new Date(Date.UTC(year, month, day, 0, 0, 0));
-
-	let offsetMinutes = 0;
+function getTzOffsetMinutes(referenceDate: Date, tz: string): number {
 	try {
 		const offsetParts = new Intl.DateTimeFormat('en-US', {
 			timeZone: tz,
 			timeZoneName: 'longOffset'
-		}).formatToParts(dateUtc);
+		}).formatToParts(referenceDate);
 		const offsetStr = offsetParts.find((p) => p.type === 'timeZoneName')?.value || 'GMT';
 
 		const match = offsetStr.match(/GMT([+-])(\d+)(?::(\d+))?/);
@@ -30,11 +23,31 @@ export function getTzBoundaries(dateStr: string, tz: string) {
 			const sign = match[1] === '+' ? 1 : -1;
 			const hours = parseInt(match[2], 10);
 			const minutes = match[3] ? parseInt(match[3], 10) : 0;
-			offsetMinutes = sign * (hours * 60 + minutes);
+			return sign * (hours * 60 + minutes);
 		}
 	} catch (err) {
 		console.error(`Invalid timezone "${tz}", falling back to UTC offsets.`, err);
 	}
+	return 0;
+}
+
+/**
+ * Calculates start and end Date objects for a date string in a given timezone.
+ */
+/** Half-open UTC Date boundary window [start, end). */
+export interface DateBoundary {
+	start: Date;
+	end: Date;
+}
+
+export function getTzBoundaries(dateStr: string, tz: string): DateBoundary {
+	const datePart = dateStr.split('-');
+	const year = parseInt(datePart[0], 10);
+	const month = parseInt(datePart[1], 10) - 1;
+	const day = parseInt(datePart[2], 10);
+
+	const dateUtc = new Date(Date.UTC(year, month, day, 0, 0, 0));
+	const offsetMinutes = getTzOffsetMinutes(dateUtc, tz);
 
 	const startMs = Date.UTC(year, month, day, 0, 0, 0) - offsetMinutes * 60 * 1000;
 	const endMs = startMs + 24 * 60 * 60 * 1000 - 1;
@@ -43,6 +56,41 @@ export function getTzBoundaries(dateStr: string, tz: string) {
 		start: new Date(startMs),
 		end: new Date(endMs)
 	};
+}
+
+/**
+ * Resolve the half-open [start, end) UTC Date boundaries of the current
+ * calendar month in the given timezone. Used to evaluate monthly
+ * invitation-request limits per RQ00-Backend §6.4.
+ */
+export function getTzMonthBoundaries(tz: string): DateBoundary {
+	const now = new Date();
+	let year: number;
+	let month: number;
+	try {
+		const parts = new Intl.DateTimeFormat('en-US', {
+			timeZone: tz,
+			year: 'numeric',
+			month: '2-digit'
+		}).formatToParts(now);
+		year = parseInt(parts.find((p) => p.type === 'year')?.value || '', 10);
+		month = parseInt(parts.find((p) => p.type === 'month')?.value || '', 10) - 1;
+		if (isNaN(year) || isNaN(month)) throw new Error('invalid month resolution');
+	} catch (err) {
+		console.error(`Invalid timezone "${tz}", falling back to UTC month.`, err);
+		year = now.getUTCFullYear();
+		month = now.getUTCMonth();
+	}
+
+	const startOffset = getTzOffsetMinutes(new Date(Date.UTC(year, month, 1, 0, 0, 0)), tz);
+	const startMs = Date.UTC(year, month, 1, 0, 0, 0) - startOffset * 60 * 1000;
+
+	const nextMonth = month === 11 ? 0 : month + 1;
+	const nextYear = month === 11 ? year + 1 : year;
+	const endOffset = getTzOffsetMinutes(new Date(Date.UTC(nextYear, nextMonth, 1, 0, 0, 0)), tz);
+	const endMs = Date.UTC(nextYear, nextMonth, 1, 0, 0, 0) - endOffset * 60 * 1000;
+
+	return { start: new Date(startMs), end: new Date(endMs) };
 }
 
 /**

@@ -12,6 +12,7 @@ import {
 } from '$lib/server/db/schema';
 import { eq, and, isNull, count, ne, sql } from 'drizzle-orm';
 import { getPaginationLimit } from '$lib/server/constants';
+import { dispatchReplyNotifications } from '$lib/server/db/notifications';
 
 export const load: PageServerLoad = async (event) => {
 	const { discussionId, slug } = event.params;
@@ -311,6 +312,14 @@ export const actions: Actions = {
 					eq(drafts.contextId, discussionId)
 				)
 			);
+
+		// Dispatch notifications (mentions, owner, participants, bookmarkers)
+		await dispatchReplyNotifications(db, {
+			discussionId,
+			replyId,
+			authorId: user.id,
+			contentJson
+		});
 
 		return { success: true, replyId };
 	}

@@ -24,7 +24,7 @@
 	}
 
 	interface DiscussionReadHistory {
-		lastReadAt: Date | string | number;
+		lastReadAt: Date | string | number | null;
 		lastReadPage: number;
 		lastReadReplyId: string | null;
 	}

@@ -3,6 +3,33 @@ import { jsonError } from '$lib/server/errors';
 import type { RequestHandler } from './$types';
 import { bookmarks, discussions } from '$lib/server/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
+import { getBookmarks } from '$lib/server/db/dao/bookmarks';
+
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 50;
+
+// GET /api/bookmarks — List discussions bookmarked by the active user, newest
+// bookmark first. Supports `page` and `limit` (tooltip widget uses limit=5).
+export const GET: RequestHandler = async ({ url, locals }) => {
+	const user = locals.user;
+	const t = locals.t;
+	if (!user) {
+		return jsonError(t, 'common.unauthorized', 401);
+	}
+
+	const rawLimit = url.searchParams.get('limit');
+	let limit = rawLimit ? parseInt(rawLimit, 10) : DEFAULT_LIMIT;
+	if (isNaN(limit) || limit < 1) limit = DEFAULT_LIMIT;
+	if (limit > MAX_LIMIT) limit = MAX_LIMIT;
+
+	const rawPage = url.searchParams.get('page');
+	let page = rawPage ? parseInt(rawPage, 10) : 1;
+	if (isNaN(page) || page < 1) page = 1;
+	const offset = (page - 1) * limit;
+
+	const items = await getBookmarks(locals.db, user.id, { limit, offset });
+	return json({ bookmarks: items, page, limit });
+};
 
 export const POST: RequestHandler = async (event) => {
 	const user = event.locals.user;

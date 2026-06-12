@@ -4,10 +4,12 @@
 	import type { Snippet } from 'svelte';
 	import type { LayoutData } from './$types';
 
-	let { data, children } = $props<{
+	interface LayoutProps {
 		data: LayoutData;
 		children: Snippet;
-	}>();
+	}
+
+	let { data, children }: LayoutProps = $props();
 
 	// Reactively update the <html> tag's lang attribute
 	$effect(() => {
