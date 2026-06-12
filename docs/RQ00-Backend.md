@@ -656,6 +656,7 @@ The frontend interfaces with the following core backend routes:
 - `JWT_SECRET`: Secret key for token verification.
 - `PCLOUD_TOKEN`, `PCLOUD_FOLDER_ID`: Access values for image reverse proxying.
 - `MONTHLY_INVITATION_LIMIT`: Integer representing the monthly request limit of invitation codes per user (defaults to `5`).
+- `PUBLIC_SITE_NAME`: String representing the site display name used in page titles and branding (defaults to `Janbao`).
 
 ### 6.7 SvelteKit Parameter Matchers
 

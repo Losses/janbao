@@ -1,5 +1,6 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
+	import { formatTitle, getSiteName } from '$lib/utils/title';
 
 	import type { PageData } from './$types';
 
@@ -14,7 +15,7 @@
 </script>
 
 <svelte:head>
-	<title>{t.home.title}</title>
+	<title>{formatTitle(t.nav.home)}</title>
 </svelte:head>
 
 {#snippet sidebar()}
@@ -55,7 +56,7 @@
 		<div
 			class="flex items-center justify-between md:hidden bg-base-200 border border-base-300 p-3 rounded-lg"
 		>
-			<span class="font-bold text-lg">Janbao</span>
+			<span class="font-bold text-lg">{getSiteName()}</span>
 			<button onclick={() => (isDrawerOpen = true)} class="btn btn-sm btn-ghost avatar placeholder">
 				<div class="bg-neutral text-neutral-content rounded-full w-8">
 					{#if user}

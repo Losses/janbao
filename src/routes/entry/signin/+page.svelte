@@ -2,6 +2,7 @@
 	import SingleColumnLayout from '$lib/components/templates/SingleColumnLayout.svelte';
 	import AlertMessage from '$lib/components/AlertMessage.svelte';
 	import { goto } from '$app/navigation';
+	import { formatTitle } from '$lib/utils/title';
 	import type { PageData } from './$types';
 	import type { ApiResponse } from '$lib/types/api';
 
@@ -46,7 +47,7 @@
 </script>
 
 <svelte:head>
-	<title>{t.nav.signin} - Janbao</title>
+	<title>{formatTitle(t.nav.signin)}</title>
 </svelte:head>
 
 <SingleColumnLayout>

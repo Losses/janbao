@@ -5,6 +5,7 @@
 	 * Text fallback "Janbao" when no custom SVG is available.
 	 */
 	import Icon from '$lib/components/atoms/Icon.svelte';
+	import { getSiteName } from '$lib/utils/title';
 	import { mdiBookOpenPageVariant } from '@mdi/js';
 
 	interface LogoProps {
@@ -16,5 +17,5 @@
 
 <a href="/" class="flex items-center gap-2 text-lg font-bold text-base-content {className}">
 	<Icon path={mdiBookOpenPageVariant} size={24} />
-	<span>Janbao</span>
+	<span>{getSiteName()}</span>
 </a>
