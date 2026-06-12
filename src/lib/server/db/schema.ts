@@ -30,10 +30,10 @@ export const users = sqliteTable('users', {
 		.references(() => userGroups.slug),
 	signupTime: integer('signup_time', { mode: 'timestamp' })
 		.notNull()
-		.default(sql`(strftime('%s', 'now'))`),
+		.default(sql`(strftime('%s', 'now') * 1000)`),
 	lastActiveTime: integer('last_active_time', { mode: 'timestamp' })
 		.notNull()
-		.default(sql`(strftime('%s', 'now'))`),
+		.default(sql`(strftime('%s', 'now') * 1000)`),
 	showEmail: integer('show_email', { mode: 'boolean' }).notNull().default(false),
 	languagePreference: text('language_preference').notNull().default('en'),
 	isStealth: integer('is_stealth', { mode: 'boolean' }).notNull().default(false),
@@ -93,10 +93,10 @@ export const discussions = sqliteTable(
 		themeName: text('theme_name'),
 		createdAt: integer('created_at', { mode: 'timestamp' })
 			.notNull()
-			.default(sql`(strftime('%s', 'now'))`),
+			.default(sql`(strftime('%s', 'now') * 1000)`),
 		updatedAt: integer('updated_at', { mode: 'timestamp' })
 			.notNull()
-			.default(sql`(strftime('%s', 'now'))`),
+			.default(sql`(strftime('%s', 'now') * 1000)`),
 		deletedAt: integer('deleted_at', { mode: 'timestamp' })
 	},
 	(table) => ({
@@ -126,10 +126,10 @@ export const replies = sqliteTable(
 		contentJson: text('content_json').notNull(),
 		createdAt: integer('created_at', { mode: 'timestamp' })
 			.notNull()
-			.default(sql`(strftime('%s', 'now'))`),
+			.default(sql`(strftime('%s', 'now') * 1000)`),
 		updatedAt: integer('updated_at', { mode: 'timestamp' })
 			.notNull()
-			.default(sql`(strftime('%s', 'now'))`),
+			.default(sql`(strftime('%s', 'now') * 1000)`),
 		deletedAt: integer('deleted_at', { mode: 'timestamp' })
 	},
 	(table) => ({
@@ -154,7 +154,7 @@ export const bookmarks = sqliteTable(
 			.references(() => discussions.id, { onDelete: 'cascade' }),
 		bookmarkedAt: integer('bookmarked_at', { mode: 'timestamp' })
 			.notNull()
-			.default(sql`(strftime('%s', 'now'))`)
+			.default(sql`(strftime('%s', 'now') * 1000)`)
 	},
 	(table) => ({
 		pk: primaryKey({ columns: [table.userId, table.discussionId] }),
@@ -174,7 +174,7 @@ export const discussionReads = sqliteTable(
 			.references(() => discussions.id, { onDelete: 'cascade' }),
 		lastReadAt: integer('last_read_at', { mode: 'timestamp' })
 			.notNull()
-			.default(sql`(strftime('%s', 'now'))`),
+			.default(sql`(strftime('%s', 'now') * 1000)`),
 		lastReadPage: integer('last_read_page').notNull().default(1),
 		lastReadReplyId: text('last_read_reply_id')
 	},
@@ -197,7 +197,7 @@ export const drafts = sqliteTable(
 		contentJson: text('content_json').notNull(),
 		updatedAt: integer('updated_at', { mode: 'timestamp' })
 			.notNull()
-			.default(sql`(strftime('%s', 'now'))`)
+			.default(sql`(strftime('%s', 'now') * 1000)`)
 	},
 	(table) => ({
 		authorIdx: index('drafts_author_idx').on(table.authorId),
@@ -216,7 +216,7 @@ export const conversations = sqliteTable('conversations', {
 	title: text('title').notNull(),
 	createdAt: integer('created_at', { mode: 'timestamp' })
 		.notNull()
-		.default(sql`(strftime('%s', 'now'))`),
+		.default(sql`(strftime('%s', 'now') * 1000)`),
 	deletedAt: integer('deleted_at', { mode: 'timestamp' })
 });
 
@@ -231,7 +231,7 @@ export const conversationParticipants = sqliteTable(
 			.references(() => users.id, { onDelete: 'cascade' }),
 		joinedAt: integer('joined_at', { mode: 'timestamp' })
 			.notNull()
-			.default(sql`(strftime('%s', 'now'))`)
+			.default(sql`(strftime('%s', 'now') * 1000)`)
 	},
 	(table) => ({
 		pk: primaryKey({ columns: [table.conversationId, table.userId] }),
@@ -254,10 +254,10 @@ export const messages = sqliteTable(
 		contentJson: text('content_json').notNull(),
 		createdAt: integer('created_at', { mode: 'timestamp' })
 			.notNull()
-			.default(sql`(strftime('%s', 'now'))`),
+			.default(sql`(strftime('%s', 'now') * 1000)`),
 		updatedAt: integer('updated_at', { mode: 'timestamp' })
 			.notNull()
-			.default(sql`(strftime('%s', 'now'))`)
+			.default(sql`(strftime('%s', 'now') * 1000)`)
 	},
 	(table) => ({
 		conversationIdx: index('messages_conversation_idx').on(table.conversationId),
@@ -276,7 +276,7 @@ export const conversationReads = sqliteTable(
 			.references(() => conversations.id, { onDelete: 'cascade' }),
 		lastReadAt: integer('last_read_at', { mode: 'timestamp' })
 			.notNull()
-			.default(sql`(strftime('%s', 'now'))`)
+			.default(sql`(strftime('%s', 'now') * 1000)`)
 	},
 	(table) => ({
 		pk: primaryKey({ columns: [table.userId, table.conversationId] })
@@ -295,7 +295,7 @@ export const activities = sqliteTable(
 		parentActivityId: text('parent_activity_id'),
 		createdAt: integer('created_at', { mode: 'timestamp' })
 			.notNull()
-			.default(sql`(strftime('%s', 'now'))`),
+			.default(sql`(strftime('%s', 'now') * 1000)`),
 		deletedAt: integer('deleted_at', { mode: 'timestamp' })
 	},
 	(table) => ({
@@ -328,7 +328,7 @@ export const notifications = sqliteTable(
 		isRead: integer('is_read', { mode: 'boolean' }).notNull().default(false),
 		createdAt: integer('created_at', { mode: 'timestamp' })
 			.notNull()
-			.default(sql`(strftime('%s', 'now'))`)
+			.default(sql`(strftime('%s', 'now') * 1000)`)
 	},
 	(table) => ({
 		userReadIdx: index('notifications_user_read_idx').on(table.userId, table.isRead),
@@ -360,7 +360,7 @@ export const attachments = sqliteTable(
 			.references(() => users.id, { onDelete: 'cascade' }),
 		createdAt: integer('created_at', { mode: 'timestamp' })
 			.notNull()
-			.default(sql`(strftime('%s', 'now'))`)
+			.default(sql`(strftime('%s', 'now') * 1000)`)
 	},
 	(table) => ({
 		uploaderIdx: index('attachments_uploader_idx').on(table.uploaderId)
@@ -377,7 +377,7 @@ export const invitations = sqliteTable(
 		usedById: text('used_by_id').references(() => users.id, { onDelete: 'set null' }),
 		createdAt: integer('created_at', { mode: 'timestamp' })
 			.notNull()
-			.default(sql`(strftime('%s', 'now'))`),
+			.default(sql`(strftime('%s', 'now') * 1000)`),
 		expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull()
 	},
 	(table) => ({

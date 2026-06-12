@@ -39,21 +39,13 @@
 />
 
 <div class="relative inline-flex {className}" bind:this={containerRef}>
-	<!-- Trigger wrapper — uses role="button" for a11y since children may be interactive elements -->
+	<!-- Trigger wrapper (clicks bubble up to toggle tooltip) -->
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="inline-flex cursor-pointer"
-		role="button"
-		tabindex="0"
-		onclick={(e) => {
-			e.stopPropagation();
+		onclick={() => {
 			onToggle();
-		}}
-		onkeydown={(e) => {
-			if (e.key === 'Enter' || e.key === ' ') {
-				e.stopPropagation();
-				e.preventDefault();
-				onToggle();
-			}
 		}}
 	>
 		{@render children()}
@@ -65,7 +57,6 @@
 			class="absolute right-0 top-full z-50 mt-2 w-72 rounded-lg border border-base-300 bg-base-100 shadow-lg"
 			role="dialog"
 			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => {
 				if (e.key === 'Escape') onClose();
 			}}

@@ -94,7 +94,6 @@
 	);
 
 	// Internal state
-	let isLoading = $state(false);
 	let isSaving = $state(false);
 	let lastSavedContent = $state('');
 	let saveStatus = $state<'idle' | 'saving' | 'saved'>('idle');
@@ -103,6 +102,27 @@
 	// Track editor instance for autosave — store JSON getter, not typed editor ref
 	// to avoid cross-version type mismatches from svelte-lexical's lexical dependency
 	let editorStateGetter: (() => string) | undefined = $state();
+
+	let editorInstance: unknown = $state();
+
+	// Dynamic registration of ImageNode protocol-level XSS validation transform
+	$effect(() => {
+		if (!editorInstance) return;
+		const castEditor = editorInstance as {
+			registerNodeTransform?: (
+				nodeClass: unknown,
+				transform: (node: unknown) => void
+			) => () => void;
+		};
+		if (!castEditor.registerNodeTransform) return;
+		const unregister = castEditor.registerNodeTransform(ImageNode, (node) => {
+			const src = (node as { getSrc?: () => string }).getSrc?.() ?? '';
+			if (!validateUrl(src)) {
+				(node as { remove?: () => void }).remove?.();
+			}
+		});
+		return () => unregister();
+	});
 
 	// Nodes required by the editor
 	const editorNodes = [
@@ -118,32 +138,43 @@
 	];
 
 	// Markdown transformers we support
-	const markdownTransformers = [
+	const markdownTransformers = $derived([
 		BOLD_STAR,
 		BOLD_UNDERSCORE,
 		ITALIC_STAR,
 		ITALIC_UNDERSCORE,
 		STRIKETHROUGH,
-		HEADING,
+		...(!disableHeadings ? [HEADING] : []),
 		LINK,
 		UNORDERED_LIST,
 		ORDERED_LIST,
 		CHECK_LIST
-	];
+	]);
 
-	// Protocol-level URL validation — only http:// and https:// allowed (blocks XSS)
+	// Protocol-level URL validation — only http://, https://, and relative paths (starting with /, ., #) allowed
 	function validateUrl(src: string): boolean {
-		return src.startsWith('http://') || src.startsWith('https://');
+		const lower = src.trim().toLowerCase();
+		if (lower.startsWith('http://') || lower.startsWith('https://')) {
+			return true;
+		}
+		if (
+			lower.startsWith('/') ||
+			lower.startsWith('./') ||
+			lower.startsWith('../') ||
+			lower.startsWith('#')
+		) {
+			return true;
+		}
+		return false;
 	}
 
 	// Handle content changes — OnChangePlugin signature: (editorState, editor, tags)
 	// We use structural types to avoid cross-package EditorState type conflicts
 	// between our direct lexical dependency and svelte-lexical's internal version.
-	function handleChange(
-		editorState: { toJSON: () => unknown },
-		editor: { getEditorState: () => { toJSON: () => unknown } }
-	) {
-		editorStateGetter = () => JSON.stringify(editor.getEditorState().toJSON());
+	function handleChange(editorState: { toJSON: () => unknown }, editor: unknown) {
+		editorInstance = editor;
+		const castEditor = editor as { getEditorState?: () => { toJSON: () => unknown } };
+		editorStateGetter = () => JSON.stringify(castEditor.getEditorState?.().toJSON() ?? {});
 		const json = JSON.stringify(editorState.toJSON());
 		onContentChange?.(json);
 	}
@@ -201,7 +232,6 @@
 	// via server-side data loading in future cycles.
 
 	$effect(() => {
-		isLoading = disabled;
 		startAutosave();
 		return () => stopAutosave();
 	});
@@ -246,69 +276,79 @@
 	});
 </script>
 
-<div class="rounded-lg border border-base-300 {className}">
-	{#if isLoading}
-		<!-- Editor locked during initial loading -->
-		<div class="flex min-h-[200px] items-center justify-center bg-base-200">
+<div class="relative rounded-lg border border-base-300 {className}">
+	<!-- Toolbar -->
+	<div
+		class="border-b border-base-300 bg-base-200 px-2 py-1 {disabled
+			? 'opacity-60 pointer-events-none'
+			: ''}"
+	>
+		<Toolbar>
+			{#if !disableHeadings}
+				<BlockFormatDropDown>
+					<ParagraphDropDownItem />
+					<HeadingDropDownItem headingSize="h1" />
+					<HeadingDropDownItem headingSize="h2" />
+					<HeadingDropDownItem headingSize="h3" />
+					<HeadingDropDownItem headingSize="h4" />
+				</BlockFormatDropDown>
+			{/if}
+			<Divider />
+			<BoldButton />
+			<ItalicButton />
+			<UnderlineButton />
+			<StrikethroughButton />
+			<Divider />
+			{#if !disableImageUpload}
+				<InsertDropDown>
+					<InsertImageDropDownItem />
+				</InsertDropDown>
+			{/if}
+			<InsertLink />
+			<Divider />
+			<UndoButton />
+			<RedoButton />
+		</Toolbar>
+	</div>
+
+	<!-- Editor Area -->
+	<Composer {initialConfig}>
+		<div
+			class="prose prose-sm max-w-none min-h-[200px] px-3 py-2 {disabled
+				? 'opacity-60 pointer-events-none'
+				: ''}"
+		>
+			<RichTextPlugin />
+			<HistoryPlugin />
+			<ListPlugin />
+			<ImagePlugin />
+			<LinkPlugin {validateUrl} />
+			<MarkdownShortcutPlugin transformers={markdownTransformers} />
+			<OnChangePlugin
+				ignoreHistoryMergeTagChange={true}
+				ignoreSelectionChange={false}
+				onChange={handleChange}
+			/>
+			<PlaceHolder>
+				{resolvedPlaceholder}
+			</PlaceHolder>
+		</div>
+	</Composer>
+
+	<!-- Save Status Footer -->
+	{#if saveStatusLabel}
+		<div class="border-t border-base-200 px-3 py-1 text-right text-xs text-base-content/40">
+			{saveStatusLabel}
+		</div>
+	{/if}
+
+	<!-- Visual loading overlay to prevent editor unmounting and data loss -->
+	{#if disabled}
+		<div
+			class="absolute inset-0 z-40 flex items-center justify-center bg-base-100/50 backdrop-blur-[1px] rounded-lg"
+		>
 			<span class="loading loading-spinner loading-sm text-primary"></span>
 			<span class="ml-2 text-sm text-base-content/60">{tEditor['loading'] ?? 'Loading...'}</span>
 		</div>
-	{:else}
-		<!-- Toolbar -->
-		<div class="border-b border-base-300 bg-base-200 px-2 py-1">
-			<Toolbar>
-				{#if !disableHeadings}
-					<BlockFormatDropDown>
-						<ParagraphDropDownItem />
-						<HeadingDropDownItem headingSize="h1" />
-						<HeadingDropDownItem headingSize="h2" />
-						<HeadingDropDownItem headingSize="h3" />
-						<HeadingDropDownItem headingSize="h4" />
-					</BlockFormatDropDown>
-				{/if}
-				<Divider />
-				<BoldButton />
-				<ItalicButton />
-				<UnderlineButton />
-				<StrikethroughButton />
-				<Divider />
-				{#if !disableImageUpload}
-					<InsertDropDown>
-						<InsertImageDropDownItem />
-					</InsertDropDown>
-				{/if}
-				<InsertLink />
-				<Divider />
-				<UndoButton />
-				<RedoButton />
-			</Toolbar>
-		</div>
-
-		<!-- Editor Area -->
-		<Composer {initialConfig}>
-			<div class="prose prose-sm max-w-none min-h-[200px] px-3 py-2">
-				<RichTextPlugin />
-				<HistoryPlugin />
-				<ListPlugin />
-				<ImagePlugin />
-				<LinkPlugin {validateUrl} />
-				<MarkdownShortcutPlugin transformers={markdownTransformers} />
-				<OnChangePlugin
-					ignoreHistoryMergeTagChange={true}
-					ignoreSelectionChange={false}
-					onChange={handleChange}
-				/>
-				<PlaceHolder>
-					{resolvedPlaceholder}
-				</PlaceHolder>
-			</div>
-		</Composer>
-
-		<!-- Save Status Footer -->
-		{#if saveStatusLabel}
-			<div class="border-t border-base-200 px-3 py-1 text-right text-xs text-base-content/40">
-				{saveStatusLabel}
-			</div>
-		{/if}
 	{/if}
 </div>

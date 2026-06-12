@@ -14,3 +14,5 @@ export function getJwtSecret(platformEnv: App.Platform['env'] | undefined): stri
 export function getCookieSecure(url: URL): boolean {
 	return url.protocol === 'https:';
 }
+
+export const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';

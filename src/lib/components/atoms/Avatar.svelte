@@ -18,23 +18,25 @@
 	}: AvatarProps = $props();
 
 	const sizeMap: Record<string, string> = {
-		xs: 'avatar-xs', // 24px via DaisyUI
-		sm: 'avatar-sm', // 32px via DaisyUI
-		md: '', // default ~40px
-		lg: 'avatar-lg' // 56px via DaisyUI
+		xs: 'w-6 h-6 text-xs',
+		sm: 'w-8 h-8 text-sm',
+		md: 'w-10 h-10 text-base',
+		lg: 'w-14 h-14 text-xl'
 	};
 
-	const sizeClass = $derived(sizeMap[size] ?? '');
+	const sizeClass = $derived(sizeMap[size] ?? 'w-10 h-10 text-base');
 
 	const fallbackLetter = $derived(displayName?.[0]?.toUpperCase() ?? '?');
 </script>
 
-<div class="avatar {sizeClass} {className}">
-	<div class="w-full rounded-full bg-neutral text-neutral-content">
+<div class="avatar {className}">
+	<div
+		class="{sizeClass} rounded-full bg-neutral text-neutral-content flex items-center justify-center"
+	>
 		{#if src}
 			<img {src} alt={displayName ?? 'User avatar'} loading="lazy" />
 		{:else}
-			<span class="flex items-center justify-center text-sm font-medium">{fallbackLetter}</span>
+			<span class="font-medium">{fallbackLetter}</span>
 		{/if}
 	</div>
 </div>

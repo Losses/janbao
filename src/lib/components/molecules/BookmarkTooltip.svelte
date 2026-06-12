@@ -39,6 +39,8 @@
 		class="btn btn-ghost btn-xs"
 		aria-label={tSidebar['bookmarks'] ?? 'Bookmarks'}
 		title={tSidebar['bookmarks'] ?? 'Bookmarks'}
+		aria-expanded={isOpen}
+		aria-haspopup="dialog"
 	>
 		<Icon path={mdiBookmark} size={16} />
 	</button>

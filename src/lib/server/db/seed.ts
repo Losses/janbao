@@ -1,6 +1,7 @@
 import { userGroups, users } from './schema';
 import { eq, ne } from 'drizzle-orm';
 import type { D1Db } from './index';
+import { SYSTEM_USER_ID } from '../constants';
 
 let seeded = false;
 
@@ -52,7 +53,7 @@ export async function seedCore(db: D1Db, env?: App.Platform['env']) {
 		}
 
 		// 2. Seed System User
-		const systemUserId = '00000000-0000-0000-0000-000000000000';
+		const systemUserId = SYSTEM_USER_ID;
 		const existingSystemUser = await db
 			.select()
 			.from(users)

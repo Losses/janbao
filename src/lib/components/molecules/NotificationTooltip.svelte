@@ -44,6 +44,8 @@
 		class="btn btn-ghost btn-xs"
 		aria-label={tSidebar['notifications'] ?? 'Notifications'}
 		title={tSidebar['notifications'] ?? 'Notifications'}
+		aria-expanded={isOpen}
+		aria-haspopup="dialog"
 	>
 		<Icon path={mdiBell} size={16} />
 	</button>
@@ -64,17 +66,17 @@
 			<!-- Notification List -->
 			<ul class="max-h-64 overflow-y-auto">
 				{#each mockNotifications as notification (notification.id)}
-					<li
-						class="border-b border-base-200 px-4 py-2 transition-colors duration-150 hover:bg-base-200"
-					>
-						<p
-							class="text-xs {notification.isRead
-								? 'text-base-content/60'
-								: 'font-medium text-base-content'}"
-						>
-							{notification.text}
-						</p>
-						<span class="text-xs text-base-content/40">{notification.time}</span>
+					<li class="border-b border-base-200 transition-colors duration-150 hover:bg-base-200">
+						<a href="/notifications" class="block px-4 py-2">
+							<p
+								class="text-xs {notification.isRead
+									? 'text-base-content/60'
+									: 'font-medium text-base-content'}"
+							>
+								{notification.text}
+							</p>
+							<span class="text-xs text-base-content/40">{notification.time}</span>
+						</a>
 					</li>
 				{/each}
 			</ul>

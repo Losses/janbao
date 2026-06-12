@@ -35,6 +35,9 @@ declare global {
 				ADMIN_PASSWORD?: string;
 				MONTHLY_INVITATION_LIMIT?: string;
 			};
+			context?: {
+				waitUntil: (promise: Promise<unknown>) => void;
+			};
 		}
 	}
 }

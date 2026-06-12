@@ -34,6 +34,8 @@
 		class="btn btn-ghost btn-xs"
 		aria-label={tSidebar['messages'] ?? 'Messages'}
 		title={tSidebar['messages'] ?? 'Messages'}
+		aria-expanded={isOpen}
+		aria-haspopup="dialog"
 	>
 		<Icon path={mdiEmail} size={16} />
 	</button>

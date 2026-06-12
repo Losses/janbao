@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { users } from '$lib/server/db/schema';
 import { eq, and, gt, not } from 'drizzle-orm';
+import { SYSTEM_USER_ID } from '$lib/server/constants';
 import type { RequestHandler } from './$types';
 
 // Active Users Wall endpoint
@@ -27,10 +28,14 @@ export const GET: RequestHandler = async ({ locals }) => {
 			and(
 				eq(users.isStealth, false),
 				gt(users.lastActiveTime, tenMinutesAgo),
-				not(eq(users.id, '00000000-0000-0000-0000-000000000000'))
+				not(eq(users.id, SYSTEM_USER_ID))
 			)
 		)
 		.limit(50);
 
-	return json(onlineUsers);
+	return json(onlineUsers, {
+		headers: {
+			'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
+		}
+	});
 };

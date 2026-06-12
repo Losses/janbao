@@ -150,3 +150,30 @@ All code has been developed adhering to the strict architectural paradigms of **
   - **M4 (Draft input validation):** `contextType` allowlist + `contentJson` size limit + `contextId` normalization.
   - **m1 (Nested button):** Replaced Tooltip's internal `<button>` wrapper with `<div role="button" tabindex="0">` to prevent nested `<button>` invalid HTML.
 - **Verification:** `bun run check` (0 errors, 0 warnings), `bun run lint` (clean).
+
+### Round 2 Audit (2026-06-12)
+
+- **Status:** Completed
+- **Audit File:** [RV00-C02-Audit-02.md](file:///home/losses/Development/janbao/docs/RV00-C02-Audit-02.md)
+- **Verdict:** FAIL → Fixed
+- **Agents Summary:** 5/5 FAIL — unanimous consensus on critical/major issues
+- **Defects Identified:** 2 CRITICAL, 6 MAJOR, 5 MINOR
+- **Resolutions Applied:**
+  - **C1 (Date.svelte render crash):** Added validation check `isNaN(dateObj.getTime())` to prevent fatal RangeError crash on invalid dates.
+  - **C2 (Database default timestamps mismatch):** Converted all 18 database default timestamp expressions in `schema.ts` from seconds-based `(strftime('%s', 'now'))` to milliseconds-based `(strftime('%s', 'now') * 1000)` to align with Drizzle mode: timestamp. Generated local migration `0001_even_rogue.sql`.
+  - **M1 (Tooltip accessibility):** Removed redundant interactive `role="button"` and `tabindex="0"` from the trigger wrapper div. Added `aria-expanded` and `aria-haspopup="dialog"` to the inner buttons in the molecules. Removed propagation stoppers from tooltips to fix click-outside dismissal conflicts.
+  - **M2 & M3 & m4 (Date i18n/skews):** Corrected plural minutes key typo; fixed double-number prefix fallback bug when translations are missing; normalized future client clock skews to return `"just now"`.
+  - **M4 & m1 & Image XSS (LexicalEditor):** Prevented composer unmount and data loss when disabled by using a visual pointer-events blurred overlay with spinner instead. Improved URL protocol validation to support case-insensitivity and relative paths. Registered a Lexical node transform to sanitize image hotlinks.
+  - **M5 (hooks.server.ts):** Wrapped the unawaited active time update promise in `event.platform.context.waitUntil` (if available) to prevent execution cancellation under Cloudflare.
+  - **M6 (NotificationTooltip):** Wrapped mock notifications in navigation links (`<a>`).
+  - **m2 & m3 (online users API):** Added `Cache-Control` header to prevent edge caching. Declared and imported a unified `SYSTEM_USER_ID` constant.
+  - **m5 (Avatar sizing):** Corrected size mapping to apply DaisyUI/Tailwind width/height classes to the inner wrapper div instead of relying on non-existent `avatar-xs` / `avatar-lg` styles.
+- **Verification:** `bun run check` (0 errors, 0 warnings), `bun run lint` (clean).
+
+### Round 3 Audit (2026-06-12)
+
+- **Status:** Completed
+- **Audit File:** [RV00-C02-Audit-03.md](file:///home/losses/Development/janbao/docs/RV00-C02-Audit-03.md)
+- **Verdict:** FAIL (4/5 PASS, 1/5 FAIL due to a hallucinated key typo)
+- **Agents Summary:** 4/5 PASS — consensus on all fixes. The single FAIL was due to a hallucinated typo in `Date.svelte` which was manually verified as fixed.
+- **Verification:** `bun run check` (0 errors, 0 warnings), `bun run lint` (clean).

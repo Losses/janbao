@@ -60,11 +60,16 @@ export const handle: Handle = async ({ event, resolve }) => {
 				const lastActive = safeUser.lastActiveTime.getTime();
 				if (now - lastActive > 60000) {
 					// Async update without blocking request
-					db.update(users)
+					const promise = db
+						.update(users)
 						.set({ lastActiveTime: new Date() })
 						.where(eq(users.id, safeUser.id))
 						.run()
 						.catch((err) => console.error('Failed to update lastActiveTime:', err));
+
+					if (event.platform?.context?.waitUntil) {
+						event.platform.context.waitUntil(promise);
+					}
 				}
 			} else {
 				// Cookie exists but user not found (e.g. deleted), clear invalid cookie

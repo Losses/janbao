@@ -14,37 +14,57 @@
 	let { value, t = null, class: className = '' }: DateProps = $props();
 
 	const dateObj = $derived(new Date(value));
+	const isValid = $derived(!isNaN(dateObj.getTime()));
 
 	const tDate = $derived((t as Record<string, Record<string, string>> | null)?.date ?? {});
 
 	const absoluteString = $derived(
-		dateObj.toLocaleString(undefined, {
-			year: 'numeric',
-			month: '2-digit',
-			day: '2-digit',
-			hour: '2-digit',
-			minute: '2-digit',
-			second: '2-digit'
-		})
+		isValid
+			? dateObj.toLocaleString(undefined, {
+					year: 'numeric',
+					month: '2-digit',
+					day: '2-digit',
+					hour: '2-digit',
+					minute: '2-digit',
+					second: '2-digit'
+				})
+			: ''
 	);
 
-	// Helper: build relative string using i18n keys with number prefix
+	// Helper: build relative string using i18n keys with number prefix, degrading gracefully to English
 	function rel(n: number, singularKey: string, pluralKey: string): string {
-		const template =
-			n === 1
-				? (tDate[singularKey] ?? `${n} ${singularKey}`)
-				: (tDate[pluralKey] ?? `${n} ${pluralKey}`);
-		// Templates like "分钟前" or "minutes ago" — prepend the number
-		return `${n} ${template}`;
+		const template = n === 1 ? tDate[singularKey] : tDate[pluralKey];
+		if (template) {
+			return `${n} ${template}`;
+		}
+		// Fallback to English if translation is missing:
+		const unitMap: Record<string, string> = {
+			yearAgo: 'year ago',
+			yearsAgo: 'years ago',
+			monthAgo: 'month ago',
+			monthsAgo: 'months ago',
+			dayAgo: 'day ago',
+			daysAgo: 'days ago',
+			hourAgo: 'hour ago',
+			hoursAgo: 'hours ago',
+			minuteAgo: 'minute ago',
+			minutesAgo: 'minutes ago'
+		};
+		const key = n === 1 ? singularKey : pluralKey;
+		const unit = unitMap[key] ?? key;
+		return `${n} ${unit}`;
 	}
 
 	// Compute relative time string
 	const relativeString = $derived.by(() => {
+		if (!isValid) return '';
+
 		const now = Date.now();
 		const then = dateObj.getTime();
 		const diffMs = now - then;
 
-		if (diffMs < 0) return formatFuture(diffMs);
+		// Handle future dates (client clock skew) as "just now"
+		if (diffMs < 0) return tDate['justNow'] ?? 'just now';
 
 		const seconds = Math.floor(diffMs / 1000);
 		const minutes = Math.floor(seconds / 60);
@@ -60,25 +80,16 @@
 		if (minutes > 0) return rel(minutes, 'minuteAgo', 'minutesAgo');
 		return tDate['justNow'] ?? 'just now';
 	});
-
-	function formatFuture(diffMs: number): string {
-		const absDiff = Math.abs(diffMs);
-		const seconds = Math.floor(absDiff / 1000);
-		const minutes = Math.floor(seconds / 60);
-		const hours = Math.floor(minutes / 60);
-		const days = Math.floor(hours / 24);
-
-		if (days > 0) return rel(days, 'dayAgo', 'daysAgo');
-		if (hours > 0) return rel(hours, 'hourAgo', 'hoursAgo');
-		if (minutes > 0) return rel(minutes, 'minuteAgo', 'minutesAgo');
-		return tDate['justNow'] ?? 'just now';
-	}
 </script>
 
-<time
-	datetime={dateObj.toISOString()}
-	title={absoluteString}
-	class="text-sm text-base-content/60 {className}"
->
-	{relativeString}
-</time>
+{#if isValid}
+	<time
+		datetime={dateObj.toISOString()}
+		title={absoluteString}
+		class="text-sm text-base-content/60 {className}"
+	>
+		{relativeString}
+	</time>
+{:else}
+	<span class="text-sm text-base-content/40 {className}">-</span>
+{/if}
