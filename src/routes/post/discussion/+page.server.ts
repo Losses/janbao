@@ -21,25 +21,21 @@ export const load: PageServerLoad = async (event) => {
 	// 1. Fetch categories
 	const allCategories = await db.select().from(categories).orderBy(categories.displayOrder);
 
-	// 2. Filter writable categories
-	const writeableCategories = [];
-	for (const cat of allCategories) {
-		const perm = await db
-			.select()
-			.from(categoryPermissions)
-			.where(
-				and(
-					eq(categoryPermissions.categorySlug, cat.slug),
-					eq(categoryPermissions.groupSlug, user.groupSlug)
-				)
-			)
-			.limit(1);
+	// 2. Batch-fetch permissions for this group across all categories (2 queries total)
+	const perms = await db
+		.select({
+			categorySlug: categoryPermissions.categorySlug,
+			canCreate: categoryPermissions.canCreate
+		})
+		.from(categoryPermissions)
+		.where(eq(categoryPermissions.groupSlug, user.groupSlug));
 
-		const canCreate = perm.length === 0 ? true : perm[0].canCreate;
-		if (canCreate) {
-			writeableCategories.push(cat);
-		}
-	}
+	const permMap = new Map(perms.map((p) => [p.categorySlug, p.canCreate]));
+
+	const writeableCategories = allCategories.filter((cat) => {
+		const canCreate = permMap.get(cat.slug);
+		return canCreate === undefined ? true : canCreate;
+	});
 
 	// 3. Find default category (highest priority)
 	let defaultCategorySlug = '';

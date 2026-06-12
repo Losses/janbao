@@ -116,3 +116,21 @@ All components and server-side code have been built strictly under typescript co
 **Verification:** `bun run check` = 0 errors/0 warnings across 935 files; `bun run lint` = clean; `any` grep = zero hits.
 
 **Full Report:** [RV00-C03-Audit-02.md](file:///home/losses/Development/janbao/docs/RV00-C03-Audit-02.md)
+
+### Audit Round 3 — 2026-06-12
+
+**Method:** Full-scope single-agent audit. All specification documents and all 27+ C03 code files read in full. 13 audit categories evaluated.
+
+**Verdict:** PASS-WITH-WARNINGS. All prior fixes verified intact. No new FAIL items.
+
+**WARN Items Fixed This Round: 3**
+
+| ID      | Description                                                                                                                                         | Resolution                                                                                                                                                                                                |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R3-W-01 | N+1 query pattern in `getDiscussionsList` — ~41 sequential queries per page load (1 main + 20x2 per-row detail queries)                             | Fixed: replaced with batch queries using `MAX(createdAt)` subquery for last-reply author and bulk reply fetch with in-memory threshold filtering for unread counts. Reduced to 3-4 queries per page load. |
+| R3-W-02 | Pagination limits hardcoded as constants (`20`, `50`) instead of reading from `DISCUSSIONS_LIMIT`/`PAGINATION_LIMIT` env vars per RQ00-Backend §6.6 | Fixed: added `getDiscussionsLimit()`, `getPaginationLimit()`, `getActivitiesLimit()` to `constants.ts` with platform env + process.env fallback. Updated 3 consumers. Added types to `app.d.ts`.          |
+| R3-W-03 | N+1 permission query in `/categories` and `/post/discussion` — each category triggered a separate `categoryPermissions` query                       | Fixed: replaced with single batch query for the user's group, in-memory `Map` lookup for filtering.                                                                                                       |
+
+**Verification:** `bun run check` = 0 errors/0 warnings across 935 files; `bun run lint` = clean; `any` grep = zero hits.
+
+**Full Report:** [RV00-C03-Audit-03.md](file:///home/losses/Development/janbao/docs/RV00-C03-Audit-03.md)

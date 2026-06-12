@@ -11,6 +11,7 @@ import {
 	drafts
 } from '$lib/server/db/schema';
 import { eq, and, isNull, count, ne, sql } from 'drizzle-orm';
+import { getPaginationLimit } from '$lib/server/constants';
 
 export const load: PageServerLoad = async (event) => {
 	const { discussionId, slug } = event.params;
@@ -82,7 +83,7 @@ export const load: PageServerLoad = async (event) => {
 		}
 	}
 
-	const limit = 50; // PAGINATION_LIMIT
+	const limit = getPaginationLimit(event.platform?.env);
 
 	// 4. Fetch the Original Post (OP) (earliest reply chronologically)
 	const opRecord = await db

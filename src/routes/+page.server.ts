@@ -1,6 +1,7 @@
 import type { PageServerLoad } from './$types';
 import { getDiscussionsList, getDiscussionsCount } from '$lib/server/db/dao/discussions';
 import { checkAndCreateWelcomePost } from '$lib/server/db/welcome';
+import { getDiscussionsLimit } from '$lib/server/constants';
 
 export const load: PageServerLoad = async (event) => {
 	const db = event.locals.db;
@@ -17,7 +18,7 @@ export const load: PageServerLoad = async (event) => {
 		page = 1;
 	}
 
-	const limit = 20; // DISCUSSIONS_LIMIT
+	const limit = getDiscussionsLimit(platformEnv);
 	const offset = (page - 1) * limit;
 
 	// 3. Fetch discussions list

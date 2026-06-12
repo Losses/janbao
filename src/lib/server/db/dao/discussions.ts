@@ -1,5 +1,5 @@
 import { discussions, users, bookmarks, discussionReads, replies, categories } from '../schema';
-import { eq, and, isNull, desc, sql, count } from 'drizzle-orm';
+import { eq, and, isNull, desc, sql, count, inArray } from 'drizzle-orm';
 import type { D1Db } from '../index';
 
 export interface DiscussionListItem {
@@ -29,6 +29,11 @@ export interface DiscussionListItem {
 
 /**
  * Fetch a paginated list of discussions (Home, Category, or User discussions).
+ *
+ * Performance: Uses batch queries (2-3 total) instead of per-row queries (N+1).
+ * - Main query: 1 query for paginated discussion rows with bookmark/read-join.
+ * - Last reply author: 1 batch query across all discussionIds.
+ * - Unread counts: 1 batch query per discussion the user has read, or uses commentCount.
  */
 export async function getDiscussionsList(
 	db: D1Db,
@@ -102,78 +107,118 @@ export async function getDiscussionsList(
 
 	const rows = await baseQuery;
 
-	const results: DiscussionListItem[] = [];
-
-	// Fetch details for each discussion sequentially/concurrently
-	for (const row of rows) {
-		let unreadCount = 0;
-		let lastReplyAuthorDisplayName: string | null = null;
-
-		// 1. Calculate unreadCount if userId is set
-		if (userId) {
-			const lastReadVal = row.lastReadAt;
-			if (lastReadVal) {
-				const unreadRes = await db
-					.select({ count: count() })
-					.from(replies)
-					.where(
-						and(
-							eq(replies.discussionId, row.id),
-							sql`${replies.createdAt} > ${lastReadVal}`,
-							isNull(replies.deletedAt)
-						)
-					);
-				unreadCount = unreadRes[0]?.count || 0;
-			} else {
-				// User has never read it, count all replies
-				unreadCount = row.commentCount;
-			}
-		}
-
-		// 2. Fetch last reply author display name
-		const lastReplyRes = await db
-			.select({
-				displayName: users.displayName
-			})
-			.from(replies)
-			.innerJoin(users, eq(replies.authorId, users.id))
-			.where(and(eq(replies.discussionId, row.id), isNull(replies.deletedAt)))
-			.orderBy(desc(replies.createdAt))
-			.limit(1);
-
-		if (lastReplyRes.length > 0) {
-			lastReplyAuthorDisplayName = lastReplyRes[0].displayName;
-		}
-
-		results.push({
-			id: row.id,
-			title: row.title,
-			slug: row.slug,
-			categorySlug: row.categorySlug,
-			categoryTitle: row.categoryTitle,
-			authorId: row.authorId,
-			authorDisplayName: row.authorDisplayName,
-			authorUsername: row.authorUsername,
-			authorAvatarFileId: row.authorAvatarFileId,
-			viewCount: row.viewCount,
-			commentCount: row.commentCount,
-			isPinned: row.isPinned,
-			createdAt: row.createdAt,
-			updatedAt: row.updatedAt,
-			isBookmarked: row.isBookmarked === 1,
-			readHistory: row.lastReadAt
-				? {
-						lastReadAt: row.lastReadAt,
-						lastReadPage: row.lastReadPage || 1,
-						lastReadReplyId: row.lastReadReplyId
-					}
-				: null,
-			unreadCount,
-			lastReplyAuthorDisplayName
-		});
+	if (rows.length === 0) {
+		return [];
 	}
 
-	return results;
+	const discussionIds = rows.map((r) => r.id);
+
+	// Batch query 1: For each discussion, find the latest reply's id via MAX(createdAt),
+	// then join back to get the author's displayName.
+	// This uses a self-join pattern on the replies table.
+	const latestReplySubq = db
+		.select({
+			discussionId: replies.discussionId,
+			maxCreatedAt: sql<Date>`MAX(${replies.createdAt})`.as('max_created_at')
+		})
+		.from(replies)
+		.where(and(inArray(replies.discussionId, discussionIds), isNull(replies.deletedAt)))
+		.groupBy(replies.discussionId)
+		.as('latest_reply');
+
+	const lastReplyAuthors = await db
+		.select({
+			discussionId: latestReplySubq.discussionId,
+			authorDisplayName: users.displayName
+		})
+		.from(latestReplySubq)
+		.innerJoin(
+			replies,
+			and(
+				eq(replies.discussionId, latestReplySubq.discussionId),
+				eq(replies.createdAt, latestReplySubq.maxCreatedAt),
+				isNull(replies.deletedAt)
+			)
+		)
+		.innerJoin(users, eq(replies.authorId, users.id));
+
+	const lastReplyMap = new Map<string, string>();
+	for (const row of lastReplyAuthors) {
+		lastReplyMap.set(row.discussionId, row.authorDisplayName);
+	}
+
+	// Batch query 2: Unread counts per discussion (only when userId present)
+	// For discussions the user has read, count replies newer than lastReadAt.
+	// For discussions the user has never read, use commentCount directly.
+	const unreadMap = new Map<string, number>();
+	if (userId) {
+		// Separate into "read" and "unread" discussion sets
+		const readDiscussions = rows.filter((r) => r.lastReadAt !== null);
+		const unreadDiscussions = rows.filter((r) => r.lastReadAt === null);
+
+		// Unread discussions: all replies are unread
+		for (const row of unreadDiscussions) {
+			unreadMap.set(row.id, row.commentCount);
+		}
+
+		// Read discussions: batch count replies newer than each discussion's lastReadAt
+		// Since each discussion has a different lastReadAt timestamp, we run one query per
+		// discussion but use IN(...) for the discussionIds to keep index lookups efficient.
+		// This is a controlled pattern: max 20 queries, each hitting the composite index.
+		const readIds = readDiscussions.map((r) => r.id);
+		if (readIds.length > 0) {
+			const readMap = new Map<string, Date>();
+			for (const row of readDiscussions) {
+				readMap.set(row.id, row.lastReadAt!);
+			}
+
+			// Fetch all non-deleted replies for these discussions created after their respective
+			// lastReadAt. We use a union-like approach: fetch all replies for these discussions
+			// and filter in-memory since each discussion has a different threshold.
+			const allRecentReplies = await db
+				.select({
+					discussionId: replies.discussionId,
+					createdAt: replies.createdAt
+				})
+				.from(replies)
+				.where(and(inArray(replies.discussionId, readIds), isNull(replies.deletedAt)));
+
+			for (const did of readIds) {
+				const threshold = readMap.get(did)!;
+				const cnt = allRecentReplies.filter(
+					(r) => r.discussionId === did && r.createdAt > threshold
+				).length;
+				unreadMap.set(did, cnt);
+			}
+		}
+	}
+
+	return rows.map((row) => ({
+		id: row.id,
+		title: row.title,
+		slug: row.slug,
+		categorySlug: row.categorySlug,
+		categoryTitle: row.categoryTitle,
+		authorId: row.authorId,
+		authorDisplayName: row.authorDisplayName,
+		authorUsername: row.authorUsername,
+		authorAvatarFileId: row.authorAvatarFileId,
+		viewCount: row.viewCount,
+		commentCount: row.commentCount,
+		isPinned: row.isPinned,
+		createdAt: row.createdAt,
+		updatedAt: row.updatedAt,
+		isBookmarked: row.isBookmarked === 1,
+		readHistory: row.lastReadAt
+			? {
+					lastReadAt: row.lastReadAt,
+					lastReadPage: row.lastReadPage || 1,
+					lastReadReplyId: row.lastReadReplyId
+				}
+			: null,
+		unreadCount: unreadMap.get(row.id) || 0,
+		lastReplyAuthorDisplayName: lastReplyMap.get(row.id) || null
+	}));
 }
 
 /**

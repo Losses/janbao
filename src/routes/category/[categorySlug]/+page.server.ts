@@ -3,6 +3,7 @@ import { error } from '@sveltejs/kit';
 import { categories, categoryPermissions } from '$lib/server/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { getDiscussionsList, getDiscussionsCount } from '$lib/server/db/dao/discussions';
+import { getDiscussionsLimit } from '$lib/server/constants';
 
 export const load: PageServerLoad = async (event) => {
 	const { categorySlug } = event.params;
@@ -46,7 +47,7 @@ export const load: PageServerLoad = async (event) => {
 		page = 1;
 	}
 
-	const limit = 20;
+	const limit = getDiscussionsLimit(event.platform?.env);
 	const offset = (page - 1) * limit;
 
 	// 4. Fetch discussions list in this category

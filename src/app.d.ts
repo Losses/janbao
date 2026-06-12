@@ -38,6 +38,9 @@ declare global {
 				WELCOME_TEXT?: string;
 				PCLOUD_TOKEN?: string;
 				PCLOUD_FOLDER_ID?: string;
+				DISCUSSIONS_LIMIT?: string;
+				PAGINATION_LIMIT?: string;
+				ACTIVITIES_LIMIT?: string;
 			};
 			context?: {
 				waitUntil: (promise: Promise<unknown>) => void;
