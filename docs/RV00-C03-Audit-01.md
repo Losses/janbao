@@ -16,51 +16,64 @@ Five independent audit agents were dispatched in parallel. Each agent read all f
 
 ### 2.1 Consensus FAIL Items (All 5 Agents)
 
-| ID | File | Issue | Severity |
-|----|------|-------|----------|
-| F-01 | `src/routes/discussion/[discussionId]/+page.server.ts:13` | Missing `isNull(discussions.deletedAt)` in ID-only redirect handler. Soft-deleted discussions produce a 302 redirect instead of 404, leaking existence metadata. | Medium |
-| F-02 | `src/routes/api/bookmarks/+server.ts:20-24` | Missing `isNull(discussions.deletedAt)` in POST bookmark discussion existence check. Users can bookmark soft-deleted discussions. | Medium |
+| ID   | File                                                      | Issue                                                                                                                                                            | Severity |
+| ---- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| F-01 | `src/routes/discussion/[discussionId]/+page.server.ts:13` | Missing `isNull(discussions.deletedAt)` in ID-only redirect handler. Soft-deleted discussions produce a 302 redirect instead of 404, leaking existence metadata. | Medium   |
+| F-02 | `src/routes/api/bookmarks/+server.ts:20-24`               | Missing `isNull(discussions.deletedAt)` in POST bookmark discussion existence check. Users can bookmark soft-deleted discussions.                                | Medium   |
 
 ### 2.2 Majority FAIL Items (3+ Agents)
 
-| ID | File | Issue | Severity |
-|----|------|-------|----------|
-| F-03 | `src/routes/category/[categorySlug]/rss/+server.ts:104` | RSS `<atom:link>` self-reference embeds the user's RSS token in the XML body, exposing it to RSS reader caches. | Medium |
-| F-04 | `src/routes/category/[categorySlug]/rss/+server.ts:63` | RSS site name hardcoded as `'Janbao'` instead of reading from `PUBLIC_SITE_NAME` environment variable. | Low |
+| ID   | File                                                    | Issue                                                                                                           | Severity |
+| ---- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | -------- |
+| F-03 | `src/routes/category/[categorySlug]/rss/+server.ts:104` | RSS `<atom:link>` self-reference embeds the user's RSS token in the XML body, exposing it to RSS reader caches. | Medium   |
+| F-04 | `src/routes/category/[categorySlug]/rss/+server.ts:63`  | RSS site name hardcoded as `'Janbao'` instead of reading from `PUBLIC_SITE_NAME` environment variable.          | Low      |
 
 ### 2.3 Consensus WARN Items
 
-| ID | File | Issue |
-|----|------|-------|
-| W-01 | `LexicalRenderer.svelte` | Image `src` and link `href` rendered without URL protocol validation. Stored XSS defense-in-depth gap — renderer trusts stored JSON. |
-| W-02 | All `+page.server.ts` with pagination | `DISCUSSIONS_LIMIT` and `PAGINATION_LIMIT` hardcoded instead of read from environment variables (RQ00-Backend §6.6). |
-| W-03 | `post/discussion/+page.server.ts:82-85` | Five `as string` casts on `FormData.get()` without null guards. `FormData.get()` returns `string \| File \| null`. |
+| ID   | File                                    | Issue                                                                                                                                |
+| ---- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| W-01 | `LexicalRenderer.svelte`                | Image `src` and link `href` rendered without URL protocol validation. Stored XSS defense-in-depth gap — renderer trusts stored JSON. |
+| W-02 | All `+page.server.ts` with pagination   | `DISCUSSIONS_LIMIT` and `PAGINATION_LIMIT` hardcoded instead of read from environment variables (RQ00-Backend §6.6).                 |
+| W-03 | `post/discussion/+page.server.ts:82-85` | Five `as string` casts on `FormData.get()` without null guards. `FormData.get()` returns `string \| File \| null`.                   |
 
 ---
 
 ## 3. Remediation Actions Applied
 
 ### Fix F-01: Discussion redirect soft-delete filter
+
 - **File:** `src/routes/discussion/[discussionId]/+page.server.ts`
 - **Change:** Added `isNull(discussions.deletedAt)` to the `where` clause via `and(eq(discussions.id, discussionId), isNull(discussions.deletedAt))`
 - **Import:** Updated `eq` import to `and, eq, isNull`
 
 ### Fix F-02: Bookmarks POST soft-delete filter
+
 - **File:** `src/routes/api/bookmarks/+server.ts`
 - **Change:** Added `isNull(discussions.deletedAt)` to the discussion existence check via `and(eq(discussions.id, discussionId), isNull(discussions.deletedAt))`
 - **Import:** Updated `and, eq` import to `and, eq, isNull`
 - **Comment:** Updated comment to clarify "exists and is not soft-deleted"
 
 ### Fix F-03: RSS self-link token redaction
+
 - **File:** `src/routes/category/[categorySlug]/rss/+server.ts`
 - **Change:** Removed `?token=${token}` from the `<atom:link>` self-reference URL, leaving only `${siteUrl}/category/${categorySlug}/rss`
 
-### Fix F-04: RSS site name from environment variable
+### Fix F-04: RSS channel title using formatTitle utility
+
 - **File:** `src/routes/category/[categorySlug]/rss/+server.ts`
-- **Change:** Replaced hardcoded `'Janbao'` with `getSiteName()` from `$lib/utils/title`
-- **Import:** Added `import { getSiteName } from '$lib/utils/title'`
+- **Change:** Replaced hardcoded `'Janbao'` and manual `${title} - ${siteName}` concatenation with `formatTitle(category.title)` from `$lib/utils/title`, then XML-escaping the result
+- **Import:** Updated to `import { formatTitle } from '$lib/utils/title'`
+
+### Fix F-05: RSS feed rebuilt with fast-xml-parser, eliminating all string concatenation
+
+- **Problem:** RSS endpoint built XML by string concatenation — fragile, dangerous, and reckless. Three separate inline `.replace()` chains with inconsistent entity coverage. No structured XML generation.
+- **Dependency:** Added `fast-xml-parser` (v5) — mature, high-performance library with automatic escaping
+- **File:** `src/routes/category/[categorySlug]/rss/+server.ts`
+- **Change:** Replaced all string-concatenated XML with `XMLBuilder` from `fast-xml-parser`, building a structured JS object that the library serializes with automatic entity escaping. It is now structurally impossible to output unescaped text content.
+- **Utility:** `src/lib/utils/escape.ts` retained with `escapeXml()` for non-RSS edge cases only
 
 ### Fix W-01: LexicalRenderer URL protocol validation
+
 - **File:** `src/lib/components/molecules/LexicalRenderer.svelte`
 - **Change:** Added `safeUrl()` function that validates `http://` or `https://` protocol, returning empty string for all other URLs
 - **Applied to:** `link`/`autolink` node `href` attribute and `image` node `src` attribute
@@ -70,11 +83,11 @@ Five independent audit agents were dispatched in parallel. Each agent read all f
 
 ## 4. Verification
 
-| Check | Result |
-|-------|--------|
-| `bun run check` (svelte-check) | **0 errors, 0 warnings** across 934 files |
+| Check                              | Result                                                      |
+| ---------------------------------- | ----------------------------------------------------------- |
+| `bun run check` (svelte-check)     | **0 errors, 0 warnings** across 934 files                   |
 | `bun run lint` (prettier + eslint) | **All matched files use Prettier code style; ESLint clean** |
-| TypeScript `any` grep | **Zero hits** across all C03 files |
+| TypeScript `any` grep              | **Zero hits** across all C03 files                          |
 
 ---
 

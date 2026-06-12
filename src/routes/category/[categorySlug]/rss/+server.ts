@@ -1,7 +1,8 @@
 import type { RequestHandler } from './$types';
 import { categories, categoryPermissions, discussions, users } from '$lib/server/db/schema';
 import { and, eq, isNull, desc } from 'drizzle-orm';
-import { getSiteName } from '$lib/utils/title';
+import { formatTitle } from '$lib/utils/title';
+import { XMLBuilder } from 'fast-xml-parser';
 
 export const GET: RequestHandler = async (event) => {
 	const { categorySlug } = event.params;
@@ -61,50 +62,48 @@ export const GET: RequestHandler = async (event) => {
 		.orderBy(desc(discussions.createdAt))
 		.limit(20);
 
-	const siteName = getSiteName();
 	const host = event.url.host;
 	const protocol = event.url.protocol;
 	const siteUrl = `${protocol}//${host}`;
 
-	const itemsXml = recentDiscussions
-		.map((d) => {
-			const link = `${siteUrl}/discussion/${d.id}/${d.slug}`;
-			const pubDate = new Date(d.createdAt).toUTCString();
-			const escapedTitle = d.title
-				.replace(/&/g, '&amp;')
-				.replace(/</g, '&lt;')
-				.replace(/>/g, '&gt;')
-				.replace(/"/g, '&quot;')
-				.replace(/'/g, '&apos;');
-			return `    <item>
-      <title>${escapedTitle}</title>
-      <link>${link}</link>
-      <guid isPermaLink="true">${link}</guid>
-      <pubDate>${pubDate}</pubDate>
-      <description>${escapedTitle}</description>
-    </item>`;
-		})
-		.join('\n');
+	// 4. Build structured feed object — all text is auto-escaped by XMLBuilder
+	const items: Record<string, unknown>[] = recentDiscussions.map((d) => {
+		const link = `${siteUrl}/discussion/${d.id}/${d.slug}`;
+		return {
+			title: d.title,
+			link,
+			guid: { '@_isPermaLink': 'true', '#text': link },
+			pubDate: new Date(d.createdAt).toUTCString(),
+			description: d.title
+		};
+	});
 
-	const escapedCatTitle = category.title
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;');
-	const escapedCatDesc = category.description
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;');
+	const feed = {
+		rss: {
+			'@_version': '2.0',
+			'@_xmlns:atom': 'http://www.w3.org/2005/Atom',
+			channel: {
+				title: formatTitle(category.title),
+				link: `${siteUrl}/category/${categorySlug}`,
+				description: category.description,
+				'atom:link': {
+					'@_href': `${siteUrl}/category/${categorySlug}/rss`,
+					'@_rel': 'self',
+					'@_type': 'application/rss+xml'
+				},
+				item: items.length === 1 ? items[0] : items
+			}
+		}
+	};
 
-	const xml = `<?xml version="1.0" encoding="UTF-8" ?>
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
-  <channel>
-    <title>${escapedCatTitle} - ${siteName}</title>
-    <link>${siteUrl}/category/${categorySlug}</link>
-    <description>${escapedCatDesc}</description>
-    <atom:link href="${siteUrl}/category/${categorySlug}/rss" rel="self" type="application/rss+xml" />
-${itemsXml}
-  </channel>
-</rss>`;
+	const builder = new XMLBuilder({
+		attributeNamePrefix: '@_',
+		textNodeName: '#text',
+		ignoreAttributes: false,
+		format: true
+	});
+
+	const xml = `<?xml version="1.0" encoding="UTF-8" ?>\n${builder.build(feed)}`;
 
 	return new Response(xml, {
 		headers: {

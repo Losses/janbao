@@ -77,13 +77,14 @@ All components and server-side code have been built strictly under typescript co
 
 **Method:** 5 independent full-scope audit agents dispatched in parallel. Each agent read all specification documents and all 27+ C03 code files, producing independent PASS/FAIL/WARN assessments across 13 audit categories.
 
-**Consensus FAIL Items Found: 4**
+**Consensus FAIL Items Found: 5**
 | ID | Description | Resolution |
 |----|-------------|------------|
 | F-01 | Discussion ID-only redirect missing `isNull(deletedAt)` filter | Fixed: added `and(eq(...), isNull(...))` to where clause |
 | F-02 | Bookmarks POST discussion existence check missing `isNull(deletedAt)` | Fixed: added `and(eq(...), isNull(...))` to where clause |
 | F-03 | RSS `<atom:link>` self-reference exposed user token in XML body | Fixed: removed token from self-link URL |
-| F-04 | RSS site name hardcoded instead of using `PUBLIC_SITE_NAME` env | Fixed: replaced with `getSiteName()` utility |
+| F-04 | RSS title manually concatenated instead of using `formatTitle()` utility | Fixed: replaced with `formatTitle()` |
+| F-05 | RSS feed built by string concatenation — fragile, inconsistent escaping, no structured XML generation | Fixed: replaced with `fast-xml-parser` XMLBuilder; all text auto-escaped by library |
 
 **Consensus WARN Items Fixed: 1**
 | ID | Description | Resolution |
