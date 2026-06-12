@@ -38,6 +38,7 @@ export default defineConfig(
 		// 'svelte/button-has-type': 'error'
 		rules: {
 			'@typescript-eslint/no-explicit-any': 'error',
+			'svelte/no-navigation-without-resolve': 'off',
 			'no-restricted-syntax': [
 				'error',
 				{

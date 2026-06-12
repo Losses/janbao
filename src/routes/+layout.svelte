@@ -1,7 +1,20 @@
 <script lang="ts">
 	import favicon from '$lib/assets/favicon.svg';
+	import '../app.css';
+	import type { Snippet } from 'svelte';
+	import type { LayoutData } from './$types';
 
-	let { children } = $props();
+	let { data, children } = $props<{
+		data: LayoutData;
+		children: Snippet;
+	}>();
+
+	// Reactively update the <html> tag's lang attribute
+	$effect(() => {
+		if (typeof document !== 'undefined') {
+			document.documentElement.lang = data.lang;
+		}
+	});
 </script>
 
 <svelte:head>

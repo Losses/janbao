@@ -1,0 +1,31 @@
+{
+	"nav": {
+		"home": "Home",
+		"categories": "Categories",
+		"activity": "Activity Square",
+		"messages": "Messages",
+		"signin": "Sign In",
+		"register": "Register",
+		"signout": "Sign Out"
+	},
+	"auth": {
+		"usernameOrEmail": "Email or Username",
+		"username": "Username",
+		"email": "Email Address",
+		"password": "Password",
+		"confirmPassword": "Confirm Password",
+		"invitationCode": "Invitation Code",
+		"rememberMe": "Remember login state",
+		"signinBtn": "Sign In",
+		"registerBtn": "Register",
+		"signoutBtn": "Sign Out",
+		"logoutConfirm": "Confirm Logout",
+		"logoutCancel": "Cancel",
+		"logoutPrompt": "Are you sure you want to log out?"
+	},
+	"common": {
+		"welcome": "Welcome!",
+		"error": "An error occurred",
+		"success": "Success"
+	}
+}

@@ -1,0 +1,31 @@
+{
+	"nav": {
+		"home": "首页",
+		"categories": "话题列表",
+		"activity": "动态广场",
+		"messages": "站内信",
+		"signin": "登录",
+		"register": "注册",
+		"signout": "登出"
+	},
+	"auth": {
+		"usernameOrEmail": "Email/用户名",
+		"username": "用户名",
+		"email": "电子邮箱",
+		"password": "密码",
+		"confirmPassword": "确认密码",
+		"invitationCode": "邀请码",
+		"rememberMe": "记住登录状态",
+		"signinBtn": "登录",
+		"registerBtn": "注册",
+		"signoutBtn": "确认登出",
+		"logoutConfirm": "确认登出",
+		"logoutCancel": "取消",
+		"logoutPrompt": "确认是否登出？"
+	},
+	"common": {
+		"welcome": "欢迎加入！",
+		"error": "发生错误",
+		"success": "操作成功"
+	}
+}
