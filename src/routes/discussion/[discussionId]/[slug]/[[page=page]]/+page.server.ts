@@ -74,6 +74,16 @@ export const load: PageServerLoad = async (event) => {
 		error(403, event.locals.t.common.forbidden);
 	}
 
+	// 2b. Resolve canDelete for sticky/unsticky toggle
+	let canDelete = false;
+	if (user) {
+		if (user.groupSlug === 'admin' || user.groupSlug === 'moderator') {
+			canDelete = true;
+		} else {
+			canDelete = perm.length === 0 ? false : (perm[0].canDelete ?? false);
+		}
+	}
+
 	// 3. Resolve page number
 	const pageParam = event.params.page;
 	let page = 1;
@@ -228,7 +238,8 @@ export const load: PageServerLoad = async (event) => {
 		totalPages,
 		totalRepliesCount,
 		theme: resolvedTheme,
-		replyDraft
+		replyDraft,
+		canDelete
 	};
 };
 
@@ -322,5 +333,65 @@ export const actions: Actions = {
 		});
 
 		return { success: true, replyId };
+	},
+
+	togglePin: async ({ locals, params }) => {
+		const user = locals.user;
+		if (!user) {
+			error(401, locals.t.common.unauthorized);
+		}
+
+		const db = locals.db;
+		const { discussionId } = params;
+		if (!discussionId) {
+			error(400, locals.t.common.badRequest);
+		}
+
+		// Fetch discussion to get categorySlug
+		const discussionRecords = await db
+			.select({
+				categorySlug: discussions.categorySlug,
+				isPinned: discussions.isPinned
+			})
+			.from(discussions)
+			.where(and(eq(discussions.id, discussionId), isNull(discussions.deletedAt)))
+			.limit(1);
+
+		if (discussionRecords.length === 0) {
+			error(404, locals.t.discussion.notFound);
+		}
+
+		const { categorySlug, isPinned } = discussionRecords[0];
+
+		// Verify canDelete permission
+		const perm = await db
+			.select()
+			.from(categoryPermissions)
+			.where(
+				and(
+					eq(categoryPermissions.categorySlug, categorySlug),
+					eq(categoryPermissions.groupSlug, user.groupSlug)
+				)
+			)
+			.limit(1);
+
+		const canDelete =
+			user.groupSlug === 'admin' || user.groupSlug === 'moderator'
+				? true
+				: perm.length === 0
+					? false
+					: (perm[0].canDelete ?? false);
+
+		if (!canDelete) {
+			error(403, locals.t.common.forbidden);
+		}
+
+		// Toggle isPinned
+		await db
+			.update(discussions)
+			.set({ isPinned: !isPinned, updatedAt: new Date() })
+			.where(eq(discussions.id, discussionId));
+
+		return { success: true, isPinned: !isPinned };
 	}
 };

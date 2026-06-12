@@ -208,7 +208,9 @@
 		"publishFailed": "Failed to publish discussion",
 		"alreadyExists": "Username or email already exists",
 		"replies": "Replies",
-		"signInToReply": "Please sign in to reply."
+		"signInToReply": "Please sign in to reply.",
+		"sticky": "Sticky",
+		"unsticky": "Unsticky"
 	},
 	"category": {
 		"notFound": "Category not found",

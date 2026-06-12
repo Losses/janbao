@@ -257,6 +257,17 @@
 	// The parent component is responsible for providing initialContent
 	// via server-side data loading in future cycles.
 
+	// Synchronize initial content with parent on mount.
+	// When a draft is loaded from the backend, the parent page's contentJson
+	// state remains '' until the first keystroke. This effect fires immediately
+	// so that submit buttons ("Publish", "Send") are enabled without requiring
+	// the user to type.
+	$effect(() => {
+		if (initialContent && onContentChange) {
+			onContentChange(initialContent);
+		}
+	});
+
 	$effect(() => {
 		startAutosave();
 		return () => stopAutosave();
