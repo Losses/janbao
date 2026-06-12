@@ -4,6 +4,7 @@ import type { RequestHandler } from './$types';
 import { bookmarks, discussions } from '$lib/server/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
 import { getBookmarks } from '$lib/server/db/dao/bookmarks';
+import type { BookmarkToggleBody } from '$lib/types/api';
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
@@ -38,7 +39,7 @@ export const POST: RequestHandler = async (event) => {
 		return jsonError(t, 'common.unauthorized', 401);
 	}
 
-	const { discussionId } = (await event.request.json()) as { discussionId: string };
+	const { discussionId } = (await event.request.json()) as BookmarkToggleBody;
 	if (!discussionId) {
 		return jsonError(t, 'bookmark.discussionRequired', 400);
 	}

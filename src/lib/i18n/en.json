@@ -219,14 +219,16 @@
 		"jumpTo": "Continue",
 		"discussionDraft": "Discussion draft",
 		"replyDraft": "Reply draft",
-		"editedAt": "Last edited"
+		"editedAt": "Last edited",
+		"contextFieldsRequired": "contextType and contextId are required"
 	},
 	"bookmark": {
 		"discussionRequired": "Missing discussionId",
 		"notFound": "Discussion not found",
 		"dbError": "Database error",
 		"myBookmarks": "Bookmarks",
-		"noBookmarks": "You have no bookmarks yet"
+		"noBookmarks": "You have no bookmarks yet",
+		"startedBy": "Started by"
 	},
 	"upload": {
 		"noFile": "No file uploaded",
@@ -264,7 +266,8 @@
 		"cannotDelete": "Messages cannot be deleted",
 		"startedBy": "Started by",
 		"participantAdded": "Participant added",
-		"participantExists": "User is already a participant"
+		"participantExists": "User is already a participant",
+		"removeRecipient": "Remove recipient"
 	},
 	"invitation": {
 		"thisMonthAllowance": "This month you have {count} invitation code(s) available.",

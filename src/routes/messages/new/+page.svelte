@@ -4,6 +4,8 @@
 	import ParticipantAdder from '$lib/components/molecules/ParticipantAdder.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
+	import Icon from '$lib/components/atoms/Icon.svelte';
+	import { mdiClose } from '@mdi/js';
 	import { formatTitle } from '$lib/utils/title';
 	import { goto } from '$app/navigation';
 	import type { UserSearchResult, ApiResult } from '$lib/types/api';
@@ -115,9 +117,9 @@
 									type="button"
 									class="ml-0.5 text-primary-content/80 hover:text-primary-content"
 									onclick={() => removeRecipient(r.id)}
-									aria-label="remove {r.displayName}"
+									aria-label="{messageT.removeRecipient} {r.displayName}"
 								>
-									✕
+									<Icon path={mdiClose} size={0.8} />
 								</button>
 							</div>
 						{/each}

@@ -9,6 +9,7 @@ import type { RequestHandler } from './$types';
 const CODE_LENGTH = 12;
 const CODE_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Unambiguous (no I/O/0/1)
 const EXPIRY_DAYS = 7;
+const MAX_CODE_ATTEMPTS = 5; // Bound regeneration on the astronomically rare PK collision
 
 /**
  * Generate a cryptographically-random invitation code of CODE_LENGTH chars
@@ -48,13 +49,28 @@ export const POST: RequestHandler = async ({ locals, platform }) => {
 	const now = new Date();
 	const expiresAt = new Date(now.getTime() + EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
-	await db.insert(invitations).values({
-		code: generateInvitationCode(),
-		creatorId: user.id,
-		usedById: null,
-		createdAt: now,
-		expiresAt
-	});
+	// Mint the code, regenerating on a PK collision (onConflictDoNothing → 0 changes)
+	let minted = false;
+	for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
+		const result = await db
+			.insert(invitations)
+			.values({
+				code: generateInvitationCode(),
+				creatorId: user.id,
+				usedById: null,
+				createdAt: now,
+				expiresAt
+			})
+			.onConflictDoNothing();
+		if (result.meta?.changes) {
+			minted = true;
+			break;
+		}
+	}
+
+	if (!minted) {
+		return jsonError(t, 'common.internalError', 500);
+	}
 
 	return json({ success: true }, { status: 201 });
 };

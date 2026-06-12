@@ -219,14 +219,16 @@
 		"jumpTo": "继续编辑",
 		"discussionDraft": "讨论草稿",
 		"replyDraft": "回复草稿",
-		"editedAt": "最后编辑"
+		"editedAt": "最后编辑",
+		"contextFieldsRequired": "缺少 contextType 和 contextId"
 	},
 	"bookmark": {
 		"discussionRequired": "缺少 discussionId",
 		"notFound": "讨论未找到",
 		"dbError": "数据库错误",
 		"myBookmarks": "收藏",
-		"noBookmarks": "暂无收藏"
+		"noBookmarks": "暂无收藏",
+		"startedBy": "发起人"
 	},
 	"upload": {
 		"noFile": "未上传文件",
@@ -264,7 +266,8 @@
 		"cannotDelete": "消息不可删除",
 		"startedBy": "发起人",
 		"participantAdded": "参与者已添加",
-		"participantExists": "该用户已是参与者"
+		"participantExists": "该用户已是参与者",
+		"removeRecipient": "移除收件人"
 	},
 	"invitation": {
 		"thisMonthAllowance": "本月你还有 {count} 个邀请码可用。",

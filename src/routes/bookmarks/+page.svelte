@@ -77,7 +77,7 @@
 							<div class="min-w-0 flex-1">
 								<h3 class="font-semibold text-base-content truncate">{bookmark.title}</h3>
 								<p class="text-xs text-base-content/50 mt-1">
-									{bookmark.categoryTitle} · {t.message.startedBy}
+									{bookmark.categoryTitle} · {bookmarkT.startedBy}
 									{bookmark.authorDisplayName}
 								</p>
 							</div>

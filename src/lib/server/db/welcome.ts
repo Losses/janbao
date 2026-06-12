@@ -34,12 +34,21 @@ function getTzOffsetMinutes(referenceDate: Date, tz: string): number {
 /**
  * Calculates start and end Date objects for a date string in a given timezone.
  */
-/** Half-open UTC Date boundary window [start, end). */
+/**
+ * A UTC Date boundary window { start, end }. The inclusivity of `end` is
+ * producer-specific — see each function's JSDoc. Callers must pair a boundary
+ * with the comparator matching its producer (inclusive → `lte`, half-open → `lt`).
+ */
 export interface DateBoundary {
 	start: Date;
 	end: Date;
 }
 
+/**
+ * Day boundaries for `dateStr` in `tz`. Returns a **closed** window
+ * `[start, end]` where `end` is the last millisecond of the day — pair with
+ * `lte(column, end)`.
+ */
 export function getTzBoundaries(dateStr: string, tz: string): DateBoundary {
 	const datePart = dateStr.split('-');
 	const year = parseInt(datePart[0], 10);
@@ -59,9 +68,10 @@ export function getTzBoundaries(dateStr: string, tz: string): DateBoundary {
 }
 
 /**
- * Resolve the half-open [start, end) UTC Date boundaries of the current
- * calendar month in the given timezone. Used to evaluate monthly
- * invitation-request limits per RQ00-Backend §6.4.
+ * Resolve the UTC Date boundaries of the current calendar month in the given
+ * timezone. Returns a **half-open** window `[start, end)` where `end` is the
+ * first instant of the next month — pair with `lt(column, end)`. Used to
+ * evaluate monthly invitation-request limits per RQ00-Backend §6.4.
  */
 export function getTzMonthBoundaries(tz: string): DateBoundary {
 	const now = new Date();

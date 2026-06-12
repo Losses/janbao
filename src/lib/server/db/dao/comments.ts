@@ -1,5 +1,5 @@
 import { replies, discussions, activities } from '../schema';
-import { eq, and, isNull, isNotNull } from 'drizzle-orm';
+import { eq, and, isNull, isNotNull, sql } from 'drizzle-orm';
 import type { D1Db } from '../index';
 
 export interface UserCommentItem {
@@ -13,11 +13,16 @@ export interface UserCommentItem {
 	parentActivityId: string | null;
 }
 
+// Defensive cap bounding each leg of the UNION (spec §6.13 says "all"; this
+// guards D1/worker memory for prolific authors without truncating normal use).
+const COMMENT_LIST_LIMIT = 500;
+
 /**
  * UNION-style merge of a user's discussion replies and activity comments,
  * sorted chronologically (newest first). Per RQ00-Backend §6.3, both datasets
  * are fetched independently and merged in memory, each carrying its context
  * indicator (discussion title for replies, parent activity id for comments).
+ * Both legs exclude soft-deleted rows AND soft-deleted parents.
  */
 export async function getUserComments(db: D1Db, userId: string): Promise<UserCommentItem[]> {
 	// 1. Discussion replies (excluding soft-deleted replies and discussions)
@@ -34,7 +39,8 @@ export async function getUserComments(db: D1Db, userId: string): Promise<UserCom
 		.innerJoin(discussions, eq(replies.discussionId, discussions.id))
 		.where(
 			and(eq(replies.authorId, userId), isNull(replies.deletedAt), isNull(discussions.deletedAt))
-		);
+		)
+		.limit(COMMENT_LIST_LIMIT);
 
 	const replyItems: UserCommentItem[] = replyRows.map((r) => ({
 		id: r.id,
@@ -47,7 +53,7 @@ export async function getUserComments(db: D1Db, userId: string): Promise<UserCom
 		parentActivityId: null
 	}));
 
-	// 2. Activity comments (rows whose parentActivityId is set)
+	// 2. Activity comments — exclude comments whose parent activity is soft-deleted
 	const commentRows = await db
 		.select({
 			id: activities.id,
@@ -60,9 +66,11 @@ export async function getUserComments(db: D1Db, userId: string): Promise<UserCom
 			and(
 				eq(activities.authorId, userId),
 				isNull(activities.deletedAt),
-				isNotNull(activities.parentActivityId)
+				isNotNull(activities.parentActivityId),
+				sql`NOT EXISTS (SELECT 1 FROM activities p WHERE p.id = activities.parent_activity_id AND p.deleted_at IS NOT NULL)`
 			)
-		);
+		)
+		.limit(COMMENT_LIST_LIMIT);
 
 	const commentItems: UserCommentItem[] = commentRows.map((c) => ({
 		id: c.id,

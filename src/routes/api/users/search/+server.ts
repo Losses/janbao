@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { jsonError } from '$lib/server/errors';
 import { users } from '$lib/server/db/schema';
-import { like, not, eq, and, sql } from 'drizzle-orm';
+import { like, not, eq, and, ne } from 'drizzle-orm';
 import { SYSTEM_USER_ID } from '$lib/server/constants';
 import type { RequestHandler } from './$types';
 import type { UserSearchResult } from '$lib/types/api';
@@ -35,11 +35,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		})
 		.from(users)
 		.where(
-			and(
-				like(users.username, `${q}%`),
-				not(eq(users.id, SYSTEM_USER_ID)),
-				sql`${users.id} != ${user.id}`
-			)
+			and(like(users.username, `${q}%`), not(eq(users.id, SYSTEM_USER_ID)), ne(users.id, user.id))
 		)
 		.limit(MAX_RESULTS);
 

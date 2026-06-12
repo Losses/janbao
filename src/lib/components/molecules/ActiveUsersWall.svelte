@@ -27,7 +27,7 @@
 	let loaded = $state(false);
 
 	const title = $derived(
-		((t['sidebar'] as Record<string, string> | undefined) ?? {})['activeUsers'] ?? 'Active Users'
+		((t['sidebar'] as Record<string, string> | undefined) ?? {})['activeUsers'] ?? ''
 	);
 
 	$effect(() => {

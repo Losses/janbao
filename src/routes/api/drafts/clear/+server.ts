@@ -1,11 +1,10 @@
 import { json } from '@sveltejs/kit';
 import { jsonError } from '$lib/server/errors';
 import { drafts } from '$lib/server/db/schema';
+import { DRAFT_CONTEXT_TYPES } from '$lib/server/constants';
 import { eq, and } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import type { DraftClearBody } from '$lib/types/api';
-
-const VALID_CONTEXT_TYPES = ['discussion', 'reply', 'message', 'activity'];
 
 // POST /api/drafts/clear — Delete a draft for the authenticated user by
 // (contextType, contextId). Invoked from the client after a successful post /
@@ -29,10 +28,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const contextId = body.contextId ?? '';
 
 	if (!contextType) {
-		return jsonError(t, 'draft.fieldsRequired', 400);
+		return jsonError(t, 'draft.contextFieldsRequired', 400);
 	}
 
-	if (!VALID_CONTEXT_TYPES.includes(contextType)) {
+	if (!DRAFT_CONTEXT_TYPES.includes(contextType as (typeof DRAFT_CONTEXT_TYPES)[number])) {
 		return jsonError(t, 'draft.invalidContextType', 400);
 	}
 
