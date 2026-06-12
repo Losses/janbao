@@ -49,6 +49,23 @@
 		CHECK_LIST
 	} from 'svelte-lexical';
 	import { CodeNode, CodeHighlightNode } from '@lexical/code';
+	import type { VoidHandler } from '$lib/types/handlers';
+
+	type ContentChangeHandler = (json: string) => void;
+	type NodeTransformFn = (node: unknown) => void;
+	type RegisterNodeTransformFn = (nodeClass: unknown, transform: NodeTransformFn) => VoidHandler;
+	type StringGetter = () => string;
+	type ToJSONFn = () => unknown;
+
+	interface EditorStateLike {
+		toJSON: ToJSONFn;
+	}
+
+	type GetEditorStateFn = () => EditorStateLike;
+
+	interface EditorWithGetState {
+		getEditorState?: GetEditorStateFn;
+	}
 
 	interface LexicalEditorProps {
 		/** Initial Lexical JSON state string to hydrate the editor */
@@ -66,7 +83,7 @@
 		/** Hide image upload button (for PM editor) */
 		disableImageUpload?: boolean;
 		/** Called when content changes with serialized JSON string */
-		onContentChange?: (json: string) => void;
+		onContentChange?: ContentChangeHandler;
 		/** Translation dictionary for i18n strings */
 		t?: Record<string, Record<string, string> | string> | null;
 		/** Class override for container */
@@ -99,26 +116,35 @@
 	let saveStatus = $state<'idle' | 'saving' | 'saved'>('idle');
 	let autosaveTimer: ReturnType<typeof setInterval> | undefined;
 
+	type EditorStateGetter = () => string;
+
 	// Track editor instance for autosave — store JSON getter, not typed editor ref
 	// to avoid cross-version type mismatches from svelte-lexical's lexical dependency
-	let editorStateGetter: (() => string) | undefined = $state();
+	let editorStateGetter: EditorStateGetter | undefined = $state();
 
 	let editorInstance: unknown = $state();
 
 	// Dynamic registration of ImageNode protocol-level XSS validation transform
+	interface EditorWithTransform {
+		registerNodeTransform?: RegisterNodeTransformFn;
+	}
+
+	interface ImageNodeWithSrc {
+		getSrc?: StringGetter;
+	}
+
+	interface NodeWithRemove {
+		remove?: VoidHandler;
+	}
+
 	$effect(() => {
 		if (!editorInstance) return;
-		const castEditor = editorInstance as {
-			registerNodeTransform?: (
-				nodeClass: unknown,
-				transform: (node: unknown) => void
-			) => () => void;
-		};
+		const castEditor = editorInstance as EditorWithTransform;
 		if (!castEditor.registerNodeTransform) return;
 		const unregister = castEditor.registerNodeTransform(ImageNode, (node) => {
-			const src = (node as { getSrc?: () => string }).getSrc?.() ?? '';
+			const src = (node as ImageNodeWithSrc).getSrc?.() ?? '';
 			if (!validateUrl(src)) {
-				(node as { remove?: () => void }).remove?.();
+				(node as NodeWithRemove).remove?.();
 			}
 		});
 		return () => unregister();
@@ -171,9 +197,9 @@
 	// Handle content changes — OnChangePlugin signature: (editorState, editor, tags)
 	// We use structural types to avoid cross-package EditorState type conflicts
 	// between our direct lexical dependency and svelte-lexical's internal version.
-	function handleChange(editorState: { toJSON: () => unknown }, editor: unknown) {
+	function handleChange(editorState: EditorStateLike, editor: unknown) {
 		editorInstance = editor;
-		const castEditor = editor as { getEditorState?: () => { toJSON: () => unknown } };
+		const castEditor = editor as EditorWithGetState;
 		editorStateGetter = () => JSON.stringify(castEditor.getEditorState?.().toJSON() ?? {});
 		const json = JSON.stringify(editorState.toJSON());
 		onContentChange?.(json);

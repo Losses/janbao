@@ -30,7 +30,15 @@
 		"passwordStrengthOk": "密码长度符合要求",
 		"registrationFailed": "注册失败。",
 		"newHere": "新用户？",
-		"alreadyHaveAccount": "已有账号？"
+		"alreadyHaveAccount": "已有账号？",
+		"allFieldsRequired": "请填写所有字段。",
+		"invalidUsername": "用户名需为 2-30 个字符，仅支持字母、数字、下划线和连字符。",
+		"invalidEmail": "请提供有效的邮箱地址。",
+		"invitationNotFound": "邀请码不存在。",
+		"invitationUsed": "邀请码已被使用。",
+		"invitationExpired": "邀请码已过期。",
+		"loginFieldsRequired": "请输入用户名/邮箱和密码。",
+		"usernameOrEmailExists": "用户名或邮箱已存在。"
 	},
 	"common": {
 		"welcome": "欢迎加入！",
@@ -46,7 +54,17 @@
 		"reply": "回复",
 		"submit": "提交",
 		"showAll": "查看全部",
-		"noResults": "暂无结果"
+		"noResults": "暂无结果",
+		"commentPlaceholder": "写下评论...",
+		"deleteConfirm": "确定要删除吗？",
+		"unauthorized": "未授权",
+		"forbidden": "禁止访问",
+		"notFound": "未找到",
+		"contentRequired": "内容不能为空",
+		"contentTooLarge": "内容过大",
+		"noFieldsToUpdate": "没有需要更新的字段",
+		"badRequest": "请求无效",
+		"internalError": "服务器内部错误"
 	},
 	"home": {
 		"welcomeTo": "欢迎来到 Janbao",
@@ -105,5 +123,112 @@
 		"monthsAgo": "个月前",
 		"yearAgo": "年前",
 		"yearsAgo": "年前"
+	},
+	"activity": {
+		"parentIdRequired": "缺少父级动态ID",
+		"parentNotFound": "父级动态未找到",
+		"recipientNotFound": "接收者未找到",
+		"activityIdRequired": "缺少动态ID",
+		"activityNotFound": "动态未找到",
+		"cannotNestComments": "评论不能嵌套超过一级"
+	},
+	"profile": {
+		"dynamics": "动态",
+		"notifications": "通知",
+		"invitations": "邀请码",
+		"mailbox": "站内信",
+		"discussions": "讨论",
+		"comments": "评论",
+		"accountSettings": "账号设置",
+		"editAccount": "编辑资料",
+		"changePassword": "修改密码",
+		"preferences": "通知偏好",
+		"avatar": "头像",
+		"stealthSettings": "在线状态",
+		"usernameAdminOnly": "仅管理员可以修改用户名",
+		"showEmail": "公开显示邮箱",
+		"language": "语言",
+		"group": "用户组",
+		"joined": "注册时间",
+		"lastActive": "最后活跃",
+		"views": "访问量",
+		"postToProfile": "在此主页留言",
+		"currentPassword": "当前密码",
+		"newPassword": "新密码",
+		"preferencesDescription": "选择你想要接收的通知类型",
+		"prefProfileComment": "主页评论",
+		"prefProfileCommentDesc": "当有人在你主页留言时",
+		"prefDiscussionReply": "讨论回复",
+		"prefDiscussionReplyDesc": "当有人回复你的讨论时",
+		"prefPrivateMessage": "站内信",
+		"prefPrivateMessageDesc": "当你收到站内信时",
+		"prefDiscussionComment": "讨论评论",
+		"prefDiscussionCommentDesc": "当你发起的讨论有新评论时",
+		"prefParticipated": "参与的话题",
+		"prefParticipatedDesc": "当你参与的话题有新回复时",
+		"prefMention": "提及",
+		"prefMentionDesc": "当有人用 @用户名 提及你时",
+		"prefBookmarked": "收藏的讨论",
+		"prefBookmarkedDesc": "当你收藏的讨论有新回复时",
+		"currentAvatar": "当前头像",
+		"avatarRequirements": "最大 1MB。支持 PNG、JPG、WebP、GIF、AVIF、BMP。",
+		"selectFile": "选择文件",
+		"uploadAvatar": "上传头像",
+		"avatarTooLarge": "头像文件不能超过 1MB",
+		"avatarInvalidType": "不支持的文件类型",
+		"stealthDescription": "隐身模式启用后，你将不会出现在在线用户列表中。",
+		"stealthMode": "隐身模式",
+		"stealthActive": "你当前对其他用户隐藏了在线状态",
+		"stealthInactive": "你当前对其他用户可见",
+		"enableStealth": "启用隐身",
+		"disableStealth": "关闭隐身",
+		"displayNameEmpty": "显示名称不能为空",
+		"emailEmpty": "邮箱不能为空",
+		"emailInUse": "邮箱已被使用",
+		"invalidLanguage": "无效的语言偏好",
+		"usernameAdminOnlyError": "仅管理员可以修改用户名",
+		"usernameEmpty": "用户名不能为空",
+		"usernameInUse": "用户名已被使用",
+		"currentPasswordRequired": "请输入当前密码",
+		"newPasswordRequired": "请输入新密码",
+		"currentPasswordIncorrect": "当前密码不正确",
+		"userNotFound": "用户未找到",
+		"invalidValue": "无效的值"
+	},
+	"discussion": {
+		"notFound": "讨论未找到",
+		"replyEmpty": "回复内容不能为空",
+		"titleEmpty": "标题不能为空",
+		"categoryEmpty": "必须选择话题分类",
+		"noPermission": "没有在此分类发帖的权限",
+		"publishFailed": "发布讨论失败",
+		"alreadyExists": "用户名或邮箱已存在"
+	},
+	"category": {
+		"notFound": "话题分类未找到"
+	},
+	"draft": {
+		"invalidBody": "请求格式无效",
+		"fieldsRequired": "缺少 contextType 和 contentJson",
+		"invalidContextType": "无效的 contextType",
+		"contentTooLarge": "草稿内容超出大小限制"
+	},
+	"bookmark": {
+		"discussionRequired": "缺少 discussionId",
+		"notFound": "讨论未找到",
+		"dbError": "数据库错误"
+	},
+	"upload": {
+		"noFile": "未上传文件",
+		"fileTooLarge": "文件大小超出限制",
+		"invalidType": "不支持的文件类型",
+		"uploadFailed": "上传失败"
+	},
+	"img": {
+		"notFound": "未找到",
+		"storageError": "无法获取文件"
+	},
+	"rss": {
+		"unauthorized": "未授权"
 	}
 }

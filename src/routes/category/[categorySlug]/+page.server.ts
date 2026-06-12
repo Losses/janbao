@@ -3,7 +3,7 @@ import { error } from '@sveltejs/kit';
 import { categories, categoryPermissions } from '$lib/server/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { getDiscussionsList, getDiscussionsCount } from '$lib/server/db/dao/discussions';
-import { getDiscussionsLimit } from '$lib/server/constants';
+import { parseDiscussionPagination } from '$lib/server/constants';
 
 export const load: PageServerLoad = async (event) => {
 	const { categorySlug } = event.params;
@@ -19,7 +19,7 @@ export const load: PageServerLoad = async (event) => {
 		.limit(1);
 
 	if (categoryRecords.length === 0) {
-		error(404, 'Category Not Found');
+		error(404, event.locals.t.category.notFound);
 	}
 	const category = categoryRecords[0];
 
@@ -37,18 +37,11 @@ export const load: PageServerLoad = async (event) => {
 
 	const canRead = perm.length === 0 ? true : perm[0].canRead;
 	if (!canRead) {
-		error(403, 'Forbidden');
+		error(403, event.locals.t.common.forbidden);
 	}
 
 	// 3. Parse page
-	const pageParam = event.url.searchParams.get('page');
-	let page = pageParam ? parseInt(pageParam, 10) : 1;
-	if (isNaN(page) || page < 1) {
-		page = 1;
-	}
-
-	const limit = getDiscussionsLimit(event.platform?.env);
-	const offset = (page - 1) * limit;
+	const { page, limit, offset } = parseDiscussionPagination(event.url, event.platform?.env);
 
 	// 4. Fetch discussions list in this category
 	const discussionsList = await getDiscussionsList(db, {

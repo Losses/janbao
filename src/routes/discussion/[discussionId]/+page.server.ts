@@ -14,7 +14,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.limit(1);
 
 	if (record.length === 0) {
-		error(404, 'Discussion Not Found');
+		error(404, locals.t.discussion.notFound);
 	}
 
 	const slug = record[0].slug;

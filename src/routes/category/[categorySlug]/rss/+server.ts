@@ -7,9 +7,10 @@ import { XMLBuilder } from 'fast-xml-parser';
 export const GET: RequestHandler = async (event) => {
 	const { categorySlug } = event.params;
 	const token = event.url.searchParams.get('token');
+	const t = event.locals.t;
 
 	if (!token) {
-		return new Response('Unauthorized', { status: 401 });
+		return new Response(t.rss.unauthorized, { status: 401 });
 	}
 
 	const db = event.locals.db;
@@ -17,7 +18,7 @@ export const GET: RequestHandler = async (event) => {
 	// 1. Resolve user matching rssToken
 	const userRecords = await db.select().from(users).where(eq(users.rssToken, token)).limit(1);
 	if (userRecords.length === 0) {
-		return new Response('Unauthorized', { status: 401 });
+		return new Response(t.rss.unauthorized, { status: 401 });
 	}
 	const user = userRecords[0];
 
@@ -28,7 +29,7 @@ export const GET: RequestHandler = async (event) => {
 		.where(eq(categories.slug, categorySlug))
 		.limit(1);
 	if (categoryRecords.length === 0) {
-		return new Response('Category Not Found', { status: 404 });
+		return new Response(t.category.notFound, { status: 404 });
 	}
 	const category = categoryRecords[0];
 
@@ -46,7 +47,7 @@ export const GET: RequestHandler = async (event) => {
 
 	const canRead = permRecords.length === 0 ? true : permRecords[0].canRead;
 	if (!canRead) {
-		return new Response('Forbidden', { status: 403 });
+		return new Response(t.common.forbidden, { status: 403 });
 	}
 
 	// 3. Query the 20 most recent discussions in this category

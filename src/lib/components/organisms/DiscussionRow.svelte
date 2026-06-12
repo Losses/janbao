@@ -9,25 +9,29 @@
 	/**
 	 * DiscussionRow Organism — Renders a discussion title, badges, bookmark star, and metadata.
 	 */
+	interface DiscussionRowItem {
+		id: string;
+		title: string;
+		slug: string;
+		authorId: string;
+		authorDisplayName: string;
+		authorUsername: string;
+		authorAvatarFileId: string | null;
+		viewCount: number;
+		commentCount: number;
+		isPinned: boolean;
+		updatedAt: Date | string | number;
+	}
+
+	interface DiscussionReadHistory {
+		lastReadAt: Date | string | number;
+		lastReadPage: number;
+		lastReadReplyId: string | null;
+	}
+
 	interface DiscussionRowProps {
-		discussion: {
-			id: string;
-			title: string;
-			slug: string;
-			authorId: string;
-			authorDisplayName: string;
-			authorUsername: string;
-			authorAvatarFileId: string | null;
-			viewCount: number;
-			commentCount: number;
-			isPinned: boolean;
-			updatedAt: Date | string | number;
-		};
-		readHistory?: {
-			lastReadAt: Date | string | number;
-			lastReadPage: number;
-			lastReadReplyId: string | null;
-		} | null;
+		discussion: DiscussionRowItem;
+		readHistory?: DiscussionReadHistory | null;
 		isBookmarked?: boolean;
 		unreadCount?: number;
 		lastReplyAuthorDisplayName?: string | null;

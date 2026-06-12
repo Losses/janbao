@@ -10,13 +10,15 @@
 	import BookmarkTooltip from '$lib/components/molecules/BookmarkTooltip.svelte';
 	import { mdiCog } from '@mdi/js';
 
+	interface UserInfoSummary {
+		id: string;
+		username: string;
+		displayName: string;
+		avatarFileId: string | null;
+	}
+
 	interface UserInfoBlockProps {
-		user: {
-			id: string;
-			username: string;
-			displayName: string;
-			avatarFileId: string | null;
-		};
+		user: UserInfoSummary;
 		t: Record<string, Record<string, string> | string>;
 		class?: string;
 	}

@@ -1,4 +1,5 @@
 import { json } from '@sveltejs/kit';
+import { jsonError } from '$lib/server/errors';
 import type { RequestHandler } from './$types';
 import { attachments } from '$lib/server/db/schema';
 import { env } from '$env/dynamic/private';
@@ -7,8 +8,9 @@ import path from 'node:path';
 
 export const POST: RequestHandler = async (event) => {
 	const user = event.locals.user;
+	const t = event.locals.t;
 	if (!user) {
-		return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+		return jsonError(t, 'common.unauthorized', 401);
 	}
 
 	const db = event.locals.db;
@@ -16,7 +18,7 @@ export const POST: RequestHandler = async (event) => {
 	const file = formData.get('file');
 
 	if (!file || !(file instanceof File)) {
-		return new Response(JSON.stringify({ error: 'No file uploaded' }), { status: 400 });
+		return jsonError(t, 'upload.noFile', 400);
 	}
 
 	const uploadType = formData.get('type') || event.url.searchParams.get('type') || 'discussion';
@@ -24,10 +26,7 @@ export const POST: RequestHandler = async (event) => {
 	const maxSize = isAvatar ? 1 * 1024 * 1024 : 5 * 1024 * 1024;
 
 	if (file.size > maxSize) {
-		return new Response(
-			JSON.stringify({ error: `File size exceeds the limit of ${isAvatar ? '1MB' : '5MB'}` }),
-			{ status: 400 }
-		);
+		return jsonError(t, 'upload.fileTooLarge', 400);
 	}
 
 	const allowedMimes = [
@@ -39,7 +38,7 @@ export const POST: RequestHandler = async (event) => {
 		'image/bmp'
 	];
 	if (!allowedMimes.includes(file.type)) {
-		return new Response(JSON.stringify({ error: 'Invalid file type' }), { status: 400 });
+		return jsonError(t, 'upload.invalidType', 400);
 	}
 
 	// Read credentials
@@ -69,9 +68,7 @@ export const POST: RequestHandler = async (event) => {
 		});
 
 		if (!pcloudRes.ok) {
-			return new Response(JSON.stringify({ error: 'pCloud upload failed' }), {
-				status: 502
-			});
+			return jsonError(t, 'upload.uploadFailed', 502);
 		}
 
 		const pcloudData = (await pcloudRes.json()) as {
@@ -81,10 +78,7 @@ export const POST: RequestHandler = async (event) => {
 		};
 
 		if (pcloudData.result !== 0 || !pcloudData.fileids || pcloudData.fileids.length === 0) {
-			return new Response(
-				JSON.stringify({ error: pcloudData.error || 'pCloud upload returned error status' }),
-				{ status: 502 }
-			);
+			return jsonError(t, 'upload.uploadFailed', 502);
 		}
 
 		fileId = String(pcloudData.fileids[0]);

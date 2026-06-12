@@ -430,6 +430,19 @@ export const invitations = sqliteTable(
 );
 ```
 
+### 2.8 Error Handling Convention
+
+All server-side error responses must follow a strict, i18n-compliant convention. **Zero hardcoded error strings are permitted.**
+
+1. **i18n-First:** Every user-facing error message must be resolved from the translation dictionary (`locals.t.*`). No raw English/Chinese strings in `error()`, `json()`, `new Response()`, or form action return values.
+2. **Page Loads (`+page.server.ts`):** Use SvelteKit's `error(status, event.locals.t.key)` to throw HTTP errors. The framework renders these as error pages.
+3. **API Endpoints (`src/routes/api/**/+server.ts`):** Must use `jsonError(t, 'key.path', status)`from`$lib/server/errors`. This returns a `json({ error: resolvedMessage }, { status })` response. **`new Response()`is banned in API routes** — all error and success responses must go through`json()`or`jsonError()`.
+4. **Form Actions:** Return `{ success: false, error: event.locals.t.key }` with i18n-resolved messages.
+5. **Proxy Routes (non-API `+server.ts`):** Endpoints that serve non-JSON content (XML feeds, binary files) must match the error response Content-Type to the success response Content-Type. Specifically:
+   - **XML endpoints** (e.g. RSS): Return plain-text error bodies with i18n messages: `new Response(t.key, { status })`. Do **not** return JSON errors to XML consumers.
+   - **Binary endpoints** (e.g. image proxy): Return plain-text error bodies with i18n messages: `new Response(t.key, { status })`. Do **not** return JSON errors to binary consumers.
+6. **`catch` Blocks:** Generic `catch` blocks returning 500-level errors must use `locals.t.common.internalError`. Domain-specific catch handlers (e.g. unique constraint violations) must use the corresponding i18n key.
+
 ---
 
 ## 3. Session Management & Authentication
@@ -685,3 +698,143 @@ To satisfy foreign key constraints and prevent database crashes, a seed script i
    - `member`: Standard user role.
 2. Seeds the System User (`00000000-0000-0000-0000-000000000000`) linked to the `system` group slug.
 3. If no accounts exist in `users`, parses `ADMIN_EMAIL` and `ADMIN_PASSWORD` from environmental variables to bootstrap the root administrator user under the `admin` group slug.
+
+---
+
+## 8. Code Quality & Linting Standards
+
+### 8.1 Lint Pipeline (`bun run lint`)
+
+The project enforces a three-stage lint pipeline that must pass with zero errors before merge:
+
+```
+prettier --check .  →  eslint .  →  similarity-ts --types
+```
+
+- **Prettier:** Code formatting (tabs, single quotes, 100-char line width).
+- **ESLint:** Type discipline rules (see 8.2).
+- **similarity-ts:** Structural type duplicate detection (see 8.4).
+
+Additionally, `bun run check` runs `svelte-check` for Svelte-specific TypeScript diagnostics (see 8.5).
+
+### 8.2 Zero Inline Typing (ESLint `no-restricted-syntax`)
+
+**All types must be named.** The following inline patterns are prohibited:
+
+| Forbidden Pattern                                | Correct Approach        |
+| ------------------------------------------------ | ----------------------- |
+| `{ name: string; value: number }` in annotations | Extract to `interface`  |
+| `(x: number) => void` in annotations             | Extract to `type` alias |
+| `[string, number]` in annotations                | Extract to `type` alias |
+| `as any`, `as unknown`, `<any>`, `<unknown>`     | Use proper typing       |
+
+This rule applies **everywhere** — variable annotations, function parameters, return types, and even **inside** interface property types:
+
+```typescript
+// ❌ BAD — inline function type inside interface
+interface TooltipProps {
+	onToggle: () => void;
+	onClose: () => void;
+}
+
+// ✅ GOOD — every function type is named
+import type { VoidHandler } from '$lib/types/handlers';
+
+interface TooltipProps {
+	onToggle: VoidHandler;
+	onClose: VoidHandler;
+}
+```
+
+### 8.3 Interface-First Rule (`consistent-type-definitions`)
+
+Use `interface` for all object shapes. Use `type` only for:
+
+- Function signatures: `type ContentChangeHandler = (json: string) => void;`
+- Union/intersection types: `type Status = 'idle' | 'saving' | 'saved';`
+- Utility aliases: `type EditorStateGetter = () => string;`
+
+```typescript
+// ❌ BAD
+type User = { id: string; name: string };
+
+// ✅ GOOD
+interface User {
+	id: string;
+	name: string;
+}
+```
+
+### 8.4 Structural Duplicate Detection (similarity-ts)
+
+The project integrates [mizchi/similarity-ts](https://github.com/mizchi/similarity) for AST-level duplicate detection:
+
+- **Binary:** `bin/similarity-ts` (auto-downloaded by `scripts/ensure-similarity.ts` based on OS/architecture).
+- **Type duplicates:** Must be **zero**. Run as part of `bun run lint`.
+- **Function duplicates:** Informational. API handler auth guard patterns (~88-90% similarity) are **intentionally duplicated** — each handler independently verifies authentication for type safety and clarity.
+
+#### Known Acceptable Patterns (Do Not Consolidate)
+
+1. **API Auth Guard Prefix** — Every `RequestHandler` starts with:
+   ```typescript
+   const user = locals.user;
+   const t = locals.t;
+   if (!user) {
+   	return json({ error: t.common.unauthorized }, { status: 401 });
+   }
+   ```
+   This 4-line pattern appears in every authenticated endpoint. It must stay per-handler for type safety and SvelteKit convention compliance.
+
+### 8.5 Svelte Diagnostics (`svelte-check`)
+
+#### `state_referenced_locally` Warnings
+
+When initializing editable form state from props data, Svelte warns that `$state()` only captures the initial value. This is **intentional** for form fields — the state starts from the server value and is then independently modified by the user.
+
+Always suppress with an explicit `svelte-ignore` comment:
+
+```svelte
+<script lang="ts">
+	let { data } = $props<{ data: PageData }>();
+
+	// svelte-ignore state_referenced_locally
+	let displayName = $state(data.user.displayName);
+	// svelte-ignore state_referenced_locally
+	let email = $state(data.user.email);
+</script>
+```
+
+Never omit the comment — zero warnings is enforced by `bun run check`.
+
+### 8.6 Shared Type Registry
+
+Common callback types are centralized in `src/lib/types/handlers.ts`:
+
+| Type                | Signature                 | Used In                                             |
+| ------------------- | ------------------------- | --------------------------------------------------- |
+| `VoidHandler`       | `() => void`              | Tooltip, ConfirmationModal, all \*Tooltip molecules |
+| `MouseEventHandler` | `(e: MouseEvent) => void` | LinkButton                                          |
+
+When adding new components with callback props, import from `$lib/types/handlers` rather than redefining.
+
+### 8.7 Type Placement Conventions
+
+| Type Kind               | Location                                                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Shared callback types   | `src/lib/types/handlers.ts`                                                                                        |
+| DAO result/option types | Exported from `src/lib/server/db/dao/*.ts` (e.g. `DiscussionListItem`, `ReadHistory`, `GetDiscussionsListOptions`) |
+| Component props         | `interface` inside component `<script>` block                                                                      |
+| Global app types        | `src/app.d.ts` (`App.Locals`, `App.Platform`, `UserData`)                                                          |
+| Utility function types  | Co-located with the function (e.g. `PaginationParams` in `constants.ts`)                                           |
+
+### 8.8 Extracted Utility: Pagination
+
+All `+page.server.ts` loaders that display paginated discussion lists use `parseDiscussionPagination(url, platformEnv)` from `$lib/server/constants.ts`. Returns `{ page, limit, offset }`.
+
+Files using this utility:
+
+- `src/routes/+page.server.ts` (home page)
+- `src/routes/category/[categorySlug]/+page.server.ts` (category view)
+- `src/routes/profile/discussions/[userId]/[userSlug]/+page.server.ts` (user discussions)
+
+Do **not** duplicate the page-parsing logic inline.

@@ -7,10 +7,12 @@
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import { mdiEmail, mdiEmailPlus } from '@mdi/js';
 
+	import type { VoidHandler } from '$lib/types/handlers';
+
 	interface MessageTooltipProps {
 		isOpen: boolean;
-		onToggle: () => void;
-		onClose: () => void;
+		onToggle: VoidHandler;
+		onClose: VoidHandler;
 		t: Record<string, Record<string, string> | string>;
 	}
 

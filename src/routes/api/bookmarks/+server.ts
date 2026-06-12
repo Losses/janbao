@@ -1,17 +1,19 @@
 import { json } from '@sveltejs/kit';
+import { jsonError } from '$lib/server/errors';
 import type { RequestHandler } from './$types';
 import { bookmarks, discussions } from '$lib/server/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
 
 export const POST: RequestHandler = async (event) => {
 	const user = event.locals.user;
+	const t = event.locals.t;
 	if (!user) {
-		return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+		return jsonError(t, 'common.unauthorized', 401);
 	}
 
 	const { discussionId } = (await event.request.json()) as { discussionId: string };
 	if (!discussionId) {
-		return new Response(JSON.stringify({ error: 'Missing discussionId' }), { status: 400 });
+		return jsonError(t, 'bookmark.discussionRequired', 400);
 	}
 
 	const db = event.locals.db;
@@ -24,7 +26,7 @@ export const POST: RequestHandler = async (event) => {
 		.limit(1);
 
 	if (discussionExists.length === 0) {
-		return new Response(JSON.stringify({ error: 'Discussion not found' }), { status: 404 });
+		return jsonError(t, 'bookmark.notFound', 404);
 	}
 
 	try {
@@ -39,19 +41,20 @@ export const POST: RequestHandler = async (event) => {
 
 		return json({ success: true, bookmarked: true });
 	} catch {
-		return new Response(JSON.stringify({ error: 'Database error' }), { status: 500 });
+		return jsonError(t, 'bookmark.dbError', 500);
 	}
 };
 
 export const DELETE: RequestHandler = async (event) => {
 	const user = event.locals.user;
+	const t = event.locals.t;
 	if (!user) {
-		return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+		return jsonError(t, 'common.unauthorized', 401);
 	}
 
 	const discussionId = event.url.searchParams.get('discussionId');
 	if (!discussionId) {
-		return new Response(JSON.stringify({ error: 'Missing discussionId' }), { status: 400 });
+		return jsonError(t, 'bookmark.discussionRequired', 400);
 	}
 
 	const db = event.locals.db;
@@ -63,6 +66,6 @@ export const DELETE: RequestHandler = async (event) => {
 
 		return json({ success: true, bookmarked: false });
 	} catch {
-		return new Response(JSON.stringify({ error: 'Database error' }), { status: 500 });
+		return jsonError(t, 'bookmark.dbError', 500);
 	}
 };

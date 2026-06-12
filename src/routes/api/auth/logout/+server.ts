@@ -1,4 +1,5 @@
 import { json } from '@sveltejs/kit';
+import { jsonError } from '$lib/server/errors';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async (event) => {
@@ -7,6 +8,6 @@ export const POST: RequestHandler = async (event) => {
 		return json({ success: true });
 	} catch (e) {
 		console.error('Logout error:', e);
-		return json({ error: 'Internal server error during logout.' }, { status: 500 });
+		return jsonError(event.locals.t, 'common.internalError', 500);
 	}
 };

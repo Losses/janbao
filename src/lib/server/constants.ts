@@ -30,6 +30,26 @@ export function getDiscussionsLimit(platformEnv: App.Platform['env'] | undefined
 	return 20;
 }
 
+interface PaginationParams {
+	page: number;
+	limit: number;
+	offset: number;
+}
+
+export function parseDiscussionPagination(
+	url: URL,
+	platformEnv: App.Platform['env'] | undefined
+): PaginationParams {
+	const pageParam = url.searchParams.get('page');
+	let page = pageParam ? parseInt(pageParam, 10) : 1;
+	if (isNaN(page) || page < 1) {
+		page = 1;
+	}
+	const limit = getDiscussionsLimit(platformEnv);
+	const offset = (page - 1) * limit;
+	return { page, limit, offset };
+}
+
 export function getPaginationLimit(platformEnv: App.Platform['env'] | undefined): number {
 	const raw = platformEnv?.PAGINATION_LIMIT || process.env.PAGINATION_LIMIT;
 	if (raw) {

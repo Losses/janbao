@@ -2,8 +2,9 @@ import { users, invitations, notificationPreferences } from '$lib/server/db/sche
 import type { DbTransaction } from '$lib/server/db';
 import { hashPassword, signJwt, createSessionToken } from '$lib/server/auth';
 import { getJwtSecret, getCookieSecure } from '$lib/server/constants';
-import { eq, or } from 'drizzle-orm';
+import { jsonError } from '$lib/server/errors';
 import { json } from '@sveltejs/kit';
+import { eq, or } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import type { AuthRegisterBody } from '$lib/types/api';
 
@@ -12,32 +13,29 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const POST: RequestHandler = async (event) => {
 	try {
-		const { db } = event.locals;
+		const { db, t } = event.locals;
 		const body = (await event.request.json()) as AuthRegisterBody;
 		const { invitationCode, username, email, password, confirmPassword, displayName } = body;
 
 		// 1. Basic validation
 		if (!invitationCode || !username || !email || !password || !confirmPassword || !displayName) {
-			return json({ error: 'All fields are required.' }, { status: 400 });
+			return jsonError(t, 'auth.allFieldsRequired', 400);
 		}
 
 		if (!USERNAME_REGEX.test(username)) {
-			return json(
-				{ error: 'Username must be 2-30 characters, alphanumeric, underscores or hyphens only.' },
-				{ status: 400 }
-			);
+			return jsonError(t, 'auth.invalidUsername', 400);
 		}
 
 		if (!EMAIL_REGEX.test(email)) {
-			return json({ error: 'Please provide a valid email address.' }, { status: 400 });
+			return jsonError(t, 'auth.invalidEmail', 400);
 		}
 
 		if (password.length < 5) {
-			return json({ error: 'Password must be at least 5 characters long.' }, { status: 400 });
+			return jsonError(t, 'auth.passwordTooShort', 400);
 		}
 
 		if (password !== confirmPassword) {
-			return json({ error: 'Passwords do not match.' }, { status: 400 });
+			return jsonError(t, 'auth.passwordsMismatch', 400);
 		}
 
 		// 2. Validate Invitation Code dynamically
@@ -48,17 +46,17 @@ export const POST: RequestHandler = async (event) => {
 			.limit(1);
 
 		if (inviteList.length === 0) {
-			return json({ error: 'Invitation code not found.' }, { status: 400 });
+			return jsonError(t, 'auth.invitationNotFound', 400);
 		}
 
 		const invitation = inviteList[0];
 
 		if (invitation.usedById !== null) {
-			return json({ error: 'Invitation code has already been used.' }, { status: 400 });
+			return jsonError(t, 'auth.invitationUsed', 400);
 		}
 
 		if (invitation.expiresAt.getTime() < Date.now()) {
-			return json({ error: 'Invitation code has expired.' }, { status: 400 });
+			return jsonError(t, 'auth.invitationExpired', 400);
 		}
 
 		// 3. Hash password
@@ -107,7 +105,7 @@ export const POST: RequestHandler = async (event) => {
 			jwtToken = await signJwt(payload, jwtSecret);
 		} catch (e) {
 			if (e instanceof Error && e.message === 'USERNAME_EMAIL_EXISTS') {
-				return json({ error: 'Username or email already exists.' }, { status: 400 });
+				return jsonError(event.locals.t, 'discussion.alreadyExists', 400);
 			}
 			throw e;
 		}
@@ -124,6 +122,6 @@ export const POST: RequestHandler = async (event) => {
 		return json({ success: true, userId: newUserId });
 	} catch (e) {
 		console.error('Registration error:', e);
-		return json({ error: 'Internal server error during registration.' }, { status: 500 });
+		return jsonError(event.locals.t, 'common.internalError', 500);
 	}
 };

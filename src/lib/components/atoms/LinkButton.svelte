@@ -3,8 +3,10 @@
 	 * LinkButton Atom — A unified minimalist link styled to look like text but functioning as an interactive button.
 	 * Used in footer metadata blocks, inline comments, and lists.
 	 */
+	import type { MouseEventHandler } from '$lib/types/handlers';
+
 	interface LinkButtonProps {
-		onclick?: (e: MouseEvent) => void;
+		onclick?: MouseEventHandler;
 		href?: string;
 		disabled?: boolean;
 		class?: string;

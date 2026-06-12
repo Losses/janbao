@@ -47,7 +47,7 @@ export const load: PageServerLoad = async (event) => {
 		.limit(1);
 
 	if (discussionRecords.length === 0) {
-		error(404, 'Discussion Not Found');
+		error(404, event.locals.t.discussion.notFound);
 	}
 	const discussion = discussionRecords[0];
 
@@ -70,7 +70,7 @@ export const load: PageServerLoad = async (event) => {
 
 	const canRead = perm.length === 0 ? true : perm[0].canRead;
 	if (!canRead) {
-		error(403, 'Forbidden');
+		error(403, event.locals.t.common.forbidden);
 	}
 
 	// 3. Resolve page number
@@ -235,13 +235,13 @@ export const actions: Actions = {
 	reply: async ({ request, locals, params }) => {
 		const user = locals.user;
 		if (!user) {
-			error(401, 'Unauthorized');
+			error(401, locals.t.common.unauthorized);
 		}
 
 		const db = locals.db;
 		const { discussionId } = params;
 		if (!discussionId) {
-			error(400, 'Bad Request');
+			error(400, locals.t.common.badRequest);
 		}
 
 		// Verify discussion exists and is not soft-deleted
@@ -254,7 +254,7 @@ export const actions: Actions = {
 			.limit(1);
 
 		if (discussionRecords.length === 0) {
-			error(404, 'Discussion Not Found');
+			error(404, locals.t.discussion.notFound);
 		}
 
 		// Verify user's group has write permission for this category
@@ -271,14 +271,14 @@ export const actions: Actions = {
 
 		const canCreate = perm.length === 0 ? true : perm[0].canCreate;
 		if (!canCreate) {
-			error(403, 'Forbidden');
+			error(403, locals.t.common.forbidden);
 		}
 
 		const data = await request.formData();
 		const contentJson = data.get('contentJson') as string;
 
 		if (!contentJson) {
-			return { success: false, error: 'Reply content cannot be empty' };
+			return { success: false, error: locals.t.discussion.replyEmpty };
 		}
 
 		// Insert the reply

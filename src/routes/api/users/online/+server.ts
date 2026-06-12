@@ -1,4 +1,5 @@
 import { json } from '@sveltejs/kit';
+import { jsonError } from '$lib/server/errors';
 import { users } from '$lib/server/db/schema';
 import { eq, and, gt, not } from 'drizzle-orm';
 import { SYSTEM_USER_ID } from '$lib/server/constants';
@@ -8,7 +9,7 @@ import type { RequestHandler } from './$types';
 // Returns users active in the last 10 minutes, excluding stealth mode users and the system user.
 export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.user) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
+		return jsonError(locals.t, 'common.unauthorized', 401);
 	}
 
 	const db = locals.db;

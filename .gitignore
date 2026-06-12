@@ -1,5 +1,8 @@
 node_modules
 
+# Vendored binaries
+/bin/
+
 # Output
 .output
 .vercel

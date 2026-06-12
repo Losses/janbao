@@ -70,7 +70,7 @@ export const actions: Actions = {
 	publish: async (event) => {
 		const user = event.locals.user;
 		if (!user) {
-			error(401, 'Unauthorized');
+			error(401, event.locals.t.common.unauthorized);
 		}
 
 		const db = event.locals.db;
@@ -81,13 +81,13 @@ export const actions: Actions = {
 		const contentJson = data.get('contentJson') as string;
 
 		if (!title || title.trim() === '') {
-			return { success: false, error: 'Title cannot be empty' };
+			return { success: false, error: event.locals.t.discussion.titleEmpty };
 		}
 		if (!categorySlug) {
-			return { success: false, error: 'Category must be selected' };
+			return { success: false, error: event.locals.t.discussion.categoryEmpty };
 		}
 		if (!contentJson) {
-			return { success: false, error: 'Content cannot be empty' };
+			return { success: false, error: event.locals.t.common.contentRequired };
 		}
 
 		// Check permission
@@ -104,7 +104,7 @@ export const actions: Actions = {
 
 		const canCreate = perm.length === 0 ? true : perm[0].canCreate;
 		if (!canCreate) {
-			return { success: false, error: 'You do not have permission to post in this category' };
+			return { success: false, error: event.locals.t.discussion.noPermission };
 		}
 
 		const discussionId = crypto.randomUUID();
@@ -149,7 +149,7 @@ export const actions: Actions = {
 				);
 		} catch (err) {
 			console.error('Failed to publish discussion:', err);
-			return { success: false, error: 'Failed to save to database' };
+			return { success: false, error: event.locals.t.discussion.publishFailed };
 		}
 
 		redirect(302, `/discussion/${discussionId}/${slug}`);

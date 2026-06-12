@@ -1,19 +1,20 @@
 import { users } from '$lib/server/db/schema';
 import { verifyPassword, signJwt, createSessionToken } from '$lib/server/auth';
 import { getJwtSecret, getCookieSecure } from '$lib/server/constants';
-import { eq, or } from 'drizzle-orm';
+import { jsonError } from '$lib/server/errors';
 import { json } from '@sveltejs/kit';
+import { eq, or } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import type { AuthLoginBody, SessionCookieOptions } from '$lib/types/api';
 
 export const POST: RequestHandler = async (event) => {
 	try {
-		const { db } = event.locals;
+		const { db, t } = event.locals;
 		const body = (await event.request.json()) as AuthLoginBody;
 		const { usernameOrEmail, password, rememberMe } = body;
 
 		if (!usernameOrEmail || !password) {
-			return json({ error: 'Username/email and password are required.' }, { status: 400 });
+			return jsonError(t, 'auth.loginFieldsRequired', 400);
 		}
 
 		// Find user by username or email
@@ -24,7 +25,7 @@ export const POST: RequestHandler = async (event) => {
 			.limit(1);
 
 		if (userList.length === 0) {
-			return json({ error: 'Invalid credentials.' }, { status: 400 });
+			return jsonError(t, 'auth.invalidCredentials', 400);
 		}
 
 		const user = userList[0];
@@ -32,7 +33,7 @@ export const POST: RequestHandler = async (event) => {
 		// Verify password hash
 		const isValid = await verifyPassword(password, user.passwordHash);
 		if (!isValid) {
-			return json({ error: 'Invalid credentials.' }, { status: 400 });
+			return jsonError(t, 'auth.invalidCredentials', 400);
 		}
 
 		// Generate token with proper expiration
@@ -57,6 +58,6 @@ export const POST: RequestHandler = async (event) => {
 		return json({ success: true, userId: user.id });
 	} catch (e) {
 		console.error('Login error:', e);
-		return json({ error: 'Internal server error during login.' }, { status: 500 });
+		return jsonError(event.locals.t, 'common.internalError', 500);
 	}
 };

@@ -2,6 +2,12 @@ import { discussions, users, bookmarks, discussionReads, replies, categories } f
 import { eq, and, isNull, desc, sql, count, inArray } from 'drizzle-orm';
 import type { D1Db } from '../index';
 
+export interface ReadHistory {
+	lastReadAt: Date | null;
+	lastReadPage: number;
+	lastReadReplyId: string | null;
+}
+
 export interface DiscussionListItem {
 	id: string;
 	title: string;
@@ -18,13 +24,22 @@ export interface DiscussionListItem {
 	createdAt: Date;
 	updatedAt: Date;
 	isBookmarked: boolean;
-	readHistory: {
-		lastReadAt: Date | null;
-		lastReadPage: number;
-		lastReadReplyId: string | null;
-	} | null;
+	readHistory: ReadHistory | null;
 	unreadCount: number;
 	lastReplyAuthorDisplayName: string | null;
+}
+
+interface GetDiscussionsListOptions {
+	userId?: string | null;
+	categorySlug?: string | null;
+	authorId?: string | null;
+	limit: number;
+	offset: number;
+}
+
+interface GetDiscussionsCountOptions {
+	categorySlug?: string | null;
+	authorId?: string | null;
 }
 
 /**
@@ -37,13 +52,7 @@ export interface DiscussionListItem {
  */
 export async function getDiscussionsList(
 	db: D1Db,
-	options: {
-		userId?: string | null;
-		categorySlug?: string | null;
-		authorId?: string | null;
-		limit: number;
-		offset: number;
-	}
+	options: GetDiscussionsListOptions
 ): Promise<DiscussionListItem[]> {
 	const { userId, categorySlug, authorId, limit, offset } = options;
 
@@ -226,10 +235,7 @@ export async function getDiscussionsList(
  */
 export async function getDiscussionsCount(
 	db: D1Db,
-	options: {
-		categorySlug?: string | null;
-		authorId?: string | null;
-	} = {}
+	options: GetDiscussionsCountOptions = {}
 ): Promise<number> {
 	const { categorySlug, authorId } = options;
 

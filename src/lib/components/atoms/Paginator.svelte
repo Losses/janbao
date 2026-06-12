@@ -3,10 +3,12 @@
 	 * Paginator Atom — Minimalist page navigation using text-link style.
 	 * Self-conditional rendering: renders nothing if totalPages <= 1.
 	 */
+	type PageChangeHandler = (page: number) => void;
+
 	interface PaginatorProps {
 		currentPage: number;
 		totalPages: number;
-		onPageChange: (page: number) => void;
+		onPageChange: PageChangeHandler;
 		/** Translation dictionary for i18n aria-labels */
 		t?: Record<string, Record<string, string> | string> | null;
 		class?: string;

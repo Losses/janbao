@@ -4,10 +4,12 @@
 	 * Children are rendered directly as the trigger element (no wrapping button).
 	 * Expects children to be an interactive element (button, link, etc.).
 	 */
+	import type { VoidHandler } from '$lib/types/handlers';
+
 	interface TooltipProps {
 		isOpen?: boolean;
-		onToggle: () => void;
-		onClose: () => void;
+		onToggle: VoidHandler;
+		onClose: VoidHandler;
 		class?: string;
 		children: import('svelte').Snippet;
 		popover: import('svelte').Snippet;

@@ -3,7 +3,12 @@
 	 * Reusable inline alert message component.
 	 * Self-conditional rendering — renders nothing when message is empty.
 	 */
-	let { message = '', class: className = '' }: { message?: string; class?: string } = $props();
+	interface AlertMessageProps {
+		message?: string;
+		class?: string;
+	}
+
+	let { message = '', class: className = '' }: AlertMessageProps = $props();
 </script>
 
 {#if message}

@@ -30,7 +30,15 @@
 		"passwordStrengthOk": "Password length meets requirements",
 		"registrationFailed": "Registration failed.",
 		"newHere": "New here?",
-		"alreadyHaveAccount": "Already have an account?"
+		"alreadyHaveAccount": "Already have an account?",
+		"allFieldsRequired": "All fields are required.",
+		"invalidUsername": "Username must be 2-30 characters, alphanumeric, underscores or hyphens only.",
+		"invalidEmail": "Please provide a valid email address.",
+		"invitationNotFound": "Invitation code not found.",
+		"invitationUsed": "Invitation code has already been used.",
+		"invitationExpired": "Invitation code has expired.",
+		"loginFieldsRequired": "Username/email and password are required.",
+		"usernameOrEmailExists": "Username or email already exists."
 	},
 	"common": {
 		"welcome": "Welcome!",
@@ -46,7 +54,17 @@
 		"reply": "Reply",
 		"submit": "Submit",
 		"showAll": "Show All",
-		"noResults": "No results found"
+		"noResults": "No results found",
+		"commentPlaceholder": "Write a comment...",
+		"deleteConfirm": "Are you sure you want to delete this?",
+		"unauthorized": "Unauthorized",
+		"forbidden": "Forbidden",
+		"notFound": "Not found",
+		"contentRequired": "Content is required",
+		"contentTooLarge": "Content too large",
+		"noFieldsToUpdate": "No fields to update",
+		"badRequest": "Bad request",
+		"internalError": "Internal server error"
 	},
 	"home": {
 		"welcomeTo": "Welcome to Janbao",
@@ -105,5 +123,112 @@
 		"monthsAgo": "months ago",
 		"yearAgo": "year ago",
 		"yearsAgo": "years ago"
+	},
+	"activity": {
+		"parentIdRequired": "Parent ID is required",
+		"parentNotFound": "Parent activity not found",
+		"recipientNotFound": "Recipient not found",
+		"activityIdRequired": "Activity ID is required",
+		"activityNotFound": "Activity not found",
+		"cannotNestComments": "Cannot nest comments beyond one level"
+	},
+	"profile": {
+		"dynamics": "Dynamics",
+		"notifications": "Notifications",
+		"invitations": "Invitations",
+		"mailbox": "Mailbox",
+		"discussions": "Discussions",
+		"comments": "Comments",
+		"accountSettings": "Account Settings",
+		"editAccount": "Edit Account",
+		"changePassword": "Change Password",
+		"preferences": "Preferences",
+		"avatar": "Avatar",
+		"stealthSettings": "Online Status",
+		"usernameAdminOnly": "Only admins can change usernames",
+		"showEmail": "Show email publicly",
+		"language": "Language",
+		"group": "Group",
+		"joined": "Joined",
+		"lastActive": "Last Active",
+		"views": "Views",
+		"postToProfile": "Write on this profile",
+		"currentPassword": "Current Password",
+		"newPassword": "New Password",
+		"preferencesDescription": "Choose which notifications you want to receive",
+		"prefProfileComment": "Profile Comments",
+		"prefProfileCommentDesc": "When someone posts on your profile",
+		"prefDiscussionReply": "Discussion Replies",
+		"prefDiscussionReplyDesc": "When someone replies to your discussion",
+		"prefPrivateMessage": "Private Messages",
+		"prefPrivateMessageDesc": "When you receive a private message",
+		"prefDiscussionComment": "Discussion Comments",
+		"prefDiscussionCommentDesc": "When someone comments in a discussion you started",
+		"prefParticipated": "Participated Threads",
+		"prefParticipatedDesc": "When a thread you participated in gets a new reply",
+		"prefMention": "Mentions",
+		"prefMentionDesc": "When someone mentions you with @username",
+		"prefBookmarked": "Bookmarked Discussions",
+		"prefBookmarkedDesc": "When a bookmarked discussion gets a new reply",
+		"currentAvatar": "Current Avatar",
+		"avatarRequirements": "Max 1MB. PNG, JPG, WebP, GIF, AVIF, BMP.",
+		"selectFile": "Select File",
+		"uploadAvatar": "Upload Avatar",
+		"avatarTooLarge": "Avatar must be less than 1MB",
+		"avatarInvalidType": "Invalid file type",
+		"stealthDescription": "When stealth mode is active, you will be hidden from the Active Users Wall.",
+		"stealthMode": "Stealth Mode",
+		"stealthActive": "You are currently hidden from the Active Users Wall",
+		"stealthInactive": "You are visible on the Active Users Wall",
+		"enableStealth": "Enable Stealth",
+		"disableStealth": "Disable Stealth",
+		"displayNameEmpty": "Display name cannot be empty",
+		"emailEmpty": "Email cannot be empty",
+		"emailInUse": "Email already in use",
+		"invalidLanguage": "Invalid language preference",
+		"usernameAdminOnlyError": "Only admins can change usernames",
+		"usernameEmpty": "Username cannot be empty",
+		"usernameInUse": "Username already in use",
+		"currentPasswordRequired": "Current password is required",
+		"newPasswordRequired": "New password is required",
+		"currentPasswordIncorrect": "Current password is incorrect",
+		"userNotFound": "User not found",
+		"invalidValue": "Invalid value"
+	},
+	"discussion": {
+		"notFound": "Discussion not found",
+		"replyEmpty": "Reply content cannot be empty",
+		"titleEmpty": "Title cannot be empty",
+		"categoryEmpty": "Category must be selected",
+		"noPermission": "You do not have permission to post in this category",
+		"publishFailed": "Failed to publish discussion",
+		"alreadyExists": "Username or email already exists"
+	},
+	"category": {
+		"notFound": "Category not found"
+	},
+	"draft": {
+		"invalidBody": "Invalid request body",
+		"fieldsRequired": "contextType and contentJson are required",
+		"invalidContextType": "Invalid contextType",
+		"contentTooLarge": "Draft content exceeds maximum size"
+	},
+	"bookmark": {
+		"discussionRequired": "Missing discussionId",
+		"notFound": "Discussion not found",
+		"dbError": "Database error"
+	},
+	"upload": {
+		"noFile": "No file uploaded",
+		"fileTooLarge": "File size exceeds the limit",
+		"invalidType": "Invalid file type",
+		"uploadFailed": "Upload failed"
+	},
+	"img": {
+		"notFound": "Not found",
+		"storageError": "Failed to retrieve file"
+	},
+	"rss": {
+		"unauthorized": "Unauthorized"
 	}
 }

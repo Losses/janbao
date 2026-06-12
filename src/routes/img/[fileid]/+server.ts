@@ -8,11 +8,12 @@ import path from 'node:path';
 export const GET: RequestHandler = async (event) => {
 	const { fileid } = event.params;
 	const db = event.locals.db;
+	const t = event.locals.t;
 
 	// 1. Attachment Validation check
 	const record = await db.select().from(attachments).where(eq(attachments.fileId, fileid)).limit(1);
 	if (record.length === 0) {
-		return new Response('Not Found', { status: 404 });
+		return new Response(t.img.notFound, { status: 404 });
 	}
 
 	const pcloudToken = env.PCLOUD_TOKEN || event.platform?.env?.PCLOUD_TOKEN || '';
@@ -47,7 +48,7 @@ export const GET: RequestHandler = async (event) => {
 				// No metadata
 			}
 		} catch {
-			return new Response('File not found in local storage', { status: 404 });
+			return new Response(t.img.notFound, { status: 404 });
 		}
 	} else {
 		// Real pCloud retrieval
@@ -56,7 +57,7 @@ export const GET: RequestHandler = async (event) => {
 				`https://api.pcloud.com/getfilelink?auth=${pcloudToken}&fileid=${fileid}`
 			);
 			if (!linkRes.ok) {
-				return new Response('Failed to get pCloud file link', { status: 502 });
+				return new Response(t.img.storageError, { status: 502 });
 			}
 			const linkData = (await linkRes.json()) as {
 				result: number;
@@ -66,17 +67,14 @@ export const GET: RequestHandler = async (event) => {
 			};
 
 			if (linkData.result !== 0 || !linkData.hosts || linkData.hosts.length === 0) {
-				return new Response(
-					JSON.stringify({ error: linkData.error || 'Failed to get pCloud download link' }),
-					{ status: 502 }
-				);
+				return new Response(t.img.storageError, { status: 502 });
 			}
 
 			const downloadUrl = `https://${linkData.hosts[0]}${linkData.path}`;
 			const fileRes = await fetch(downloadUrl);
 
 			if (!fileRes.ok) {
-				return new Response('Failed to fetch file from pCloud storage', { status: 502 });
+				return new Response(t.img.storageError, { status: 502 });
 			}
 
 			if (fileRes.body) {
@@ -86,7 +84,7 @@ export const GET: RequestHandler = async (event) => {
 			}
 			contentType = fileRes.headers.get('content-type') || 'application/octet-stream';
 		} catch {
-			return new Response('Error retrieving file from pCloud', { status: 500 });
+			return new Response(t.img.storageError, { status: 500 });
 		}
 	}
 
