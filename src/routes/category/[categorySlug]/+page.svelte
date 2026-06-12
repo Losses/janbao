@@ -23,8 +23,6 @@
 	const currentPage = $derived(data.page);
 	const totalPages = $derived(data.totalPages);
 
-	let isDrawerOpen = $state(false);
-
 	function handlePageChange(newPage: number) {
 		goto(`?page=${newPage}`);
 	}
@@ -65,7 +63,7 @@
 	</div>
 {/snippet}
 
-<DualColumnLayout {sidebar} bind:isDrawerOpen>
+<DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-6">
 		<!-- Category Title + Description + RSS Link -->
 		<div class="border-b border-base-300 pb-4">

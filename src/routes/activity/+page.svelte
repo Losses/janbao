@@ -19,7 +19,6 @@
 	const currentPage = $derived(data.page);
 	const totalPages = $derived(data.totalPages);
 
-	let isDrawerOpen = $state(false);
 	let editorContent = $state('');
 	let submitting = $state(false);
 
@@ -59,7 +58,7 @@
 	<!-- Activity Square sidebar intentionally left empty per RQ00-Frontend §3.3.5 -->
 {/snippet}
 
-<DualColumnLayout {sidebar} bind:isDrawerOpen>
+<DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-6">
 		<!-- Activity Composer -->
 		{#if user}

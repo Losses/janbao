@@ -19,6 +19,7 @@
 
 	const t = $derived(data.t);
 	const messageT = $derived(t.message);
+	const user = $derived(data.user);
 
 	// svelte-ignore state_referenced_locally
 	let recipients = $state<UserSearchResult[]>(data.prefillRecipient ? [data.prefillRecipient] : []);
@@ -26,13 +27,12 @@
 	let content = $state('');
 	let sending = $state(false);
 	let errorMessage = $state<string | null>(null);
-	let isDrawerOpen = $state(false);
 
 	const selectedIds = $derived(recipients.map((r) => r.id));
 
-	function addRecipient(user: UserSearchResult) {
-		if (recipients.some((r) => r.id === user.id)) return;
-		recipients = [...recipients, user];
+	function addRecipient(u: UserSearchResult) {
+		if (recipients.some((r) => r.id === u.id)) return;
+		recipients = [...recipients, u];
 	}
 
 	function removeRecipient(id: string) {
@@ -80,7 +80,7 @@
 	</div>
 {/snippet}
 
-<DualColumnLayout {sidebar} bind:isDrawerOpen>
+<DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-6">
 		<h1 class="text-2xl font-bold border-b border-base-300 pb-4">{messageT.composeTitle}</h1>
 

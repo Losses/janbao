@@ -3,7 +3,7 @@
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import DiscussionRow from '$lib/components/organisms/DiscussionRow.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
-	import { formatTitle, getSiteName } from '$lib/utils/title';
+	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
@@ -19,8 +19,6 @@
 	const discussionsList = $derived(data.discussions);
 	const currentPage = $derived(data.page);
 	const totalPages = $derived(data.totalPages);
-
-	let isDrawerOpen = $state(false);
 
 	function handlePageChange(newPage: number) {
 		goto(`?page=${newPage}`);
@@ -62,27 +60,10 @@
 	</div>
 {/snippet}
 
-<DualColumnLayout {sidebar} bind:isDrawerOpen>
+<DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-6">
-		<!-- Mobile Header Toolbar -->
-		<div
-			class="flex items-center justify-between md:hidden bg-base-200 border border-base-300 p-3 rounded-lg"
-		>
-			<span class="font-bold text-lg">{getSiteName()}</span>
-			<button onclick={() => (isDrawerOpen = true)} class="btn btn-sm btn-ghost avatar placeholder">
-				<div class="bg-neutral text-neutral-content rounded-full w-8">
-					{#if user}
-						<span>{user.displayName?.[0]?.toUpperCase() ?? '?'}</span>
-					{:else}
-						<span>G</span>
-					{/if}
-				</div>
-			</button>
-		</div>
-
-		<!-- Title Banner -->
-		<div class="flex items-center justify-between border-b border-base-300 pb-4">
-			<h1 class="text-3xl font-extrabold tracking-tight">{t.nav.home}</h1>
+		<!-- Top Paginator -->
+		<div class="flex justify-end">
 			<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
 		</div>
 

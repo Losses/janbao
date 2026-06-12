@@ -1,10 +1,11 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
-	import ActiveUsersWall from '$lib/components/molecules/ActiveUsersWall.svelte';
+	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
 	import Badge from '$lib/components/atoms/Badge.svelte';
 	import DateComponent from '$lib/components/atoms/Date.svelte';
 	import { formatTitle } from '$lib/utils/title';
+	import { generateSlug } from '$lib/utils/slug';
 	import { goto } from '$app/navigation';
 	import type { ConversationListItem } from '$lib/types/api';
 	import type { PageData } from './$types';
@@ -17,8 +18,9 @@
 
 	const t = $derived(data.t);
 	const messageT = $derived(t.message);
+	const user = $derived(data.user);
 	const conversations = $derived(data.conversations as ConversationListItem[]);
-	let isDrawerOpen = $state(false);
+	const userSlug = $derived(generateSlug(user?.username || ''));
 
 	function handlePageChange(newPage: number) {
 		goto(`?page=${newPage}`);
@@ -30,25 +32,22 @@
 </svelte:head>
 
 {#snippet sidebar()}
-	<div class="card bg-base-200 border border-base-300 p-4 space-y-4">
-		<a href="/messages/new" class="btn btn-primary btn-sm w-full">
-			{messageT.newMessage}
-		</a>
-		<div class="divider my-1"></div>
-		<ActiveUsersWall {t} />
-	</div>
+	{#if user}
+		<ProfileSidebar
+			{user}
+			{t}
+			activeItem="mailbox"
+			targetUserId={user.id}
+			targetUserSlug={userSlug}
+		/>
+	{/if}
 {/snippet}
 
-<DualColumnLayout {sidebar} bind:isDrawerOpen>
+<DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-6">
 		<div class="flex items-center justify-between border-b border-base-300 pb-4">
 			<h1 class="text-2xl font-bold">{messageT.inbox}</h1>
-			<Paginator
-				currentPage={data.page}
-				totalPages={data.totalPages}
-				onPageChange={handlePageChange}
-				{t}
-			/>
+			<a href="/messages/new" class="btn btn-primary btn-sm">{messageT.newMessage}</a>
 		</div>
 
 		{#if conversations.length === 0}

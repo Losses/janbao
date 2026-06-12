@@ -1,5 +1,15 @@
 import type { CookieSerializeOptions } from 'cookie';
 
+// --- Shared Component Types ---
+
+/** Minimal user identity used by Header, sidebars, and user-facing molecules. */
+export interface UserInfoSummary {
+	id: string;
+	username: string;
+	displayName: string;
+	avatarFileId: string | null;
+}
+
 // --- Auth Types ---
 
 export interface AuthRegisterBody {

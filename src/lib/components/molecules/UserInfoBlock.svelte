@@ -8,14 +8,8 @@
 	import NotificationTooltip from '$lib/components/molecules/NotificationTooltip.svelte';
 	import MessageTooltip from '$lib/components/molecules/MessageTooltip.svelte';
 	import BookmarkTooltip from '$lib/components/molecules/BookmarkTooltip.svelte';
+	import type { UserInfoSummary } from '$lib/types/api';
 	import { mdiCog } from '@mdi/js';
-
-	interface UserInfoSummary {
-		id: string;
-		username: string;
-		displayName: string;
-		avatarFileId: string | null;
-	}
 
 	interface UserInfoBlockProps {
 		user: UserInfoSummary;
