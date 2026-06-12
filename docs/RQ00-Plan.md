@@ -146,6 +146,7 @@ To guarantee that no loose type assertions occur, the linter configurations in `
   - **Atoms:** Pin labels, Bookmark star toggles.
   - **Organisms:** `DiscussionRow.svelte` (handling unread counts badge, star bookmarks, reading state tracker).
   - **Pages (Frontend Views):**
+    - `/` (Home page displaying the unified list of discussions with 20 items per page).
     - `/post/discussion` (New Discussion page utilizing templates and priority selector defaults).
     - `/categories` layout.
     - `/category/:slug` listing page.
