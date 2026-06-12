@@ -42,7 +42,7 @@
 			<div class="divider my-1"></div>
 			{#if isOwner}
 				<ul class="menu menu-sm w-full gap-1">
-					<li><a href="/profile/{user.id}/{targetUserSlug}">{profileT.dynamics}</a></li>
+					<li><a href="/profile/{user.id}/{targetUserSlug}">{profileT.activities}</a></li>
 					<li><a href="/notifications">{profileT.notifications}</a></li>
 					<li><a href="/profile/invitations">{profileT.invitations}</a></li>
 					<li><a href="/messages/inbox">{profileT.mailbox}</a></li>
@@ -61,7 +61,7 @@
 				</ul>
 			{:else}
 				<ul class="menu menu-sm w-full gap-1">
-					<li><a href="/profile/{targetUser.id}/{targetUserSlug}">{profileT.dynamics}</a></li>
+					<li><a href="/profile/{targetUser.id}/{targetUserSlug}">{profileT.activities}</a></li>
 					<li>
 						<a href="/profile/discussions/{targetUser.id}/{targetUserSlug}" class="active"
 							>{profileT.discussions}</a
@@ -74,7 +74,7 @@
 			{/if}
 		{:else}
 			<ul class="menu menu-sm w-full gap-1">
-				<li><a href="/profile/{targetUser.id}/{targetUserSlug}">{profileT.dynamics}</a></li>
+				<li><a href="/profile/{targetUser.id}/{targetUserSlug}">{profileT.activities}</a></li>
 				<li>
 					<a href="/profile/discussions/{targetUser.id}/{targetUserSlug}" class="active"
 						>{profileT.discussions}</a

@@ -73,7 +73,7 @@
 		</div>
 		<div class="divider my-1"></div>
 		<ul class="menu menu-sm w-full gap-1">
-			<li><a href="/profile/{targetUser.id}/{targetSlug}">{profileT.dynamics}</a></li>
+			<li><a href="/profile/{targetUser.id}/{targetSlug}">{profileT.activities}</a></li>
 			{#if isOwner}
 				<li><a href="/notifications">{profileT.notifications}</a></li>
 				<li><a href="/profile/invitations">{profileT.invitations}</a></li>

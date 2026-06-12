@@ -133,7 +133,7 @@
 		"cannotNestComments": "Cannot nest comments beyond one level"
 	},
 	"profile": {
-		"dynamics": "Dynamics",
+		"activities": "Activities",
 		"notifications": "Notifications",
 		"invitations": "Invitations",
 		"mailbox": "Mailbox",

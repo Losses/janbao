@@ -133,7 +133,7 @@
 		"cannotNestComments": "评论不能嵌套超过一级"
 	},
 	"profile": {
-		"dynamics": "动态",
+		"activities": "动态",
 		"notifications": "通知",
 		"invitations": "邀请码",
 		"mailbox": "站内信",
