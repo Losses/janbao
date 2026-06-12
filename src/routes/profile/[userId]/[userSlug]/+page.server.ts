@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { users, activities, drafts } from '$lib/server/db/schema';
-import { eq, and, isNull, desc, sql, or } from 'drizzle-orm';
+import { eq, and, isNull, desc, sql, or, inArray } from 'drizzle-orm';
 import { generateSlug } from '$lib/utils/slug';
 import { SYSTEM_USER_ID } from '$lib/server/constants';
 
@@ -86,7 +86,7 @@ export const load: PageServerLoad = async (event) => {
 		const recipients = await db
 			.select({ id: users.id, displayName: users.displayName, username: users.username })
 			.from(users)
-			.where(sql`${users.id} IN ${uniqueIds}`);
+			.where(inArray(users.id, uniqueIds));
 
 		for (const r of recipients) {
 			recipientMap.set(r.id, { displayName: r.displayName, username: r.username });
@@ -104,9 +104,7 @@ export const load: PageServerLoad = async (event) => {
 				count: sql<number>`COUNT(*)`
 			})
 			.from(activities)
-			.where(
-				and(sql`${activities.parentActivityId} IN ${activityIds}`, isNull(activities.deletedAt))
-			)
+			.where(and(inArray(activities.parentActivityId, activityIds), isNull(activities.deletedAt)))
 			.groupBy(activities.parentActivityId);
 
 		for (const cc of commentCounts) {
