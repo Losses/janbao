@@ -22,9 +22,9 @@ All 9 Round 1 fixes verified as correctly implemented by all 5 agents: F-01 thro
 
 | ID      | Description                                                                                                                                                                                       | Resolution                                                                               |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| R2-W-01 | Batch queries use raw `sql` template `sql\`${column} IN ${array}\``instead of Drizzle's idiomatic`inArray()` operator — 4 instances across activity page server load and profile page server load | Fixed: replaced all 4 `sql...IN` patterns with `inArray(column, array)` from drizzle-orm |
+| R2-W-01 | Batch queries use raw `sql` template `sql\`${column} IN ${array}\``instead of Drizzle's idiomatic`inArray()` operator - 4 instances across activity page server load and profile page server load | Fixed: replaced all 4 `sql...IN` patterns with `inArray(column, array)` from drizzle-orm |
 
-## Observations (Not Fixed — By Design)
+## Observations (Not Fixed - By Design)
 
 1. **Activity comment plain-text contentJson:** The inline comment composer sends plain text as `contentJson` rather than Lexical JSON. This is an intentional simplification for lightweight single-line inline comments.
 
@@ -32,8 +32,8 @@ All 9 Round 1 fixes verified as correctly implemented by all 5 agents: F-01 thro
 
 ## Verification
 
-- **Type Check:** `bun run check` — 983 files, 0 errors, 0 warnings.
-- **Lint Check:** `bun run lint` — 0 errors, 0 warnings. similarity-ts type duplicates = 0.
+- **Type Check:** `bun run check` - 983 files, 0 errors, 0 warnings.
+- **Lint Check:** `bun run lint` - 0 errors, 0 warnings. similarity-ts type duplicates = 0.
 - **Strict Typing:** Zero occurrences of `any`, `as any`, `as unknown`.
 - **ORM Safety:** All batch queries now use Drizzle `inArray()` for IN-clause operations.
 

@@ -95,7 +95,7 @@
 		<!-- Title Banner -->
 		<div class="flex items-center justify-between border-b border-base-300 pb-4">
 			<h1 class="text-2xl font-bold tracking-tight">
-				{targetUser.displayName} — {profileT.discussions}
+				{targetUser.displayName} - {profileT.discussions}
 			</h1>
 			<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
 		</div>

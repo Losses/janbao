@@ -125,8 +125,8 @@ All code has been developed adhering to the strict architectural paradigms of **
 
 ## 3. Verification & Code Safety Compliance
 
-- **Type Check:** `bun run check` — 897 files, 0 errors, 0 warnings.
-- **Lint:** `bun run lint` (Prettier + ESLint) — Clean, zero errors.
+- **Type Check:** `bun run check` - 897 files, 0 errors, 0 warnings.
+- **Lint:** `bun run lint` (Prettier + ESLint) - Clean, zero errors.
 - **Strict Typing:** Zero occurrences of `any`, `as any`, or `as unknown as` across all new files.
 - **Icon System:** All inline SVG icons replaced with Material Design Icons via `@mdi/js` + Icon atom component. No hand-drawn SVG icons remain.
 
@@ -139,7 +139,7 @@ All code has been developed adhering to the strict architectural paradigms of **
 - **Status:** Completed
 - **Audit File:** [RV00-C02-Audit-01.md](file:///home/losses/Development/janbao/docs/RV00-C02-Audit-01.md)
 - **Verdict:** FAIL → Fixed
-- **Agents Summary:** 5/5 FAIL — unanimous consensus on critical issues
+- **Agents Summary:** 5/5 FAIL - unanimous consensus on critical issues
 - **Defects Identified:** 2 CRITICAL, 4 MAJOR, 12 MINOR
 - **Resolutions Applied:**
   - **C1 (Draft save race condition):** Replaced manual SELECT+INSERT with Drizzle `onConflictDoUpdate()` targeting unique composite index. Added `contextType` allowlist validation, `contentJson` 512 KiB size limit, and `contextId` normalization to empty string.
@@ -156,7 +156,7 @@ All code has been developed adhering to the strict architectural paradigms of **
 - **Status:** Completed
 - **Audit File:** [RV00-C02-Audit-02.md](file:///home/losses/Development/janbao/docs/RV00-C02-Audit-02.md)
 - **Verdict:** FAIL → Fixed
-- **Agents Summary:** 5/5 FAIL — unanimous consensus on critical/major issues
+- **Agents Summary:** 5/5 FAIL - unanimous consensus on critical/major issues
 - **Defects Identified:** 2 CRITICAL, 6 MAJOR, 5 MINOR
 - **Resolutions Applied:**
   - **C1 (Date.svelte render crash):** Added validation check `isNaN(dateObj.getTime())` to prevent fatal RangeError crash on invalid dates.
@@ -175,7 +175,7 @@ All code has been developed adhering to the strict architectural paradigms of **
 - **Status:** Completed
 - **Audit File:** [RV00-C02-Audit-03.md](file:///home/losses/Development/janbao/docs/RV00-C02-Audit-03.md)
 - **Verdict:** FAIL (4/5 PASS, 1/5 FAIL due to a hallucinated key typo)
-- **Agents Summary:** 4/5 PASS — consensus on all fixes. The single FAIL was due to a hallucinated typo in `Date.svelte` which was manually verified as fixed.
+- **Agents Summary:** 4/5 PASS - consensus on all fixes. The single FAIL was due to a hallucinated typo in `Date.svelte` which was manually verified as fixed.
 - **Verification:** `bun run check` (0 errors, 0 warnings), `bun run lint` (clean).
 
 ### Round 4 Audit (2026-06-12)
@@ -183,5 +183,5 @@ All code has been developed adhering to the strict architectural paradigms of **
 - **Status:** Completed
 - **Audit File:** [RV00-C02-Audit-04.md](file:///home/losses/Development/janbao/docs/RV00-C02-Audit-04.md)
 - **Verdict:** PASS
-- **Agents Summary:** 5/5 PASS — unanimous consensus on all C02 work being perfectly completed.
+- **Agents Summary:** 5/5 PASS - unanimous consensus on all C02 work being perfectly completed.
 - **Verification:** `bun run check` (0 errors, 0 warnings), `bun run lint` (clean).

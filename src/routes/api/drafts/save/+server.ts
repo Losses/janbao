@@ -12,7 +12,7 @@ interface DraftSaveBody {
 
 const MAX_CONTENT_SIZE = 512 * 1024; // 512 KiB limit for draft content
 
-// POST /api/drafts/save — Atomic upsert draft record for the authenticated user.
+// POST /api/drafts/save - Atomic upsert draft record for the authenticated user.
 // Uses Drizzle's onConflictDoUpdate targeting the unique composite index
 // (authorId, contextType, contextId) to eliminate race conditions.
 export const POST: RequestHandler = async ({ locals, request }) => {
@@ -48,7 +48,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	const normalizedContextId = contextId ?? '';
 	const now = new Date();
 
-	// Atomic upsert — on conflict over (authorId, contextType, contextId), update content
+	// Atomic upsert - on conflict over (authorId, contextType, contextId), update content
 	await db
 		.insert(drafts)
 		.values({

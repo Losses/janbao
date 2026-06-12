@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Logo Atom — Renders a theme-aware logo component.
+	 * Logo Atom - Renders a theme-aware logo component.
 	 * Uses Material Design Icon for the book icon.
 	 * Text fallback "Janbao" when no custom SVG is available.
 	 */

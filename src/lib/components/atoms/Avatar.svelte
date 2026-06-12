@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Avatar Atom — Renders a circular user avatar image or a text-based fallback (first letter of displayName).
+	 * Avatar Atom - Renders a circular user avatar image or a text-based fallback (first letter of displayName).
 	 * Supports sizes: xs (24px), sm (32px), md (40px), lg (56px).
 	 */
 	interface AvatarProps {

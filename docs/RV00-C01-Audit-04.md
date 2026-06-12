@@ -16,7 +16,7 @@
 | Agent 4 | Frontend Views & Design System          | PASS    | YES              |
 | Agent 5 | Full Integration & Configuration        | PASS    | YES              |
 
-**Overall Verdict: UNANIMOUS PASS** — All 5 agents independently confirm Cycle 1 is complete.
+**Overall Verdict: UNANIMOUS PASS** - All 5 agents independently confirm Cycle 1 is complete.
 
 ---
 
@@ -30,7 +30,7 @@
 
 ### MAJOR-1 Detail
 
-`@sveltejs/adapter-cloudflare` v7.2.8 installed as devDependency alongside `adapter-auto`. The project retains `adapter-auto` in `vite.config.ts` to avoid type conflicts — the adapter's ambient declarations set `Platform.env` to `unknown`, which conflicts with the project's custom typed env interface. `adapter-auto` correctly delegates to `adapter-cloudflare` at deploy time via the `CF_PAGES` environment variable.
+`@sveltejs/adapter-cloudflare` v7.2.8 installed as devDependency alongside `adapter-auto`. The project retains `adapter-auto` in `vite.config.ts` to avoid type conflicts - the adapter's ambient declarations set `Platform.env` to `unknown`, which conflicts with the project's custom typed env interface. `adapter-auto` correctly delegates to `adapter-cloudflare` at deploy time via the `CF_PAGES` environment variable.
 
 ---
 
@@ -52,9 +52,9 @@ All 15 fixes from 4 audit rounds confirmed intact with zero regressions:
 | R1    | m1      | System rssToken UUID           |
 | R1    | m2      | Journal index names            |
 | R2    | C3-fix  | Admin bootstrap unreachable    |
-| R2    | —       | `role="alert"` accessibility   |
-| R2    | —       | Dead `signoutBtn` key removed  |
-| R2    | —       | Null-safe avatar rendering     |
+| R2    | -       | `role="alert"` accessibility   |
+| R2    | -       | Dead `signoutBtn` key removed  |
+| R2    | -       | Null-safe avatar rendering     |
 | R3    | MAJOR-1 | `@sveltejs/adapter-cloudflare` |
 
 ---
@@ -71,13 +71,13 @@ All 15 fixes from 4 audit rounds confirmed intact with zero regressions:
 
 ## 5. Cycle 1 Closure
 
-**Cycle 1: Foundations, Schemas, Core Seed & Authentication — COMPLETE**
+**Cycle 1: Foundations, Schemas, Core Seed & Authentication - COMPLETE**
 
 Four consecutive audit rounds have verified the implementation:
 
 1. **Round 1:** Identified 4 Critical, 5 Major, 5 Minor defects → All fixed
 2. **Round 2:** Found C3 regression + 4 Minor → All fixed
 3. **Round 3:** Found 1 Major (adapter) + 2 Minor → All fixed/resolved
-4. **Round 4:** Unanimous PASS — no outstanding defects
+4. **Round 4:** Unanimous PASS - no outstanding defects
 
 All 5 audit agents independently confirm that the Cycle 1 implementation fully conforms to the specification. The codebase is ready for Cycle 2 development.

@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * Reusable inline alert message component.
-	 * Self-conditional rendering — renders nothing when message is empty.
+	 * Self-conditional rendering - renders nothing when message is empty.
 	 */
 	interface AlertMessageProps {
 		message?: string;

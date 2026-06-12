@@ -1,11 +1,10 @@
 <script lang="ts">
 	/**
-	 * MessageTooltip Molecule — Popover displaying the 5 most recently active
+	 * MessageTooltip Molecule - Popover displaying the 5 most recently active
 	 * PM conversations. Lazily fetches `/api/messages/recent?limit=5` when opened.
 	 */
 	import Tooltip from '$lib/components/atoms/Tooltip.svelte';
 	import Icon from '$lib/components/atoms/Icon.svelte';
-	import DateComponent from '$lib/components/atoms/Date.svelte';
 	import Badge from '$lib/components/atoms/Badge.svelte';
 	import { mdiEmail, mdiEmailPlus } from '@mdi/js';
 	import type { VoidHandler } from '$lib/types/handlers';

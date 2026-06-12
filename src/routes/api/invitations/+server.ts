@@ -3,7 +3,7 @@ import { jsonError } from '$lib/server/errors';
 import { getInvitations } from '$lib/server/db/dao/invitations';
 import type { RequestHandler } from './$types';
 
-// GET /api/invitations — List all invitation codes created by the active user,
+// GET /api/invitations - List all invitation codes created by the active user,
 // with each record's status resolved dynamically from usedById / expiresAt.
 export const GET: RequestHandler = async ({ locals }) => {
 	const user = locals.user;

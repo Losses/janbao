@@ -53,7 +53,7 @@ export async function getUserComments(db: D1Db, userId: string): Promise<UserCom
 		parentActivityId: null
 	}));
 
-	// 2. Activity comments — exclude comments whose parent activity is soft-deleted
+	// 2. Activity comments - exclude comments whose parent activity is soft-deleted
 	const commentRows = await db
 		.select({
 			id: activities.id,

@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * LinkButton Atom — A unified minimalist link styled to look like text but functioning as an interactive button.
+	 * LinkButton Atom - A unified minimalist link styled to look like text but functioning as an interactive button.
 	 * Used in footer metadata blocks, inline comments, and lists.
 	 */
 	import type { MouseEventHandler } from '$lib/types/handlers';

@@ -5,7 +5,7 @@ import { DRAFT_CONTEXT_TYPES } from '$lib/server/constants';
 import { eq, and } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
-// DELETE /api/drafts?contextType=<type>&contextId=<id> — Delete a single draft
+// DELETE /api/drafts?contextType=<type>&contextId=<id> - Delete a single draft
 // for the authenticated user, keyed by its (contextType, contextId) composite.
 export const DELETE: RequestHandler = async ({ url, locals }) => {
 	const user = locals.user;

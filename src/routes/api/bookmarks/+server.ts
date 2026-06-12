@@ -9,7 +9,7 @@ import type { BookmarkToggleBody } from '$lib/types/api';
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 
-// GET /api/bookmarks — List discussions bookmarked by the active user, newest
+// GET /api/bookmarks - List discussions bookmarked by the active user, newest
 // bookmark first. Supports `page` and `limit` (tooltip widget uses limit=5).
 export const GET: RequestHandler = async ({ url, locals }) => {
 	const user = locals.user;

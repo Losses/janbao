@@ -6,7 +6,7 @@ import type { RequestHandler } from './$types';
 const DEFAULT_LIMIT = 5;
 const MAX_LIMIT = 20;
 
-// GET /api/messages/recent — The active user's most recently active
+// GET /api/messages/recent - The active user's most recently active
 // conversations, each with a last-message preview and unread count. Used by
 // the Messages sidebar tooltip (limit=5).
 export const GET: RequestHandler = async ({ url, locals }) => {

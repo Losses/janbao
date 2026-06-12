@@ -7,7 +7,7 @@
 	import { generateSlug } from '$lib/utils/slug';
 
 	/**
-	 * DiscussionRow Organism — Renders a discussion title, badges, bookmark star, and metadata.
+	 * DiscussionRow Organism - Renders a discussion title, badges, bookmark star, and metadata.
 	 */
 	interface DiscussionRowItem {
 		id: string;

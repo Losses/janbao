@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * UserInfoBlock Molecule — Displays user avatar, display name, and a row of icon buttons
+	 * UserInfoBlock Molecule - Displays user avatar, display name, and a row of icon buttons
 	 * for Notifications, Messages, Bookmarks, and Settings.
 	 */
 	import Avatar from '$lib/components/atoms/Avatar.svelte';

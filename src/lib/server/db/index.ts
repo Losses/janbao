@@ -8,7 +8,7 @@ export const getDb = (d1: D1Database) => drizzle(d1, { schema });
 export type D1Db = ReturnType<typeof getDb>;
 
 /**
- * Transaction callback parameter type — inferred from D1Db transaction overload.
+ * Transaction callback parameter type - inferred from D1Db transaction overload.
  */
 export type DbTransaction = Parameters<Parameters<D1Db['transaction']>[0]>[0];
 

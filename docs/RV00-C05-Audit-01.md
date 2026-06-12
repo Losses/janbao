@@ -1,4 +1,4 @@
-# RV00-C05-Audit-01: Cycle 5 Audit — Round 1
+# RV00-C05-Audit-01: Cycle 5 Audit - Round 1
 
 **Method:** 5 independent full-scope audit agents dispatched in parallel. Each read all spec documents (RQ00-Backend, RQ00-Frontend, RQ00-Plan §Cycle 5, DV00-C05-Journal, CLAUDE.md) and every C05 source file, producing an independent PASS/FAIL/WARN assessment across correctness, security, soft-delete, i18n, error convention, spec compliance, type-safety, performance, and notification-correctness categories.
 
@@ -8,7 +8,7 @@
 
 ## Consensus & High-Priority Findings
 
-### MAJOR (real defects — fixed)
+### MAJOR (real defects - fixed)
 
 | ID   | Description                                                                                                                                                                                                                                                                                                   | Consensus            | Resolution                                                                                                                                           |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -23,7 +23,7 @@
 | W-01 | `ActiveUsersWall.svelte` hardcoded English fallback `'Active Users'`.                                                                              | Dropped the fallback (key always resolves).                                                                                   |
 | W-02 | `messages/new` recipient-chip remove button hardcoded `✕` + English `aria-label="remove …"`.                                                       | Added `message.removeRecipient` key (+Icon atom).                                                                             |
 | W-03 | `ParticipantAdder.svelte` re-declared a local `UserSearchResult` identical to the shared type.                                                     | Imports `UserSearchResult` from `$lib/types/api`.                                                                             |
-| W-04 | `/bookmarks` page rendered `t.message.startedBy` ("Started by") — semantic mismatch.                                                               | Added `bookmark.startedBy` key to both dictionaries.                                                                          |
+| W-04 | `/bookmarks` page rendered `t.message.startedBy` ("Started by") - semantic mismatch.                                                               | Added `bookmark.startedBy` key to both dictionaries.                                                                          |
 | W-05 | `draft.fieldsRequired` text says "contextType and contentJson" but the clear/delete endpoints need `contextType + contextId`.                      | Added `draft.contextFieldsRequired`; clear/delete endpoints use it.                                                           |
 | W-06 | `VALID_CONTEXT_TYPES` array duplicated across 3 draft route files.                                                                                 | Hoisted to `src/lib/server/constants.ts` (`DRAFT_CONTEXT_TYPES`).                                                             |
 | W-07 | `/api/users/search` used raw `sql\`... != ...\``while`ne` was imported unused.                                                                     | Uses `ne(users.id, user.id)`.                                                                                                 |
@@ -33,7 +33,7 @@
 | W-11 | `getConversations` unread-count computation loaded every message of each page conversation into JS.                                                | Replaced with a grouped SQL `COUNT(*) ... GROUP BY conversationId` over messages newer than each conversation's `lastReadAt`. |
 | W-12 | `/api/invitations/request` had an unhandled PK-collision path (random 12-char code, no `onConflictDoNothing`).                                     | Added `onConflictDoNothing` + bounded retry loop.                                                                             |
 | W-13 | `getUserComments` activity-comment branch did not filter soft-deleted _parent_ activities.                                                         | Self-joins `activities` on `parentActivityId` with `isNull(parent.deletedAt)`.                                                |
-| W-14 | `welcome.ts` `getTzBoundaries` (closed `end`) vs `getTzMonthBoundaries` (half-open `end`) shared the `DateBoundary` type with ambiguous semantics. | Documented each producer's end-semantics in JSDoc (behavior unchanged — the C05 monthly-limit consumer is already correct).   |
+| W-14 | `welcome.ts` `getTzBoundaries` (closed `end`) vs `getTzMonthBoundaries` (half-open `end`) shared the `DateBoundary` type with ambiguous semantics. | Documented each producer's end-semantics in JSDoc (behavior unchanged - the C05 monthly-limit consumer is already correct).   |
 | W-15 | Inline type-literal casts: `messages/new` `prefillRecipient` inline shape; `/api/bookmarks` POST `as { discussionId: string }`.                    | `prefillRecipient` typed as `UserSearchResult \| null`; extracted `BookmarkToggleBody`.                                       |
 | W-16 | `/api/users/search` + tooltip molecules: t-dict `as Record<string,string>` casts (pervasive existing pattern).                                     | Left consistent with C02–C04 convention (ActivityRow et al.); not a lint failure.                                             |
 
@@ -41,7 +41,7 @@
 
 | ID  | Description                                                                                                                                        | Disposition     |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
-| —   | A5 C05-02: `/profile/onlineNow` route-folder casing rename is **the user's own in-progress change** for route-style consistency, not a C05 defect. | Left untouched. |
+| -   | A5 C05-02: `/profile/onlineNow` route-folder casing rename is **the user's own in-progress change** for route-style consistency, not a C05 defect. | Left untouched. |
 
 ---
 
