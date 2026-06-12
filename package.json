@@ -48,7 +48,7 @@
 		"@mdi/js": "^7.4.47",
 		"@tailwindcss/vite": "^4.3.0",
 		"fast-xml-parser": "^5.8.0",
-		"lexical": "^0.45.0",
+		"lexical": "0.40.0",
 		"svelte-lexical": "^0.6.4",
 		"tailwindcss": "^4.3.0"
 	}
