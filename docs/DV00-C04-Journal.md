@@ -83,4 +83,46 @@ All components and server-side code have been built strictly under TypeScript co
 
 ## 4. Audit & Quality History
 
-(Audit rounds will be appended here.)
+### Audit Round 1 — 2026-06-12
+
+**Method:** 5 independent full-scope audit agents dispatched in parallel. Each agent read all specification documents and all 27+ C04 code files, producing independent PASS/FAIL/WARN assessments across 13 audit categories.
+
+**Agent Verdicts:** Agent 1 FAIL (4 FAIL), Agent 2 PASS-WITH-WARNINGS (0 FAIL), Agent 3 PASS-WITH-WARNINGS (0 FAIL), Agent 4 FAIL (2 FAIL), Agent 5 FAIL (4 FAIL).
+
+**Consensus FAIL Items Found: 4**
+| ID | Description | Resolution |
+|----|-------------|------------|
+| F-01 | All 6 C04 API endpoints use raw `json({ error: t.* })` instead of `jsonError(t, 'key.path', status)` — violates RQ00-Backend §2.8 | Fixed: replaced all error calls with `jsonError()` in all 6 API files |
+| F-02 | Activity Square sidebar renders UserInfoBlock + navigation, contradicting RQ00-Frontend §3.3.5 ("sidebar is left completely empty") | Fixed: emptied sidebar content per spec |
+| F-03 | Profile page server load missing batch recipient display names and comment counts for ActivityRow — directed indicator never renders on profile pages | Fixed: added batch recipient name fetch + comment count query; replaced raw `sql` OR with Drizzle `or(eq(), eq())` |
+| F-04 | DELETE handler parent activity lookup missing `isNull(deletedAt)` filter and parent `recipientId` authorization check | Fixed: added soft-delete filter + recipient check on parent lookup |
+
+**Majority WARN Items Fixed: 5**
+| ID | Description | Resolution |
+|----|-------------|------------|
+| W-01 | ConfirmationModal backdrop hardcoded `aria-label="Close modal"` | Fixed: replaced with `{cancelLabel}` prop |
+| W-02 | ActivityRow delete button visibility only checks author/admin — missing recipient and parent author | Fixed: added `recipientId`, `resolvedAuthorId` checks to button visibility |
+| W-03 | Profile edit language selector hardcoded "English" / "简体中文" | Fixed: added `languageEnglish` / `languageChinese` i18n keys to both dictionaries |
+| W-04 | 5 Svelte settings pages use inline type literal `$state<{ type: ... }>` | Fixed: extracted `FeedbackMessage` interface to `src/lib/types/api.ts` |
+| W-05 | `ProfileEditUpdates` and `PreferenceUpdates` duplicate `ProfileEditBody` and `ProfilePreferencesBody` | Fixed: removed local interfaces, use `Partial<ProfileEditBody>` and `Partial<ProfilePreferencesBody>` |
+
+**Verification:** `bun run check` = 0 errors/0 warnings across 983 files; `bun run lint` = clean (similarity-ts type duplicates = 0); `any` grep = zero hits.
+
+**Full Report:** [RV00-C04-Audit-01.md](file:///home/losses/Development/janbao/docs/RV00-C04-Audit-01.md)
+
+### Audit Round 2 — 2026-06-12
+
+**Method:** 5 independent full-scope audit agents dispatched in parallel. Each agent verified all 9 Round 1 fixes and performed a fresh full-scope audit across 13 categories.
+
+**Agent Verdicts:** R2 Agent 1 PASS-WITH-WARNINGS (0 FAIL), R2 Agent 2 PASS (0 FAIL), R2 Agent 3 PASS-WITH-WARNINGS (0 FAIL), R2 Agent 4 PASS (0 FAIL), R2 Agent 5 PASS (0 FAIL).
+
+**New Consensus WARN Items Found: 1**
+| ID | Description | Resolution |
+|----|-------------|------------|
+| R2-W-01 | Batch queries use raw `sql\`${column} IN ${array}\``instead of Drizzle's idiomatic`inArray()`— 4 instances across activity and profile page server loads | Fixed: replaced with`inArray(column, array)` from drizzle-orm |
+
+**Verification:** `bun run check` = 0 errors/0 warnings across 983 files; `bun run lint` = clean (similarity-ts type duplicates = 0); `any` grep = zero hits.
+
+**Conclusion:** All Round 1 fixes verified correct. One minor WARN fixed. No remaining FAIL items. C04 implementation is complete and spec-compliant.
+
+**Full Report:** [RV00-C04-Audit-02.md](file:///home/losses/Development/janbao/docs/RV00-C04-Audit-02.md)

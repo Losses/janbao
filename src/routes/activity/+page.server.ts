@@ -1,6 +1,6 @@
 import type { PageServerLoad } from './$types';
 import { activities, users, drafts } from '$lib/server/db/schema';
-import { and, isNull, desc, eq, sql } from 'drizzle-orm';
+import { and, isNull, desc, eq, sql, inArray } from 'drizzle-orm';
 import { checkAndCreateWelcomePost } from '$lib/server/db/welcome';
 import { getActivitiesLimit, SYSTEM_USER_ID } from '$lib/server/constants';
 
@@ -52,7 +52,7 @@ export const load: PageServerLoad = async (event) => {
 		const recipients = await db
 			.select({ id: users.id, displayName: users.displayName, username: users.username })
 			.from(users)
-			.where(sql`${users.id} IN ${uniqueIds}`);
+			.where(inArray(users.id, uniqueIds));
 
 		for (const r of recipients) {
 			recipientMap.set(r.id, { displayName: r.displayName, username: r.username });
@@ -70,9 +70,7 @@ export const load: PageServerLoad = async (event) => {
 				count: sql<number>`COUNT(*)`
 			})
 			.from(activities)
-			.where(
-				and(sql`${activities.parentActivityId} IN ${activityIds}`, isNull(activities.deletedAt))
-			)
+			.where(and(inArray(activities.parentActivityId, activityIds), isNull(activities.deletedAt)))
 			.groupBy(activities.parentActivityId);
 
 		for (const cc of commentCounts) {
