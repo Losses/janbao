@@ -12,9 +12,9 @@ All code has been developed adhering to the strict architectural paradigms of **
 
 ### 2.1 Database & Schema (`src/lib/server/db/`)
 
-- **Schema Definitons ([schema.ts](file:///home/losses/Development/janbao/src/lib/server/db/schema.ts)):** Relational SQLite database structures using Drizzle ORM.
-  - Tables implemented: `userGroups`, `users`, `notificationPreferences`, `categories`, `discussions`, `replies`, `discussionReads`, `bookmarks`, `userInvitations`, `invitations`, `privateMessages`, `notifications`, and `systemLogs`.
-  - Indexes implemented: Multi-column composite and unique indexes for fast lookups (e.g., `unique_read_idx`, `unread_notifications_idx`, `pm_participants_idx`).
+- **Schema Definitions ([schema.ts](file:///home/losses/Development/janbao/src/lib/server/db/schema.ts)):** Relational SQLite database structures using Drizzle ORM.
+  - Tables implemented: `userGroups`, `users`, `notificationPreferences`, `categories`, `categoryPermissions`, `discussions`, `replies`, `discussionReads`, `bookmarks`, `drafts`, `conversations`, `conversationParticipants`, `messages`, `conversationReads`, `activities`, `notifications`, `attachments`, and `invitations`.
+  - Indexes implemented: Multi-column composite indexes, unique indexes, and primary key constraints for optimized query performance (e.g., `discussions_category_updated_idx`, `notifications_user_read_idx`, `drafts_uniq_idx`).
 - **Core Seeding ([seed.ts](file:///home/losses/Development/janbao/src/lib/server/db/seed.ts)):** Provisions the core default database state.
   - User groups seeded: `system` (restricted automation), `admin` (super-admin), `moderator`, and `member`.
   - System User seeded: `00000000-0000-0000-0000-000000000000` with disabled password and stealth flags to satisfy database constraints and support system actions.
@@ -80,7 +80,24 @@ This section lists the consecutive audit logs and resolutions.
 
 ### Round 1 Audit (2026-06-12)
 
-- **Status:** In Progress
+- **Status:** Completed
 - **Audit File:** [RV00-C01-Audit-01.md](file:///home/losses/Development/janbao/docs/RV00-C01-Audit-01.md)
-- **Defects Identified:** (To be completed during audit run)
-- **Resolutions:** (To be completed during audit run)
+- **Verdict:** FAIL → Fixed
+- **Defects Identified:** 4 Critical, 5 Major, 5 Minor
+- **Resolutions Applied:**
+  - **C1 (JWT `exp` claim):** Added `createSessionToken()` helper that sets `exp` (24h session / 30d rememberMe) and `iat` claims.
+  - **C2 (JWT_SECRET fallback):** Extracted to `src/lib/server/constants.ts` with `getJwtSecret()` that logs a security warning when using the fallback.
+  - **C3 (Admin user bootstrap):** Added `ADMIN_EMAIL`/`ADMIN_PASSWORD` env var parsing to `seedCore()`. Updated `app.d.ts` Platform types.
+  - **C4 (Cookie secure flag):** Added `getCookieSecure()` helper that checks `url.protocol === 'https:'` for dev/prod compatibility.
+  - **M1 (Registration race condition):** Moved username/email uniqueness check inside the transaction. Throws typed error for catch.
+  - **M2 (Registration cookie):** Registration now uses `createSessionToken()` with proper `exp`.
+  - **M3 (Hardcoded strings):** Replaced all hardcoded English strings with i18n keys in 4 page files. Added `home.*` and `auth.*` keys to both dictionaries.
+  - **M4 (Color palette):** Replaced `alert-error` → `alert-warning`, `text-success` → `text-primary`, `text-error` → `text-warning` across 3 entry pages.
+  - **M5 (displayName i18n):** Added `auth.displayName` to both `en.json` and `zh-CN.json`.
+  - **m1 (System rssToken):** Changed from hardcoded string to `crypto.randomUUID()`.
+  - **m2 (Journal index names):** Corrected inaccurate table/index references in Section 2.1.
+- **New Files Created:**
+  - `src/lib/server/constants.ts` — Shared security constants (`getJwtSecret`, `getCookieSecure`).
+  - `src/lib/types/api.ts` — Shared API request/response interfaces (`AuthRegisterBody`, `AuthLoginBody`, `ApiResponse`, `SessionCookieOptions`).
+- **Dependencies Added:** `@cloudflare/workers-types` for `D1Database` global type.
+- **Verification:** `bun run check` (0 errors), `bun run lint` (clean).
