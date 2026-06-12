@@ -52,6 +52,15 @@ interface NewNotificationRow {
 	createdAt: Date;
 }
 
+interface MessageNotificationRow {
+	id: string;
+	userId: string;
+	type: string;
+	sourceUserId: string;
+	messageId: string;
+	createdAt: Date;
+}
+
 /**
  * Dispatch notifications triggered by a new discussion reply.
  */
@@ -209,14 +218,7 @@ export async function dispatchMessageNotifications(
 	const prefMap = new Map(prefs.map((p) => [p.userId, p]));
 
 	const now = new Date();
-	const rows: {
-		id: string;
-		userId: string;
-		type: string;
-		sourceUserId: string;
-		messageId: string;
-		createdAt: Date;
-	}[] = [];
+	const rows: MessageNotificationRow[] = [];
 	for (const userId of recipientIds) {
 		const pref = prefMap.get(userId);
 		const eligible = pref ? pref.privateMessage : true;
