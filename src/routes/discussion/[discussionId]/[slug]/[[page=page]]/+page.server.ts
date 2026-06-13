@@ -11,14 +11,14 @@ import {
 	drafts
 } from '$lib/server/db/schema';
 import { eq, and, isNull, count, ne, sql } from 'drizzle-orm';
-import { getPaginationLimit } from '$lib/server/constants';
+import { getPaginationLimit, resolvePermissions } from '$lib/server/constants';
 import { dispatchReplyNotifications } from '$lib/server/db/notifications';
+import { resolveMentions } from '$lib/server/utils/mentions';
 
 export const load: PageServerLoad = async (event) => {
 	const { discussionId, slug } = event.params;
 	const db = event.locals.db;
 	const user = event.locals.user;
-	const groupSlug = user?.groupSlug || 'member';
 
 	// 1. Fetch discussion, category, and author details
 	const discussionRecords = await db
@@ -57,32 +57,14 @@ export const load: PageServerLoad = async (event) => {
 		redirect(302, `/discussion/${discussionId}/${discussion.slug}`);
 	}
 
-	// 2. Check read permissions for this category
-	const perm = await db
-		.select()
-		.from(categoryPermissions)
-		.where(
-			and(
-				eq(categoryPermissions.categorySlug, discussion.categorySlug),
-				eq(categoryPermissions.groupSlug, groupSlug)
-			)
-		)
-		.limit(1);
-
-	const canRead = perm.length === 0 ? true : perm[0].canRead;
-	if (!canRead) {
+	// 2. Check read permissions for this category (guest-safe via resolvePermissions)
+	const perms = await resolvePermissions(db, discussion.categorySlug, user);
+	if (!perms.canRead) {
 		error(403, event.locals.t.common.forbidden);
 	}
 
 	// 2b. Resolve canDelete for sticky/unsticky toggle
-	let canDelete = false;
-	if (user) {
-		if (user.groupSlug === 'admin' || user.groupSlug === 'moderator') {
-			canDelete = true;
-		} else {
-			canDelete = perm.length === 0 ? false : (perm[0].canDelete ?? false);
-		}
-	}
+	const canDelete = user ? perms.canDelete : false;
 
 	// 3. Resolve page number
 	const pageParam = event.params.page;
@@ -230,6 +212,13 @@ export const load: PageServerLoad = async (event) => {
 		}
 	}
 
+	// 11. Resolve @mentions across OP + reply content for chip rendering
+	const allContentJsons = [
+		opReply?.contentJson,
+		...repliesStream.map((r) => r.contentJson)
+	];
+	const mentionedUsers = await resolveMentions(allContentJsons, db);
+
 	return {
 		discussion,
 		opReply,
@@ -239,7 +228,8 @@ export const load: PageServerLoad = async (event) => {
 		totalRepliesCount,
 		theme: resolvedTheme,
 		replyDraft,
-		canDelete
+		canDelete,
+		mentionedUsers
 	};
 };
 
@@ -270,19 +260,8 @@ export const actions: Actions = {
 		}
 
 		// Verify user's group has write permission for this category
-		const perm = await db
-			.select()
-			.from(categoryPermissions)
-			.where(
-				and(
-					eq(categoryPermissions.categorySlug, discussionRecords[0].categorySlug),
-					eq(categoryPermissions.groupSlug, user.groupSlug)
-				)
-			)
-			.limit(1);
-
-		const canCreate = perm.length === 0 ? true : perm[0].canCreate;
-		if (!canCreate) {
+		const perms = await resolvePermissions(db, discussionRecords[0].categorySlug, user);
+		if (!perms.canCreate) {
 			error(403, locals.t.common.forbidden);
 		}
 
@@ -363,26 +342,9 @@ export const actions: Actions = {
 
 		const { categorySlug, isPinned } = discussionRecords[0];
 
-		// Verify canDelete permission
-		const perm = await db
-			.select()
-			.from(categoryPermissions)
-			.where(
-				and(
-					eq(categoryPermissions.categorySlug, categorySlug),
-					eq(categoryPermissions.groupSlug, user.groupSlug)
-				)
-			)
-			.limit(1);
-
-		const canDelete =
-			user.groupSlug === 'admin' || user.groupSlug === 'moderator'
-				? true
-				: perm.length === 0
-					? false
-					: (perm[0].canDelete ?? false);
-
-		if (!canDelete) {
+		// Verify canDelete permission via centralized helper
+		const perms = await resolvePermissions(db, categorySlug, user);
+		if (!perms.canDelete) {
 			error(403, locals.t.common.forbidden);
 		}
 

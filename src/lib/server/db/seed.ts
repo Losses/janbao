@@ -39,6 +39,12 @@ export async function seedCore(db: D1Db, env?: App.Platform['env']) {
 				title: 'Member',
 				description: 'Standard forum member',
 				permissionsJson: JSON.stringify({ discussions: 'cr', categories: 'r', messages: 'cr' })
+			},
+			{
+				slug: 'guest',
+				title: 'Guest',
+				description: 'Unauthenticated visitors with limited read access',
+				permissionsJson: '{}'
 			}
 		];
 

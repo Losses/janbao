@@ -3,6 +3,7 @@ import { activities, users, drafts } from '$lib/server/db/schema';
 import { and, isNull, desc, eq, sql, inArray } from 'drizzle-orm';
 import { checkAndCreateWelcomePost } from '$lib/server/db/welcome';
 import { getActivitiesLimit, SYSTEM_USER_ID } from '$lib/server/constants';
+import { resolveMentions } from '$lib/server/utils/mentions';
 
 export const load: PageServerLoad = async (event) => {
 	const db = event.locals.db;
@@ -114,6 +115,12 @@ export const load: PageServerLoad = async (event) => {
 		}
 	}
 
+	// 8. Resolve @mentions across all activity content for chip rendering
+	const mentionedUsers = await resolveMentions(
+		activityList.map((a) => a.contentJson),
+		db
+	);
+
 	return {
 		activities: activityList.map((a) => ({
 			...a,
@@ -126,6 +133,7 @@ export const load: PageServerLoad = async (event) => {
 		page,
 		totalPages,
 		totalCount,
-		activityDraft
+		activityDraft,
+		mentionedUsers
 	};
 };

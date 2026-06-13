@@ -12,6 +12,7 @@ import {
 import { eq, and, isNull, count, sql } from 'drizzle-orm';
 import { getPaginationLimit } from '$lib/server/constants';
 import { dispatchMessageNotifications } from '$lib/server/db/notifications';
+import { resolveMentions } from '$lib/server/utils/mentions';
 
 const MESSAGE_PAGE_FALLBACK = 50;
 
@@ -152,6 +153,12 @@ export const load: PageServerLoad = async (event) => {
 		messageDraft = draftRows[0].contentJson;
 	}
 
+	// 9. Resolve @mentions across message content for chip rendering
+	const mentionedUsers = await resolveMentions(
+		messageRows.map((m) => m.contentJson),
+		db
+	);
+
 	return {
 		conversation,
 		participants,
@@ -159,7 +166,8 @@ export const load: PageServerLoad = async (event) => {
 		page,
 		totalPages,
 		totalCount,
-		messageDraft
+		messageDraft,
+		mentionedUsers
 	};
 };
 

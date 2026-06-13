@@ -1,15 +1,14 @@
-import type { PageServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
-import { categories, categoryPermissions } from '$lib/server/db/schema';
-import { and, eq } from 'drizzle-orm';
+import type { PageServerLoad } from './$types';
+import { categories } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
 import { getDiscussionsList, getDiscussionsCount } from '$lib/server/db/dao/discussions';
-import { parseDiscussionPagination } from '$lib/server/constants';
+import { parseDiscussionPagination, resolvePermissions } from '$lib/server/constants';
 
 export const load: PageServerLoad = async (event) => {
 	const { categorySlug } = event.params;
 	const db = event.locals.db;
 	const user = event.locals.user;
-	const groupSlug = user?.groupSlug || 'member';
 
 	// 1. Fetch category
 	const categoryRecords = await db
@@ -23,20 +22,9 @@ export const load: PageServerLoad = async (event) => {
 	}
 	const category = categoryRecords[0];
 
-	// 2. Check read permissions
-	const perm = await db
-		.select()
-		.from(categoryPermissions)
-		.where(
-			and(
-				eq(categoryPermissions.categorySlug, categorySlug),
-				eq(categoryPermissions.groupSlug, groupSlug)
-			)
-		)
-		.limit(1);
-
-	const canRead = perm.length === 0 ? true : perm[0].canRead;
-	if (!canRead) {
+	// 2. Check read permissions (guest-safe via resolvePermissions)
+	const perms = await resolvePermissions(db, categorySlug, user);
+	if (!perms.canRead) {
 		error(403, event.locals.t.common.forbidden);
 	}
 

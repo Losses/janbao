@@ -1,3 +1,7 @@
+import type { D1Db } from './db/index';
+import { categoryPermissions } from './db/schema';
+import { and, eq } from 'drizzle-orm';
+
 const DEV_JWT_SECRET = 'fallback-secret-key-for-local-dev-only';
 
 export function getJwtSecret(platformEnv: App.Platform['env'] | undefined): string {
@@ -82,4 +86,77 @@ export function getMonthlyInvitationLimit(platformEnv: App.Platform['env'] | und
 
 export function getForumTimezone(platformEnv: App.Platform['env'] | undefined): string {
 	return platformEnv?.FORUM_TIMEZONE || process.env.FORUM_TIMEZONE || 'UTC';
+}
+
+/**
+ * Resolved category-level CRUD permission flags.
+ * When no explicit categoryPermissions row exists, defaults are applied
+ * based on the resolved groupSlug:
+ *   guest  → canRead=true (public), rest false
+ *   member → canRead=true, canCreate=true, rest false
+ *   admin / moderator → all true
+ */
+export interface ResolvedPermissions {
+	canRead: boolean;
+	canCreate: boolean;
+	canUpdate: boolean;
+	canDelete: boolean;
+}
+
+interface UserData {
+	groupSlug: string;
+}
+
+/**
+ * Centralised permission resolver. Queries categoryPermissions for the
+ * given (categorySlug, groupSlug) pair and fills in default flags when no
+ * database record is found.
+ */
+export async function resolvePermissions(
+	db: D1Db,
+	categorySlug: string,
+	user: UserData | null | undefined
+): Promise<ResolvedPermissions> {
+	const groupSlug = user?.groupSlug || 'guest';
+
+	const rows = await db
+		.select()
+		.from(categoryPermissions)
+		.where(
+			and(
+				eq(categoryPermissions.categorySlug, categorySlug),
+				eq(categoryPermissions.groupSlug, groupSlug)
+			)
+		)
+		.limit(1);
+
+	if (rows.length > 0) {
+		const row = rows[0];
+		return {
+			canRead: row.canRead,
+			canCreate: row.canCreate,
+			canUpdate: row.canUpdate,
+			canDelete: row.canDelete
+		};
+	}
+
+	// No explicit permission row → apply role-based defaults
+	switch (groupSlug) {
+		case 'admin':
+		case 'moderator':
+			return { canRead: true, canCreate: true, canUpdate: true, canDelete: true };
+		case 'member':
+			return { canRead: true, canCreate: true, canUpdate: false, canDelete: false };
+		default:
+			// guest or unknown
+			return { canRead: true, canCreate: false, canUpdate: false, canDelete: false };
+	}
+}
+
+/**
+ * Resolve the effective groupSlug for the current request context.
+ * Returns 'guest' when no user is authenticated.
+ */
+export function resolveGroupSlug(user: UserData | null | undefined): string {
+	return user?.groupSlug || 'guest';
 }

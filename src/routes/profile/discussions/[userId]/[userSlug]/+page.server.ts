@@ -3,13 +3,14 @@ import type { PageServerLoad } from './$types';
 import { users } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { getDiscussionsList, getDiscussionsCount } from '$lib/server/db/dao/discussions';
-import { parseDiscussionPagination } from '$lib/server/constants';
+import { parseDiscussionPagination, resolveGroupSlug } from '$lib/server/constants';
 import { generateSlug } from '$lib/utils/slug';
 
 export const load: PageServerLoad = async (event) => {
 	const { userId, userSlug } = event.params;
 	const db = event.locals.db;
 	const user = event.locals.user;
+	const groupSlug = resolveGroupSlug(user);
 
 	// 1. Fetch target user
 	const targetUserRecords = await db
@@ -38,15 +39,16 @@ export const load: PageServerLoad = async (event) => {
 	// 2. Parse pagination
 	const { page, limit, offset } = parseDiscussionPagination(event.url, event.platform?.env);
 
-	// 3. Fetch discussions by this user
+	// 3. Fetch discussions by this user (filtered by category read permissions)
 	const discussionsList = await getDiscussionsList(db, {
 		userId: user?.id || null,
 		authorId: userId,
 		limit,
-		offset
+		offset,
+		groupSlug
 	});
 
-	const totalCount = await getDiscussionsCount(db, { authorId: userId });
+	const totalCount = await getDiscussionsCount(db, { authorId: userId, groupSlug });
 	const totalPages = Math.ceil(totalCount / limit);
 
 	return {

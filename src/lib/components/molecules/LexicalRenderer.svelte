@@ -2,7 +2,8 @@
 	/**
 	 * LexicalRenderer Molecule - Recursively renders Lexical JSON states securely on the client.
 	 * Supports standard text formats (bold, italic, underline, strikethrough, inline code),
-	 * paragraphs, headings (h1-h4), quotes, lists (numbered, bulleted), links, and images.
+	 * paragraphs, headings (h1-h4), quotes, lists (numbered, bulleted), links, images,
+	 * and @username mention chips.
 	 */
 	interface LexicalNode {
 		type: string;
@@ -18,18 +19,85 @@
 		children?: LexicalNode[];
 	}
 
+	interface MentionedUserEntry {
+		id: string;
+		displayName: string;
+		username: string;
+		avatarFileId: string | null;
+	}
+
 	interface LexicalRendererProps {
 		contentJson?: string | null;
 		class?: string;
+		mentionedUsers?: Record<string, MentionedUserEntry> | null;
 	}
 
-	let { contentJson = null, class: className = '' }: LexicalRendererProps = $props();
+	let {
+		contentJson = null,
+		class: className = '',
+		mentionedUsers = null
+	}: LexicalRendererProps = $props();
 
 	/** Defense-in-depth: only allow http/https URLs to prevent Stored XSS */
 	function safeUrl(url: string | undefined): string {
 		if (!url) return '';
 		if (url.startsWith('http://') || url.startsWith('https://')) return url;
 		return '';
+	}
+
+	/**
+	 * Regex pattern to match @username mentions in text.
+	 * Matches @ followed by 2-30 alphanumeric, underscore, or hyphen characters.
+	 */
+	const MENTION_REGEX = /@[a-zA-Z0-9_-]{2,30}/g;
+
+	/**
+	 * Split a text string into segments, replacing @username tokens
+	 * with mention chip placeholder objects when the username exists in the map.
+	 */
+	interface TextSegment {
+		kind: 'text' | 'mention';
+		text: string;
+		username: string;
+	}
+
+	function parseMentions(text: string): TextSegment[] {
+		if (!mentionedUsers || Object.keys(mentionedUsers).length === 0) {
+			return [{ kind: 'text', text, username: '' }];
+		}
+
+		const segments: TextSegment[] = [];
+		let lastIndex = 0;
+
+		// Reset regex state for global matching
+		const regex = new RegExp(MENTION_REGEX.source, 'g');
+		let match: RegExpExecArray | null;
+
+		while ((match = regex.exec(text)) !== null) {
+			const username = match[0].slice(1); // strip leading @
+
+			// Only convert to chip if the user exists in the map
+			if (mentionedUsers[username]) {
+				// Push preceding plain text
+				if (match.index > lastIndex) {
+					segments.push({ kind: 'text', text: text.slice(lastIndex, match.index), username: '' });
+				}
+				segments.push({ kind: 'mention', text: match[0], username });
+				lastIndex = regex.lastIndex;
+			}
+		}
+
+		// Push remaining text
+		if (lastIndex < text.length) {
+			segments.push({ kind: 'text', text: text.slice(lastIndex), username: '' });
+		}
+
+		// If no mentions were found, return single text segment
+		if (segments.length === 0) {
+			return [{ kind: 'text', text, username: '' }];
+		}
+
+		return segments;
 	}
 
 	const rootNode = $derived.by(() => {
@@ -61,18 +129,30 @@
 
 {#snippet renderNode(node: LexicalNode)}
 	{#if node.type === 'text'}
-		<span
-			class="{(node.format ?? 0) & 1 ? 'font-bold' : ''} {(node.format ?? 0) & 2
-				? 'italic'
-				: ''} {(node.format ?? 0) & 4 ? 'line-through' : ''} {(node.format ?? 0) & 8
-				? 'underline'
-				: ''} {(node.format ?? 0) & 16
-				? 'bg-base-300 px-1.5 py-0.5 rounded font-mono text-xs text-secondary-content'
-				: ''}"
-			style={node.style || undefined}
-		>
-			{node.text}
-		</span>
+		{#each parseMentions(node.text || '') as segment}
+			{#if segment.kind === 'mention' && mentionedUsers?.[segment.username]}
+				{@const user = mentionedUsers[segment.username]}
+				<a
+					href="/profile/{user.id}/{user.username}"
+					class="inline-flex items-center gap-0.5 px-1.5 py-0 mx-0.5 rounded bg-primary/15 text-primary text-xs font-medium hover:bg-primary/25 transition-colors no-underline"
+				>
+					{user.displayName}
+				</a>
+			{:else}
+				<span
+					class="{(node.format ?? 0) & 1 ? 'font-bold' : ''} {(node.format ?? 0) & 2
+						? 'italic'
+						: ''} {(node.format ?? 0) & 4 ? 'line-through' : ''} {(node.format ?? 0) & 8
+						? 'underline'
+						: ''} {(node.format ?? 0) & 16
+						? 'bg-base-300 px-1.5 py-0.5 rounded font-mono text-xs text-secondary-content'
+						: ''}"
+					style={node.style || undefined}
+				>
+					{segment.text}
+				</span>
+			{/if}
+		{/each}
 	{:else}
 		{#if node.type === 'paragraph'}
 			<p class="mb-2 leading-relaxed text-base-content/95 min-h-[1.2em]">

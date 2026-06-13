@@ -1,6 +1,7 @@
 import { discussions, users, bookmarks, discussionReads, replies, categories } from '../schema';
 import { eq, and, isNull, desc, sql, count, inArray } from 'drizzle-orm';
 import type { D1Db } from '../index';
+import { resolveGroupSlug } from '$lib/server/constants';
 
 export interface ReadHistory {
 	lastReadAt: Date | null;
@@ -35,11 +36,13 @@ interface GetDiscussionsListOptions {
 	authorId?: string | null;
 	limit: number;
 	offset: number;
+	groupSlug?: string;
 }
 
 interface GetDiscussionsCountOptions {
 	categorySlug?: string | null;
 	authorId?: string | null;
+	groupSlug?: string;
 }
 
 /**
@@ -49,12 +52,15 @@ interface GetDiscussionsCountOptions {
  * - Main query: 1 query for paginated discussion rows with bookmark/read-join.
  * - Last reply author: 1 batch query across all discussionIds.
  * - Unread counts: 1 batch query per discussion the user has read, or uses commentCount.
+ *
+ * Security: When groupSlug is provided, only returns discussions from categories
+ * the user/guest has read access to. This prevents permission leaks in list views.
  */
 export async function getDiscussionsList(
 	db: D1Db,
 	options: GetDiscussionsListOptions
 ): Promise<DiscussionListItem[]> {
-	const { userId, categorySlug, authorId, limit, offset } = options;
+	const { userId, categorySlug, authorId, limit, offset, groupSlug } = options;
 
 	// Build the select query
 	const baseQuery = db
@@ -114,7 +120,12 @@ export async function getDiscussionsList(
 
 	baseQuery.limit(limit).offset(offset);
 
-	const rows = await baseQuery;
+	let rows = await baseQuery;
+
+	// Security: Filter out discussions from categories the user/guest cannot read
+	if (groupSlug) {
+		rows = await filterByCategoryReadAccess(db, rows, groupSlug);
+	}
 
 	if (rows.length === 0) {
 		return [];
@@ -232,12 +243,13 @@ export async function getDiscussionsList(
 
 /**
  * Get the total number of active discussions (for pagination).
+ * When groupSlug is provided, only counts discussions from readable categories.
  */
 export async function getDiscussionsCount(
 	db: D1Db,
 	options: GetDiscussionsCountOptions = {}
 ): Promise<number> {
-	const { categorySlug, authorId } = options;
+	const { categorySlug, authorId, groupSlug } = options;
 
 	const whereClauses = [isNull(discussions.deletedAt)];
 	if (categorySlug) {
@@ -247,10 +259,90 @@ export async function getDiscussionsCount(
 		whereClauses.push(eq(discussions.authorId, authorId));
 	}
 
-	const res = await db
+	let res = await db
 		.select({ count: count() })
 		.from(discussions)
 		.where(and(...whereClauses));
 
+	// Security: If groupSlug provided and no explicit categorySlug filter, filter by readable categories
+	if (groupSlug && !categorySlug) {
+		const readableSlugs = await getReadableCategorySlugs(db, groupSlug);
+		if (readableSlugs !== null) {
+			// null means all categories are readable (privileged)
+			res = await db
+				.select({ count: count() })
+				.from(discussions)
+				.where(
+					and(
+						...whereClauses,
+						readableSlugs.length > 0
+							? inArray(discussions.categorySlug, readableSlugs)
+							: sql`1 = 0`
+					)
+				);
+		}
+	}
+
 	return res[0]?.count || 0;
+}
+
+/**
+ * Get the list of category slugs the given group can read.
+ * Returns null if all categories are readable (admin/moderator default).
+ */
+async function getReadableCategorySlugs(
+	db: D1Db,
+	groupSlug: string
+): Promise<string[] | null> {
+	// Privileged groups can read all categories by default
+	if (groupSlug === 'admin' || groupSlug === 'moderator') {
+		return null; // null = all readable
+	}
+
+	// For member/guest: get all categories and check permissions
+	const { categoryPermissions, categories } = await import('../schema');
+	const { eq: eqOp } = await import('drizzle-orm');
+
+	const allCats = await db.select({ slug: categories.slug }).from(categories);
+	const allSlugs = allCats.map((c) => c.slug);
+
+	if (allSlugs.length === 0) return [];
+
+	// Get explicit permission rows
+	const permRows = await db
+		.select({
+			categorySlug: categoryPermissions.categorySlug,
+			canRead: categoryPermissions.canRead
+		})
+		.from(categoryPermissions)
+		.where(eqOp(categoryPermissions.groupSlug, groupSlug));
+
+	const permMap = new Map(permRows.map((p) => [p.categorySlug, p.canRead]));
+
+	// Apply defaults based on role
+	const defaultCanRead = true; // Both member and guest default to canRead=true for public
+	return allSlugs.filter((slug) => {
+		const canRead = permMap.get(slug);
+		return canRead === undefined ? defaultCanRead : canRead;
+	});
+}
+
+/**
+ * Post-query filter: remove rows from categories the user/guest cannot read.
+ * Used when the main query can't easily JOIN on categoryPermissions.
+ */
+async function filterByCategoryReadAccess<T extends { categorySlug: string }>(
+	db: D1Db,
+	rows: T[],
+	groupSlug: string
+): Promise<T[]> {
+	if (groupSlug === 'admin' || groupSlug === 'moderator') {
+		return rows;
+	}
+
+	const readableSlugs = await getReadableCategorySlugs(db, groupSlug);
+	if (readableSlugs === null) return rows; // all readable
+
+	const readableSet = new Set(readableSlugs);
+	return rows.filter((row) => readableSet.has(row.categorySlug));
 }

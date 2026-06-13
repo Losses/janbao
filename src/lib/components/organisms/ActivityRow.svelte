@@ -27,6 +27,13 @@
 		[key: string]: string | Record<string, string>;
 	}
 
+	interface MentionedUserEntry {
+		id: string;
+		displayName: string;
+		username: string;
+		avatarFileId: string | null;
+	}
+
 	interface ActivityRowProps {
 		id: string;
 		authorId: string;
@@ -42,6 +49,7 @@
 		currentUserId?: string | null;
 		isAdmin?: boolean;
 		t: TranslationDict;
+		mentionedUsers?: Record<string, MentionedUserEntry> | null;
 	}
 
 	let {
@@ -58,7 +66,8 @@
 		commentCount = 0,
 		currentUserId = null,
 		isAdmin = false,
-		t
+		t,
+		mentionedUsers = null
 	}: ActivityRowProps = $props();
 
 	const initialCommentCount = $derived(commentCount);
@@ -207,7 +216,7 @@
 			</div>
 
 			<div class="mt-1">
-				<LexicalRenderer {contentJson} />
+				<LexicalRenderer {contentJson} {mentionedUsers} />
 			</div>
 
 			<div class="flex items-center gap-3 mt-2">
