@@ -6,7 +6,7 @@
 	 * `input input-bordered` so it matches the subject field's border, height
 	 * and focus highlight exactly.
 	 */
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, untrack } from 'svelte';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import type { UserSearchResult } from '$lib/types/api';
 
@@ -30,7 +30,9 @@
 		disabled = false
 	}: MentionChipInputProps = $props();
 
-	let recipients = $state<UserSearchResult[]>(initialRecipients ?? []);
+	// `initialRecipients` only seeds the chips once on mount; later prop changes
+	// shouldn't overwrite the user's selection, so untrack the reactive read.
+	let recipients = $state<UserSearchResult[]>(untrack(() => initialRecipients ?? []));
 	let query = $state('');
 	let results = $state<UserSearchResult[]>([]);
 	let selectedIndex = $state(0);
@@ -179,6 +181,7 @@
 			autocomplete="off"
 			aria-autocomplete="list"
 			aria-expanded={isOpen}
+			aria-controls={isOpen && results.length > 0 ? 'mention-listbox' : undefined}
 			role="combobox"
 			class="min-w-0 flex-1 border-none bg-transparent outline-none"
 		/>
@@ -186,6 +189,7 @@
 
 	{#if isOpen && results.length > 0}
 		<div
+			id="mention-listbox"
 			class="absolute left-0 right-0 top-[calc(100%+0.25rem)] z-50 max-h-60 overflow-y-auto rounded-lg border border-base-300 bg-base-100 shadow-lg"
 			role="listbox"
 		>

@@ -44,7 +44,10 @@ export async function getConversations(
 	const lastTimeRows = await db
 		.select({
 			conversationId: messages.conversationId,
-			maxAt: sql<Date>`MAX(${messages.createdAt})`
+			// MAX() over an integer column returns the raw stored epoch value
+			// (number), not a Date — the sql<number> reflects the runtime type,
+			// since Drizzle's timestamp mapper does not apply to raw aggregates.
+			maxAt: sql<number>`MAX(${messages.createdAt})`
 		})
 		.from(messages)
 		.where(inArray(messages.conversationId, allIds))
@@ -52,8 +55,8 @@ export async function getConversations(
 	const lastTimeMap = new Map(lastTimeRows.map((r) => [r.conversationId, r.maxAt]));
 
 	const sortedIds = allIds.sort((a, b) => {
-		const aTime = lastTimeMap.get(a)?.getTime() ?? 0;
-		const bTime = lastTimeMap.get(b)?.getTime() ?? 0;
+		const aTime = lastTimeMap.get(a) ?? 0;
+		const bTime = lastTimeMap.get(b) ?? 0;
 		return bTime - aTime;
 	});
 
@@ -81,6 +84,17 @@ export async function getConversations(
 		.groupBy(conversationParticipants.conversationId);
 	const countMap = new Map(countRows.map((p) => [p.conversationId, p.count]));
 
+	// 4b. Message counts (total messages per conversation) for the list meta line.
+	const messageCountRows = await db
+		.select({
+			conversationId: messages.conversationId,
+			count: sql<number>`COUNT(*)`
+		})
+		.from(messages)
+		.where(inArray(messages.conversationId, pageIds))
+		.groupBy(messages.conversationId);
+	const messageCountMap = new Map(messageCountRows.map((m) => [m.conversationId, m.count]));
+
 	// 5. Latest message detail (preview + author) per page conversation
 	const latestSubq = db
 		.select({
@@ -98,7 +112,11 @@ export async function getConversations(
 			maxAt: latestSubq.maxAt,
 			id: messages.id,
 			contentJson: messages.contentJson,
-			authorDisplayName: users.displayName
+			createdAt: messages.createdAt,
+			authorId: users.id,
+			authorUsername: users.username,
+			authorDisplayName: users.displayName,
+			authorAvatarFileId: users.avatarFileId
 		})
 		.from(latestSubq)
 		.innerJoin(
@@ -152,10 +170,17 @@ export async function getConversations(
 		return {
 			id,
 			title: titleMap.get(id) ?? '',
-			lastMessageAt: latest?.maxAt ?? null,
+			// Read the typed column (Drizzle converts timestamp mode) rather than the
+			// raw MAX() aggregate, which bypasses conversion and would render as the
+			// epoch (e.g. "56 years ago") on the client.
+			lastMessageAt: latest?.createdAt ?? null,
 			lastMessagePreview: latest ? extractPlainText(latest.contentJson) : null,
+			lastAuthorId: latest?.authorId ?? null,
+			lastAuthorUsername: latest?.authorUsername ?? null,
 			lastAuthorDisplayName: latest?.authorDisplayName ?? null,
+			lastAuthorAvatarFileId: latest?.authorAvatarFileId ?? null,
 			participantCount: countMap.get(id) ?? 0,
+			messageCount: messageCountMap.get(id) ?? 0,
 			unreadCount: unreadMap.get(id) ?? 0
 		};
 	});

@@ -200,8 +200,12 @@ export interface ConversationListItem {
 	title: string;
 	lastMessageAt: Date | null;
 	lastMessagePreview: string | null;
+	lastAuthorId: string | null;
+	lastAuthorUsername: string | null;
 	lastAuthorDisplayName: string | null;
+	lastAuthorAvatarFileId: string | null;
 	participantCount: number;
+	messageCount: number;
 	unreadCount: number;
 }
 

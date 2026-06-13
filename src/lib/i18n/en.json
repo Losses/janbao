@@ -284,6 +284,7 @@
 		"searchUser": "Search users",
 		"content": "Message",
 		"participants": "Participants",
+		"messages": "messages",
 		"addParticipant": "Add Participant",
 		"addParticipantPlaceholder": "Search a user to add...",
 		"noConversations": "No conversations yet",

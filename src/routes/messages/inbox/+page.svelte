@@ -2,6 +2,7 @@
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
+	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import Badge from '$lib/components/atoms/Badge.svelte';
 	import DateComponent from '$lib/components/atoms/Date.svelte';
 	import { formatTitle } from '$lib/utils/title';
@@ -57,40 +58,76 @@
 				{messageT.noConversations}
 			</div>
 		{:else}
-			<div class="card bg-base-100 border border-base-200 rounded-xl shadow-sm overflow-hidden">
-				{#each conversations as conv (conv.id)}
-					<a
-						href="/messages/{conv.id}"
-						class="flex items-center gap-3 p-4 border-b border-base-200 last:border-b-0 hover:bg-base-200/40 transition-colors {conv.unreadCount >
-						0
-							? ''
-							: 'opacity-70'}"
-					>
-						<div class="min-w-0 flex-1">
-							<div class="flex items-center justify-between gap-2">
-								<h3 class="font-semibold text-base-content truncate">{conv.title}</h3>
-								{#if conv.lastMessageAt}
-									<DateComponent
-										value={conv.lastMessageAt}
-										{t}
-										class="text-xs text-base-content/40 flex-shrink-0"
-									/>
+			<!-- Conversation stream — mirrors the homepage discussion list:
+			avatar left, content right, divide-y rows, no card chrome. -->
+			<div class="bg-base-100 overflow-hidden">
+				<div class="divide-y divide-base-200">
+					{#each conversations as conv (conv.id)}
+						{@const authorSlug = generateSlug(conv.lastAuthorUsername || 'user')}
+						{@const authorHref = conv.lastAuthorId
+							? `/profile/${conv.lastAuthorId}/${authorSlug}`
+							: null}
+						<div class="flex items-start gap-4 p-4 transition-all hover:bg-base-200/20">
+							<!-- Left: last author avatar → profile -->
+							<div class="flex-shrink-0">
+								{#if authorHref}
+									<a href={authorHref}>
+										<Avatar
+											src={conv.lastAuthorAvatarFileId
+												? `/img/${conv.lastAuthorAvatarFileId}`
+												: null}
+											displayName={conv.lastAuthorDisplayName}
+											size="md"
+										/>
+									</a>
+								{:else}
+									<Avatar src={null} displayName="?" size="md" />
 								{/if}
 							</div>
-							{#if conv.lastMessagePreview}
-								<p class="text-sm text-base-content/60 truncate mt-0.5">
-									{#if conv.lastAuthorDisplayName}
-										<span class="font-medium">{conv.lastAuthorDisplayName}: </span>
+
+							<!-- Right: username, title, meta -->
+							<div class="flex-1 min-w-0">
+								{#if authorHref}
+									<a
+										href={authorHref}
+										class="inline-block text-sm font-medium text-base-content/85 hover:text-primary hover:underline"
+									>
+										{conv.lastAuthorUsername}
+									</a>
+								{/if}
+
+								<div class="flex items-center gap-2 flex-wrap">
+									<a
+										href="/messages/{conv.id}"
+										class="font-semibold text-lg hover:text-primary transition-colors hover:underline text-base-content break-words leading-snug"
+									>
+										{conv.title}
+									</a>
+									{#if conv.unreadCount > 0}
+										<Badge variant="primary" class="font-bold">{conv.unreadCount}</Badge>
 									{/if}
-									{conv.lastMessagePreview}
-								</p>
-							{/if}
+								</div>
+
+								{#if conv.lastMessagePreview}
+									<a
+										href="/messages/{conv.id}"
+										class="block text-sm text-base-content/60 hover:text-primary line-clamp-3 break-words mt-1"
+									>
+										{conv.lastMessagePreview}
+									</a>
+								{/if}
+
+								<div class="flex items-center gap-2 text-xs text-base-content/60 flex-wrap mt-1">
+									<span>{conv.messageCount} {messageT.messages}</span>
+									<span class="text-base-content/30">•</span>
+									{#if conv.lastMessageAt}
+										<DateComponent value={conv.lastMessageAt} {t} />
+									{/if}
+								</div>
+							</div>
 						</div>
-						{#if conv.unreadCount > 0}
-							<Badge variant="primary">{conv.unreadCount}</Badge>
-						{/if}
-					</a>
-				{/each}
+					{/each}
+				</div>
 			</div>
 
 			<div class="flex justify-end pt-2">
