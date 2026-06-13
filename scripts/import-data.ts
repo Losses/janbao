@@ -1,4 +1,12 @@
-import { readdirSync, existsSync, readFileSync, createReadStream, writeFileSync } from 'fs';
+import {
+	readdirSync,
+	existsSync,
+	readFileSync,
+	createReadStream,
+	writeFileSync,
+	copyFileSync,
+	mkdirSync
+} from 'fs';
 import { join } from 'path';
 import { createInterface } from 'readline';
 import { getLocalDb } from '../src/lib/server/db';
@@ -17,7 +25,8 @@ interface ParsedProfile {
 
 interface DiscussionMeta {
 	title: string;
-	authorId: string;
+	authorId: number;
+	createdAt: Date;
 }
 
 interface ConflictRecord {
@@ -27,7 +36,7 @@ interface ConflictRecord {
 
 interface ParsedActivity {
 	id: string;
-	content: string;
+	contentHtml: string;
 	createdAt: Date;
 }
 
@@ -42,47 +51,368 @@ function decodeHtmlEntities(str: string): string {
 		.replace(/&nbsp;/g, ' ');
 }
 
-// Convert HTML content into Lexical JSON Node Tree structure
-function convertHtmlToLexicalJson(html: string): string {
-	// Translate line breaks and paragraph ends to newlines
-	const plainText = decodeHtmlEntities(
-		html
-			.replace(/<br\s*\/?>/gi, '\n')
-			.replace(/<\/p>/gi, '\n')
-			.replace(/<[^>]+>/g, '')
-	).trim();
+// ===== Lexical node shapes produced by the converter =====
 
-	// Split text by newlines and build standard Lexical paragraphs
-	const paragraphs = plainText.split('\n');
-	const children = paragraphs.map((p) => ({
-		children: [
-			{
-				detail: 0,
-				format: 0,
-				mode: 'normal',
-				style: '',
-				text: p,
-				type: 'text',
-				version: 1
-			}
-		],
+interface LexicalTextNode {
+	detail: number;
+	format: number;
+	mode: string;
+	style: string;
+	text: string;
+	type: 'text';
+	version: number;
+}
+
+interface LexicalMentionNode {
+	type: 'mention';
+	username: string;
+	displayName: string;
+	version: number;
+}
+
+interface LexicalLinkNode {
+	type: 'link';
+	url: string;
+	rel: null;
+	target: null;
+	title: null;
+	direction: string;
+	format: string;
+	indent: number;
+	version: number;
+	children: LexicalInlineNode[];
+}
+
+interface LexicalImageNode {
+	type: 'image';
+	src: string;
+	altText: string;
+	maxWidth: number;
+	showCaption: boolean;
+	caption: EmptyCaption;
+	height: 'inherit';
+	width: 'inherit';
+	version: number;
+}
+
+interface LexicalDeadImageNode {
+	type: 'dead-image';
+	version: number;
+}
+
+interface LexicalParagraphNode {
+	type: 'paragraph';
+	direction: string;
+	format: string;
+	indent: number;
+	version: number;
+	children: LexicalInlineNode[];
+}
+
+type LexicalInlineNode = LexicalTextNode | LexicalMentionNode | LexicalLinkNode;
+type LexicalBlockNode = LexicalParagraphNode | LexicalImageNode | LexicalDeadImageNode;
+
+// Empty SerializedEditor for the svelte-lexical ImageNode caption field
+// (importJSON requires the full shape even though the caption is unused).
+interface EmptyCaptionRoot {
+	type: 'root';
+	direction: string;
+	format: string;
+	indent: number;
+	version: number;
+	children: {
+		type: 'paragraph';
+		direction: string;
+		format: string;
+		indent: number;
+		version: number;
+		children: never[];
+	}[];
+}
+
+interface EmptyCaption {
+	root: EmptyCaptionRoot;
+}
+
+const EMPTY_CAPTION: EmptyCaption = {
+	root: {
+		type: 'root',
 		direction: 'ltr',
 		format: '',
 		indent: 0,
-		type: 'paragraph',
+		version: 1,
+		children: [
+			{
+				type: 'paragraph',
+				direction: 'ltr',
+				format: '',
+				indent: 0,
+				version: 1,
+				children: []
+			}
+		]
+	}
+};
+
+// ===== Converter context (mention + image resolution) =====
+
+interface MentionResolved {
+	resolved: true;
+	userId: number;
+}
+
+interface MentionUnresolved {
+	resolved: false;
+}
+
+type MentionResolution = MentionResolved | MentionUnresolved;
+
+interface ImageLive {
+	kind: 'live';
+	fileId: string;
+}
+
+interface ImageDead {
+	kind: 'dead';
+}
+
+interface ImageDrop {
+	kind: 'drop';
+}
+
+type ImageResolution = ImageLive | ImageDead | ImageDrop;
+
+type MentionResolver = (username: string) => Promise<MentionResolution>;
+type ImageResolver = (src: string) => Promise<ImageResolution>;
+
+interface ConverterContext {
+	resolveMention: MentionResolver;
+	resolveImage: ImageResolver;
+}
+
+// Block-level tags whose open/close flush the current paragraph.
+const BLOCK_TAGS = new Set([
+	'p',
+	'div',
+	'li',
+	'ul',
+	'ol',
+	'blockquote',
+	'pre',
+	'table',
+	'tr',
+	'td',
+	'th',
+	'h1',
+	'h2',
+	'h3',
+	'h4',
+	'h5',
+	'h6',
+	'hr',
+	'br'
+]);
+
+function buildTextNode(text: string): LexicalTextNode {
+	return { detail: 0, format: 0, mode: 'normal', style: '', text, type: 'text', version: 1 };
+}
+
+function buildMentionNode(username: string, displayName: string): LexicalMentionNode {
+	return { type: 'mention', username, displayName, version: 1 };
+}
+
+function buildLinkNode(url: string, text: string): LexicalLinkNode {
+	return {
+		type: 'link',
+		url,
+		rel: null,
+		target: null,
+		title: null,
+		direction: 'ltr',
+		format: '',
+		indent: 0,
+		version: 1,
+		children: text ? [buildTextNode(text)] : []
+	};
+}
+
+function buildImageNode(src: string, altText: string): LexicalImageNode {
+	return {
+		type: 'image',
+		src,
+		altText,
+		maxWidth: 800,
+		showCaption: false,
+		caption: EMPTY_CAPTION,
+		height: 'inherit',
+		width: 'inherit',
 		version: 1
-	}));
+	};
+}
+
+function buildDeadImageNode(): LexicalDeadImageNode {
+	return { type: 'dead-image', version: 1 };
+}
+
+function buildParagraphNode(children: LexicalInlineNode[]): LexicalParagraphNode {
+	return { type: 'paragraph', direction: 'ltr', format: '', indent: 0, version: 1, children };
+}
+
+// Extract a named attribute value from a raw attribute string (double-quoted).
+function getAttr(attrs: string, name: string): string | null {
+	const re = new RegExp('(?:^|\\s)' + name + '\\s*=\\s*"([^"]*)"', 'i');
+	const m = attrs.match(re);
+	return m ? m[1] : null;
+}
+
+/**
+ * Convert a Message-body HTML slice into a serialized Lexical state.
+ *
+ * Handles paragraphs (split on <br>/block boundaries), plain text, @username
+ * mention chips, http(s) links, content images (live or dead), and silently
+ * drops emoji <img class="emoji">. Rich formatting (bold/italic/lists/quote) is
+ * intentionally stripped to text in this pass.
+ *
+ * Mentions resolve via ctx.resolveMention (username → userId); images resolve
+ * via ctx.resolveImage (src → live file id | dead | drop). Both may perform DB
+ * / filesystem side effects, so the converter is async.
+ */
+export async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promise<string> {
+	const blocks: LexicalBlockNode[] = [];
+	let inline: LexicalInlineNode[] = [];
+	let textBuf = '';
+
+	function flushText(): void {
+		if (textBuf) {
+			inline.push(buildTextNode(textBuf));
+			textBuf = '';
+		}
+	}
+
+	function flushParagraph(): void {
+		flushText();
+		if (inline.length > 0) {
+			blocks.push(buildParagraphNode(inline));
+			inline = [];
+		}
+	}
+
+	const tagRe = /<(\w+)((?:[^>"]|"[^"]*")*)>|<\/(\w+)>/g;
+	let lastIndex = 0;
+	let m: RegExpExecArray | null;
+
+	while ((m = tagRe.exec(html)) !== null) {
+		if (m.index > lastIndex) {
+			textBuf += decodeHtmlEntities(html.slice(lastIndex, m.index));
+		}
+
+		const openName = m[1];
+		const attrs = m[2] ?? '';
+		const closeName = m[3];
+
+		if (openName) {
+			const tag = openName.toLowerCase();
+
+			if (tag === 'br') {
+				flushParagraph();
+			} else if (tag === 'img') {
+				const cls = getAttr(attrs, 'class') ?? '';
+				const src = getAttr(attrs, 'src') ?? '';
+				const alt = getAttr(attrs, 'alt') ?? '';
+				if (/\bemoji\b/.test(cls)) {
+					// Emoji were never crawled — drop silently.
+				} else {
+					const res = await ctx.resolveImage(src);
+					if (res.kind === 'live') {
+						flushParagraph();
+						blocks.push(buildImageNode('/img/' + res.fileId, alt));
+					} else if (res.kind === 'dead') {
+						flushParagraph();
+						blocks.push(buildDeadImageNode());
+					}
+					// kind === 'drop' → skip
+				}
+			} else if (tag === 'a') {
+				const href = getAttr(attrs, 'href') ?? '';
+				const closeIdx = html.indexOf('</a>', tagRe.lastIndex);
+				const innerEnd = closeIdx === -1 ? html.length : closeIdx;
+				const innerRaw = html.slice(tagRe.lastIndex, innerEnd);
+				const innerText = decodeHtmlEntities(innerRaw.replace(/<[^>]+>/g, '')).trim();
+				const afterClose = closeIdx === -1 ? html.length : closeIdx + 4;
+
+				const mentionMatch = href.match(/^\/profile\/(.+)$/);
+				if (mentionMatch) {
+					const username = decodeURIComponent(mentionMatch[1]).trim();
+					const display = innerText.replace(/^@/, '').trim() || username;
+					if (textBuf.endsWith('@')) textBuf = textBuf.slice(0, -1);
+					flushText();
+					const res = await ctx.resolveMention(username);
+					if (res.resolved) {
+						inline.push(buildMentionNode(username, display));
+					} else {
+						inline.push(buildTextNode('@' + display));
+					}
+				} else {
+					flushText();
+					if (/^https?:\/\//i.test(href)) {
+						inline.push(buildLinkNode(href, innerText));
+					} else if (innerText) {
+						inline.push(buildTextNode(innerText));
+					}
+				}
+
+				tagRe.lastIndex = afterClose;
+				lastIndex = afterClose;
+				continue;
+			} else if (BLOCK_TAGS.has(tag)) {
+				flushParagraph();
+			}
+		} else if (closeName && BLOCK_TAGS.has(closeName.toLowerCase())) {
+			flushParagraph();
+		}
+
+		lastIndex = tagRe.lastIndex;
+	}
+
+	if (lastIndex < html.length) {
+		textBuf += decodeHtmlEntities(html.slice(lastIndex));
+	}
+	flushParagraph();
 
 	return JSON.stringify({
 		root: {
-			children: children,
+			type: 'root',
 			direction: 'ltr',
 			format: '',
 			indent: 0,
-			type: 'root',
-			version: 1
+			version: 1,
+			children: blocks
 		}
 	});
+}
+
+/**
+ * Extract the OP (first post) body from a discussion page: the first
+ * <div class="Message"> inside <div id="Discussion_<id>">, terminated before the
+ * comment list begins. Returns null if the Discussion wrapper or Message is
+ * absent.
+ */
+function extractOpBody(html: string, discussionId: number): string | null {
+	const startMarker = `id="Discussion_${discussionId}"`;
+	const startIdx = html.indexOf(startMarker);
+	if (startIdx === -1) return null;
+
+	const rest = html.slice(startIdx);
+	const endMarkers = ['class="Item ItemComment"', 'class="CommentsWrap"', '<div class="Comments"'];
+	let endIdx = rest.length;
+	for (const marker of endMarkers) {
+		const i = rest.indexOf(marker);
+		if (i !== -1 && i < endIdx) endIdx = i;
+	}
+
+	const slice = rest.slice(0, endIdx);
+	const msgMatch = slice.match(/<div\s+class="Message">([\s\S]+?)<\/div>/);
+	return msgMatch ? msgMatch[1] : null;
 }
 
 // Robust Email obfuscation decoder
@@ -148,7 +478,7 @@ function parseProfileHtml(html: string): ParsedProfile {
 // Parse comments from HTML string in comments-page-*.json
 interface ParsedComment {
 	id: string;
-	content: string;
+	contentHtml: string;
 	discussionTitle: string;
 	timeText: string;
 }
@@ -163,10 +493,7 @@ function parseCommentsHtml(html: string): ParsedComment[] {
 		const id = idMatch[1];
 
 		const messageMatch = part.match(/<div\s+class="Message">([\s\S]+?)<\/div>/);
-		let content = '';
-		if (messageMatch) {
-			content = convertHtmlToLexicalJson(messageMatch[1]);
-		}
+		const contentHtml = messageMatch ? messageMatch[1] : '';
 
 		const titleMatch = part.match(/in\s*<b><a[^>]*>([\s\S]+?)<\/a><\/b>/);
 		let discussionTitle = '';
@@ -200,7 +527,7 @@ function parseCommentsHtml(html: string): ParsedComment[] {
 			}
 		}
 
-		comments.push({ id, content, discussionTitle, timeText });
+		comments.push({ id, contentHtml, discussionTitle, timeText });
 	}
 	return comments;
 }
@@ -318,10 +645,7 @@ function parseActivitiesHtml(html: string): ParsedActivity[] {
 		const id = idMatch[1];
 
 		const excerptMatch = part.match(/<div\s+class="Excerpt">([\s\S]+?)<\/div>/);
-		let content = '';
-		if (excerptMatch) {
-			content = convertHtmlToLexicalJson(excerptMatch[1]);
-		}
+		const contentHtml = excerptMatch ? excerptMatch[1] : '';
 
 		const dateMatch = part.match(/<span\s+class="MItem\s+DateCreated">([\s\S]+?)<\/span>/);
 		let createdAt = new Date();
@@ -332,7 +656,7 @@ function parseActivitiesHtml(html: string): ParsedActivity[] {
 
 		activities.push({
 			id,
-			content,
+			contentHtml,
 			createdAt
 		});
 	}
@@ -365,6 +689,91 @@ function getErrorMessage(e: unknown): string {
 		return e.message;
 	}
 	return String(e);
+}
+
+// ===== Mention + image resolution maps =====
+
+interface ImageEntry {
+	sha256: string;
+	file: string;
+	contentType: string | null;
+}
+
+interface ImageMaps {
+	byUrl: Map<string, ImageEntry>;
+	deadUrls: Set<string>;
+}
+
+/**
+ * Build username → userId from users.json. Mention hrefs use the Vanilla Name
+ * field, which equals our `username`, so this resolves mentions directly.
+ * First write wins on username collision.
+ */
+function buildMentionMap(dataDir: string): Map<string, number> {
+	const usersPath = join(dataDir, 'users.json');
+	if (!existsSync(usersPath)) return new Map();
+	const raw: unknown = JSON.parse(readFileSync(usersPath, 'utf-8'));
+	const arr: unknown[] = Array.isArray(raw)
+		? raw
+		: Array.isArray((raw as { users?: unknown[] }).users)
+			? (raw as { users: unknown[] }).users
+			: Object.values(raw as Record<string, unknown>);
+
+	const map = new Map<string, number>();
+	for (const u of arr) {
+		const rec = u as { username?: unknown; userId?: unknown };
+		const username = typeof rec.username === 'string' ? rec.username.trim() : '';
+		const userId = Number(rec.userId);
+		if (username && Number.isFinite(userId) && !map.has(username)) {
+			map.set(username, userId);
+		}
+	}
+	return map;
+}
+
+/**
+ * Build image resolution maps: images.json byUrl (only entries with both
+ * sha256 + file are "live") and image-deadlinks.jsonl (dead URLs).
+ */
+function buildImageMaps(dataDir: string): ImageMaps {
+	const byUrl = new Map<string, ImageEntry>();
+	const deadUrls = new Set<string>();
+
+	const imagesPath = join(dataDir, 'images.json');
+	if (existsSync(imagesPath)) {
+		const raw = JSON.parse(readFileSync(imagesPath, 'utf-8')) as {
+			byUrl?: Record<string, unknown>;
+		};
+		const entries = raw.byUrl ?? {};
+		for (const [url, val] of Object.entries(entries)) {
+			const rec = val as { sha256?: unknown; file?: unknown; contentType?: unknown };
+			if (typeof rec.sha256 === 'string' && typeof rec.file === 'string') {
+				byUrl.set(url, {
+					sha256: rec.sha256,
+					file: rec.file,
+					contentType: typeof rec.contentType === 'string' ? rec.contentType : null
+				});
+			} else {
+				deadUrls.add(url);
+			}
+		}
+	}
+
+	const deadPath = join(dataDir, 'image-deadlinks.jsonl');
+	if (existsSync(deadPath)) {
+		for (const line of readFileSync(deadPath, 'utf-8').split('\n')) {
+			const trimmed = line.trim();
+			if (!trimmed) continue;
+			try {
+				const rec = JSON.parse(trimmed) as { url?: unknown };
+				if (typeof rec.url === 'string') deadUrls.add(rec.url);
+			} catch {
+				// skip malformed line
+			}
+		}
+	}
+
+	return { byUrl, deadUrls };
 }
 
 async function main() {
@@ -416,14 +825,14 @@ async function main() {
 
 	// 2. Preload DB records in memory to detect conflicts and avoid repeated DB lookups
 	console.log('Preloading DB indexes for duplicate detection...');
-	const existingUserIds = new Set<string>();
+	const existingUserIds = new Set<number>();
 	const existingCategorySlugs = new Set<string>();
-	const existingDiscussionIds = new Set<string>();
-	const existingReplyIds = new Set<string>();
-	const existingActivityIds = new Set<string>();
+	const existingDiscussionIds = new Set<number>();
+	const existingReplyIds = new Set<number>();
+	const existingActivityIds = new Set<number>();
 
-	const existingDiscussionsMap = new Map<string, DiscussionMeta>();
-	const discussionTitleToIdMap = new Map<string, string>();
+	const existingDiscussionsMap = new Map<number, DiscussionMeta>();
+	const discussionTitleToIdMap = new Map<string, number>();
 
 	const usersInDb = await db.select({ id: schema.users.id }).from(schema.users);
 	for (const u of usersInDb) {
@@ -439,12 +848,17 @@ async function main() {
 		.select({
 			id: schema.discussions.id,
 			title: schema.discussions.title,
-			authorId: schema.discussions.authorId
+			authorId: schema.discussions.authorId,
+			createdAt: schema.discussions.createdAt
 		})
 		.from(schema.discussions);
 	for (const d of discInDb) {
 		existingDiscussionIds.add(d.id);
-		existingDiscussionsMap.set(d.id, { title: d.title, authorId: d.authorId });
+		existingDiscussionsMap.set(d.id, {
+			title: d.title,
+			authorId: d.authorId,
+			createdAt: d.createdAt
+		});
 		discussionTitleToIdMap.set(d.title, d.id);
 	}
 
@@ -461,7 +875,7 @@ async function main() {
 	const conflicts: ConflictRecord[] = [];
 
 	// Helper function to insert user if not exist
-	async function ensureUser(userId: string, username: string, avatarUrl?: string) {
+	async function ensureUser(userId: number, username: string, avatarUrl?: string) {
 		if (existingUserIds.has(userId)) return;
 		try {
 			await db.insert(schema.users).values({
@@ -504,6 +918,68 @@ async function main() {
 		}
 	}
 
+	// 2.5 Build mention + image resolution maps (used by the lexical converter)
+	console.log('Building mention + image resolution maps...');
+	const mentionMap = buildMentionMap(dataDir);
+	const imageMaps = buildImageMaps(dataDir);
+
+	// Local uploads dir mirrors the img route's mock path (path.resolve('.local-uploads'))
+	const uploadsDir = join(process.cwd(), '.local-uploads');
+	mkdirSync(uploadsDir, { recursive: true });
+	const materializedImages = new Set<string>();
+
+	/**
+	 * Copy a downloaded image into .local-uploads and register an attachments
+	 * row (fileId = sha256, so the same image is materialized once regardless of
+	 * how many posts embed it). Returns the sha256 on success, null on failure.
+	 */
+	async function materializeImage(entry: ImageEntry, uploaderId: number): Promise<string | null> {
+		if (materializedImages.has(entry.sha256)) return entry.sha256;
+		try {
+			const rel = entry.file.startsWith('data/') ? entry.file.slice(5) : entry.file;
+			const srcPath = join(dataDir, rel);
+			const destPath = join(uploadsDir, entry.sha256);
+			copyFileSync(srcPath, destPath);
+			const meta = entry.contentType ? { contentType: entry.contentType } : {};
+			writeFileSync(destPath + '.json', JSON.stringify(meta), 'utf-8');
+			await db
+				.insert(schema.attachments)
+				.values({ fileId: entry.sha256, uploaderId })
+				.onConflictDoNothing();
+			materializedImages.add(entry.sha256);
+			return entry.sha256;
+		} catch (e: unknown) {
+			conflicts.push({
+				type: 'attachment_materialize_error',
+				sha256: entry.sha256,
+				uploaderId,
+				error: getErrorMessage(e)
+			});
+			return null;
+		}
+	}
+
+	/** Build a converter context bound to a given content author (uploaderId). */
+	function makeContext(uploaderId: number): ConverterContext {
+		return {
+			resolveMention: async (username: string): Promise<MentionResolution> => {
+				const userId = mentionMap.get(username);
+				if (userId === undefined) return { resolved: false };
+				await ensureUser(userId, username);
+				return { resolved: true, userId };
+			},
+			resolveImage: async (src: string): Promise<ImageResolution> => {
+				const entry = imageMaps.byUrl.get(src);
+				if (entry) {
+					const sha = await materializeImage(entry, uploaderId);
+					return sha ? { kind: 'live', fileId: sha } : { kind: 'dead' };
+				}
+				// Not in images.json: deadlink or never crawled → dead-image placeholder.
+				return { kind: 'dead' };
+			}
+		};
+	}
+
 	// 3. Import data/posts
 	const postsDir = join(dataDir, 'posts');
 	if (existsSync(postsDir)) {
@@ -535,24 +1011,25 @@ async function main() {
 						continue;
 					}
 
-					const discussionId = parsedUrl.id;
+					const discussionId = Number(parsedUrl.id);
 					const discussionSlug = parsedUrl.slug;
 					const categorySlug = extractCategorySlug(post.pageUrl);
+					const authorId = Number(post.userId);
 
 					// Ensure dependencies exist
-					await ensureUser(post.userId, post.username, post.avatarUrl);
+					await ensureUser(authorId, post.username, post.avatarUrl);
 					await ensureCategory(categorySlug);
 
 					if (existingDiscussionIds.has(discussionId)) {
 						const existing = existingDiscussionsMap.get(discussionId);
 						if (existing) {
-							if (existing.title !== post.title || existing.authorId !== post.userId) {
+							if (existing.title !== post.title || existing.authorId !== authorId) {
 								conflicts.push({
 									type: 'discussion_conflict',
 									id: discussionId,
 									reason: 'Discussion ID exists with different title/author in posts data',
 									existing: { title: existing.title, authorId: existing.authorId },
-									incoming: { title: post.title, authorId: post.userId }
+									incoming: { title: post.title, authorId }
 								});
 							}
 						}
@@ -566,14 +1043,18 @@ async function main() {
 							title: post.title,
 							slug: discussionSlug,
 							categorySlug: categorySlug,
-							authorId: post.userId,
+							authorId,
 							viewCount: post.viewCount || 0,
 							commentCount: post.commentCount || 0,
 							createdAt: createdAt,
 							updatedAt: createdAt
 						});
 						existingDiscussionIds.add(discussionId);
-						existingDiscussionsMap.set(discussionId, { title: post.title, authorId: post.userId });
+						existingDiscussionsMap.set(discussionId, {
+							title: post.title,
+							authorId,
+							createdAt: createdAt
+						});
 						discussionTitleToIdMap.set(post.title, discussionId);
 					} catch (e: unknown) {
 						conflicts.push({
@@ -603,11 +1084,11 @@ async function main() {
 		const subdirs = readdirSync(profilesDir);
 
 		for (const subdir of subdirs) {
-			const userId = subdir;
 			// Ensure it is a valid numeric userId directory
-			if (!/^\d+$/.test(userId)) continue;
+			if (!/^\d+$/.test(subdir)) continue;
+			const userId = Number(subdir);
 
-			const userDir = join(profilesDir, userId);
+			const userDir = join(profilesDir, subdir);
 			const profileHtmlPath = join(userDir, 'profile.html');
 
 			console.log(`Processing profile for User ID: ${userId}`);
@@ -692,16 +1173,19 @@ async function main() {
 
 					// Import dynamic activity data from user's profile.html
 					const activities = parseActivitiesHtml(html);
+					const activityCtx = makeContext(userId);
 					for (const act of activities) {
-						if (existingActivityIds.has(act.id)) continue;
+						const actId = Number(act.id);
+						if (existingActivityIds.has(actId)) continue;
 						try {
+							const contentJson = await convertHtmlToLexical(act.contentHtml, activityCtx);
 							await db.insert(schema.activities).values({
-								id: act.id,
+								id: actId,
 								authorId: userId,
-								contentJson: act.content,
+								contentJson,
 								createdAt: act.createdAt
 							});
-							existingActivityIds.add(act.id);
+							existingActivityIds.add(actId);
 						} catch (e: unknown) {
 							conflicts.push({
 								type: 'activity_insert_error',
@@ -736,10 +1220,11 @@ async function main() {
 					const parsedDiscussions = parseDiscussionsHtml(decodedHtml);
 
 					for (const d of parsedDiscussions) {
+						const discId = Number(d.id);
 						await ensureCategory(d.categorySlug);
 
-						if (existingDiscussionIds.has(d.id)) {
-							const existing = existingDiscussionsMap.get(d.id);
+						if (existingDiscussionIds.has(discId)) {
+							const existing = existingDiscussionsMap.get(discId);
 							if (existing && existing.title !== d.title) {
 								conflicts.push({
 									type: 'discussion_conflict',
@@ -754,7 +1239,7 @@ async function main() {
 
 						try {
 							await db.insert(schema.discussions).values({
-								id: d.id,
+								id: discId,
 								title: d.title,
 								slug: `discussion-${d.id}`,
 								categorySlug: d.categorySlug,
@@ -764,9 +1249,13 @@ async function main() {
 								createdAt: d.lastActiveTime,
 								updatedAt: d.lastActiveTime
 							});
-							existingDiscussionIds.add(d.id);
-							existingDiscussionsMap.set(d.id, { title: d.title, authorId: userId });
-							discussionTitleToIdMap.set(d.title, d.id);
+							existingDiscussionIds.add(discId);
+							existingDiscussionsMap.set(discId, {
+								title: d.title,
+								authorId: userId,
+								createdAt: d.lastActiveTime
+							});
+							discussionTitleToIdMap.set(d.title, discId);
 						} catch (e: unknown) {
 							conflicts.push({
 								type: 'discussion_insert_error',
@@ -797,6 +1286,7 @@ async function main() {
 
 					const decodedHtml = Buffer.from(jsonContent.Data, 'base64').toString('utf-8');
 					const comments = parseCommentsHtml(decodedHtml);
+					const commentCtx = makeContext(userId);
 
 					for (const comment of comments) {
 						// Resolve parent discussion by title
@@ -813,21 +1303,23 @@ async function main() {
 							continue;
 						}
 
-						if (existingReplyIds.has(comment.id)) {
+						const commentId = Number(comment.id);
+						if (existingReplyIds.has(commentId)) {
 							continue;
 						}
 
 						try {
 							const createdAt = parseCommentTime(comment.timeText);
+							const contentJson = await convertHtmlToLexical(comment.contentHtml, commentCtx);
 							await db.insert(schema.replies).values({
-								id: comment.id,
+								id: commentId,
 								discussionId: discussionId,
 								authorId: userId,
-								contentJson: comment.content,
+								contentJson,
 								createdAt: createdAt,
 								updatedAt: createdAt
 							});
-							existingReplyIds.add(comment.id);
+							existingReplyIds.add(commentId);
 						} catch (e: unknown) {
 							conflicts.push({
 								type: 'reply_insert_error',
@@ -847,6 +1339,66 @@ async function main() {
 		}
 	} else {
 		console.log('Warning: data/profiles directory not found.');
+	}
+
+	// 4.5 Import discussion OP bodies (first post) as the earliest reply.
+	// The discussions table has no content column — the OP is the chronologically
+	// earliest reply (see the discussion loader's orderBy(createdAt).limit(1)).
+	const discussionsDir = join(dataDir, 'discussions');
+	if (existsSync(discussionsDir)) {
+		console.log('Importing discussion bodies (OP)...');
+		for (const [discussionId, meta] of existingDiscussionsMap) {
+			// Negative id keeps OP replies deterministic, idempotent, and clear of
+			// the positive Vanilla comment ids.
+			const opReplyId = -discussionId;
+			if (existingReplyIds.has(opReplyId)) continue;
+
+			const htmlPath = join(discussionsDir, String(discussionId), 'page-000001.html');
+			if (!existsSync(htmlPath)) {
+				conflicts.push({ type: 'op_body_missing', discussionId });
+				continue;
+			}
+
+			let body: string | null;
+			try {
+				const opHtml = readFileSync(htmlPath, 'utf-8');
+				body = extractOpBody(opHtml, discussionId);
+			} catch (e: unknown) {
+				conflicts.push({
+					type: 'op_body_read_error',
+					discussionId,
+					error: getErrorMessage(e)
+				});
+				continue;
+			}
+
+			if (!body || !body.trim()) {
+				conflicts.push({ type: 'op_body_empty', discussionId });
+				continue;
+			}
+
+			const authorId = meta.authorId;
+			try {
+				const contentJson = await convertHtmlToLexical(body, makeContext(authorId));
+				await db.insert(schema.replies).values({
+					id: opReplyId,
+					discussionId,
+					authorId,
+					contentJson,
+					createdAt: meta.createdAt,
+					updatedAt: meta.createdAt
+				});
+				existingReplyIds.add(opReplyId);
+			} catch (e: unknown) {
+				conflicts.push({
+					type: 'op_body_insert_error',
+					discussionId,
+					error: getErrorMessage(e)
+				});
+			}
+		}
+	} else {
+		console.log('Warning: data/discussions directory not found; skipping OP bodies.');
 	}
 
 	// 5. Generate log and output report
@@ -872,7 +1424,9 @@ async function main() {
 	process.exit(0);
 }
 
-main().catch((err) => {
-	console.error('Error in main execution:', err);
-	process.exit(1);
-});
+if (import.meta.main) {
+	main().catch((err) => {
+		console.error('Error in main execution:', err);
+		process.exit(1);
+	});
+}

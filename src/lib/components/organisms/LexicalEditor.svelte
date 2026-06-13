@@ -44,6 +44,7 @@
 	import RichTextLinkEditor from '$lib/components/molecules/RichTextLinkEditor.svelte';
 	import { CodeNode, CodeHighlightNode } from '@lexical/code';
 	import { MentionNode, createMentionNode } from '$lib/components/atoms/MentionNode';
+	import { DeadImageNode } from '$lib/components/atoms/DeadImageNode';
 	import MentionTypeaheadPlugin from '$lib/components/molecules/MentionTypeaheadPlugin.svelte';
 	import {
 		COMMAND_PRIORITY_EDITOR,
@@ -238,7 +239,8 @@
 		LinkNode,
 		CodeNode,
 		CodeHighlightNode,
-		MentionNode
+		MentionNode,
+		DeadImageNode
 	];
 
 	// Markdown transformers we support

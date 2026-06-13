@@ -8,7 +8,7 @@ import { resolveMentions } from '$lib/server/utils/mentions';
 
 export const load: PageServerLoad = async (event) => {
 	const userId = Number(event.params.userId);
-	if (!userId) {
+	if (Number.isNaN(userId)) {
 		error(404, event.locals.t.common.notFound);
 	}
 	const db = event.locals.db;
