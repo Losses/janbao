@@ -61,7 +61,11 @@
 	>
 		<Icon path={mdiEmail} size={16} />
 		{#if badges.unreadMessages > 0}
-			<Badge variant="primary" size="xs" class="absolute -top-1 -right-1 min-w-[1rem]">
+			<Badge
+				variant="primary"
+				size="xs"
+				class="pointer-events-none absolute -top-1 -right-1 min-w-[1rem]"
+			>
 				{formatBadgeCount(badges.unreadMessages)}
 			</Badge>
 		{/if}

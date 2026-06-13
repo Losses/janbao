@@ -443,7 +443,7 @@
 			<Toolbar>
 				{#snippet children({ activeEditor })}
 					<EditorInstanceSync {activeEditor} update={(e: unknown) => (editorInstance = e)} />
-					<RichTextToolbar {activeEditor} {disableHeadings} {disableImageUpload} />
+					<RichTextToolbar {activeEditor} {disableHeadings} {disableImageUpload} {t} />
 				{/snippet}
 			</Toolbar>
 		</div>
@@ -463,7 +463,7 @@
 			<ImagePlugin />
 			<LinkPlugin {validateUrl} />
 			<AutoLinkPlugin />
-			<RichTextLinkEditor anchorElem={editorAreaElem} />
+			<RichTextLinkEditor anchorElem={editorAreaElem} {t} />
 			<MentionTypeaheadPlugin {excludeIds} />
 			<MarkdownShortcutPlugin transformers={markdownTransformers} />
 			<OnChangePlugin

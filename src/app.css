@@ -1,5 +1,77 @@
 @import 'tailwindcss';
-@plugin "daisyui";
+@plugin "daisyui" {
+	themes:
+		light,
+		dark --prefersdark,
+		cupcake,
+		bumblebee,
+		emerald,
+		corporate,
+		synthwave,
+		retro,
+		cyberpunk,
+		valentine,
+		halloween,
+		garden,
+		forest,
+		aqua,
+		lofi,
+		pastel,
+		fantasy,
+		wireframe,
+		black,
+		luxury,
+		dracula,
+		cmyk,
+		autumn,
+		business,
+		acid,
+		lemonade,
+		night,
+		coffee,
+		winter,
+		dim,
+		nord,
+		sunset,
+		caramellatte,
+		abyss,
+		silk;
+}
+
+@plugin "daisyui/theme" {
+	name: 'huoxin';
+	default: true;
+
+	/* Colors */
+	--color-primary: #444;
+	--color-primary-content: #ffffff;
+	--color-secondary: #ccc;
+	--color-secondary-content: #111;
+	--color-accent: #ffee88;
+	--color-accent-content: #111;
+	--color-neutral: #111;
+	--color-neutral-content: #ffffff;
+	--color-base-100: #ffffff;
+	--color-base-200: #f3f3f3;
+	--color-base-300: #ccc;
+	--color-base-content: #111;
+
+	/* Border Radius */
+	--radius-selector: 0px;
+	--radius-field: 0px;
+	--radius-box: 0px;
+
+	/* Border Width */
+	--border: 1px;
+}
+
+[data-theme='huoxin'] {
+	.btn:not(.btn-ghost):not(.btn-link):not(:disabled):not([disabled]) {
+		border-width: 1px;
+		border-color: #ccc;
+		box-shadow: none;
+	}
+}
 
 /*
  * Spoiler text styling - used in both LexicalRenderer (read-only) and

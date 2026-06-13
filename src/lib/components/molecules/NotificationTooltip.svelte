@@ -83,10 +83,16 @@
 	// notification read on the server and clear the badge optimistically. Fires
 	// on each open that still has unread (e.g. after new ones land and a
 	// navigation refreshes the count back above zero).
+	//
+	// Deferred to a microtask so it runs AFTER the opening click event. Doing it
+	// synchronously would remove the badge during the very click that opened the
+	// tooltip; the Tooltip's click-outside handler runs in that same click and,
+	// finding the badge's click target detached, would mistake it for an outside
+	// click and snap the popup shut before it's ever seen.
 	$effect(() => {
 		if (!isOpen) return;
 		if (badges.unreadNotifications <= 0) return;
-		void markAllRead();
+		queueMicrotask(markAllRead);
 	});
 
 	function markItemsRead(list: NotificationItem[]): NotificationItem[] {
@@ -136,7 +142,11 @@
 	>
 		<Icon path={mdiBell} size={16} />
 		{#if badges.unreadNotifications > 0}
-			<Badge variant="primary" size="xs" class="absolute -top-1 -right-1 min-w-[1rem]">
+			<Badge
+				variant="primary"
+				size="xs"
+				class="pointer-events-none absolute -top-1 -right-1 min-w-[1rem]"
+			>
 				{formatBadgeCount(badges.unreadNotifications)}
 			</Badge>
 		{/if}

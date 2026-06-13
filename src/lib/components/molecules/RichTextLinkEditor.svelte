@@ -27,16 +27,18 @@
 	import { sanitizeUrl } from 'svelte-lexical';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import { mdiClose, mdiCheck, mdiPencil, mdiDelete } from '@mdi/js';
+	import type { TranslationDict } from '$lib/types/translation';
 
 	interface Props {
 		anchorElem: HTMLElement | undefined;
+		t?: TranslationDict | null;
 	}
 
 	interface UpdateListenerPayload {
 		editorState: EditorState;
 	}
 
-	let { anchorElem }: Props = $props();
+	let { anchorElem, t = null }: Props = $props();
 
 	const editor = getEditor();
 	let activeEditor = $state(editor);
@@ -347,7 +349,7 @@
 			<input
 				bind:this={inputRef}
 				class="input input-bordered input-xs max-w-xs link-input text-base-content bg-base-100"
-				placeholder="Enter URL..."
+				placeholder={t?.editor?.enterUrl ?? 'Enter URL...'}
 				bind:value={editedLinkUrl}
 				onkeydown={monitorInputInteraction}
 			/>
@@ -356,7 +358,7 @@
 				class="btn btn-xs btn-ghost btn-circle text-error"
 				onmousedown={preventDefault}
 				onclick={() => ($isEditMode = false)}
-				title="Cancel"
+				title={t?.common?.cancel ?? 'Cancel'}
 			>
 				<Icon path={mdiClose} size={14} />
 			</button>
@@ -365,7 +367,7 @@
 				class="btn btn-xs btn-ghost btn-circle text-success"
 				onmousedown={preventDefault}
 				onclick={handleLinkSubmission}
-				title="Confirm"
+				title={t?.common?.confirm ?? 'Confirm'}
 			>
 				<Icon path={mdiCheck} size={14} />
 			</button>
@@ -387,7 +389,7 @@
 					editedLinkUrl = linkUrl;
 					$isEditMode = true;
 				}}
-				title="Edit"
+				title={t?.common?.edit ?? 'Edit'}
 			>
 				<Icon path={mdiPencil} size={14} />
 			</button>
@@ -398,7 +400,7 @@
 				onclick={() => {
 					activeEditor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
 				}}
-				title="Remove"
+				title={t?.editor?.remove ?? 'Remove'}
 			>
 				<Icon path={mdiDelete} size={14} />
 			</button>

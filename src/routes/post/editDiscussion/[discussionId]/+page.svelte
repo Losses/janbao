@@ -39,24 +39,66 @@
 		}
 	});
 
-	const themesList = [
-		{ value: '', label: 'Default theme' },
-		{ value: 'light', label: 'Light' },
-		{ value: 'dark', label: 'Dark' },
-		{ value: 'cupcake', label: 'Cupcake' },
-		{ value: 'bumblebee', label: 'Bumblebee' },
-		{ value: 'emerald', label: 'Emerald' },
-		{ value: 'synthwave', label: 'Synthwave' },
-		{ value: 'cyberpunk', label: 'Cyberpunk' },
-		{ value: 'valentine', label: 'Valentine' },
-		{ value: 'aqua', label: 'Aqua' },
-		{ value: 'luxury', label: 'Luxury' },
-		{ value: 'dracula', label: 'Dracula' },
-		{ value: 'business', label: 'Business' },
-		{ value: 'night', label: 'Night' },
-		{ value: 'coffee', label: 'Coffee' },
-		{ value: 'winter', label: 'Winter' }
-	];
+	// Reactive Theme Preview
+	$effect(() => {
+		if (typeof document === 'undefined') return;
+		const originalTheme = document.documentElement.getAttribute('data-theme');
+		return () => {
+			if (originalTheme) {
+				document.documentElement.setAttribute('data-theme', originalTheme);
+			} else {
+				document.documentElement.removeAttribute('data-theme');
+			}
+		};
+	});
+
+	$effect(() => {
+		if (typeof document === 'undefined') return;
+		if (themeName) {
+			document.documentElement.setAttribute('data-theme', themeName);
+		} else {
+			document.documentElement.removeAttribute('data-theme');
+		}
+	});
+
+	const themesList = $derived([
+		{ value: '', label: t.theme.defaultTheme },
+		{ value: 'light', label: t.theme.light },
+		{ value: 'dark', label: t.theme.dark },
+		{ value: 'cupcake', label: t.theme.cupcake },
+		{ value: 'bumblebee', label: t.theme.bumblebee },
+		{ value: 'emerald', label: t.theme.emerald },
+		{ value: 'corporate', label: t.theme.corporate },
+		{ value: 'synthwave', label: t.theme.synthwave },
+		{ value: 'retro', label: t.theme.retro },
+		{ value: 'cyberpunk', label: t.theme.cyberpunk },
+		{ value: 'valentine', label: t.theme.valentine },
+		{ value: 'halloween', label: t.theme.halloween },
+		{ value: 'garden', label: t.theme.garden },
+		{ value: 'forest', label: t.theme.forest },
+		{ value: 'aqua', label: t.theme.aqua },
+		{ value: 'lofi', label: t.theme.lofi },
+		{ value: 'pastel', label: t.theme.pastel },
+		{ value: 'fantasy', label: t.theme.fantasy },
+		{ value: 'wireframe', label: t.theme.wireframe },
+		{ value: 'black', label: t.theme.black },
+		{ value: 'luxury', label: t.theme.luxury },
+		{ value: 'dracula', label: t.theme.dracula },
+		{ value: 'cmyk', label: t.theme.cmyk },
+		{ value: 'autumn', label: t.theme.autumn },
+		{ value: 'business', label: t.theme.business },
+		{ value: 'acid', label: t.theme.acid },
+		{ value: 'lemonade', label: t.theme.lemonade },
+		{ value: 'night', label: t.theme.night },
+		{ value: 'coffee', label: t.theme.coffee },
+		{ value: 'winter', label: t.theme.winter },
+		{ value: 'dim', label: t.theme.dim },
+		{ value: 'nord', label: t.theme.nord },
+		{ value: 'sunset', label: t.theme.sunset },
+		{ value: 'caramellatte', label: t.theme.caramellatte },
+		{ value: 'abyss', label: t.theme.abyss },
+		{ value: 'silk', label: t.theme.silk }
+	]);
 
 	async function saveDraftManual() {
 		if (!contentJson || isSavingManualDraft) return;
@@ -114,9 +156,9 @@
 						'success' in result.data &&
 						result.data.success === false
 					) {
-						alert(result.data.error || 'Failed to update discussion');
+						alert(result.data.error || t.discussion.updateFailed);
 					} else if (result.type === 'failure') {
-						alert(result.data?.error || 'Failed to update discussion');
+						alert(result.data?.error || t.discussion.updateFailed);
 					}
 				};
 			}}
@@ -125,14 +167,14 @@
 			<!-- Title Input -->
 			<div class="form-control w-full">
 				<label class="label" for="title-input">
-					<span class="label-text font-bold text-base-content">Title</span>
+					<span class="label-text font-bold text-base-content">{t.discussion.title}</span>
 				</label>
 				<input
 					id="title-input"
 					type="text"
 					name="title"
 					bind:value={title}
-					placeholder="Enter discussion title..."
+					placeholder={t.discussion.titlePlaceholder}
 					class="input input-bordered w-full text-lg focus:input-primary"
 					required
 					disabled={isSubmitting || isPreview}
@@ -144,7 +186,7 @@
 				<!-- Category Selector -->
 				<div class="form-control w-full">
 					<label class="label" for="category-select">
-						<span class="label-text font-bold text-base-content">Category</span>
+						<span class="label-text font-bold text-base-content">{t.discussion.category}</span>
 					</label>
 					<select
 						id="category-select"
@@ -163,7 +205,9 @@
 				<!-- Theme Selector -->
 				<div class="form-control w-full">
 					<label class="label" for="theme-select">
-						<span class="label-text font-bold text-base-content font-medium">Custom Theme</span>
+						<span class="label-text font-bold text-base-content font-medium">
+							{t.theme.customTheme}
+						</span>
 					</label>
 					<select
 						id="theme-select"
@@ -182,7 +226,7 @@
 			<!-- Content Editor -->
 			<div class="form-control w-full">
 				<label class="label" for="editor-block">
-					<span class="label-text font-bold text-base-content">Content</span>
+					<span class="label-text font-bold text-base-content">{t.discussion.content}</span>
 				</label>
 				<input type="hidden" name="contentJson" value={contentJson} />
 
@@ -204,7 +248,7 @@
 						{#if contentJson}
 							<LexicalRenderer {contentJson} />
 						{:else}
-							<p class="text-base-content/40 italic">Nothing to preview yet.</p>
+							<p class="text-base-content/40 italic">{t.discussion.previewEmpty}</p>
 						{/if}
 					</div>
 				{/if}
