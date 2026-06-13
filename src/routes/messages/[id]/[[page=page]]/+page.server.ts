@@ -22,6 +22,9 @@ export const load: PageServerLoad = async (event) => {
 	}
 
 	const conversationId = Number(event.params.id);
+	if (!conversationId) {
+		error(404, event.locals.t.message.conversationNotFound);
+	}
 	const db = event.locals.db;
 	const t = event.locals.t;
 
@@ -167,6 +170,9 @@ export const actions: Actions = {
 		}
 
 		const conversationId = Number(params.id);
+		if (!conversationId) {
+			error(400, locals.t.common.badRequest);
+		}
 		const db = locals.db;
 		const t = locals.t;
 
@@ -224,6 +230,9 @@ export const actions: Actions = {
 		}
 
 		const conversationId = Number(params.id);
+		if (!conversationId) {
+			error(400, locals.t.common.badRequest);
+		}
 		const db = locals.db;
 		const t = locals.t;
 
@@ -314,6 +323,9 @@ export const actions: Actions = {
 		}
 
 		const conversationId = Number(params.id);
+		if (!conversationId) {
+			error(400, locals.t.common.badRequest);
+		}
 		const db = locals.db;
 		const t = locals.t;
 

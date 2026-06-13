@@ -75,7 +75,7 @@
 		<!-- Discussions Stream -->
 		{#if discussionsList.length === 0}
 			<div
-				class="card bg-base-200/40 border border-base-200 p-10 text-center text-base-content/50 rounded-xl"
+				class="card bg-base-200/40 border border-base-200 p-10 text-center text-base-content/50"
 			>
 				{t.common.noResults}
 			</div>

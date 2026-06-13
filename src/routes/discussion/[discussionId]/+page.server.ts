@@ -5,6 +5,9 @@ import { and, eq, isNull } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const discussionId = Number(params.discussionId);
+	if (!discussionId) {
+		error(404, locals.t.discussion.notFound);
+	}
 	const db = locals.db;
 
 	const record = await db

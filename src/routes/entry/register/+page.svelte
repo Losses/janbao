@@ -79,7 +79,7 @@
 
 <SingleColumnLayout>
 	<div class="text-center">
-		<h2 class="text-3xl font-bold tracking-tight text-neutral-content">{t.nav.register}</h2>
+		<h2 class="text-3xl font-bold tracking-tight text-base-content">{t.nav.register}</h2>
 	</div>
 
 	<form class="mt-8 space-y-4" onsubmit={handleSubmit}>

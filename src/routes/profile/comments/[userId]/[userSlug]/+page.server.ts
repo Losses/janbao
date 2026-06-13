@@ -8,6 +8,9 @@ import { resolveMentions } from '$lib/server/utils/mentions';
 
 export const load: PageServerLoad = async (event) => {
 	const userId = Number(event.params.userId);
+	if (!userId) {
+		error(404, event.locals.t.common.notFound);
+	}
 	const db = event.locals.db;
 	const user = event.locals.user;
 	const groupSlug = resolveGroupSlug(user);

@@ -19,6 +19,9 @@ import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 export const load: PageServerLoad = async (event) => {
 	const slug = event.params.slug;
 	const discussionId = Number(event.params.discussionId);
+	if (!discussionId) {
+		error(404, event.locals.t.discussion.notFound);
+	}
 	const db = event.locals.db;
 	const user = event.locals.user;
 

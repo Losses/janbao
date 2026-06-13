@@ -21,6 +21,9 @@ export const load: PageServerLoad = async (event) => {
 
 	const db = event.locals.db;
 	const discussionId = Number(event.params.discussionId);
+	if (!discussionId) {
+		error(404, event.locals.t.discussion.notFound);
+	}
 
 	// 1. Fetch discussion
 	const discussionRecords = await db
