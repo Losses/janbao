@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { MentionedUsersMap } from '$lib/types/mentions';
 	import { generateSlug } from '$lib/utils/slug';
+	import Icon from '$lib/components/atoms/Icon.svelte';
+	import { mdiImageBrokenVariant } from '@mdi/js';
 	/**
 	 * LexicalRenderer Molecule - Recursively renders Lexical JSON states securely on the client.
 	 * Supports standard text formats (bold, italic, underline, strikethrough, inline code),
@@ -35,10 +37,17 @@
 		mentionedUsers = null
 	}: LexicalRendererProps = $props();
 
-	/** Defense-in-depth: only allow http/https URLs to prevent Stored XSS */
+	/**
+	 * Defense-in-depth URL allowlist to prevent Stored XSS via <a href> / <img src>.
+	 * Allows absolute http(s) and same-origin relative references ("/img/<id>",
+	 * "./", "../", "#") — aligned with the editor's validateUrl. Rejects
+	 * protocol-relative "//host" and any non-http scheme (javascript:, data:, …).
+	 */
 	function safeUrl(url: string | undefined): string {
 		if (!url) return '';
 		if (url.startsWith('http://') || url.startsWith('https://')) return url;
+		if (url.startsWith('/') && !url.startsWith('//')) return url;
+		if (url.startsWith('./') || url.startsWith('../') || url.startsWith('#')) return url;
 		return '';
 	}
 
@@ -297,6 +306,13 @@
 					loading="lazy"
 				/>
 			{/if}
+		{:else if node.type === 'dead-image'}
+			<span
+				class="dead-image-placeholder inline-flex items-center gap-2 my-3 px-3 py-2 rounded-lg border border-dashed border-base-300 bg-base-200/50 text-base-content/60 text-sm"
+			>
+				<Icon path={mdiImageBrokenVariant} size={20} class="opacity-50" />
+				图片已失效
+			</span>
 		{:else if node.children}
 			{#each node.children as child, i (i)}
 				{@render renderNode(child)}

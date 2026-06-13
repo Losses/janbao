@@ -9,7 +9,7 @@ import { generateSlug } from '$lib/utils/slug';
 export const load: PageServerLoad = async (event) => {
 	const userSlug = event.params.userSlug;
 	const userId = Number(event.params.userId);
-	if (!userId) {
+	if (Number.isNaN(userId)) {
 		error(404, event.locals.t.common.notFound);
 	}
 	const db = event.locals.db;

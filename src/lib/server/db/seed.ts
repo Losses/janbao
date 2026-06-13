@@ -137,6 +137,7 @@ export async function seedCore(db: D1Db, env?: App.Platform['env']) {
 				const { hashPassword } = await import('$lib/server/auth');
 				const adminPasswordHash = await hashPassword(adminPassword);
 				await db.insert(users).values({
+					id: 0,
 					username: 'admin',
 					email: adminEmail,
 					passwordHash: adminPasswordHash,

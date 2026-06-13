@@ -30,3 +30,6 @@ vite.config.ts.timestamp-*
 
 draft.md
 draft-*.md
+.local.db*
+.local-uploads/**
+import-conflicts.json
