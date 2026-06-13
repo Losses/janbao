@@ -330,7 +330,6 @@
 	},
 	"comment": {
 		"replyIn": "回复于",
-		"onActivity": "动态评论",
 		"noComments": "暂无评论"
 	},
 	"forum": {

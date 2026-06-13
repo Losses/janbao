@@ -32,6 +32,8 @@ export async function getBookmarks(
 			categorySlug: discussions.categorySlug,
 			categoryTitle: categories.title,
 			bookmarkedAt: bookmarks.bookmarkedAt,
+			authorId: users.id,
+			authorUsername: users.username,
 			authorDisplayName: users.displayName
 		})
 		.from(bookmarks)
@@ -49,6 +51,8 @@ export async function getBookmarks(
 		slug: r.slug,
 		categorySlug: r.categorySlug,
 		categoryTitle: r.categoryTitle,
+		authorId: r.authorId,
+		authorUsername: r.authorUsername,
 		authorDisplayName: r.authorDisplayName,
 		bookmarkedAt: r.bookmarkedAt
 	}));

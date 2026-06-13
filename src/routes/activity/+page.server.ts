@@ -61,28 +61,7 @@ export const load: PageServerLoad = async (event) => {
 		}
 	}
 
-	// 5. Fetch comment counts per activity (batch query)
-	const activityIds = activityList.map((a) => a.id);
-	const commentCountMap = new Map<string, number>();
-
-	if (activityIds.length > 0) {
-		const commentCounts = await db
-			.select({
-				parentActivityId: activities.parentActivityId,
-				count: sql<number>`COUNT(*)`
-			})
-			.from(activities)
-			.where(and(inArray(activities.parentActivityId, activityIds), isNull(activities.deletedAt)))
-			.groupBy(activities.parentActivityId);
-
-		for (const cc of commentCounts) {
-			if (cc.parentActivityId) {
-				commentCountMap.set(cc.parentActivityId, cc.count);
-			}
-		}
-	}
-
-	// 6. Total count for pagination
+	// 5. Total count for pagination
 	const totalResult = await db
 		.select({ count: sql<number>`COUNT(*)` })
 		.from(activities)
@@ -91,7 +70,7 @@ export const load: PageServerLoad = async (event) => {
 	const totalCount = totalResult[0]?.count || 0;
 	const totalPages = Math.ceil(totalCount / limit);
 
-	// 7. Fetch existing activity draft if logged in
+	// 6. Fetch existing activity draft if logged in
 	let activityDraft: string | null = null;
 	if (user) {
 		const draftRecords = await db
@@ -111,7 +90,7 @@ export const load: PageServerLoad = async (event) => {
 		}
 	}
 
-	// 8. Resolve @mentions across all activity content for chip rendering
+	// 7. Resolve @mentions across all activity content for chip rendering
 	const mentionedUsers = await resolveMentions(
 		activityList.map((a) => a.contentJson),
 		db
@@ -123,8 +102,7 @@ export const load: PageServerLoad = async (event) => {
 			recipientDisplayName: a.recipientId
 				? recipientMap.get(a.recipientId)?.displayName || null
 				: null,
-			recipientUsername: a.recipientId ? recipientMap.get(a.recipientId)?.username || null : null,
-			commentCount: commentCountMap.get(a.id) || 0
+			recipientUsername: a.recipientId ? recipientMap.get(a.recipientId)?.username || null : null
 		})),
 		page,
 		totalPages,

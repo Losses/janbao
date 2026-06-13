@@ -330,7 +330,6 @@
 	},
 	"comment": {
 		"replyIn": "Reply in",
-		"onActivity": "Comment on Activity",
 		"noComments": "No comments yet"
 	},
 	"forum": {
