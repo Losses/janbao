@@ -1,14 +1,9 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
-import {
-	categories,
-	categoryPermissions,
-	discussions,
-	replies,
-	drafts
-} from '$lib/server/db/schema';
+import { categories, categoryPermissions, discussions, replies, drafts } from '$lib/server/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { generateSlug } from '$lib/utils/slug';
+import { resolvePermissions, resolveGroupSlug } from '$lib/server/constants';
 
 export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user;
@@ -17,6 +12,7 @@ export const load: PageServerLoad = async (event) => {
 	}
 
 	const db = event.locals.db;
+	const groupSlug = resolveGroupSlug(user);
 
 	// 1. Fetch categories
 	const allCategories = await db.select().from(categories).orderBy(categories.displayOrder);
@@ -28,14 +24,20 @@ export const load: PageServerLoad = async (event) => {
 			canCreate: categoryPermissions.canCreate
 		})
 		.from(categoryPermissions)
-		.where(eq(categoryPermissions.groupSlug, user.groupSlug));
+		.where(eq(categoryPermissions.groupSlug, groupSlug));
 
 	const permMap = new Map(perms.map((p) => [p.categorySlug, p.canCreate]));
 
-	const writeableCategories = allCategories.filter((cat) => {
-		const canCreate = permMap.get(cat.slug);
-		return canCreate === undefined ? true : canCreate;
-	});
+	// Apply defaults based on groupSlug
+	const isPrivileged = groupSlug === 'admin' || groupSlug === 'moderator';
+	const defaultCanCreate = groupSlug === 'member' ? true : false;
+
+	const writeableCategories = isPrivileged
+		? allCategories
+		: allCategories.filter((cat) => {
+				const canCreate = permMap.get(cat.slug);
+				return canCreate === undefined ? defaultCanCreate : canCreate;
+			});
 
 	// 3. Find default category (highest priority)
 	let defaultCategorySlug = '';
@@ -90,20 +92,9 @@ export const actions: Actions = {
 			return { success: false, error: event.locals.t.common.contentRequired };
 		}
 
-		// Check permission
-		const perm = await db
-			.select()
-			.from(categoryPermissions)
-			.where(
-				and(
-					eq(categoryPermissions.categorySlug, categorySlug),
-					eq(categoryPermissions.groupSlug, user.groupSlug)
-				)
-			)
-			.limit(1);
-
-		const canCreate = perm.length === 0 ? true : perm[0].canCreate;
-		if (!canCreate) {
+		// Check permission via centralized resolver
+		const perms = await resolvePermissions(db, categorySlug, user);
+		if (!perms.canCreate) {
 			return { success: false, error: event.locals.t.discussion.noPermission };
 		}
 

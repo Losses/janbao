@@ -4,6 +4,7 @@ import { users, activities, drafts } from '$lib/server/db/schema';
 import { eq, and, isNull, desc, sql, or, inArray } from 'drizzle-orm';
 import { generateSlug } from '$lib/utils/slug';
 import { SYSTEM_USER_ID } from '$lib/server/constants';
+import { resolveMentions } from '$lib/server/utils/mentions';
 
 export const load: PageServerLoad = async (event) => {
 	const { userId } = event.params;
@@ -142,6 +143,12 @@ export const load: PageServerLoad = async (event) => {
 		}
 	}
 
+	// 8. Resolve @mentions across profile activity content for chip rendering
+	const mentionedUsers = await resolveMentions(
+		profileActivities.map((a) => a.contentJson),
+		db
+	);
+
 	return {
 		targetUser,
 		activities: profileActivities.map((a) => ({
@@ -153,6 +160,7 @@ export const load: PageServerLoad = async (event) => {
 			commentCount: commentCountMap.get(a.id) || 0
 		})),
 		isOwner,
-		activityDraft
+		activityDraft,
+		mentionedUsers
 	};
 };

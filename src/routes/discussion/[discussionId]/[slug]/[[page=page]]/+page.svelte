@@ -28,6 +28,7 @@
 	const currentPage = $derived(data.page);
 	const totalPages = $derived(data.totalPages);
 	const canDelete = $derived(data.canDelete);
+	const mentionedUsers = $derived(data.mentionedUsers);
 
 	let replyContent = $state('');
 	let isSubmitting = $state(false);
@@ -147,7 +148,7 @@
 					{t}
 				/>
 				<div class="divider my-1"></div>
-				<LexicalRenderer contentJson={opReply.contentJson} />
+				<LexicalRenderer contentJson={opReply.contentJson} {mentionedUsers} />
 				{#if canDelete}
 					<div class="flex justify-end pt-2">
 						<form
@@ -200,7 +201,7 @@
 							{t}
 						/>
 						<div class="divider my-1"></div>
-						<LexicalRenderer contentJson={reply.contentJson} />
+						<LexicalRenderer contentJson={reply.contentJson} {mentionedUsers} />
 					</div>
 				{/each}
 			</div>
