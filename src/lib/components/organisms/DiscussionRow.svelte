@@ -178,7 +178,7 @@
 	<div class="flex-shrink-0">
 		<button
 			onclick={toggleBookmark}
-			class="btn btn-ghost btn-circle btn-sm {bookmarked
+			class="btn btn-ghost btn-circle btn-sm bookmark-btn {bookmarked
 				? 'text-primary'
 				: 'text-base-content/35 hover:text-primary'}"
 			aria-label="Bookmark"

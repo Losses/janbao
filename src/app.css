@@ -71,6 +71,18 @@
 		border-color: #ccc;
 		box-shadow: none;
 	}
+
+	.sidebar-icon-btn {
+		color: #7f7f7f;
+
+		&:hover {
+			color: #111;
+		}
+	}
+
+	.bookmark-btn.text-primary {
+		color: #e5c970;
+	}
 }
 
 /*
