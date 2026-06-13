@@ -51,6 +51,19 @@
 	let deleteDiscussionForm: HTMLFormElement | undefined = $state();
 	let deleteReplyForm: HTMLFormElement | undefined = $state();
 
+	let loadedDiscussionId = $state<string | null>(null);
+	let loadedPage = $state<number | null>(null);
+
+	$effect(() => {
+		if (discussion && (discussion.id !== loadedDiscussionId || currentPage !== loadedPage)) {
+			replyContent = '';
+			editingReplyId = null;
+			editReplyContent = '';
+			loadedDiscussionId = discussion.id;
+			loadedPage = currentPage;
+		}
+	});
+
 	function handlePageChange(newPage: number) {
 		goto(`/discussion/${discussion.id}/${discussion.slug}/p${newPage}`);
 	}
@@ -353,7 +366,7 @@
 			{#if user}
 				{#if canCreate}
 					<h3 class="text-lg font-bold mb-3 text-base-content">{t.common.reply}</h3>
-					{#key editorKey}
+					{#key `${discussion.id}_${editorKey}`}
 						<LexicalEditor
 							bind:this={replyEditor}
 							contextType="reply"

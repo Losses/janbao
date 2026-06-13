@@ -34,6 +34,7 @@
 			title = data.discussion.title;
 			categorySlug = data.discussion.categorySlug;
 			themeName = data.discussion.themeName || '';
+			contentJson = '';
 			loadedDiscussionId = data.discussion.id;
 		}
 	});
@@ -186,14 +187,16 @@
 				<input type="hidden" name="contentJson" value={contentJson} />
 
 				<div class={isPreview ? 'hidden' : ''} id="editor-block">
-					<LexicalEditor
-						contextType="discussion"
-						contextId={discussion.id}
-						initialContent={draftContent || opContentJson}
-						onContentChange={(json) => (contentJson = json)}
-						placeholder={t.editor.placeholder}
-						{t}
-					/>
+					{#key loadedDiscussionId || discussion.id}
+						<LexicalEditor
+							contextType="discussion"
+							contextId={discussion.id}
+							initialContent={draftContent || opContentJson}
+							onContentChange={(json) => (contentJson = json)}
+							placeholder={t.editor.placeholder}
+							{t}
+						/>
+					{/key}
 				</div>
 
 				{#if isPreview}
