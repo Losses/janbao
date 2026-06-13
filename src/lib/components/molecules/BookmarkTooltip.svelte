@@ -49,7 +49,7 @@
 <Tooltip {isOpen} {onToggle} {onClose}>
 	<button
 		type="button"
-		class="btn btn-ghost btn-xs"
+		class="btn btn-ghost btn-xs sidebar-icon-btn"
 		aria-label={tSidebar['bookmarks'] ?? ''}
 		title={tSidebar['bookmarks'] ?? ''}
 		aria-expanded={isOpen}

@@ -53,7 +53,7 @@
 <Tooltip {isOpen} {onToggle} {onClose}>
 	<button
 		type="button"
-		class="btn btn-ghost btn-xs relative"
+		class="btn btn-ghost btn-xs relative sidebar-icon-btn"
 		aria-label={tSidebar['messages'] ?? ''}
 		title={tSidebar['messages'] ?? ''}
 		aria-expanded={isOpen}

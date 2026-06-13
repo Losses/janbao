@@ -87,7 +87,7 @@
 		<!-- Settings (direct link, no tooltip) -->
 		<a
 			href="/profile/edit"
-			class="btn btn-ghost btn-xs"
+			class="btn btn-ghost btn-xs sidebar-icon-btn"
 			aria-label={tSidebar['settings']}
 			title={tSidebar['settings']}
 		>
