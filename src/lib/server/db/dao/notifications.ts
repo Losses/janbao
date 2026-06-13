@@ -1,5 +1,5 @@
 import { notifications, users, discussions, messages } from '../schema';
-import { eq, desc, inArray } from 'drizzle-orm';
+import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import type { D1Db } from '../index';
 import type { NotificationItem } from '$lib/types/api';
 
@@ -116,4 +116,18 @@ export async function getNotifications(
 			activityId: r.activityId
 		};
 	});
+}
+
+/**
+ * Count the active user's unread notifications. Served by the
+ * `notifications_user_read_idx` index on (userId, isRead). Used by the root
+ * layout load to render the notification icon badge; cheap enough to run on
+ * every navigation.
+ */
+export async function countUnreadNotifications(db: D1Db, userId: string): Promise<number> {
+	const rows = await db
+		.select({ count: sql<number>`COUNT(*)` })
+		.from(notifications)
+		.where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
+	return rows[0]?.count ?? 0;
 }

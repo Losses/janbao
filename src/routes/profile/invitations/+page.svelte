@@ -91,7 +91,7 @@
 			</div>
 		{/if}
 
-		<div class="card bg-base-100 border border-base-200 rounded-xl p-5 shadow-sm space-y-3">
+		<div class="space-y-3">
 			<p class="text-sm text-base-content/80">{allowanceText}</p>
 			<button
 				class="btn btn-primary btn-sm"

@@ -323,7 +323,6 @@ export const notifications = sqliteTable(
 		sourceUserId: text('source_user_id').references(() => users.id, { onDelete: 'cascade' }),
 		discussionId: text('discussion_id'),
 		replyId: text('reply_id'),
-		messageId: text('message_id'),
 		activityId: text('activity_id'),
 		isRead: integer('is_read', { mode: 'boolean' }).notNull().default(false),
 		createdAt: integer('created_at', { mode: 'timestamp' })
@@ -342,7 +341,6 @@ export const notificationPreferences = sqliteTable('notification_preferences', {
 		.references(() => users.id, { onDelete: 'cascade' }),
 	profileComment: integer('profile_comment', { mode: 'boolean' }).notNull().default(true),
 	discussionReply: integer('discussion_reply', { mode: 'boolean' }).notNull().default(true),
-	privateMessage: integer('private_message', { mode: 'boolean' }).notNull().default(true),
 	discussionComment: integer('discussion_comment', { mode: 'boolean' }).notNull().default(true),
 	participatedComment: integer('participated_comment', { mode: 'boolean' }).notNull().default(true),
 	mention: integer('mention', { mode: 'boolean' }).notNull().default(true),

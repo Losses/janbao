@@ -9,6 +9,8 @@
 	import { mdiEmail, mdiEmailPlus } from '@mdi/js';
 	import type { VoidHandler } from '$lib/types/handlers';
 	import type { ConversationListItem } from '$lib/types/api';
+	import { getBadgesStore } from '$lib/stores/badges.svelte';
+	import { formatBadgeCount } from '$lib/utils/count';
 
 	import type { TranslationDict } from '$lib/types/translation';
 
@@ -23,6 +25,8 @@
 
 	const tSidebar = $derived((t['sidebar'] as Record<string, string> | undefined) ?? {});
 	const tMessage = $derived((t['message'] as Record<string, string> | undefined) ?? {});
+
+	const badges = getBadgesStore();
 
 	let conversations = $state<ConversationListItem[]>([]);
 	let loaded = $state(false);
@@ -49,13 +53,18 @@
 <Tooltip {isOpen} {onToggle} {onClose}>
 	<button
 		type="button"
-		class="btn btn-ghost btn-xs"
+		class="btn btn-ghost btn-xs relative"
 		aria-label={tSidebar['messages'] ?? ''}
 		title={tSidebar['messages'] ?? ''}
 		aria-expanded={isOpen}
 		aria-haspopup="dialog"
 	>
 		<Icon path={mdiEmail} size={16} />
+		{#if badges.unreadMessages > 0}
+			<Badge variant="primary" size="xs" class="absolute -top-1 -right-1 min-w-[1rem]">
+				{formatBadgeCount(badges.unreadMessages)}
+			</Badge>
+		{/if}
 	</button>
 
 	{#snippet popover()}

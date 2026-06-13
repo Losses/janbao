@@ -7,9 +7,12 @@
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import DateComponent from '$lib/components/atoms/Date.svelte';
+	import Badge from '$lib/components/atoms/Badge.svelte';
 	import { mdiBell, mdiCog } from '@mdi/js';
 	import type { VoidHandler } from '$lib/types/handlers';
 	import type { NotificationItem } from '$lib/types/api';
+	import { getBadgesStore } from '$lib/stores/badges.svelte';
+	import { formatBadgeCount } from '$lib/utils/count';
 
 	import type { TranslationDict } from '$lib/types/translation';
 
@@ -25,8 +28,15 @@
 	const tSidebar = $derived((t['sidebar'] as Record<string, string> | undefined) ?? {});
 	const tNotification = $derived((t['notification'] as Record<string, string> | undefined) ?? {});
 
+	const badges = getBadgesStore();
+
 	let items = $state<NotificationItem[]>([]);
 	let loaded = $state(false);
+	// True once the user has opened the dropdown this session and we marked
+	// everything read. Decouples the dropdown's read styling from the race
+	// between the items fetch and the mark-all-read PUT (whichever resolves
+	// first, the items end up rendered as read).
+	let allMarkedRead = $state(false);
 
 	interface NotificationView {
 		item: NotificationItem;
@@ -76,6 +86,20 @@
 		void load();
 	});
 
+	// Opening the dropdown counts as having seen the notifications: mark every
+	// notification read on the server and clear the badge optimistically. Fires
+	// on each open that still has unread (e.g. after new ones land and a
+	// navigation refreshes the count back above zero).
+	$effect(() => {
+		if (!isOpen) return;
+		if (badges.unreadNotifications <= 0) return;
+		void markAllRead();
+	});
+
+	function markItemsRead(list: NotificationItem[]): NotificationItem[] {
+		return list.map((item) => ({ ...item, isRead: true }));
+	}
+
 	async function load() {
 		try {
 			const res = await fetch('/api/notifications?limit=5');
@@ -87,19 +111,42 @@
 			items = [];
 		}
 		loaded = true;
+		if (allMarkedRead) {
+			items = markItemsRead(items);
+		}
+	}
+
+	async function markAllRead() {
+		badges.clearNotifications();
+		allMarkedRead = true;
+		items = markItemsRead(items);
+		try {
+			await fetch('/api/notifications', {
+				method: 'PUT',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ all: true })
+			});
+		} catch {
+			// Non-critical — the next navigation re-syncs from the server
+		}
 	}
 </script>
 
 <Tooltip {isOpen} {onToggle} {onClose}>
 	<button
 		type="button"
-		class="btn btn-ghost btn-xs"
+		class="btn btn-ghost btn-xs relative"
 		aria-label={tSidebar['notifications'] ?? ''}
 		title={tSidebar['notifications'] ?? ''}
 		aria-expanded={isOpen}
 		aria-haspopup="dialog"
 	>
 		<Icon path={mdiBell} size={16} />
+		{#if badges.unreadNotifications > 0}
+			<Badge variant="primary" size="xs" class="absolute -top-1 -right-1 min-w-[1rem]">
+				{formatBadgeCount(badges.unreadNotifications)}
+			</Badge>
+		{/if}
 	</button>
 
 	{#snippet popover()}
