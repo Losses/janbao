@@ -43,7 +43,7 @@
 </svelte:head>
 
 {#snippet sidebar()}
-	<div class="card bg-base-200 border border-base-300 p-4 space-y-4">
+	<div class="space-y-4">
 		<div>
 			<h3 class="text-sm font-semibold text-base-content/70 mb-2">{messageT.participants}</h3>
 			<div class="space-y-2">
@@ -105,9 +105,11 @@
 			<h1 class="text-2xl font-bold truncate">{conversation.title}</h1>
 		</div>
 
-		<div class="flex justify-end">
-			<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
-		</div>
+		{#if totalPages > 1}
+			<div class="flex justify-end">
+				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+			</div>
+		{/if}
 
 		<PrivateMessageWindow
 			messages={data.messages}
@@ -118,8 +120,10 @@
 			{t}
 		/>
 
-		<div class="flex justify-end pt-2">
-			<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
-		</div>
+		{#if totalPages > 1}
+			<div class="flex justify-end pt-2">
+				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+			</div>
+		{/if}
 	</div>
 </DualColumnLayout>

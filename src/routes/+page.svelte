@@ -32,7 +32,7 @@
 </svelte:head>
 
 {#snippet sidebar()}
-	<div class="card bg-base-200 border border-base-300 p-4 space-y-4">
+	<div class="space-y-4">
 		{#if user}
 			<UserInfoBlock {user} {t} />
 			<div class="flex flex-col gap-2">
@@ -66,9 +66,11 @@
 <DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-6">
 		<!-- Top Paginator -->
-		<div class="flex justify-end">
-			<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
-		</div>
+		{#if totalPages > 1}
+			<div class="flex justify-end">
+				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+			</div>
+		{/if}
 
 		<!-- Discussions Stream -->
 		{#if discussionsList.length === 0}
@@ -96,9 +98,11 @@
 			</div>
 
 			<!-- Bottom Paginator -->
-			<div class="flex justify-end pt-2">
-				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
-			</div>
+			{#if totalPages > 1}
+				<div class="flex justify-end pt-2">
+					<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+				</div>
+			{/if}
 		{/if}
 	</div>
 </DualColumnLayout>

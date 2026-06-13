@@ -60,7 +60,7 @@
 <DualColumnLayout {user} {t}>
 	{#snippet sidebar()}
 		{#if user}
-			<div class="card bg-base-200 border border-base-300 p-4">
+			<div>
 				<UserInfoBlock {user} {t} />
 			</div>
 		{/if}
@@ -96,7 +96,9 @@
 		<!-- Title Banner -->
 		<div class="flex items-center justify-between border-b border-base-300 pb-4">
 			<h1 class="text-3xl font-extrabold tracking-tight">{t.nav.activity}</h1>
-			<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+			{#if totalPages > 1}
+				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+			{/if}
 		</div>
 
 		<!-- Activities Stream -->
@@ -128,9 +130,11 @@
 			</div>
 
 			<!-- Bottom Paginator -->
-			<div class="flex justify-end pt-2">
-				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
-			</div>
+			{#if totalPages > 1}
+				<div class="flex justify-end pt-2">
+					<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+				</div>
+			{/if}
 		{/if}
 	</div>
 </DualColumnLayout>

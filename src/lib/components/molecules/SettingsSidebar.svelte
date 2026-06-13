@@ -18,7 +18,7 @@
 	const profileT = $derived(t.profile);
 </script>
 
-<div class="card bg-base-200 border border-base-300 p-4 space-y-4">
+<div class="space-y-4">
 	<UserInfoBlock {user} {t} />
 	<ul class="menu menu-sm w-full gap-1">
 		<li>
