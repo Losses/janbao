@@ -46,13 +46,6 @@
 
 	function buildView(item: NotificationItem): NotificationView {
 		const source = item.sourceDisplayName ?? '';
-		if (item.type === 'message' && item.conversationId) {
-			return {
-				item,
-				label: `${source} ${tNotification['message'] ?? ''}`,
-				href: `/messages/${item.conversationId}`
-			};
-		}
 		if (
 			(item.type === 'mention' || item.type === 'reply' || item.type === 'discussion_comment') &&
 			item.discussionId

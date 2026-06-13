@@ -6,12 +6,10 @@ import {
 	conversationReads,
 	messages,
 	users,
-	notifications,
 	drafts
 } from '$lib/server/db/schema';
-import { eq, and, isNull, count, sql } from 'drizzle-orm';
+import { eq, and, isNull, count } from 'drizzle-orm';
 import { getPaginationLimit } from '$lib/server/constants';
-import { dispatchMessageNotifications } from '$lib/server/db/notifications';
 import { resolveMentions } from '$lib/server/utils/mentions';
 
 const MESSAGE_PAGE_FALLBACK = 50;
@@ -123,20 +121,7 @@ export const load: PageServerLoad = async (event) => {
 			set: { lastReadAt: new Date() }
 		});
 
-	// 7. Resolve pending message notifications for this conversation (single
-	// UPDATE with a subquery — no id round-trip, no bind-variable ceiling).
-	await db
-		.update(notifications)
-		.set({ isRead: true })
-		.where(
-			and(
-				eq(notifications.userId, user.id),
-				eq(notifications.isRead, false),
-				sql`${notifications.messageId} IN (SELECT id FROM messages WHERE conversation_id = ${conversationId})`
-			)
-		);
-
-	// 8. Load composer draft
+	// 7. Load composer draft
 	let messageDraft: string | null = null;
 	const draftRows = await db
 		.select({ contentJson: drafts.contentJson })
@@ -153,7 +138,7 @@ export const load: PageServerLoad = async (event) => {
 		messageDraft = draftRows[0].contentJson;
 	}
 
-	// 9. Resolve @mentions across message content for chip rendering
+	// 8. Resolve @mentions across message content for chip rendering
 	const mentionedUsers = await resolveMentions(
 		messageRows.map((m) => m.contentJson),
 		db
@@ -304,13 +289,6 @@ export const actions: Actions = {
 				target: [conversationReads.userId, conversationReads.conversationId],
 				set: { lastReadAt: now }
 			});
-
-		// Notify other participants (PM @mention notifications are bypassed)
-		await dispatchMessageNotifications(db, {
-			conversationId,
-			messageId,
-			authorId: user.id
-		});
 
 		// Calculate which page the new message lands on
 		const newTotalRes = await db

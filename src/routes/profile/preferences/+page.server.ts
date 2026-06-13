@@ -24,7 +24,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 			: {
 					profileComment: true,
 					discussionReply: true,
-					privateMessage: true,
 					discussionComment: true,
 					participatedComment: true,
 					mention: true,

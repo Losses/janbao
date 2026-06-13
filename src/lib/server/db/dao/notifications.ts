@@ -1,4 +1,4 @@
-import { notifications, users, discussions, messages } from '../schema';
+import { notifications, users, discussions } from '../schema';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import type { D1Db } from '../index';
 import type { NotificationItem } from '$lib/types/api';
@@ -33,7 +33,6 @@ export async function getNotifications(
 			sourceUserId: notifications.sourceUserId,
 			discussionId: notifications.discussionId,
 			replyId: notifications.replyId,
-			messageId: notifications.messageId,
 			activityId: notifications.activityId
 		})
 		.from(notifications)
@@ -78,23 +77,6 @@ export async function getNotifications(
 		}
 	}
 
-	// Batch-resolve conversation ids for private-message notifications (so the
-	// notifications page can deep-link into the right conversation)
-	const messageIds = rows
-		.filter((r) => r.type === 'message' && r.messageId !== null)
-		.map((r) => r.messageId as string);
-	const messageConversationMap = new Map<string, string>();
-	if (messageIds.length > 0) {
-		const uniqueMessageIds = [...new Set(messageIds)];
-		const messageRecords = await db
-			.select({ id: messages.id, conversationId: messages.conversationId })
-			.from(messages)
-			.where(inArray(messages.id, uniqueMessageIds));
-		for (const m of messageRecords) {
-			messageConversationMap.set(m.id, m.conversationId);
-		}
-	}
-
 	return rows.map((r) => {
 		const source = r.sourceUserId ? (sourceMap.get(r.sourceUserId) ?? null) : null;
 		const discussion = r.discussionId ? (discussionMap.get(r.discussionId) ?? null) : null;
@@ -111,8 +93,6 @@ export async function getNotifications(
 			discussionTitle: discussion?.title ?? null,
 			discussionSlug: discussion?.slug ?? null,
 			replyId: r.replyId,
-			messageId: r.messageId,
-			conversationId: r.messageId ? (messageConversationMap.get(r.messageId) ?? null) : null,
 			activityId: r.activityId
 		};
 	});

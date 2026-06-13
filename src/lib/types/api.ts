@@ -106,7 +106,6 @@ export interface ProfilePasswordBody {
 export interface ProfilePreferencesBody {
 	profileComment?: boolean;
 	discussionReply?: boolean;
-	privateMessage?: boolean;
 	discussionComment?: boolean;
 	participatedComment?: boolean;
 	mention?: boolean;
@@ -165,8 +164,6 @@ export interface NotificationItem {
 	discussionTitle: string | null;
 	discussionSlug: string | null;
 	replyId: string | null;
-	messageId: string | null;
-	conversationId: string | null;
 	activityId: string | null;
 }
 
