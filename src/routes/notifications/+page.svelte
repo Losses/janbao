@@ -43,10 +43,7 @@
 		let href: string | null = null;
 		let target: string | null = null;
 
-		if (item.type === 'message' && item.conversationId) {
-			label = `${sourceName} ${notificationT.message}`;
-			href = `/messages/${item.conversationId}`;
-		} else if (
+		if (
 			(item.type === 'mention' || item.type === 'reply' || item.type === 'discussion_comment') &&
 			item.discussionId
 		) {

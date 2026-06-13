@@ -8,7 +8,6 @@ import type { ProfilePreferencesBody } from '$lib/types/api';
 const VALID_PREF_KEYS = [
 	'profileComment',
 	'discussionReply',
-	'privateMessage',
 	'discussionComment',
 	'participatedComment',
 	'mention',

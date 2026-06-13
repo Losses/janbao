@@ -21,8 +21,6 @@
 	// svelte-ignore state_referenced_locally
 	let discussionReply = $state(prefs.discussionReply);
 	// svelte-ignore state_referenced_locally
-	let privateMessage = $state(prefs.privateMessage);
-	// svelte-ignore state_referenced_locally
 	let discussionComment = $state(prefs.discussionComment);
 	// svelte-ignore state_referenced_locally
 	let participatedComment = $state(prefs.participatedComment);
@@ -44,7 +42,6 @@
 				body: JSON.stringify({
 					profileComment,
 					discussionReply,
-					privateMessage,
 					discussionComment,
 					participatedComment,
 					mention,
@@ -122,21 +119,6 @@
 					<div>
 						<span class="label-text font-medium">{profileT.prefDiscussionReply}</span>
 						<p class="text-xs text-base-content/50">{profileT.prefDiscussionReplyDesc}</p>
-					</div>
-				</label>
-			</div>
-
-			<div class="form-control">
-				<label class="label cursor-pointer justify-start gap-3" for="pref-private-message">
-					<input
-						id="pref-private-message"
-						type="checkbox"
-						class="checkbox checkbox-sm checkbox-primary"
-						bind:checked={privateMessage}
-					/>
-					<div>
-						<span class="label-text font-medium">{profileT.prefPrivateMessage}</span>
-						<p class="text-xs text-base-content/50">{profileT.prefPrivateMessageDesc}</p>
 					</div>
 				</label>
 			</div>
