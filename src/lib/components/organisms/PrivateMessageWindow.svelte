@@ -6,14 +6,11 @@
 	 */
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import DateComponent from '$lib/components/atoms/Date.svelte';
-	import LinkButton from '$lib/components/atoms/LinkButton.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import { generateSlug } from '$lib/utils/slug';
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
-	import { mdiPencilOutline } from '@mdi/js';
-	import Icon from '$lib/components/atoms/Icon.svelte';
 	import type { TranslationDict } from '$lib/types/translation';
 	import type { MentionedUsersMap } from '$lib/types/mentions';
 
@@ -77,25 +74,22 @@
 
 <div class="space-y-4">
 	<!-- Message stream -->
-	{#each messages as msg (msg.id)}
-		<div
-			class="card bg-base-100 border border-base-200 rounded-xl p-4 shadow-sm {msg.authorId ===
-			currentUserId
-				? 'border-primary/30'
-				: ''}"
-		>
-			<div class="flex gap-3">
-				<div class="flex-shrink-0">
-					<a href="/profile/{msg.authorId}/{generateSlug(msg.authorUsername)}">
+	<div class="divide-y divide-base-300">
+		{#each messages as msg (msg.id)}
+			<div class="space-y-4 py-4 first:pt-0 last:pb-0">
+				<!-- Metadata -->
+				<div class="flex items-center gap-3">
+					<a
+						href="/profile/{msg.authorId}/{generateSlug(msg.authorUsername)}"
+						class="flex-shrink-0"
+					>
 						<Avatar
 							src={msg.authorAvatarFileId ? `/img/${msg.authorAvatarFileId}` : null}
 							displayName={msg.authorDisplayName}
 							size="sm"
 						/>
 					</a>
-				</div>
-				<div class="min-w-0 flex-1">
-					<div class="flex items-center gap-2 flex-wrap">
+					<div class="flex items-center gap-2 flex-wrap min-w-0">
 						<a
 							href="/profile/{msg.authorId}/{generateSlug(msg.authorUsername)}"
 							class="font-semibold text-sm text-base-content hover:text-primary transition-colors"
@@ -107,68 +101,70 @@
 							<span class="text-xs text-base-content/40">({gtc('edit')})</span>
 						{/if}
 					</div>
-
-					{#if editingMessageId === msg.id}
-						<!-- Inline edit -->
-						<div class="mt-2">
-							<LexicalEditor
-								contextType="message"
-								contextId={msg.id}
-								initialContent={msg.contentJson}
-								placeholder={editorT['placeholderMessage'] ?? ''}
-								disableImageUpload={true}
-								onContentChange={(json) => (editContent = json)}
-								{t}
-								class="mb-2"
-							/>
-							<form
-								method="POST"
-								action="?/editMessage"
-								use:enhance={() => {
-									isSavingEdit = true;
-									return async ({ result, update }) => {
-										isSavingEdit = false;
-										if (result.type === 'success') {
-											cancelEdit();
-											update();
-										} else if (result.type === 'failure') {
-											update();
-										}
-									};
-								}}
-								class="flex items-center gap-2"
-							>
-								<input type="hidden" name="messageId" value={msg.id} />
-								<input type="hidden" name="contentJson" value={editContent} />
-								<button
-									type="submit"
-									class="btn btn-primary btn-sm"
-									disabled={!editContent || isSavingEdit}
-								>
-									{isSavingEdit ? gtc('saving') : gtc('confirm')}
-								</button>
-								<button type="button" class="btn btn-ghost btn-sm" onclick={cancelEdit}>
-									{gtc('cancel')}
-								</button>
-							</form>
-						</div>
-					{:else}
-						<div class="mt-1">
-							<LexicalRenderer contentJson={msg.contentJson} {mentionedUsers} />
-						</div>
-						{#if msg.authorId === currentUserId}
-							<div class="mt-1">
-								<LinkButton onclick={() => startEdit(msg)} class="text-xs">
-									<Icon path={mdiPencilOutline} size={0.8} />
-									{gtc('edit')}
-								</LinkButton>
-							</div>
-						{/if}
-					{/if}
 				</div>
+
+				{#if editingMessageId === msg.id}
+					<!-- Inline edit -->
+					<div>
+						<LexicalEditor
+							contextType="message"
+							contextId={msg.id}
+							initialContent={msg.contentJson}
+							placeholder={editorT['placeholderMessage'] ?? ''}
+							disableImageUpload={true}
+							onContentChange={(json) => (editContent = json)}
+							{t}
+							class="mb-2"
+						/>
+						<form
+							method="POST"
+							action="?/editMessage"
+							use:enhance={() => {
+								isSavingEdit = true;
+								return async ({ result, update }) => {
+									isSavingEdit = false;
+									if (result.type === 'success') {
+										cancelEdit();
+										update();
+									} else if (result.type === 'failure') {
+										update();
+									}
+								};
+							}}
+							class="flex items-center justify-end gap-2"
+						>
+							<input type="hidden" name="messageId" value={msg.id} />
+							<input type="hidden" name="contentJson" value={editContent} />
+							<button
+								type="submit"
+								class="btn btn-primary btn-sm"
+								disabled={!editContent || isSavingEdit}
+							>
+								{isSavingEdit ? gtc('saving') : gtc('confirm')}
+							</button>
+							<button type="button" class="btn btn-ghost btn-sm" onclick={cancelEdit}>
+								{gtc('cancel')}
+							</button>
+						</form>
+					</div>
+				{:else}
+					<LexicalRenderer contentJson={msg.contentJson} {mentionedUsers} />
+
+					{#if msg.authorId === currentUserId}
+						<div class="flex justify-end items-center gap-2 pt-2 border-t border-base-200/50 mt-2">
+							<button
+								type="button"
+								class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
+								onclick={() => startEdit(msg)}
+							>
+								{gtc('edit')}
+							</button>
+						</div>
+					{/if}
+				{/if}
 			</div>
-		</div>
-	{/each}
+		{/each}
+	</div>
 
 	<!-- Composer -->
 	{#if currentUserId}

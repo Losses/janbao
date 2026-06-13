@@ -1,180 +1,219 @@
 <script lang="ts">
 	/**
-	 * MentionChipInput - A minimal Lexical editor that ONLY accepts @mention chips.
-	 * Used for the message recipient field where only user mention chips are valid input.
-	 * All other content (plain text, formatting) is filtered out on extraction.
-	 *
-	 * Features:
-	 * - Type @ to trigger user search autocomplete
-	 * - Selected user becomes a MentionNode chip
-	 * - Chips are shown inline with @displayName
-	 * - On change, extracts mention data and fires onRecipientsChange
-	 * - No toolbar, no formatting, no markdown shortcuts
+	 * MentionChipInput - Single-line recipient picker for the message compose
+	 * page. Type to search users (no @ required), Enter/click to add a chip,
+	 * Backspace on empty input removes the last chip. Styled with DaisyUI
+	 * `input input-bordered` so it matches the subject field's border, height
+	 * and focus highlight exactly.
 	 */
-	import {
-		Composer,
-		ContentEditable,
-		RichTextPlugin,
-		HistoryPlugin,
-		PlaceHolder,
-		OnChangePlugin
-	} from 'svelte-lexical';
-	import { MentionNode } from '$lib/components/atoms/MentionNode';
-	import MentionTypeaheadPlugin from '$lib/components/molecules/MentionTypeaheadPlugin.svelte';
+	import { onMount, onDestroy } from 'svelte';
+	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import type { UserSearchResult } from '$lib/types/api';
 
-	type ContentChangeHandler = (json: string) => void;
 	type RecipientsChangeHandler = (users: UserSearchResult[]) => void;
-	type ToJSONFn = () => unknown;
-
-	interface LexicalNode {
-		type: string;
-		username?: string;
-		displayName?: string;
-		children?: LexicalNode[];
-	}
-
-	interface EditorStateLike {
-		toJSON: ToJSONFn;
-	}
 
 	interface MentionChipInputProps {
-		/** Placeholder text */
-		placeholder?: string;
-		/** User IDs to exclude from suggestions */
+		/** Extra user IDs to hide from suggestions (e.g. already selected upstream) */
 		excludeIds?: string[];
 		/** Pre-loaded recipients (e.g. from URL prefill) */
 		initialRecipients?: UserSearchResult[];
-		/** Called with the current list of mention recipients on every change */
+		/** Called with the current recipients whenever they change */
 		onRecipientsChange?: RecipientsChangeHandler;
-		/** Called with raw Lexical JSON on every change */
-		onContentChange?: ContentChangeHandler;
 		/** Disable the input */
 		disabled?: boolean;
 	}
 
 	let {
-		placeholder = 'Add recipients...',
 		excludeIds = [],
 		initialRecipients,
 		onRecipientsChange,
-		onContentChange,
 		disabled = false
 	}: MentionChipInputProps = $props();
 
-	// Build initial content from prefill recipients
-	const initialContent = $derived.by(() => {
-		if (!initialRecipients || initialRecipients.length === 0) return undefined;
-		const mentionChildren = initialRecipients.map((r) => ({
-			type: 'mention',
-			username: r.username,
-			displayName: r.displayName,
-			version: 1
-		}));
-		mentionChildren.push({ type: 'text', text: ' ', format: 0 });
-		return JSON.stringify({
-			root: {
-				children: [
-					{
-						type: 'paragraph',
-						children: mentionChildren,
-						direction: null,
-						format: '',
-						indent: 0,
-						version: 1
-					}
-				],
-				direction: null,
-				format: '',
-				indent: 0,
-				type: 'root',
-				version: 1
-			}
-		});
-	});
+	let recipients = $state<UserSearchResult[]>(initialRecipients ?? []);
+	let query = $state('');
+	let results = $state<UserSearchResult[]>([]);
+	let selectedIndex = $state(0);
+	let isOpen = $state(false);
 
-	const editorNodes = [MentionNode];
+	let inputEl = $state<HTMLInputElement>();
+	let containerEl = $state<HTMLDivElement>();
+	let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
-	const initialConfig = $derived({
-		namespace: 'JanbaoMentionChipInput',
-		theme: {
-			paragraph: 'mb-0',
-			text: {}
-		},
-		nodes: editorNodes,
-		editorState: initialContent ?? undefined,
-		onError: (error: Error) => {
-			console.error('MentionChipInput Error:', error);
-		}
-	});
+	const DEBOUNCE_MS = 200;
 
-	function handleChange(editorState: EditorStateLike) {
-		const json = JSON.stringify(editorState.toJSON());
-		onContentChange?.(json);
-		extractRecipients(json);
+	function notify() {
+		onRecipientsChange?.(recipients);
 	}
 
-	function extractRecipients(contentJson: string) {
-		let parsed: unknown;
-		try {
-			parsed = JSON.parse(contentJson);
-		} catch {
-			onRecipientsChange?.([]);
+	function excludedSet(): Set<string> {
+		return new Set([...excludeIds, ...recipients.map((r) => r.id)]);
+	}
+
+	function onInput() {
+		if (debounceTimer) clearTimeout(debounceTimer);
+		const q = query.trim();
+		if (q.length === 0) {
+			results = [];
+			isOpen = false;
 			return;
 		}
-
-		const users: UserSearchResult[] = [];
-		collectMentions(parsed, users);
-		onRecipientsChange?.(users);
+		isOpen = true;
+		debounceTimer = setTimeout(() => {
+			void search(q);
+		}, DEBOUNCE_MS);
 	}
 
-	function collectMentions(node: unknown, out: UserSearchResult[]): void {
-		if (!node || typeof node !== 'object') return;
-		const lexicalNode = node as LexicalNode;
-
-		if (
-			lexicalNode.type === 'mention' &&
-			typeof lexicalNode.username === 'string' &&
-			typeof lexicalNode.displayName === 'string'
-		) {
-			out.push({
-				id: lexicalNode.username,
-				username: lexicalNode.username,
-				displayName: lexicalNode.displayName,
-				avatarFileId: null
-			});
-		}
-
-		if (Array.isArray(lexicalNode.children)) {
-			for (const child of lexicalNode.children) {
-				collectMentions(child, out);
+	async function search(q: string) {
+		try {
+			const res = await fetch(`/api/users/search?q=${encodeURIComponent(q)}&limit=5`);
+			if (!res.ok) {
+				results = [];
+				isOpen = false;
+				return;
 			}
+			const data = (await res.json()) as { users: UserSearchResult[] };
+			const exclude = excludedSet();
+			results = (data.users || []).filter((u) => !exclude.has(u.id));
+			selectedIndex = 0;
+			if (results.length === 0) isOpen = false;
+		} catch {
+			results = [];
+			isOpen = false;
 		}
 	}
+
+	function addRecipient(user: UserSearchResult) {
+		if (!excludedSet().has(user.id)) {
+			recipients = [...recipients, user];
+			notify();
+		}
+		query = '';
+		results = [];
+		isOpen = false;
+		inputEl?.focus();
+	}
+
+	function removeRecipient(id: string) {
+		recipients = recipients.filter((r) => r.id !== id);
+		notify();
+		inputEl?.focus();
+	}
+
+	function onKeydown(event: KeyboardEvent) {
+		if (event.key === 'ArrowDown') {
+			if (!isOpen || results.length === 0) return;
+			event.preventDefault();
+			selectedIndex = (selectedIndex + 1) % results.length;
+		} else if (event.key === 'ArrowUp') {
+			if (!isOpen || results.length === 0) return;
+			event.preventDefault();
+			selectedIndex = (selectedIndex - 1 + results.length) % results.length;
+		} else if (event.key === 'Enter') {
+			// Single-line: Enter only ever selects a suggestion, never inserts a newline.
+			event.preventDefault();
+			if (isOpen && results.length > 0) {
+				addRecipient(results[selectedIndex]);
+			}
+		} else if (event.key === 'Escape') {
+			isOpen = false;
+		} else if (event.key === 'Backspace' && query === '' && recipients.length > 0) {
+			event.preventDefault();
+			removeRecipient(recipients[recipients.length - 1].id);
+		}
+	}
+
+	function onFocus() {
+		if (results.length > 0) isOpen = true;
+	}
+
+	function closeIfOutside(event: MouseEvent) {
+		if (containerEl && !containerEl.contains(event.target as Node)) {
+			isOpen = false;
+		}
+	}
+
+	onMount(() => {
+		document.addEventListener('mousedown', closeIfOutside);
+		notify();
+	});
+
+	onDestroy(() => {
+		document.removeEventListener('mousedown', closeIfOutside);
+		if (debounceTimer) clearTimeout(debounceTimer);
+	});
 </script>
 
-<div
-	class="mention-chip-input relative rounded-lg border border-base-300 bg-base-100 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all duration-200"
->
-	<Composer {initialConfig}>
-		<div class={disabled ? 'opacity-60 pointer-events-none' : ''}>
-			<div class="relative {disabled ? 'opacity-60 pointer-events-none' : ''}">
-				<ContentEditable
-					ariaLabel={placeholder}
-					className="ContentEditable__root prose prose-sm max-w-none min-h-[40px] px-3 py-2 text-base-content bg-base-100 focus:outline-none"
-				/>
-				<RichTextPlugin />
-				<HistoryPlugin />
-				<OnChangePlugin
-					ignoreHistoryMergeTagChange={true}
-					ignoreSelectionChange={true}
-					onChange={handleChange}
-				/>
-				<PlaceHolder>
-					{placeholder}
-				</PlaceHolder>
-			</div>
+<div class="relative" bind:this={containerEl}>
+	<!-- `.input input-bordered` mirrors the subject field's border, height, focus ring. -->
+	<div
+		class="input input-bordered w-full h-auto min-h-[2.5rem] flex-wrap items-center gap-1 {disabled
+			? 'pointer-events-none'
+			: ''}"
+	>
+		{#each recipients as r (r.id)}
+			<span
+				class="inline-flex items-center gap-1 rounded bg-primary/15 px-1.5 py-0.5 text-xs font-medium text-primary flex-shrink-0"
+			>
+				{r.displayName}
+				{#if !disabled}
+					<button
+						type="button"
+						class="-mr-0.5 leading-none hover:opacity-70"
+						aria-label="Remove {r.displayName}"
+						onclick={() => removeRecipient(r.id)}
+					>
+						×
+					</button>
+				{/if}
+			</span>
+		{/each}
+		<input
+			bind:this={inputEl}
+			bind:value={query}
+			oninput={onInput}
+			onkeydown={onKeydown}
+			onfocus={onFocus}
+			{disabled}
+			type="text"
+			autocomplete="off"
+			aria-autocomplete="list"
+			aria-expanded={isOpen}
+			role="combobox"
+			class="min-w-0 flex-1 border-none bg-transparent outline-none"
+		/>
+	</div>
+
+	{#if isOpen && results.length > 0}
+		<div
+			class="absolute left-0 right-0 top-[calc(100%+0.25rem)] z-50 max-h-60 overflow-y-auto rounded-lg border border-base-300 bg-base-100 shadow-lg"
+			role="listbox"
+		>
+			{#each results as user, index (user.id)}
+				<button
+					type="button"
+					class="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors {index ===
+					selectedIndex
+						? 'bg-base-200'
+						: 'hover:bg-base-200'}"
+					role="option"
+					aria-selected={index === selectedIndex}
+					onmouseenter={() => (selectedIndex = index)}
+					onclick={() => addRecipient(user)}
+				>
+					<Avatar
+						src={user.avatarFileId ? `/img/${user.avatarFileId}` : null}
+						displayName={user.displayName}
+						size="xs"
+					/>
+					<span class="min-w-0 flex-1">
+						<span class="block truncate text-sm font-medium text-base-content">
+							{user.displayName}
+						</span>
+						<span class="block truncate text-xs text-base-content/50">@{user.username}</span>
+					</span>
+				</button>
+			{/each}
 		</div>
-		<MentionTypeaheadPlugin {excludeIds} />
-	</Composer>
+	{/if}
 </div>
