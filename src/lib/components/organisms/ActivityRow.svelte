@@ -13,18 +13,18 @@
 	import type { TranslationDict } from '$lib/types/translation';
 
 	interface ActivityRowProps {
-		id: string;
-		authorId: string;
+		id: number;
+		authorId: number;
 		authorDisplayName: string;
 		authorUsername: string;
 		authorAvatarFileId: string | null;
-		recipientId?: string | null;
+		recipientId?: number | null;
 		recipientDisplayName?: string | null;
 		recipientUsername?: string | null;
 		contentJson: string;
 		createdAt: Date;
 		commentCount: number;
-		currentUserId?: string | null;
+		currentUserId?: number | null;
 		isAdmin?: boolean;
 		t: TranslationDict;
 		mentionedUsers?: MentionedUsersMap | null;
@@ -59,7 +59,7 @@
 	// svelte-ignore state_referenced_locally
 	let commentCountState = $state(commentCount);
 	let showDeleteModal = $state(false);
-	let deleteTargetId = $state<string | null>(null);
+	let deleteTargetId = $state<number | null>(null);
 	let editorKey = $state(0);
 
 	$effect(() => {
@@ -125,7 +125,7 @@
 		submittingComment = false;
 	}
 
-	function confirmDelete(activityId: string) {
+	function confirmDelete(activityId: number) {
 		deleteTargetId = activityId;
 		showDeleteModal = true;
 	}

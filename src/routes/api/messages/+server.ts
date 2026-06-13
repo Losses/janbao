@@ -35,7 +35,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const title = (body.title || '').trim();
 	const contentJson = body.contentJson || '';
 	const recipientIds = Array.isArray(body.recipientIds)
-		? [...new Set(body.recipientIds.filter((id) => typeof id === 'string' && id !== user.id))]
+		? [...new Set(body.recipientIds.filter((id) => typeof id === 'number' && id !== user.id))]
 		: [];
 
 	if (!title) {
@@ -66,43 +66,40 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return jsonError(t, 'message.recipientNotFound', 404);
 	}
 
-	const conversationId = crypto.randomUUID();
-	const messageId = crypto.randomUUID();
 	const now = new Date();
 
-	// Insert conversation, participants, and the first message atomically
-	await db.transaction(async (tx: DbTransaction) => {
-		await tx.insert(conversations).values({
-			id: conversationId,
-			title,
-			createdAt: now
-		});
+	// Insert conversation, participants, and the first message atomically.
+	// conversation.id and messages.id are auto-assigned; the conversation id is
+	// read back via returning() so participants/messages can reference it.
+	const conversationId = await db.transaction(async (tx: DbTransaction) => {
+		const convInserted = await tx
+			.insert(conversations)
+			.values({ title, createdAt: now })
+			.returning({ id: conversations.id });
+		const convId = convInserted[0].id;
 
 		const participantRows = [
-			{ conversationId, userId: user.id, joinedAt: now },
-			...recipientIds.map((rid) => ({ conversationId, userId: rid, joinedAt: now }))
+			{ conversationId: convId, userId: user.id, joinedAt: now },
+			...recipientIds.map((rid) => ({ conversationId: convId, userId: rid, joinedAt: now }))
 		];
 		await tx.insert(conversationParticipants).values(participantRows);
 
 		await tx.insert(messages).values({
-			id: messageId,
-			conversationId,
+			conversationId: convId,
 			authorId: user.id,
 			contentJson,
 			createdAt: now,
 			updatedAt: now
 		});
+
+		return convId;
 	});
 
 	// Clear the composer draft (contextType 'message', contextId 'new')
 	await db
 		.delete(drafts)
 		.where(
-			and(
-				eq(drafts.authorId, user.id),
-				eq(drafts.contextType, 'message'),
-				eq(drafts.contextId, 'new')
-			)
+			and(eq(drafts.authorId, user.id), eq(drafts.contextType, 'message'), eq(drafts.contextId, 0))
 		);
 
 	// Mark the conversation as read for the author so their own opening message

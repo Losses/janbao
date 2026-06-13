@@ -14,7 +14,7 @@ interface BookmarkFilterOptions {
  */
 export async function getBookmarks(
 	db: D1Db,
-	userId: string,
+	userId: number,
 	options: ListOffsetOptions,
 	filters?: BookmarkFilterOptions
 ): Promise<BookmarkListItem[]> {
@@ -63,7 +63,7 @@ export async function getBookmarks(
  */
 export async function getBookmarksCount(
 	db: D1Db,
-	userId: string,
+	userId: number,
 	filters?: BookmarkFilterOptions
 ): Promise<number> {
 	const conditions = [eq(bookmarks.userId, userId), isNull(discussions.deletedAt)];

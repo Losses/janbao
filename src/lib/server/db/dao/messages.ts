@@ -25,7 +25,7 @@ interface ConversationListResult {
  */
 export async function getConversations(
 	db: D1Db,
-	userId: string,
+	userId: number,
 	options: ListOffsetOptions
 ): Promise<ConversationListResult> {
 	// 1. All conversation ids the user participates in (excluding soft-deleted)
@@ -129,7 +129,7 @@ export async function getConversations(
 		.innerJoin(users, eq(messages.authorId, users.id));
 	// Tie-break on timestamp ties: keep the row with the largest message id per
 	// conversation so the "latest" preview/author is deterministic.
-	const latestMap = new Map<string, (typeof latestDetails)[number]>();
+	const latestMap = new Map<number, (typeof latestDetails)[number]>();
 	for (const row of latestDetails) {
 		const existing = latestMap.get(row.conversationId);
 		if (!existing || row.id > existing.id) {
@@ -163,7 +163,7 @@ export async function getConversations(
 			)
 		)
 		.groupBy(messages.conversationId);
-	const unreadMap = new Map<string, number>(unreadRows.map((u) => [u.conversationId, u.count]));
+	const unreadMap = new Map<number, number>(unreadRows.map((u) => [u.conversationId, u.count]));
 
 	const items: ConversationListItem[] = pageIds.map((id) => {
 		const latest = latestMap.get(id);
@@ -197,7 +197,7 @@ export async function getConversations(
  * in non-deleted conversations they participate in), collapsed to one number.
  * Used by the root layout load to render the message icon badge.
  */
-export async function countTotalUnreadMessages(db: D1Db, userId: string): Promise<number> {
+export async function countTotalUnreadMessages(db: D1Db, userId: number): Promise<number> {
 	const rows = await db
 		.select({ count: sql<number>`COUNT(*)` })
 		.from(messages)

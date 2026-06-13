@@ -83,7 +83,7 @@
 						initialContent={editorKey === 0 ? data.activityDraft : null}
 						placeholder={t.editor.placeholderActivity}
 						contextType="activity"
-						contextId="new"
+						contextId={0}
 						{t}
 						disableHeadings={true}
 						onContentChange={handleEditorChange}

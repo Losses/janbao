@@ -8,7 +8,7 @@ import type { DateBoundary } from '../welcome';
  * List all invitation codes created by `userId`, each with its status resolved
  * dynamically from usedById / expiresAt and the username of the redeeming user.
  */
-export async function getInvitations(db: D1Db, userId: string): Promise<InvitationItem[]> {
+export async function getInvitations(db: D1Db, userId: number): Promise<InvitationItem[]> {
 	const rows = await db
 		.select({
 			code: invitations.code,
@@ -21,8 +21,8 @@ export async function getInvitations(db: D1Db, userId: string): Promise<Invitati
 		.where(eq(invitations.creatorId, userId))
 		.orderBy(desc(invitations.createdAt));
 
-	const usedByIds = rows.map((r) => r.usedById).filter((id): id is string => id !== null);
-	const usedByMap = new Map<string, string>();
+	const usedByIds = rows.map((r) => r.usedById).filter((id): id is number => id !== null);
+	const usedByMap = new Map<number, string>();
 	if (usedByIds.length > 0) {
 		const uniqueUsedByIds = [...new Set(usedByIds)];
 		const usedByUsers = await db
@@ -61,7 +61,7 @@ export async function getInvitations(db: D1Db, userId: string): Promise<Invitati
  */
 export async function getMonthlyRequestCount(
 	db: D1Db,
-	userId: string,
+	userId: number,
 	window: DateBoundary
 ): Promise<number> {
 	const result = await db

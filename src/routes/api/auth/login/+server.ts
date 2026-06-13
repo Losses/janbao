@@ -38,7 +38,12 @@ export const POST: RequestHandler = async (event) => {
 
 		// Generate token with proper expiration
 		const jwtSecret = getJwtSecret(event.platform?.env);
-		const payload = createSessionToken(user.id, user.username, user.groupSlug, !!rememberMe);
+		const payload = createSessionToken(
+			String(user.id),
+			user.username,
+			user.groupSlug,
+			!!rememberMe
+		);
 		const token = await signJwt(payload, jwtSecret);
 
 		// Set cookie session settings

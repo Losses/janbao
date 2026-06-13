@@ -3,7 +3,7 @@
  * to LexicalRenderer for @username chip rendering.
  */
 interface MentionedUserEntry {
-	id: string;
+	id: number;
 	displayName: string;
 	username: string;
 	avatarFileId: string | null;

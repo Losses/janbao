@@ -34,7 +34,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (token) {
 		const payload = await verifyJwt(token, jwtSecret);
 		if (payload && payload.sub) {
-			const usersList = await db.select().from(users).where(eq(users.id, payload.sub)).limit(1);
+			const usersList = await db
+				.select()
+				.from(users)
+				.where(eq(users.id, Number(payload.sub)))
+				.limit(1);
 			if (usersList.length > 0) {
 				const userRecord = usersList[0];
 				// Redact password hash before exposing to locals

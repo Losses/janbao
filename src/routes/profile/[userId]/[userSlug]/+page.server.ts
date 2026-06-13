@@ -8,7 +8,7 @@ import { resolveMentions } from '$lib/server/utils/mentions';
 import type { RecipientInfo } from '$lib/types/api';
 
 export const load: PageServerLoad = async (event) => {
-	const { userId } = event.params;
+	const userId = Number(event.params.userId);
 	const db = event.locals.db;
 	const currentUser = event.locals.user;
 
@@ -80,9 +80,9 @@ export const load: PageServerLoad = async (event) => {
 	// 4. Batch-fetch recipient display names for directed activities
 	const recipientIds = profileActivities
 		.map((a) => a.recipientId)
-		.filter((id): id is string => id !== null && id !== SYSTEM_USER_ID);
+		.filter((id): id is number => id !== null && id !== SYSTEM_USER_ID);
 
-	const recipientMap = new Map<string, RecipientInfo>();
+	const recipientMap = new Map<number, RecipientInfo>();
 	if (recipientIds.length > 0) {
 		const uniqueIds = [...new Set(recipientIds)];
 		const recipients = await db
@@ -97,7 +97,7 @@ export const load: PageServerLoad = async (event) => {
 
 	// 5. Batch-fetch comment counts per activity
 	const activityIds = profileActivities.map((a) => a.id);
-	const commentCountMap = new Map<string, number>();
+	const commentCountMap = new Map<number, number>();
 
 	if (activityIds.length > 0) {
 		const commentCounts = await db

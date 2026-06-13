@@ -16,7 +16,7 @@
 		/** Placeholder text for the input */
 		placeholder?: string;
 		/** User IDs to exclude from suggestions (already added / the caller) */
-		excludeIds?: string[];
+		excludeIds?: number[];
 		/** Called when a suggestion is selected */
 		onSelect: UserSelectHandler;
 	}

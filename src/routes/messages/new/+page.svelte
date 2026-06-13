@@ -64,7 +64,7 @@
 					contentJson: content
 				})
 			});
-			const result: ApiResult & { conversationId?: string } = await res.json();
+			const result: ApiResult & { conversationId?: number } = await res.json();
 			if (result.success && result.conversationId) {
 				goto(`/messages/${result.conversationId}`);
 				return;
@@ -140,7 +140,7 @@
 					{#key data.messageDraft}
 						<LexicalEditor
 							contextType="message"
-							contextId="new"
+							contextId={0}
 							initialContent={data.messageDraft}
 							placeholder=""
 							disableImageUpload={true}

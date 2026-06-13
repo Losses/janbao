@@ -12,7 +12,7 @@
 	import type { TranslationDict } from '$lib/types/translation';
 
 	interface DiscussionMetadataProps {
-		userId: string;
+		userId: number;
 		username: string;
 		displayName: string;
 		avatarFileId?: string | null;

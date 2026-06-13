@@ -4,14 +4,14 @@ import type { D1Db } from '../index';
 import { getReadableCategorySlugs } from '$lib/server/constants';
 
 export interface UserCommentItem {
-	id: string;
+	id: number;
 	kind: 'reply' | 'activity_comment';
 	contentJson: string;
 	createdAt: Date;
-	discussionId: string | null;
+	discussionId: number | null;
 	discussionTitle: string | null;
 	discussionSlug: string | null;
-	parentActivityId: string | null;
+	parentActivityId: number | null;
 }
 
 // Defensive cap bounding each leg of the UNION (spec §6.13 says "all"; this
@@ -30,7 +30,7 @@ const COMMENT_LIST_LIMIT = 500;
  */
 export async function getUserComments(
 	db: D1Db,
-	userId: string,
+	userId: number,
 	groupSlug?: string
 ): Promise<UserCommentItem[]> {
 	// Determine readable category slugs if groupSlug provided

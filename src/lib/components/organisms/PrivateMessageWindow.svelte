@@ -16,9 +16,9 @@
 	import type { MentionedUsersMap } from '$lib/types/mentions';
 
 	interface PrivateMessage {
-		id: string;
-		conversationId: string;
-		authorId: string;
+		id: number;
+		conversationId: number;
+		authorId: number;
 		authorDisplayName: string;
 		authorUsername: string;
 		authorAvatarFileId: string | null;
@@ -29,8 +29,8 @@
 
 	interface PrivateMessageWindowProps {
 		messages: PrivateMessage[];
-		conversationId: string;
-		currentUserId?: string | null;
+		conversationId: number;
+		currentUserId?: number | null;
 		messageDraft?: string | null;
 		t: TranslationDict;
 		mentionedUsers?: MentionedUsersMap | null;
@@ -56,7 +56,7 @@
 	});
 
 	// Inline edit state - only one message edited at a time
-	let editingMessageId = $state<string | null>(null);
+	let editingMessageId = $state<number | null>(null);
 	let editContent = $state('');
 	let isSavingEdit = $state(false);
 

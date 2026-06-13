@@ -53,7 +53,7 @@ export const load: PageServerLoad = async (event) => {
 		defaultCategorySlug = sorted[0].slug;
 	}
 
-	// 4. Fetch existing creation draft if any
+	// 4. Fetch existing creation draft if any (contextId = 0 marks the "new" draft)
 	const draftRecord = await db
 		.select({ contentJson: drafts.contentJson })
 		.from(drafts)
@@ -61,7 +61,7 @@ export const load: PageServerLoad = async (event) => {
 			and(
 				eq(drafts.authorId, user.id),
 				eq(drafts.contextType, 'discussion'),
-				eq(drafts.contextId, 'new')
+				eq(drafts.contextId, 0)
 			)
 		)
 		.limit(1);
@@ -108,29 +108,30 @@ export const actions: Actions = {
 			return { success: false, error: event.locals.t.discussion.noPermission };
 		}
 
-		const discussionId = crypto.randomUUID();
 		const slug = generateSlug(title);
+		let discussionId: number;
 
 		try {
-			// Insert discussion
-			await db.insert(discussions).values({
-				id: discussionId,
-				title,
-				slug,
-				categorySlug,
-				authorId: user.id,
-				themeName,
-				viewCount: 0,
-				commentCount: 0,
-				isPinned: false,
-				createdAt: new Date(),
-				updatedAt: new Date()
-			});
+			// Insert discussion; id is auto-assigned and read back via returning()
+			const inserted = await db
+				.insert(discussions)
+				.values({
+					title,
+					slug,
+					categorySlug,
+					authorId: user.id,
+					themeName,
+					viewCount: 0,
+					commentCount: 0,
+					isPinned: false,
+					createdAt: new Date(),
+					updatedAt: new Date()
+				})
+				.returning({ id: discussions.id });
+			discussionId = inserted[0].id;
 
-			// Insert OP reply (as index 0 reply)
-			const opReplyId = crypto.randomUUID();
+			// Insert OP reply (as index 0 reply); id is auto-assigned
 			await db.insert(replies).values({
-				id: opReplyId,
 				discussionId,
 				authorId: user.id,
 				contentJson,
@@ -138,14 +139,14 @@ export const actions: Actions = {
 				updatedAt: new Date()
 			});
 
-			// Clear draft
+			// Clear draft (contextId = 0 marks the "new" discussion composer draft)
 			await db
 				.delete(drafts)
 				.where(
 					and(
 						eq(drafts.authorId, user.id),
 						eq(drafts.contextType, 'discussion'),
-						eq(drafts.contextId, 'new')
+						eq(drafts.contextId, 0)
 					)
 				);
 		} catch (err) {

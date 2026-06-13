@@ -17,7 +17,8 @@ import type { DbTransaction } from '$lib/server/db';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 
 export const load: PageServerLoad = async (event) => {
-	const { discussionId, slug } = event.params;
+	const slug = event.params.slug;
+	const discussionId = Number(event.params.discussionId);
 	const db = event.locals.db;
 	const user = event.locals.user;
 
@@ -245,7 +246,7 @@ export const actions: Actions = {
 		}
 
 		const db = locals.db;
-		const { discussionId } = params;
+		const discussionId = Number(params.discussionId);
 		if (!discussionId) {
 			error(400, locals.t.common.badRequest);
 		}
@@ -279,18 +280,21 @@ export const actions: Actions = {
 			return { success: false, error: locals.t.common.contentTooLarge };
 		}
 
-		// Insert the reply, update discussion stats, and clear draft in a transaction
-		const replyId = crypto.randomUUID();
+		// Insert the reply, update discussion stats, and clear draft in a transaction.
+		// replies.id is auto-assigned; read it back via returning().
+		let replyId: number;
 		try {
-			await db.transaction(async (tx: DbTransaction) => {
-				await tx.insert(replies).values({
-					id: replyId,
-					discussionId,
-					authorId: user.id,
-					contentJson,
-					createdAt: new Date(),
-					updatedAt: new Date()
-				});
+			replyId = await db.transaction(async (tx: DbTransaction) => {
+				const inserted = await tx
+					.insert(replies)
+					.values({
+						discussionId,
+						authorId: user.id,
+						contentJson,
+						createdAt: new Date(),
+						updatedAt: new Date()
+					})
+					.returning({ id: replies.id });
 
 				await tx
 					.update(discussions)
@@ -309,6 +313,8 @@ export const actions: Actions = {
 							eq(drafts.contextId, discussionId)
 						)
 					);
+
+				return inserted[0].id;
 			});
 		} catch (err) {
 			console.error('Failed to create reply:', err);
@@ -355,7 +361,7 @@ export const actions: Actions = {
 		}
 
 		const db = locals.db;
-		const { discussionId } = params;
+		const discussionId = Number(params.discussionId);
 		if (!discussionId) {
 			error(400, locals.t.common.badRequest);
 		}
@@ -399,7 +405,7 @@ export const actions: Actions = {
 
 		const db = locals.db;
 		const data = await request.formData();
-		const replyId = data.get('replyId') as string;
+		const replyId = Number(data.get('replyId'));
 		const contentJson = data.get('contentJson') as string;
 
 		if (!replyId || isLexicalEmpty(contentJson)) {
@@ -466,7 +472,7 @@ export const actions: Actions = {
 
 		const db = locals.db;
 		const data = await request.formData();
-		const replyId = data.get('replyId') as string;
+		const replyId = Number(data.get('replyId'));
 
 		if (!replyId) {
 			error(400, locals.t.common.badRequest);
@@ -539,7 +545,7 @@ export const actions: Actions = {
 		}
 
 		const db = locals.db;
-		const { discussionId } = params;
+		const discussionId = Number(params.discussionId);
 		if (!discussionId) {
 			error(400, locals.t.common.badRequest);
 		}

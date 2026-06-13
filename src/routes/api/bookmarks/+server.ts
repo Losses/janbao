@@ -80,7 +80,7 @@ export const DELETE: RequestHandler = async (event) => {
 		return jsonError(t, 'common.unauthorized', 401);
 	}
 
-	const discussionId = event.url.searchParams.get('discussionId');
+	const discussionId = Number(event.url.searchParams.get('discussionId'));
 	if (!discussionId) {
 		return jsonError(t, 'bookmark.discussionRequired', 400);
 	}

@@ -28,7 +28,7 @@
 
 	interface MentionTypeaheadPluginProps {
 		/** User IDs to exclude from suggestions */
-		excludeIds?: string[];
+		excludeIds?: number[];
 	}
 
 	let { excludeIds = [] }: MentionTypeaheadPluginProps = $props();

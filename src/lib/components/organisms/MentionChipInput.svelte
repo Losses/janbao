@@ -14,7 +14,7 @@
 
 	interface MentionChipInputProps {
 		/** Extra user IDs to hide from suggestions (e.g. already selected upstream) */
-		excludeIds?: string[];
+		excludeIds?: number[];
 		/** Pre-loaded recipients (e.g. from URL prefill) */
 		initialRecipients?: UserSearchResult[];
 		/** Called with the current recipients whenever they change */
@@ -48,7 +48,7 @@
 		onRecipientsChange?.(recipients);
 	}
 
-	function excludedSet(): Set<string> {
+	function excludedSet(): Set<number> {
 		return new Set([...excludeIds, ...recipients.map((r) => r.id)]);
 	}
 
@@ -96,7 +96,7 @@
 		inputEl?.focus();
 	}
 
-	function removeRecipient(id: string) {
+	function removeRecipient(id: number) {
 		recipients = recipients.filter((r) => r.id !== id);
 		notify();
 		inputEl?.focus();

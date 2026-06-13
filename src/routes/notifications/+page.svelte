@@ -23,7 +23,7 @@
 
 	// Locally-marked-read ids (session-only) so "mark all as read" updates the
 	// UI without mutating server-loaded prop data.
-	let markedReadIds = $state<Set<string>>(new Set());
+	let markedReadIds = $state<Set<number>>(new Set());
 	const hasUnread = $derived(notifications.some((n) => !n.isRead && !markedReadIds.has(n.id)));
 
 	const userSlug = $derived(generateSlug(user?.username || ''));

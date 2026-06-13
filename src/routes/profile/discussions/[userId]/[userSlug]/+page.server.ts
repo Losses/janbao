@@ -7,7 +7,8 @@ import { parseDiscussionPagination, resolveGroupSlug } from '$lib/server/constan
 import { generateSlug } from '$lib/utils/slug';
 
 export const load: PageServerLoad = async (event) => {
-	const { userId, userSlug } = event.params;
+	const userSlug = event.params.userSlug;
+	const userId = Number(event.params.userId);
 	const db = event.locals.db;
 	const user = event.locals.user;
 	const groupSlug = resolveGroupSlug(user);
