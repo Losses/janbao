@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import { jsonError } from '$lib/server/errors';
 import { drafts } from '$lib/server/db/schema';
 import { DRAFT_CONTEXT_TYPES } from '$lib/server/constants';
+import { MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 import type { RequestHandler } from './$types';
 
 interface DraftSaveBody {
@@ -9,8 +10,6 @@ interface DraftSaveBody {
 	contextId?: string;
 	contentJson?: string;
 }
-
-const MAX_CONTENT_SIZE = 512 * 1024; // 512 KiB limit for draft content
 
 // POST /api/drafts/save - Atomic upsert draft record for the authenticated user.
 // Uses Drizzle's onConflictDoUpdate targeting the unique composite index

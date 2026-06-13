@@ -9,6 +9,7 @@
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import { generateSlug } from '$lib/utils/slug';
+	import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import type { TranslationDict } from '$lib/types/translation';
@@ -47,6 +48,12 @@
 	let composeContent = $state('');
 	let isPosting = $state(false);
 	let editorKey = $state(0);
+
+	$effect(() => {
+		if (messageDraft) {
+			composeContent = messageDraft;
+		}
+	});
 
 	// Inline edit state - only one message edited at a time
 	let editingMessageId = $state<string | null>(null);
@@ -138,7 +145,9 @@
 							<button
 								type="submit"
 								class="btn btn-primary btn-sm"
-								disabled={!editContent || isSavingEdit}
+								disabled={isLexicalEmpty(editContent) ||
+									editContent.length > MAX_CONTENT_SIZE ||
+									isSavingEdit}
 							>
 								{isSavingEdit ? gtc('saving') : gtc('confirm')}
 							</button>
@@ -209,7 +218,9 @@
 					<button
 						type="submit"
 						class="btn btn-primary btn-sm"
-						disabled={!composeContent || isPosting}
+						disabled={isLexicalEmpty(composeContent) ||
+							composeContent.length > MAX_CONTENT_SIZE ||
+							isPosting}
 					>
 						{isPosting ? gtc('saving') : (messageT['send'] ?? gtc('submit'))}
 					</button>

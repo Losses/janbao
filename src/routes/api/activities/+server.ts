@@ -10,6 +10,7 @@ import {
 import { eq, and, isNull, asc, inArray } from 'drizzle-orm';
 import { jsonError } from '$lib/server/errors';
 import type { ActivityCreateBody, ActivityDeleteBody } from '$lib/types/api';
+import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
 	const t = locals.t;
@@ -57,11 +58,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const contentJson = body.contentJson;
 	const recipientId = body.recipientId;
 
-	if (!contentJson) {
+	if (isLexicalEmpty(contentJson)) {
 		return jsonError(t, 'common.contentRequired', 400);
 	}
 
-	if (contentJson.length > 512 * 1024) {
+	if (contentJson.length > MAX_CONTENT_SIZE) {
 		return jsonError(t, 'common.contentTooLarge', 400);
 	}
 

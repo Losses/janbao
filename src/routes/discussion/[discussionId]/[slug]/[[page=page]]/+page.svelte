@@ -10,6 +10,7 @@
 	import ConfirmationModal from '$lib/components/organisms/ConfirmationModal.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
+	import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { enhance } from '$app/forms';
@@ -56,7 +57,7 @@
 
 	$effect(() => {
 		if (discussion && (discussion.id !== loadedDiscussionId || currentPage !== loadedPage)) {
-			replyContent = '';
+			replyContent = data.replyDraft || '';
 			editingReplyId = null;
 			editReplyContent = '';
 			loadedDiscussionId = discussion.id;
@@ -305,7 +306,9 @@
 								<button
 									type="submit"
 									class="btn btn-sm btn-primary"
-									disabled={!editReplyContent || isSubmitting}
+									disabled={isLexicalEmpty(editReplyContent) ||
+										editReplyContent.length > MAX_CONTENT_SIZE ||
+										isSubmitting}
 								>
 									{t.discussion.saveReply}
 								</button>
@@ -419,7 +422,13 @@
 						class="flex justify-end"
 					>
 						<input type="hidden" name="contentJson" value={replyContent} />
-						<button type="submit" class="btn btn-primary" disabled={!replyContent || isSubmitting}>
+						<button
+							type="submit"
+							class="btn btn-primary"
+							disabled={isLexicalEmpty(replyContent) ||
+								replyContent.length > MAX_CONTENT_SIZE ||
+								isSubmitting}
+						>
 							{#if isSubmitting}
 								<span class="loading loading-spinner loading-xs"></span>
 							{/if}

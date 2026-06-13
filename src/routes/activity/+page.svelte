@@ -5,6 +5,7 @@
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
 	import { formatTitle } from '$lib/utils/title';
+	import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 	import { goto, invalidateAll } from '$app/navigation';
 	import type { PageData } from './$types';
 
@@ -24,6 +25,12 @@
 	let submitting = $state(false);
 	let editorKey = $state(0);
 
+	$effect(() => {
+		if (data.activityDraft) {
+			editorContent = data.activityDraft;
+		}
+	});
+
 	function handlePageChange(newPage: number) {
 		goto(`?page=${newPage}`);
 	}
@@ -33,7 +40,8 @@
 	}
 
 	async function submitActivity() {
-		if (!editorContent.trim()) return;
+		if (isLexicalEmpty(editorContent) || editorContent.length > MAX_CONTENT_SIZE || submitting)
+			return;
 		submitting = true;
 		try {
 			const res = await fetch('/api/activities', {
@@ -85,7 +93,9 @@
 					<button
 						class="btn btn-primary btn-sm"
 						onclick={submitActivity}
-						disabled={submitting || !editorContent.trim()}
+						disabled={submitting ||
+							isLexicalEmpty(editorContent) ||
+							editorContent.length > MAX_CONTENT_SIZE}
 					>
 						{submitting ? t.common.saving : t.common.submit}
 					</button>
