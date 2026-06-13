@@ -19,6 +19,8 @@
 		format?: number;
 		style?: string;
 		children?: LexicalNode[];
+		username?: string;
+		displayName?: string;
 	}
 
 	interface LexicalRendererProps {
@@ -168,6 +170,22 @@
 				{/if}
 			{/if}
 		{/each}
+	{:else if node.type === 'mention'}
+		{@const mentionUser = mentionedUsers?.[node.username ?? '']}
+		{#if mentionUser}
+			<a
+				href="/profile/{mentionUser.id}/{generateSlug(mentionUser.username)}"
+				class="inline-flex items-center gap-0.5 px-1.5 py-0 mx-0.5 rounded bg-primary/15 text-primary text-xs font-medium hover:bg-primary/25 transition-colors no-underline"
+			>
+				{mentionUser.displayName}
+			</a>
+		{:else}
+			<span
+				class="inline-flex items-center px-1.5 py-0 mx-0.5 rounded bg-primary/15 text-primary text-xs font-medium"
+			>
+				@{node.displayName ?? node.username ?? ''}
+			</span>
+		{/if}
 	{:else}
 		{#if node.type === 'paragraph'}
 			<p class="mb-2 leading-relaxed text-base-content/95 min-h-[1.2em]">

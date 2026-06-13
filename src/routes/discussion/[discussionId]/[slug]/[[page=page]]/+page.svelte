@@ -68,9 +68,9 @@
 		goto(`/discussion/${discussion.id}/${discussion.slug}/p${newPage}`);
 	}
 
-	function quickReply(username: string) {
+	function quickReply(username: string, displayName: string) {
 		if (replyEditor) {
-			replyEditor.insertText(`@${username} `);
+			replyEditor.insertMention(username, displayName);
 			if (replyComposerElem) {
 				replyComposerElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
 			}
@@ -226,7 +226,7 @@
 								href="/post/editDiscussion/{discussion.id}"
 								class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
 							>
-								{t.discussion.editDiscussion}
+								{t.common.edit}
 							</a>
 						{/if}
 						{#if canDelete}
@@ -235,7 +235,7 @@
 								class="btn btn-xs btn-ghost text-error/60 hover:text-error"
 								onclick={() => triggerDeleteDiscussion()}
 							>
-								{t.discussion.deleteDiscussion}
+								{t.common.delete}
 							</button>
 						{/if}
 					</div>
@@ -318,7 +318,7 @@
 										<button
 											type="button"
 											class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
-											onclick={() => quickReply(reply.authorUsername)}
+											onclick={() => quickReply(reply.authorUsername, reply.authorDisplayName)}
 										>
 											{t.discussion.quickReply}
 										</button>
@@ -444,7 +444,7 @@
 
 <ConfirmationModal
 	open={showDeleteModal}
-	title={deleteTarget === 'discussion' ? t.discussion.deleteDiscussion : t.common.delete}
+	title={t.common.delete}
 	message={deleteTarget === 'discussion'
 		? t.discussion.deleteDiscussionConfirm
 		: t.discussion.deleteReplyConfirm}
