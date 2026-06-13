@@ -35,7 +35,6 @@
 	<div class="card bg-base-200 border border-base-300 p-4 space-y-4">
 		{#if user}
 			<UserInfoBlock {user} {t} />
-			<div class="divider my-1"></div>
 			<div class="flex flex-col gap-2">
 				<a href="/post/discussion" class="btn btn-primary btn-sm w-full">
 					{t.sidebar.createDiscussion}
@@ -59,9 +58,7 @@
 				</div>
 			</div>
 		{/if}
-		<div class="divider my-1"></div>
 		<CategoryListWidget {t} />
-		<div class="divider my-1"></div>
 		<ActiveUsersWall {t} />
 	</div>
 {/snippet}
@@ -81,7 +78,7 @@
 				{t.common.noResults}
 			</div>
 		{:else}
-			<div class="card bg-base-100 border border-base-200 rounded-xl overflow-hidden shadow-sm">
+			<div class="bg-base-100 overflow-hidden">
 				<div class="divide-y divide-base-200">
 					{#each discussionsList as discussion (discussion.id)}
 						<DiscussionRow
@@ -90,6 +87,8 @@
 							isBookmarked={discussion.isBookmarked}
 							unreadCount={discussion.unreadCount}
 							lastReplyAuthorDisplayName={discussion.lastReplyAuthorDisplayName}
+							lastReplyAuthorId={discussion.lastReplyAuthorId}
+							lastReplyAuthorUsername={discussion.lastReplyAuthorUsername}
 							{t}
 						/>
 					{/each}

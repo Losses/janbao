@@ -86,10 +86,10 @@
 	<time
 		datetime={dateObj.toISOString()}
 		title={absoluteString}
-		class="text-sm text-base-content/60 {className}"
+		class="text-xs text-base-content/60 {className}"
 	>
 		{relativeString}
 	</time>
 {:else}
-	<span class="text-sm text-base-content/40 {className}">-</span>
+	<span class="text-xs text-base-content/40 {className}">-</span>
 {/if}

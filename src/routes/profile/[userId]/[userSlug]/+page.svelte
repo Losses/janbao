@@ -2,11 +2,13 @@
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
+	import Icon from '$lib/components/atoms/Icon.svelte';
 	import DateComponent from '$lib/components/atoms/Date.svelte';
 	import ActivityRow from '$lib/components/organisms/ActivityRow.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
+	import { mdiAccountGroup, mdiCalendarClock, mdiClockOutline, mdiEyeOutline } from '@mdi/js';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -71,7 +73,7 @@
 <DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-6">
 		<!-- Profile Header -->
-		<div class="card bg-base-100 border border-base-200 rounded-xl p-6 shadow-sm">
+		<div class="card bg-base-100 p-6">
 			<div class="flex items-center gap-4">
 				<Avatar
 					src={targetUser.avatarFileId ? `/img/${targetUser.avatarFileId}` : null}
@@ -86,32 +88,32 @@
 
 			<!-- User Statistics -->
 			<div class="flex flex-wrap gap-x-6 gap-y-2 mt-4 text-sm text-base-content/70">
-				<div>
-					<span class="font-medium text-base-content">{profileT.group}:</span>
-					<span class="ml-1">{targetUser.groupSlug}</span>
+				<div class="flex items-center gap-1">
+					<Icon path={mdiAccountGroup} size={16} class="text-base-content/50" ariaLabel={profileT.group} />
+					<span>{targetUser.groupSlug}</span>
 				</div>
-				<div>
-					<span class="font-medium text-base-content">{profileT.joined}:</span>
-					<span class="ml-1">
+				<div class="flex items-center gap-1">
+					<Icon path={mdiCalendarClock} size={16} class="text-base-content/50" ariaLabel={profileT.joined} />
+					<span>
 						<DateComponent value={targetUser.signupTime} {t} />
 					</span>
 				</div>
-				<div>
-					<span class="font-medium text-base-content">{profileT.lastActive}:</span>
-					<span class="ml-1">
+				<div class="flex items-center gap-1">
+					<Icon path={mdiClockOutline} size={16} class="text-base-content/50" ariaLabel={profileT.lastActive} />
+					<span>
 						<DateComponent value={targetUser.lastActiveTime} {t} />
 					</span>
 				</div>
-				<div>
-					<span class="font-medium text-base-content">{profileT.views}:</span>
-					<span class="ml-1">{targetUser.viewCount}</span>
+				<div class="flex items-center gap-1">
+					<Icon path={mdiEyeOutline} size={16} class="text-base-content/50" ariaLabel={profileT.views} />
+					<span>{targetUser.viewCount}</span>
 				</div>
 			</div>
 		</div>
 
 		<!-- Directed Activity Composer (if logged in and not own profile) -->
 		{#if user && !isOwner}
-			<div class="card bg-base-100 border border-base-200 rounded-xl p-4 shadow-sm">
+			<div class="card bg-base-100 p-4">
 				<p class="text-sm text-base-content/70 mb-2">
 					{profileT.postToProfile} → {targetUser.displayName}
 				</p>
@@ -138,15 +140,11 @@
 
 		<!-- Activities Stream -->
 		{#if activityList.length === 0}
-			<div
-				class="card bg-base-200/40 border border-base-200 p-10 text-center text-base-content/50 rounded-xl"
-			>
+			<div class="card bg-base-200/40 p-10 text-center text-base-content/50">
 				{t.common.noResults}
 			</div>
 		{:else}
-			<div
-				class="card bg-base-100 border border-base-200 rounded-xl overflow-hidden shadow-sm px-4"
-			>
+			<div class="card bg-base-100 overflow-hidden px-4">
 				{#each activityList as activity (activity.id)}
 					<ActivityRow
 						id={activity.id}

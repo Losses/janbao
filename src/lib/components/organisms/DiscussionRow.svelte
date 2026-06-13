@@ -36,6 +36,8 @@
 		isBookmarked?: boolean;
 		unreadCount?: number;
 		lastReplyAuthorDisplayName?: string | null;
+		lastReplyAuthorId?: string | null;
+		lastReplyAuthorUsername?: string | null;
 		/** Translation dictionary */
 		t?: TranslationDict | null;
 		class?: string;
@@ -47,6 +49,8 @@
 		isBookmarked = false,
 		unreadCount = 0,
 		lastReplyAuthorDisplayName = null,
+		lastReplyAuthorId = null,
+		lastReplyAuthorUsername = null,
 		t = null,
 		class: className = ''
 	}: DiscussionRowProps = $props();
@@ -67,11 +71,11 @@
 	});
 
 	const authorSlug = $derived(generateSlug(discussion.authorUsername || 'user'));
+	const lastReplyAuthorSlug = $derived(generateSlug(lastReplyAuthorUsername || 'user'));
 
 	// I18n translations with defaults
 	const viewsText = $derived(t?.forum?.views ?? 'views');
 	const repliesText = $derived(t?.forum?.replies ?? 'replies');
-	const lastReplierText = $derived(t?.forum?.lastReplyBy ?? 'last reply by');
 	const pinnedText = $derived(t?.forum?.pinned ?? 'PIN');
 
 	async function toggleBookmark(e: Event) {
@@ -159,9 +163,9 @@
 
 			{#if lastReplyAuthorDisplayName}
 				<span class="text-base-content/30">•</span>
-				<span
-					>{lastReplierText}:
-					<span class="font-medium text-base-content/80">{lastReplyAuthorDisplayName}</span></span
+				<a
+					href="/profile/{lastReplyAuthorId}/{lastReplyAuthorSlug}"
+					class="hover:underline font-medium text-base-content/80">{lastReplyAuthorDisplayName}</a
 				>
 			{/if}
 

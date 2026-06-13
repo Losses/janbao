@@ -28,6 +28,8 @@ export interface DiscussionListItem {
 	readHistory: ReadHistory | null;
 	unreadCount: number;
 	lastReplyAuthorDisplayName: string | null;
+	lastReplyAuthorId: string | null;
+	lastReplyAuthorUsername: string | null;
 }
 
 interface GetDiscussionsListOptions {
@@ -149,6 +151,8 @@ export async function getDiscussionsList(
 	const lastReplyAuthors = await db
 		.select({
 			discussionId: latestReplySubq.discussionId,
+			authorId: users.id,
+			authorUsername: users.username,
 			authorDisplayName: users.displayName
 		})
 		.from(latestReplySubq)
@@ -162,9 +166,13 @@ export async function getDiscussionsList(
 		)
 		.innerJoin(users, eq(replies.authorId, users.id));
 
-	const lastReplyMap = new Map<string, string>();
+	const lastReplyMap = new Map<string, { id: string; username: string; displayName: string }>();
 	for (const row of lastReplyAuthors) {
-		lastReplyMap.set(row.discussionId, row.authorDisplayName);
+		lastReplyMap.set(row.discussionId, {
+			id: row.authorId,
+			username: row.authorUsername,
+			displayName: row.authorDisplayName
+		});
 	}
 
 	// Batch query 2: Unread counts per discussion (only when userId present)
@@ -237,7 +245,9 @@ export async function getDiscussionsList(
 				}
 			: null,
 		unreadCount: unreadMap.get(row.id) || 0,
-		lastReplyAuthorDisplayName: lastReplyMap.get(row.id) || null
+		lastReplyAuthorDisplayName: lastReplyMap.get(row.id)?.displayName || null,
+		lastReplyAuthorId: lastReplyMap.get(row.id)?.id || null,
+		lastReplyAuthorUsername: lastReplyMap.get(row.id)?.username || null
 	}));
 }
 
