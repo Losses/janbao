@@ -144,4 +144,35 @@ Fixed lint issues found during this cycle's lint run:
 
 ## 4. Audit Log
 
-_Audit entries will be appended after the code review cycle._
+### Audit Round 1 (RV01-C04-Audit-01)
+
+- **Date:** 2026-06-12
+- **Method:** 5 independent agents
+- **Issues Found:** 6 (all fixed)
+- **Result:** All actionable findings resolved. See [RV01-C04-Audit-01.md](./RV01-C04-Audit-01.md).
+
+### Audit Round 2 (RV01-C04-Audit-02)
+
+- **Date:** 2026-06-12
+- **Method:** 5 independent agents (full re-audit of all C04 files)
+- **Verdicts:** 4 PASS / 1 FAIL → All fixed
+- **Issues Found:** 7 (all fixed)
+- **Key Fixes:**
+  - F1 (Critical): Bookmarks page `totalPages` computed from unfiltered count — refactored to use SQL-level category filtering via `getReadableCategorySlugs`
+  - F2: Dead ternary `guest ? true : true` simplified to `true`
+  - F3: Duplicate `RecipientInfo` extracted to `$lib/types/api.ts`
+  - F4: Bookmarks admin/moderator shortcut added via `getReadableCategorySlugs` (returns `null` for privileged groups)
+  - F5: ActivityRow `TranslationDict` replaced with canonical import from `$lib/types/translation`
+  - F6: RSS endpoint reduced to minimal column selection (`groupSlug` only)
+  - F7: `resolvePermissions` inline fallback replaced with `resolveGroupSlug()` call
+- **Verification:** `bun run check` ✅ (0 errors), `bun run lint` ✅ (0 type duplicates)
+- **See:** [RV01-C04-Audit-02.md](./RV01-C04-Audit-02.md)
+
+### Audit Round 3 — Verification Pass
+
+- **Date:** 2026-06-12
+- **Method:** 5 independent agents (full re-audit after Round 2 fixes)
+- **Verdicts:** 5/5 PASS ✅ — All auditors confirm C04 is complete
+- **Issues Found:** 0 critical, 0 medium. Low-priority items noted: wasteful double-query in `getDiscussionsCount`, `['__none__']` sentinel pattern, post-query filtering consistency with `getDiscussionsList` — all deferred to follow-up optimization cycle.
+- **Verification:** `bun run check` ✅ (0 errors), `bun run lint` ✅ (0 type duplicates)
+- **Conclusion:** All 5 independent auditors agree C04 is complete and ready for merge. Audit cycle closed.
