@@ -95,10 +95,31 @@ export const load: PageServerLoad = async (event) => {
 		}
 	}
 
-	// 5. Determine if current user is the owner
+	// 5. Batch-fetch comment counts per activity
+	const activityIds = profileActivities.map((a) => a.id);
+	const commentCountMap = new Map<string, number>();
+
+	if (activityIds.length > 0) {
+		const commentCounts = await db
+			.select({
+				parentActivityId: activities.parentActivityId,
+				count: sql<number>`COUNT(*)`
+			})
+			.from(activities)
+			.where(and(inArray(activities.parentActivityId, activityIds), isNull(activities.deletedAt)))
+			.groupBy(activities.parentActivityId);
+
+		for (const cc of commentCounts) {
+			if (cc.parentActivityId) {
+				commentCountMap.set(cc.parentActivityId, cc.count);
+			}
+		}
+	}
+
+	// 6. Determine if current user is the owner
 	const isOwner = currentUser ? currentUser.id === userId : false;
 
-	// 6. Fetch existing draft for directed activity composer
+	// 7. Fetch existing draft for directed activity composer
 	let activityDraft: string | null = null;
 	if (currentUser) {
 		const draftRecords = await db
@@ -118,7 +139,7 @@ export const load: PageServerLoad = async (event) => {
 		}
 	}
 
-	// 7. Resolve @mentions across profile activity content for chip rendering
+	// 8. Resolve @mentions across profile activity content for chip rendering
 	const mentionedUsers = await resolveMentions(
 		profileActivities.map((a) => a.contentJson),
 		db
@@ -131,7 +152,8 @@ export const load: PageServerLoad = async (event) => {
 			recipientDisplayName: a.recipientId
 				? recipientMap.get(a.recipientId)?.displayName || null
 				: null,
-			recipientUsername: a.recipientId ? recipientMap.get(a.recipientId)?.username || null : null
+			recipientUsername: a.recipientId ? recipientMap.get(a.recipientId)?.username || null : null,
+			commentCount: commentCountMap.get(a.id) || 0
 		})),
 		isOwner,
 		activityDraft,
