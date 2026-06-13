@@ -5,6 +5,7 @@ import { eq, and, isNull, desc, sql, or, inArray } from 'drizzle-orm';
 import { generateSlug } from '$lib/utils/slug';
 import { SYSTEM_USER_ID } from '$lib/server/constants';
 import { resolveMentions } from '$lib/server/utils/mentions';
+import type { RecipientInfo } from '$lib/types/api';
 
 export const load: PageServerLoad = async (event) => {
 	const { userId } = event.params;
@@ -80,11 +81,6 @@ export const load: PageServerLoad = async (event) => {
 	const recipientIds = profileActivities
 		.map((a) => a.recipientId)
 		.filter((id): id is string => id !== null && id !== SYSTEM_USER_ID);
-
-	interface RecipientInfo {
-		displayName: string;
-		username: string;
-	}
 
 	const recipientMap = new Map<string, RecipientInfo>();
 	if (recipientIds.length > 0) {

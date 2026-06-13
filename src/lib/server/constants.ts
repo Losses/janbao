@@ -117,7 +117,7 @@ export async function resolvePermissions(
 	categorySlug: string,
 	user: UserData | null | undefined
 ): Promise<ResolvedPermissions> {
-	const groupSlug = user?.groupSlug || 'guest';
+	const groupSlug = resolveGroupSlug(user);
 
 	const rows = await db
 		.select()

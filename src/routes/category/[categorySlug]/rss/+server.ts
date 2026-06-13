@@ -16,8 +16,12 @@ export const GET: RequestHandler = async (event) => {
 
 	const db = event.locals.db;
 
-	// 1. Resolve user matching rssToken
-	const userRecords = await db.select().from(users).where(eq(users.rssToken, token)).limit(1);
+	// 1. Resolve user matching rssToken (select only needed fields)
+	const userRecords = await db
+		.select({ groupSlug: users.groupSlug })
+		.from(users)
+		.where(eq(users.rssToken, token))
+		.limit(1);
 	if (userRecords.length === 0) {
 		return new Response(t.rss.unauthorized, { status: 401 });
 	}

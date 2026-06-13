@@ -31,7 +31,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	// Apply role-based defaults when no permission row exists
 	const isPrivileged = groupSlug === 'admin' || groupSlug === 'moderator';
-	const defaultCanRead = groupSlug === 'guest' ? true : true; // guests can read public, members can read
+	const defaultCanRead = true; // both guest and member default to canRead=true per spec
 
 	const readableCategories = isPrivileged
 		? allCategories
