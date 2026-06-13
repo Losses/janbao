@@ -63,7 +63,6 @@
 			</div>
 		</div>
 
-		<div class="divider my-1"></div>
 
 		<div>
 			<h3 class="text-sm font-semibold text-base-content/70 mb-2">{messageT.addParticipant}</h3>

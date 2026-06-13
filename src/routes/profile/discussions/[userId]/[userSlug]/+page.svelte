@@ -61,7 +61,7 @@
 				{t.common.noResults}
 			</div>
 		{:else}
-			<div class="card bg-base-100 border border-base-200 rounded-xl overflow-hidden shadow-sm">
+			<div class="bg-base-100 overflow-hidden">
 				<div class="divide-y divide-base-200">
 					{#each discussionsList as discussion (discussion.id)}
 						<DiscussionRow
@@ -70,6 +70,8 @@
 							isBookmarked={discussion.isBookmarked}
 							unreadCount={discussion.unreadCount}
 							lastReplyAuthorDisplayName={discussion.lastReplyAuthorDisplayName}
+							lastReplyAuthorId={discussion.lastReplyAuthorId}
+							lastReplyAuthorUsername={discussion.lastReplyAuthorUsername}
 							{t}
 						/>
 					{/each}

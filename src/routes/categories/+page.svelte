@@ -34,9 +34,7 @@
 				</div>
 			</div>
 		{/if}
-		<div class="divider my-1"></div>
 		<CategoryListWidget {t} />
-		<div class="divider my-1"></div>
 		<ActiveUsersWall {t} />
 	</div>
 {/snippet}

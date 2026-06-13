@@ -75,7 +75,6 @@
 		<a href="/messages/inbox" class="btn btn-outline btn-sm w-full">
 			{messageT.inbox}
 		</a>
-		<div class="divider my-1"></div>
 		<ActiveUsersWall {t} />
 	</div>
 {/snippet}
