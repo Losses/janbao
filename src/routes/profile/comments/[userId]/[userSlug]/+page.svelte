@@ -77,7 +77,10 @@
 			<div class="space-y-4">
 				{#each views as view (view.comment.id)}
 					<div class="card bg-base-100 border border-base-200 rounded-xl p-4 shadow-sm space-y-2">
-						<LexicalRenderer contentJson={view.comment.contentJson} />
+						<LexicalRenderer
+							contentJson={view.comment.contentJson}
+							mentionedUsers={data.mentionedUsers}
+						/>
 						<div class="flex items-center justify-between gap-2 pt-2 border-t border-base-200">
 							<a href={view.href} class="text-xs text-primary hover:underline truncate">
 								{view.contextLabel}

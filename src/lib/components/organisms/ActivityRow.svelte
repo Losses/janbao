@@ -8,6 +8,7 @@
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import { mdiCommentOutline, mdiDeleteOutline, mdiArrowRight } from '@mdi/js';
 	import type { ApiResult } from '$lib/types/api';
+	import type { MentionedUsersMap } from '$lib/types/mentions';
 
 	interface ActivityComment {
 		id: string;
@@ -27,13 +28,6 @@
 		[key: string]: string | Record<string, string>;
 	}
 
-	interface MentionedUserEntry {
-		id: string;
-		displayName: string;
-		username: string;
-		avatarFileId: string | null;
-	}
-
 	interface ActivityRowProps {
 		id: string;
 		authorId: string;
@@ -49,7 +43,7 @@
 		currentUserId?: string | null;
 		isAdmin?: boolean;
 		t: TranslationDict;
-		mentionedUsers?: Record<string, MentionedUserEntry> | null;
+		mentionedUsers?: MentionedUsersMap | null;
 	}
 
 	let {

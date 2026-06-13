@@ -1,6 +1,12 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
-import { categories, categoryPermissions, discussions, replies, drafts } from '$lib/server/db/schema';
+import {
+	categories,
+	categoryPermissions,
+	discussions,
+	replies,
+	drafts
+} from '$lib/server/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { generateSlug } from '$lib/utils/slug';
 import { resolvePermissions, resolveGroupSlug } from '$lib/server/constants';

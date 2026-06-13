@@ -1,7 +1,6 @@
 import { discussions, users, bookmarks, discussionReads, replies, categories } from '../schema';
 import { eq, and, isNull, desc, sql, count, inArray } from 'drizzle-orm';
 import type { D1Db } from '../index';
-import { resolveGroupSlug } from '$lib/server/constants';
 
 export interface ReadHistory {
 	lastReadAt: Date | null;
@@ -275,9 +274,7 @@ export async function getDiscussionsCount(
 				.where(
 					and(
 						...whereClauses,
-						readableSlugs.length > 0
-							? inArray(discussions.categorySlug, readableSlugs)
-							: sql`1 = 0`
+						readableSlugs.length > 0 ? inArray(discussions.categorySlug, readableSlugs) : sql`1 = 0`
 					)
 				);
 		}
@@ -290,10 +287,7 @@ export async function getDiscussionsCount(
  * Get the list of category slugs the given group can read.
  * Returns null if all categories are readable (admin/moderator default).
  */
-async function getReadableCategorySlugs(
-	db: D1Db,
-	groupSlug: string
-): Promise<string[] | null> {
+async function getReadableCategorySlugs(db: D1Db, groupSlug: string): Promise<string[] | null> {
 	// Privileged groups can read all categories by default
 	if (groupSlug === 'admin' || groupSlug === 'moderator') {
 		return null; // null = all readable

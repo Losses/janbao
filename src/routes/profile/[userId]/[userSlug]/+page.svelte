@@ -163,6 +163,7 @@
 						currentUserId={user?.id}
 						isAdmin={user?.groupSlug === 'admin'}
 						{t}
+						mentionedUsers={data.mentionedUsers}
 					/>
 				{/each}
 			</div>
