@@ -162,6 +162,7 @@
 						recipientId={activity.recipientId}
 						contentJson={activity.contentJson}
 						createdAt={activity.createdAt}
+						commentCount={activity.commentCount}
 						recipientDisplayName={activity.recipientDisplayName}
 						recipientUsername={activity.recipientUsername}
 						currentUserId={user?.id}

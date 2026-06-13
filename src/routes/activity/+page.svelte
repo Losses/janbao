@@ -118,6 +118,7 @@
 						recipientUsername={activity.recipientUsername}
 						contentJson={activity.contentJson}
 						createdAt={activity.createdAt}
+						commentCount={activity.commentCount}
 						currentUserId={user?.id}
 						isAdmin={user?.groupSlug === 'admin'}
 						{t}
