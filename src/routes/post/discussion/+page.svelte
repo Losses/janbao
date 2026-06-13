@@ -87,13 +87,10 @@
 <DualColumnLayout {t}>
 	<div class="space-y-6 py-2">
 		<!-- Header -->
-		<div class="flex items-center justify-between border-b border-base-300 pb-4">
+		<div class="border-b border-base-300 pb-4">
 			<h1 class="text-3xl font-extrabold tracking-tight text-base-content">
 				{t.sidebar.createDiscussion}
 			</h1>
-			<a href="/" class="btn btn-sm btn-ghost">
-				{t.common.cancel}
-			</a>
 		</div>
 
 		<!-- Main form -->

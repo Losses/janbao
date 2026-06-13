@@ -1,2 +1,39 @@
 @import 'tailwindcss';
 @plugin "daisyui";
+
+/*
+ * Spoiler text styling - used in both LexicalRenderer (read-only) and
+ * LexicalEditor (editable) contexts. Text is hidden by default and revealed
+ * on hover. !important overrides are needed to beat any inline styles.
+ */
+.spoiler-text {
+	background-color: currentColor !important;
+	color: currentColor !important;
+	cursor: pointer;
+	transition:
+		color 0.2s ease-out,
+		background-color 0.2s ease-out;
+}
+
+.spoiler-text:hover {
+	background-color: transparent !important;
+	color: var(--fallback-bc, oklch(var(--bc) / 1)) !important;
+}
+
+/*
+ * Spoiler styling inside the Lexical editor content area.
+ * Targets spans whose inline style attribute contains the sentinel marker.
+ */
+.ContentEditable__root span[style*='janbao-spoiler'] {
+	background-color: currentColor !important;
+	color: currentColor !important;
+	cursor: pointer;
+	transition:
+		color 0.2s ease-out,
+		background-color 0.2s ease-out;
+}
+
+.ContentEditable__root span[style*='janbao-spoiler']:hover {
+	background-color: transparent !important;
+	color: var(--fallback-bc, oklch(var(--bc) / 1)) !important;
+}

@@ -103,6 +103,8 @@
 		"underline": "Underline",
 		"strikethrough": "Strikethrough",
 		"heading": "Heading",
+		"highlight": "Marker Highlight",
+		"spoiler": "Spoiler",
 		"link": "Insert Link",
 		"image": "Insert Image",
 		"mentionHint": "Type @ to mention someone"

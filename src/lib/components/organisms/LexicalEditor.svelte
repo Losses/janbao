@@ -5,6 +5,8 @@
 	 * - Protocol-level URL validation (only http:// https:// allowed, blocking XSS)
 	 * - Context-aware autosave (POST to /api/drafts/save every 30s)
 	 * - Editor locking during initial loading
+	 * - AutoLink plugin for automatic URL linkification
+	 * - Marker Highlight and Spoiler inline text formatting
 	 */
 	import {
 		Composer,
@@ -14,6 +16,7 @@
 		ListPlugin,
 		ImagePlugin,
 		LinkPlugin,
+		AutoLinkPlugin,
 		PlaceHolder,
 		MarkdownShortcutPlugin,
 		OnChangePlugin,
@@ -39,14 +42,37 @@
 	import RichTextToolbar from '$lib/components/molecules/RichTextToolbar.svelte';
 	import RichTextLinkEditor from '$lib/components/molecules/RichTextLinkEditor.svelte';
 	import { CodeNode, CodeHighlightNode } from '@lexical/code';
+	import {
+		COMMAND_PRIORITY_EDITOR,
+		$getSelection as getSelection,
+		$isRangeSelection as isRangeSelection,
+		$isTextNode as isTextNodeFn
+	} from 'lexical';
+	import type { LexicalCommand } from 'lexical';
 	import type { VoidHandler } from '$lib/types/handlers';
 	import type { TranslationDict } from '$lib/types/translation';
+
+	/** Custom Lexical command to toggle spoiler formatting on selected text */
+	import { TOGGLE_SPOILER_COMMAND } from '$lib/types/editor-commands';
+
+	/** Sentinel string embedded in TextNode style to mark spoiler formatting */
+	const SPOILER_STYLE_MARKER = 'janbao-spoiler;';
 
 	type ContentChangeHandler = (json: string) => void;
 	type NodeTransformFn = (node: unknown) => void;
 	type RegisterNodeTransformFn = (nodeClass: unknown, transform: NodeTransformFn) => VoidHandler;
 	type StringGetter = () => string;
 	type ToJSONFn = () => unknown;
+	type GetStyleFn = () => string;
+	type SetStyleFn = (style: string) => void;
+	type GetNodesFn = () => NodeWithStyle[];
+	type UpdateFn = (fn: VoidHandler) => void;
+	type CommandHandlerFn = () => boolean;
+	type RegisterCommandFn = (
+		command: LexicalCommand<void>,
+		handler: CommandHandlerFn,
+		priority: number
+	) => VoidHandler;
 
 	interface EditorStateLike {
 		toJSON: ToJSONFn;
@@ -119,6 +145,8 @@
 	// Dynamic registration of ImageNode protocol-level XSS validation transform
 	interface EditorWithTransform {
 		registerNodeTransform?: RegisterNodeTransformFn;
+		registerCommand?: RegisterCommandFn;
+		update?: UpdateFn;
 	}
 
 	interface ImageNodeWithSrc {
@@ -127,6 +155,15 @@
 
 	interface NodeWithRemove {
 		remove?: VoidHandler;
+	}
+
+	interface NodeWithStyle {
+		getStyle?: GetStyleFn;
+		setStyle?: SetStyleFn;
+	}
+
+	interface SelectionWithNodes {
+		getNodes?: GetNodesFn;
 	}
 
 	$effect(() => {
@@ -139,6 +176,41 @@
 				(node as NodeWithRemove).remove?.();
 			}
 		});
+		return () => unregister();
+	});
+
+	// Register spoiler toggle command on the editor instance
+	$effect(() => {
+		if (!editorInstance) return;
+		const castEditor = editorInstance as EditorWithTransform;
+		if (!castEditor.registerCommand || !castEditor.update) return;
+
+		const unregister = castEditor.registerCommand(
+			TOGGLE_SPOILER_COMMAND,
+			() => {
+				castEditor.update!(() => {
+					const selection = getSelection();
+					if (isRangeSelection(selection)) {
+						const nodes = (selection as SelectionWithNodes).getNodes?.() ?? [];
+						for (const node of nodes) {
+							if (isTextNodeFn(node as Parameters<typeof isTextNodeFn>[0])) {
+								const textNode = node as NodeWithStyle;
+								const currentStyle = textNode.getStyle?.() ?? '';
+								if (currentStyle.includes('janbao-spoiler')) {
+									textNode.setStyle?.(currentStyle.replace(/janbao-spoiler;?\s*/g, '').trim());
+								} else {
+									textNode.setStyle?.(
+										currentStyle ? `${currentStyle} ${SPOILER_STYLE_MARKER}` : SPOILER_STYLE_MARKER
+									);
+								}
+							}
+						}
+					}
+				});
+				return true;
+			},
+			COMMAND_PRIORITY_EDITOR
+		);
 		return () => unregister();
 	});
 
@@ -245,10 +317,6 @@
 		}
 	}
 
-	// Note: Draft loading (GET /api/drafts) is deferred to Cycle 5.
-	// The parent component is responsible for providing initialContent
-	// via server-side data loading in future cycles.
-
 	// Synchronize initial content with parent on mount.
 	// When a draft is loaded from the backend, the parent page's contentJson
 	// state remains '' until the first keystroke. This effect fires immediately
@@ -292,7 +360,8 @@
 				bold: 'font-bold',
 				italic: 'italic',
 				underline: 'underline',
-				strikethrough: 'line-through'
+				strikethrough: 'line-through',
+				highlight: 'bg-yellow-200/60 dark:bg-yellow-400/30 rounded px-0.5'
 			},
 			link: 'text-primary underline',
 			image: 'max-w-full my-2'
@@ -331,6 +400,7 @@
 			<ListPlugin />
 			<ImagePlugin />
 			<LinkPlugin {validateUrl} />
+			<AutoLinkPlugin />
 			<RichTextLinkEditor anchorElem={editorAreaElem} />
 			<MarkdownShortcutPlugin transformers={markdownTransformers} />
 			<OnChangePlugin

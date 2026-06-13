@@ -4,8 +4,8 @@
 	/**
 	 * LexicalRenderer Molecule - Recursively renders Lexical JSON states securely on the client.
 	 * Supports standard text formats (bold, italic, underline, strikethrough, inline code),
-	 * paragraphs, headings (h1-h4), quotes, lists (numbered, bulleted), links, images,
-	 * and @username mention chips.
+	 * marker highlight (bit 128), spoiler text (style sentinel), paragraphs, headings (h1-h4),
+	 * quotes, lists (numbered, bulleted), links, images, and @username mention chips.
 	 */
 	interface LexicalNode {
 		type: string;
@@ -120,6 +120,23 @@
 			};
 		}
 	});
+
+	/**
+	 * Build CSS class string for text node format bits and optional spoiler marker.
+	 * Bit flags: 1=bold, 2=italic, 4=strikethrough, 8=underline, 16=code, 128=highlight
+	 */
+	function formatTextClasses(format: number | undefined, isSpoiler: boolean): string {
+		const f = format ?? 0;
+		const parts: string[] = [];
+		if (f & 1) parts.push('font-bold');
+		if (f & 2) parts.push('italic');
+		if (f & 4) parts.push('line-through');
+		if (f & 8) parts.push('underline');
+		if (f & 128) parts.push('bg-yellow-200/60 dark:bg-yellow-400/30 rounded px-0.5');
+		if (f & 16) parts.push('font-mono text-xs');
+		if (isSpoiler) parts.push('spoiler-text');
+		return parts.join(' ');
+	}
 </script>
 
 {#snippet renderNode(node: LexicalNode)}
@@ -134,18 +151,21 @@
 					{user.displayName}
 				</a>
 			{:else}
-				<span
-					class="{(node.format ?? 0) & 1 ? 'font-bold' : ''} {(node.format ?? 0) & 2
-						? 'italic'
-						: ''} {(node.format ?? 0) & 4 ? 'line-through' : ''} {(node.format ?? 0) & 8
-						? 'underline'
-						: ''} {(node.format ?? 0) & 16
-						? 'bg-base-300 px-1.5 py-0.5 rounded font-mono text-xs text-secondary-content'
-						: ''}"
-					style={node.style || undefined}
-				>
-					{segment.text}
-				</span>
+				{@const hasSpoiler = (node.style ?? '').includes('janbao-spoiler')}
+				{#if hasSpoiler}
+					<span class={formatTextClasses(node.format, true)}>
+						{segment.text}
+					</span>
+				{:else}
+					<span
+						class="{formatTextClasses(node.format, false)} {(node.format ?? 0) & 16
+							? 'bg-base-300 px-1.5 py-0.5 rounded text-secondary-content'
+							: ''}"
+						style={node.style || undefined}
+					>
+						{segment.text}
+					</span>
+				{/if}
 			{/if}
 		{/each}
 	{:else}
