@@ -174,6 +174,17 @@
 				</label>
 				<input type="hidden" name="contentJson" value={contentJson} />
 
+				<div class={isPreview ? 'hidden' : ''} id="editor-block">
+					<LexicalEditor
+						contextType="discussion"
+						contextId="new"
+						initialContent={draftContent}
+						onContentChange={(json) => (contentJson = json)}
+						placeholder={t.editor.placeholder}
+						{t}
+					/>
+				</div>
+
 				{#if isPreview}
 					<div class="border border-base-300 rounded-lg p-5 bg-base-100 min-h-[200px] shadow-inner">
 						{#if contentJson}
@@ -181,17 +192,6 @@
 						{:else}
 							<p class="text-base-content/40 italic">Nothing to preview yet.</p>
 						{/if}
-					</div>
-				{:else}
-					<div id="editor-block">
-						<LexicalEditor
-							contextType="discussion"
-							contextId="new"
-							initialContent={draftContent}
-							onContentChange={(json) => (contentJson = json)}
-							placeholder={t.editor.placeholder}
-							{t}
-						/>
 					</div>
 				{/if}
 			</div>

@@ -27,14 +27,14 @@
 	let isPreview = $state(false);
 	let isSavingManualDraft = $state(false);
 	let showSaveSuccess = $state(false);
-	let hasLoaded = false;
+	let loadedDiscussionId = $state<string | null>(null);
 
 	$effect(() => {
-		if (!hasLoaded && data.discussion) {
+		if (data.discussion && data.discussion.id !== loadedDiscussionId) {
 			title = data.discussion.title;
 			categorySlug = data.discussion.categorySlug;
 			themeName = data.discussion.themeName || '';
-			hasLoaded = true;
+			loadedDiscussionId = data.discussion.id;
 		}
 	});
 
@@ -107,6 +107,13 @@
 					isSubmitting = false;
 					if (result.type === 'redirect') {
 						goto(result.location);
+					} else if (
+						result.type === 'success' &&
+						result.data &&
+						'success' in result.data &&
+						result.data.success === false
+					) {
+						alert(result.data.error || 'Failed to update discussion');
 					} else if (result.type === 'failure') {
 						alert(result.data?.error || 'Failed to update discussion');
 					}
@@ -178,6 +185,17 @@
 				</label>
 				<input type="hidden" name="contentJson" value={contentJson} />
 
+				<div class={isPreview ? 'hidden' : ''} id="editor-block">
+					<LexicalEditor
+						contextType="discussion"
+						contextId={discussion.id}
+						initialContent={draftContent || opContentJson}
+						onContentChange={(json) => (contentJson = json)}
+						placeholder={t.editor.placeholder}
+						{t}
+					/>
+				</div>
+
 				{#if isPreview}
 					<div class="border border-base-300 rounded-lg p-5 bg-base-100 min-h-[200px] shadow-inner">
 						{#if contentJson}
@@ -185,17 +203,6 @@
 						{:else}
 							<p class="text-base-content/40 italic">Nothing to preview yet.</p>
 						{/if}
-					</div>
-				{:else}
-					<div id="editor-block">
-						<LexicalEditor
-							contextType="discussion"
-							contextId={discussion.id}
-							initialContent={draftContent || opContentJson}
-							onContentChange={(json) => (contentJson = json)}
-							placeholder={t.editor.placeholder}
-							{t}
-						/>
 					</div>
 				{/if}
 			</div>

@@ -262,11 +262,14 @@
 								action="?/editReply"
 								use:enhance={() => {
 									isSubmitting = true;
-									return async ({ result }) => {
+									return async ({ result, update }) => {
 										isSubmitting = false;
 										if (result.type === 'success') {
+											await update();
 											editingReplyId = null;
 											editReplyContent = '';
+										} else if (result.type === 'failure') {
+											alert(result.data?.error || 'Failed to edit reply');
 										}
 									};
 								}}
@@ -348,53 +351,69 @@
 		<!-- Reply Composer at the bottom -->
 		<div bind:this={replyComposerElem} class="pt-6">
 			{#if user}
-				<h3 class="text-lg font-bold mb-3 text-base-content">{t.common.reply}</h3>
-				{#key editorKey}
-					<LexicalEditor
-						bind:this={replyEditor}
-						contextType="reply"
-						contextId={discussion.id}
-						initialContent={data.replyDraft}
-						placeholder={t.editor.placeholderReply}
-						onContentChange={(json) => (replyContent = json)}
-						{t}
-						class="mb-3"
-					/>
-				{/key}
+				{#if canCreate}
+					<h3 class="text-lg font-bold mb-3 text-base-content">{t.common.reply}</h3>
+					{#key editorKey}
+						<LexicalEditor
+							bind:this={replyEditor}
+							contextType="reply"
+							contextId={discussion.id}
+							initialContent={data.replyDraft}
+							placeholder={t.editor.placeholderReply}
+							onContentChange={(json) => (replyContent = json)}
+							{t}
+							class="mb-3"
+						/>
+					{/key}
 
-				<form
-					method="POST"
-					action="?/reply"
-					use:enhance={() => {
-						isSubmitting = true;
-						return async ({ result }) => {
-							isSubmitting = false;
-							if (result.type === 'success') {
-								replyContent = '';
-								editorKey++;
-								const data = result.data as { replyId?: string; page?: number } | null;
-								const replyId = data?.replyId;
-								const page = data?.page;
-								if (replyId && page) {
-									const url =
-										page <= 1
-											? `/discussion/${discussion.id}/${discussion.slug}#reply-${replyId}`
-											: `/discussion/${discussion.id}/${discussion.slug}/p${page}#reply-${replyId}`;
-									goto(url);
+					<form
+						method="POST"
+						action="?/reply"
+						use:enhance={() => {
+							isSubmitting = true;
+							return async ({ result, update }) => {
+								isSubmitting = false;
+								if (result.type === 'success') {
+									const resData = result.data as {
+										success?: boolean;
+										error?: string;
+										replyId?: string;
+										page?: number;
+									} | null;
+									if (resData && resData.success === false) {
+										alert(resData.error || 'Failed to create reply');
+										return;
+									}
+									await update({ reset: true });
+									replyContent = '';
+									editorKey++;
+									const replyId = resData?.replyId;
+									const page = resData?.page;
+									if (replyId && page) {
+										const url =
+											page <= 1
+												? `/discussion/${discussion.id}/${discussion.slug}#reply-${replyId}`
+												: `/discussion/${discussion.id}/${discussion.slug}/p${page}#reply-${replyId}`;
+										goto(url);
+									}
 								}
-							}
-						};
-					}}
-					class="flex justify-end"
-				>
-					<input type="hidden" name="contentJson" value={replyContent} />
-					<button type="submit" class="btn btn-primary" disabled={!replyContent || isSubmitting}>
-						{#if isSubmitting}
-							<span class="loading loading-spinner loading-xs"></span>
-						{/if}
-						{t.common.submit}
-					</button>
-				</form>
+							};
+						}}
+						class="flex justify-end"
+					>
+						<input type="hidden" name="contentJson" value={replyContent} />
+						<button type="submit" class="btn btn-primary" disabled={!replyContent || isSubmitting}>
+							{#if isSubmitting}
+								<span class="loading loading-spinner loading-xs"></span>
+							{/if}
+							{t.common.submit}
+						</button>
+					</form>
+				{:else}
+					<div class="bg-base-200 p-6 text-center text-base-content/70 rounded-lg">
+						{t.discussion.noPermission}
+					</div>
+				{/if}
 			{:else}
 				<div class="bg-base-200 p-6 text-center">
 					<p class="text-base-content/70 mb-3">
@@ -434,6 +453,8 @@
 		return async ({ result }) => {
 			if (result.type === 'redirect') {
 				goto(result.location);
+			} else if (result.type === 'failure') {
+				alert(result.data?.error || 'Failed to delete discussion');
 			}
 		};
 	}}
@@ -445,8 +466,11 @@
 	method="POST"
 	action="?/deleteReply"
 	use:enhance={() => {
-		return async ({ update }) => {
-			update();
+		return async ({ result, update }) => {
+			if (result.type === 'failure') {
+				alert(result.data?.error || 'Failed to delete reply');
+			}
+			await update();
 		};
 	}}
 	class="hidden"

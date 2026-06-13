@@ -46,7 +46,8 @@
 		COMMAND_PRIORITY_EDITOR,
 		$getSelection as getSelection,
 		$isRangeSelection as isRangeSelection,
-		$isTextNode as isTextNodeFn
+		$isTextNode as isTextNodeFn,
+		$getRoot as getRoot
 	} from 'lexical';
 	import type { LexicalCommand } from 'lexical';
 	import type { VoidHandler } from '$lib/types/handlers';
@@ -382,11 +383,20 @@
 		const castEditor = editorInstance as { update: UpdateFn; focus: VoidHandler };
 		castEditor.focus();
 		castEditor.update(() => {
-			const selection = getSelection();
+			let selection = getSelection();
+			if (!isRangeSelection(selection)) {
+				getRoot().selectEnd();
+				selection = getSelection();
+			}
 			if (isRangeSelection(selection)) {
 				selection.insertText(text);
 			}
 		});
+	}
+
+	function setEditorInstance(editor: unknown): string {
+		editorInstance = editor;
+		return '';
 	}
 </script>
 
@@ -397,6 +407,7 @@
 		<div class={disabled ? 'opacity-60 pointer-events-none' : ''}>
 			<Toolbar>
 				{#snippet children({ activeEditor })}
+					{setEditorInstance(activeEditor)}
 					<RichTextToolbar {activeEditor} {disableHeadings} {disableImageUpload} />
 				{/snippet}
 			</Toolbar>
