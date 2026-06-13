@@ -48,18 +48,23 @@
 				{bookmarkT.noBookmarks}
 			</div>
 		{:else}
-			<div class="space-y-3">
+			<div class="divide-y divide-base-200">
 				{#each bookmarks as bookmark (bookmark.discussionId)}
-					<a
-						href="/discussion/{bookmark.discussionId}/{bookmark.slug || 'discussion'}"
-						class="card bg-base-100 border border-base-200 hover:border-primary/40 transition-colors rounded-xl p-4 shadow-sm block"
-					>
+					{@const authorSlug = generateSlug(bookmark.authorUsername || '')}
+					<div class="py-3 px-0">
 						<div class="flex items-start justify-between gap-3">
 							<div class="min-w-0 flex-1">
-								<h3 class="font-semibold text-base-content truncate">{bookmark.title}</h3>
+								<a
+									href="/discussion/{bookmark.discussionId}/{bookmark.slug || 'discussion'}"
+									class="font-semibold text-base-content hover:text-primary transition-colors truncate block"
+								>
+									{bookmark.title}
+								</a>
 								<p class="text-xs text-base-content/50 mt-1">
-									{bookmark.categoryTitle} · {bookmarkT.startedBy}
-									{bookmark.authorDisplayName}
+									{bookmark.categoryTitle} ·
+									<a href="/profile/{bookmark.authorId}/{authorSlug}" class="hover:underline">
+										{bookmark.authorDisplayName}
+									</a>
 								</p>
 							</div>
 							<div class="flex items-center gap-2 flex-shrink-0">
@@ -70,7 +75,7 @@
 								/>
 							</div>
 						</div>
-					</a>
+					</div>
 				{/each}
 			</div>
 

@@ -19,7 +19,7 @@
 	const profileT = $derived(t.profile);
 	const user = $derived(data.user);
 	const targetUser = $derived(data.targetUser);
-	const comments = $derived(data.comments as UserCommentItem[]);
+	const comments = $derived((data.comments as UserCommentItem[]).filter((c) => c.kind === 'reply'));
 
 	const targetSlug = $derived(generateSlug(targetUser.username));
 
@@ -30,17 +30,10 @@
 	}
 
 	function buildView(comment: UserCommentItem): CommentView {
-		if (comment.kind === 'reply') {
-			return {
-				comment,
-				contextLabel: `${commentT.replyIn}: ${comment.discussionTitle ?? ''}`,
-				href: `/discussion/${comment.discussionId}/${comment.discussionSlug ?? 'discussion'}`
-			};
-		}
 		return {
 			comment,
-			contextLabel: commentT.onActivity,
-			href: `/activity#activity-${comment.parentActivityId ?? ''}`
+			contextLabel: `${commentT.replyIn}: ${comment.discussionTitle ?? ''}`,
+			href: `/discussion/${comment.discussionId}/${comment.discussionSlug ?? 'discussion'}`
 		};
 	}
 
@@ -68,15 +61,13 @@
 		</h1>
 
 		{#if views.length === 0}
-			<div
-				class="card bg-base-200/40 border border-base-200 p-10 text-center text-base-content/50 rounded-xl"
-			>
+			<div class="card bg-base-200/40 py-10 text-center text-base-content/50">
 				{commentT.noComments}
 			</div>
 		{:else}
 			<div class="space-y-4">
 				{#each views as view (view.comment.id)}
-					<div class="card bg-base-100 border border-base-200 rounded-xl p-4 shadow-sm space-y-2">
+					<div class="card bg-base-100 py-4 space-y-2">
 						<LexicalRenderer
 							contentJson={view.comment.contentJson}
 							mentionedUsers={data.mentionedUsers}

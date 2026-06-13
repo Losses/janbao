@@ -183,6 +183,8 @@ export interface BookmarkListItem {
 	slug: string;
 	categorySlug: string;
 	categoryTitle: string;
+	authorId: string;
+	authorUsername: string;
 	authorDisplayName: string;
 	bookmarkedAt: Date;
 }
