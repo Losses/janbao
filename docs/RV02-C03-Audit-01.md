@@ -17,16 +17,19 @@ We conducted the Round 1 comprehensive review with 5 independent SubAgents perfo
 **Severity:** Critical — Draft autosave/load/clear pipeline completely broken for profile owners, partially broken for guests.
 
 **Root Cause:**
+
 - Profile page passed `contextId={isOwner ? undefined : targetUser.id}` to LexicalEditor.
 - When `isOwner`, `contextId` was `undefined`, which LexicalEditor normalized to `''` in autosave.
 - Server load (`+page.server.ts:132`) fetched draft with `eq(drafts.contextId, userId)` — a different value.
 - POST `/api/activities` cleared draft with `eq(drafts.contextId, 'new')` — yet another different value.
 
 **Impact:**
+
 - Owner: Draft never loaded (contextId mismatch), never updated by autosave, never cleared after posting.
 - Guest: Draft loaded correctly but never cleared after posting (contextId = `'new'` vs `targetUser.id`).
 
 **Fix Applied:**
+
 - `+page.svelte:131`: Changed to `contextId={targetUser.id}` (always, for both owner and guest).
 - `/api/activities/+server.ts`: Expanded draft clear logic to use `inArray(drafts.contextId, ['new', user.id, recipientId])` covering all contexts.
 
@@ -49,6 +52,7 @@ We conducted the Round 1 comprehensive review with 5 independent SubAgents perfo
 **Root Cause:** Five `$derived` wrappers (`initialCommentCount`, `resolvedAuthorUsername`, `resolvedCurrentUserId`, `resolvedAuthorId`, `resolvedIsAdmin`) mirrored props with no transformation. In Svelte 5, `$props()` destructured bindings are already reactive signals.
 
 **Fix Applied:**
+
 - Removed all five `$derived` wrappers.
 - Changed `commentCountState = $state(initialCommentCount)` to `commentCountState = $state(commentCount)`.
 - Replaced all `resolvedXxx` template references with original prop names (`authorUsername`, `currentUserId`, `authorId`, `isAdmin`).
