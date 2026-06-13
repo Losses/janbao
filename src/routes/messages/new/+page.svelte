@@ -91,7 +91,6 @@
 				</label>
 				<div id="recipients-input">
 					<MentionChipInput
-						placeholder={messageT.recipientPlaceholder}
 						excludeIds={selectedIds}
 						initialRecipients={data.prefillRecipient ? [data.prefillRecipient] : undefined}
 						onRecipientsChange={handleRecipientsChange}
@@ -124,7 +123,7 @@
 						contextType="message"
 						contextId="new"
 						initialContent={data.messageDraft}
-						placeholder={messageT.content}
+						placeholder=""
 						disableImageUpload={true}
 						onContentChange={(json) => (content = json)}
 						{t}
