@@ -9,6 +9,7 @@
 	import { mdiCommentOutline, mdiDeleteOutline, mdiArrowRight } from '@mdi/js';
 	import type { ApiResult } from '$lib/types/api';
 	import type { MentionedUsersMap } from '$lib/types/mentions';
+	import type { TranslationDict } from '$lib/types/translation';
 
 	interface ActivityComment {
 		id: string;
@@ -22,10 +23,6 @@
 
 	interface ActivityCommentsResponse {
 		comments: ActivityComment[];
-	}
-
-	interface TranslationDict {
-		[key: string]: string | Record<string, string>;
 	}
 
 	interface ActivityRowProps {
@@ -81,8 +78,8 @@
 	let deleteTargetId = $state<string | null>(null);
 
 	function gtc(key: string): string {
-		const common = t['common'];
-		if (common && typeof common === 'object' && key in common) {
+		const common = t['common'] as Record<string, string> | undefined;
+		if (common && key in common) {
 			const val = common[key];
 			return typeof val === 'string' ? val : key;
 		}

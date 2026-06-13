@@ -10,6 +10,12 @@ export interface UserInfoSummary {
 	avatarFileId: string | null;
 }
 
+/** Recipient display info for directed activities (User A -> User B). */
+export interface RecipientInfo {
+	displayName: string;
+	username: string;
+}
+
 // --- Auth Types ---
 
 export interface AuthRegisterBody {

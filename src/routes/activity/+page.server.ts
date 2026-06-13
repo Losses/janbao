@@ -4,6 +4,7 @@ import { and, isNull, desc, eq, sql, inArray } from 'drizzle-orm';
 import { checkAndCreateWelcomePost } from '$lib/server/db/welcome';
 import { getActivitiesLimit, SYSTEM_USER_ID } from '$lib/server/constants';
 import { resolveMentions } from '$lib/server/utils/mentions';
+import type { RecipientInfo } from '$lib/types/api';
 
 export const load: PageServerLoad = async (event) => {
 	const db = event.locals.db;
@@ -46,11 +47,6 @@ export const load: PageServerLoad = async (event) => {
 	const recipientIds = activityList
 		.map((a) => a.recipientId)
 		.filter((id): id is string => id !== null && id !== SYSTEM_USER_ID);
-
-	interface RecipientInfo {
-		displayName: string;
-		username: string;
-	}
 
 	const recipientMap = new Map<string, RecipientInfo>();
 	if (recipientIds.length > 0) {
