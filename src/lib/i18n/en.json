@@ -212,7 +212,15 @@
 		"replies": "Replies",
 		"signInToReply": "Please sign in to reply.",
 		"pin": "Pin",
-		"unpin": "Unpin"
+		"unpin": "Unpin",
+		"editDiscussion": "Edit Discussion",
+		"editReply": "Edit Reply",
+		"saveReply": "Save",
+		"deleteDiscussion": "Delete Discussion",
+		"deleteReply": "Delete",
+		"deleteDiscussionConfirm": "Are you sure you want to delete this discussion? This action cannot be undone.",
+		"deleteReplyConfirm": "Are you sure you want to delete this reply?",
+		"quickReply": "Reply"
 	},
 	"category": {
 		"notFound": "Category not found",

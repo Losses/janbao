@@ -7,6 +7,7 @@
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
+	import ConfirmationModal from '$lib/components/organisms/ConfirmationModal.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
 	import { page } from '$app/state';
@@ -28,6 +29,8 @@
 	const currentPage = $derived(data.page);
 	const totalPages = $derived(data.totalPages);
 	const canDelete = $derived(data.canDelete);
+	const canCreate = $derived(data.canCreate);
+	const canUpdate = $derived(data.canUpdate);
 	const mentionedUsers = $derived(data.mentionedUsers);
 
 	let replyContent = $state('');
@@ -35,8 +38,52 @@
 	let isTogglingPin = $state(false);
 	let editorKey = $state(0);
 
+	// Quick Reply & inline editing states
+	let replyEditor: ReturnType<typeof LexicalEditor> | undefined = $state();
+	let replyComposerElem: HTMLElement | undefined = $state();
+	let editingReplyId = $state<string | null>(null);
+	let editReplyContent = $state('');
+
+	// Delete confirmation states
+	let showDeleteModal = $state(false);
+	let deleteTarget = $state<'discussion' | 'reply' | null>(null);
+	let deleteReplyId = $state<string | null>(null);
+	let deleteDiscussionForm: HTMLFormElement | undefined = $state();
+	let deleteReplyForm: HTMLFormElement | undefined = $state();
+
 	function handlePageChange(newPage: number) {
 		goto(`/discussion/${discussion.id}/${discussion.slug}/p${newPage}`);
+	}
+
+	function quickReply(username: string) {
+		if (replyEditor) {
+			replyEditor.insertText(`@${username} `);
+			if (replyComposerElem) {
+				replyComposerElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+			}
+		}
+	}
+
+	function triggerDeleteDiscussion() {
+		deleteTarget = 'discussion';
+		showDeleteModal = true;
+	}
+
+	function triggerDeleteReply(replyId: string) {
+		deleteTarget = 'reply';
+		deleteReplyId = replyId;
+		showDeleteModal = true;
+	}
+
+	function handleConfirmDelete() {
+		if (deleteTarget === 'discussion') {
+			deleteDiscussionForm?.requestSubmit();
+		} else if (deleteTarget === 'reply') {
+			deleteReplyForm?.requestSubmit();
+		}
+		showDeleteModal = false;
+		deleteTarget = null;
+		deleteReplyId = null;
 	}
 
 	// 1. Reactive Theme Override
@@ -135,30 +182,49 @@
 					{t}
 				/>
 				<LexicalRenderer contentJson={opReply.contentJson} {mentionedUsers} />
-				{#if canDelete}
-					<div class="flex justify-end pt-2">
-						<form
-							method="POST"
-							action="?/togglePin"
-							use:enhance={() => {
-								isTogglingPin = true;
-								return async ({ update }) => {
-									isTogglingPin = false;
-									update();
-								};
-							}}
-						>
-							<button
-								type="submit"
-								class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
-								disabled={isTogglingPin}
+				{#if user}
+					<div class="flex justify-end items-center gap-2 pt-2">
+						{#if canDelete}
+							<form
+								method="POST"
+								action="?/togglePin"
+								use:enhance={() => {
+									isTogglingPin = true;
+									return async ({ update }) => {
+										isTogglingPin = false;
+										update();
+									};
+								}}
 							>
-								{#if isTogglingPin}
-									<span class="loading loading-spinner loading-xs"></span>
-								{/if}
-								{discussion.isPinned ? t.discussion.unpin : t.discussion.pin}
+								<button
+									type="submit"
+									class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
+									disabled={isTogglingPin}
+								>
+									{#if isTogglingPin}
+										<span class="loading loading-spinner loading-xs"></span>
+									{/if}
+									{discussion.isPinned ? t.discussion.unpin : t.discussion.pin}
+								</button>
+							</form>
+						{/if}
+						{#if canUpdate || user.id === opReply.authorId}
+							<a
+								href="/post/editDiscussion/{discussion.id}"
+								class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
+							>
+								{t.discussion.editDiscussion}
+							</a>
+						{/if}
+						{#if canDelete}
+							<button
+								type="button"
+								class="btn btn-xs btn-ghost text-error/60 hover:text-error"
+								onclick={() => triggerDeleteDiscussion()}
+							>
+								{t.discussion.deleteDiscussion}
 							</button>
-						</form>
+						{/if}
 					</div>
 				{/if}
 			</div>
@@ -183,7 +249,88 @@
 							updatedAt={reply.updatedAt}
 							{t}
 						/>
-						<LexicalRenderer contentJson={reply.contentJson} {mentionedUsers} />
+						{#if editingReplyId === reply.id}
+							<LexicalEditor
+								initialContent={reply.contentJson}
+								placeholder={t.editor.placeholderReply}
+								onContentChange={(json) => (editReplyContent = json)}
+								{t}
+								class="mb-3"
+							/>
+							<form
+								method="POST"
+								action="?/editReply"
+								use:enhance={() => {
+									isSubmitting = true;
+									return async ({ result }) => {
+										isSubmitting = false;
+										if (result.type === 'success') {
+											editingReplyId = null;
+											editReplyContent = '';
+										}
+									};
+								}}
+								class="flex gap-2 justify-end"
+							>
+								<input type="hidden" name="replyId" value={reply.id} />
+								<input type="hidden" name="contentJson" value={editReplyContent} />
+								<button
+									type="button"
+									class="btn btn-sm btn-ghost"
+									onclick={() => {
+										editingReplyId = null;
+										editReplyContent = '';
+									}}
+								>
+									{t.common.cancel}
+								</button>
+								<button
+									type="submit"
+									class="btn btn-sm btn-primary"
+									disabled={!editReplyContent || isSubmitting}
+								>
+									{t.discussion.saveReply}
+								</button>
+							</form>
+						{:else}
+							<LexicalRenderer contentJson={reply.contentJson} {mentionedUsers} />
+							{#if user}
+								<div
+									class="flex justify-end items-center gap-2 pt-2 border-t border-base-200/50 mt-2"
+								>
+									{#if canCreate}
+										<button
+											type="button"
+											class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
+											onclick={() => quickReply(reply.authorUsername)}
+										>
+											{t.discussion.quickReply}
+										</button>
+									{/if}
+									{#if canUpdate || user.id === reply.authorId}
+										<button
+											type="button"
+											class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
+											onclick={() => {
+												editingReplyId = reply.id;
+												editReplyContent = reply.contentJson;
+											}}
+										>
+											{t.common.edit}
+										</button>
+									{/if}
+									{#if canDelete}
+										<button
+											type="button"
+											class="btn btn-xs btn-ghost text-error/60 hover:text-error"
+											onclick={() => triggerDeleteReply(reply.id)}
+										>
+											{t.common.delete}
+										</button>
+									{/if}
+								</div>
+							{/if}
+						{/if}
 					</div>
 				{/each}
 			</div>
@@ -199,11 +346,12 @@
 		</div>
 
 		<!-- Reply Composer at the bottom -->
-		<div class="pt-6">
+		<div bind:this={replyComposerElem} class="pt-6">
 			{#if user}
 				<h3 class="text-lg font-bold mb-3 text-base-content">{t.common.reply}</h3>
 				{#key editorKey}
 					<LexicalEditor
+						bind:this={replyEditor}
 						contextType="reply"
 						contextId={discussion.id}
 						initialContent={data.replyDraft}
@@ -261,3 +409,47 @@
 		</div>
 	</div>
 </DualColumnLayout>
+
+<ConfirmationModal
+	open={showDeleteModal}
+	title={deleteTarget === 'discussion' ? t.discussion.deleteDiscussion : t.common.delete}
+	message={deleteTarget === 'discussion'
+		? t.discussion.deleteDiscussionConfirm
+		: t.discussion.deleteReplyConfirm}
+	confirmLabel={t.common.delete}
+	cancelLabel={t.common.cancel}
+	onconfirm={handleConfirmDelete}
+	oncancel={() => {
+		showDeleteModal = false;
+		deleteTarget = null;
+		deleteReplyId = null;
+	}}
+/>
+
+<form
+	bind:this={deleteDiscussionForm}
+	method="POST"
+	action="?/deleteDiscussion"
+	use:enhance={() => {
+		return async ({ result }) => {
+			if (result.type === 'redirect') {
+				goto(result.location);
+			}
+		};
+	}}
+	class="hidden"
+></form>
+
+<form
+	bind:this={deleteReplyForm}
+	method="POST"
+	action="?/deleteReply"
+	use:enhance={() => {
+		return async ({ update }) => {
+			update();
+		};
+	}}
+	class="hidden"
+>
+	<input type="hidden" name="replyId" value={deleteReplyId || ''} />
+</form>

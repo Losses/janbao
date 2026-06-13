@@ -372,6 +372,22 @@
 		},
 		editorState: initialContent ?? undefined
 	});
+
+	/**
+	 * Programmatically inserts text at the current selection.
+	 * Focuses the editor first to ensure selection is active.
+	 */
+	export function insertText(text: string) {
+		if (!editorInstance) return;
+		const castEditor = editorInstance as { update: UpdateFn; focus: VoidHandler };
+		castEditor.focus();
+		castEditor.update(() => {
+			const selection = getSelection();
+			if (isRangeSelection(selection)) {
+				selection.insertText(text);
+			}
+		});
+	}
 </script>
 
 <div
