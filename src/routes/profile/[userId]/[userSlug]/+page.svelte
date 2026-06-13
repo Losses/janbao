@@ -42,7 +42,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					contentJson: editorContent,
-					recipientId: targetUser.id
+					recipientId: isOwner ? null : targetUser.id
 				})
 			});
 			if (res.ok) {
@@ -114,17 +114,21 @@
 			</div>
 		</div>
 
-		<!-- Directed Activity Composer (if logged in and not own profile) -->
-		{#if user && !isOwner}
+		<!-- Directed/Normal Activity Composer (if logged in) -->
+		{#if user}
 			<div class="card bg-base-100 p-4">
 				<p class="text-sm text-base-content/70 mb-2">
-					{profileT.postToProfile} → {targetUser.displayName}
+					{#if isOwner}
+						{profileT.postNormalActivity}
+					{:else}
+						{profileT.postToProfile} → {targetUser.displayName}
+					{/if}
 				</p>
 				<LexicalEditor
 					initialContent={data.activityDraft}
 					placeholder={t.editor.placeholderActivity}
 					contextType="activity"
-					contextId={targetUser.id}
+					contextId={isOwner ? undefined : targetUser.id}
 					{t}
 					disableHeadings={true}
 					onContentChange={handleEditorChange}

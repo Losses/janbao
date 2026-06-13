@@ -4,9 +4,10 @@
 	import LinkButton from '$lib/components/atoms/LinkButton.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import ConfirmationModal from '$lib/components/organisms/ConfirmationModal.svelte';
+	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import { generateSlug } from '$lib/utils/slug';
 	import Icon from '$lib/components/atoms/Icon.svelte';
-	import { mdiCommentOutline, mdiDeleteOutline, mdiArrowRight } from '@mdi/js';
+	import { mdiDeleteOutline, mdiArrowRight } from '@mdi/js';
 	import type { ApiResult } from '$lib/types/api';
 	import type { MentionedUsersMap } from '$lib/types/mentions';
 	import type { TranslationDict } from '$lib/types/translation';
@@ -41,6 +42,7 @@
 		isAdmin?: boolean;
 		t: TranslationDict;
 		mentionedUsers?: MentionedUsersMap | null;
+		isTopLevel?: boolean;
 	}
 
 	let {
@@ -58,7 +60,8 @@
 		currentUserId = null,
 		isAdmin = false,
 		t,
-		mentionedUsers = null
+		mentionedUsers = null,
+		isTopLevel = true
 	}: ActivityRowProps = $props();
 
 	const initialCommentCount = $derived(commentCount);
@@ -76,6 +79,11 @@
 	let commentCountState = $state(initialCommentCount);
 	let showDeleteModal = $state(false);
 	let deleteTargetId = $state<string | null>(null);
+	let editorKey = $state(0);
+
+	function handleCommentEditorChange(json: string) {
+		commentContentJson = json;
+	}
 
 	function gtc(key: string): string {
 		const common = t['common'] as Record<string, string> | undefined;
@@ -121,6 +129,7 @@
 			});
 			if (res.ok) {
 				commentContentJson = '';
+				editorKey += 1;
 				commentCountState += 1;
 				await loadComments();
 			}
@@ -185,6 +194,7 @@
 			</a>
 		</div>
 		<div class="flex-1 min-w-0">
+			<!-- Row 1: Username (→ recipient) -->
 			<div class="flex items-center gap-1 flex-wrap">
 				<a
 					href="/profile/{authorId}/{generateSlug(resolvedAuthorUsername)}"
@@ -203,27 +213,59 @@
 						</a>
 					</span>
 				{/if}
-				<DateComponent value={createdAt} {t} class="text-base-content/50 text-sm" />
 			</div>
 
+			<!-- Row 2: Content -->
 			<div class="mt-1">
 				<LexicalRenderer {contentJson} {mentionedUsers} />
 			</div>
 
-			<div class="flex items-center gap-3 mt-2">
-				<LinkButton onclick={toggleComments} class="flex items-center gap-1 text-sm">
-					<Icon path={mdiCommentOutline} size={0.9} />
-					{commentCountState > 0 ? commentCountState : ''}
-				</LinkButton>
+			<!-- Row 3: Timestamp + "Comment" text link + delete button -->
+			<div class="flex items-center gap-3 mt-2 text-sm text-base-content/50">
+				<DateComponent value={createdAt} {t} class="text-sm" />
+				{#if isTopLevel && resolvedCurrentUserId}
+					<LinkButton onclick={toggleComments} class="hover:text-primary hover:underline">
+						{gtc('comment')}{commentCountState > 0 ? ` (${commentCountState})` : ''}
+					</LinkButton>
+				{/if}
 				{#if resolvedCurrentUserId === resolvedAuthorId || resolvedIsAdmin || resolvedCurrentUserId === recipientId}
-					<LinkButton onclick={() => confirmDelete(id)} class="text-sm text-warning">
-						<Icon path={mdiDeleteOutline} size={0.9} />
+					<LinkButton
+						onclick={() => confirmDelete(id)}
+						class="text-warning hover:underline flex items-center gap-1"
+					>
+						<Icon path={mdiDeleteOutline} size={0.8} />
+						{gtc('delete')}
 					</LinkButton>
 				{/if}
 			</div>
 
 			{#if showComments}
 				<div class="mt-3 bg-base-200/50 rounded-lg p-3">
+					{#if resolvedCurrentUserId}
+						<div class="mb-3 flex flex-col gap-2">
+							{#key editorKey}
+								<LexicalEditor
+									placeholder={gtc('commentPlaceholder')}
+									contextType="activity"
+									contextId={id}
+									{t}
+									disableHeadings={true}
+									disableImageUpload={true}
+									onContentChange={handleCommentEditorChange}
+								/>
+							{/key}
+							<div class="flex justify-end">
+								<button
+									class="btn btn-sm btn-primary"
+									onclick={submitComment}
+									disabled={submittingComment || !commentContentJson.trim()}
+								>
+									{submittingComment ? gtc('saving') : gtc('submit')}
+								</button>
+							</div>
+						</div>
+					{/if}
+
 					{#if loadingComments}
 						<p class="text-sm text-base-content/50">{gtc('loading')}</p>
 					{:else if comments.length > 0}
@@ -242,6 +284,7 @@
 										</a>
 									</div>
 									<div class="flex-1 min-w-0">
+										<!-- Row 1: Username -->
 										<div class="flex items-center gap-1 flex-wrap">
 											<a
 												href="/profile/{comment.authorId}/{generateSlug(comment.authorUsername)}"
@@ -249,51 +292,27 @@
 											>
 												{comment.authorDisplayName}
 											</a>
-											<DateComponent
-												value={comment.createdAt}
-												{t}
-												class="text-base-content/50 text-xs"
-											/>
+										</div>
+										<!-- Row 2: Content -->
+										<div class="mt-0.5">
+											<LexicalRenderer contentJson={comment.contentJson} class="text-sm" />
+										</div>
+										<!-- Row 3: Timestamp + delete button -->
+										<div class="flex items-center gap-3 mt-1 text-xs text-base-content/50">
+											<DateComponent value={comment.createdAt} {t} class="text-xs" />
 											{#if resolvedCurrentUserId === comment.authorId || resolvedIsAdmin || resolvedCurrentUserId === resolvedAuthorId || resolvedCurrentUserId === recipientId}
 												<LinkButton
 													onclick={() => confirmDelete(comment.id)}
-													class="text-xs text-warning ml-1"
+													class="text-xs text-warning hover:underline flex items-center gap-0.5"
 												>
 													<Icon path={mdiDeleteOutline} size={0.7} />
+													{gtc('delete')}
 												</LinkButton>
 											{/if}
-										</div>
-										<div class="mt-0.5">
-											<LexicalRenderer contentJson={comment.contentJson} class="text-sm" />
 										</div>
 									</div>
 								</div>
 							{/each}
-						</div>
-					{/if}
-
-					{#if resolvedCurrentUserId}
-						<div class="mt-3 flex gap-2">
-							<input
-								type="text"
-								class="input input-sm input-bordered flex-1"
-								placeholder={gtc('commentPlaceholder')}
-								bind:value={commentContentJson}
-								disabled={submittingComment}
-								onkeydown={(e) => {
-									if (e.key === 'Enter' && !e.shiftKey) {
-										e.preventDefault();
-										submitComment();
-									}
-								}}
-							/>
-							<button
-								class="btn btn-sm btn-primary"
-								onclick={submitComment}
-								disabled={submittingComment || !commentContentJson.trim()}
-							>
-								{gtc('submit')}
-							</button>
 						</div>
 					{/if}
 				</div>

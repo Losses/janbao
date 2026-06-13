@@ -8,6 +8,7 @@
 	 * - AutoLink plugin for automatic URL linkification
 	 * - Marker Highlight and Spoiler inline text formatting
 	 */
+	import EditorInstanceSync from './EditorInstanceSync.svelte';
 	import {
 		Composer,
 		ContentEditable,
@@ -393,11 +394,6 @@
 			}
 		});
 	}
-
-	function setEditorInstance(editor: unknown): string {
-		editorInstance = editor;
-		return '';
-	}
 </script>
 
 <div
@@ -407,7 +403,7 @@
 		<div class={disabled ? 'opacity-60 pointer-events-none' : ''}>
 			<Toolbar>
 				{#snippet children({ activeEditor })}
-					{setEditorInstance(activeEditor)}
+					<EditorInstanceSync {activeEditor} update={(e: unknown) => (editorInstance = e)} />
 					<RichTextToolbar {activeEditor} {disableHeadings} {disableImageUpload} />
 				{/snippet}
 			</Toolbar>
