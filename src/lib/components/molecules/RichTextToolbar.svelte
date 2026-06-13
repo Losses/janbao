@@ -14,8 +14,6 @@
 		toggleItalic,
 		toggleUnderline,
 		toggleStrikethrough,
-		undo,
-		redo,
 		formatParagraph,
 		formatHeading,
 		formatQuote,
@@ -33,8 +31,6 @@
 		mdiFormatItalic,
 		mdiFormatUnderline,
 		mdiFormatStrikethrough,
-		mdiUndo,
-		mdiRedo,
 		mdiFormatParagraph,
 		mdiFormatHeader1,
 		mdiFormatHeader2,
@@ -145,28 +141,6 @@
 <div
 	class="flex flex-wrap items-center gap-1.5 p-1.5 bg-base-200 border-b border-base-300 rounded-t-lg"
 >
-	<!-- Undo / Redo -->
-	<div class="join">
-		<button
-			type="button"
-			class="btn btn-xs btn-ghost join-item"
-			onclick={() => undo(activeEditor)}
-			title="Undo"
-		>
-			<Icon path={mdiUndo} size={16} />
-		</button>
-		<button
-			type="button"
-			class="btn btn-xs btn-ghost join-item"
-			onclick={() => redo(activeEditor)}
-			title="Redo"
-		>
-			<Icon path={mdiRedo} size={16} />
-		</button>
-	</div>
-
-	<div class="divider divider-horizontal m-0 h-6"></div>
-
 	<!-- Block Formatting Dropdown -->
 	{#if !disableHeadings}
 		<div class="dropdown">
