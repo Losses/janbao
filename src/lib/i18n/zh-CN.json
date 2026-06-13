@@ -284,6 +284,7 @@
 		"searchUser": "搜索用户",
 		"content": "消息内容",
 		"participants": "参与者",
+		"messages": "消息",
 		"addParticipant": "添加参与者",
 		"addParticipantPlaceholder": "搜索要添加的用户...",
 		"noConversations": "暂无会话",

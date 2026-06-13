@@ -15,6 +15,13 @@
       "when": 1781277125362,
       "tag": "0001_even_rogue",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1781375159720,
+      "tag": "0002_fixed_machine_man",
+      "breakpoints": true
     }
   ]
 }

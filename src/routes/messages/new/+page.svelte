@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import MentionChipInput from '$lib/components/organisms/MentionChipInput.svelte';
@@ -20,7 +21,11 @@
 	const user = $derived(data.user);
 	const userSlug = $derived(generateSlug(user?.username || ''));
 
-	let recipients = $state<UserSearchResult[]>(data.prefillRecipient ? [data.prefillRecipient] : []);
+	// URL prefill only seeds recipients once on load; untrack so later `data`
+	// changes (e.g. re-navigation) don't clobber the user's edited selection.
+	let recipients = $state<UserSearchResult[]>(
+		untrack(() => (data.prefillRecipient ? [data.prefillRecipient] : []))
+	);
 	let title = $state('');
 	let content = $state('');
 	let sending = $state(false);
