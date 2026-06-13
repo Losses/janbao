@@ -19,7 +19,7 @@ export function getCookieSecure(url: URL): boolean {
 	return url.protocol === 'https:';
 }
 
-export const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
+export const SYSTEM_USER_ID = 0;
 
 /** Allowlist of valid draft context types, shared by the save/clear/delete endpoints. */
 export const DRAFT_CONTEXT_TYPES = ['discussion', 'reply', 'message', 'activity'] as const;

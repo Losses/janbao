@@ -11,10 +11,10 @@
 	 * DiscussionRow Organism - Renders a discussion title, badges, bookmark star, and metadata.
 	 */
 	interface DiscussionRowItem {
-		id: string;
+		id: number;
 		title: string;
 		slug: string;
-		authorId: string;
+		authorId: number;
 		authorDisplayName: string;
 		authorUsername: string;
 		authorAvatarFileId: string | null;
@@ -27,7 +27,7 @@
 	interface DiscussionReadHistory {
 		lastReadAt: Date | string | number | null;
 		lastReadPage: number;
-		lastReadReplyId: string | null;
+		lastReadReplyId: number | null;
 	}
 
 	interface DiscussionRowProps {
@@ -36,7 +36,7 @@
 		isBookmarked?: boolean;
 		unreadCount?: number;
 		lastReplyAuthorDisplayName?: string | null;
-		lastReplyAuthorId?: string | null;
+		lastReplyAuthorId?: number | null;
 		lastReplyAuthorUsername?: string | null;
 		/** Translation dictionary */
 		t?: TranslationDict | null;
@@ -112,8 +112,8 @@
 <div
 	class="flex items-center gap-4 py-4 border-b border-base-200 transition-all hover:bg-base-200/20 {className} {unreadCount >
 	0
-		? 'bg-transparent border-l-4 border-l-primary'
-		: 'bg-base-100/40'}"
+		? 'bg-transparent'
+		: 'bg-base-200'}"
 >
 	<!-- Left: User Avatar -->
 	<a href="/profile/{discussion.authorId}/{authorSlug}" class="flex-shrink-0">

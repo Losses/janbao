@@ -94,7 +94,7 @@
 		/** Context for draft autosave: 'discussion', 'reply', 'message', 'activity' */
 		contextType?: string;
 		/** Context ID for draft autosave: categorySlug, discussionId, conversationId */
-		contextId?: string;
+		contextId?: number;
 		/** Placeholder text (overrides i18n default) */
 		placeholder?: string;
 		/** Disable the editor (e.g. during initial data loading) */
@@ -110,7 +110,7 @@
 		/** Class override for container */
 		class?: string;
 		/** User IDs to exclude from @ mention suggestions */
-		excludeIds?: string[];
+		excludeIds?: number[];
 	}
 
 	let {
@@ -303,7 +303,7 @@
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
 						contextType,
-						contextId: contextId ?? '',
+						contextId,
 						contentJson: json
 					})
 				});

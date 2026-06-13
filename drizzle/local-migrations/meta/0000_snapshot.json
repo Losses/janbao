@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "392a1b85-c5ab-4cfe-b9d6-3a0ffdd8658d",
+  "id": "516cdcce-f107-4ee0-a70e-c85d7b96911b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "activities": {
@@ -9,21 +9,21 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": true,
           "notNull": true,
           "autoincrement": false
         },
         "author_id": {
           "name": "author_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
         "recipient_id": {
           "name": "recipient_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -37,7 +37,7 @@
         },
         "parent_activity_id": {
           "name": "parent_activity_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -140,7 +140,7 @@
         },
         "uploader_id": {
           "name": "uploader_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -187,14 +187,14 @@
       "columns": {
         "user_id": {
           "name": "user_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
         "discussion_id": {
           "name": "discussion_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -415,14 +415,14 @@
       "columns": {
         "conversation_id": {
           "name": "conversation_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
         "user_id": {
           "name": "user_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -490,14 +490,14 @@
       "columns": {
         "user_id": {
           "name": "user_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
         "conversation_id": {
           "name": "conversation_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -557,7 +557,7 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": true,
           "notNull": true,
           "autoincrement": false
@@ -596,14 +596,14 @@
       "columns": {
         "user_id": {
           "name": "user_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
         "discussion_id": {
           "name": "discussion_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -626,7 +626,7 @@
         },
         "last_read_reply_id": {
           "name": "last_read_reply_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -678,7 +678,7 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": true,
           "notNull": true,
           "autoincrement": false
@@ -706,7 +706,7 @@
         },
         "author_id": {
           "name": "author_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -841,14 +841,14 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": true,
           "notNull": true,
           "autoincrement": false
         },
         "author_id": {
           "name": "author_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -862,7 +862,7 @@
         },
         "context_id": {
           "name": "context_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -932,14 +932,14 @@
         },
         "creator_id": {
           "name": "creator_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
         "used_by_id": {
           "name": "used_by_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -1006,21 +1006,21 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": true,
           "notNull": true,
           "autoincrement": false
         },
         "conversation_id": {
           "name": "conversation_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
         "author_id": {
           "name": "author_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -1102,7 +1102,7 @@
       "columns": {
         "user_id": {
           "name": "user_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": true,
           "notNull": true,
           "autoincrement": false
@@ -1117,14 +1117,6 @@
         },
         "discussion_reply": {
           "name": "discussion_reply",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": true
-        },
-        "private_message": {
-          "name": "private_message",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -1189,14 +1181,14 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": true,
           "notNull": true,
           "autoincrement": false
         },
         "user_id": {
           "name": "user_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -1210,35 +1202,28 @@
         },
         "source_user_id": {
           "name": "source_user_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
         "discussion_id": {
           "name": "discussion_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
         "reply_id": {
           "name": "reply_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "message_id": {
-          "name": "message_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
         "activity_id": {
           "name": "activity_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -1315,21 +1300,21 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": true,
           "notNull": true,
           "autoincrement": false
         },
         "discussion_id": {
           "name": "discussion_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
         "author_id": {
           "name": "author_id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -1472,7 +1457,7 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "integer",
           "primaryKey": true,
           "notNull": true,
           "autoincrement": false

@@ -25,7 +25,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	const contextType = body.contextType;
-	const contextId = body.contextId ?? '';
+	const contextId = body.contextId ?? 0;
 
 	if (!contextType) {
 		return jsonError(t, 'draft.contextFieldsRequired', 400);

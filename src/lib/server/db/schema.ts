@@ -17,9 +17,7 @@ export const userGroups = sqliteTable('user_groups', {
 });
 
 export const users = sqliteTable('users', {
-	id: text('id')
-		.primaryKey()
-		.$defaultFn(() => crypto.randomUUID()),
+	id: integer('id').primaryKey(),
 	username: text('username').notNull().unique(),
 	email: text('email').notNull().unique(),
 	passwordHash: text('password_hash').notNull(),
@@ -76,15 +74,13 @@ export const categoryPermissions = sqliteTable(
 export const discussions = sqliteTable(
 	'discussions',
 	{
-		id: text('id')
-			.primaryKey()
-			.$defaultFn(() => crypto.randomUUID()),
+		id: integer('id').primaryKey(),
 		title: text('title').notNull(),
 		slug: text('slug').notNull(),
 		categorySlug: text('category_slug')
 			.notNull()
 			.references(() => categories.slug),
-		authorId: text('author_id')
+		authorId: integer('author_id')
 			.notNull()
 			.references(() => users.id),
 		viewCount: integer('view_count').notNull().default(0),
@@ -114,13 +110,11 @@ export const discussions = sqliteTable(
 export const replies = sqliteTable(
 	'replies',
 	{
-		id: text('id')
-			.primaryKey()
-			.$defaultFn(() => crypto.randomUUID()),
-		discussionId: text('discussion_id')
+		id: integer('id').primaryKey(),
+		discussionId: integer('discussion_id')
 			.notNull()
 			.references(() => discussions.id, { onDelete: 'cascade' }),
-		authorId: text('author_id')
+		authorId: integer('author_id')
 			.notNull()
 			.references(() => users.id),
 		contentJson: text('content_json').notNull(),
@@ -146,10 +140,10 @@ export const replies = sqliteTable(
 export const bookmarks = sqliteTable(
 	'bookmarks',
 	{
-		userId: text('user_id')
+		userId: integer('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
-		discussionId: text('discussion_id')
+		discussionId: integer('discussion_id')
 			.notNull()
 			.references(() => discussions.id, { onDelete: 'cascade' }),
 		bookmarkedAt: integer('bookmarked_at', { mode: 'timestamp' })
@@ -166,17 +160,17 @@ export const bookmarks = sqliteTable(
 export const discussionReads = sqliteTable(
 	'discussion_reads',
 	{
-		userId: text('user_id')
+		userId: integer('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
-		discussionId: text('discussion_id')
+		discussionId: integer('discussion_id')
 			.notNull()
 			.references(() => discussions.id, { onDelete: 'cascade' }),
 		lastReadAt: integer('last_read_at', { mode: 'timestamp' })
 			.notNull()
 			.default(sql`(strftime('%s', 'now'))`),
 		lastReadPage: integer('last_read_page').notNull().default(1),
-		lastReadReplyId: text('last_read_reply_id')
+		lastReadReplyId: integer('last_read_reply_id')
 	},
 	(table) => ({
 		pk: primaryKey({ columns: [table.userId, table.discussionId] })
@@ -186,14 +180,12 @@ export const discussionReads = sqliteTable(
 export const drafts = sqliteTable(
 	'drafts',
 	{
-		id: text('id')
-			.primaryKey()
-			.$defaultFn(() => crypto.randomUUID()),
-		authorId: text('author_id')
+		id: integer('id').primaryKey(),
+		authorId: integer('author_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
 		contextType: text('context_type').notNull(),
-		contextId: text('context_id'),
+		contextId: integer('context_id'),
 		contentJson: text('content_json').notNull(),
 		updatedAt: integer('updated_at', { mode: 'timestamp' })
 			.notNull()
@@ -210,9 +202,7 @@ export const drafts = sqliteTable(
 );
 
 export const conversations = sqliteTable('conversations', {
-	id: text('id')
-		.primaryKey()
-		.$defaultFn(() => crypto.randomUUID()),
+	id: integer('id').primaryKey(),
 	title: text('title').notNull(),
 	createdAt: integer('created_at', { mode: 'timestamp' })
 		.notNull()
@@ -223,10 +213,10 @@ export const conversations = sqliteTable('conversations', {
 export const conversationParticipants = sqliteTable(
 	'conversation_participants',
 	{
-		conversationId: text('conversation_id')
+		conversationId: integer('conversation_id')
 			.notNull()
 			.references(() => conversations.id, { onDelete: 'cascade' }),
-		userId: text('user_id')
+		userId: integer('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
 		joinedAt: integer('joined_at', { mode: 'timestamp' })
@@ -242,13 +232,11 @@ export const conversationParticipants = sqliteTable(
 export const messages = sqliteTable(
 	'messages',
 	{
-		id: text('id')
-			.primaryKey()
-			.$defaultFn(() => crypto.randomUUID()),
-		conversationId: text('conversation_id')
+		id: integer('id').primaryKey(),
+		conversationId: integer('conversation_id')
 			.notNull()
 			.references(() => conversations.id, { onDelete: 'cascade' }),
-		authorId: text('author_id')
+		authorId: integer('author_id')
 			.notNull()
 			.references(() => users.id),
 		contentJson: text('content_json').notNull(),
@@ -268,10 +256,10 @@ export const messages = sqliteTable(
 export const conversationReads = sqliteTable(
 	'conversation_reads',
 	{
-		userId: text('user_id')
+		userId: integer('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
-		conversationId: text('conversation_id')
+		conversationId: integer('conversation_id')
 			.notNull()
 			.references(() => conversations.id, { onDelete: 'cascade' }),
 		lastReadAt: integer('last_read_at', { mode: 'timestamp' })
@@ -286,13 +274,13 @@ export const conversationReads = sqliteTable(
 export const activities = sqliteTable(
 	'activities',
 	{
-		id: text('id').primaryKey(),
-		authorId: text('author_id')
+		id: integer('id').primaryKey(),
+		authorId: integer('author_id')
 			.notNull()
 			.references(() => users.id),
-		recipientId: text('recipient_id').references(() => users.id),
+		recipientId: integer('recipient_id').references(() => users.id),
 		contentJson: text('content_json').notNull(),
-		parentActivityId: text('parent_activity_id'),
+		parentActivityId: integer('parent_activity_id'),
 		createdAt: integer('created_at', { mode: 'timestamp' })
 			.notNull()
 			.default(sql`(strftime('%s', 'now'))`),
@@ -313,17 +301,15 @@ export const activities = sqliteTable(
 export const notifications = sqliteTable(
 	'notifications',
 	{
-		id: text('id')
-			.primaryKey()
-			.$defaultFn(() => crypto.randomUUID()),
-		userId: text('user_id')
+		id: integer('id').primaryKey(),
+		userId: integer('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
 		type: text('type').notNull(),
-		sourceUserId: text('source_user_id').references(() => users.id, { onDelete: 'cascade' }),
-		discussionId: text('discussion_id'),
-		replyId: text('reply_id'),
-		activityId: text('activity_id'),
+		sourceUserId: integer('source_user_id').references(() => users.id, { onDelete: 'cascade' }),
+		discussionId: integer('discussion_id'),
+		replyId: integer('reply_id'),
+		activityId: integer('activity_id'),
 		isRead: integer('is_read', { mode: 'boolean' }).notNull().default(false),
 		createdAt: integer('created_at', { mode: 'timestamp' })
 			.notNull()
@@ -336,7 +322,7 @@ export const notifications = sqliteTable(
 );
 
 export const notificationPreferences = sqliteTable('notification_preferences', {
-	userId: text('user_id')
+	userId: integer('user_id')
 		.primaryKey()
 		.references(() => users.id, { onDelete: 'cascade' }),
 	profileComment: integer('profile_comment', { mode: 'boolean' }).notNull().default(true),
@@ -353,7 +339,7 @@ export const attachments = sqliteTable(
 	'attachments',
 	{
 		fileId: text('file_id').primaryKey(),
-		uploaderId: text('uploader_id')
+		uploaderId: integer('uploader_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
 		createdAt: integer('created_at', { mode: 'timestamp' })
@@ -369,10 +355,10 @@ export const invitations = sqliteTable(
 	'invitations',
 	{
 		code: text('code').primaryKey(),
-		creatorId: text('creator_id')
+		creatorId: integer('creator_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
-		usedById: text('used_by_id').references(() => users.id, { onDelete: 'set null' }),
+		usedById: integer('used_by_id').references(() => users.id, { onDelete: 'set null' }),
 		createdAt: integer('created_at', { mode: 'timestamp' })
 			.notNull()
 			.default(sql`(strftime('%s', 'now'))`),

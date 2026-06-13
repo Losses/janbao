@@ -14,7 +14,7 @@
 		user: UserInfoSummary | null;
 		t: TranslationDict;
 		activeItem?: string;
-		targetUserId: string;
+		targetUserId: number;
 		targetUserSlug: string;
 	}
 

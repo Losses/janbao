@@ -10,7 +10,7 @@ export interface CategoryItem {
 
 /** Online user item used by ActiveUsersWall and active-users store. */
 export interface OnlineUser {
-	id: string;
+	id: number;
 	username: string;
 	displayName: string;
 	avatarFileId: string | null;
@@ -18,7 +18,7 @@ export interface OnlineUser {
 
 /** Minimal user identity used by Header, sidebars, and user-facing molecules. */
 export interface UserInfoSummary {
-	id: string;
+	id: number;
 	username: string;
 	displayName: string;
 	avatarFileId: string | null;
@@ -50,7 +50,7 @@ export interface AuthLoginBody {
 export interface ApiResponse {
 	success?: boolean;
 	error?: string;
-	userId?: string;
+	userId?: number;
 }
 
 export interface SessionCookieOptions extends CookieSerializeOptions {
@@ -61,15 +61,15 @@ export interface SessionCookieOptions extends CookieSerializeOptions {
 
 export interface ActivityCreateBody {
 	contentJson?: string;
-	recipientId?: string;
+	recipientId?: number;
 }
 
 export interface ActivityDeleteBody {
-	activityId?: string;
+	activityId?: number;
 }
 
 export interface ActivityCommentCreateBody {
-	parentActivityId?: string;
+	parentActivityId?: number;
 	contentJson?: string;
 }
 
@@ -78,8 +78,8 @@ export interface ActivityCommentsResponse {
 }
 
 export interface ActivityCommentItem {
-	id: string;
-	authorId: string;
+	id: number;
+	authorId: number;
 	contentJson: string;
 	createdAt: Date;
 	authorDisplayName: string;
@@ -120,7 +120,7 @@ export interface ProfileStealthBody {
 
 export interface ApiSuccessResponse {
 	success: boolean;
-	id?: string;
+	id?: number;
 }
 
 export interface ApiErrorResponse {
@@ -130,7 +130,7 @@ export interface ApiErrorResponse {
 export interface ApiResult {
 	success?: boolean;
 	error?: string;
-	id?: string;
+	id?: number;
 	fileId?: string;
 }
 
@@ -152,52 +152,52 @@ export interface ListOffsetOptions {
 // --- Notifications API Types ---
 
 export interface NotificationItem {
-	id: string;
+	id: number;
 	type: string;
 	isRead: boolean;
 	createdAt: Date;
-	sourceUserId: string | null;
+	sourceUserId: number | null;
 	sourceDisplayName: string | null;
 	sourceUsername: string | null;
 	sourceAvatarFileId: string | null;
-	discussionId: string | null;
+	discussionId: number | null;
 	discussionTitle: string | null;
 	discussionSlug: string | null;
-	replyId: string | null;
-	activityId: string | null;
+	replyId: number | null;
+	activityId: number | null;
 }
 
 export interface NotificationMarkReadBody {
-	ids?: string[];
+	ids?: number[];
 	all?: boolean;
 }
 
 // --- Bookmarks List API Types ---
 
 export interface BookmarkListItem {
-	discussionId: string;
+	discussionId: number;
 	title: string;
 	slug: string;
 	categorySlug: string;
 	categoryTitle: string;
-	authorId: string;
+	authorId: number;
 	authorUsername: string;
 	authorDisplayName: string;
 	bookmarkedAt: Date;
 }
 
 export interface BookmarkToggleBody {
-	discussionId?: string;
+	discussionId?: number;
 }
 
 // --- Messaging API Types ---
 
 export interface ConversationListItem {
-	id: string;
+	id: number;
 	title: string;
 	lastMessageAt: Date | null;
 	lastMessagePreview: string | null;
-	lastAuthorId: string | null;
+	lastAuthorId: number | null;
 	lastAuthorUsername: string | null;
 	lastAuthorDisplayName: string | null;
 	lastAuthorAvatarFileId: string | null;
@@ -207,9 +207,9 @@ export interface ConversationListItem {
 }
 
 export interface MessageItem {
-	id: string;
-	conversationId: string;
-	authorId: string;
+	id: number;
+	conversationId: number;
+	authorId: number;
 	authorDisplayName: string;
 	authorUsername: string;
 	authorAvatarFileId: string | null;
@@ -219,20 +219,20 @@ export interface MessageItem {
 }
 
 export interface ParticipantItem {
-	userId: string;
+	userId: number;
 	username: string;
 	displayName: string;
 	avatarFileId: string | null;
 }
 
 export interface MessageCreateBody {
-	recipientIds?: string[];
+	recipientIds?: number[];
 	title?: string;
 	contentJson?: string;
 }
 
 export interface AddParticipantBody {
-	userId?: string;
+	userId?: number;
 }
 
 export interface PostMessageBody {
@@ -242,7 +242,7 @@ export interface PostMessageBody {
 // --- User Search API Types ---
 
 export interface UserSearchResult {
-	id: string;
+	id: number;
 	username: string;
 	displayName: string;
 	avatarFileId: string | null;
@@ -252,13 +252,13 @@ export interface UserSearchResult {
 
 export interface DraftClearBody {
 	contextType?: string;
-	contextId?: string;
+	contextId?: number;
 }
 
 export interface DraftListItem {
-	id: string;
+	id: number;
 	contextType: string;
-	contextId: string | null;
+	contextId: number | null;
 	contentJson: string;
 	updatedAt: Date;
 }
@@ -267,8 +267,8 @@ export interface DraftListItem {
 
 export interface InvitationItem {
 	code: string;
-	creatorId: string;
-	usedById: string | null;
+	creatorId: number;
+	usedById: number | null;
 	usedByUsername: string | null;
 	createdAt: Date;
 	expiresAt: Date;

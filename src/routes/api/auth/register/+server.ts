@@ -61,12 +61,14 @@ export const POST: RequestHandler = async (event) => {
 
 		// 3. Hash password
 		const passwordHash = await hashPassword(password);
-		const newUserId = crypto.randomUUID();
 
-		// 4. Database execution: uniqueness check + create user inside a single transaction
+		// 4. Database execution: uniqueness check + create user inside a single transaction.
+		// users.id is an auto-incrementing INTEGER PK, so it is assigned by the DB and
+		// read back via returning() rather than pre-generated.
 		let jwtToken: string;
+		let newUserId: number;
 		try {
-			await db.transaction(async (tx: DbTransaction) => {
+			newUserId = await db.transaction(async (tx: DbTransaction) => {
 				// Check for existing username or email inside the transaction
 				const existingUser = await tx
 					.select()
@@ -78,30 +80,34 @@ export const POST: RequestHandler = async (event) => {
 					throw new Error('USERNAME_EMAIL_EXISTS');
 				}
 
-				// Create user under the standard 'member' role
-				await tx.insert(users).values({
-					id: newUserId,
-					username,
-					email,
-					passwordHash,
-					displayName,
-					groupSlug: 'member'
-				});
+				// Create user under the standard 'member' role; id is auto-assigned
+				const inserted = await tx
+					.insert(users)
+					.values({
+						username,
+						email,
+						passwordHash,
+						displayName,
+						groupSlug: 'member'
+					})
+					.returning({ id: users.id });
 
 				// Setup default notification preferences
 				await tx.insert(notificationPreferences).values({
-					userId: newUserId
+					userId: inserted[0].id
 				});
 
 				// Link invitation (marks as used)
 				await tx
 					.update(invitations)
-					.set({ usedById: newUserId })
+					.set({ usedById: inserted[0].id })
 					.where(eq(invitations.code, invitationCode));
+
+				return inserted[0].id;
 			});
 
 			const jwtSecret = getJwtSecret(event.platform?.env);
-			const payload = createSessionToken(newUserId, username, 'member', true);
+			const payload = createSessionToken(String(newUserId), username, 'member', true);
 			jwtToken = await signJwt(payload, jwtSecret);
 		} catch (e) {
 			if (e instanceof Error && e.message === 'USERNAME_EMAIL_EXISTS') {

@@ -21,7 +21,7 @@ export const load: PageServerLoad = async (event) => {
 		error(401, event.locals.t.common.unauthorized);
 	}
 
-	const { id: conversationId } = event.params;
+	const conversationId = Number(event.params.id);
 	const db = event.locals.db;
 	const t = event.locals.t;
 
@@ -166,7 +166,7 @@ export const actions: Actions = {
 			error(401, locals.t.common.unauthorized);
 		}
 
-		const { id: conversationId } = params;
+		const conversationId = Number(params.id);
 		const db = locals.db;
 		const t = locals.t;
 
@@ -188,7 +188,7 @@ export const actions: Actions = {
 		}
 
 		const data = await request.formData();
-		const targetUserId = (data.get('userId') as string | null)?.trim();
+		const targetUserId = Number((data.get('userId') as string | null)?.trim());
 
 		if (!targetUserId) {
 			return { success: false, error: t.message.userIdRequired };
@@ -223,7 +223,7 @@ export const actions: Actions = {
 			error(401, locals.t.common.unauthorized);
 		}
 
-		const { id: conversationId } = params;
+		const conversationId = Number(params.id);
 		const db = locals.db;
 		const t = locals.t;
 
@@ -255,16 +255,18 @@ export const actions: Actions = {
 			return { success: false, error: t.common.contentTooLarge };
 		}
 
-		const messageId = crypto.randomUUID();
 		const now = new Date();
-		await db.insert(messages).values({
-			id: messageId,
-			conversationId,
-			authorId: user.id,
-			contentJson,
-			createdAt: now,
-			updatedAt: now
-		});
+		const inserted = await db
+			.insert(messages)
+			.values({
+				conversationId,
+				authorId: user.id,
+				contentJson,
+				createdAt: now,
+				updatedAt: now
+			})
+			.returning({ id: messages.id });
+		const messageId = inserted[0].id;
 
 		// Clear the composer draft
 		await db
@@ -311,12 +313,12 @@ export const actions: Actions = {
 			error(401, locals.t.common.unauthorized);
 		}
 
-		const { id: conversationId } = params;
+		const conversationId = Number(params.id);
 		const db = locals.db;
 		const t = locals.t;
 
 		const data = await request.formData();
-		const messageId = (data.get('messageId') as string | null) || '';
+		const messageId = Number(data.get('messageId'));
 		const contentJson = (data.get('contentJson') as string | null) || '';
 
 		if (!messageId || isLexicalEmpty(contentJson)) {

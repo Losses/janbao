@@ -20,7 +20,7 @@ export const load: PageServerLoad = async (event) => {
 	}
 
 	const db = event.locals.db;
-	const discussionId = event.params.discussionId;
+	const discussionId = Number(event.params.discussionId);
 
 	// 1. Fetch discussion
 	const discussionRecords = await db
@@ -130,7 +130,7 @@ export const actions: Actions = {
 		}
 
 		const db = event.locals.db;
-		const discussionId = event.params.discussionId;
+		const discussionId = Number(event.params.discussionId);
 		if (!discussionId) {
 			error(400, event.locals.t.common.badRequest);
 		}

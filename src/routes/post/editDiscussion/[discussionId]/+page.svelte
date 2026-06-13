@@ -28,7 +28,7 @@
 	let isPreview = $state(false);
 	let isSavingManualDraft = $state(false);
 	let showSaveSuccess = $state(false);
-	let loadedDiscussionId = $state<string | null>(null);
+	let loadedDiscussionId = $state<number | null>(null);
 
 	const currentTheme = $derived(
 		themeName || categories.find((c) => c.slug === categorySlug)?.themeName || 'huoxin'

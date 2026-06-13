@@ -148,14 +148,21 @@ export async function checkAndCreateWelcomePost(
 		yesterdayStr = yesterday.toISOString().split('T')[0];
 	}
 
-	const welcomePostId = `welcome-${yesterdayStr}`;
-
 	try {
-		// 1. Check if welcome post already exists
+		// 1. Check if today's welcome post already exists.
+		// activities.id is now an auto-incrementing integer, so idempotency is keyed on
+		// authorId=SYSTEM_USER_ID plus createdAt falling within today's tz boundary.
+		const { start: todayStart, end: todayEnd } = getTzBoundaries(todayStr, tz);
 		const existing = await db
 			.select({ id: activities.id })
 			.from(activities)
-			.where(eq(activities.id, welcomePostId))
+			.where(
+				and(
+					eq(activities.authorId, SYSTEM_USER_ID),
+					gte(activities.createdAt, todayStart),
+					lte(activities.createdAt, todayEnd)
+				)
+			)
 			.limit(1);
 
 		if (existing.length > 0) {
@@ -258,18 +265,17 @@ export async function checkAndCreateWelcomePost(
 			}
 		};
 
-		// 5. Insert deterministic activity post
+		// 5. Insert daily welcome post. id is auto-assigned; idempotency is handled by the check above.
 		await db
 			.insert(activities)
 			.values({
-				id: welcomePostId,
 				authorId: SYSTEM_USER_ID,
 				recipientId: null,
 				parentActivityId: null,
 				contentJson: JSON.stringify(contentJsonObj),
 				createdAt: new Date()
 			})
-			.onConflictDoNothing(); // Ignore uniqueness constraint errors on concurrent insert attempts
+			.onConflictDoNothing();
 	} catch (e) {
 		console.error('Failed to generate daily welcome post:', e);
 	}

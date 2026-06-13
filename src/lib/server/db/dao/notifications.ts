@@ -21,7 +21,7 @@ interface DiscussionInfo {
  */
 export async function getNotifications(
 	db: D1Db,
-	userId: string,
+	userId: number,
 	limit: number
 ): Promise<NotificationItem[]> {
 	const rows = await db
@@ -41,8 +41,8 @@ export async function getNotifications(
 		.limit(limit);
 
 	// Batch-resolve source user display info
-	const sourceIds = rows.map((r) => r.sourceUserId).filter((id): id is string => id !== null);
-	const sourceMap = new Map<string, SourceUserInfo>();
+	const sourceIds = rows.map((r) => r.sourceUserId).filter((id): id is number => id !== null);
+	const sourceMap = new Map<number, SourceUserInfo>();
 	if (sourceIds.length > 0) {
 		const uniqueSourceIds = [...new Set(sourceIds)];
 		const sourceUsers = await db
@@ -64,8 +64,8 @@ export async function getNotifications(
 	}
 
 	// Batch-resolve referenced discussion titles/slugs
-	const discussionIds = rows.map((r) => r.discussionId).filter((id): id is string => id !== null);
-	const discussionMap = new Map<string, DiscussionInfo>();
+	const discussionIds = rows.map((r) => r.discussionId).filter((id): id is number => id !== null);
+	const discussionMap = new Map<number, DiscussionInfo>();
 	if (discussionIds.length > 0) {
 		const uniqueDiscussionIds = [...new Set(discussionIds)];
 		const discussionRecords = await db
@@ -104,7 +104,7 @@ export async function getNotifications(
  * layout load to render the notification icon badge; cheap enough to run on
  * every navigation.
  */
-export async function countUnreadNotifications(db: D1Db, userId: string): Promise<number> {
+export async function countUnreadNotifications(db: D1Db, userId: number): Promise<number> {
 	const rows = await db
 		.select({ count: sql<number>`COUNT(*)` })
 		.from(notifications)

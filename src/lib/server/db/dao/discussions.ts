@@ -6,16 +6,16 @@ import { getReadableCategorySlugs } from '$lib/server/constants';
 export interface ReadHistory {
 	lastReadAt: Date | null;
 	lastReadPage: number;
-	lastReadReplyId: string | null;
+	lastReadReplyId: number | null;
 }
 
 export interface DiscussionListItem {
-	id: string;
+	id: number;
 	title: string;
 	slug: string;
 	categorySlug: string;
 	categoryTitle?: string;
-	authorId: string;
+	authorId: number;
 	authorDisplayName: string;
 	authorUsername: string;
 	authorAvatarFileId: string | null;
@@ -28,20 +28,20 @@ export interface DiscussionListItem {
 	readHistory: ReadHistory | null;
 	unreadCount: number;
 	lastReplyAuthorDisplayName: string | null;
-	lastReplyAuthorId: string | null;
+	lastReplyAuthorId: number | null;
 	lastReplyAuthorUsername: string | null;
 }
 
 interface LastReplyAuthor {
-	id: string;
+	id: number;
 	username: string;
 	displayName: string;
 }
 
 interface GetDiscussionsListOptions {
-	userId?: string | null;
+	userId?: number | null;
 	categorySlug?: string | null;
-	authorId?: string | null;
+	authorId?: number | null;
 	limit: number;
 	offset: number;
 	groupSlug?: string;
@@ -49,7 +49,7 @@ interface GetDiscussionsListOptions {
 
 interface GetDiscussionsCountOptions {
 	categorySlug?: string | null;
-	authorId?: string | null;
+	authorId?: number | null;
 	groupSlug?: string;
 }
 
@@ -172,7 +172,7 @@ export async function getDiscussionsList(
 		)
 		.innerJoin(users, eq(replies.authorId, users.id));
 
-	const lastReplyMap = new Map<string, LastReplyAuthor>();
+	const lastReplyMap = new Map<number, LastReplyAuthor>();
 	for (const row of lastReplyAuthors) {
 		lastReplyMap.set(row.discussionId, {
 			id: row.authorId,
@@ -184,7 +184,7 @@ export async function getDiscussionsList(
 	// Batch query 2: Unread counts per discussion (only when userId present)
 	// For discussions the user has read, count replies newer than lastReadAt.
 	// For discussions the user has never read, use commentCount directly.
-	const unreadMap = new Map<string, number>();
+	const unreadMap = new Map<number, number>();
 	if (userId) {
 		// Separate into "read" and "unread" discussion sets
 		const readDiscussions = rows.filter((r) => r.lastReadAt !== null);
@@ -201,7 +201,7 @@ export async function getDiscussionsList(
 		// This is a controlled pattern: max 20 queries, each hitting the composite index.
 		const readIds = readDiscussions.map((r) => r.id);
 		if (readIds.length > 0) {
-			const readMap = new Map<string, Date>();
+			const readMap = new Map<number, Date>();
 			for (const row of readDiscussions) {
 				readMap.set(row.id, row.lastReadAt!);
 			}

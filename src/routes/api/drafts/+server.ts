@@ -15,7 +15,7 @@ export const DELETE: RequestHandler = async ({ url, locals }) => {
 	}
 
 	const contextType = url.searchParams.get('contextType');
-	const contextId = url.searchParams.get('contextId') || '';
+	const contextId = Number(url.searchParams.get('contextId')) || 0;
 
 	if (!contextType) {
 		return jsonError(t, 'draft.contextFieldsRequired', 400);

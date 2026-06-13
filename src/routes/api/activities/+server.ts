@@ -14,7 +14,7 @@ import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
 	const t = locals.t;
-	const parentId = url.searchParams.get('parentId');
+	const parentId = Number(url.searchParams.get('parentId'));
 	if (!parentId) {
 		return jsonError(t, 'activity.parentIdRequired', 400);
 	}
@@ -55,7 +55,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	const body: ActivityCreateBody = await request.json();
-	const contentJson = body.contentJson;
+	const contentJson = body.contentJson ?? '';
 	const recipientId = body.recipientId;
 
 	if (isLexicalEmpty(contentJson)) {
@@ -78,21 +78,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 	}
 
-	const activityId = crypto.randomUUID();
+	const inserted = await locals.db
+		.insert(activities)
+		.values({
+			authorId: user.id,
+			recipientId: recipientId || null,
+			parentActivityId: null,
+			contentJson,
+			createdAt: new Date()
+		})
+		.returning({ id: activities.id });
+	const activityId = inserted[0].id;
 
-	await locals.db.insert(activities).values({
-		id: activityId,
-		authorId: user.id,
-		recipientId: recipientId || null,
-		parentActivityId: null,
-		contentJson,
-		createdAt: new Date()
-	});
-
-	// Clear the composer draft so the editor starts fresh on next page load
-	// Clear activity page draft (contextId = 'new') and profile page draft
-	// (contextId = targetUser.id, which equals user.id for owner or recipientId for guest)
-	const draftContextIds = ['new', user.id];
+	// Clear the composer draft so the editor starts fresh on next page load.
+	// contextId = 0 marks the "new" (unsaved) activity composer draft; the
+	// profile-page draft uses contextId = targetUser.id (user.id for owner,
+	// recipientId for a guest viewing the recipient's profile).
+	const draftContextIds: number[] = [0, user.id];
 	if (recipientId && recipientId !== user.id) {
 		draftContextIds.push(recipientId);
 	}
@@ -116,7 +118,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const shouldNotify = prefs.length === 0 ? true : prefs[0].profileComment;
 		if (shouldNotify) {
 			await locals.db.insert(notifications).values({
-				id: crypto.randomUUID(),
 				userId: recipientId,
 				type: 'profile_comment',
 				sourceUserId: user.id,

@@ -30,19 +30,18 @@ import { extractMentions } from '$lib/utils/mentions';
 type ReplyNotifCategory = 'mention' | 'owner' | 'participant' | 'bookmarker';
 
 interface ReplyNotificationContext {
-	discussionId: string;
-	replyId: string;
-	authorId: string;
+	discussionId: number;
+	replyId: number;
+	authorId: number;
 	contentJson: string;
 }
 
 interface NewNotificationRow {
-	id: string;
-	userId: string;
+	userId: number;
 	type: string;
-	sourceUserId: string;
-	discussionId: string;
-	replyId: string;
+	sourceUserId: number;
+	discussionId: number;
+	replyId: number;
 	createdAt: Date;
 }
 
@@ -68,7 +67,7 @@ export async function dispatchReplyNotifications(
 
 	// 2. Resolve mentioned user IDs from the reply content
 	const mentionUsernames = extractMentions(ctx.contentJson);
-	const mentionIds: string[] = [];
+	const mentionIds: number[] = [];
 	if (mentionUsernames.length > 0) {
 		const mentionedUsers = await db
 			.select({ id: users.id })
@@ -104,7 +103,7 @@ export async function dispatchReplyNotifications(
 	];
 
 	// 5. Build candidate map with category priority (first-write wins)
-	const candidates = new Map<string, ReplyNotifCategory>();
+	const candidates = new Map<number, ReplyNotifCategory>();
 	for (const id of mentionIds) {
 		if (!candidates.has(id)) candidates.set(id, 'mention');
 	}
@@ -139,7 +138,6 @@ export async function dispatchReplyNotifications(
 		if (!eligible) continue;
 
 		rows.push({
-			id: crypto.randomUUID(),
 			userId,
 			type: notificationTypeFor(category),
 			sourceUserId: ctx.authorId,

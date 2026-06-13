@@ -7,7 +7,7 @@ import type { RequestHandler } from './$types';
 
 interface DraftSaveBody {
 	contextType?: string;
-	contextId?: string;
+	contextId?: number;
 	contentJson?: string;
 }
 
@@ -44,7 +44,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 
 	const db = locals.db;
 	const authorId = locals.user.id;
-	const normalizedContextId = contextId ?? '';
+	const normalizedContextId = contextId ?? 0;
 	const now = new Date();
 
 	// Atomic upsert - on conflict over (authorId, contextType, contextId), update content

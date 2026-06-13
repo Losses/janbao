@@ -15,7 +15,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	const body: ActivityCommentCreateBody = await request.json();
 	const parentActivityId = body.parentActivityId;
-	const contentJson = body.contentJson;
+	const contentJson = body.contentJson ?? '';
 
 	if (!parentActivityId) {
 		return jsonError(t, 'activity.parentIdRequired', 400);
@@ -43,16 +43,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return jsonError(t, 'activity.cannotNestComments', 400);
 	}
 
-	const commentId = crypto.randomUUID();
+	const inserted = await locals.db
+		.insert(activities)
+		.values({
+			authorId: user.id,
+			recipientId: null,
+			parentActivityId,
+			contentJson,
+			createdAt: new Date()
+		})
+		.returning({ id: activities.id });
 
-	await locals.db.insert(activities).values({
-		id: commentId,
-		authorId: user.id,
-		recipientId: null,
-		parentActivityId,
-		contentJson,
-		createdAt: new Date()
-	});
-
-	return json({ success: true, id: commentId }, { status: 201 });
+	return json({ success: true, id: inserted[0].id }, { status: 201 });
 };

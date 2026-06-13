@@ -17,11 +17,7 @@ export const load: PageServerLoad = async (event) => {
 		.select({ contentJson: drafts.contentJson })
 		.from(drafts)
 		.where(
-			and(
-				eq(drafts.authorId, user.id),
-				eq(drafts.contextType, 'message'),
-				eq(drafts.contextId, 'new')
-			)
+			and(eq(drafts.authorId, user.id), eq(drafts.contextType, 'message'), eq(drafts.contextId, 0))
 		)
 		.limit(1);
 	if (draftRows.length > 0) {
@@ -29,7 +25,7 @@ export const load: PageServerLoad = async (event) => {
 	}
 
 	// Optional ?recipient=<userId> prefill (from the Active Users Wall)
-	const recipientId = event.url.searchParams.get('recipient');
+	const recipientId = Number(event.url.searchParams.get('recipient'));
 	let prefillRecipient: UserSearchResult | null = null;
 	if (recipientId && recipientId !== user.id) {
 		const recipientRows = await db

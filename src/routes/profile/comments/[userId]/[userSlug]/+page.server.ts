@@ -7,7 +7,7 @@ import { resolveGroupSlug } from '$lib/server/constants';
 import { resolveMentions } from '$lib/server/utils/mentions';
 
 export const load: PageServerLoad = async (event) => {
-	const { userId } = event.params;
+	const userId = Number(event.params.userId);
 	const db = event.locals.db;
 	const user = event.locals.user;
 	const groupSlug = resolveGroupSlug(user);

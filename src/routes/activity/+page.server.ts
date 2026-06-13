@@ -46,9 +46,9 @@ export const load: PageServerLoad = async (event) => {
 	// 4. Fetch recipient display names for directed activities
 	const recipientIds = activityList
 		.map((a) => a.recipientId)
-		.filter((id): id is string => id !== null && id !== SYSTEM_USER_ID);
+		.filter((id): id is number => id !== null && id !== SYSTEM_USER_ID);
 
-	const recipientMap = new Map<string, RecipientInfo>();
+	const recipientMap = new Map<number, RecipientInfo>();
 	if (recipientIds.length > 0) {
 		const uniqueIds = [...new Set(recipientIds)];
 		const recipients = await db
@@ -63,7 +63,7 @@ export const load: PageServerLoad = async (event) => {
 
 	// 5. Fetch comment counts per activity (batch query)
 	const activityIds = activityList.map((a) => a.id);
-	const commentCountMap = new Map<string, number>();
+	const commentCountMap = new Map<number, number>();
 
 	if (activityIds.length > 0) {
 		const commentCounts = await db
@@ -101,7 +101,7 @@ export const load: PageServerLoad = async (event) => {
 				and(
 					eq(drafts.authorId, user.id),
 					eq(drafts.contextType, 'activity'),
-					eq(drafts.contextId, 'new')
+					eq(drafts.contextId, 0)
 				)
 			)
 			.limit(1);

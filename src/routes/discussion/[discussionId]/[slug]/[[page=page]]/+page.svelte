@@ -42,17 +42,17 @@
 	// Quick Reply & inline editing states
 	let replyEditor: ReturnType<typeof LexicalEditor> | undefined = $state();
 	let replyComposerElem: HTMLElement | undefined = $state();
-	let editingReplyId = $state<string | null>(null);
+	let editingReplyId = $state<number | null>(null);
 	let editReplyContent = $state('');
 
 	// Delete confirmation states
 	let showDeleteModal = $state(false);
 	let deleteTarget = $state<'discussion' | 'reply' | null>(null);
-	let deleteReplyId = $state<string | null>(null);
+	let deleteReplyId = $state<number | null>(null);
 	let deleteDiscussionForm: HTMLFormElement | undefined = $state();
 	let deleteReplyForm: HTMLFormElement | undefined = $state();
 
-	let loadedDiscussionId = $state<string | null>(null);
+	let loadedDiscussionId = $state<number | null>(null);
 	let loadedPage = $state<number | null>(null);
 
 	$effect(() => {
@@ -83,7 +83,7 @@
 		showDeleteModal = true;
 	}
 
-	function triggerDeleteReply(replyId: string) {
+	function triggerDeleteReply(replyId: number) {
 		deleteTarget = 'reply';
 		deleteReplyId = replyId;
 		showDeleteModal = true;

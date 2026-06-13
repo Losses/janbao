@@ -24,7 +24,7 @@ interface PlatformContext {
 }
 
 interface UserData {
-	id: string;
+	id: number;
 	username: string;
 	email: string;
 	displayName: string;

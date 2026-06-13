@@ -4,7 +4,7 @@ import { discussions } from '$lib/server/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-	const { discussionId } = params;
+	const discussionId = Number(params.discussionId);
 	const db = locals.db;
 
 	const record = await db

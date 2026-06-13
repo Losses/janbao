@@ -230,7 +230,7 @@
 					{#key draftContent}
 						<LexicalEditor
 							contextType="discussion"
-							contextId="new"
+							contextId={0}
 							initialContent={draftContent}
 							onContentChange={(json) => (contentJson = json)}
 							placeholder={t.editor.placeholder}
