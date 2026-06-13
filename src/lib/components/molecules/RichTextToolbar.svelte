@@ -48,14 +48,21 @@
 		mdiChevronDown,
 		mdiClose
 	} from '@mdi/js';
+	import type { TranslationDict } from '$lib/types/translation';
 
 	interface Props {
 		activeEditor: LexicalEditor;
 		disableHeadings?: boolean;
 		disableImageUpload?: boolean;
+		t?: TranslationDict | null;
 	}
 
-	let { activeEditor, disableHeadings = false, disableImageUpload = false }: Props = $props();
+	let {
+		activeEditor,
+		disableHeadings = false,
+		disableImageUpload = false,
+		t = null
+	}: Props = $props();
 
 	// Retrieve stores from svelte-lexical's context
 	const isBold = getContext<Writable<boolean>>('isBold');
@@ -146,17 +153,17 @@
 		<div class="dropdown">
 			<div tabindex="0" role="button" class="btn btn-xs btn-ghost gap-1 font-semibold text-xs">
 				<span>
-					{#if $blockType === 'paragraph'}Normal
-					{:else if $blockType === 'h1'}H1
-					{:else if $blockType === 'h2'}H2
-					{:else if $blockType === 'h3'}H3
-					{:else if $blockType === 'h4'}H4
-					{:else if $blockType === 'quote'}Quote
-					{:else if $blockType === 'code'}Code
-					{:else if $blockType === 'bullet'}Bulleted List
-					{:else if $blockType === 'number'}Numbered List
-					{:else if $blockType === 'check'}Check List
-					{:else}Normal
+					{#if $blockType === 'paragraph'}{t?.editor?.normal ?? 'Normal'}
+					{:else if $blockType === 'h1'}{t?.editor?.heading1 ?? 'H1'}
+					{:else if $blockType === 'h2'}{t?.editor?.heading2 ?? 'H2'}
+					{:else if $blockType === 'h3'}{t?.editor?.heading3 ?? 'H3'}
+					{:else if $blockType === 'h4'}{t?.editor?.heading4 ?? 'H4'}
+					{:else if $blockType === 'quote'}{t?.editor?.quote ?? 'Quote'}
+					{:else if $blockType === 'code'}{t?.editor?.codeBlock ?? 'Code'}
+					{:else if $blockType === 'bullet'}{t?.editor?.bulletList ?? 'Bulleted List'}
+					{:else if $blockType === 'number'}{t?.editor?.numberedList ?? 'Numbered List'}
+					{:else if $blockType === 'check'}{t?.editor?.checkList ?? 'Check List'}
+					{:else}{t?.editor?.normal ?? 'Normal'}
 					{/if}
 				</span>
 				<Icon path={mdiChevronDown} size={14} />
@@ -173,7 +180,7 @@
 						}}
 					>
 						<Icon path={mdiFormatParagraph} size={18} />
-						<span>Normal</span>
+						<span>{t?.editor?.normal ?? 'Normal'}</span>
 					</button>
 				</li>
 				<li>
@@ -186,7 +193,7 @@
 						}}
 					>
 						<Icon path={mdiFormatHeader1} size={18} />
-						<span>Heading 1</span>
+						<span>{t?.editor?.heading1 ?? 'Heading 1'}</span>
 					</button>
 				</li>
 				<li>
@@ -199,7 +206,7 @@
 						}}
 					>
 						<Icon path={mdiFormatHeader2} size={18} />
-						<span>Heading 2</span>
+						<span>{t?.editor?.heading2 ?? 'Heading 2'}</span>
 					</button>
 				</li>
 				<li>
@@ -212,7 +219,7 @@
 						}}
 					>
 						<Icon path={mdiFormatHeader3} size={18} />
-						<span>Heading 3</span>
+						<span>{t?.editor?.heading3 ?? 'Heading 3'}</span>
 					</button>
 				</li>
 				<li>
@@ -225,7 +232,7 @@
 						}}
 					>
 						<Icon path={mdiFormatHeader4} size={18} />
-						<span>Heading 4</span>
+						<span>{t?.editor?.heading4 ?? 'Heading 4'}</span>
 					</button>
 				</li>
 				<li>
@@ -238,7 +245,7 @@
 						}}
 					>
 						<Icon path={mdiFormatQuoteClose} size={18} />
-						<span>Quote</span>
+						<span>{t?.editor?.quote ?? 'Quote'}</span>
 					</button>
 				</li>
 				<li>
@@ -251,7 +258,7 @@
 						}}
 					>
 						<Icon path={mdiCodeBraces} size={18} />
-						<span>Code Block</span>
+						<span>{t?.editor?.codeBlock ?? 'Code Block'}</span>
 					</button>
 				</li>
 			</ul>
@@ -268,7 +275,7 @@
 			class:btn-active={$isBold}
 			class:btn-ghost={!$isBold}
 			onclick={() => toggleBold(activeEditor)}
-			title="Bold (Ctrl+B)"
+			title="{t?.editor?.bold ?? 'Bold'} (Ctrl+B)"
 		>
 			<Icon path={mdiFormatBold} size={16} />
 		</button>
@@ -278,7 +285,7 @@
 			class:btn-active={$isItalic}
 			class:btn-ghost={!$isItalic}
 			onclick={() => toggleItalic(activeEditor)}
-			title="Italic (Ctrl+I)"
+			title="{t?.editor?.italic ?? 'Italic'} (Ctrl+I)"
 		>
 			<Icon path={mdiFormatItalic} size={16} />
 		</button>
@@ -288,7 +295,7 @@
 			class:btn-active={$isUnderline}
 			class:btn-ghost={!$isUnderline}
 			onclick={() => toggleUnderline(activeEditor)}
-			title="Underline (Ctrl+U)"
+			title="{t?.editor?.underline ?? 'Underline'} (Ctrl+U)"
 		>
 			<Icon path={mdiFormatUnderline} size={16} />
 		</button>
@@ -298,7 +305,7 @@
 			class:btn-active={$isStrikethrough}
 			class:btn-ghost={!$isStrikethrough}
 			onclick={() => toggleStrikethrough(activeEditor)}
-			title="Strikethrough"
+			title={t?.editor?.strikethrough ?? 'Strikethrough'}
 		>
 			<Icon path={mdiFormatStrikethrough} size={16} />
 		</button>
@@ -308,7 +315,7 @@
 			class:btn-active={isHighlight}
 			class:btn-ghost={!isHighlight}
 			onclick={handleToggleHighlight}
-			title="Marker Highlight"
+			title={t?.editor?.highlight ?? 'Marker Highlight'}
 		>
 			<Icon path={mdiMarker} size={16} />
 		</button>
@@ -318,7 +325,7 @@
 			class:btn-active={isSpoiler}
 			class:btn-ghost={!isSpoiler}
 			onclick={handleToggleSpoiler}
-			title="Spoiler"
+			title={t?.editor?.spoiler ?? 'Spoiler'}
 		>
 			<Icon path={mdiEyeOff} size={16} />
 		</button>
@@ -334,7 +341,7 @@
 			class:btn-active={$blockType === 'bullet'}
 			class:btn-ghost={$blockType !== 'bullet'}
 			onclick={() => formatBulletList(activeEditor, $blockType)}
-			title="Bulleted List"
+			title={t?.editor?.bulletList ?? 'Bulleted List'}
 		>
 			<Icon path={mdiFormatListBulleted} size={16} />
 		</button>
@@ -344,7 +351,7 @@
 			class:btn-active={$blockType === 'number'}
 			class:btn-ghost={$blockType !== 'number'}
 			onclick={() => formatNumberedList(activeEditor, $blockType)}
-			title="Numbered List"
+			title={t?.editor?.numberedList ?? 'Numbered List'}
 		>
 			<Icon path={mdiFormatListNumbered} size={16} />
 		</button>
@@ -354,7 +361,7 @@
 			class:btn-active={$blockType === 'check'}
 			class:btn-ghost={$blockType !== 'check'}
 			onclick={() => formatCheckList(activeEditor, $blockType)}
-			title="Check List"
+			title={t?.editor?.checkList ?? 'Check List'}
 		>
 			<Icon path={mdiFormatListChecks} size={16} />
 		</button>
@@ -370,7 +377,7 @@
 			class:btn-active={$isLink}
 			class:btn-ghost={!$isLink}
 			onclick={handleToggleLink}
-			title="Insert Link"
+			title={t?.editor?.link ?? 'Insert Link'}
 		>
 			<Icon path={mdiLink} size={16} />
 		</button>
@@ -382,7 +389,7 @@
 				onclick={() => {
 					showImageModal = true;
 				}}
-				title="Insert Image"
+				title={t?.editor?.image ?? 'Insert Image'}
 			>
 				<Icon path={mdiImage} size={16} />
 			</button>
@@ -400,12 +407,12 @@
 				type="button"
 				class="btn btn-sm btn-circle btn-ghost absolute right-4 top-4 text-error"
 				onclick={() => (showLinkModal = false)}
-				title="Close"
+				title={t?.editor?.close ?? 'Close'}
 			>
 				<Icon path={mdiClose} size={18} />
 			</button>
 
-			<h3 class="text-lg font-bold mb-4">Insert Link</h3>
+			<h3 class="text-lg font-bold mb-4">{t?.editor?.link ?? 'Insert Link'}</h3>
 
 			<div class="form-control w-full mb-3">
 				<label for="editor-link-url" class="label label-text font-semibold p-1 text-base-content/70"
@@ -426,7 +433,7 @@
 
 			<div class="modal-action mt-6 flex justify-end gap-2">
 				<button type="button" class="btn btn-sm btn-ghost" onclick={() => (showLinkModal = false)}>
-					Cancel
+					{t?.common?.cancel ?? 'Cancel'}
 				</button>
 				<button
 					type="button"
@@ -434,7 +441,7 @@
 					disabled={!linkUrl.trim()}
 					onclick={handleConfirmLink}
 				>
-					Confirm
+					{t?.common?.confirm ?? 'Confirm'}
 				</button>
 			</div>
 		</div>
@@ -451,12 +458,12 @@
 				type="button"
 				class="btn btn-sm btn-circle btn-ghost absolute right-4 top-4 text-error"
 				onclick={() => (showImageModal = false)}
-				title="Close"
+				title={t?.editor?.close ?? 'Close'}
 			>
 				<Icon path={mdiClose} size={18} />
 			</button>
 
-			<h3 class="text-lg font-bold mb-4">Insert Image</h3>
+			<h3 class="text-lg font-bold mb-4">{t?.editor?.image ?? 'Insert Image'}</h3>
 
 			<div class="form-control w-full mb-3">
 				<label
@@ -488,7 +495,7 @@
 
 			<div class="modal-action mt-6 flex justify-end gap-2">
 				<button type="button" class="btn btn-sm btn-ghost" onclick={() => (showImageModal = false)}>
-					Cancel
+					{t?.common?.cancel ?? 'Cancel'}
 				</button>
 				<button
 					type="button"
@@ -496,7 +503,7 @@
 					disabled={!imageUrl.trim()}
 					onclick={handleInsertImage}
 				>
-					Confirm
+					{t?.common?.confirm ?? 'Confirm'}
 				</button>
 			</div>
 		</div>
