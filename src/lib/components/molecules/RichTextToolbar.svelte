@@ -1,7 +1,13 @@
 <script lang="ts">
-	import { getContext } from 'svelte';
+	import { getContext, onMount } from 'svelte';
 	import type { Writable } from 'svelte/store';
 	import type { LexicalEditor } from 'lexical';
+	import {
+		$getSelection as getSelection,
+		$isRangeSelection as isRangeSelection,
+		$isTextNode as isTextNodeFn,
+		FORMAT_TEXT_COMMAND
+	} from 'lexical';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import {
 		toggleBold,
@@ -21,6 +27,7 @@
 	} from 'svelte-lexical';
 	import { TOGGLE_LINK_COMMAND } from '@lexical/link';
 	import { sanitizeUrl } from 'svelte-lexical';
+	import { TOGGLE_SPOILER_COMMAND } from '$lib/types/editor-commands';
 	import {
 		mdiFormatBold,
 		mdiFormatItalic,
@@ -40,6 +47,8 @@
 		mdiFormatListChecks,
 		mdiLink,
 		mdiImage,
+		mdiMarker,
+		mdiEyeOff,
 		mdiChevronDown,
 		mdiClose
 	} from '@mdi/js';
@@ -60,17 +69,63 @@
 	const isLink = getContext<Writable<boolean>>('isLink');
 	const blockType = getContext<Writable<string>>('blockType');
 
+	// Custom format state tracking for highlight and spoiler (not provided by svelte-lexical)
+	let isHighlight = $state(false);
+	let isSpoiler = $state(false);
+
+	onMount(() => {
+		return activeEditor.registerUpdateListener(({ editorState }) => {
+			editorState.read(() => {
+				const selection = getSelection();
+				if (isRangeSelection(selection)) {
+					isHighlight = selection.hasFormat('highlight');
+					const nodes = selection.getNodes();
+					isSpoiler = nodes.some((node) => {
+						if (isTextNodeFn(node)) {
+							return (node.getStyle() ?? '').includes('janbao-spoiler');
+						}
+						return false;
+					});
+				} else {
+					isHighlight = false;
+					isSpoiler = false;
+				}
+			});
+		});
+	});
+
 	// Local states for custom Insert Image modal
 	let showImageModal = $state(false);
+	let showLinkModal = $state(false);
 	let imageUrl = $state('');
 	let imageAltText = $state('');
+	let linkUrl = $state('');
 
 	function handleToggleLink() {
 		if (!$isLink) {
-			activeEditor.dispatchCommand(TOGGLE_LINK_COMMAND, sanitizeUrl('https://'));
+			// Show modal for URL input instead of immediately applying a placeholder URL
+			linkUrl = '';
+			showLinkModal = true;
 		} else {
 			activeEditor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
 		}
+	}
+
+	function handleConfirmLink() {
+		if (linkUrl.trim()) {
+			activeEditor.dispatchCommand(TOGGLE_LINK_COMMAND, sanitizeUrl(linkUrl.trim()));
+		}
+		showLinkModal = false;
+		linkUrl = '';
+		activeEditor.focus();
+	}
+
+	function handleToggleHighlight() {
+		activeEditor.dispatchCommand(FORMAT_TEXT_COMMAND, 'highlight');
+	}
+
+	function handleToggleSpoiler() {
+		activeEditor.dispatchCommand(TOGGLE_SPOILER_COMMAND, undefined);
 	}
 
 	function handleInsertImage() {
@@ -231,7 +286,7 @@
 		<div class="divider divider-horizontal m-0 h-6"></div>
 	{/if}
 
-	<!-- Inline Styles (Bold, Italic, Underline, Strikethrough) -->
+	<!-- Inline Styles (Bold, Italic, Underline, Strikethrough, Highlight, Spoiler) -->
 	<div class="join">
 		<button
 			type="button"
@@ -272,6 +327,26 @@
 			title="Strikethrough"
 		>
 			<Icon path={mdiFormatStrikethrough} size={16} />
+		</button>
+		<button
+			type="button"
+			class="btn btn-xs join-item"
+			class:btn-active={isHighlight}
+			class:btn-ghost={!isHighlight}
+			onclick={handleToggleHighlight}
+			title="Marker Highlight"
+		>
+			<Icon path={mdiMarker} size={16} />
+		</button>
+		<button
+			type="button"
+			class="btn btn-xs join-item"
+			class:btn-active={isSpoiler}
+			class:btn-ghost={!isSpoiler}
+			onclick={handleToggleSpoiler}
+			title="Spoiler"
+		>
+			<Icon path={mdiEyeOff} size={16} />
 		</button>
 	</div>
 
@@ -340,6 +415,57 @@
 		{/if}
 	</div>
 </div>
+
+<!-- Modal for inserting links -->
+{#if showLinkModal}
+	<div class="modal modal-open z-50">
+		<div
+			class="modal-box max-w-md bg-base-100 text-base-content border border-base-300 relative p-6"
+		>
+			<button
+				type="button"
+				class="btn btn-sm btn-circle btn-ghost absolute right-4 top-4 text-error"
+				onclick={() => (showLinkModal = false)}
+				title="Close"
+			>
+				<Icon path={mdiClose} size={18} />
+			</button>
+
+			<h3 class="text-lg font-bold mb-4">Insert Link</h3>
+
+			<div class="form-control w-full mb-3">
+				<label for="editor-link-url" class="label label-text font-semibold p-1 text-base-content/70"
+					>URL</label
+				>
+				<input
+					id="editor-link-url"
+					type="text"
+					placeholder="https://example.com"
+					class="input input-bordered input-sm w-full bg-base-100 text-base-content focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+					bind:value={linkUrl}
+					onkeydown={(e) => {
+						if (e.key === 'Enter') handleConfirmLink();
+						if (e.key === 'Escape') showLinkModal = false;
+					}}
+				/>
+			</div>
+
+			<div class="modal-action mt-6 flex justify-end gap-2">
+				<button type="button" class="btn btn-sm btn-ghost" onclick={() => (showLinkModal = false)}>
+					Cancel
+				</button>
+				<button
+					type="button"
+					class="btn btn-sm btn-primary font-semibold"
+					disabled={!linkUrl.trim()}
+					onclick={handleConfirmLink}
+				>
+					Confirm
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <!-- Custom daisyUI Modal for inserting images -->
 {#if showImageModal}
