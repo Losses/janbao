@@ -124,7 +124,7 @@
 
 		<!-- Original Post (OP) - Only visible on Page 1 -->
 		{#if currentPage === 1 && opReply}
-			<div id="reply-{opReply.id}" class="card bg-base-100 border border-base-200 p-5 space-y-4">
+			<div id="reply-{opReply.id}" class="space-y-4">
 				<DiscussionMetadata
 					userId={opReply.authorId}
 					username={opReply.authorUsername}
@@ -171,12 +171,9 @@
 
 		<!-- Replies Stream -->
 		{#if repliesList.length > 0}
-			<div class="space-y-4">
+			<div class="divide-y divide-base-300">
 				{#each repliesList as reply (reply.id)}
-					<div
-						id="reply-{reply.id}"
-						class="card bg-base-100 border border-base-200 hover:border-base-300 transition-colors p-5 space-y-4"
-					>
+					<div id="reply-{reply.id}" class="space-y-4 py-4 first:pt-0 last:pb-0">
 						<DiscussionMetadata
 							userId={reply.authorId}
 							username={reply.authorUsername}
@@ -197,15 +194,12 @@
 		{/if}
 
 		<!-- Paginator Bottom -->
-		<div class="flex justify-between items-center gap-4 pt-2">
-			<span class="text-xs text-base-content/50">
-				{t.discussion.replies}: {data.totalRepliesCount}
-			</span>
+		<div class="flex justify-end pt-2">
 			<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
 		</div>
 
 		<!-- Reply Composer at the bottom -->
-		<div class="border-t border-base-300 pt-6">
+		<div class="pt-6">
 			{#if user}
 				<h3 class="text-lg font-bold mb-3 text-base-content">{t.common.reply}</h3>
 				{#key editorKey}
@@ -254,7 +248,7 @@
 					</button>
 				</form>
 			{:else}
-				<div class="card bg-base-200 border border-base-300 p-6 text-center">
+				<div class="bg-base-200 p-6 text-center">
 					<p class="text-base-content/70 mb-3">
 						{t.discussion.signInToReply}
 					</p>
