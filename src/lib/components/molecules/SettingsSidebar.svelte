@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * SettingsSidebar Molecule - Navigation sidebar for account settings pages.
-	 * Shows settings-specific navigation links and a "Back to Profile" button.
+	 * Shows settings-specific navigation links.
 	 */
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import { generateSlug } from '$lib/utils/slug';
@@ -23,7 +23,6 @@
 
 <div class="card bg-base-200 border border-base-300 p-4 space-y-4">
 	<UserInfoBlock {user} {t} />
-	<div class="divider my-1"></div>
 	<ul class="menu menu-sm w-full gap-1">
 		<li>
 			<a href="/profile/edit" class={activeItem === 'editAccount' ? 'active' : ''}>
@@ -51,7 +50,4 @@
 			</a>
 		</li>
 	</ul>
-	<a href="/profile/{user.id}/{userSlug}" class="btn btn-outline btn-sm w-full">
-		{profileT['backToProfile']}
-	</a>
 </div>

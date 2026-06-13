@@ -43,14 +43,6 @@
 				{tNav['home']}
 			</a>
 			<a
-				href="/categories"
-				class="btn btn-ghost btn-sm text-sm"
-				class:text-primary={isNavActive('/categories')}
-				aria-current={isNavActive('/categories') ? 'page' : undefined}
-			>
-				{tNav['categories']}
-			</a>
-			<a
 				href="/activity"
 				class="btn btn-ghost btn-sm text-sm"
 				class:text-primary={isNavActive('/activity')}

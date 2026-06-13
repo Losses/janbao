@@ -88,7 +88,7 @@
 			<div class="alert alert-warning" role="alert">{errorMessage}</div>
 		{/if}
 
-		<div class="card bg-base-100 border border-base-200 rounded-xl p-5 shadow-sm space-y-4">
+		<div class="card bg-base-100 border border-base-200 rounded-xl p-5 space-y-4">
 			<!-- Recipients -->
 			<div class="form-control">
 				<label class="label" for="recipients-input">

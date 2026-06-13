@@ -55,7 +55,6 @@
 			>
 				{user.displayName}
 			</a>
-			<p class="text-xs text-base-content/60">@{user.username}</p>
 		</div>
 	</div>
 

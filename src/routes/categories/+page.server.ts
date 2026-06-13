@@ -2,11 +2,13 @@ import type { PageServerLoad } from './$types';
 import { categories, categoryPermissions } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { resolveGroupSlug } from '$lib/server/constants';
+import { resolveCategoriesI18n } from '$lib/server/i18n';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const db = locals.db;
 	const user = locals.user;
 	const groupSlug = resolveGroupSlug(user);
+	const t = locals.t;
 
 	// Batch query: fetch all categories and their permissions for this group in 2 queries
 	const allCategories = await db.select().from(categories).orderBy(categories.displayOrder);
@@ -41,6 +43,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 			});
 
 	return {
-		categories: readableCategories
+		categories: resolveCategoriesI18n(readableCategories, t)
 	};
 };

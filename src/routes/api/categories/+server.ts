@@ -3,6 +3,7 @@ import { categories, categoryPermissions } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { resolveGroupSlug } from '$lib/server/constants';
+import { resolveCategoriesI18n } from '$lib/server/i18n';
 
 /**
  * Categories list endpoint for sidebar widget.
@@ -11,11 +12,13 @@ import { resolveGroupSlug } from '$lib/server/constants';
 export const GET: RequestHandler = async ({ locals }) => {
 	const db = locals.db;
 	const groupSlug = resolveGroupSlug(locals.user);
+	const t = locals.t;
 
 	const allCategories = await db
 		.select({
 			slug: categories.slug,
-			title: categories.title
+			title: categories.title,
+			description: categories.description
 		})
 		.from(categories)
 		.orderBy(categories.displayOrder);
@@ -39,7 +42,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 		return canRead === undefined ? true : canRead;
 	});
 
-	return json(readableCategories, {
+	return json(resolveCategoriesI18n(readableCategories, t), {
 		headers: {
 			'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
 		}

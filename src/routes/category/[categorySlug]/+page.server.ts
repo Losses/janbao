@@ -8,11 +8,13 @@ import {
 	resolvePermissions,
 	resolveGroupSlug
 } from '$lib/server/constants';
+import { resolveCategoryI18n } from '$lib/server/i18n';
 
 export const load: PageServerLoad = async (event) => {
 	const { categorySlug } = event.params;
 	const db = event.locals.db;
 	const user = event.locals.user;
+	const t = event.locals.t;
 
 	// 1. Fetch category
 	const categoryRecords = await db
@@ -22,14 +24,14 @@ export const load: PageServerLoad = async (event) => {
 		.limit(1);
 
 	if (categoryRecords.length === 0) {
-		error(404, event.locals.t.category.notFound);
+		error(404, t.category.notFound);
 	}
-	const category = categoryRecords[0];
+	const category = resolveCategoryI18n(categoryRecords[0], t);
 
 	// 2. Check read permissions (guest-safe via resolvePermissions)
 	const perms = await resolvePermissions(db, categorySlug, user);
 	if (!perms.canRead) {
-		error(403, event.locals.t.common.forbidden);
+		error(403, t.common.forbidden);
 	}
 
 	// 3. Parse page

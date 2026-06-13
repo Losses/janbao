@@ -2,7 +2,7 @@
 	/**
 	 * ProfileSidebar Molecule - Navigation sidebar for profile-related pages.
 	 * Shows profile navigation with owner/visitor view guards.
-	 * Owner sees: Activities, Notifications, Invitations, Mailbox, Discussions, Comments + Account Settings button.
+	 * Owner sees: Activities, Notifications, Invitations, Mailbox, Discussions, Comments.
 	 * Visitor sees: Activities, Discussions, Comments only.
 	 * Guest sees: Same as visitor + Sign-in/Register links.
 	 */
@@ -29,7 +29,6 @@
 <div class="card bg-base-200 border border-base-300 p-4 space-y-4">
 	{#if user}
 		<UserInfoBlock {user} {t} />
-		<div class="divider my-1"></div>
 		{#if isOwner}
 			<!-- Owner View: Full profile navigation -->
 			<ul class="menu menu-sm w-full gap-1">
@@ -73,9 +72,6 @@
 					</a>
 				</li>
 			</ul>
-			<a href="/profile/edit" class="btn btn-outline btn-sm w-full">
-				{profileT['accountSettings']}
-			</a>
 		{:else}
 			<!-- Visitor View: Public navigation only -->
 			<ul class="menu menu-sm w-full gap-1">
@@ -133,7 +129,6 @@
 				</a>
 			</li>
 		</ul>
-		<div class="divider my-1"></div>
 		<div class="flex gap-2">
 			<a href="/entry/signin" class="btn btn-sm btn-primary flex-1">{tNav['signin']}</a>
 			<a href="/entry/register" class="btn btn-sm btn-outline flex-1">

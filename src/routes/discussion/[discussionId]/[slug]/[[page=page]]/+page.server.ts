@@ -62,7 +62,7 @@ export const load: PageServerLoad = async (event) => {
 		error(403, event.locals.t.common.forbidden);
 	}
 
-	// 2b. Resolve canDelete for sticky/unsticky toggle
+	// 2b. Resolve canDelete for pin/unpin toggle
 	const canDelete = user ? perms.canDelete : false;
 
 	// 3. Resolve page number
@@ -307,7 +307,30 @@ export const actions: Actions = {
 			contentJson
 		});
 
-		return { success: true, replyId };
+		// Calculate which page the new reply lands on (excluding OP)
+		const opRecord = await db
+			.select({ id: replies.id })
+			.from(replies)
+			.where(and(eq(replies.discussionId, discussionId), isNull(replies.deletedAt)))
+			.orderBy(replies.createdAt)
+			.limit(1);
+		const opId = opRecord.length > 0 ? opRecord[0].id : null;
+
+		const newCountRes = await db
+			.select({ value: count() })
+			.from(replies)
+			.where(
+				and(
+					eq(replies.discussionId, discussionId),
+					isNull(replies.deletedAt),
+					opId ? ne(replies.id, opId) : undefined
+				)
+			);
+		const newCount = newCountRes[0]?.value ?? 1;
+		const limit = getPaginationLimit(undefined);
+		const replyPage = Math.max(1, Math.ceil(newCount / limit));
+
+		return { success: true, replyId, page: replyPage };
 	},
 
 	togglePin: async ({ locals, params }) => {

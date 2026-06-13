@@ -211,13 +211,17 @@
 		"alreadyExists": "用户名或邮箱已存在",
 		"replies": "回复",
 		"signInToReply": "请登录后回复。",
-		"sticky": "置顶",
-		"unsticky": "取消置顶"
+		"pin": "置顶",
+		"unpin": "取消置顶"
 	},
 	"category": {
 		"notFound": "话题分类未找到",
 		"subscribeRss": "订阅 RSS 订阅源",
-		"total": "总计"
+		"total": "总计",
+		"general": {
+			"title": "大杂烩",
+			"description": "什么都可以聊的地方"
+		}
 	},
 	"draft": {
 		"invalidBody": "请求格式无效",

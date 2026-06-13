@@ -80,7 +80,6 @@
 	<div class="card bg-base-200 border border-base-300 p-4 space-y-4">
 		{#if user}
 			<UserInfoBlock {user} {t} />
-			<div class="divider my-1"></div>
 			<div class="flex flex-col gap-2">
 				<a
 					href="/post/discussion?category={discussion.categorySlug}"
@@ -107,9 +106,7 @@
 				</div>
 			</div>
 		{/if}
-		<div class="divider my-1"></div>
 		<CategoryListWidget {t} activeSlug={discussion.categorySlug} />
-		<div class="divider my-1"></div>
 		<ActiveUsersWall {t} />
 	</div>
 {/snippet}
@@ -118,11 +115,6 @@
 	<div class="space-y-6">
 		<!-- Discussion Header -->
 		<div class="border-b border-base-300 pb-4">
-			<div class="text-xs text-primary font-semibold mb-1 uppercase tracking-wider">
-				<a href="/category/{discussion.categorySlug}" class="hover:underline">
-					{discussion.categoryTitle}
-				</a>
-			</div>
 			<h1
 				class="text-3xl font-extrabold tracking-tight text-base-content break-words leading-tight"
 			>
@@ -132,10 +124,7 @@
 
 		<!-- Original Post (OP) - Only visible on Page 1 -->
 		{#if currentPage === 1 && opReply}
-			<div
-				id="reply-{opReply.id}"
-				class="card bg-base-100 border border-base-200 rounded-xl p-5 shadow-sm space-y-4"
-			>
+			<div id="reply-{opReply.id}" class="card bg-base-100 border border-base-200 p-5 space-y-4">
 				<DiscussionMetadata
 					userId={opReply.authorId}
 					username={opReply.authorUsername}
@@ -143,11 +132,8 @@
 					avatarFileId={opReply.authorAvatarFileId}
 					createdAt={opReply.createdAt}
 					updatedAt={opReply.updatedAt}
-					categoryName={discussion.categoryTitle}
-					categorySlug={discussion.categorySlug}
 					{t}
 				/>
-				<div class="divider my-1"></div>
 				<LexicalRenderer contentJson={opReply.contentJson} {mentionedUsers} />
 				{#if canDelete}
 					<div class="flex justify-end pt-2">
@@ -170,7 +156,7 @@
 								{#if isTogglingPin}
 									<span class="loading loading-spinner loading-xs"></span>
 								{/if}
-								{discussion.isPinned ? t.discussion.unsticky : t.discussion.sticky}
+								{discussion.isPinned ? t.discussion.unpin : t.discussion.pin}
 							</button>
 						</form>
 					</div>
@@ -189,7 +175,7 @@
 				{#each repliesList as reply (reply.id)}
 					<div
 						id="reply-{reply.id}"
-						class="card bg-base-100 border border-base-200 hover:border-base-300 transition-colors rounded-xl p-5 shadow-sm space-y-4"
+						class="card bg-base-100 border border-base-200 hover:border-base-300 transition-colors p-5 space-y-4"
 					>
 						<DiscussionMetadata
 							userId={reply.authorId}
@@ -200,7 +186,6 @@
 							updatedAt={reply.updatedAt}
 							{t}
 						/>
-						<div class="divider my-1"></div>
 						<LexicalRenderer contentJson={reply.contentJson} {mentionedUsers} />
 					</div>
 				{/each}
@@ -240,13 +225,21 @@
 					action="?/reply"
 					use:enhance={() => {
 						isSubmitting = true;
-						return async ({ result, update }) => {
+						return async ({ result }) => {
 							isSubmitting = false;
 							if (result.type === 'success') {
 								replyContent = '';
 								editorKey++;
-								// Remount and scroll to bottom or reload page data
-								update();
+								const data = result.data as { replyId?: string; page?: number } | null;
+								const replyId = data?.replyId;
+								const page = data?.page;
+								if (replyId && page) {
+									const url =
+										page <= 1
+											? `/discussion/${discussion.id}/${discussion.slug}#reply-${replyId}`
+											: `/discussion/${discussion.id}/${discussion.slug}/p${page}#reply-${replyId}`;
+									goto(url);
+								}
 							}
 						};
 					}}
@@ -261,7 +254,7 @@
 					</button>
 				</form>
 			{:else}
-				<div class="card bg-base-200 border border-base-300 p-6 text-center rounded-xl">
+				<div class="card bg-base-200 border border-base-300 p-6 text-center">
 					<p class="text-base-content/70 mb-3">
 						{t.discussion.signInToReply}
 					</p>
