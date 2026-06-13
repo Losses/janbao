@@ -33,11 +33,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	if (token) {
 		const payload = await verifyJwt(token, jwtSecret);
-		if (payload && payload.sub) {
+		// sub holds the user id as a numeric string. A non-numeric sub (e.g. a legacy
+		// UUID token from before the id migration) is treated as an invalid token.
+		const userId = payload?.sub !== undefined ? Number(payload.sub) : NaN;
+		if (payload && payload.sub && !Number.isNaN(userId)) {
 			const usersList = await db
 				.select()
 				.from(users)
-				.where(eq(users.id, Number(payload.sub)))
+				.where(eq(users.id, userId))
 				.limit(1);
 			if (usersList.length > 0) {
 				const userRecord = usersList[0];

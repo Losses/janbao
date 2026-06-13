@@ -9,6 +9,9 @@ import type { RecipientInfo } from '$lib/types/api';
 
 export const load: PageServerLoad = async (event) => {
 	const userId = Number(event.params.userId);
+	if (!userId) {
+		error(404, event.locals.t.common.notFound);
+	}
 	const db = event.locals.db;
 	const currentUser = event.locals.user;
 
