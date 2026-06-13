@@ -10,11 +10,11 @@ The discussion detail page currently only has PIN/UNPIN action buttons. Edit and
 
 ### 2.1 Action Button Visibility
 
-| Button     | OP                                | Reply                             |
-| ---------- | --------------------------------- | --------------------------------- |
-| **Pin**    | `canDelete` permission            | ❌ Not shown                      |
+| Button     | OP                                   | Reply                                |
+| ---------- | ------------------------------------ | ------------------------------------ |
+| **Pin**    | `canDelete` permission               | ❌ Not shown                         |
 | **Edit**   | `canUpdate` permission **or** author | `canUpdate` permission **or** author |
-| **Delete** | `canDelete` permission            | `canDelete` permission            |
+| **Delete** | `canDelete` permission               | `canDelete` permission               |
 
 - `canUpdate` and `canDelete` come from `resolvePermissions(db, categorySlug, user)`.
 - "Author" check: `user.id === reply.authorId` / `user.id === discussion.authorId`.
@@ -227,28 +227,28 @@ The Profile page (`/profile/[userId]/[userSlug]`) should have a rich-text editor
 
 ## 4. Files Touched
 
-| File                                                                        | Change                                                                                                           |
-| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `src/routes/discussion/[discussionId]/[slug]/[[page=page]]/+page.server.ts` | Add `canUpdate`, `user`, `canCreate` to load return; add `editReply`, `deleteReply`, `deleteDiscussion` actions  |
-| `src/routes/discussion/[discussionId]/[slug]/[[page=page]]/+page.svelte`    | OP action buttons; reply action buttons (Reply / Edit / Delete); inline edit; Quick Reply; ConfirmationModal      |
-| `src/routes/post/editDiscussion/[discussionId]/+page.server.ts`             | **New** — load + update action                                                                                   |
-| `src/routes/post/editDiscussion/[discussionId]/+page.svelte`                | **New** — edit page (reuses new-post page structure)                                                             |
-| `src/lib/components/organisms/LexicalEditor.svelte`                         | Add `insertText()` method, exposed to parent via `bind:this`                                                     |
+| File                                                                        | Change                                                                                                                            |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `src/routes/discussion/[discussionId]/[slug]/[[page=page]]/+page.server.ts` | Add `canUpdate`, `user`, `canCreate` to load return; add `editReply`, `deleteReply`, `deleteDiscussion` actions                   |
+| `src/routes/discussion/[discussionId]/[slug]/[[page=page]]/+page.svelte`    | OP action buttons; reply action buttons (Reply / Edit / Delete); inline edit; Quick Reply; ConfirmationModal                      |
+| `src/routes/post/editDiscussion/[discussionId]/+page.server.ts`             | **New** — load + update action                                                                                                    |
+| `src/routes/post/editDiscussion/[discussionId]/+page.svelte`                | **New** — edit page (reuses new-post page structure)                                                                              |
+| `src/lib/components/organisms/LexicalEditor.svelte`                         | Add `insertText()` method, exposed to parent via `bind:this`                                                                      |
 | `src/lib/components/organisms/ActivityRow.svelte`                           | Layout fix (timestamp moved to row 3); add `isTopLevel` prop; "Comment" text link; inline LexicalEditor replaces plain-text input |
-| `src/routes/profile/[userId]/[userSlug]/+page.svelte`                       | Change editor visibility from `user && !isOwner` to `user`; submit logic distinguishes isOwner (whether to pass recipientId) |
-| `src/lib/i18n/en.json`                                                      | Add discussion + activity related keys                                                                           |
-| `src/lib/i18n/zh-CN.json`                                                   | Add discussion + activity related keys                                                                           |
+| `src/routes/profile/[userId]/[userSlug]/+page.svelte`                       | Change editor visibility from `user && !isOwner` to `user`; submit logic distinguishes isOwner (whether to pass recipientId)      |
+| `src/lib/i18n/en.json`                                                      | Add discussion + activity related keys                                                                                            |
+| `src/lib/i18n/zh-CN.json`                                                   | Add discussion + activity related keys                                                                                            |
 
 ---
 
 ## 5. Existing Patterns to Reuse
 
-| Pattern                           | Source File                               | Usage                                                                                          |
-| --------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| ConfirmationModal                 | `ActivityRow.svelte`                      | OP delete, reply delete confirmation                                                           |
-| Inline edit (editor replaces renderer) | `PrivateMessageWindow.svelte`         | Reply inline edit                                                                              |
-| New-post page layout + form structure | `src/routes/post/discussion/+page.svelte` | Edit page template                                                                             |
-| `resolvePermissions`              | `src/lib/server/constants.ts`             | Permission checks                                                                              |
-| `enhance()` form actions          | Multiple existing locations               | Edit/delete submissions                                                                        |
-| Mention rendering pipeline        | `resolveMentions()` + `LexicalRenderer`   | `@username` plain text → chip rendering (already complete, Quick Reply reuses directly)        |
-| Activity comment submission       | `POST /api/activities/comments`           | Already implemented, ActivityRow inline editor reuses directly                                 |
+| Pattern                                | Source File                               | Usage                                                                                   |
+| -------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------- |
+| ConfirmationModal                      | `ActivityRow.svelte`                      | OP delete, reply delete confirmation                                                    |
+| Inline edit (editor replaces renderer) | `PrivateMessageWindow.svelte`             | Reply inline edit                                                                       |
+| New-post page layout + form structure  | `src/routes/post/discussion/+page.svelte` | Edit page template                                                                      |
+| `resolvePermissions`                   | `src/lib/server/constants.ts`             | Permission checks                                                                       |
+| `enhance()` form actions               | Multiple existing locations               | Edit/delete submissions                                                                 |
+| Mention rendering pipeline             | `resolveMentions()` + `LexicalRenderer`   | `@username` plain text → chip rendering (already complete, Quick Reply reuses directly) |
+| Activity comment submission            | `POST /api/activities/comments`           | Already implemented, ActivityRow inline editor reuses directly                          |
