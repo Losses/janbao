@@ -10,6 +10,7 @@ export const load: PageServerLoad = async (event) => {
 		redirect(302, '/entry/signin');
 	}
 
+	const isAdmin = user.groupSlug === 'admin';
 	const platformEnv = event.platform?.env;
 	const monthlyLimit = getMonthlyInvitationLimit(platformEnv);
 	const window = getTzMonthBoundaries(getForumTimezone(platformEnv));
@@ -23,6 +24,7 @@ export const load: PageServerLoad = async (event) => {
 		invitations,
 		monthlyLimit,
 		requestedThisMonth,
-		canRequestMore: requestedThisMonth < monthlyLimit
+		canRequestMore: isAdmin || requestedThisMonth < monthlyLimit,
+		isAdmin
 	};
 };

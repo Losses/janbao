@@ -5,7 +5,7 @@
 	import DateComponent from '$lib/components/atoms/Date.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
-	import { goto } from '$app/navigation';
+	import { invalidateAll } from '$app/navigation';
 	import type { InvitationItem, ApiResult, FeedbackMessage } from '$lib/types/api';
 	import type { PageData } from './$types';
 
@@ -26,7 +26,9 @@
 	const userSlug = $derived(generateSlug(user?.username || ''));
 	const remaining = $derived(Math.max(0, data.monthlyLimit - data.requestedThisMonth));
 	const allowanceText = $derived(
-		invitationT.thisMonthAllowance.replace('{count}', String(remaining))
+		data.isAdmin
+			? invitationT.adminUnlimited
+			: invitationT.thisMonthAllowance.replace('{count}', String(remaining))
 	);
 
 	function statusVariant(status: InvitationItem['status']): 'primary' | 'neutral' | 'warning' {
