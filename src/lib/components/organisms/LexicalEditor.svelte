@@ -44,6 +44,7 @@
 	import RichTextLinkEditor from '$lib/components/molecules/RichTextLinkEditor.svelte';
 	import { CodeNode, CodeHighlightNode } from '@lexical/code';
 	import { MentionNode, createMentionNode } from '$lib/components/atoms/MentionNode';
+	import MentionTypeaheadPlugin from '$lib/components/molecules/MentionTypeaheadPlugin.svelte';
 	import {
 		COMMAND_PRIORITY_EDITOR,
 		$getSelection as getSelection,
@@ -108,6 +109,8 @@
 		t?: TranslationDict | null;
 		/** Class override for container */
 		class?: string;
+		/** User IDs to exclude from @ mention suggestions */
+		excludeIds?: string[];
 	}
 
 	let {
@@ -120,7 +123,8 @@
 		disableImageUpload = false,
 		onContentChange,
 		t = null,
-		class: className = ''
+		class: className = '',
+		excludeIds = []
 	}: LexicalEditorProps = $props();
 
 	const tEditor = $derived((t?.editor ?? {}) as Record<string, string>);
@@ -460,6 +464,7 @@
 			<LinkPlugin {validateUrl} />
 			<AutoLinkPlugin />
 			<RichTextLinkEditor anchorElem={editorAreaElem} />
+			<MentionTypeaheadPlugin {excludeIds} />
 			<MarkdownShortcutPlugin transformers={markdownTransformers} />
 			<OnChangePlugin
 				ignoreHistoryMergeTagChange={true}

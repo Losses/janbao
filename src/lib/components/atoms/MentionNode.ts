@@ -7,17 +7,30 @@
  * createDOM() builds the element, decorate() returns null, skipDecorateRender = true.
  */
 import { DecoratorNode, $applyNodeReplacement } from 'lexical';
-import type { NodeKey, SerializedLexicalNode } from 'lexical';
-
-interface ExportDomResult {
-	element: HTMLElement;
-}
+import type {
+	NodeKey,
+	SerializedLexicalNode,
+	DOMConversionMap,
+	DOMConversionOutput,
+	DOMExportOutput
+} from 'lexical';
 
 interface SerializedMentionNode extends SerializedLexicalNode {
 	username: string;
 	displayName: string;
 	type: 'mention';
 	version: number;
+}
+
+/**
+ * Reconstructs a MentionNode from a pasted <span data-lexical-mention> element.
+ * Paired with exportDOM() below so copy/paste round-trips the full chip
+ * (username + displayName), not just plain text.
+ */
+function convertMentionElement(element: HTMLElement): DOMConversionOutput {
+	const username = element.getAttribute('data-lexical-username') ?? '';
+	const displayName = element.getAttribute('data-lexical-display-name') ?? '';
+	return { node: createMentionNode(username, displayName || username) };
 }
 
 export class MentionNode extends DecoratorNode<unknown> {
@@ -37,6 +50,23 @@ export class MentionNode extends DecoratorNode<unknown> {
 
 	static importJSON(serializedNode: SerializedMentionNode): MentionNode {
 		return createMentionNode(serializedNode.username, serializedNode.displayName);
+	}
+
+	/**
+	 * Match the spans produced by exportDOM() on paste and convert them back
+	 * into MentionNodes. Silences Lexical's "should implement importDOM"
+	 * warning when a custom exportDOM is present.
+	 */
+	static importDOM(): DOMConversionMap {
+		return {
+			span: (domNode: HTMLElement) => {
+				if (!domNode.hasAttribute('data-lexical-mention')) return null;
+				return {
+					conversion: convertMentionElement,
+					priority: 1
+				};
+			}
+		};
 	}
 
 	constructor(username: string, displayName: string, key?: NodeKey) {
@@ -67,9 +97,14 @@ export class MentionNode extends DecoratorNode<unknown> {
 		};
 	}
 
-	exportDOM(): ExportDomResult {
+	exportDOM(): DOMExportOutput {
 		const element = document.createElement('span');
-		element.textContent = `@${this.__username}`;
+		// Tag with data attributes so importDOM can reconstruct the chip on
+		// paste. Visible text mirrors the in-editor chip (@displayName).
+		element.setAttribute('data-lexical-mention', 'true');
+		element.setAttribute('data-lexical-username', this.__username);
+		element.setAttribute('data-lexical-display-name', this.__displayName);
+		element.textContent = `@${this.__displayName}`;
 		return { element };
 	}
 

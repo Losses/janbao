@@ -1,11 +1,8 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
-	import ParticipantAdder from '$lib/components/molecules/ParticipantAdder.svelte';
+	import MentionChipInput from '$lib/components/organisms/MentionChipInput.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
-	import Avatar from '$lib/components/atoms/Avatar.svelte';
-	import Icon from '$lib/components/atoms/Icon.svelte';
-	import { mdiClose } from '@mdi/js';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
 	import { goto } from '$app/navigation';
@@ -23,7 +20,6 @@
 	const user = $derived(data.user);
 	const userSlug = $derived(generateSlug(user?.username || ''));
 
-	// svelte-ignore state_referenced_locally
 	let recipients = $state<UserSearchResult[]>(data.prefillRecipient ? [data.prefillRecipient] : []);
 	let title = $state('');
 	let content = $state('');
@@ -32,13 +28,8 @@
 
 	const selectedIds = $derived(recipients.map((r) => r.id));
 
-	function addRecipient(u: UserSearchResult) {
-		if (recipients.some((r) => r.id === u.id)) return;
-		recipients = [...recipients, u];
-	}
-
-	function removeRecipient(id: string) {
-		recipients = recipients.filter((r) => r.id !== id);
+	function handleRecipientsChange(users: UserSearchResult[]) {
+		recipients = users;
 	}
 
 	async function send() {
@@ -92,39 +83,19 @@
 			<div class="alert alert-warning" role="alert">{errorMessage}</div>
 		{/if}
 
-		<div class="card bg-base-100 border border-base-200 rounded-xl p-5 space-y-4">
+		<div class="space-y-4">
 			<!-- Recipients -->
 			<div class="form-control">
 				<label class="label" for="recipients-input">
 					<span class="label-text font-medium">{messageT.recipients}</span>
 				</label>
-				{#if recipients.length > 0}
-					<div class="flex flex-wrap gap-2 mb-2">
-						{#each recipients as r (r.id)}
-							<div class="flex items-center gap-1.5 badge badge-lg badge-primary">
-								<Avatar
-									src={r.avatarFileId ? `/img/${r.avatarFileId}` : null}
-									displayName={r.displayName}
-									size="xs"
-								/>
-								<span class="text-xs">{r.displayName}</span>
-								<button
-									type="button"
-									class="ml-0.5 text-primary-content/80 hover:text-primary-content"
-									onclick={() => removeRecipient(r.id)}
-									aria-label="{messageT.removeRecipient} {r.displayName}"
-								>
-									<Icon path={mdiClose} size={0.8} />
-								</button>
-							</div>
-						{/each}
-					</div>
-				{/if}
 				<div id="recipients-input">
-					<ParticipantAdder
+					<MentionChipInput
 						placeholder={messageT.recipientPlaceholder}
 						excludeIds={selectedIds}
-						onSelect={addRecipient}
+						initialRecipients={data.prefillRecipient ? [data.prefillRecipient] : undefined}
+						onRecipientsChange={handleRecipientsChange}
+						disabled={sending}
 					/>
 				</div>
 			</div>
