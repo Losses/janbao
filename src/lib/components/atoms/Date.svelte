@@ -33,14 +33,14 @@
 			: ''
 	);
 
-	// Helper: build relative string using i18n keys with number prefix, degrading gracefully to English
+	// Helper: build relative string using i18n keys, degrading gracefully to English
 	function rel(n: number, singularKey: string, pluralKey: string): string {
 		const template = n === 1 ? tDate[singularKey] : tDate[pluralKey];
 		if (template) {
 			return `${n} ${template}`;
 		}
 		// Fallback to English if translation is missing:
-		const unitMap: Record<string, string> = {
+		const fallbackMap: Record<string, string> = {
 			yearAgo: 'year ago',
 			yearsAgo: 'years ago',
 			monthAgo: 'month ago',
@@ -50,14 +50,24 @@
 			hourAgo: 'hour ago',
 			hoursAgo: 'hours ago',
 			minuteAgo: 'minute ago',
-			minutesAgo: 'minutes ago'
+			minutesAgo: 'minutes ago',
+			yearLater: 'year later',
+			yearsLater: 'years later',
+			monthLater: 'month later',
+			monthsLater: 'months later',
+			dayLater: 'day later',
+			daysLater: 'days later',
+			hourLater: 'hour later',
+			hoursLater: 'hours later',
+			minuteLater: 'minute later',
+			minutesLater: 'minutes later'
 		};
 		const key = n === 1 ? singularKey : pluralKey;
-		const unit = unitMap[key] ?? key;
+		const unit = fallbackMap[key] ?? key;
 		return `${n} ${unit}`;
 	}
 
-	// Compute relative time string
+	// Compute relative time string (supports both past and future)
 	const relativeString = $derived.by(() => {
 		if (!isValid) return '';
 
@@ -65,22 +75,38 @@
 		const then = dateObj.getTime();
 		const diffMs = now - then;
 
-		// Handle future dates (client clock skew) as "just now"
-		if (diffMs < 0) return tDate['justNow'] ?? 'just now';
+		if (diffMs >= 0) {
+			// Past dates
+			const seconds = Math.floor(diffMs / 1000);
+			const minutes = Math.floor(seconds / 60);
+			const hours = Math.floor(minutes / 60);
+			const days = Math.floor(hours / 24);
+			const months = Math.floor(days / 30);
+			const years = Math.floor(days / 365);
 
-		const seconds = Math.floor(diffMs / 1000);
-		const minutes = Math.floor(seconds / 60);
-		const hours = Math.floor(minutes / 60);
-		const days = Math.floor(hours / 24);
-		const months = Math.floor(days / 30);
-		const years = Math.floor(days / 365);
+			if (years > 0) return rel(years, 'yearAgo', 'yearsAgo');
+			if (months > 0) return rel(months, 'monthAgo', 'monthsAgo');
+			if (days > 0) return rel(days, 'dayAgo', 'daysAgo');
+			if (hours > 0) return rel(hours, 'hourAgo', 'hoursAgo');
+			if (minutes > 0) return rel(minutes, 'minuteAgo', 'minutesAgo');
+			return tDate['justNow'] ?? 'just now';
+		} else {
+			// Future dates
+			const absDiff = Math.abs(diffMs);
+			const seconds = Math.floor(absDiff / 1000);
+			const minutes = Math.floor(seconds / 60);
+			const hours = Math.floor(minutes / 60);
+			const days = Math.floor(hours / 24);
+			const months = Math.floor(days / 30);
+			const years = Math.floor(days / 365);
 
-		if (years > 0) return rel(years, 'yearAgo', 'yearsAgo');
-		if (months > 0) return rel(months, 'monthAgo', 'monthsAgo');
-		if (days > 0) return rel(days, 'dayAgo', 'daysAgo');
-		if (hours > 0) return rel(hours, 'hourAgo', 'hoursAgo');
-		if (minutes > 0) return rel(minutes, 'minuteAgo', 'minutesAgo');
-		return tDate['justNow'] ?? 'just now';
+			if (years > 0) return rel(years, 'yearLater', 'yearsLater');
+			if (months > 0) return rel(months, 'monthLater', 'monthsLater');
+			if (days > 0) return rel(days, 'dayLater', 'daysLater');
+			if (hours > 0) return rel(hours, 'hourLater', 'hoursLater');
+			if (minutes > 0) return rel(minutes, 'minuteLater', 'minutesLater');
+			return tDate['justNow'] ?? 'just now';
+		}
 	});
 </script>
 

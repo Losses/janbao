@@ -126,7 +126,17 @@
 		"monthAgo": "个月前",
 		"monthsAgo": "个月前",
 		"yearAgo": "年前",
-		"yearsAgo": "年前"
+		"yearsAgo": "年前",
+		"minuteLater": "分钟后",
+		"minutesLater": "分钟后",
+		"hourLater": "小时后",
+		"hoursLater": "小时后",
+		"dayLater": "天后",
+		"daysLater": "天后",
+		"monthLater": "个月后",
+		"monthsLater": "个月后",
+		"yearLater": "年后",
+		"yearsLater": "年后"
 	},
 	"activity": {
 		"parentIdRequired": "缺少父级动态ID",
@@ -306,7 +316,8 @@
 		"statusUnused": "未使用",
 		"statusExpired": "已过期",
 		"monthlyLimitExceeded": "本月邀请码申请次数已达上限",
-		"noInvitations": "你还没有邀请码"
+		"noInvitations": "你还没有邀请码",
+		"adminUnlimited": "作为管理员，你可以无限制地生成邀请码。"
 	},
 	"notification": {
 		"title": "通知",
