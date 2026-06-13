@@ -312,7 +312,16 @@ export const actions: Actions = {
 			authorId: user.id
 		});
 
-		return { success: true, messageId };
+		// Calculate which page the new message lands on
+		const newTotalRes = await db
+			.select({ value: count() })
+			.from(messages)
+			.where(eq(messages.conversationId, conversationId));
+		const newTotal = newTotalRes[0]?.value ?? 1;
+		const limit = getPaginationLimit(undefined) || MESSAGE_PAGE_FALLBACK;
+		const messagePage = Math.max(1, Math.ceil(newTotal / limit));
+
+		return { success: true, messageId, page: messagePage };
 	},
 
 	// Edit a message authored by the active user. PMs can be edited but never

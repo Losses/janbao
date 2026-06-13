@@ -1,5 +1,5 @@
-import { userGroups, users } from './schema';
-import { eq, ne } from 'drizzle-orm';
+import { userGroups, users, categories, categoryPermissions } from './schema';
+import { eq, ne, and } from 'drizzle-orm';
 import type { D1Db } from './index';
 import { SYSTEM_USER_ID } from '../constants';
 import { env as svelteEnv } from '$env/dynamic/private';
@@ -79,7 +79,51 @@ export async function seedCore(db: D1Db, env?: App.Platform['env']) {
 			});
 		}
 
-		// 3. Bootstrap admin user from environment variables if no real users exist
+		// 3. Seed default categories
+		const categoriesToSeed = [
+			{
+				slug: 'general',
+				title: 'General',
+				description: 'A place for everything and anything',
+				priority: 1,
+				displayOrder: 1
+			}
+		];
+
+		for (const cat of categoriesToSeed) {
+			const existing = await db
+				.select()
+				.from(categories)
+				.where(eq(categories.slug, cat.slug))
+				.limit(1);
+			if (existing.length === 0) {
+				await db.insert(categories).values(cat);
+			}
+		}
+
+		// Seed category permissions: guests cannot read "general"
+		const guestGeneralPerm = await db
+			.select()
+			.from(categoryPermissions)
+			.where(
+				and(
+					eq(categoryPermissions.categorySlug, 'general'),
+					eq(categoryPermissions.groupSlug, 'guest')
+				)
+			)
+			.limit(1);
+		if (guestGeneralPerm.length === 0) {
+			await db.insert(categoryPermissions).values({
+				categorySlug: 'general',
+				groupSlug: 'guest',
+				canRead: false,
+				canCreate: false,
+				canUpdate: false,
+				canDelete: false
+			});
+		}
+
+		// 4. Bootstrap admin user from environment variables if no real users exist
 		const adminEmail = env?.ADMIN_EMAIL || svelteEnv.ADMIN_EMAIL;
 		const adminPassword = env?.ADMIN_PASSWORD || svelteEnv.ADMIN_PASSWORD;
 		if (adminEmail && adminPassword) {

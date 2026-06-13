@@ -375,7 +375,7 @@
 </script>
 
 <div
-	class="janbao-rich-editor relative rounded-lg border border-base-300 bg-base-100 shadow-xs focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all duration-200 {className}"
+	class="janbao-rich-editor relative rounded-lg border border-base-300 bg-base-100 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all duration-200 {className}"
 >
 	<Composer {initialConfig}>
 		<div class={disabled ? 'opacity-60 pointer-events-none' : ''}>

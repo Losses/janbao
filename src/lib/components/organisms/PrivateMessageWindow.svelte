@@ -11,6 +11,7 @@
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import { generateSlug } from '$lib/utils/slug';
 	import { enhance } from '$app/forms';
+	import { goto } from '$app/navigation';
 	import { mdiPencilOutline } from '@mdi/js';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import type { TranslationDict } from '$lib/types/translation';
@@ -48,6 +49,7 @@
 
 	let composeContent = $state('');
 	let isPosting = $state(false);
+	let editorKey = $state(0);
 
 	// Inline edit state - only one message edited at a time
 	let editingMessageId = $state<string | null>(null);
@@ -176,27 +178,36 @@
 				action="?/post"
 				use:enhance={() => {
 					isPosting = true;
-					return async ({ result, update }) => {
+					return async ({ result }) => {
 						isPosting = false;
 						if (result.type === 'success') {
 							composeContent = '';
-							update();
-						} else if (result.type === 'failure') {
-							update();
+							editorKey++;
+							const data = result.data as { page?: number } | null;
+							const page = data?.page;
+							if (page) {
+								const url =
+									page <= 1
+										? `/messages/${conversationId}`
+										: `/messages/${conversationId}/p${page}`;
+								goto(url);
+							}
 						}
 					};
 				}}
 				class="space-y-3"
 			>
-				<LexicalEditor
-					contextType="message"
-					contextId={conversationId}
-					initialContent={messageDraft}
-					placeholder={editorT['placeholderMessage'] ?? messageT['content'] ?? ''}
-					disableImageUpload={true}
-					onContentChange={(json) => (composeContent = json)}
-					{t}
-				/>
+				{#key editorKey}
+					<LexicalEditor
+						contextType="message"
+						contextId={conversationId}
+						initialContent={editorKey === 0 ? messageDraft : null}
+						placeholder={editorT['placeholderMessage'] ?? messageT['content'] ?? ''}
+						disableImageUpload={true}
+						onContentChange={(json) => (composeContent = json)}
+						{t}
+					/>
+				{/key}
 				<div class="flex justify-end">
 					<input type="hidden" name="contentJson" value={composeContent} />
 					<button

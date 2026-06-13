@@ -1,10 +1,11 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
+	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import ActivityRow from '$lib/components/organisms/ActivityRow.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
 	import { formatTitle } from '$lib/utils/title';
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -21,6 +22,7 @@
 
 	let editorContent = $state('');
 	let submitting = $state(false);
+	let editorKey = $state(0);
 
 	function handlePageChange(newPage: number) {
 		goto(`?page=${newPage}`);
@@ -41,7 +43,8 @@
 			});
 			if (res.ok) {
 				editorContent = '';
-				goto(window.location.pathname);
+				editorKey++;
+				await invalidateAll();
 			}
 		} catch {
 			// Silently fail
@@ -55,19 +58,29 @@
 </svelte:head>
 
 <DualColumnLayout {user} {t}>
+	{#snippet sidebar()}
+		{#if user}
+			<div class="card bg-base-200 border border-base-300 p-4">
+				<UserInfoBlock {user} {t} />
+			</div>
+		{/if}
+	{/snippet}
+
 	<div class="space-y-6">
 		<!-- Activity Composer -->
 		{#if user}
-			<div class="card bg-base-100 border border-base-200 rounded-xl p-4 shadow-sm">
-				<LexicalEditor
-					initialContent={data.activityDraft}
-					placeholder={t.editor.placeholderActivity}
-					contextType="activity"
-					contextId="new"
-					{t}
-					disableHeadings={true}
-					onContentChange={handleEditorChange}
-				/>
+			<div class="card bg-base-100 border border-base-200 rounded-xl p-4">
+				{#key editorKey}
+					<LexicalEditor
+						initialContent={editorKey === 0 ? data.activityDraft : null}
+						placeholder={t.editor.placeholderActivity}
+						contextType="activity"
+						contextId="new"
+						{t}
+						disableHeadings={true}
+						onContentChange={handleEditorChange}
+					/>
+				{/key}
 				<div class="flex justify-end mt-3">
 					<button
 						class="btn btn-primary btn-sm"

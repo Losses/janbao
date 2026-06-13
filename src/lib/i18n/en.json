@@ -211,13 +211,17 @@
 		"alreadyExists": "Username or email already exists",
 		"replies": "Replies",
 		"signInToReply": "Please sign in to reply.",
-		"sticky": "Sticky",
-		"unsticky": "Unsticky"
+		"pin": "Pin",
+		"unpin": "Unpin"
 	},
 	"category": {
 		"notFound": "Category not found",
 		"subscribeRss": "Subscribe to RSS Feed",
-		"total": "Total"
+		"total": "Total",
+		"general": {
+			"title": "General",
+			"description": "A place for everything and anything"
+		}
 	},
 	"draft": {
 		"invalidBody": "Invalid request body",
