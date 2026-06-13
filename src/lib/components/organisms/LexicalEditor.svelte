@@ -436,7 +436,7 @@
 </script>
 
 <div
-	class="janbao-rich-editor relative rounded-lg border border-base-300 bg-base-100 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all duration-200 {className}"
+	class="janbao-rich-editor relative border border-base-300 bg-base-100 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all duration-200 {className}"
 >
 	<Composer {initialConfig}>
 		<div class={disabled ? 'opacity-60 pointer-events-none' : ''}>
@@ -480,7 +480,7 @@
 	<!-- Save Status Footer -->
 	{#if saveStatusLabel}
 		<div
-			class="border-t border-base-300 px-3 py-1 text-right text-xs text-base-content/40 bg-base-200 rounded-b-lg"
+			class="janbao-rich-editor-footer border-t border-base-300 px-3 py-1 text-right text-xs text-base-content/40 bg-base-200"
 		>
 			{saveStatusLabel}
 		</div>
@@ -489,10 +489,36 @@
 	<!-- Visual loading overlay to prevent editor unmounting and data loss -->
 	{#if disabled}
 		<div
-			class="absolute inset-0 z-40 flex items-center justify-center bg-base-100/50 backdrop-blur-[1px] rounded-lg"
+			class="janbao-rich-editor-overlay absolute inset-0 z-40 flex items-center justify-center bg-base-100/50 backdrop-blur-[1px]"
 		>
 			<span class="loading loading-spinner loading-sm text-primary"></span>
 			<span class="ml-2 text-sm text-base-content/60">{tEditor['loading'] ?? 'Loading...'}</span>
 		</div>
 	{/if}
 </div>
+
+<style>
+	.janbao-rich-editor {
+		border-radius: var(--radius-field, 0.5rem);
+	}
+
+	/* Prevent children backgrounds from bleeding over rounded corners */
+	.janbao-rich-editor :global(.rounded-t-lg) {
+		border-top-left-radius: max(0px, calc(var(--radius-field, 0.5rem) - 1px));
+		border-top-right-radius: max(0px, calc(var(--radius-field, 0.5rem) - 1px));
+	}
+
+	.janbao-rich-editor :global(.ContentEditable__root) {
+		border-bottom-left-radius: max(0px, calc(var(--radius-field, 0.5rem) - 1px));
+		border-bottom-right-radius: max(0px, calc(var(--radius-field, 0.5rem) - 1px));
+	}
+
+	.janbao-rich-editor-footer {
+		border-bottom-left-radius: max(0px, calc(var(--radius-field, 0.5rem) - 1px));
+		border-bottom-right-radius: max(0px, calc(var(--radius-field, 0.5rem) - 1px));
+	}
+
+	.janbao-rich-editor-overlay {
+		border-radius: max(0px, calc(var(--radius-field, 0.5rem) - 1px));
+	}
+</style>
