@@ -1,8 +1,9 @@
 import type { RequestHandler } from './$types';
-import { categories, categoryPermissions, discussions, users } from '$lib/server/db/schema';
+import { categories, discussions, users } from '$lib/server/db/schema';
 import { and, eq, isNull, desc } from 'drizzle-orm';
 import { formatTitle } from '$lib/utils/title';
 import { XMLBuilder } from 'fast-xml-parser';
+import { resolvePermissions } from '$lib/server/constants';
 
 export const GET: RequestHandler = async (event) => {
 	const { categorySlug } = event.params;
@@ -34,19 +35,8 @@ export const GET: RequestHandler = async (event) => {
 	const category = categoryRecords[0];
 
 	// Check if user's group can read this category
-	const permRecords = await db
-		.select()
-		.from(categoryPermissions)
-		.where(
-			and(
-				eq(categoryPermissions.categorySlug, categorySlug),
-				eq(categoryPermissions.groupSlug, user.groupSlug)
-			)
-		)
-		.limit(1);
-
-	const canRead = permRecords.length === 0 ? true : permRecords[0].canRead;
-	if (!canRead) {
+	const perms = await resolvePermissions(db, categorySlug, user);
+	if (!perms.canRead) {
 		return new Response(t.common.forbidden, { status: 403 });
 	}
 
