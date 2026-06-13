@@ -1,15 +1,11 @@
 <script lang="ts">
 	/**
 	 * CategoryListWidget Molecule - Displays a vertical navigation list of
-	 * categories. Fetches /api/categories on mount. Rendered in forum route
-	 * sidebars per RQ00-Frontend §3.3.1.
+	 * categories. Uses a module-level store so data persists across page
+	 * navigations — no skeleton flash on subsequent visits.
 	 */
 	import type { TranslationDict } from '$lib/types/translation';
-
-	interface CategoryItem {
-		slug: string;
-		title: string;
-	}
+	import { getCategoryStore } from '$lib/stores/categories.svelte';
 
 	interface CategoryListWidgetProps {
 		t: TranslationDict;
@@ -19,41 +15,27 @@
 
 	let { t, activeSlug }: CategoryListWidgetProps = $props();
 
-	let categories = $state<CategoryItem[]>([]);
-	let loaded = $state(false);
-
+	const store = getCategoryStore();
 	const title = $derived(t.sidebar.categoryList);
 
 	$effect(() => {
-		void fetchCategories();
+		void store.fetchIfNeeded();
 	});
-
-	async function fetchCategories() {
-		try {
-			const res = await fetch('/api/categories');
-			if (res.ok) {
-				categories = (await res.json()) as CategoryItem[];
-			}
-		} catch {
-			// Silently fail - the widget is non-critical
-		}
-		loaded = true;
-	}
 </script>
 
 <div class="space-y-3">
 	<h3 class="text-sm font-semibold text-base-content/70">{title}</h3>
-	{#if !loaded}
+	{#if !store.loaded}
 		<div class="space-y-2">
 			{#each [0, 1, 2, 3] as i (i)}
 				<div class="skeleton h-5 w-full rounded"></div>
 			{/each}
 		</div>
-	{:else if categories.length === 0}
+	{:else if store.categories.length === 0}
 		<div class="h-4"></div>
 	{:else}
 		<nav class="flex flex-col gap-1">
-			{#each categories as cat (cat.slug)}
+			{#each store.categories as cat (cat.slug)}
 				<a
 					href="/category/{cat.slug}"
 					class="text-sm px-2 py-1.5 rounded transition-colors {activeSlug === cat.slug

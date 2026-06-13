@@ -69,7 +69,7 @@
 	<div class="space-y-6">
 		<!-- Activity Composer -->
 		{#if user}
-			<div class="card bg-base-100 border border-base-200 rounded-xl p-4">
+			<div class="space-y-3">
 				{#key editorKey}
 					<LexicalEditor
 						initialContent={editorKey === 0 ? data.activityDraft : null}
@@ -102,13 +102,13 @@
 		<!-- Activities Stream -->
 		{#if activityList.length === 0}
 			<div
-				class="card bg-base-200/40 border border-base-200 p-10 text-center text-base-content/50 rounded-xl"
+				class="p-10 text-center text-base-content/50"
 			>
 				{t.common.noResults}
 			</div>
 		{:else}
 			<div
-				class="card bg-base-100 border border-base-200 rounded-xl overflow-hidden shadow-sm px-4"
+				class="space-y-0"
 			>
 				{#each activityList as activity (activity.id)}
 					<ActivityRow

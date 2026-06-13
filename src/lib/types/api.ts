@@ -2,6 +2,20 @@ import type { CookieSerializeOptions } from 'cookie';
 
 // --- Shared Component Types ---
 
+/** Category item used by CategoryListWidget and sidebar store. */
+export interface CategoryItem {
+	slug: string;
+	title: string;
+}
+
+/** Online user item used by ActiveUsersWall and active-users store. */
+export interface OnlineUser {
+	id: string;
+	username: string;
+	displayName: string;
+	avatarFileId: string | null;
+}
+
 /** Minimal user identity used by Header, sidebars, and user-facing molecules. */
 export interface UserInfoSummary {
 	id: string;
