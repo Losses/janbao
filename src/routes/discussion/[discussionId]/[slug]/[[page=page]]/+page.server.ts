@@ -13,6 +13,7 @@ import { eq, and, isNull, count, ne, sql } from 'drizzle-orm';
 import { getPaginationLimit, resolvePermissions } from '$lib/server/constants';
 import { dispatchReplyNotifications } from '$lib/server/db/notifications';
 import { resolveMentions } from '$lib/server/utils/mentions';
+import type { DbTransaction } from '$lib/server/db';
 
 export const load: PageServerLoad = async (event) => {
 	const { discussionId, slug } = event.params;
@@ -53,7 +54,11 @@ export const load: PageServerLoad = async (event) => {
 
 	// Canonical slug redirect if slug in URL is mismatch
 	if (discussion.slug !== slug) {
-		redirect(302, `/discussion/${discussionId}/${discussion.slug}`);
+		const pageParam = event.params.page;
+		redirect(
+			302,
+			`/discussion/${discussionId}/${discussion.slug}${pageParam ? '/' + pageParam : ''}`
+		);
 	}
 
 	// 2. Check read permissions for this category (guest-safe via resolvePermissions)
@@ -100,16 +105,15 @@ export const load: PageServerLoad = async (event) => {
 	// 5. Fetch total count of replies excluding the OP
 	let totalRepliesCount = 0;
 	if (opReply) {
+		const replyFilters = [eq(replies.discussionId, discussionId), isNull(replies.deletedAt)];
+		if (opReply.id) {
+			replyFilters.push(ne(replies.id, opReply.id));
+		}
+
 		const totalRes = await db
 			.select({ count: count() })
 			.from(replies)
-			.where(
-				and(
-					eq(replies.discussionId, discussionId),
-					isNull(replies.deletedAt),
-					ne(replies.id, opReply.id)
-				)
-			);
+			.where(and(...replyFilters));
 		totalRepliesCount = totalRes[0]?.count || 0;
 	}
 
@@ -225,12 +229,15 @@ export const load: PageServerLoad = async (event) => {
 		theme: resolvedTheme,
 		replyDraft,
 		canDelete,
+		canUpdate: perms.canUpdate,
+		canCreate: perms.canCreate,
+		user,
 		mentionedUsers
 	};
 };
 
 export const actions: Actions = {
-	reply: async ({ request, locals, params }) => {
+	reply: async ({ request, locals, params, platform }) => {
 		const user = locals.user;
 		if (!user) {
 			error(401, locals.t.common.unauthorized);
@@ -268,36 +275,41 @@ export const actions: Actions = {
 			return { success: false, error: locals.t.discussion.replyEmpty };
 		}
 
-		// Insert the reply
+		// Insert the reply, update discussion stats, and clear draft in a transaction
 		const replyId = crypto.randomUUID();
-		await db.insert(replies).values({
-			id: replyId,
-			discussionId,
-			authorId: user.id,
-			contentJson,
-			createdAt: new Date(),
-			updatedAt: new Date()
-		});
+		try {
+			await db.transaction(async (tx: DbTransaction) => {
+				await tx.insert(replies).values({
+					id: replyId,
+					discussionId,
+					authorId: user.id,
+					contentJson,
+					createdAt: new Date(),
+					updatedAt: new Date()
+				});
 
-		// Update discussion commentCount and updatedAt timestamp
-		await db
-			.update(discussions)
-			.set({
-				commentCount: sql`${discussions.commentCount} + 1`,
-				updatedAt: new Date()
-			})
-			.where(eq(discussions.id, discussionId));
+				await tx
+					.update(discussions)
+					.set({
+						commentCount: sql`${discussions.commentCount} + 1`,
+						updatedAt: new Date()
+					})
+					.where(eq(discussions.id, discussionId));
 
-		// Clear the draft from DB
-		await db
-			.delete(drafts)
-			.where(
-				and(
-					eq(drafts.authorId, user.id),
-					eq(drafts.contextType, 'reply'),
-					eq(drafts.contextId, discussionId)
-				)
-			);
+				await tx
+					.delete(drafts)
+					.where(
+						and(
+							eq(drafts.authorId, user.id),
+							eq(drafts.contextType, 'reply'),
+							eq(drafts.contextId, discussionId)
+						)
+					);
+			});
+		} catch (err) {
+			console.error('Failed to create reply:', err);
+			error(500, locals.t.common.internalError);
+		}
 
 		// Dispatch notifications (mentions, owner, participants, bookmarkers)
 		await dispatchReplyNotifications(db, {
@@ -316,18 +328,17 @@ export const actions: Actions = {
 			.limit(1);
 		const opId = opRecord.length > 0 ? opRecord[0].id : null;
 
+		const countConditions = [eq(replies.discussionId, discussionId), isNull(replies.deletedAt)];
+		if (opId) {
+			countConditions.push(ne(replies.id, opId));
+		}
+
 		const newCountRes = await db
 			.select({ value: count() })
 			.from(replies)
-			.where(
-				and(
-					eq(replies.discussionId, discussionId),
-					isNull(replies.deletedAt),
-					opId ? ne(replies.id, opId) : undefined
-				)
-			);
+			.where(and(...countConditions));
 		const newCount = newCountRes[0]?.value ?? 1;
-		const limit = getPaginationLimit(undefined);
+		const limit = getPaginationLimit(platform?.env);
 		const replyPage = Math.max(1, Math.ceil(newCount / limit));
 
 		return { success: true, replyId, page: replyPage };
@@ -374,5 +385,187 @@ export const actions: Actions = {
 			.where(eq(discussions.id, discussionId));
 
 		return { success: true, isPinned: !isPinned };
+	},
+
+	editReply: async ({ request, locals }) => {
+		const user = locals.user;
+		if (!user) {
+			error(401, locals.t.common.unauthorized);
+		}
+
+		const db = locals.db;
+		const data = await request.formData();
+		const replyId = data.get('replyId') as string;
+		const contentJson = data.get('contentJson') as string;
+
+		if (!replyId || !contentJson) {
+			error(400, locals.t.common.badRequest);
+		}
+
+		// Fetch reply and associated discussion categorySlug to check permissions
+		const replyRecords = await db
+			.select({
+				id: replies.id,
+				authorId: replies.authorId,
+				discussionId: replies.discussionId,
+				categorySlug: discussions.categorySlug
+			})
+			.from(replies)
+			.innerJoin(discussions, eq(replies.discussionId, discussions.id))
+			.where(and(eq(replies.id, replyId), isNull(replies.deletedAt), isNull(discussions.deletedAt)))
+			.limit(1);
+
+		if (replyRecords.length === 0) {
+			error(404, locals.t.common.notFound);
+		}
+		const replyRecord = replyRecords[0];
+
+		// Check permissions: canUpdate permission or author
+		const perms = await resolvePermissions(db, replyRecord.categorySlug, user);
+		const isAuthor = user.id === replyRecord.authorId;
+		if (!perms.canUpdate && !isAuthor) {
+			error(403, locals.t.common.forbidden);
+		}
+
+		// Verify the reply is not the OP (earliest reply)
+		const opRecord = await db
+			.select({ id: replies.id })
+			.from(replies)
+			.where(and(eq(replies.discussionId, replyRecord.discussionId), isNull(replies.deletedAt)))
+			.orderBy(replies.createdAt)
+			.limit(1);
+
+		if (opRecord.length > 0 && opRecord[0].id === replyId) {
+			error(400, locals.t.common.badRequest);
+		}
+
+		// Update reply
+		await db
+			.update(replies)
+			.set({
+				contentJson,
+				updatedAt: new Date()
+			})
+			.where(eq(replies.id, replyId));
+
+		return { success: true };
+	},
+
+	deleteReply: async ({ request, locals }) => {
+		const user = locals.user;
+		if (!user) {
+			error(401, locals.t.common.unauthorized);
+		}
+
+		const db = locals.db;
+		const data = await request.formData();
+		const replyId = data.get('replyId') as string;
+
+		if (!replyId) {
+			error(400, locals.t.common.badRequest);
+		}
+
+		// Fetch reply and associated discussion categorySlug to check permissions
+		const replyRecords = await db
+			.select({
+				id: replies.id,
+				discussionId: replies.discussionId,
+				categorySlug: discussions.categorySlug
+			})
+			.from(replies)
+			.innerJoin(discussions, eq(replies.discussionId, discussions.id))
+			.where(and(eq(replies.id, replyId), isNull(replies.deletedAt), isNull(discussions.deletedAt)))
+			.limit(1);
+
+		if (replyRecords.length === 0) {
+			error(404, locals.t.common.notFound);
+		}
+		const replyRecord = replyRecords[0];
+
+		// Check permissions: canDelete
+		const perms = await resolvePermissions(db, replyRecord.categorySlug, user);
+		if (!perms.canDelete) {
+			error(403, locals.t.common.forbidden);
+		}
+
+		// Verify the reply is not the OP (earliest reply)
+		const opRecord = await db
+			.select({ id: replies.id })
+			.from(replies)
+			.where(and(eq(replies.discussionId, replyRecord.discussionId), isNull(replies.deletedAt)))
+			.orderBy(replies.createdAt)
+			.limit(1);
+
+		if (opRecord.length > 0 && opRecord[0].id === replyId) {
+			error(400, locals.t.common.badRequest);
+		}
+
+		try {
+			await db.transaction(async (tx: DbTransaction) => {
+				await tx
+					.update(replies)
+					.set({
+						deletedAt: new Date()
+					})
+					.where(eq(replies.id, replyId));
+
+				await tx
+					.update(discussions)
+					.set({
+						commentCount: sql`${discussions.commentCount} - 1`,
+						updatedAt: new Date()
+					})
+					.where(eq(discussions.id, replyRecord.discussionId));
+			});
+		} catch (err) {
+			console.error('Failed to delete reply:', err);
+			error(500, locals.t.common.internalError);
+		}
+
+		return { success: true };
+	},
+
+	deleteDiscussion: async ({ locals, params }) => {
+		const user = locals.user;
+		if (!user) {
+			error(401, locals.t.common.unauthorized);
+		}
+
+		const db = locals.db;
+		const { discussionId } = params;
+		if (!discussionId) {
+			error(400, locals.t.common.badRequest);
+		}
+
+		// Fetch discussion categorySlug
+		const discussionRecords = await db
+			.select({
+				categorySlug: discussions.categorySlug
+			})
+			.from(discussions)
+			.where(and(eq(discussions.id, discussionId), isNull(discussions.deletedAt)))
+			.limit(1);
+
+		if (discussionRecords.length === 0) {
+			error(404, locals.t.discussion.notFound);
+		}
+		const { categorySlug } = discussionRecords[0];
+
+		// Check permissions: canDelete
+		const perms = await resolvePermissions(db, categorySlug, user);
+		if (!perms.canDelete) {
+			error(403, locals.t.common.forbidden);
+		}
+
+		// Soft delete discussion
+		await db
+			.update(discussions)
+			.set({
+				deletedAt: new Date(),
+				updatedAt: new Date()
+			})
+			.where(eq(discussions.id, discussionId));
+
+		redirect(303, '/');
 	}
 };
