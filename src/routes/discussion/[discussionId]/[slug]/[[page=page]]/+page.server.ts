@@ -14,6 +14,7 @@ import { getPaginationLimit, resolvePermissions } from '$lib/server/constants';
 import { dispatchReplyNotifications } from '$lib/server/db/notifications';
 import { resolveMentions } from '$lib/server/utils/mentions';
 import type { DbTransaction } from '$lib/server/db';
+import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 
 export const load: PageServerLoad = async (event) => {
 	const { discussionId, slug } = event.params;
@@ -271,8 +272,11 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const contentJson = data.get('contentJson') as string;
 
-		if (!contentJson) {
+		if (isLexicalEmpty(contentJson)) {
 			return { success: false, error: locals.t.discussion.replyEmpty };
+		}
+		if (contentJson.length > MAX_CONTENT_SIZE) {
+			return { success: false, error: locals.t.common.contentTooLarge };
 		}
 
 		// Insert the reply, update discussion stats, and clear draft in a transaction
@@ -398,8 +402,11 @@ export const actions: Actions = {
 		const replyId = data.get('replyId') as string;
 		const contentJson = data.get('contentJson') as string;
 
-		if (!replyId || !contentJson) {
+		if (!replyId || isLexicalEmpty(contentJson)) {
 			error(400, locals.t.common.badRequest);
+		}
+		if (contentJson.length > MAX_CONTENT_SIZE) {
+			error(400, locals.t.common.contentTooLarge);
 		}
 
 		// Fetch reply and associated discussion categorySlug to check permissions

@@ -12,8 +12,8 @@ import { eq, inArray, and } from 'drizzle-orm';
 import type { DbTransaction } from '$lib/server/db';
 import type { RequestHandler } from './$types';
 import type { MessageCreateBody } from '$lib/types/api';
+import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 
-const MAX_CONTENT_SIZE = 512 * 1024;
 const MAX_RECIPIENTS = 20;
 
 // POST /api/messages - Create a new private conversation with an initial
@@ -41,7 +41,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!title) {
 		return jsonError(t, 'message.titleRequired', 400);
 	}
-	if (!contentJson) {
+	if (isLexicalEmpty(contentJson)) {
 		return jsonError(t, 'common.contentRequired', 400);
 	}
 	if (recipientIds.length === 0) {

@@ -6,6 +6,7 @@
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
+	import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 	import { goto } from '$app/navigation';
 	import type { UserSearchResult, ApiResult } from '$lib/types/api';
 	import type { PageData } from './$types';
@@ -31,6 +32,12 @@
 	let sending = $state(false);
 	let errorMessage = $state<string | null>(null);
 
+	$effect(() => {
+		if (data.messageDraft) {
+			content = data.messageDraft;
+		}
+	});
+
 	const selectedIds = $derived(recipients.map((r) => r.id));
 
 	function handleRecipientsChange(users: UserSearchResult[]) {
@@ -38,7 +45,13 @@
 	}
 
 	async function send() {
-		if (recipients.length === 0 || !title.trim() || !content.trim()) return;
+		if (
+			recipients.length === 0 ||
+			!title.trim() ||
+			isLexicalEmpty(content) ||
+			content.length > MAX_CONTENT_SIZE
+		)
+			return;
 		sending = true;
 		errorMessage = null;
 		try {
@@ -124,15 +137,17 @@
 					<span class="label-text font-medium">{messageT.content}</span>
 				</label>
 				<div id="content-editor">
-					<LexicalEditor
-						contextType="message"
-						contextId="new"
-						initialContent={data.messageDraft}
-						placeholder=""
-						disableImageUpload={true}
-						onContentChange={(json) => (content = json)}
-						{t}
-					/>
+					{#key data.messageDraft}
+						<LexicalEditor
+							contextType="message"
+							contextId="new"
+							initialContent={data.messageDraft}
+							placeholder=""
+							disableImageUpload={true}
+							onContentChange={(json) => (content = json)}
+							{t}
+						/>
+					{/key}
 				</div>
 			</div>
 
@@ -140,7 +155,11 @@
 				<button
 					class="btn btn-primary"
 					onclick={send}
-					disabled={sending || recipients.length === 0 || !title.trim() || !content.trim()}
+					disabled={sending ||
+						recipients.length === 0 ||
+						!title.trim() ||
+						isLexicalEmpty(content) ||
+						content.length > MAX_CONTENT_SIZE}
 				>
 					{#if sending}
 						<span class="loading loading-spinner loading-xs"></span>

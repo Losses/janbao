@@ -11,6 +11,7 @@ import {
 import { eq, and, isNull, count } from 'drizzle-orm';
 import { getPaginationLimit } from '$lib/server/constants';
 import { resolveMentions } from '$lib/server/utils/mentions';
+import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 
 const MESSAGE_PAGE_FALLBACK = 50;
 
@@ -247,10 +248,10 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const contentJson = (data.get('contentJson') as string | null) || '';
 
-		if (!contentJson) {
+		if (isLexicalEmpty(contentJson)) {
 			return { success: false, error: t.common.contentRequired };
 		}
-		if (contentJson.length > 512 * 1024) {
+		if (contentJson.length > MAX_CONTENT_SIZE) {
 			return { success: false, error: t.common.contentTooLarge };
 		}
 
@@ -318,10 +319,10 @@ export const actions: Actions = {
 		const messageId = (data.get('messageId') as string | null) || '';
 		const contentJson = (data.get('contentJson') as string | null) || '';
 
-		if (!messageId || !contentJson) {
+		if (!messageId || isLexicalEmpty(contentJson)) {
 			return { success: false, error: t.common.contentRequired };
 		}
-		if (contentJson.length > 512 * 1024) {
+		if (contentJson.length > MAX_CONTENT_SIZE) {
 			return { success: false, error: t.common.contentTooLarge };
 		}
 

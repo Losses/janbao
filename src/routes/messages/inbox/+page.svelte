@@ -67,7 +67,7 @@
 						{@const authorHref = conv.lastAuthorId
 							? `/profile/${conv.lastAuthorId}/${authorSlug}`
 							: null}
-						<div class="flex items-start gap-4 p-4 transition-all hover:bg-base-200/20">
+						<div class="flex items-start gap-4 py-4 transition-all hover:bg-base-200/20">
 							<!-- Left: last author avatar → profile -->
 							<div class="flex-shrink-0">
 								{#if authorHref}

@@ -4,6 +4,7 @@ import { activities } from '$lib/server/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { jsonError } from '$lib/server/errors';
 import type { ActivityCommentCreateBody } from '$lib/types/api';
+import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const user = locals.user;
@@ -20,11 +21,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return jsonError(t, 'activity.parentIdRequired', 400);
 	}
 
-	if (!contentJson) {
+	if (isLexicalEmpty(contentJson)) {
 		return jsonError(t, 'common.contentRequired', 400);
 	}
 
-	if (contentJson.length > 512 * 1024) {
+	if (contentJson.length > MAX_CONTENT_SIZE) {
 		return jsonError(t, 'common.contentTooLarge', 400);
 	}
 

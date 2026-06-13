@@ -11,6 +11,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { generateSlug } from '$lib/utils/slug';
 import { resolvePermissions, resolveGroupSlug } from '$lib/server/constants';
 import type { DbTransaction } from '$lib/server/db';
+import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 
 export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user;
@@ -146,8 +147,11 @@ export const actions: Actions = {
 		if (!categorySlug) {
 			return { success: false, error: event.locals.t.discussion.categoryEmpty };
 		}
-		if (!contentJson) {
+		if (isLexicalEmpty(contentJson)) {
 			return { success: false, error: event.locals.t.common.contentRequired };
+		}
+		if (contentJson.length > MAX_CONTENT_SIZE) {
+			return { success: false, error: event.locals.t.common.contentTooLarge };
 		}
 
 		// 1. Fetch current discussion record

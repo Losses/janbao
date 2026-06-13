@@ -3,6 +3,7 @@
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import { formatTitle } from '$lib/utils/title';
+	import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
@@ -38,7 +39,7 @@
 			title = data.discussion.title;
 			categorySlug = data.discussion.categorySlug;
 			themeName = data.discussion.themeName || '';
-			contentJson = '';
+			contentJson = draftContent || opContentJson || '';
 			loadedDiscussionId = data.discussion.id;
 		}
 	});
@@ -101,7 +102,7 @@
 	]);
 
 	async function saveDraftManual() {
-		if (!contentJson || isSavingManualDraft) return;
+		if (isLexicalEmpty(contentJson) || isSavingManualDraft) return;
 		isSavingManualDraft = true;
 		try {
 			const res = await fetch('/api/drafts/save', {
@@ -272,7 +273,10 @@
 							type="button"
 							onclick={saveDraftManual}
 							class="btn btn-sm btn-ghost gap-2"
-							disabled={!contentJson || isSubmitting || isSavingManualDraft}
+							disabled={isLexicalEmpty(contentJson) ||
+								contentJson.length > MAX_CONTENT_SIZE ||
+								isSubmitting ||
+								isSavingManualDraft}
 						>
 							{#if isSavingManualDraft}
 								<span class="loading loading-spinner loading-xs"></span>
@@ -292,7 +296,11 @@
 					<button
 						type="submit"
 						class="btn btn-primary"
-						disabled={!title || !contentJson || isSubmitting || isPreview}
+						disabled={!title.trim() ||
+							isLexicalEmpty(contentJson) ||
+							contentJson.length > MAX_CONTENT_SIZE ||
+							isSubmitting ||
+							isPreview}
 					>
 						{#if isSubmitting}
 							<span class="loading loading-spinner loading-xs"></span>

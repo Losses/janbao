@@ -5,6 +5,7 @@
 	import ConfirmationModal from '$lib/components/organisms/ConfirmationModal.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import { generateSlug } from '$lib/utils/slug';
+	import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import { mdiArrowRight } from '@mdi/js';
 	import type { ApiResult, ActivityCommentItem, ActivityCommentsResponse } from '$lib/types/api';
@@ -100,7 +101,7 @@
 	}
 
 	async function submitComment() {
-		if (!commentContentJson.trim()) return;
+		if (isLexicalEmpty(commentContentJson) || commentContentJson.length > MAX_CONTENT_SIZE) return;
 		submittingComment = true;
 		try {
 			const res = await fetch('/api/activities/comments', {
@@ -249,7 +250,9 @@
 								<button
 									class="btn btn-sm btn-primary"
 									onclick={submitComment}
-									disabled={submittingComment || !commentContentJson.trim()}
+									disabled={submittingComment ||
+										isLexicalEmpty(commentContentJson) ||
+										commentContentJson.length > MAX_CONTENT_SIZE}
 								>
 									{submittingComment ? gtc('saving') : gtc('submit')}
 								</button>
