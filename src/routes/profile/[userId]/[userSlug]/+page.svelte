@@ -82,30 +82,33 @@
 				/>
 				<div>
 					<h1 class="text-2xl font-bold text-base-content">{targetUser.displayName}</h1>
-					<p class="text-sm text-base-content/60">@{targetUser.username}</p>
 				</div>
 			</div>
 
 			<!-- User Statistics -->
 			<div class="flex flex-wrap gap-x-6 gap-y-2 mt-4 text-sm text-base-content/70">
-				<div class="flex items-center gap-1">
-					<Icon path={mdiAccountGroup} size={16} class="text-base-content/50" ariaLabel={profileT.group} />
+				<div class="flex items-center gap-1.5">
+					<Icon path={mdiAccountGroup} size={16} class="text-base-content/50" />
+					<span class="font-medium text-base-content">{profileT.group}</span>
 					<span>{targetUser.groupSlug}</span>
 				</div>
-				<div class="flex items-center gap-1">
-					<Icon path={mdiCalendarClock} size={16} class="text-base-content/50" ariaLabel={profileT.joined} />
+				<div class="flex items-center gap-1.5">
+					<Icon path={mdiCalendarClock} size={16} class="text-base-content/50" />
+					<span class="font-medium text-base-content">{profileT.joined}</span>
 					<span>
 						<DateComponent value={targetUser.signupTime} {t} />
 					</span>
 				</div>
-				<div class="flex items-center gap-1">
-					<Icon path={mdiClockOutline} size={16} class="text-base-content/50" ariaLabel={profileT.lastActive} />
+				<div class="flex items-center gap-1.5">
+					<Icon path={mdiClockOutline} size={16} class="text-base-content/50" />
+					<span class="font-medium text-base-content">{profileT.lastActive}</span>
 					<span>
 						<DateComponent value={targetUser.lastActiveTime} {t} />
 					</span>
 				</div>
-				<div class="flex items-center gap-1">
-					<Icon path={mdiEyeOutline} size={16} class="text-base-content/50" ariaLabel={profileT.views} />
+				<div class="flex items-center gap-1.5">
+					<Icon path={mdiEyeOutline} size={16} class="text-base-content/50" />
+					<span class="font-medium text-base-content">{profileT.views}</span>
 					<span>{targetUser.viewCount}</span>
 				</div>
 			</div>

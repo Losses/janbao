@@ -101,15 +101,11 @@
 
 		<!-- Activities Stream -->
 		{#if activityList.length === 0}
-			<div
-				class="p-10 text-center text-base-content/50"
-			>
+			<div class="p-10 text-center text-base-content/50">
 				{t.common.noResults}
 			</div>
 		{:else}
-			<div
-				class="space-y-0"
-			>
+			<div class="space-y-0">
 				{#each activityList as activity (activity.id)}
 					<ActivityRow
 						id={activity.id}

@@ -4,10 +4,12 @@
 	 * Hovering displays the exact browser-localized date and time via native `title` attribute.
 	 * Accepts a `t` translation dictionary to support i18n relative time strings.
 	 */
+	import type { TranslationDict } from '$lib/types/translation';
+
 	interface DateProps {
 		value: Date | string | number;
 		/** Translation dictionary (from locals.t). Falls back to English if not provided. */
-		t?: Record<string, Record<string, string> | string> | null;
+		t?: TranslationDict | null;
 		class?: string;
 	}
 
