@@ -112,7 +112,7 @@
 				{invitationT.noInvitations}
 			</div>
 		{:else}
-			<div class="card bg-base-100 border border-base-200 rounded-xl shadow-sm overflow-hidden">
+			<div class="overflow-hidden">
 				<div class="overflow-x-auto">
 					<table class="table table-sm">
 						<thead>

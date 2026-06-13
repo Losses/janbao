@@ -116,7 +116,7 @@
 
 		<!-- Directed/Normal Activity Composer (if logged in) -->
 		{#if user}
-			<div class="card bg-base-100 p-4">
+			<div>
 				<p class="text-sm text-base-content/70 mb-2">
 					{#if isOwner}
 						{profileT.postNormalActivity}
@@ -151,7 +151,7 @@
 				{t.common.noResults}
 			</div>
 		{:else}
-			<div class="card bg-base-100 overflow-hidden px-4">
+			<div class="overflow-hidden">
 				{#each activityList as activity (activity.id)}
 					<ActivityRow
 						id={activity.id}

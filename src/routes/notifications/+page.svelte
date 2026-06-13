@@ -121,7 +121,7 @@
 				{notificationT.allCaughtUp}
 			</div>
 		{:else}
-			<div class="card bg-base-100 border border-base-200 rounded-xl shadow-sm px-4">
+			<div>
 				{#each views as view (view.item.id)}
 					{@const item = view.item}
 					<div
