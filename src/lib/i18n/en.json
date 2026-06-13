@@ -126,7 +126,17 @@
 		"monthAgo": "month ago",
 		"monthsAgo": "months ago",
 		"yearAgo": "year ago",
-		"yearsAgo": "years ago"
+		"yearsAgo": "years ago",
+		"minuteLater": "minute later",
+		"minutesLater": "minutes later",
+		"hourLater": "hour later",
+		"hoursLater": "hours later",
+		"dayLater": "day later",
+		"daysLater": "days later",
+		"monthLater": "month later",
+		"monthsLater": "months later",
+		"yearLater": "year later",
+		"yearsLater": "years later"
 	},
 	"activity": {
 		"parentIdRequired": "Parent ID is required",
@@ -306,7 +316,8 @@
 		"statusUnused": "Unused",
 		"statusExpired": "Expired",
 		"monthlyLimitExceeded": "Monthly invitation limit reached",
-		"noInvitations": "You have no invitation codes"
+		"noInvitations": "You have no invitation codes",
+		"adminUnlimited": "As an administrator, you can generate unlimited invitation codes."
 	},
 	"notification": {
 		"title": "Notifications",
