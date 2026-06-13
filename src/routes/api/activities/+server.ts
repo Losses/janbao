@@ -7,7 +7,7 @@ import {
 	notifications,
 	drafts
 } from '$lib/server/db/schema';
-import { eq, and, isNull, asc } from 'drizzle-orm';
+import { eq, and, isNull, asc, inArray } from 'drizzle-orm';
 import { jsonError } from '$lib/server/errors';
 import type { ActivityCreateBody, ActivityDeleteBody } from '$lib/types/api';
 
@@ -89,13 +89,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	});
 
 	// Clear the composer draft so the editor starts fresh on next page load
+	// Clear activity page draft (contextId = 'new') and profile page draft
+	// (contextId = targetUser.id, which equals user.id for owner or recipientId for guest)
+	const draftContextIds = ['new', user.id];
+	if (recipientId && recipientId !== user.id) {
+		draftContextIds.push(recipientId);
+	}
 	await locals.db
 		.delete(drafts)
 		.where(
 			and(
 				eq(drafts.authorId, user.id),
 				eq(drafts.contextType, 'activity'),
-				eq(drafts.contextId, 'new')
+				inArray(drafts.contextId, draftContextIds)
 			)
 		);
 

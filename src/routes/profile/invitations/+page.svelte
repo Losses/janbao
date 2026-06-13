@@ -50,7 +50,8 @@
 			const res = await fetch('/api/invitations/request', { method: 'POST' });
 			const result: ApiResult = await res.json();
 			if (result.success) {
-				goto(window.location.pathname);
+				await invalidateAll();
+				requesting = false;
 				return;
 			}
 			feedback = { type: 'error', text: result.error || t.common.error };

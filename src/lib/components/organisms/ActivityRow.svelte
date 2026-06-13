@@ -8,23 +8,9 @@
 	import { generateSlug } from '$lib/utils/slug';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import { mdiDeleteOutline, mdiArrowRight } from '@mdi/js';
-	import type { ApiResult } from '$lib/types/api';
+	import type { ApiResult, ActivityCommentItem, ActivityCommentsResponse } from '$lib/types/api';
 	import type { MentionedUsersMap } from '$lib/types/mentions';
 	import type { TranslationDict } from '$lib/types/translation';
-
-	interface ActivityComment {
-		id: string;
-		authorId: string;
-		authorDisplayName: string;
-		authorUsername: string;
-		authorAvatarFileId: string | null;
-		contentJson: string;
-		createdAt: Date;
-	}
-
-	interface ActivityCommentsResponse {
-		comments: ActivityComment[];
-	}
 
 	interface ActivityRowProps {
 		id: string;
@@ -64,19 +50,13 @@
 		isTopLevel = true
 	}: ActivityRowProps = $props();
 
-	const initialCommentCount = $derived(commentCount);
-	const resolvedAuthorUsername = $derived(authorUsername);
-	const resolvedCurrentUserId = $derived(currentUserId);
-	const resolvedAuthorId = $derived(authorId);
-	const resolvedIsAdmin = $derived(isAdmin);
-
 	let showComments = $state(false);
-	let comments = $state<ActivityComment[]>([]);
+	let comments = $state<ActivityCommentItem[]>([]);
 	let loadingComments = $state(false);
 	let commentContentJson = $state('');
 	let submittingComment = $state(false);
 	// svelte-ignore state_referenced_locally
-	let commentCountState = $state(initialCommentCount);
+	let commentCountState = $state(commentCount);
 	let showDeleteModal = $state(false);
 	let deleteTargetId = $state<string | null>(null);
 	let editorKey = $state(0);
@@ -185,7 +165,7 @@
 <div class="py-4 border-b border-base-300 last:border-b-0">
 	<div class="flex gap-3">
 		<div class="flex-shrink-0">
-			<a href="/profile/{authorId}/{generateSlug(resolvedAuthorUsername)}">
+			<a href="/profile/{authorId}/{generateSlug(authorUsername)}">
 				<Avatar
 					src={authorAvatarFileId ? `/img/${authorAvatarFileId}` : null}
 					displayName={authorDisplayName}
@@ -197,7 +177,7 @@
 			<!-- Row 1: Username (→ recipient) -->
 			<div class="flex items-center gap-1 flex-wrap">
 				<a
-					href="/profile/{authorId}/{generateSlug(resolvedAuthorUsername)}"
+					href="/profile/{authorId}/{generateSlug(authorUsername)}"
 					class="font-semibold text-base-content hover:text-primary transition-colors"
 				>
 					{authorDisplayName}
@@ -223,12 +203,12 @@
 			<!-- Row 3: Timestamp + "Comment" text link + delete button -->
 			<div class="flex items-center gap-3 mt-2 text-sm text-base-content/50">
 				<DateComponent value={createdAt} {t} class="text-sm" />
-				{#if isTopLevel && resolvedCurrentUserId}
+				{#if isTopLevel && currentUserId}
 					<LinkButton onclick={toggleComments} class="hover:text-primary hover:underline">
 						{gtc('comment')}{commentCountState > 0 ? ` (${commentCountState})` : ''}
 					</LinkButton>
 				{/if}
-				{#if resolvedCurrentUserId === resolvedAuthorId || resolvedIsAdmin || resolvedCurrentUserId === recipientId}
+				{#if currentUserId === authorId || isAdmin || currentUserId === recipientId}
 					<LinkButton
 						onclick={() => confirmDelete(id)}
 						class="text-warning hover:underline flex items-center gap-1"
@@ -241,7 +221,7 @@
 
 			{#if showComments}
 				<div class="mt-3 bg-base-200/50 rounded-lg p-3">
-					{#if resolvedCurrentUserId}
+					{#if currentUserId}
 						<div class="mb-3 flex flex-col gap-2">
 							{#key editorKey}
 								<LexicalEditor
@@ -300,7 +280,7 @@
 										<!-- Row 3: Timestamp + delete button -->
 										<div class="flex items-center gap-3 mt-1 text-xs text-base-content/50">
 											<DateComponent value={comment.createdAt} {t} class="text-xs" />
-											{#if resolvedCurrentUserId === comment.authorId || resolvedIsAdmin || resolvedCurrentUserId === resolvedAuthorId || resolvedCurrentUserId === recipientId}
+											{#if currentUserId === comment.authorId || isAdmin || currentUserId === authorId || currentUserId === recipientId}
 												<LinkButton
 													onclick={() => confirmDelete(comment.id)}
 													class="text-xs text-warning hover:underline flex items-center gap-0.5"

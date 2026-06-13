@@ -1,5 +1,5 @@
 import { invitations, users } from '../schema';
-import { eq, and, gte, lt, inArray, count } from 'drizzle-orm';
+import { eq, and, gte, lt, inArray, count, desc } from 'drizzle-orm';
 import type { D1Db } from '../index';
 import type { InvitationItem } from '$lib/types/api';
 import type { DateBoundary } from '../welcome';
@@ -19,7 +19,7 @@ export async function getInvitations(db: D1Db, userId: string): Promise<Invitati
 		})
 		.from(invitations)
 		.where(eq(invitations.creatorId, userId))
-		.orderBy(invitations.createdAt);
+		.orderBy(desc(invitations.createdAt));
 
 	const usedByIds = rows.map((r) => r.usedById).filter((id): id is string => id !== null);
 	const usedByMap = new Map<string, string>();

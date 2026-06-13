@@ -128,7 +128,7 @@
 					initialContent={data.activityDraft}
 					placeholder={t.editor.placeholderActivity}
 					contextType="activity"
-					contextId={isOwner ? undefined : targetUser.id}
+					contextId={targetUser.id}
 					{t}
 					disableHeadings={true}
 					onContentChange={handleEditorChange}
