@@ -62,13 +62,13 @@ Five independent auditors reviewed the Cycle 4 codebase after the first audit ro
 
 Carried forward from Audit Round 1:
 
-| # | Issue | Impact |
-|---|-------|--------|
-| A1 | Activity comments loaded via API have no mention resolution | @mentions in activity comments render as plain text |
-| A2 | Drafts page and creation previews don't resolve mentions | Draft previews show plain text @mentions |
-| A3 | Mention regex can false-positive on email addresses | Wasted DB query, low probability |
-| A4 | Post-query permission filtering may return fewer rows than `limit` | Pages may appear partially empty |
-| A5 | `MentionedUserEntry` structurally similar to `UserInfoSummary`/`UserSearchResult` | similarity-ts informational |
+| #   | Issue                                                                             | Impact                                              |
+| --- | --------------------------------------------------------------------------------- | --------------------------------------------------- |
+| A1  | Activity comments loaded via API have no mention resolution                       | @mentions in activity comments render as plain text |
+| A2  | Drafts page and creation previews don't resolve mentions                          | Draft previews show plain text @mentions            |
+| A3  | Mention regex can false-positive on email addresses                               | Wasted DB query, low probability                    |
+| A4  | Post-query permission filtering may return fewer rows than `limit`                | Pages may appear partially empty                    |
+| A5  | `MentionedUserEntry` structurally similar to `UserInfoSummary`/`UserSearchResult` | similarity-ts informational                         |
 
 ---
 
@@ -98,13 +98,13 @@ Carried forward from Audit Round 1:
 
 ## 6. Auditor Verdicts
 
-| Auditor | Verdict | Notes |
-|---------|---------|-------|
-| 1 | FAIL → PASS after fixes | Bookmarks pagination was the sole blocker |
-| 2 | PASS | Recommended M1 (bookmarks) and M2 (ternary) for follow-up — now fixed |
-| 3 | PASS | Flagged M1 (ternary) and M2 (bookmarks) as quality items — now fixed |
-| 4 | PASS | Flagged M1-M4, all addressed in this round |
-| 5 | PASS | Flagged M1-M4, all addressed in this round |
+| Auditor | Verdict                 | Notes                                                                 |
+| ------- | ----------------------- | --------------------------------------------------------------------- |
+| 1       | FAIL → PASS after fixes | Bookmarks pagination was the sole blocker                             |
+| 2       | PASS                    | Recommended M1 (bookmarks) and M2 (ternary) for follow-up — now fixed |
+| 3       | PASS                    | Flagged M1 (ternary) and M2 (bookmarks) as quality items — now fixed  |
+| 4       | PASS                    | Flagged M1-M4, all addressed in this round                            |
+| 5       | PASS                    | Flagged M1-M4, all addressed in this round                            |
 
 ---
 
