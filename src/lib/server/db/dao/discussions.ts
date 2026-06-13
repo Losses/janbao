@@ -1,6 +1,7 @@
 import { discussions, users, bookmarks, discussionReads, replies, categories } from '../schema';
 import { eq, and, isNull, desc, sql, count, inArray } from 'drizzle-orm';
 import type { D1Db } from '../index';
+import { getReadableCategorySlugs } from '$lib/server/constants';
 
 export interface ReadHistory {
 	lastReadAt: Date | null;
@@ -281,44 +282,6 @@ export async function getDiscussionsCount(
 	}
 
 	return res[0]?.count || 0;
-}
-
-/**
- * Get the list of category slugs the given group can read.
- * Returns null if all categories are readable (admin/moderator default).
- */
-async function getReadableCategorySlugs(db: D1Db, groupSlug: string): Promise<string[] | null> {
-	// Privileged groups can read all categories by default
-	if (groupSlug === 'admin' || groupSlug === 'moderator') {
-		return null; // null = all readable
-	}
-
-	// For member/guest: get all categories and check permissions
-	const { categoryPermissions, categories } = await import('../schema');
-	const { eq: eqOp } = await import('drizzle-orm');
-
-	const allCats = await db.select({ slug: categories.slug }).from(categories);
-	const allSlugs = allCats.map((c) => c.slug);
-
-	if (allSlugs.length === 0) return [];
-
-	// Get explicit permission rows
-	const permRows = await db
-		.select({
-			categorySlug: categoryPermissions.categorySlug,
-			canRead: categoryPermissions.canRead
-		})
-		.from(categoryPermissions)
-		.where(eqOp(categoryPermissions.groupSlug, groupSlug));
-
-	const permMap = new Map(permRows.map((p) => [p.categorySlug, p.canRead]));
-
-	// Apply defaults based on role
-	const defaultCanRead = true; // Both member and guest default to canRead=true for public
-	return allSlugs.filter((slug) => {
-		const canRead = permMap.get(slug);
-		return canRead === undefined ? defaultCanRead : canRead;
-	});
 }
 
 /**

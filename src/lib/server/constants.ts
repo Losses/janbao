@@ -1,5 +1,5 @@
 import type { D1Db } from './db/index';
-import { categoryPermissions } from './db/schema';
+import { categoryPermissions, categories } from './db/schema';
 import { and, eq } from 'drizzle-orm';
 
 const DEV_JWT_SECRET = 'fallback-secret-key-for-local-dev-only';
@@ -159,4 +159,37 @@ export async function resolvePermissions(
  */
 export function resolveGroupSlug(user: UserData | null | undefined): string {
 	return user?.groupSlug || 'guest';
+}
+
+/**
+ * Get the list of category slugs the given group can read.
+ * Returns null if all categories are readable (admin/moderator default).
+ */
+export async function getReadableCategorySlugs(
+	db: D1Db,
+	groupSlug: string
+): Promise<string[] | null> {
+	if (groupSlug === 'admin' || groupSlug === 'moderator') {
+		return null;
+	}
+
+	const allCats = await db.select({ slug: categories.slug }).from(categories);
+	const allSlugs = allCats.map((c) => c.slug);
+
+	if (allSlugs.length === 0) return [];
+
+	const permRows = await db
+		.select({
+			categorySlug: categoryPermissions.categorySlug,
+			canRead: categoryPermissions.canRead
+		})
+		.from(categoryPermissions)
+		.where(eq(categoryPermissions.groupSlug, groupSlug));
+
+	const permMap = new Map(permRows.map((p) => [p.categorySlug, p.canRead]));
+
+	return allSlugs.filter((slug) => {
+		const canRead = permMap.get(slug);
+		return canRead === undefined ? true : canRead;
+	});
 }

@@ -14,8 +14,6 @@ import { extractMentions } from '$lib/utils/mentions';
 import type { D1Db } from '../db/index';
 import type { MentionedUsersMap } from '$lib/types/mentions';
 
-export type { MentionedUsersMap };
-
 /**
  * Scan one or more Lexical JSON content strings for `@username` mentions,
  * resolve them against the users table, and return a map keyed by username.

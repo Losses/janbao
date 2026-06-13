@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import { categories, categoryPermissions } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
+import { resolveGroupSlug } from '$lib/server/constants';
 
 /**
  * Categories list endpoint for sidebar widget.
@@ -9,7 +10,7 @@ import type { RequestHandler } from './$types';
  */
 export const GET: RequestHandler = async ({ locals }) => {
 	const db = locals.db;
-	const groupSlug = locals.user?.groupSlug || 'member';
+	const groupSlug = resolveGroupSlug(locals.user);
 
 	const allCategories = await db
 		.select({

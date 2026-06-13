@@ -1,6 +1,7 @@
-import { replies, discussions, activities, categoryPermissions, categories } from '../schema';
+import { replies, discussions, activities } from '../schema';
 import { eq, and, isNull, isNotNull, sql } from 'drizzle-orm';
 import type { D1Db } from '../index';
+import { getReadableCategorySlugs } from '$lib/server/constants';
 
 export interface UserCommentItem {
 	id: string;
@@ -107,34 +108,4 @@ export async function getUserComments(
 	return [...replyItems, ...commentItems].sort(
 		(a, b) => b.createdAt.getTime() - a.createdAt.getTime()
 	);
-}
-
-/**
- * Get the list of category slugs the given group can read.
- * Returns null if all categories are readable (admin/moderator default).
- */
-async function getReadableCategorySlugs(db: D1Db, groupSlug: string): Promise<string[] | null> {
-	if (groupSlug === 'admin' || groupSlug === 'moderator') {
-		return null;
-	}
-
-	const allCats = await db.select({ slug: categories.slug }).from(categories);
-	const allSlugs = allCats.map((c) => c.slug);
-
-	if (allSlugs.length === 0) return [];
-
-	const permRows = await db
-		.select({
-			categorySlug: categoryPermissions.categorySlug,
-			canRead: categoryPermissions.canRead
-		})
-		.from(categoryPermissions)
-		.where(eq(categoryPermissions.groupSlug, groupSlug));
-
-	const permMap = new Map(permRows.map((p) => [p.categorySlug, p.canRead]));
-
-	return allSlugs.filter((slug) => {
-		const canRead = permMap.get(slug);
-		return canRead === undefined ? true : canRead;
-	});
 }

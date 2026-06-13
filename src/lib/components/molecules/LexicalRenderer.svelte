@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { MentionedUsersMap } from '$lib/types/mentions';
+	import { generateSlug } from '$lib/utils/slug';
 	/**
 	 * LexicalRenderer Molecule - Recursively renders Lexical JSON states securely on the client.
 	 * Supports standard text formats (bold, italic, underline, strikethrough, inline code),
@@ -127,7 +128,7 @@
 			{#if segment.kind === 'mention' && mentionedUsers?.[segment.username]}
 				{@const user = mentionedUsers[segment.username]}
 				<a
-					href="/profile/{user.id}/{user.username}"
+					href="/profile/{user.id}/{generateSlug(user.username)}"
 					class="inline-flex items-center gap-0.5 px-1.5 py-0 mx-0.5 rounded bg-primary/15 text-primary text-xs font-medium hover:bg-primary/25 transition-colors no-underline"
 				>
 					{user.displayName}

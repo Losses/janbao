@@ -44,12 +44,12 @@ Cycle 4 addresses three critical areas:
 
 All page server loaders that previously used `user?.groupSlug || 'member'` now use the centralized helpers:
 
-| File | Change |
-|------|--------|
-| `src/routes/category/[categorySlug]/+page.server.ts` | Uses `resolvePermissions()` instead of inline query |
+| File                                                           | Change                                                      |
+| -------------------------------------------------------------- | ----------------------------------------------------------- |
+| `src/routes/category/[categorySlug]/+page.server.ts`           | Uses `resolvePermissions()` instead of inline query         |
 | `src/routes/discussion/[...]/+page.server.ts` (load + actions) | Uses `resolvePermissions()` for read, create, delete checks |
-| `src/routes/categories/+page.server.ts` | Uses `resolveGroupSlug()` for permission mapping |
-| `src/routes/post/discussion/+page.server.ts` | Uses `resolvePermissions()` and `resolveGroupSlug()` |
+| `src/routes/categories/+page.server.ts`                        | Uses `resolveGroupSlug()` for permission mapping            |
+| `src/routes/post/discussion/+page.server.ts`                   | Uses `resolvePermissions()` and `resolveGroupSlug()`        |
 
 ### 2.4 Secure Listings — Category Permission Filtering
 
@@ -65,6 +65,7 @@ All page server loaders that previously used `user?.groupSlug || 'member'` now u
 - Filters discussion replies by readable categories; activity comments are not category-scoped.
 
 **Callers updated:**
+
 - `src/routes/+page.server.ts` — passes `groupSlug`
 - `src/routes/profile/discussions/[userId]/[userSlug]/+page.server.ts` — passes `groupSlug`
 - `src/routes/profile/comments/[userId]/[userSlug]/+page.server.ts` — passes `groupSlug`
@@ -89,13 +90,13 @@ All page server loaders that previously used `user?.groupSlug || 'member'` now u
 
 All content-serving load handlers now call `resolveMentions()` and return `mentionedUsers`:
 
-| File | Content Sources |
-|------|----------------|
-| `src/routes/discussion/[...]/+page.server.ts` | OP + reply contentJsons |
-| `src/routes/activity/+page.server.ts` | Activity list contentJsons |
-| `src/routes/profile/[userId]/[userSlug]/+page.server.ts` | Profile activities |
-| `src/routes/messages/[id]/[[page=page]]/+page.server.ts` | Message contentJsons |
-| `src/routes/profile/comments/[userId]/[userSlug]/+page.server.ts` | Comment contentJsons |
+| File                                                              | Content Sources            |
+| ----------------------------------------------------------------- | -------------------------- |
+| `src/routes/discussion/[...]/+page.server.ts`                     | OP + reply contentJsons    |
+| `src/routes/activity/+page.server.ts`                             | Activity list contentJsons |
+| `src/routes/profile/[userId]/[userSlug]/+page.server.ts`          | Profile activities         |
+| `src/routes/messages/[id]/[[page=page]]/+page.server.ts`          | Message contentJsons       |
+| `src/routes/profile/comments/[userId]/[userSlug]/+page.server.ts` | Comment contentJsons       |
 
 ### 2.8 LexicalRenderer — @mention Chip Rendering
 
@@ -118,6 +119,7 @@ All content-serving load handlers now call `resolveMentions()` and return `menti
 ### 2.10 Pre-existing Lint Fixes
 
 Fixed lint issues found during this cycle's lint run:
+
 - Removed unused `LexicalCommand` import from `RichTextToolbar.svelte`.
 - Removed unused `editor` prop from `RichTextToolbar.svelte` and its destructuring in `LexicalEditor.svelte`.
 - Removed unused `preventDefault()` function from `RichTextToolbar.svelte`.
