@@ -51,5 +51,8 @@
 		"lexical": "0.40.0",
 		"svelte-lexical": "^0.6.4",
 		"tailwindcss": "^4.3.0"
+	},
+	"overrides": {
+		"lexical": "0.40.0"
 	}
 }

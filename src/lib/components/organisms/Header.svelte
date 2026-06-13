@@ -9,16 +9,14 @@
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import { mdiMenu } from '@mdi/js';
 	import type { VoidHandler } from '$lib/types/handlers';
-	import type { UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 
 	interface HeaderProps {
-		user: UserInfoSummary | null;
 		t: TranslationDict;
 		onToggleDrawer: VoidHandler;
 	}
 
-	let { user, t, onToggleDrawer }: HeaderProps = $props();
+	let { t, onToggleDrawer }: HeaderProps = $props();
 
 	const tNav = $derived(t.nav);
 	const currentPath = $derived(page.url.pathname);
@@ -70,19 +68,8 @@
 			</a>
 		</div>
 
-		<!-- Right: Auth links for guests + Mobile menu button -->
+		<!-- Right: Mobile menu button (hidden on desktop) -->
 		<div class="flex items-center gap-2">
-			{#if !user}
-				<div class="hidden md:flex items-center gap-2">
-					<a href="/entry/signin" class="btn btn-ghost btn-sm text-sm">
-						{tNav['signin']}
-					</a>
-					<a href="/entry/register" class="btn btn-primary btn-sm text-sm">
-						{tNav['register']}
-					</a>
-				</div>
-			{/if}
-
 			<!-- Mobile: Hamburger menu button -->
 			<button
 				class="btn btn-ghost btn-sm md:hidden"

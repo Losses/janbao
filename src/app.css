@@ -1,2 +1,8 @@
 @import 'tailwindcss';
 @plugin "daisyui";
+
+/* Overriding Placeholder font styling */
+.Placeholder__root {
+	@apply text-base-content/40 text-sm font-normal select-none pointer-events-none absolute left-3 top-2.5 right-6 overflow-hidden text-ellipsis whitespace-nowrap;
+}
+

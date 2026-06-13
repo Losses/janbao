@@ -8,6 +8,7 @@
 	 */
 	import {
 		Composer,
+		ContentEditable,
 		RichTextPlugin,
 		HistoryPlugin,
 		ListPlugin,
@@ -17,17 +18,6 @@
 		MarkdownShortcutPlugin,
 		OnChangePlugin,
 		Toolbar,
-		BoldButton,
-		ItalicButton,
-		UnderlineButton,
-		StrikethroughButton,
-		BlockFormatDropDown,
-		InsertDropDown,
-		InsertImageDropDownItem,
-		InsertLink,
-		Divider,
-		UndoButton,
-		RedoButton,
 		HeadingNode,
 		QuoteNode,
 		ListNode,
@@ -35,8 +25,6 @@
 		ImageNode,
 		AutoLinkNode,
 		LinkNode,
-		HeadingDropDownItem,
-		ParagraphDropDownItem,
 		ITALIC_STAR,
 		ITALIC_UNDERSCORE,
 		BOLD_STAR,
@@ -48,6 +36,8 @@
 		ORDERED_LIST,
 		CHECK_LIST
 	} from 'svelte-lexical';
+	import RichTextToolbar from '$lib/components/molecules/RichTextToolbar.svelte';
+	import RichTextLinkEditor from '$lib/components/molecules/RichTextLinkEditor.svelte';
 	import { CodeNode, CodeHighlightNode } from '@lexical/code';
 	import type { VoidHandler } from '$lib/types/handlers';
 	import type { TranslationDict } from '$lib/types/translation';
@@ -112,6 +102,7 @@
 	);
 
 	// Internal state
+	let editorAreaElem: HTMLDivElement | undefined = $state();
 	let isSaving = $state(false);
 	let lastSavedContent = $state('');
 	let saveStatus = $state<'idle' | 'saving' | 'saved'>('idle');
@@ -314,53 +305,33 @@
 	});
 </script>
 
-<div class="relative rounded-lg border border-base-300 {className}">
-	<!-- Toolbar -->
-	<div
-		class="border-b border-base-300 bg-base-200 px-2 py-1 {disabled
-			? 'opacity-60 pointer-events-none'
-			: ''}"
-	>
-		<Toolbar>
-			{#if !disableHeadings}
-				<BlockFormatDropDown>
-					<ParagraphDropDownItem />
-					<HeadingDropDownItem headingSize="h1" />
-					<HeadingDropDownItem headingSize="h2" />
-					<HeadingDropDownItem headingSize="h3" />
-					<HeadingDropDownItem headingSize="h4" />
-				</BlockFormatDropDown>
-			{/if}
-			<Divider />
-			<BoldButton />
-			<ItalicButton />
-			<UnderlineButton />
-			<StrikethroughButton />
-			<Divider />
-			{#if !disableImageUpload}
-				<InsertDropDown>
-					<InsertImageDropDownItem />
-				</InsertDropDown>
-			{/if}
-			<InsertLink />
-			<Divider />
-			<UndoButton />
-			<RedoButton />
-		</Toolbar>
-	</div>
-
-	<!-- Editor Area -->
+<div
+	class="janbao-rich-editor relative rounded-lg border border-base-300 bg-base-100 shadow-xs focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all duration-200 {className}"
+>
 	<Composer {initialConfig}>
+		<div class={disabled ? 'opacity-60 pointer-events-none' : ''}>
+			<Toolbar>
+				{#snippet children({ editor, activeEditor })}
+					<RichTextToolbar {editor} {activeEditor} {disableHeadings} {disableImageUpload} />
+				{/snippet}
+			</Toolbar>
+		</div>
+
+		<!-- Editor Area -->
 		<div
-			class="prose prose-sm max-w-none min-h-[200px] px-3 py-2 {disabled
-				? 'opacity-60 pointer-events-none'
-				: ''}"
+			bind:this={editorAreaElem}
+			class="relative {disabled ? 'opacity-60 pointer-events-none' : ''}"
 		>
+			<ContentEditable
+				ariaLabel={resolvedPlaceholder}
+				className="ContentEditable__root prose prose-sm max-w-none min-h-[200px] px-3 py-2 text-base-content bg-base-100 focus:outline-none"
+			/>
 			<RichTextPlugin />
 			<HistoryPlugin />
 			<ListPlugin />
 			<ImagePlugin />
 			<LinkPlugin {validateUrl} />
+			<RichTextLinkEditor anchorElem={editorAreaElem} />
 			<MarkdownShortcutPlugin transformers={markdownTransformers} />
 			<OnChangePlugin
 				ignoreHistoryMergeTagChange={true}
@@ -375,7 +346,9 @@
 
 	<!-- Save Status Footer -->
 	{#if saveStatusLabel}
-		<div class="border-t border-base-200 px-3 py-1 text-right text-xs text-base-content/40">
+		<div
+			class="border-t border-base-300 px-3 py-1 text-right text-xs text-base-content/40 bg-base-200 rounded-b-lg"
+		>
 			{saveStatusLabel}
 		</div>
 	{/if}
