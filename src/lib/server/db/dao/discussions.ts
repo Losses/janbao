@@ -32,6 +32,12 @@ export interface DiscussionListItem {
 	lastReplyAuthorUsername: string | null;
 }
 
+interface LastReplyAuthor {
+	id: string;
+	username: string;
+	displayName: string;
+}
+
 interface GetDiscussionsListOptions {
 	userId?: string | null;
 	categorySlug?: string | null;
@@ -166,7 +172,7 @@ export async function getDiscussionsList(
 		)
 		.innerJoin(users, eq(replies.authorId, users.id));
 
-	const lastReplyMap = new Map<string, { id: string; username: string; displayName: string }>();
+	const lastReplyMap = new Map<string, LastReplyAuthor>();
 	for (const row of lastReplyAuthors) {
 		lastReplyMap.set(row.discussionId, {
 			id: row.authorId,

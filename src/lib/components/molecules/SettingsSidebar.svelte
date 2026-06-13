@@ -4,7 +4,6 @@
 	 * Shows settings-specific navigation links.
 	 */
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
-	import { generateSlug } from '$lib/utils/slug';
 	import type { UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 
@@ -17,8 +16,6 @@
 	let { user, t, activeItem = '' }: SettingsSidebarProps = $props();
 
 	const profileT = $derived(t.profile);
-
-	const userSlug = $derived(generateSlug(user.username));
 </script>
 
 <div class="card bg-base-200 border border-base-300 p-4 space-y-4">

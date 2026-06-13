@@ -5,12 +5,14 @@
 	 */
 	type PageChangeHandler = (page: number) => void;
 
+	import type { TranslationDict } from '$lib/types/translation';
+
 	interface PaginatorProps {
 		currentPage: number;
 		totalPages: number;
 		onPageChange: PageChangeHandler;
 		/** Translation dictionary for i18n aria-labels */
-		t?: Record<string, Record<string, string> | string> | null;
+		t?: TranslationDict | null;
 		class?: string;
 	}
 

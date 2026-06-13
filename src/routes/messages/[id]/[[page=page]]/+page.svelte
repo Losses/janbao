@@ -63,7 +63,6 @@
 			</div>
 		</div>
 
-
 		<div>
 			<h3 class="text-sm font-semibold text-base-content/70 mb-2">{messageT.addParticipant}</h3>
 			{#if addError}

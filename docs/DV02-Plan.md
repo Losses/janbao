@@ -142,6 +142,7 @@ The Profile page (`/profile/[userId]/[userSlug]`) should have a rich-text editor
    - `?/deleteDiscussion`: verify login → check permissions (`canDelete`) → soft delete discussion → redirect `/`.
 
 **Verification**:
+
 - `bun run check` passes with no type errors.
 - `bun run lint` passes.
 
@@ -175,6 +176,7 @@ The Profile page (`/profile/[userId]/[userSlug]`) should have a rich-text editor
    - `editDiscussion` / `editReply` / `saveReply` / `deleteDiscussion` / `deleteReply` / `deleteDiscussionConfirm` / `deleteReplyConfirm` / `quickReply`.
 
 **Verification**:
+
 - Admin sees Pin + Edit + Delete on OP; sees Reply + Edit + Delete on replies.
 - Author sees Edit on OP; sees Reply + Edit on replies.
 - Click reply Edit → inline editor + Cancel/Save.
@@ -213,6 +215,7 @@ The Profile page (`/profile/[userId]/[userSlug]`) should have a rich-text editor
 5. **i18n** — `en.json` / `zh-CN.json` activity / profile block (if new keys are added).
 
 **Verification**:
+
 - Top-level activity three-row layout: username → content → timestamp + comment link + delete.
 - Child reply three-row layout: username → content → timestamp + delete (no comment link).
 - Click "Comment" → LexicalEditor + comment list expand.

@@ -10,9 +10,7 @@
 	import type { VoidHandler } from '$lib/types/handlers';
 	import type { BookmarkListItem } from '$lib/types/api';
 
-	interface TranslationDict {
-		[key: string]: string | Record<string, string>;
-	}
+	import type { TranslationDict } from '$lib/types/translation';
 
 	interface BookmarkTooltipProps {
 		isOpen: boolean;

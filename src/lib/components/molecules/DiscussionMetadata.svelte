@@ -9,6 +9,8 @@
 	 *   - Top: User Display Name (links to /profile/:userId/:userSlug)
 	 *   - Bottom: Relative date (via Date component), last edited indicator.
 	 */
+	import type { TranslationDict } from '$lib/types/translation';
+
 	interface DiscussionMetadataProps {
 		userId: string;
 		username: string;
@@ -17,7 +19,7 @@
 		createdAt: string | number | Date;
 		updatedAt?: string | number | Date | null;
 		/** Translation dictionary */
-		t?: Record<string, Record<string, string> | string> | null;
+		t?: TranslationDict | null;
 		class?: string;
 	}
 
