@@ -8,8 +8,7 @@ import type { RequestHandler } from './$types';
 
 const CODE_LENGTH = 12;
 const CODE_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Unambiguous (no I/O/0/1)
-const EXPIRY_DAYS = 7;
-const MAX_CODE_ATTEMPTS = 5; // Bound regeneration on the astronomically rare PK collision
+const EXPIRY_DAYS = 30;
 
 /**
  * Generate a cryptographically-random invitation code of CODE_LENGTH chars
@@ -27,6 +26,7 @@ function generateInvitationCode(): string {
 
 // POST /api/invitations/request - Mint a new invitation code for the active
 // user, enforcing the per-month limit defined by MONTHLY_INVITATION_LIMIT.
+// Administrators bypass the monthly limit entirely.
 export const POST: RequestHandler = async ({ locals, platform }) => {
 	const user = locals.user;
 	const t = locals.t;
@@ -34,41 +34,35 @@ export const POST: RequestHandler = async ({ locals, platform }) => {
 		return jsonError(t, 'common.unauthorized', 401);
 	}
 
+	const isAdmin = user.groupSlug === 'admin';
 	const platformEnv = platform?.env;
-	const limit = getMonthlyInvitationLimit(platformEnv);
-	const tz = getForumTimezone(platformEnv);
-	const window = getTzMonthBoundaries(tz);
-
 	const db = locals.db;
 
-	const requestedThisMonth = await getMonthlyRequestCount(db, user.id, window);
-	if (requestedThisMonth >= limit) {
-		return jsonError(t, 'invitation.monthlyLimitExceeded', 400);
+	if (!isAdmin) {
+		const limit = getMonthlyInvitationLimit(platformEnv);
+		const tz = getForumTimezone(platformEnv);
+		const window = getTzMonthBoundaries(tz);
+
+		const requestedThisMonth = await getMonthlyRequestCount(db, user.id, window);
+		if (requestedThisMonth >= limit) {
+			return jsonError(t, 'invitation.monthlyLimitExceeded', 400);
+		}
 	}
 
 	const now = new Date();
 	const expiresAt = new Date(now.getTime() + EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
-	// Mint the code, regenerating on a PK collision (onConflictDoNothing → 0 changes)
-	let minted = false;
-	for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
-		const result = await db
-			.insert(invitations)
-			.values({
-				code: generateInvitationCode(),
-				creatorId: user.id,
-				usedById: null,
-				createdAt: now,
-				expiresAt
-			})
-			.onConflictDoNothing();
-		if (result.meta?.changes) {
-			minted = true;
-			break;
-		}
-	}
-
-	if (!minted) {
+	// PK collisions are astronomically rare (30^12 ≈ 5.3×10^17 space).
+	// A single insert with try/catch is sufficient — no retry loop needed.
+	try {
+		await db.insert(invitations).values({
+			code: generateInvitationCode(),
+			creatorId: user.id,
+			usedById: null,
+			createdAt: now,
+			expiresAt
+		});
+	} catch {
 		return jsonError(t, 'common.internalError', 500);
 	}
 
