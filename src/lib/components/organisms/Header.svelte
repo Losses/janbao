@@ -70,7 +70,7 @@
 		<div class="flex items-center gap-2 self-center">
 			<!-- Mobile: Hamburger menu button -->
 			<button
-				class="btn btn-ghost btn-sm md:hidden text-neutral-content/70 hover:text-neutral-content"
+				class="btn btn-ghost btn-sm md:hidden text-neutral-content/70 hover:text-neutral-content hover:bg-neutral-content/10 border-transparent hover:border-transparent"
 				onclick={onToggleDrawer}
 				aria-label={tNav['menu']}
 			>

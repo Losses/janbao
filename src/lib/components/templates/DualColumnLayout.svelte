@@ -46,7 +46,7 @@
 
 				<!-- Right Column (Desktop Sidebar) -->
 				{#if sidebar}
-					<aside class="hidden w-full shrink-0 md:block md:w-[320px]">
+					<aside class="hidden w-full shrink-0 md:block md:w-[280px]">
 						<div class="space-y-6">
 							{@render sidebar()}
 						</div>
@@ -60,7 +60,7 @@
 	{#if sidebar}
 		<div class="drawer-side z-50 md:hidden">
 			<label for="sidebar-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
-			<div class="min-h-full w-80 border-l border-base-300 bg-base-100 p-6 shadow-lg">
+			<div class="min-h-full w-[280px] border-l border-base-300 bg-base-100 p-6 shadow-lg">
 				<div class="space-y-6">
 					{@render sidebar()}
 				</div>
