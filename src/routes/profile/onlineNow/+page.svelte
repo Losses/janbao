@@ -71,7 +71,7 @@
 			</div>
 		{/if}
 
-		<div class="card bg-base-100 border border-base-200 rounded-xl p-6 shadow-sm space-y-4">
+		<div class="space-y-4">
 			<p class="text-sm text-base-content/70">
 				{profileT.stealthDescription}
 			</p>

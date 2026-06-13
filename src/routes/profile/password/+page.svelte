@@ -86,10 +86,7 @@
 			</div>
 		{/if}
 
-		<form
-			onsubmit={handleSubmit}
-			class="card bg-base-100 border border-base-200 rounded-xl p-6 shadow-sm space-y-4"
-		>
+		<form onsubmit={handleSubmit} class="space-y-4">
 			<div class="form-control">
 				<label class="label" for="currentPassword">
 					<span class="label-text font-medium">{profileT.currentPassword}</span>

@@ -9,7 +9,6 @@ import {
 	conversationReads
 } from '$lib/server/db/schema';
 import { eq, inArray, and } from 'drizzle-orm';
-import { dispatchMessageNotifications } from '$lib/server/db/notifications';
 import type { DbTransaction } from '$lib/server/db';
 import type { RequestHandler } from './$types';
 import type { MessageCreateBody } from '$lib/types/api';
@@ -119,13 +118,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			target: [conversationReads.userId, conversationReads.conversationId],
 			set: { lastReadAt: now }
 		});
-
-	// Notify other participants (PM @mention notifications are bypassed inside)
-	await dispatchMessageNotifications(db, {
-		conversationId,
-		messageId,
-		authorId: user.id
-	});
 
 	return json({ success: true, conversationId }, { status: 201 });
 };

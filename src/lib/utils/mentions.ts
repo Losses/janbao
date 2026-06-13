@@ -14,6 +14,7 @@ interface LexicalNode {
 	text?: string;
 	username?: string;
 	children?: LexicalNode[];
+	root?: LexicalNode;
 }
 
 const MENTION_PATTERN = /@[a-zA-Z0-9_-]{2,30}/g;
@@ -60,18 +61,24 @@ function collectTextAndMentions(node: unknown, texts: string[], mentionUsernames
 	if (!node || typeof node !== 'object') return;
 	const lexicalNode = node as LexicalNode;
 
+	// A serialized Lexical state is wrapped as { root: { type: 'root', children: [...] } }.
+	// Callers pass the parsed JSON object, so descend into `root` on the entry node;
+	// recursive children have no `root` and are traversed directly.
+	const entry: LexicalNode =
+		lexicalNode.root && typeof lexicalNode.root === 'object' ? lexicalNode.root : lexicalNode;
+
 	// Collect plain text content
-	if (typeof lexicalNode.text === 'string') {
-		texts.push(lexicalNode.text);
+	if (typeof entry.text === 'string') {
+		texts.push(entry.text);
 	}
 
 	// Collect username from dedicated MentionNode
-	if (lexicalNode.type === 'mention' && typeof lexicalNode.username === 'string') {
-		mentionUsernames.push(lexicalNode.username);
+	if (entry.type === 'mention' && typeof entry.username === 'string') {
+		mentionUsernames.push(entry.username);
 	}
 
-	if (Array.isArray(lexicalNode.children)) {
-		for (const child of lexicalNode.children) {
+	if (Array.isArray(entry.children)) {
+		for (const child of entry.children) {
 			collectTextAndMentions(child, texts, mentionUsernames);
 		}
 	}

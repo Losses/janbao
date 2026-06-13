@@ -113,7 +113,7 @@
 			</div>
 		{/if}
 
-		<div class="card bg-base-100 border border-base-200 rounded-xl p-6 shadow-sm space-y-6">
+		<div class="space-y-6">
 			<!-- Current Avatar Preview -->
 			<div class="flex items-center gap-4">
 				<Avatar

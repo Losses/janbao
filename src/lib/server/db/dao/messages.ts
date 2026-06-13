@@ -174,7 +174,9 @@ export async function getConversations(
 			// raw MAX() aggregate, which bypasses conversion and would render as the
 			// epoch (e.g. "56 years ago") on the client.
 			lastMessageAt: latest?.createdAt ?? null,
-			lastMessagePreview: latest ? extractPlainText(latest.contentJson) : null,
+			// Generous cap so the card's CSS line-clamp-3 is the real visual limiter
+			// (≈3 lines on desktop); short messages render in full.
+			lastMessagePreview: latest ? extractPlainText(latest.contentJson, 300) : null,
 			lastAuthorId: latest?.authorId ?? null,
 			lastAuthorUsername: latest?.authorUsername ?? null,
 			lastAuthorDisplayName: latest?.authorDisplayName ?? null,
@@ -186,4 +188,42 @@ export async function getConversations(
 	});
 
 	return { items, total };
+}
+
+/**
+ * Count the active user's total unread private messages across all
+ * conversations — the sum that `getConversations` computes per-conversation
+ * (messages newer than the user's lastReadAt, excluding their own messages,
+ * in non-deleted conversations they participate in), collapsed to one number.
+ * Used by the root layout load to render the message icon badge.
+ */
+export async function countTotalUnreadMessages(db: D1Db, userId: string): Promise<number> {
+	const rows = await db
+		.select({ count: sql<number>`COUNT(*)` })
+		.from(messages)
+		.innerJoin(
+			conversationParticipants,
+			and(
+				eq(conversationParticipants.conversationId, messages.conversationId),
+				eq(conversationParticipants.userId, userId)
+			)
+		)
+		.innerJoin(
+			conversations,
+			and(eq(conversations.id, messages.conversationId), isNull(conversations.deletedAt))
+		)
+		.leftJoin(
+			conversationReads,
+			and(
+				eq(conversationReads.conversationId, messages.conversationId),
+				eq(conversationReads.userId, userId)
+			)
+		)
+		.where(
+			and(
+				ne(messages.authorId, userId),
+				sql`${messages.createdAt} > COALESCE(${conversationReads.lastReadAt}, 0)`
+			)
+		);
+	return rows[0]?.count ?? 0;
 }

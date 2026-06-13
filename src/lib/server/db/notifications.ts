@@ -10,14 +10,10 @@
  *  - discussion owner   -> pref.discussionReply || pref.discussionComment
  *  - thread participant -> pref.participatedComment
  *  - bookmark subscriber-> pref.bookmarkedDiscussionComment
- *  - private message    -> pref.privateMessage
  *
  * A user receives at most one notification per content-creation event: when a
  * user qualifies under several categories, the most specific category wins
  * (mention > owner > participant > bookmarker).
- *
- * Private message mentions bypass `@mention` notification dispatch entirely,
- * so private content is never leaked to users outside the conversation.
  */
 import {
 	users,
@@ -25,9 +21,7 @@ import {
 	notificationPreferences,
 	discussions,
 	replies,
-	bookmarks,
-	conversationParticipants,
-	conversations
+	bookmarks
 } from './schema';
 import { eq, and, isNull, ne, inArray } from 'drizzle-orm';
 import type { D1Db } from './index';
@@ -49,15 +43,6 @@ interface NewNotificationRow {
 	sourceUserId: string;
 	discussionId: string;
 	replyId: string;
-	createdAt: Date;
-}
-
-interface MessageNotificationRow {
-	id: string;
-	userId: string;
-	type: string;
-	sourceUserId: string;
-	messageId: string;
 	createdAt: Date;
 }
 
@@ -160,76 +145,6 @@ export async function dispatchReplyNotifications(
 			sourceUserId: ctx.authorId,
 			discussionId: ctx.discussionId,
 			replyId: ctx.replyId,
-			createdAt: now
-		});
-	}
-
-	if (rows.length > 0) {
-		await db.insert(notifications).values(rows);
-	}
-}
-
-interface MessageNotificationContext {
-	conversationId: string;
-	messageId: string;
-	authorId: string;
-}
-
-/**
- * Dispatch notifications to the other participants of a conversation on a new
- * private message. Per §5.4, `@mention` notifications are intentionally
- * bypassed for private messages so content is never leaked outside the thread.
- */
-export async function dispatchMessageNotifications(
-	db: D1Db,
-	ctx: MessageNotificationContext
-): Promise<void> {
-	// Ensure the conversation is still active (not soft-deleted)
-	const conversationRecords = await db
-		.select({ id: conversations.id })
-		.from(conversations)
-		.where(and(eq(conversations.id, ctx.conversationId), isNull(conversations.deletedAt)))
-		.limit(1);
-
-	if (conversationRecords.length === 0) {
-		return;
-	}
-
-	const participantRows = await db
-		.select({ userId: conversationParticipants.userId })
-		.from(conversationParticipants)
-		.where(
-			and(
-				eq(conversationParticipants.conversationId, ctx.conversationId),
-				ne(conversationParticipants.userId, ctx.authorId)
-			)
-		);
-
-	if (participantRows.length === 0) {
-		return;
-	}
-
-	const recipientIds = [...new Set(participantRows.map((p) => p.userId))];
-
-	const prefs = await db
-		.select()
-		.from(notificationPreferences)
-		.where(inArray(notificationPreferences.userId, recipientIds));
-	const prefMap = new Map(prefs.map((p) => [p.userId, p]));
-
-	const now = new Date();
-	const rows: MessageNotificationRow[] = [];
-	for (const userId of recipientIds) {
-		const pref = prefMap.get(userId);
-		const eligible = pref ? pref.privateMessage : true;
-		if (!eligible) continue;
-
-		rows.push({
-			id: crypto.randomUUID(),
-			userId,
-			type: 'message',
-			sourceUserId: ctx.authorId,
-			messageId: ctx.messageId,
 			createdAt: now
 		});
 	}
