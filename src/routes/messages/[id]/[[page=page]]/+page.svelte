@@ -116,6 +116,7 @@
 			conversationId={conversation.id}
 			currentUserId={user?.id ?? null}
 			messageDraft={data.messageDraft}
+			mentionedUsers={data.mentionedUsers}
 			{t}
 		/>
 

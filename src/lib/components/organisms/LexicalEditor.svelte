@@ -311,8 +311,8 @@
 	<Composer {initialConfig}>
 		<div class={disabled ? 'opacity-60 pointer-events-none' : ''}>
 			<Toolbar>
-				{#snippet children({ editor, activeEditor })}
-					<RichTextToolbar {editor} {activeEditor} {disableHeadings} {disableImageUpload} />
+				{#snippet children({ activeEditor })}
+					<RichTextToolbar {activeEditor} {disableHeadings} {disableImageUpload} />
 				{/snippet}
 			</Toolbar>
 		</div>

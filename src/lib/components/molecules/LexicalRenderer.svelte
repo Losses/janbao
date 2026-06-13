@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { MentionedUsersMap } from '$lib/types/mentions';
 	/**
 	 * LexicalRenderer Molecule - Recursively renders Lexical JSON states securely on the client.
 	 * Supports standard text formats (bold, italic, underline, strikethrough, inline code),
@@ -19,17 +20,10 @@
 		children?: LexicalNode[];
 	}
 
-	interface MentionedUserEntry {
-		id: string;
-		displayName: string;
-		username: string;
-		avatarFileId: string | null;
-	}
-
 	interface LexicalRendererProps {
 		contentJson?: string | null;
 		class?: string;
-		mentionedUsers?: Record<string, MentionedUserEntry> | null;
+		mentionedUsers?: MentionedUsersMap | null;
 	}
 
 	let {
@@ -129,7 +123,7 @@
 
 {#snippet renderNode(node: LexicalNode)}
 	{#if node.type === 'text'}
-		{#each parseMentions(node.text || '') as segment}
+		{#each parseMentions(node.text || '') as segment, idx (idx)}
 			{#if segment.kind === 'mention' && mentionedUsers?.[segment.username]}
 				{@const user = mentionedUsers[segment.username]}
 				<a

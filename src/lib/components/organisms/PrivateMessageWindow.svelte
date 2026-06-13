@@ -14,6 +14,7 @@
 	import { mdiPencilOutline } from '@mdi/js';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import type { TranslationDict } from '$lib/types/translation';
+	import type { MentionedUsersMap } from '$lib/types/mentions';
 
 	interface PrivateMessage {
 		id: string;
@@ -33,6 +34,7 @@
 		currentUserId?: string | null;
 		messageDraft?: string | null;
 		t: TranslationDict;
+		mentionedUsers?: MentionedUsersMap | null;
 	}
 
 	let {
@@ -40,6 +42,7 @@
 		conversationId,
 		currentUserId = null,
 		messageDraft = null,
+		mentionedUsers = null,
 		t
 	}: PrivateMessageWindowProps = $props();
 
@@ -149,7 +152,7 @@
 						</div>
 					{:else}
 						<div class="mt-1">
-							<LexicalRenderer contentJson={msg.contentJson} />
+							<LexicalRenderer contentJson={msg.contentJson} {mentionedUsers} />
 						</div>
 						{#if msg.authorId === currentUserId}
 							<div class="mt-1">

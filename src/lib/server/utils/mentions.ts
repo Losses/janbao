@@ -12,15 +12,9 @@ import { users } from '../db/schema';
 import { inArray } from 'drizzle-orm';
 import { extractMentions } from '$lib/utils/mentions';
 import type { D1Db } from '../db/index';
+import type { MentionedUsersMap } from '$lib/types/mentions';
 
-export interface MentionedUserEntry {
-	id: string;
-	displayName: string;
-	username: string;
-	avatarFileId: string | null;
-}
-
-export type MentionedUsersMap = Record<string, MentionedUserEntry>;
+export type { MentionedUsersMap };
 
 /**
  * Scan one or more Lexical JSON content strings for `@username` mentions,

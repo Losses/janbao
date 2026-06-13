@@ -7,7 +7,6 @@ import {
 	users,
 	discussionReads,
 	notifications,
-	categoryPermissions,
 	drafts
 } from '$lib/server/db/schema';
 import { eq, and, isNull, count, ne, sql } from 'drizzle-orm';
@@ -213,10 +212,7 @@ export const load: PageServerLoad = async (event) => {
 	}
 
 	// 11. Resolve @mentions across OP + reply content for chip rendering
-	const allContentJsons = [
-		opReply?.contentJson,
-		...repliesStream.map((r) => r.contentJson)
-	];
+	const allContentJsons = [opReply?.contentJson, ...repliesStream.map((r) => r.contentJson)];
 	const mentionedUsers = await resolveMentions(allContentJsons, db);
 
 	return {

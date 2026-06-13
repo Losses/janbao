@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
 	import type { Writable } from 'svelte/store';
-	import type { LexicalEditor, LexicalCommand } from 'lexical';
+	import type { LexicalEditor } from 'lexical';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import {
 		toggleBold,
@@ -45,13 +45,12 @@
 	} from '@mdi/js';
 
 	interface Props {
-		editor: LexicalEditor;
 		activeEditor: LexicalEditor;
 		disableHeadings?: boolean;
 		disableImageUpload?: boolean;
 	}
 
-	let { editor, activeEditor, disableHeadings = false, disableImageUpload = false }: Props = $props();
+	let { activeEditor, disableHeadings = false, disableImageUpload = false }: Props = $props();
 
 	// Retrieve stores from svelte-lexical's context
 	const isBold = getContext<Writable<boolean>>('isBold');
@@ -86,13 +85,11 @@
 			activeEditor.focus();
 		}
 	}
-
-	function preventDefault(event: MouseEvent) {
-		event.preventDefault();
-	}
 </script>
 
-<div class="flex flex-wrap items-center gap-1.5 p-1.5 bg-base-200 border-b border-base-300 rounded-t-lg">
+<div
+	class="flex flex-wrap items-center gap-1.5 p-1.5 bg-base-200 border-b border-base-300 rounded-t-lg"
+>
 	<!-- Undo / Redo -->
 	<div class="join">
 		<button
@@ -347,7 +344,9 @@
 <!-- Custom daisyUI Modal for inserting images -->
 {#if showImageModal}
 	<div class="modal modal-open z-50">
-		<div class="modal-box max-w-md bg-base-100 text-base-content border border-base-300 relative p-6">
+		<div
+			class="modal-box max-w-md bg-base-100 text-base-content border border-base-300 relative p-6"
+		>
 			<button
 				type="button"
 				class="btn btn-sm btn-circle btn-ghost absolute right-4 top-4 text-error"
@@ -360,7 +359,10 @@
 			<h3 class="text-lg font-bold mb-4">Insert Image</h3>
 
 			<div class="form-control w-full mb-3">
-				<label for="editor-image-url" class="label label-text font-semibold p-1 text-base-content/70">Image URL</label>
+				<label
+					for="editor-image-url"
+					class="label label-text font-semibold p-1 text-base-content/70">Image URL</label
+				>
 				<input
 					id="editor-image-url"
 					type="text"
@@ -371,7 +373,10 @@
 			</div>
 
 			<div class="form-control w-full mb-4">
-				<label for="editor-image-alt" class="label label-text font-semibold p-1 text-base-content/70">Alt Text</label>
+				<label
+					for="editor-image-alt"
+					class="label label-text font-semibold p-1 text-base-content/70">Alt Text</label
+				>
 				<input
 					id="editor-image-alt"
 					type="text"
@@ -382,11 +387,7 @@
 			</div>
 
 			<div class="modal-action mt-6 flex justify-end gap-2">
-				<button
-					type="button"
-					class="btn btn-sm btn-ghost"
-					onclick={() => (showImageModal = false)}
-				>
+				<button type="button" class="btn btn-sm btn-ghost" onclick={() => (showImageModal = false)}>
 					Cancel
 				</button>
 				<button

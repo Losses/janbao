@@ -1,5 +1,5 @@
 import { replies, discussions, activities, categoryPermissions, categories } from '../schema';
-import { eq, and, isNull, isNotNull, sql, inArray } from 'drizzle-orm';
+import { eq, and, isNull, isNotNull, sql } from 'drizzle-orm';
 import type { D1Db } from '../index';
 
 export interface UserCommentItem {
@@ -113,10 +113,7 @@ export async function getUserComments(
  * Get the list of category slugs the given group can read.
  * Returns null if all categories are readable (admin/moderator default).
  */
-async function getReadableCategorySlugs(
-	db: D1Db,
-	groupSlug: string
-): Promise<string[] | null> {
+async function getReadableCategorySlugs(db: D1Db, groupSlug: string): Promise<string[] | null> {
 	if (groupSlug === 'admin' || groupSlug === 'moderator') {
 		return null;
 	}
