@@ -22,6 +22,7 @@
 
 	function openDrawer() {
 		isDrawerOpen = true;
+		void user;
 	}
 </script>
 
@@ -31,7 +32,7 @@
 
 	<div class="drawer-content flex min-h-screen flex-col bg-base-100 text-base-content">
 		<!-- Global Header -->
-		<Header user={user ?? null} {t} onToggleDrawer={openDrawer} />
+		<Header {t} onToggleDrawer={openDrawer} />
 
 		<!-- Main Content Container -->
 		<div class="mx-auto w-full max-w-[960px] flex-1 px-4 py-6 md:px-6">

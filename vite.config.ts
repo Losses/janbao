@@ -27,7 +27,32 @@ export default defineConfig({
 			}
 		})
 	],
+	resolve: {
+		dedupe: ['lexical']
+	},
 	ssr: {
+		noExternal: [
+			'lexical',
+			'@lexical/clipboard',
+			'@lexical/code',
+			'@lexical/file',
+			'@lexical/hashtag',
+			'@lexical/history',
+			'@lexical/html',
+			'@lexical/link',
+			'@lexical/list',
+			'@lexical/mark',
+			'@lexical/markdown',
+			'@lexical/overflow',
+			'@lexical/plain-text',
+			'@lexical/rich-text',
+			'@lexical/selection',
+			'@lexical/table',
+			'@lexical/text',
+			'@lexical/utils',
+			'@lexical/yjs',
+			'svelte-lexical'
+		],
 		// Prevent Vite from bundling libsql during production builds.
 		// These modules are dynamically imported in the local development
 		// database path (never reached in Cloudflare production).
