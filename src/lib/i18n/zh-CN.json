@@ -226,10 +226,7 @@
 		"pin": "置顶",
 		"unpin": "取消置顶",
 		"editDiscussion": "编辑讨论",
-		"editReply": "编辑回复",
 		"saveReply": "保存",
-		"deleteDiscussion": "删除讨论",
-		"deleteReply": "删除",
 		"deleteDiscussionConfirm": "确定要删除这个讨论吗？此操作无法撤销。",
 		"deleteReplyConfirm": "确定要删除这条回复吗？",
 		"quickReply": "回复"

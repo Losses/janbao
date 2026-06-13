@@ -43,6 +43,7 @@
 	import RichTextToolbar from '$lib/components/molecules/RichTextToolbar.svelte';
 	import RichTextLinkEditor from '$lib/components/molecules/RichTextLinkEditor.svelte';
 	import { CodeNode, CodeHighlightNode } from '@lexical/code';
+	import { MentionNode, createMentionNode } from '$lib/components/atoms/MentionNode';
 	import {
 		COMMAND_PRIORITY_EDITOR,
 		$getSelection as getSelection,
@@ -168,6 +169,12 @@
 		getNodes?: GetNodesFn;
 	}
 
+	type InsertNodesFn = (nodes: unknown[]) => void;
+
+	interface SelectionWithInsertNodes {
+		insertNodes?: InsertNodesFn;
+	}
+
 	$effect(() => {
 		if (!editorInstance) return;
 		const castEditor = editorInstance as EditorWithTransform;
@@ -226,7 +233,8 @@
 		AutoLinkNode,
 		LinkNode,
 		CodeNode,
-		CodeHighlightNode
+		CodeHighlightNode,
+		MentionNode
 	];
 
 	// Markdown transformers we support
@@ -391,6 +399,33 @@
 			}
 			if (isRangeSelection(selection)) {
 				selection.insertText(text);
+			}
+		});
+	}
+
+	/**
+	 * Inserts a mention chip (MentionNode) at the current selection.
+	 * The chip shows @displayName in the editor and exports @username for backend processing.
+	 */
+	export function insertMention(username: string, displayName: string) {
+		if (!editorInstance) return;
+		const castEditor = editorInstance as { update: UpdateFn; focus: VoidHandler };
+		castEditor.focus();
+		castEditor.update(() => {
+			let selection = getSelection();
+			if (!isRangeSelection(selection)) {
+				getRoot().selectEnd();
+				selection = getSelection();
+			}
+			if (isRangeSelection(selection)) {
+				const sel = selection as SelectionWithInsertNodes;
+				const mentionNode = createMentionNode(username, displayName);
+				sel.insertNodes?.([mentionNode]);
+				// Insert trailing space after the chip
+				selection = getSelection();
+				if (isRangeSelection(selection)) {
+					selection.insertText(' ');
+				}
 			}
 		});
 	}

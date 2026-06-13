@@ -1,13 +1,12 @@
 <script lang="ts">
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import DateComponent from '$lib/components/atoms/Date.svelte';
-	import LinkButton from '$lib/components/atoms/LinkButton.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import ConfirmationModal from '$lib/components/organisms/ConfirmationModal.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import { generateSlug } from '$lib/utils/slug';
 	import Icon from '$lib/components/atoms/Icon.svelte';
-	import { mdiDeleteOutline, mdiArrowRight } from '@mdi/js';
+	import { mdiArrowRight } from '@mdi/js';
 	import type { ApiResult, ActivityCommentItem, ActivityCommentsResponse } from '$lib/types/api';
 	import type { MentionedUsersMap } from '$lib/types/mentions';
 	import type { TranslationDict } from '$lib/types/translation';
@@ -50,7 +49,8 @@
 		isTopLevel = true
 	}: ActivityRowProps = $props();
 
-	let showComments = $state(false);
+	let showEditor = $state(false);
+	let commentsLoaded = $state(false);
 	let comments = $state<ActivityCommentItem[]>([]);
 	let loadingComments = $state(false);
 	let commentContentJson = $state('');
@@ -60,6 +60,13 @@
 	let showDeleteModal = $state(false);
 	let deleteTargetId = $state<string | null>(null);
 	let editorKey = $state(0);
+
+	$effect(() => {
+		if (isTopLevel && !commentsLoaded) {
+			commentsLoaded = true;
+			loadComments();
+		}
+	});
 
 	function handleCommentEditorChange(json: string) {
 		commentContentJson = json;
@@ -74,11 +81,8 @@
 		return key;
 	}
 
-	async function toggleComments() {
-		showComments = !showComments;
-		if (showComments && comments.length === 0) {
-			await loadComments();
-		}
+	function toggleEditor() {
+		showEditor = !showEditor;
 	}
 
 	async function loadComments() {
@@ -111,6 +115,7 @@
 				commentContentJson = '';
 				editorKey += 1;
 				commentCountState += 1;
+				showEditor = false;
 				await loadComments();
 			}
 		} catch {
@@ -200,28 +205,34 @@
 				<LexicalRenderer {contentJson} {mentionedUsers} />
 			</div>
 
-			<!-- Row 3: Timestamp + "Comment" text link + delete button -->
-			<div class="flex items-center gap-3 mt-2 text-sm text-base-content/50">
-				<DateComponent value={createdAt} {t} class="text-sm" />
+			<!-- Row 3: Timestamp + action buttons -->
+			<div class="flex justify-end items-center gap-2 pt-2 border-t border-base-200/50 mt-2">
+				<div class="flex-1 text-sm text-base-content/50">
+					<DateComponent value={createdAt} {t} class="text-sm" />
+				</div>
 				{#if isTopLevel && currentUserId}
-					<LinkButton onclick={toggleComments} class="hover:text-primary hover:underline">
+					<button
+						type="button"
+						class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
+						onclick={toggleEditor}
+					>
 						{gtc('comment')}{commentCountState > 0 ? ` (${commentCountState})` : ''}
-					</LinkButton>
+					</button>
 				{/if}
 				{#if currentUserId === authorId || isAdmin || currentUserId === recipientId}
-					<LinkButton
+					<button
+						type="button"
+						class="btn btn-xs btn-ghost text-error/60 hover:text-error"
 						onclick={() => confirmDelete(id)}
-						class="text-warning hover:underline flex items-center gap-1"
 					>
-						<Icon path={mdiDeleteOutline} size={0.8} />
 						{gtc('delete')}
-					</LinkButton>
+					</button>
 				{/if}
 			</div>
 
-			{#if showComments}
+			{#if isTopLevel && (showEditor || loadingComments || comments.length > 0)}
 				<div class="mt-3 bg-base-200/50 rounded-lg p-3">
-					{#if currentUserId}
+					{#if showEditor && currentUserId}
 						<div class="mb-3 flex flex-col gap-2">
 							{#key editorKey}
 								<LexicalEditor
@@ -277,17 +288,21 @@
 										<div class="mt-0.5">
 											<LexicalRenderer contentJson={comment.contentJson} class="text-sm" />
 										</div>
-										<!-- Row 3: Timestamp + delete button -->
-										<div class="flex items-center gap-3 mt-1 text-xs text-base-content/50">
-											<DateComponent value={comment.createdAt} {t} class="text-xs" />
+										<!-- Row 3: Timestamp + action buttons -->
+										<div
+											class="flex justify-end items-center gap-2 pt-1 border-t border-base-200/50 mt-1"
+										>
+											<div class="flex-1 text-xs text-base-content/50">
+												<DateComponent value={comment.createdAt} {t} class="text-xs" />
+											</div>
 											{#if currentUserId === comment.authorId || isAdmin || currentUserId === authorId || currentUserId === recipientId}
-												<LinkButton
+												<button
+													type="button"
+													class="btn btn-xs btn-ghost text-error/60 hover:text-error"
 													onclick={() => confirmDelete(comment.id)}
-													class="text-xs text-warning hover:underline flex items-center gap-0.5"
 												>
-													<Icon path={mdiDeleteOutline} size={0.7} />
 													{gtc('delete')}
-												</LinkButton>
+												</button>
 											{/if}
 										</div>
 									</div>

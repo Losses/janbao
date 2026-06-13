@@ -1,12 +1,13 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
-	import ActiveUsersWall from '$lib/components/molecules/ActiveUsersWall.svelte';
+	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import ParticipantAdder from '$lib/components/molecules/ParticipantAdder.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import { mdiClose } from '@mdi/js';
 	import { formatTitle } from '$lib/utils/title';
+	import { generateSlug } from '$lib/utils/slug';
 	import { goto } from '$app/navigation';
 	import type { UserSearchResult, ApiResult } from '$lib/types/api';
 	import type { PageData } from './$types';
@@ -20,6 +21,7 @@
 	const t = $derived(data.t);
 	const messageT = $derived(t.message);
 	const user = $derived(data.user);
+	const userSlug = $derived(generateSlug(user?.username || ''));
 
 	// svelte-ignore state_referenced_locally
 	let recipients = $state<UserSearchResult[]>(data.prefillRecipient ? [data.prefillRecipient] : []);
@@ -71,12 +73,15 @@
 </svelte:head>
 
 {#snippet sidebar()}
-	<div class="card bg-base-200 border border-base-300 p-4 space-y-4">
-		<a href="/messages/inbox" class="btn btn-outline btn-sm w-full">
-			{messageT.inbox}
-		</a>
-		<ActiveUsersWall {t} />
-	</div>
+	{#if user}
+		<ProfileSidebar
+			{user}
+			{t}
+			activeItem="mailbox"
+			targetUserId={user.id}
+			targetUserSlug={userSlug}
+		/>
+	{/if}
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>

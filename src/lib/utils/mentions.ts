@@ -5,13 +5,14 @@
  * walks every node, collects the raw text payloads, and matches `@username`
  * tokens against the canonical username character set (`[a-zA-Z0-9_-]{2,30}`).
  *
- * The editor does not currently emit dedicated mention nodes, so mentions are
- * resolved from plain-text `@username` tokens. Returns a de-duplicated list of
- * usernames (without the leading `@`), preserving first-seen order.
+ * Also handles dedicated MentionNode entries (type: 'mention') which store the
+ * username directly. Returns a de-duplicated list of usernames (without the
+ * leading `@`), preserving first-seen order.
  */
 interface LexicalNode {
 	type: string;
 	text?: string;
+	username?: string;
 	children?: LexicalNode[];
 }
 
@@ -26,10 +27,21 @@ export function extractMentions(contentJson: string): string[] {
 	}
 
 	const texts: string[] = [];
-	collectText(root, texts);
+	const mentionUsernames: string[] = [];
+	collectTextAndMentions(root, texts, mentionUsernames);
 
 	const usernames: string[] = [];
 	const seen = new Set<string>();
+
+	// First, add usernames from dedicated MentionNodes
+	for (const username of mentionUsernames) {
+		if (!seen.has(username)) {
+			seen.add(username);
+			usernames.push(username);
+		}
+	}
+
+	// Then, extract @username tokens from plain text
 	for (const text of texts) {
 		const matches = text.match(MENTION_PATTERN);
 		if (!matches) continue;
@@ -44,15 +56,23 @@ export function extractMentions(contentJson: string): string[] {
 	return usernames;
 }
 
-function collectText(node: unknown, out: string[]): void {
+function collectTextAndMentions(node: unknown, texts: string[], mentionUsernames: string[]): void {
 	if (!node || typeof node !== 'object') return;
 	const lexicalNode = node as LexicalNode;
+
+	// Collect plain text content
 	if (typeof lexicalNode.text === 'string') {
-		out.push(lexicalNode.text);
+		texts.push(lexicalNode.text);
 	}
+
+	// Collect username from dedicated MentionNode
+	if (lexicalNode.type === 'mention' && typeof lexicalNode.username === 'string') {
+		mentionUsernames.push(lexicalNode.username);
+	}
+
 	if (Array.isArray(lexicalNode.children)) {
 		for (const child of lexicalNode.children) {
-			collectText(child, out);
+			collectTextAndMentions(child, texts, mentionUsernames);
 		}
 	}
 }
@@ -71,8 +91,13 @@ export function extractPlainText(contentJson: string, maxLen = 120): string {
 	}
 
 	const texts: string[] = [];
-	collectText(root, texts);
-	const joined = texts.join('').replace(/\s+/g, ' ').trim();
+	const mentionUsernames: string[] = [];
+	collectTextAndMentions(root, texts, mentionUsernames);
+
+	// Include mention display names as @username in the plain text
+	const allTexts = [...texts, ...mentionUsernames.map((u) => `@${u}`)];
+
+	const joined = allTexts.join('').replace(/\s+/g, ' ').trim();
 	if (joined.length <= maxLen) return joined;
 	return `${joined.slice(0, maxLen)}…`;
 }
