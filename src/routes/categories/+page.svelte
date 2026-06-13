@@ -22,7 +22,7 @@
 </svelte:head>
 
 {#snippet sidebar()}
-	<div class="card bg-base-200 border border-base-300 p-4 space-y-4">
+	<div class="space-y-4">
 		{#if user}
 			<UserInfoBlock {user} {t} />
 		{:else}

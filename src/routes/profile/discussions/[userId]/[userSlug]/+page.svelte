@@ -50,7 +50,9 @@
 			<h1 class="text-2xl font-bold tracking-tight">
 				{targetUser.displayName} - {profileT.discussions}
 			</h1>
-			<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+			{#if totalPages > 1}
+				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+			{/if}
 		</div>
 
 		<!-- Discussions Listing -->
@@ -79,9 +81,11 @@
 			</div>
 
 			<!-- Bottom Paginator -->
-			<div class="flex justify-end pt-2">
-				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
-			</div>
+			{#if totalPages > 1}
+				<div class="flex justify-end pt-2">
+					<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+				</div>
+			{/if}
 		{/if}
 	</div>
 </DualColumnLayout>

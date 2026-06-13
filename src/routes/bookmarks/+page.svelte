@@ -79,14 +79,16 @@
 				{/each}
 			</div>
 
-			<div class="flex justify-end pt-2">
-				<Paginator
-					currentPage={data.page}
-					totalPages={data.totalPages}
-					onPageChange={handlePageChange}
-					{t}
-				/>
-			</div>
+			{#if data.totalPages > 1}
+				<div class="flex justify-end pt-2">
+					<Paginator
+						currentPage={data.page}
+						totalPages={data.totalPages}
+						onPageChange={handlePageChange}
+						{t}
+					/>
+				</div>
+			{/if}
 		{/if}
 	</div>
 </DualColumnLayout>

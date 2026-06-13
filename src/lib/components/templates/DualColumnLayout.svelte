@@ -30,13 +30,15 @@
 	<!-- Drawer Toggle checkbox bound to isDrawerOpen state -->
 	<input id="sidebar-drawer" type="checkbox" class="drawer-toggle" bind:checked={isDrawerOpen} />
 
-	<div class="drawer-content flex min-h-screen flex-col bg-base-100 text-base-content">
+	<div class="drawer-content flex min-h-screen flex-col bg-base-200 text-base-content">
 		<!-- Global Header -->
 		<Header {t} onToggleDrawer={openDrawer} />
 
 		<!-- Main Content Container -->
-		<div class="mx-auto w-full max-w-[960px] flex-1 px-4 py-6 md:px-6">
-			<div class="flex flex-col gap-6 md:flex-row">
+		<div class="mx-auto w-full max-w-[960px] flex-1 px-0 pb-6 md:px-6">
+			<div
+				class="bg-base-100 border-b md:border-x border-base-300 p-6 md:p-8 flex flex-col gap-6 md:flex-row"
+			>
 				<!-- Left Column (Main Page Content) -->
 				<main class="w-full min-w-0 flex-1">
 					{@render children()}

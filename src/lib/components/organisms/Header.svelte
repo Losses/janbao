@@ -27,33 +27,35 @@
 	}
 </script>
 
-<header class="sticky top-0 z-40 backdrop-blur bg-base-100/80 border-b border-base-200">
-	<nav class="mx-auto max-w-[960px] px-4 md:px-6 h-14 flex items-center justify-between">
+<header class="sticky top-0 md:top-6 z-40 mx-auto w-full max-w-[960px] px-0 md:px-6 mt-0 md:mt-6">
+	<nav
+		class="bg-neutral text-neutral-content h-14 flex items-center justify-between px-4 md:px-6 shadow-sm"
+	>
 		<!-- Left: Site name (plain text, no icon) -->
-		<a href="/" class="text-lg font-bold text-base-content">{getSiteName()}</a>
+		<a href="/" class="text-lg font-bold text-neutral-content">{getSiteName()}</a>
 
 		<!-- Center: Desktop Navigation (hidden on mobile) -->
 		<div class="hidden md:flex items-center gap-1">
 			<a
 				href="/"
-				class="btn btn-ghost btn-sm text-sm"
-				class:text-primary={isNavActive('/')}
+				class="btn btn-ghost btn-sm text-sm text-neutral-content/70 hover:text-neutral-content"
+				class:text-accent={isNavActive('/')}
 				aria-current={isNavActive('/') ? 'page' : undefined}
 			>
 				{tNav['home']}
 			</a>
 			<a
 				href="/activity"
-				class="btn btn-ghost btn-sm text-sm"
-				class:text-primary={isNavActive('/activity')}
+				class="btn btn-ghost btn-sm text-sm text-neutral-content/70 hover:text-neutral-content"
+				class:text-accent={isNavActive('/activity')}
 				aria-current={isNavActive('/activity') ? 'page' : undefined}
 			>
 				{tNav['activity']}
 			</a>
 			<a
 				href="/messages/inbox"
-				class="btn btn-ghost btn-sm text-sm"
-				class:text-primary={isNavActive('/messages')}
+				class="btn btn-ghost btn-sm text-sm text-neutral-content/70 hover:text-neutral-content"
+				class:text-accent={isNavActive('/messages')}
 				aria-current={isNavActive('/messages') ? 'page' : undefined}
 			>
 				{tNav['messages']}
@@ -64,7 +66,7 @@
 		<div class="flex items-center gap-2">
 			<!-- Mobile: Hamburger menu button -->
 			<button
-				class="btn btn-ghost btn-sm md:hidden"
+				class="btn btn-ghost btn-sm md:hidden text-neutral-content/70 hover:text-neutral-content"
 				onclick={onToggleDrawer}
 				aria-label={tNav['menu']}
 			>

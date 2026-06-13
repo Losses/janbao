@@ -137,7 +137,7 @@
 </svelte:head>
 
 {#snippet sidebar()}
-	<div class="card bg-base-200 border border-base-300 p-4 space-y-4">
+	<div class="space-y-4">
 		{#if user}
 			<UserInfoBlock {user} {t} />
 			<div class="flex flex-col gap-2">
@@ -244,9 +244,11 @@
 		{/if}
 
 		<!-- Paginator Top -->
-		<div class="flex justify-end">
-			<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
-		</div>
+		{#if totalPages > 1}
+			<div class="flex justify-end">
+				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+			</div>
+		{/if}
 
 		<!-- Replies Stream -->
 		{#if repliesList.length > 0}
@@ -357,9 +359,11 @@
 		{/if}
 
 		<!-- Paginator Bottom -->
-		<div class="flex justify-end pt-2">
-			<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
-		</div>
+		{#if totalPages > 1}
+			<div class="flex justify-end pt-2">
+				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+			</div>
+		{/if}
 
 		<!-- Reply Composer at the bottom -->
 		<div bind:this={replyComposerElem} class="pt-6">
