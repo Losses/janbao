@@ -29,6 +29,10 @@
 	let showSaveSuccess = $state(false);
 	let loadedDiscussionId = $state<string | null>(null);
 
+	const currentTheme = $derived(
+		themeName || categories.find((c) => c.slug === categorySlug)?.themeName || 'huoxin'
+	);
+
 	$effect(() => {
 		if (data.discussion && data.discussion.id !== loadedDiscussionId) {
 			title = data.discussion.title;
@@ -54,11 +58,7 @@
 
 	$effect(() => {
 		if (typeof document === 'undefined') return;
-		if (themeName) {
-			document.documentElement.setAttribute('data-theme', themeName);
-		} else {
-			document.documentElement.removeAttribute('data-theme');
-		}
+		document.documentElement.setAttribute('data-theme', currentTheme);
 	});
 
 	const themesList = $derived([
