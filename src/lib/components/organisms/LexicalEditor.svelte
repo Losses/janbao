@@ -477,10 +477,12 @@
 		</div>
 	</Composer>
 
-	<!-- Save Status Footer -->
+	<!-- Save Status — floating overlay (anchored to the relative root) rather
+	     than in-flow. Appearing/disappearing no longer changes the editor's
+	     height, so the page stops jumping on every autosave. -->
 	{#if saveStatusLabel}
 		<div
-			class="janbao-rich-editor-footer border-t border-base-300 px-3 py-1 text-right text-xs text-base-content/40 bg-base-200"
+			class="absolute bottom-1.5 right-2 z-30 rounded-md bg-base-200/90 px-2 py-0.5 text-xs text-base-content/50 shadow-sm backdrop-blur-sm pointer-events-none"
 		>
 			{saveStatusLabel}
 		</div>
@@ -509,11 +511,6 @@
 	}
 
 	.janbao-rich-editor :global(.ContentEditable__root) {
-		border-bottom-left-radius: max(0px, calc(var(--radius-field, 0.5rem) - 1px));
-		border-bottom-right-radius: max(0px, calc(var(--radius-field, 0.5rem) - 1px));
-	}
-
-	.janbao-rich-editor-footer {
 		border-bottom-left-radius: max(0px, calc(var(--radius-field, 0.5rem) - 1px));
 		border-bottom-right-radius: max(0px, calc(var(--radius-field, 0.5rem) - 1px));
 	}

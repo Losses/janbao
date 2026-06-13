@@ -73,7 +73,7 @@
 <DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-6">
 		<!-- Profile Header -->
-		<div class="card bg-base-100 p-6">
+		<div>
 			<div class="flex items-center gap-4">
 				<Avatar
 					src={targetUser.avatarFileId ? `/img/${targetUser.avatarFileId}` : null}
