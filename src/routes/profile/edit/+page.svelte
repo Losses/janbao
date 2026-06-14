@@ -113,11 +113,9 @@
 					aria-describedby={allowSlugChange && !isAdmin ? 'username-hint' : undefined}
 				/>
 				{#if username && !isValidUsername(username)}
-					<label class="label" for="username">
-						<span class="label-text-alt text-error">
-							{t.auth.invalidUsername}
-						</span>
-					</label>
+					<p class="text-xs text-error mt-1">
+						{t.auth.invalidUsername}
+					</p>
 				{/if}
 				{#if allowSlugChange && !isAdmin}
 					<label class="label" id="username-hint" for="username">

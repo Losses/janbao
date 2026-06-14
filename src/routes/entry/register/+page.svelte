@@ -121,11 +121,9 @@
 					placeholder="username"
 				/>
 				{#if username && !isValidUsername(username)}
-					<label class="label" for="username">
-						<span class="label-text-alt text-error">
-							{t.auth.invalidUsername}
-						</span>
-					</label>
+					<p class="text-xs text-error mt-1">
+						{t.auth.invalidUsername}
+					</p>
 				{/if}
 			</div>
 
