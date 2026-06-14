@@ -55,7 +55,7 @@
 	 * Regex pattern to match @username mentions in text.
 	 * Matches @ followed by 2-30 alphanumeric, underscore, or hyphen characters.
 	 */
-	const MENTION_REGEX = /@[a-zA-Z0-9_-]{2,30}/g;
+	const MENTION_REGEX = /@[\p{L}\p{N}_-]{2,30}/gu;
 
 	/**
 	 * Split a text string into segments, replacing @username tokens
@@ -76,7 +76,7 @@
 		let lastIndex = 0;
 
 		// Reset regex state for global matching
-		const regex = new RegExp(MENTION_REGEX.source, 'g');
+		const regex = new RegExp(MENTION_REGEX.source, 'gu');
 		let match: RegExpExecArray | null;
 
 		while ((match = regex.exec(text)) !== null) {

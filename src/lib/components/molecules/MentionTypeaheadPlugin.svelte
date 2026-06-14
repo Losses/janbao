@@ -54,7 +54,7 @@
 	let unregisterFns: (() => void)[] = [];
 
 	// --- Trigger regex ---
-	const MENTION_TRIGGER_REGEX = /(^|\s)(@([a-zA-Z0-9_-]{0,30}))$/;
+	const MENTION_TRIGGER_REGEX = /(^|\s)(@([\p{L}\p{N}_-]{0,30}))$/u;
 
 	type KeyboardCommandHandler = (event: KeyboardEvent) => boolean;
 

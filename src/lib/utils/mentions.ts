@@ -17,7 +17,7 @@ interface LexicalNode {
 	root?: LexicalNode;
 }
 
-const MENTION_PATTERN = /@[a-zA-Z0-9_-]{2,30}/g;
+const MENTION_PATTERN = /@[\p{L}\p{N}_-]{2,30}/gu;
 
 export function extractMentions(contentJson: string): string[] {
 	let root: unknown;
