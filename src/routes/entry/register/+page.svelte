@@ -5,6 +5,7 @@
 	import { formatTitle } from '$lib/utils/title';
 	import type { PageData } from './$types';
 	import type { ApiResponse } from '$lib/types/api';
+	import { isValidUsername } from '$lib/utils/validation';
 
 	interface PageProps {
 		data: PageData;
@@ -34,6 +35,11 @@
 
 		if (!isPasswordStrong) {
 			errorMessage = t.auth.passwordTooShort;
+			return;
+		}
+
+		if (!isValidUsername(username)) {
+			errorMessage = t.auth.invalidUsername;
 			return;
 		}
 
@@ -109,9 +115,18 @@
 					type="text"
 					required
 					bind:value={username}
-					class="input input-bordered w-full"
+					class="input input-bordered w-full {username && !isValidUsername(username)
+						? 'input-error'
+						: ''}"
 					placeholder="username"
 				/>
+				{#if username && !isValidUsername(username)}
+					<label class="label" for="username">
+						<span class="label-text-alt text-error">
+							{t.auth.invalidUsername}
+						</span>
+					</label>
+				{/if}
 			</div>
 
 			<div class="form-control">

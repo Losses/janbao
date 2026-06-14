@@ -223,6 +223,7 @@
 		"emailInUse": "Email already in use",
 		"invalidLanguage": "Invalid language preference",
 		"usernameAdminOnlyError": "Only admins can change usernames",
+		"usernameChangeDisabledError": "Username (slug) changing is disabled by the administrator",
 		"usernameEmpty": "Username cannot be empty",
 		"usernameInUse": "Username already in use",
 		"currentPasswordRequired": "Current password is required",

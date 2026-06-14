@@ -7,8 +7,8 @@ import { json } from '@sveltejs/kit';
 import { eq, or } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import type { AuthRegisterBody } from '$lib/types/api';
+import { isValidUsername } from '$lib/utils/validation';
 
-const USERNAME_REGEX = /^[a-zA-Z0-9_-]{2,30}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const POST: RequestHandler = async (event) => {
@@ -22,7 +22,7 @@ export const POST: RequestHandler = async (event) => {
 			return jsonError(t, 'auth.allFieldsRequired', 400);
 		}
 
-		if (!USERNAME_REGEX.test(username)) {
+		if (!isValidUsername(username)) {
 			return jsonError(t, 'auth.invalidUsername', 400);
 		}
 

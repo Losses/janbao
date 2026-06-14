@@ -223,6 +223,7 @@
 		"emailInUse": "邮箱已被使用",
 		"invalidLanguage": "无效的语言偏好",
 		"usernameAdminOnlyError": "仅管理员可以修改用户名",
+		"usernameChangeDisabledError": "用户名（Slug）修改功能已被禁用",
 		"usernameEmpty": "用户名不能为空",
 		"usernameInUse": "用户名已被使用",
 		"currentPasswordRequired": "请输入当前密码",

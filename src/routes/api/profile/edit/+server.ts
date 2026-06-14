@@ -4,8 +4,10 @@ import { users } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { jsonError } from '$lib/server/errors';
 import type { ProfileEditBody } from '$lib/types/api';
+import { getAllowSlugChange } from '$lib/server/constants';
+import { isValidUsername } from '$lib/utils/validation';
 
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	const user = locals.user;
 	const t = locals.t;
 	if (!user) {
@@ -54,12 +56,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	if (username !== undefined) {
+		const allowSlugChange = getAllowSlugChange(platform?.env);
+		if (!allowSlugChange) {
+			return jsonError(t, 'profile.usernameChangeDisabledError', 400);
+		}
 		if (user.groupSlug !== 'admin') {
 			return jsonError(t, 'profile.usernameAdminOnlyError', 403);
 		}
 		const trimmed = username.trim();
 		if (trimmed.length === 0) {
 			return jsonError(t, 'profile.usernameEmpty', 400);
+		}
+		if (!isValidUsername(trimmed)) {
+			return jsonError(t, 'auth.invalidUsername', 400);
 		}
 		const existingUsername = await locals.db
 			.select({ id: users.id })
