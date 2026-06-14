@@ -5,8 +5,8 @@
  *   bun scripts/backfill-fts.ts
  *
  * Idempotent: clears each FTS table first, so it can be re-run after schema or
- * extractor changes. For production, use the /admin/backfill-fts endpoint, which
- * runs the same logic inside the Worker via the D1 binding.
+ * extractor changes. scripts/import-data.ts also calls ensureAndBackfillAll at
+ * the end of a fresh import, so re-indexing stays in sync automatically.
  */
 import { getLocalDb } from '../src/lib/server/db';
 import { ensureAndBackfillAll } from '../src/lib/server/search/backfill';
