@@ -33,3 +33,4 @@ draft-*.md
 .local.db*
 .local-uploads/**
 import-conflicts.json
+scratch/**/*
