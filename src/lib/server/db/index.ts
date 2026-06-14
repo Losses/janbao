@@ -40,6 +40,11 @@ export async function getLocalDb(): Promise<D1Db> {
 		const { migrate } = await import('drizzle-orm/libsql/migrator');
 
 		const client = createClient({ url: 'file:.local.db' });
+		// WAL allows concurrent readers (dev server) alongside a writer (import scripts),
+		// so running import-data without stopping `bun run dev` no longer 500s on lock
+		// errors. busy_timeout makes a contended writer wait briefly instead of failing.
+		await client.execute('PRAGMA journal_mode=WAL');
+		await client.execute('PRAGMA busy_timeout=5000');
 		const sqliteDb = drizzleLibsql(client, { schema });
 		await migrate(sqliteDb, { migrationsFolder: 'drizzle/local-migrations' });
 		_localDb = castDb<D1Db>(sqliteDb);
