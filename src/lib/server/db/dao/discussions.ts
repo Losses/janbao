@@ -199,22 +199,25 @@ export async function getDiscussionsList(
 			unreadMap.set(row.id, row.commentCount);
 		}
 
-		// Read discussions: batch count replies newer than each discussion's lastReadAt
-		// Since each discussion has a different lastReadAt timestamp, we run one query per
+		// Read discussions: batch count replies newer than each discussion's lastReadAt or lastReadReplyId
+		// Since each discussion has a different lastReadAt timestamp or lastReadReplyId, we run one query per
 		// discussion but use IN(...) for the discussionIds to keep index lookups efficient.
 		// This is a controlled pattern: max 20 queries, each hitting the composite index.
 		const readIds = readDiscussions.map((r) => r.id);
 		if (readIds.length > 0) {
-			const readMap = new Map<number, Date>();
+			const readAtMap = new Map<number, Date>();
+			const readReplyIdMap = new Map<number, number | null>();
 			for (const row of readDiscussions) {
-				readMap.set(row.id, row.lastReadAt!);
+				readAtMap.set(row.id, row.lastReadAt!);
+				readReplyIdMap.set(row.id, row.lastReadReplyId);
 			}
 
 			// Fetch all non-deleted replies for these discussions created after their respective
-			// lastReadAt. We use a union-like approach: fetch all replies for these discussions
+			// lastReadAt or lastReadReplyId. We use a union-like approach: fetch all replies for these discussions
 			// and filter in-memory since each discussion has a different threshold.
 			const allRecentReplies = await db
 				.select({
+					id: replies.id,
 					discussionId: replies.discussionId,
 					createdAt: replies.createdAt
 				})
@@ -222,10 +225,15 @@ export async function getDiscussionsList(
 				.where(and(inArray(replies.discussionId, readIds), isNull(replies.deletedAt)));
 
 			for (const did of readIds) {
-				const threshold = readMap.get(did)!;
-				const cnt = allRecentReplies.filter(
-					(r) => r.discussionId === did && r.createdAt > threshold
-				).length;
+				const threshold = readAtMap.get(did)!;
+				const lastReadReplyId = readReplyIdMap.get(did);
+				const cnt = allRecentReplies.filter((r) => {
+					if (r.discussionId !== did) return false;
+					if (lastReadReplyId !== null && lastReadReplyId !== undefined) {
+						return r.id > lastReadReplyId;
+					}
+					return r.createdAt > threshold;
+				}).length;
 				unreadMap.set(did, cnt);
 			}
 		}
