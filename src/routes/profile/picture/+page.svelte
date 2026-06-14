@@ -117,7 +117,8 @@
 			<!-- Current Avatar Preview -->
 			<div class="flex items-center gap-4">
 				<Avatar
-					src={avatarFileId ? `/img/${avatarFileId}` : null}
+					userId={user?.id ?? null}
+					{avatarFileId}
 					displayName={user?.displayName || '?'}
 					size="lg"
 				/>

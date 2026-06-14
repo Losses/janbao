@@ -352,7 +352,8 @@
 				onmouseenter={() => (selectedIndex = index)}
 			>
 				<Avatar
-					src={user.avatarFileId ? `/img/${user.avatarFileId}` : null}
+					userId={user.id}
+					avatarFileId={user.avatarFileId}
 					displayName={user.displayName}
 					size="xs"
 				/>

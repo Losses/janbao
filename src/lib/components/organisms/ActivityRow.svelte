@@ -173,7 +173,8 @@
 		<div class="flex-shrink-0">
 			<a href="/profile/{authorId}/{generateSlug(authorUsername)}">
 				<Avatar
-					src={authorAvatarFileId ? `/img/${authorAvatarFileId}` : null}
+					userId={authorId}
+					avatarFileId={authorAvatarFileId}
 					displayName={authorDisplayName}
 					size="md"
 				/>
@@ -269,9 +270,8 @@
 									<div class="flex-shrink-0">
 										<a href="/profile/{comment.authorId}/{generateSlug(comment.authorUsername)}">
 											<Avatar
-												src={comment.authorAvatarFileId
-													? `/img/${comment.authorAvatarFileId}`
-													: null}
+												userId={comment.authorId}
+												avatarFileId={comment.authorAvatarFileId}
 												displayName={comment.authorDisplayName}
 												size="xs"
 											/>

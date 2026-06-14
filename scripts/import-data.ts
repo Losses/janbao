@@ -4,14 +4,18 @@ import {
 	readFileSync,
 	createReadStream,
 	writeFileSync,
-	copyFileSync,
-	mkdirSync
+	unlinkSync
 } from 'fs';
 import { join } from 'path';
 import { createInterface } from 'readline';
+import { execFileSync } from 'child_process';
+import { tmpdir } from 'os';
+import { randomUUID } from 'crypto';
 import { getLocalDb } from '../src/lib/server/db';
 import * as schema from '../src/lib/server/db/schema';
 import { eq } from 'drizzle-orm';
+import { GHOST_USER_ID } from '../src/lib/server/constants';
+import { resolvePcloudConfig, pcloudUploadBytes, pcloudListFolder } from '../src/lib/server/pcloud';
 
 // Named interfaces to avoid inline object type literal lint errors
 interface ParsedProfile {
@@ -277,7 +281,7 @@ function getAttr(attrs: string, name: string): string | null {
  * via ctx.resolveImage (src → live file id | dead | drop). Both may perform DB
  * / filesystem side effects, so the converter is async.
  */
-export async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promise<string> {
+async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promise<string> {
 	const blocks: LexicalBlockNode[] = [];
 	let inline: LexicalInlineNode[] = [];
 	let textBuf = '';
@@ -325,7 +329,7 @@ export async function convertHtmlToLexical(html: string, ctx: ConverterContext):
 					const res = await ctx.resolveImage(src);
 					if (res.kind === 'live') {
 						flushParagraph();
-						blocks.push(buildImageNode('/img/' + res.fileId, alt));
+						blocks.push(buildImageNode('/attachment/' + res.fileId, alt));
 					} else if (res.kind === 'dead') {
 						flushParagraph();
 						blocks.push(buildDeadImageNode());
@@ -683,6 +687,17 @@ function extractCategorySlug(pageUrl: string | undefined): string {
 	return match ? match[1] : 'general';
 }
 
+/**
+ * Vanilla reserves UserID 0 for the "Unknown" author (account deleted/purged),
+ * and never issues non-positive ids otherwise. Remap any such id onto our
+ * GHOST_USER_ID sentinel so it never collides with the seeded admin (id 0) or
+ * any real user.
+ */
+function normalizeVanillaUserId(raw: string | number): number {
+	const id = Number(raw);
+	return id > 0 ? id : GHOST_USER_ID;
+}
+
 // Helper to get safe error message from unknown errors
 function getErrorMessage(e: unknown): string {
 	if (e instanceof Error) {
@@ -776,6 +791,47 @@ function buildImageMaps(dataDir: string): ImageMaps {
 	return { byUrl, deadUrls };
 }
 
+/**
+ * Verify the libwebp CLI tools are on PATH; fail fast with a clear message if
+ * not (they are required to convert crawled images to webp).
+ */
+function ensureWebpTools(): void {
+	for (const tool of ['cwebp', 'gif2webp']) {
+		try {
+			execFileSync('which', [tool], { stdio: 'ignore' });
+		} catch {
+			console.error(
+				`Missing required tool: ${tool}. Install libwebp (e.g. "nix-env -iA nixos.libwebp", ` +
+					` "brew install webp", or "apt install webp").`
+			);
+			process.exit(1);
+		}
+	}
+}
+
+/**
+ * Convert a source image file to webp bytes. Animated GIFs go through
+ * gif2webp (preserving animation); everything else through cwebp. APNG is
+ * best-effort (cwebp takes the first frame). Returns the webp bytes.
+ */
+function convertToWebp(srcPath: string, contentType: string | null): Uint8Array {
+	const out = join(tmpdir(), `janbao-${randomUUID()}.webp`);
+	try {
+		if (contentType === 'image/gif') {
+			execFileSync('gif2webp', [srcPath, '-o', out], { stdio: 'ignore' });
+		} else {
+			execFileSync('cwebp', [srcPath, '-o', out, '-quiet', '-q', '82'], { stdio: 'ignore' });
+		}
+		return new Uint8Array(readFileSync(out));
+	} finally {
+		try {
+			unlinkSync(out);
+		} catch {
+			// temp cleanup is best-effort
+		}
+	}
+}
+
 async function main() {
 	const args = process.argv.slice(2);
 	if (args.length < 1) {
@@ -790,6 +846,8 @@ async function main() {
 	}
 
 	console.log(`Starting data import from: ${dataDir}`);
+
+	ensureWebpTools();
 
 	const db = await getLocalDb();
 
@@ -822,6 +880,22 @@ async function main() {
 			displayOrder: 1
 		})
 		.onConflictDoNothing();
+
+	// Ghost user: absorbs Vanilla's UserID 0 ("Unknown" / deleted authors) so
+	// those posts attribute to a single stealth sentinel instead of occupying
+	// id 0 (which the seeded admin needs). Pre-seeded here so ensureUser skips it.
+	await db
+		.insert(schema.users)
+		.values({
+			id: GHOST_USER_ID,
+			username: 'unknown',
+			displayName: 'Unknown',
+			email: 'unknown@janbao.local',
+			passwordHash: 'GHOST_NO_PASSWORD',
+			groupSlug: 'system',
+			isStealth: true
+		})
+		.onConflictDoNothing({ target: schema.users.id });
 
 	// 2. Preload DB records in memory to detect conflicts and avoid repeated DB lookups
 	console.log('Preloading DB indexes for duplicate detection...');
@@ -875,7 +949,7 @@ async function main() {
 	const conflicts: ConflictRecord[] = [];
 
 	// Helper function to insert user if not exist
-	async function ensureUser(userId: number, username: string, avatarUrl?: string) {
+	async function ensureUser(userId: number, username: string) {
 		if (existingUserIds.has(userId)) return;
 		try {
 			await db.insert(schema.users).values({
@@ -885,7 +959,7 @@ async function main() {
 				email: `${userId}@placeholder.janbao.net`,
 				passwordHash: 'NO_PASSWORD',
 				groupSlug: 'member',
-				avatarFileId: avatarUrl || null
+				avatarFileId: null
 			});
 			existingUserIds.add(userId);
 		} catch (e: unknown) {
@@ -923,40 +997,61 @@ async function main() {
 	const mentionMap = buildMentionMap(dataDir);
 	const imageMaps = buildImageMaps(dataDir);
 
-	// Local uploads dir mirrors the img route's mock path (path.resolve('.local-uploads'))
-	const uploadsDir = join(process.cwd(), '.local-uploads');
-	mkdirSync(uploadsDir, { recursive: true });
-	const materializedImages = new Set<string>();
+	// pCloud config (WebDAV). Avatars + attachments are stored under
+	// cfg.basePath (e.g. /Janbao) and served by the /avatar and /attachment
+	// reverse-proxy routes.
+	const pcloudCfg = resolvePcloudConfig(process.env as Record<string, string>);
+	if (!pcloudCfg.username || !pcloudCfg.password) {
+		console.error(
+			'pCloud credentials not configured. Run: bun scripts/setup-pcloud.ts (writes PCLOUD_* to .env).'
+		);
+		process.exit(1);
+	}
+	console.log(`pCloud: ${pcloudCfg.host}${pcloudCfg.basePath}`);
+
+	// "ls before migration": the set of attachments already on pCloud, so a
+	// re-run skips re-converting/re-uploading them. Refreshed as we upload.
+	const attachmentsOnCloud = await pcloudListFolder(pcloudCfg, '/attachments');
 
 	/**
-	 * Copy a downloaded image into .local-uploads and register an attachments
-	 * row (fileId = sha256, so the same image is materialized once regardless of
-	 * how many posts embed it). Returns the sha256 on success, null on failure.
+	 * Convert a crawled image to webp and upload it to pCloud
+	 * /<basePath>/attachments/<sha256>, keyed by the pre-conversion sha256 so
+	 * the same image is uploaded once regardless of how many posts embed it.
+	 * Returns the sha256 on success, null on failure.
 	 */
 	async function materializeImage(entry: ImageEntry, uploaderId: number): Promise<string | null> {
-		if (materializedImages.has(entry.sha256)) return entry.sha256;
+		if (!attachmentsOnCloud.has(entry.sha256)) {
+			try {
+				const rel = entry.file.startsWith('data/') ? entry.file.slice(5) : entry.file;
+				const srcPath = join(dataDir, rel);
+				const webp = convertToWebp(srcPath, entry.contentType);
+				await pcloudUploadBytes(pcloudCfg, '/attachments', entry.sha256, webp);
+				attachmentsOnCloud.add(entry.sha256);
+			} catch (e: unknown) {
+				conflicts.push({
+					type: 'attachment_materialize_error',
+					sha256: entry.sha256,
+					uploaderId,
+					error: getErrorMessage(e)
+				});
+				return null;
+			}
+		}
+		// File is on pCloud — record its metadata so the /attachment route can
+		// stream with the right content-type without sniffing.
 		try {
-			const rel = entry.file.startsWith('data/') ? entry.file.slice(5) : entry.file;
-			const srcPath = join(dataDir, rel);
-			const destPath = join(uploadsDir, entry.sha256);
-			copyFileSync(srcPath, destPath);
-			const meta = entry.contentType ? { contentType: entry.contentType } : {};
-			writeFileSync(destPath + '.json', JSON.stringify(meta), 'utf-8');
 			await db
 				.insert(schema.attachments)
-				.values({ fileId: entry.sha256, uploaderId })
+				.values({ fileId: entry.sha256, contentType: 'image/webp', uploaderId })
 				.onConflictDoNothing();
-			materializedImages.add(entry.sha256);
-			return entry.sha256;
 		} catch (e: unknown) {
 			conflicts.push({
-				type: 'attachment_materialize_error',
+				type: 'attachment_meta_error',
 				sha256: entry.sha256,
-				uploaderId,
 				error: getErrorMessage(e)
 			});
-			return null;
 		}
+		return entry.sha256;
 	}
 
 	/** Build a converter context bound to a given content author (uploaderId). */
@@ -1014,10 +1109,10 @@ async function main() {
 					const discussionId = Number(parsedUrl.id);
 					const discussionSlug = parsedUrl.slug;
 					const categorySlug = extractCategorySlug(post.pageUrl);
-					const authorId = Number(post.userId);
+					const authorId = normalizeVanillaUserId(post.userId);
 
 					// Ensure dependencies exist
-					await ensureUser(authorId, post.username, post.avatarUrl);
+					await ensureUser(authorId, post.username);
 					await ensureCategory(categorySlug);
 
 					if (existingDiscussionIds.has(discussionId)) {
@@ -1086,7 +1181,7 @@ async function main() {
 		for (const subdir of subdirs) {
 			// Ensure it is a valid numeric userId directory
 			if (!/^\d+$/.test(subdir)) continue;
-			const userId = Number(subdir);
+			const userId = normalizeVanillaUserId(subdir);
 
 			const userDir = join(profilesDir, subdir);
 			const profileHtmlPath = join(userDir, 'profile.html');
@@ -1401,6 +1496,47 @@ async function main() {
 		console.log('Warning: data/discussions directory not found; skipping OP bodies.');
 	}
 
+	// 4.6 Upload avatars: convert each crawled avatar to webp, PUT to
+	// /<basePath>/avatars/<userId> (filename = userId, overwrite-friendly), and
+	// set users.avatarFileId = '1' (truthy flag; the /avatar route resolves it).
+	const profileAvatarsPath = join(dataDir, 'profile-avatars.json');
+	if (existsSync(profileAvatarsPath)) {
+		console.log('Uploading avatars...');
+		const avatarsRaw = JSON.parse(readFileSync(profileAvatarsPath, 'utf-8')) as {
+			byUserId?: Record<string, unknown>;
+		};
+		const avatarsOnCloud = await pcloudListFolder(pcloudCfg, '/avatars');
+		for (const [userIdStr, val] of Object.entries(avatarsRaw.byUserId ?? {})) {
+			const rec = val as { file?: unknown; contentType?: unknown };
+			if (typeof rec.file !== 'string') continue;
+			if (avatarsOnCloud.has(userIdStr)) continue;
+			try {
+				const rel = rec.file.startsWith('data/') ? rec.file.slice(5) : rec.file;
+				const webp = convertToWebp(
+					join(dataDir, rel),
+					typeof rec.contentType === 'string' ? rec.contentType : null
+				);
+				await pcloudUploadBytes(pcloudCfg, '/avatars', userIdStr, webp);
+				const avatarUserId = Number(userIdStr);
+				if (Number.isFinite(avatarUserId) && existingUserIds.has(avatarUserId)) {
+					await db
+						.update(schema.users)
+						.set({ avatarFileId: '1', avatarContentType: 'image/webp' })
+						.where(eq(schema.users.id, avatarUserId));
+				}
+				avatarsOnCloud.add(userIdStr);
+			} catch (e: unknown) {
+				conflicts.push({
+					type: 'avatar_upload_error',
+					userId: userIdStr,
+					error: getErrorMessage(e)
+				});
+			}
+		}
+	} else {
+		console.log('Warning: profile-avatars.json not found; skipping avatars.');
+	}
+
 	// 5. Generate log and output report
 	console.log('\n====== IMPORT COMPLETED ======');
 	console.log(`Discussions in database: ${existingDiscussionIds.size}`);
@@ -1424,9 +1560,7 @@ async function main() {
 	process.exit(0);
 }
 
-if (import.meta.main) {
-	main().catch((err) => {
-		console.error('Error in main execution:', err);
-		process.exit(1);
-	});
-}
+main().catch((err) => {
+	console.error('Error in main execution:', err);
+	process.exit(1);
+});

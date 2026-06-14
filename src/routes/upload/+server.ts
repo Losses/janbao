@@ -1,10 +1,27 @@
 import { json } from '@sveltejs/kit';
 import { jsonError } from '$lib/server/errors';
 import type { RequestHandler } from './$types';
-import { attachments } from '$lib/server/db/schema';
 import { env } from '$env/dynamic/private';
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import { eq } from 'drizzle-orm';
+import { attachments, users } from '$lib/server/db/schema';
+import { resolvePcloudConfig, pcloudUploadBytes, pcloudIsConfigured } from '$lib/server/pcloud';
+
+const ALLOWED_MIMES = [
+	'image/png',
+	'image/jpeg',
+	'image/webp',
+	'image/gif',
+	'image/avif',
+	'image/bmp'
+];
+
+async function sha256Hex(buf: ArrayBuffer): Promise<string> {
+	const digest = await crypto.subtle.digest('SHA-256', buf);
+	const view = new Uint8Array(digest);
+	let hex = '';
+	for (const byte of view) hex += byte.toString(16).padStart(2, '0');
+	return hex;
+}
 
 export const POST: RequestHandler = async (event) => {
 	const user = event.locals.user;
@@ -28,75 +45,37 @@ export const POST: RequestHandler = async (event) => {
 	if (file.size > maxSize) {
 		return jsonError(t, 'upload.fileTooLarge', 400);
 	}
-
-	const allowedMimes = [
-		'image/png',
-		'image/jpeg',
-		'image/webp',
-		'image/gif',
-		'image/avif',
-		'image/bmp'
-	];
-	if (!allowedMimes.includes(file.type)) {
+	if (!ALLOWED_MIMES.includes(file.type)) {
 		return jsonError(t, 'upload.invalidType', 400);
 	}
 
-	// Read credentials
-	const pcloudToken = env.PCLOUD_TOKEN || event.platform?.env?.PCLOUD_TOKEN || '';
-	const pcloudFolderId = env.PCLOUD_FOLDER_ID || event.platform?.env?.PCLOUD_FOLDER_ID || '';
-
-	let fileId: string;
-
-	if (!pcloudToken || !pcloudFolderId) {
-		// Mock Mode
-		fileId = crypto.randomUUID();
-		const uploadsDir = path.resolve('.local-uploads');
-		await fs.mkdir(uploadsDir, { recursive: true });
-		const filePath = path.join(uploadsDir, fileId);
-
-		await fs.writeFile(filePath, Buffer.from(await file.arrayBuffer()));
-		await fs.writeFile(filePath + '.json', JSON.stringify({ contentType: file.type }));
-	} else {
-		// Real pCloud Mode
-		const pcloudUrl = `https://api.pcloud.com/uploadfile?auth=${pcloudToken}&folderid=${pcloudFolderId}`;
-		const pcloudFormData = new FormData();
-		pcloudFormData.append('file', file, file.name);
-
-		const pcloudRes = await fetch(pcloudUrl, {
-			method: 'POST',
-			body: pcloudFormData
-		});
-
-		if (!pcloudRes.ok) {
-			return jsonError(t, 'upload.uploadFailed', 502);
-		}
-
-		const pcloudData = (await pcloudRes.json()) as {
-			result: number;
-			fileids?: number[];
-			error?: string;
-		};
-
-		if (pcloudData.result !== 0 || !pcloudData.fileids || pcloudData.fileids.length === 0) {
-			return jsonError(t, 'upload.uploadFailed', 502);
-		}
-
-		fileId = String(pcloudData.fileids[0]);
+	const cfg = resolvePcloudConfig({ ...env, ...(event.platform?.env ?? {}) });
+	if (!pcloudIsConfigured(cfg)) {
+		return jsonError(t, 'upload.uploadFailed', 502);
 	}
 
-	// Log in attachments table
-	await db.insert(attachments).values({
-		fileId: fileId,
-		uploaderId: user.id,
-		createdAt: new Date()
-	});
-
-	const protocol = event.url.protocol;
-	const host = event.url.host;
-	const imageUrl = `${protocol}//${host}/img/${fileId}`;
-
-	return json({
-		fileId,
-		url: imageUrl
-	});
+	const buf = await file.arrayBuffer();
+	const bytes = new Uint8Array(buf);
+	try {
+		if (isAvatar) {
+			// Avatars are keyed by user id (overwrite-friendly). avatarFileId is a
+			// truthy flag; avatarContentType lets /avatar stream without sniffing.
+			await pcloudUploadBytes(cfg, '/avatars', String(user.id), bytes);
+			await db
+				.update(users)
+				.set({ avatarFileId: '1', avatarContentType: file.type })
+				.where(eq(users.id, user.id));
+			return json({ fileId: '1', url: `/avatar/${user.id}` });
+		}
+		// Attachments are keyed by the pre-conversion sha256 of the bytes.
+		const sha = await sha256Hex(buf);
+		await pcloudUploadBytes(cfg, '/attachments', sha, bytes);
+		await db
+			.insert(attachments)
+			.values({ fileId: sha, contentType: file.type, uploaderId: user.id })
+			.onConflictDoNothing();
+		return json({ fileId: sha, url: `/attachment/${sha}` });
+	} catch {
+		return jsonError(t, 'upload.uploadFailed', 502);
+	}
 };

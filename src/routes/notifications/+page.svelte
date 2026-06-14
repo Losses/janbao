@@ -115,9 +115,7 @@
 		</div>
 
 		{#if views.length === 0}
-			<div
-				class="card bg-base-200/40 border border-base-200 p-10 text-center text-base-content/50"
-			>
+			<div class="card bg-base-200/40 border border-base-200 p-10 text-center text-base-content/50">
 				{notificationT.allCaughtUp}
 			</div>
 		{:else}
@@ -133,13 +131,14 @@
 							{#if item.sourceUserId}
 								<a href="/profile/{item.sourceUserId}/{generateSlug(item.sourceUsername ?? '')}">
 									<Avatar
-										src={item.sourceAvatarFileId ? `/img/${item.sourceAvatarFileId}` : null}
+										userId={item.sourceUserId}
+										avatarFileId={item.sourceAvatarFileId}
 										displayName={item.sourceDisplayName ?? '?'}
 										size="sm"
 									/>
 								</a>
 							{:else}
-								<Avatar src={null} displayName="?" size="sm" />
+								<Avatar displayName="?" size="sm" />
 							{/if}
 						</div>
 						<div class="min-w-0 flex-1">

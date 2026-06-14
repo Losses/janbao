@@ -172,7 +172,8 @@
 						<a href={view.href} class="flex gap-2 px-4 py-2">
 							<div class="flex-shrink-0">
 								<Avatar
-									src={view.item.sourceAvatarFileId ? `/img/${view.item.sourceAvatarFileId}` : null}
+									userId={view.item.sourceUserId}
+									avatarFileId={view.item.sourceAvatarFileId}
 									displayName={view.item.sourceDisplayName ?? '?'}
 									size="xs"
 								/>

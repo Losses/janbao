@@ -10,8 +10,10 @@ interface PlatformEnv {
 	MONTHLY_INVITATION_LIMIT?: string;
 	FORUM_TIMEZONE?: string;
 	WELCOME_TEXT?: string;
-	PCLOUD_TOKEN?: string;
-	PCLOUD_FOLDER_ID?: string;
+	PCLOUD_USERNAME?: string;
+	PCLOUD_PASSWORD?: string;
+	PCLOUD_WEBDAV_HOST?: string;
+	PCLOUD_BASE_PATH?: string;
 	DISCUSSIONS_LIMIT?: string;
 	PAGINATION_LIMIT?: string;
 	ACTIVITIES_LIMIT?: string;

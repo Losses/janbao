@@ -53,7 +53,8 @@
 						class="flex items-center gap-2 hover:text-primary transition-colors"
 					>
 						<Avatar
-							src={p.avatarFileId ? `/img/${p.avatarFileId}` : null}
+							userId={p.userId}
+							avatarFileId={p.avatarFileId}
 							displayName={p.displayName}
 							size="xs"
 						/>
