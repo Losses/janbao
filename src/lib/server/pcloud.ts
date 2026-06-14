@@ -118,7 +118,9 @@ export async function pcloudUploadStream(
 			Authorization: basicAuth(cfg),
 			'Content-Type': 'application/octet-stream'
 		},
-		body
+		body,
+		// @ts-expect-error duplex is required in Node/Bun when sending a stream body
+		duplex: 'half'
 	});
 	if (!res.ok && res.status !== 201 && res.status !== 204) {
 		throw new Error(`pCloud WebDAV PUT (stream) ${path} -> HTTP ${res.status}`);
