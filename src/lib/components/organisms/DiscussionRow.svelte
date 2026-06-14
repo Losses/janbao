@@ -134,10 +134,14 @@
 				class="font-semibold text-lg hover:text-primary transition-colors hover:underline text-base-content break-words leading-snug"
 			>
 				{discussion.title}
+				{#if unreadCount > 0}
+					<Badge
+						variant="primary"
+						class="font-bold ml-1.5 align-middle -translate-y-[2px] no-underline"
+						>{unreadCount}</Badge
+					>
+				{/if}
 			</a>
-			{#if unreadCount > 0}
-				<Badge variant="primary" class="font-bold">{unreadCount}</Badge>
-			{/if}
 		</div>
 
 		<!-- Metadata: author, views, replies, last replier, updated date -->

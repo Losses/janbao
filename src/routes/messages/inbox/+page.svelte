@@ -99,10 +99,14 @@
 										class="font-semibold text-lg hover:text-primary transition-colors hover:underline text-base-content break-words leading-snug"
 									>
 										{conv.title}
+										{#if conv.unreadCount > 0}
+											<Badge
+												variant="primary"
+												class="font-bold ml-1.5 align-middle -translate-y-[2px] no-underline"
+												>{conv.unreadCount}</Badge
+											>
+										{/if}
 									</a>
-									{#if conv.unreadCount > 0}
-										<Badge variant="primary" class="font-bold">{conv.unreadCount}</Badge>
-									{/if}
 								</div>
 
 								{#if conv.lastMessagePreview}
