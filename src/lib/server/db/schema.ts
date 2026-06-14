@@ -370,3 +370,21 @@ export const invitations = sqliteTable(
 		creatorIdx: index('invitations_creator_idx').on(table.creatorId)
 	})
 );
+
+export const passwordRecoveries = sqliteTable(
+	'password_recoveries',
+	{
+		id: integer('id').primaryKey(),
+		userId: integer('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		token: text('token').notNull().unique(),
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(strftime('%s', 'now'))`),
+		expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull()
+	},
+	(table) => ({
+		tokenIdx: index('password_recoveries_token_idx').on(table.token)
+	})
+);

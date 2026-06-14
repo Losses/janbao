@@ -101,6 +101,9 @@
 				/>
 				<span class="label-text text-sm">{t.auth.rememberMe}</span>
 			</label>
+			<a href="/entry/forgot" class="link link-primary text-sm font-medium">
+				{t.auth.forgotPassword}
+			</a>
 		</div>
 
 		<div>

@@ -24,6 +24,46 @@
 	const tNav = $derived(t.nav);
 
 	const isOwner = $derived(!!user && user.id === targetUserId);
+	const isAdmin = $derived(!!user && user.groupSlug === 'admin');
+
+	let generatedLink = $state('');
+	let showModal = $state(false);
+
+	interface ResetLinkResponse {
+		resetLink: string;
+	}
+
+	interface ResetLinkErrorResponse {
+		error: string;
+	}
+
+	async function handleGenerateResetLink() {
+		const confirmed = confirm(t.auth.confirmGenerateResetLink);
+		if (!confirmed) return;
+
+		try {
+			const res = await fetch('/api/auth/admin-generate-reset', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ targetUserId })
+			});
+			if (res.ok) {
+				const data = (await res.json()) as ResetLinkResponse;
+				generatedLink = data.resetLink;
+				showModal = true;
+			} else {
+				const err = (await res.json()) as ResetLinkErrorResponse;
+				alert(err.error || t.common.error);
+			}
+		} catch {
+			alert(t.auth.networkError);
+		}
+	}
+
+	function copyLink() {
+		navigator.clipboard.writeText(generatedLink);
+		alert(t.common.saved || 'Copied!');
+	}
 </script>
 
 <div class="space-y-4">
@@ -71,6 +111,16 @@
 						{profileT['comments']}
 					</a>
 				</li>
+				{#if isAdmin}
+					<li class="mt-2 pt-2 border-t border-base-content/10">
+						<button
+							onclick={handleGenerateResetLink}
+							class="btn btn-xs btn-outline btn-primary w-full text-center"
+						>
+							{t.auth.generateResetLink}
+						</button>
+					</li>
+				{/if}
 			</ul>
 		{:else}
 			<!-- Visitor View: Public navigation only -->
@@ -99,6 +149,16 @@
 						{profileT['comments']}
 					</a>
 				</li>
+				{#if isAdmin}
+					<li class="mt-2 pt-2 border-t border-base-content/10">
+						<button
+							onclick={handleGenerateResetLink}
+							class="btn btn-xs btn-outline btn-primary w-full text-center"
+						>
+							{t.auth.generateResetLink}
+						</button>
+					</li>
+				{/if}
 			</ul>
 		{/if}
 	{:else}
@@ -137,3 +197,24 @@
 		</div>
 	{/if}
 </div>
+
+{#if showModal}
+	<div class="modal modal-open">
+		<div class="modal-box">
+			<h3 class="font-bold text-lg">{t.auth.resetPassword}</h3>
+			<p
+				class="py-4 text-sm break-all select-all border border-dashed border-base-300 p-2 rounded bg-base-200"
+			>
+				{generatedLink}
+			</p>
+			<div class="modal-action gap-2">
+				<button class="btn btn-sm btn-primary" onclick={copyLink}>
+					{t.common.confirm || 'Copy'}
+				</button>
+				<button class="btn btn-sm btn-ghost" onclick={() => (showModal = false)}>
+					{t.common.cancel || 'Close'}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
