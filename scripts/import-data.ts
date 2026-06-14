@@ -682,12 +682,18 @@ function parseDiscussionsHtml(html: string): ParsedDiscussion[] {
 		const title = decodeHtmlEntities(titleMatch[1].replace(/<[^>]+>/g, '')).trim();
 
 		const catMatch = part.match(/Category-([^"\s>]+)/);
-		const categorySlug = catMatch ? catMatch[1] : 'general';
+		let categorySlug = catMatch ? catMatch[1] : 'general';
+		if (categorySlug === 'bt') {
+			categorySlug = 'general';
+		}
 
 		const catTitleMatch = part.match(/Category-[^"\s>]+"[^>]*><a[^>]*>([\s\S]+?)<\/a>/);
-		const categoryTitle = catTitleMatch
+		let categoryTitle = catTitleMatch
 			? decodeHtmlEntities(catTitleMatch[1].replace(/<[^>]+>/g, '')).trim()
 			: 'General';
+		if (categorySlug === 'general') {
+			categoryTitle = 'General';
+		}
 
 		const timeMatch = part.match(/<time[^>]*datetime="([^"]+)"/);
 		const lastActiveTime = timeMatch ? new Date(timeMatch[1]) : new Date();
@@ -767,7 +773,8 @@ function parsePostUrl(postUrl: string): { id: string; slug: string } | null {
 function extractCategorySlug(pageUrl: string | undefined): string {
 	if (!pageUrl) return 'general';
 	const match = pageUrl.match(/categories\/([^/]+)/);
-	return match ? match[1] : 'general';
+	const slug = match ? match[1] : 'general';
+	return slug === 'bt' ? 'general' : slug;
 }
 
 /**
@@ -966,33 +973,8 @@ async function main() {
 
 	// 1. Seed base user groups and default category
 	console.log('Seeding baseline groups and categories...');
-	const groupsToSeed = [
-		{ slug: 'system', title: 'System', description: 'System account', permissionsJson: '{}' },
-		{ slug: 'admin', title: 'Administrator', description: 'Admin account', permissionsJson: '{}' },
-		{
-			slug: 'moderator',
-			title: 'Moderator',
-			description: 'Moderator account',
-			permissionsJson: '{}'
-		},
-		{ slug: 'member', title: 'Member', description: 'Member account', permissionsJson: '{}' },
-		{ slug: 'guest', title: 'Guest', description: 'Guest account', permissionsJson: '{}' }
-	];
-
-	for (const g of groupsToSeed) {
-		await db.insert(schema.userGroups).values(g).onConflictDoNothing();
-	}
-
-	await db
-		.insert(schema.categories)
-		.values({
-			slug: 'general',
-			title: 'General',
-			description: 'General discussion board',
-			priority: 1,
-			displayOrder: 1
-		})
-		.onConflictDoNothing();
+	const { seedBaseline } = await import('../src/lib/server/db/seed-baseline');
+	await seedBaseline(db);
 
 	// Ghost user: absorbs Vanilla's UserID 0 ("Unknown" / deleted authors) so
 	// those posts attribute to a single stealth sentinel instead of occupying
