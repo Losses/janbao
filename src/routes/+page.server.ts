@@ -17,7 +17,7 @@ export const load: PageServerLoad = async (event) => {
 
 	// 3. Fetch discussions list (filtered by category read permissions)
 	const discussionsList = await getDiscussionsList(db, {
-		userId: user?.id || null,
+		userId: user?.id ?? null,
 		limit,
 		offset,
 		groupSlug

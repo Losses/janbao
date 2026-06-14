@@ -41,7 +41,7 @@ export const load: PageServerLoad = async (event) => {
 	const groupSlug = resolveGroupSlug(user);
 
 	const discussionsList = await getDiscussionsList(db, {
-		userId: user?.id || null,
+		userId: user?.id ?? null,
 		categorySlug,
 		groupSlug,
 		limit,

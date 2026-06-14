@@ -212,7 +212,7 @@
 				<div class="flex-1 text-sm text-base-content/50">
 					<DateComponent value={createdAt} {t} class="text-sm" />
 				</div>
-				{#if isTopLevel && currentUserId}
+				{#if isTopLevel && currentUserId !== null && currentUserId !== undefined}
 					<button
 						type="button"
 						class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
@@ -234,7 +234,7 @@
 
 			{#if isTopLevel && (showEditor || loadingComments || comments.length > 0)}
 				<div class="mt-3 bg-base-200/50 rounded-box p-3">
-					{#if showEditor && currentUserId}
+					{#if showEditor && currentUserId !== null && currentUserId !== undefined}
 						<div class="mb-3 flex flex-col gap-2">
 							{#key editorKey}
 								<LexicalEditor
