@@ -5,6 +5,7 @@
 	 * store so data persists across page navigations  - no skeleton flash on
 	 * subsequent visits.
 	 */
+	import { afterNavigate } from '$app/navigation';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import type { TranslationDict } from '$lib/types/translation';
 	import { getActiveUsersStore } from '$lib/stores/active-users.svelte';
@@ -19,7 +20,13 @@
 	const title = $derived(t.sidebar.activeUsers);
 
 	$effect(() => {
-		void store.fetchIfNeeded();
+		if (!store.loaded) void store.load();
+	});
+
+	// Background refresh on navigation only - never inside the $effect, since
+	// the store mutates the same $state the effect tracks, which would loop.
+	afterNavigate(() => {
+		void store.refresh();
 	});
 </script>
 
