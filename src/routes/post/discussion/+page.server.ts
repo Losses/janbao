@@ -10,6 +10,8 @@ import {
 import { and, eq } from 'drizzle-orm';
 import { generateSlug } from '$lib/utils/slug';
 import { resolvePermissions, resolveGroupSlug } from '$lib/server/constants';
+import type { DbTransaction } from '$lib/server/db';
+import { indexDiscussionTitle, indexReply } from '$lib/server/search/fts';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 
 export const load: PageServerLoad = async (event) => {
@@ -112,43 +114,52 @@ export const actions: Actions = {
 		let discussionId: number;
 
 		try {
-			// Insert discussion; id is auto-assigned and read back via returning()
-			const inserted = await db
-				.insert(discussions)
-				.values({
-					title,
-					slug,
-					categorySlug,
-					authorId: user.id,
-					themeName,
-					viewCount: 0,
-					commentCount: 0,
-					isPinned: false,
-					createdAt: new Date(),
-					updatedAt: new Date()
-				})
-				.returning({ id: discussions.id });
-			discussionId = inserted[0].id;
+			// Insert discussion + OP reply + clear draft atomically, keeping the
+			// FTS index in sync within the same transaction.
+			discussionId = await db.transaction(async (tx: DbTransaction) => {
+				const inserted = await tx
+					.insert(discussions)
+					.values({
+						title,
+						slug,
+						categorySlug,
+						authorId: user.id,
+						themeName,
+						viewCount: 0,
+						commentCount: 0,
+						isPinned: false,
+						createdAt: new Date(),
+						updatedAt: new Date()
+					})
+					.returning({ id: discussions.id });
+				const did = inserted[0].id;
+				await indexDiscussionTitle(tx, did, title);
 
-			// Insert OP reply (as index 0 reply); id is auto-assigned
-			await db.insert(replies).values({
-				discussionId,
-				authorId: user.id,
-				contentJson,
-				createdAt: new Date(),
-				updatedAt: new Date()
+				// Insert OP reply (as index 0 reply); id is auto-assigned
+				const opInserted = await tx
+					.insert(replies)
+					.values({
+						discussionId: did,
+						authorId: user.id,
+						contentJson,
+						createdAt: new Date(),
+						updatedAt: new Date()
+					})
+					.returning({ id: replies.id });
+				await indexReply(tx, opInserted[0].id, contentJson);
+
+				// Clear draft (contextId = 0 marks the "new" discussion composer draft)
+				await tx
+					.delete(drafts)
+					.where(
+						and(
+							eq(drafts.authorId, user.id),
+							eq(drafts.contextType, 'discussion'),
+							eq(drafts.contextId, 0)
+						)
+					);
+				return did;
 			});
-
-			// Clear draft (contextId = 0 marks the "new" discussion composer draft)
-			await db
-				.delete(drafts)
-				.where(
-					and(
-						eq(drafts.authorId, user.id),
-						eq(drafts.contextType, 'discussion'),
-						eq(drafts.contextId, 0)
-					)
-				);
 		} catch (err) {
 			console.error('Failed to publish discussion:', err);
 			return { success: false, error: event.locals.t.discussion.publishFailed };

@@ -1,5 +1,6 @@
 import { drizzle } from 'drizzle-orm/d1';
 import * as schema from './schema';
+import { ensureFtsSchema } from '../search/fts-schema';
 
 // Production: Cloudflare D1 database client
 export const getDb = (d1: D1Database) => drizzle(d1, { schema });
@@ -47,6 +48,10 @@ export async function getLocalDb(): Promise<D1Db> {
 		await client.execute('PRAGMA busy_timeout=5000');
 		const sqliteDb = drizzleLibsql(client, { schema });
 		await migrate(sqliteDb, { migrationsFolder: 'drizzle/local-migrations' });
+		// Create FTS5 trigram search tables (contentless). Drizzle cannot model
+		// virtual tables, so these live outside the migration journal and are
+		// applied idempotently here (local) and via the admin endpoint (production).
+		await ensureFtsSchema(castDb<D1Db>(sqliteDb));
 		_localDb = castDb<D1Db>(sqliteDb);
 	}
 	return _localDb;

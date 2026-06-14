@@ -12,6 +12,7 @@ import { generateSlug } from '$lib/utils/slug';
 import { resolvePermissions, resolveGroupSlug } from '$lib/server/constants';
 import type { DbTransaction } from '$lib/server/db';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
+import { reindexDiscussionTitle, reindexReply } from '$lib/server/search/fts';
 
 export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user;
@@ -218,26 +219,37 @@ export const actions: Actions = {
 
 		try {
 			await db.transaction(async (tx: DbTransaction) => {
+				// Capture pre-edit values — contentless FTS delete needs the old text.
+				const oldDisc = await tx
+					.select({ title: discussions.title })
+					.from(discussions)
+					.where(eq(discussions.id, discussionId))
+					.limit(1);
+				const oldReply = await tx
+					.select({ contentJson: replies.contentJson })
+					.from(replies)
+					.where(eq(replies.id, opReply.id))
+					.limit(1);
+
 				// Update discussion title, slug, categorySlug, themeName, updatedAt
 				await tx
 					.update(discussions)
-					.set({
-						title,
-						slug,
-						categorySlug,
-						themeName,
-						updatedAt: new Date()
-					})
+					.set({ title, slug, categorySlug, themeName, updatedAt: new Date() })
 					.where(eq(discussions.id, discussionId));
 
 				// Update OP reply contentJson, updatedAt
 				await tx
 					.update(replies)
-					.set({
-						contentJson,
-						updatedAt: new Date()
-					})
+					.set({ contentJson, updatedAt: new Date() })
 					.where(eq(replies.id, opReply.id));
+
+				// Reindex search text (title + OP body)
+				if (oldDisc[0]) {
+					await reindexDiscussionTitle(tx, discussionId, oldDisc[0].title, title);
+				}
+				if (oldReply[0]) {
+					await reindexReply(tx, opReply.id, oldReply[0].contentJson, contentJson);
+				}
 
 				// Clear draft
 				await tx

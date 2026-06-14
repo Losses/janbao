@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { activities } from '$lib/server/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { jsonError } from '$lib/server/errors';
+import { indexActivity } from '$lib/server/search/fts';
 import type { ActivityCommentCreateBody } from '$lib/types/api';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 
@@ -53,6 +54,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			createdAt: new Date()
 		})
 		.returning({ id: activities.id });
+	const activityId = inserted[0].id;
+	await indexActivity(locals.db, activityId, contentJson);
 
-	return json({ success: true, id: inserted[0].id }, { status: 201 });
+	return json({ success: true, id: activityId }, { status: 201 });
 };

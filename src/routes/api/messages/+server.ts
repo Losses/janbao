@@ -10,6 +10,7 @@ import {
 } from '$lib/server/db/schema';
 import { eq, inArray, and } from 'drizzle-orm';
 import type { DbTransaction } from '$lib/server/db';
+import { indexMessage } from '$lib/server/search/fts';
 import type { RequestHandler } from './$types';
 import type { MessageCreateBody } from '$lib/types/api';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
@@ -84,13 +85,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		];
 		await tx.insert(conversationParticipants).values(participantRows);
 
-		await tx.insert(messages).values({
-			conversationId: convId,
-			authorId: user.id,
-			contentJson,
-			createdAt: now,
-			updatedAt: now
-		});
+		const msgInserted = await tx
+			.insert(messages)
+			.values({
+				conversationId: convId,
+				authorId: user.id,
+				contentJson,
+				createdAt: now,
+				updatedAt: now
+			})
+			.returning({ id: messages.id });
+		await indexMessage(tx, msgInserted[0].id, contentJson);
 
 		return convId;
 	});

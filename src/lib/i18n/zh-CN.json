@@ -7,7 +7,22 @@
 		"signin": "登录",
 		"register": "注册",
 		"signout": "登出",
-		"menu": "打开菜单"
+		"menu": "打开菜单",
+		"search": "搜索"
+	},
+	"search": {
+		"title": "搜索",
+		"placeholder": "搜索讨论、动态、私信...",
+		"scopeDiscussions": "讨论",
+		"scopeActivities": "动态",
+		"scopeMessages": "私信",
+		"searchBtn": "搜索",
+		"noResults": "没有找到相关结果。",
+		"noQuery": "输入关键词开始搜索。",
+		"tooShortHint": "短关键词，使用模糊匹配（LIKE）。",
+		"resultsLabel": "条结果",
+		"matchedTitle": "标题",
+		"matchedBody": "正文"
 	},
 	"auth": {
 		"usernameOrEmail": "Email/用户名",
