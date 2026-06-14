@@ -560,10 +560,10 @@
 
 			<h3 class="text-lg font-bold mb-4">{t?.editor?.image ?? 'Insert Image'}</h3>
 
-			<div class="tabs tabs-boxed mb-4 bg-base-200 p-1 rounded-lg">
+			<div class="tabs tabs-boxed mb-4 bg-base-200 p-1 rounded-box">
 				<button
 					type="button"
-					class="tab tab-sm w-1/2 rounded-md transition-all font-semibold {imageActiveTab === 'upload' ? 'bg-primary text-primary-content shadow-sm' : 'text-base-content/70 hover:text-base-content'}"
+					class="tab tab-sm w-1/2 rounded-selector transition-all font-semibold {imageActiveTab === 'upload' ? 'bg-primary text-primary-content shadow-sm' : 'text-base-content/70 hover:text-base-content'}"
 					onclick={() => {
 						if (!uploading) imageActiveTab = 'upload';
 					}}
@@ -573,7 +573,7 @@
 				</button>
 				<button
 					type="button"
-					class="tab tab-sm w-1/2 rounded-md transition-all font-semibold {imageActiveTab === 'url' ? 'bg-primary text-primary-content shadow-sm' : 'text-base-content/70 hover:text-base-content'}"
+					class="tab tab-sm w-1/2 rounded-selector transition-all font-semibold {imageActiveTab === 'url' ? 'bg-primary text-primary-content shadow-sm' : 'text-base-content/70 hover:text-base-content'}"
 					onclick={() => {
 						if (!uploading) imageActiveTab = 'url';
 					}}
@@ -586,7 +586,7 @@
 			{#if imageActiveTab === 'upload'}
 				<div class="flex flex-col gap-4">
 					{#if uploading}
-						<div class="flex flex-col items-center justify-center p-8 border border-base-300 rounded-lg bg-base-200/30 gap-3 min-h-[160px]">
+						<div class="flex flex-col items-center justify-center p-8 border border-base-300 rounded-field bg-base-200/30 gap-3 min-h-[160px]">
 							<span class="loading loading-spinner loading-md text-primary"></span>
 							<span class="text-sm font-medium text-base-content/70">{t?.editor?.uploading ?? 'Uploading...'}</span>
 						</div>
@@ -594,7 +594,7 @@
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<div
-							class="border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all duration-200 min-h-[160px]
+							class="border-2 border-dashed rounded-field p-8 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all duration-200 min-h-[160px]
 							{dragOver ? 'border-primary bg-primary/10 text-primary' : 'border-base-300 bg-base-200/20 hover:border-primary/50 hover:bg-base-200/50 text-base-content/60'}"
 							onclick={() => fileInput?.click()}
 							ondragover={handleDragOver}
@@ -619,7 +619,7 @@
 					{/if}
 
 					{#if uploadError}
-						<div class="alert alert-error text-sm py-2 px-3 flex gap-2 rounded-lg items-center text-error-content bg-error/15 border border-error/30">
+						<div class="alert alert-error text-sm py-2 px-3 flex gap-2 rounded-box items-center text-error-content bg-error/15 border border-error/30">
 							<Icon path={mdiAlertCircle} size={18} />
 							<span>{uploadError}</span>
 						</div>
