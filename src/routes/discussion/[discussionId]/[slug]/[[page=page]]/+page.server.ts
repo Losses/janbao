@@ -15,6 +15,7 @@ import { dispatchReplyNotifications } from '$lib/server/db/notifications';
 import { resolveMentions } from '$lib/server/utils/mentions';
 import type { DbTransaction } from '$lib/server/db';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
+import { indexReply, reindexReply, unindexReply, unindexDiscussion } from '$lib/server/search/fts';
 
 export const load: PageServerLoad = async (event) => {
 	const slug = event.params.slug;
@@ -305,6 +306,7 @@ export const actions: Actions = {
 						updatedAt: new Date()
 					})
 					.returning({ id: replies.id });
+				await indexReply(tx, inserted[0].id, contentJson);
 
 				await tx
 					.update(discussions)
@@ -431,7 +433,8 @@ export const actions: Actions = {
 				id: replies.id,
 				authorId: replies.authorId,
 				discussionId: replies.discussionId,
-				categorySlug: discussions.categorySlug
+				categorySlug: discussions.categorySlug,
+				contentJson: replies.contentJson
 			})
 			.from(replies)
 			.innerJoin(discussions, eq(replies.discussionId, discussions.id))
@@ -462,14 +465,14 @@ export const actions: Actions = {
 			error(400, locals.t.common.badRequest);
 		}
 
-		// Update reply
-		await db
-			.update(replies)
-			.set({
-				contentJson,
-				updatedAt: new Date()
-			})
-			.where(eq(replies.id, replyId));
+		// Update reply and reindex its search text atomically.
+		await db.transaction(async (tx: DbTransaction) => {
+			await tx
+				.update(replies)
+				.set({ contentJson, updatedAt: new Date() })
+				.where(eq(replies.id, replyId));
+			await reindexReply(tx, replyId, replyRecord.contentJson, contentJson);
+		});
 
 		return { success: true };
 	},
@@ -493,7 +496,8 @@ export const actions: Actions = {
 			.select({
 				id: replies.id,
 				discussionId: replies.discussionId,
-				categorySlug: discussions.categorySlug
+				categorySlug: discussions.categorySlug,
+				contentJson: replies.contentJson
 			})
 			.from(replies)
 			.innerJoin(discussions, eq(replies.discussionId, discussions.id))
@@ -525,12 +529,8 @@ export const actions: Actions = {
 
 		try {
 			await db.transaction(async (tx: DbTransaction) => {
-				await tx
-					.update(replies)
-					.set({
-						deletedAt: new Date()
-					})
-					.where(eq(replies.id, replyId));
+				await tx.update(replies).set({ deletedAt: new Date() }).where(eq(replies.id, replyId));
+				await unindexReply(tx, replyId, replyRecord.contentJson);
 
 				await tx
 					.update(discussions)
@@ -563,7 +563,8 @@ export const actions: Actions = {
 		// Fetch discussion categorySlug
 		const discussionRecords = await db
 			.select({
-				categorySlug: discussions.categorySlug
+				categorySlug: discussions.categorySlug,
+				title: discussions.title
 			})
 			.from(discussions)
 			.where(and(eq(discussions.id, discussionId), isNull(discussions.deletedAt)))
@@ -572,7 +573,7 @@ export const actions: Actions = {
 		if (discussionRecords.length === 0) {
 			error(404, locals.t.discussion.notFound);
 		}
-		const { categorySlug } = discussionRecords[0];
+		const { categorySlug, title } = discussionRecords[0];
 
 		// Check permissions: canDelete
 		const perms = await resolvePermissions(db, categorySlug, user);
@@ -588,6 +589,10 @@ export const actions: Actions = {
 				updatedAt: new Date()
 			})
 			.where(eq(discussions.id, discussionId));
+
+		// Remove the title from the search index. Replies are left indexed; search
+		// queries JOIN discussions and filter deletedAt, so they are excluded anyway.
+		await unindexDiscussion(db, discussionId, title);
 
 		redirect(303, '/');
 	}

@@ -9,6 +9,8 @@ import {
 } from '$lib/server/db/schema';
 import { eq, and, isNull, asc, inArray } from 'drizzle-orm';
 import { jsonError } from '$lib/server/errors';
+import type { DbTransaction } from '$lib/server/db';
+import { indexActivity, unindexActivity } from '$lib/server/search/fts';
 import type { ActivityCreateBody, ActivityDeleteBody } from '$lib/types/api';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 
@@ -78,17 +80,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 	}
 
-	const inserted = await locals.db
-		.insert(activities)
-		.values({
-			authorId: user.id,
-			recipientId: recipientId || null,
-			parentActivityId: null,
-			contentJson,
-			createdAt: new Date()
-		})
-		.returning({ id: activities.id });
-	const activityId = inserted[0].id;
+	const activityId = await locals.db.transaction(async (tx: DbTransaction) => {
+		const inserted = await tx
+			.insert(activities)
+			.values({
+				authorId: user.id,
+				recipientId: recipientId || null,
+				parentActivityId: null,
+				contentJson,
+				createdAt: new Date()
+			})
+			.returning({ id: activities.id });
+		const id = inserted[0].id;
+		await indexActivity(tx, id, contentJson);
+		return id;
+	});
 
 	// Clear the composer draft so the editor starts fresh on next page load.
 	// contextId = 0 marks the "new" (unsaved) activity composer draft; the
@@ -149,7 +155,8 @@ export const DELETE: RequestHandler = async ({ request, locals }) => {
 			id: activities.id,
 			authorId: activities.authorId,
 			recipientId: activities.recipientId,
-			parentActivityId: activities.parentActivityId
+			parentActivityId: activities.parentActivityId,
+			contentJson: activities.contentJson
 		})
 		.from(activities)
 		.where(and(eq(activities.id, activityId), isNull(activities.deletedAt)))
@@ -190,6 +197,11 @@ export const DELETE: RequestHandler = async ({ request, locals }) => {
 		.update(activities)
 		.set({ deletedAt: new Date() })
 		.where(eq(activities.id, activityId));
+
+	// contentJson is unchanged by the soft-delete; remove the indexed text so the
+	// activity stops matching searches. (Search queries also filter deletedAt, so a
+	// missed unindex here is harmless, but keeping the index tidy is cheaper.)
+	await unindexActivity(locals.db, activityId, activity.contentJson);
 
 	return json({ success: true });
 };

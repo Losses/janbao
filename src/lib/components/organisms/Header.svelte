@@ -63,6 +63,14 @@
 				>
 					{tNav['messages']}
 				</a>
+				<a
+					href="/search"
+					class="text-sm font-medium text-neutral-content/70 hover:text-neutral-content hover:underline"
+					class:text-accent={isNavActive('/search')}
+					aria-current={isNavActive('/search') ? 'page' : undefined}
+				>
+					{tNav['search']}
+				</a>
 			</div>
 		</div>
 

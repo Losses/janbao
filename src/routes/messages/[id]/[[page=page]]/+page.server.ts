@@ -11,6 +11,7 @@ import {
 import { eq, and, isNull, count } from 'drizzle-orm';
 import { getPaginationLimit } from '$lib/server/constants';
 import { resolveMentions } from '$lib/server/utils/mentions';
+import { indexMessage, reindexMessage } from '$lib/server/search/fts';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 
 const MESSAGE_PAGE_FALLBACK = 50;
@@ -283,6 +284,7 @@ export const actions: Actions = {
 			})
 			.returning({ id: messages.id });
 		const messageId = inserted[0].id;
+		await indexMessage(db, messageId, contentJson);
 
 		// Clear the composer draft
 		await db
@@ -349,7 +351,7 @@ export const actions: Actions = {
 
 		// Only the author may edit, and only within an active conversation
 		const messageRecords = await db
-			.select({ authorId: messages.authorId })
+			.select({ authorId: messages.authorId, contentJson: messages.contentJson })
 			.from(messages)
 			.innerJoin(conversations, eq(messages.conversationId, conversations.id))
 			.where(
@@ -372,6 +374,10 @@ export const actions: Actions = {
 			.update(messages)
 			.set({ contentJson, updatedAt: new Date() })
 			.where(eq(messages.id, messageId));
+
+		// messageRecords[0].contentJson is the pre-edit value; reindex swaps the old
+		// indexed text for the new (contentless FTS needs the old text to delete).
+		await reindexMessage(db, messageId, messageRecords[0].contentJson, contentJson);
 
 		return { success: true };
 	}

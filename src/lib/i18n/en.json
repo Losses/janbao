@@ -7,7 +7,22 @@
 		"signin": "Sign In",
 		"register": "Register",
 		"signout": "Sign Out",
-		"menu": "Open menu"
+		"menu": "Open menu",
+		"search": "Search"
+	},
+	"search": {
+		"title": "Search",
+		"placeholder": "Search discussions, activity, messages...",
+		"scopeDiscussions": "Discussions",
+		"scopeActivities": "Activity",
+		"scopeMessages": "Messages",
+		"searchBtn": "Search",
+		"noResults": "No results found.",
+		"noQuery": "Enter a search term to begin.",
+		"tooShortHint": "Short query — using fuzzy match (LIKE).",
+		"resultsLabel": "results",
+		"matchedTitle": "title",
+		"matchedBody": "content"
 	},
 	"auth": {
 		"usernameOrEmail": "Email or Username",
