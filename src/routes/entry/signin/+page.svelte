@@ -62,7 +62,7 @@
 	<form class="mt-8 space-y-6" onsubmit={handleSubmit}>
 		<AlertMessage message={errorMessage} />
 
-		<div class="space-y-4 rounded-md shadow-sm">
+		<div class="space-y-4 rounded-field shadow-sm">
 			<div class="form-control">
 				<label class="label text-sm font-semibold" for="usernameOrEmail">
 					<span class="label-text">{t.auth.usernameOrEmail}</span>

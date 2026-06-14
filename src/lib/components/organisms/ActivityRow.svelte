@@ -233,7 +233,7 @@
 			</div>
 
 			{#if isTopLevel && (showEditor || loadingComments || comments.length > 0)}
-				<div class="mt-3 bg-base-200/50 rounded-lg p-3">
+				<div class="mt-3 bg-base-200/50 rounded-box p-3">
 					{#if showEditor && currentUserId}
 						<div class="mb-3 flex flex-col gap-2">
 							{#key editorKey}

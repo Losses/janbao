@@ -339,7 +339,7 @@
 
 <div
 	bind:this={editorRef}
-	class="absolute z-50 bg-base-100 border border-base-300 rounded-lg shadow-lg p-2 flex items-center gap-2 transition-opacity duration-200"
+	class="absolute z-50 bg-base-100 border border-base-300 rounded-box shadow-lg p-2 flex items-center gap-2 transition-opacity duration-200"
 	style="opacity: {$isLink ? 1 : 0}; pointer-events: {$isLink
 		? 'auto'
 		: 'none'}; top: 0; left: 0; will-change: transform;"

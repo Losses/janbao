@@ -56,7 +56,7 @@
 	<!-- Popover content -->
 	{#if isOpen}
 		<div
-			class="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2 w-72 max-w-[calc(100vw-1rem)] rounded-lg border border-base-300 bg-base-100 shadow-lg"
+			class="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2 w-72 max-w-[calc(100vw-1rem)] rounded-box border border-base-300 bg-base-100 shadow-lg"
 			role="dialog"
 			tabindex="-1"
 			onkeydown={(e) => {

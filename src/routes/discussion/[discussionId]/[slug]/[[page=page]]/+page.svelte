@@ -436,7 +436,7 @@
 						</button>
 					</form>
 				{:else}
-					<div class="bg-base-200 p-6 text-center text-base-content/70 rounded-lg">
+					<div class="bg-base-200 p-6 text-center text-base-content/70 rounded-box">
 						{t.discussion.noPermission}
 					</div>
 				{/if}

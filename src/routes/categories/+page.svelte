@@ -55,7 +55,7 @@
 			<div class="grid gap-4">
 				{#each categoriesList as category (category.slug)}
 					<div
-						class="card bg-base-100 border border-base-200 hover:border-primary/40 transition-all p-5 rounded-xl shadow-sm"
+						class="card bg-base-100 border border-base-200 hover:border-primary/40 transition-all p-5 rounded-box shadow-sm"
 					>
 						<h2 class="text-xl font-bold mb-2">
 							<a

@@ -240,7 +240,7 @@
 			{/if}
 		{:else if node.type === 'quote'}
 			<blockquote
-				class="border-l-4 border-primary bg-base-200/40 pl-4 py-2 my-3 rounded-r-lg italic text-base-content/80"
+				class="border-l-4 border-primary bg-base-200/40 pl-4 py-2 my-3 rounded-r-box italic text-base-content/80"
 			>
 				{#if node.children}
 					{#each node.children as child, i (i)}
@@ -302,13 +302,13 @@
 				<img
 					src={safeUrl(node.src)}
 					alt={node.altText || 'Image'}
-					class="max-w-full my-3 rounded-lg border border-base-300 shadow-sm"
+					class="max-w-full my-3 rounded-field border border-base-300 shadow-sm"
 					loading="lazy"
 				/>
 			{/if}
 		{:else if node.type === 'dead-image'}
 			<span
-				class="dead-image-placeholder inline-flex items-center gap-2 my-3 px-3 py-2 rounded-lg border border-dashed border-base-300 bg-base-200/50 text-base-content/60 text-sm"
+				class="dead-image-placeholder inline-flex items-center gap-2 my-3 px-3 py-2 rounded-field border border-dashed border-base-300 bg-base-200/50 text-base-content/60 text-sm"
 			>
 				<Icon path={mdiImageBrokenVariant} size={20} class="opacity-50" />
 				图片已失效

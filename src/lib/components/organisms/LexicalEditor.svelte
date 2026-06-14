@@ -484,7 +484,7 @@
 	     height, so the page stops jumping on every autosave. -->
 	{#if saveStatusLabel}
 		<div
-			class="absolute bottom-1.5 right-2 z-30 rounded-md bg-base-200/90 px-2 py-0.5 text-xs text-base-content/50 shadow-sm backdrop-blur-sm pointer-events-none"
+			class="absolute bottom-1.5 right-2 z-30 rounded-selector bg-base-200/90 px-2 py-0.5 text-xs text-base-content/50 shadow-sm backdrop-blur-sm pointer-events-none"
 		>
 			{saveStatusLabel}
 		</div>
@@ -507,7 +507,7 @@
 	}
 
 	/* Prevent children backgrounds from bleeding over rounded corners */
-	.janbao-rich-editor :global(.rounded-t-lg) {
+	.janbao-rich-editor :global(.rounded-t-field) {
 		border-top-left-radius: max(0px, calc(var(--radius-field, 0.5rem) - 1px));
 		border-top-right-radius: max(0px, calc(var(--radius-field, 0.5rem) - 1px));
 	}

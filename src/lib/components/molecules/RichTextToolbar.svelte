@@ -242,7 +242,7 @@
 </script>
 
 <div
-	class="flex flex-wrap items-center gap-1.5 p-1.5 bg-base-200 border-b border-base-300 rounded-t-lg"
+	class="flex flex-wrap items-center gap-1.5 p-1.5 bg-base-200 border-b border-base-300 rounded-t-field"
 >
 	<!-- Block Formatting Dropdown -->
 	{#if !disableHeadings}
