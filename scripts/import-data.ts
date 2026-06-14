@@ -434,13 +434,32 @@ async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promis
 				if (mentionMatch) {
 					const username = decodeURIComponent(mentionMatch[1]).trim();
 					const display = innerText.replace(/^@/, '').trim() || username;
-					if (textBuf.endsWith('@')) textBuf = textBuf.slice(0, -1);
-					await flushText();
-					const res = await ctx.resolveMention(username);
-					if (res.resolved) {
-						inline.push(buildMentionNode(username, display));
+
+					// Verify if it is a valid mention and not part of an email address
+					let isValidBefore = true;
+					if (textBuf.endsWith('@')) {
+						const charBefore = textBuf.length > 1 ? textBuf.charAt(textBuf.length - 2) : '';
+						isValidBefore = !charBefore || /\s/.test(charBefore);
+					} else if (innerText.startsWith('@')) {
+						const charBefore = textBuf.length > 0 ? textBuf.charAt(textBuf.length - 1) : '';
+						isValidBefore = !charBefore || /\s/.test(charBefore);
+					}
+
+					const afterText = html.slice(afterClose);
+					const isValidAfter = !/^\.[a-zA-Z0-9]/.test(afterText);
+
+					if (isValidBefore && isValidAfter) {
+						if (textBuf.endsWith('@')) textBuf = textBuf.slice(0, -1);
+						await flushText();
+						const res = await ctx.resolveMention(username);
+						if (res.resolved) {
+							inline.push(buildMentionNode(username, display));
+						} else {
+							inline.push(buildTextNode('@' + display));
+						}
 					} else {
-						inline.push(buildTextNode('@' + display));
+						// Part of email or domain name (e.g. sein@jandan.com). Treat as plain text!
+						textBuf += (textBuf.endsWith('@') ? '' : '@') + display;
 					}
 				} else {
 					await flushText();
