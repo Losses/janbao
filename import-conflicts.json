@@ -3,7 +3,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,f94a1e78-90f4-42bc-97db-55ac955e9bb5,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,fdf0cb56-fc98-4831-988e-421b47827df7,0"
   },
   {
     "type": "discussion_insert_error",
@@ -15,7 +15,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,2f1ac501-a335-421f-8b2c-0903bcc0f0a1,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,e3868a6d-3489-4ad3-9cdd-ca033d3edec3,0"
   },
   {
     "type": "discussion_insert_error",
@@ -27,7 +27,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,1abf8b06-adfc-46ec-b884-d9e91a9a6b34,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,68edd2bc-c92b-434e-856e-22890925d723,0"
   },
   {
     "type": "discussion_insert_error",
@@ -39,7 +39,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,99fa4e77-e8ed-41f1-a9e7-fcc047518bbb,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,fe0d4a15-6944-48da-8763-89840d6da64b,0"
   },
   {
     "type": "discussion_insert_error",
@@ -51,7 +51,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,f36cf0c1-8e1b-4a7e-8928-e5ab947bbdb3,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,2dd2efa1-dcc9-434f-8d76-f70fc5f75ad3,0"
   },
   {
     "type": "discussion_insert_error",
@@ -63,7 +63,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,ebe91ad1-6101-462f-bb84-ced5507ce252,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,1a494412-67d9-4d79-b016-c05b797c23ed,0"
   },
   {
     "type": "discussion_insert_error",
@@ -75,7 +75,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,46bb1d64-a413-4a85-a1f7-4fffc20f46ff,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,b9fc229d-14fa-45dd-a400-e57c2e838c29,0"
   },
   {
     "type": "discussion_insert_error",
@@ -87,7 +87,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,88efc953-5238-4a64-86a6-a5a34241f84f,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,ae03bacc-73cc-42b7-8689-11afd5a8a554,0"
   },
   {
     "type": "discussion_insert_error",
@@ -99,7 +99,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,ee988239-2d61-4401-9ec6-37736f4601df,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,e58bbd9d-71c9-4894-bff2-d49699f2ccfa,0"
   },
   {
     "type": "discussion_insert_error",
@@ -111,7 +111,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,d3a91d40-7277-4b92-92dd-ce78daa7ee5c,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,21883431-93ed-40db-98fc-664bac20b960,0"
   },
   {
     "type": "discussion_insert_error",
@@ -123,7 +123,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,20f97b62-ec2e-47fd-b4a8-380dfb4a5a43,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,ce6e1220-3cd4-44dd-bf01-5950314b71b3,0"
   },
   {
     "type": "discussion_insert_error",
@@ -135,7 +135,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,035539aa-3796-4e17-bf64-0d26ee53c2dd,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,be290ac3-0fa0-4777-8c81-59508617f5f4,0"
   },
   {
     "type": "discussion_insert_error",
@@ -147,7 +147,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,df8b44ca-3fe4-4306-ab52-3dfce1a93ce1,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,87f4f889-f5c4-41fb-a533-a3b318fc9278,0"
   },
   {
     "type": "discussion_insert_error",
@@ -159,7 +159,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,fe59d701-aab7-4d11-91bd-2fc722872858,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,1105331a-d177-48e5-8fcf-2f89e4a55c1d,0"
   },
   {
     "type": "discussion_insert_error",
@@ -171,7 +171,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,bcb9b22d-1a72-4235-b9e3-0785d0fe6f0f,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,faf286a9-2a32-4944-8d1c-7cd67b2b58d5,0"
   },
   {
     "type": "discussion_insert_error",
@@ -183,7 +183,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,e7e6d58b-8d9c-4258-865e-7db9b2fa811a,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,efc3c1a4-ad17-4b76-b427-aad4ce678fd2,0"
   },
   {
     "type": "discussion_insert_error",
@@ -195,7 +195,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,7b29da4f-c5ae-4395-82c2-cb428ffbee54,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,1c716fed-cb58-47d7-804b-d7cff206f26a,0"
   },
   {
     "type": "discussion_insert_error",
@@ -207,7 +207,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,e7760a34-52dd-4e7b-97a1-158a14960918,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,eafbef3e-1ebf-4e7a-b400-d6af85de1a8d,0"
   },
   {
     "type": "discussion_insert_error",
@@ -219,7 +219,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,e9b9faca-530f-4d57-8514-57112a62dd97,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,8c258375-bb47-49d6-a8b2-51a736c666c9,0"
   },
   {
     "type": "discussion_insert_error",
@@ -231,7 +231,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,ab143ae3-6dee-40d4-a5a1-a6ee10d6eeeb,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,d364b7cf-bf2a-4e3a-a7a4-aca6a7317fea,0"
   },
   {
     "type": "discussion_insert_error",
@@ -243,7 +243,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,b5656e31-d19b-462b-9309-5701859e4ae4,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,a60fde16-6a50-4cee-9026-634cc57ea33e,0"
   },
   {
     "type": "discussion_insert_error",
@@ -255,7 +255,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,3f133533-edb8-49ba-8d32-a840a53c830d,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,70dad0ba-3ede-4956-89a4-c5c1608b6783,0"
   },
   {
     "type": "discussion_insert_error",
@@ -267,7 +267,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,b3b72318-b517-4e0e-a3b8-6a48525b2876,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,f3018a9b-023c-4aed-8180-822612f8a0e6,0"
   },
   {
     "type": "discussion_insert_error",
@@ -279,7 +279,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,d41c2feb-cde5-4211-9ab9-4c95f9cae66d,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,d4331de5-5d18-4a16-b686-731c19a19023,0"
   },
   {
     "type": "discussion_insert_error",
@@ -291,7 +291,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,222bb337-ad52-4ae3-b89e-bdfb7ff42125,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,3d5b9191-ba1a-491e-b3ed-6308847e1e44,0"
   },
   {
     "type": "discussion_insert_error",
@@ -303,7 +303,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,e149a0df-2cb3-4b30-bb86-bd7a7593cb72,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,26623369-8237-4705-8cdd-a83409935a0b,0"
   },
   {
     "type": "discussion_insert_error",
@@ -315,7 +315,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,d5ad24f5-3dc9-4509-a91b-047a2af0fb20,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,77caed72-6a6d-4334-a6ef-e9013f80b98f,0"
   },
   {
     "type": "discussion_insert_error",
@@ -327,7 +327,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,867417e3-6bc8-45c9-8eb6-42e7676f6d89,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,45701617-c3fe-4dd6-9ffe-f8e200375b18,0"
   },
   {
     "type": "discussion_insert_error",
@@ -339,7 +339,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,1faca238-e1f1-4fe4-9490-82385b335f76,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,a9fce343-c709-4cc5-a729-589a425c7a9a,0"
   },
   {
     "type": "discussion_insert_error",
@@ -351,7 +351,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,9e6cc982-f36b-4874-92fc-76c621a8d0c9,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,1bd49216-d2aa-4ba1-b097-af20c4f84223,0"
   },
   {
     "type": "discussion_insert_error",
@@ -363,7 +363,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,ff84dd7b-9630-47b0-9d05-e1dd1d17329b,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,05290e64-dd17-4ccd-a58f-f3e920eeb565,0"
   },
   {
     "type": "discussion_insert_error",
@@ -375,7 +375,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,c0d66d1a-2d19-470d-91a5-e95bebf5e871,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,bf82d2a3-d645-498c-bec3-893baf6e8b08,0"
   },
   {
     "type": "discussion_insert_error",
@@ -387,7 +387,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,f85c680a-f455-42f1-9a03-3dc0e44d5f08,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,887b0270-4ac8-4e5d-b72d-13b3d18a3d8d,0"
   },
   {
     "type": "discussion_insert_error",
@@ -399,7 +399,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,6c9846e5-e856-4648-9b54-8b96550f7b81,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,5bcc8c20-6821-4d48-9c9f-0147abb11b87,0"
   },
   {
     "type": "discussion_insert_error",
@@ -411,7 +411,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,8556c8f1-d7e3-42da-9475-e44e516987de,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,16b30321-8410-4835-99f3-7a2a1e402f8b,0"
   },
   {
     "type": "discussion_insert_error",
@@ -423,7 +423,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,1106ede7-f746-44ff-b663-a48e893dbf4f,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,333dc44f-6d4c-431f-b9ec-4a097ac72d85,0"
   },
   {
     "type": "discussion_insert_error",
@@ -435,7 +435,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,9ea216ec-812c-492b-a5ed-fa4baa056658,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,9a1a4468-5c8f-4d44-a6a3-5d5071dafd3a,0"
   },
   {
     "type": "discussion_insert_error",
@@ -447,7 +447,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,d3211867-962b-496d-931b-3b8529454aa8,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,a4a7a3da-651a-401f-9e8a-f67e1abf5807,0"
   },
   {
     "type": "discussion_insert_error",
@@ -459,7 +459,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,a9603b2c-5b5b-4ff5-a054-43f856fdfb2c,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,154d1a21-7581-422b-8bd4-13ac2f7d1086,0"
   },
   {
     "type": "discussion_insert_error",
@@ -471,7 +471,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,b022eeee-936f-473d-8beb-bc66df000bf0,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,1f516b81-3a3f-4e36-b68f-5e244d5963ec,0"
   },
   {
     "type": "discussion_insert_error",
@@ -483,7 +483,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,77d8a116-edf9-4319-9d58-ce4d67704717,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,9fec5f80-0942-461f-83d9-fb43fb633a09,0"
   },
   {
     "type": "discussion_insert_error",
@@ -495,7 +495,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,d911429a-91ba-4959-bb20-41cde928b90d,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,ddf6a048-c91b-4667-af20-8d59bd8d8bdb,0"
   },
   {
     "type": "discussion_insert_error",
@@ -507,7 +507,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,e3fde8a5-aabb-459e-8e0f-17a1434ceb18,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,4631c22c-e4b8-4ce8-8e2c-b737c9e88b6d,0"
   },
   {
     "type": "discussion_insert_error",
@@ -519,7 +519,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,4fc98723-b258-444c-9099-3b1ca037c861,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,c2e34c0b-cd97-4f42-81fb-8a7ec93789d7,0"
   },
   {
     "type": "discussion_insert_error",
@@ -531,7 +531,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,afde4d8a-bb0d-4432-b53b-1bd81383434c,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,dbe4e768-1dad-4d2a-b2ae-e2bab528b2bc,0"
   },
   {
     "type": "discussion_insert_error",
@@ -543,7 +543,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,3e686c38-1fac-4f4d-adb6-549901bb566b,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,d4561c99-4cf2-41c8-837b-d6f14e5a86c8,0"
   },
   {
     "type": "discussion_insert_error",
@@ -555,7 +555,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,6d193e7e-15d7-439f-903e-ebd0b9d35308,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,00c0a660-87a4-410f-9973-0be041ce7ce9,0"
   },
   {
     "type": "discussion_insert_error",
@@ -567,7 +567,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,51a197d4-6fd0-4707-b531-a070d4e0fd92,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,aa0050ef-bb65-45d3-b5a9-be3af1d17caa,0"
   },
   {
     "type": "discussion_insert_error",
@@ -579,7 +579,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,3cfbd4ef-d438-46bc-b895-4f8709ae88ac,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,f4eea62f-f673-446f-a54b-982bc4681afd,0"
   },
   {
     "type": "discussion_insert_error",
@@ -591,7 +591,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,c5ab3381-8eb7-4c7d-9a15-43b822117598,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,e71e6921-17ac-4509-ab19-5d929d370c2a,0"
   },
   {
     "type": "discussion_insert_error",
@@ -603,7 +603,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,c7f41fdd-2f12-48ab-add2-e8cea0e13886,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,fa6c63c2-f11d-42de-83cc-b1da637ded3f,0"
   },
   {
     "type": "discussion_insert_error",
@@ -615,7 +615,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,d30e6055-882b-4203-a9d5-148fa5a7fe50,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,873a1b56-54cd-4a12-8348-a466e46c11ee,0"
   },
   {
     "type": "discussion_insert_error",
@@ -627,7 +627,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,a9db1527-6292-4979-9b53-ee22e727805f,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,3636c941-d889-499b-92e0-6395cd450965,0"
   },
   {
     "type": "discussion_insert_error",
@@ -639,7 +639,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,5df969fd-eaac-4622-849f-2fb803643f85,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,586dacca-d517-41b9-861b-b272a8a44560,0"
   },
   {
     "type": "discussion_insert_error",
@@ -651,7 +651,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,df0ba7fd-5009-4e8a-8e53-7b2df05adbe8,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,56fb7c51-f103-466a-9da8-6155c0b48c22,0"
   },
   {
     "type": "discussion_insert_error",
@@ -663,7 +663,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,ece4a122-bd52-47dc-beda-aad47bb727a3,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,203fed1b-b086-4ea9-9c4f-e7ac3bd778fb,0"
   },
   {
     "type": "discussion_insert_error",
@@ -675,7 +675,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,4ad47edc-8bc7-45c4-a5f9-e57bb7f32fe7,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,00d464d1-503a-4c06-a40c-5e7aafbd5524,0"
   },
   {
     "type": "discussion_insert_error",
@@ -687,7 +687,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,77be6886-2ad1-4605-af30-4bae67686304,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,570bde9c-cddc-4522-b7c3-e57ac2a34001,0"
   },
   {
     "type": "discussion_insert_error",
@@ -699,7 +699,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,19abad33-3599-4d40-8089-234123906fc7,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,e9a65bd4-7eb7-47a2-a49b-c5bee775008b,0"
   },
   {
     "type": "discussion_insert_error",
@@ -711,7 +711,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,b2e15897-33d1-488e-8363-4814aafd5982,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,86c2b8f9-3543-4c7f-9c4c-62a1953d5a4a,0"
   },
   {
     "type": "discussion_insert_error",
@@ -723,7 +723,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,5f741312-0212-4b9a-ac95-1f21b5df7f33,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,b08b3a5b-803f-4632-8a5d-53150d1c35f1,0"
   },
   {
     "type": "discussion_insert_error",
@@ -735,7 +735,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,cfa47979-f8c2-487a-94ae-3e6d2dae1a98,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,008b4892-f052-4305-8f77-ca757a986db4,0"
   },
   {
     "type": "discussion_insert_error",
@@ -747,7 +747,7 @@
     "type": "user_insert_error",
     "userId": 31132,
     "username": "[Deleted User]",
-    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],http://huox.in/uploads/noicon.png,member,0,en,0,b339198c-33dd-43d6-9666-0179d53d9a51,0"
+    "error": "Failed query: insert into \"users\" (\"id\", \"username\", \"email\", \"password_hash\", \"display_name\", \"avatar_file_id\", \"avatar_content_type\", \"group_slug\", \"signup_time\", \"last_active_time\", \"show_email\", \"language_preference\", \"is_stealth\", \"rss_token\", \"view_count\") values (?, ?, ?, ?, ?, ?, null, ?, (strftime('%s', 'now')), (strftime('%s', 'now')), ?, ?, ?, ?, ?)\nparams: 31132,[Deleted User],31132@placeholder.janbao.net,NO_PASSWORD,[Deleted User],,member,0,en,0,35e7d863-74f4-44ae-85fb-af88a82e4d50,0"
   },
   {
     "type": "discussion_insert_error",
@@ -11665,5 +11665,200 @@
   {
     "type": "op_body_missing",
     "discussionId": 29585
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "5306dba61d2ffffc0cb2cdc82c79af0b9a179cbdbfe3898de0fda9b54d510684",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/5306dba61d2ffffc0cb2cdc82c79af0b9a179cbdbfe3898de0fda9b54d510684.jpg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "b72a18b75422a979b505283c964f6d616c62367e803f05a0da02f311eeb77271",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/b72a18b75422a979b505283c964f6d616c62367e803f05a0da02f311eeb77271.jpg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "dda29eb493b1e56cf8db59b673d3afea8b20b658bb8810ebfa2502b19f405576",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/dda29eb493b1e56cf8db59b673d3afea8b20b658bb8810ebfa2502b19f405576.svg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f.jpeg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f.jpeg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f.jpeg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f.jpeg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f.jpeg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f.jpeg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f.jpeg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f.jpeg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f.jpeg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f.jpeg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f.jpeg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f.jpeg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f.jpeg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f.jpeg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/9036ca3471d758eadd9a0704787c3231b166c44cf2d5b1c12d9a92c93acbc93f.jpeg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "6dc9c7fc93bb488bb0520a6c780a8d3c0fb5486a4711aca49b4c53fac7393023",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/6dc9c7fc93bb488bb0520a6c780a8d3c0fb5486a4711aca49b4c53fac7393023.jpg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "6dc9c7fc93bb488bb0520a6c780a8d3c0fb5486a4711aca49b4c53fac7393023",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/6dc9c7fc93bb488bb0520a6c780a8d3c0fb5486a4711aca49b4c53fac7393023.jpg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "e579e7c9e432718d754d6e33f3d83481b49bd3165b84557674f10a78e5c2dd27",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/e579e7c9e432718d754d6e33f3d83481b49bd3165b84557674f10a78e5c2dd27.jpg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "5bec2ffdde9aebbf44fcefc33c38423b2ea294184bdfc6c664be069454dd52b9",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/5bec2ffdde9aebbf44fcefc33c38423b2ea294184bdfc6c664be069454dd52b9.bin"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "c7f6fefab88fca8f1cddba78c294af17feef3e0168b59ceb3142b600a4b7d8d1",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/c7f6fefab88fca8f1cddba78c294af17feef3e0168b59ceb3142b600a4b7d8d1.bmp"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "c7f6fefab88fca8f1cddba78c294af17feef3e0168b59ceb3142b600a4b7d8d1",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/c7f6fefab88fca8f1cddba78c294af17feef3e0168b59ceb3142b600a4b7d8d1.bmp"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "c7f6fefab88fca8f1cddba78c294af17feef3e0168b59ceb3142b600a4b7d8d1",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/c7f6fefab88fca8f1cddba78c294af17feef3e0168b59ceb3142b600a4b7d8d1.bmp"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "c7f6fefab88fca8f1cddba78c294af17feef3e0168b59ceb3142b600a4b7d8d1",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/c7f6fefab88fca8f1cddba78c294af17feef3e0168b59ceb3142b600a4b7d8d1.bmp"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "5bab8e94f73edc9a2e33f4c79e9a02749047d9f43204bf232680b3983b634acd",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/5bab8e94f73edc9a2e33f4c79e9a02749047d9f43204bf232680b3983b634acd.aspx"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "0a33a80e60d448b60febd66ffc8cc6504a29133e75bbcc43ce2de8f4887dac35",
+    "error": "Command failed: cwebp /home/losses/Downloads/data/images/0a33a80e60d448b60febd66ffc8cc6504a29133e75bbcc43ce2de8f4887dac35.jpg -o /tmp/janbao-9c9a36bf-f3bd-4cd4-96cc-899ce18c8806.webp -quiet -q 82"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "4eb87513c2c720e61175d84d1b17ab345a791068705f9cfdd1794910d217253d",
+    "error": "Command failed: cwebp /home/losses/Downloads/data/images/4eb87513c2c720e61175d84d1b17ab345a791068705f9cfdd1794910d217253d.jpg -o /tmp/janbao-fc99b4fe-027c-4e58-a6e7-b73e07a08a61.webp -quiet -q 82"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "1415757eb8cca74671045e7f34ccc9176ba64100b77fba9d319cf6acc9380f3d",
+    "error": "Command failed: cwebp /home/losses/Downloads/data/images/1415757eb8cca74671045e7f34ccc9176ba64100b77fba9d319cf6acc9380f3d.jpg -o /tmp/janbao-1c5fef4d-e08d-489c-99f5-67693fc511f0.webp -quiet -q 82"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "e4f81312123b41d1cbe1307c07a269fffcc5e74ca0558d9cad3e0eccaa94a692",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/e4f81312123b41d1cbe1307c07a269fffcc5e74ca0558d9cad3e0eccaa94a692.PNG"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "540cc7309c46bb3d77dbcd15904b88e7ecdf80a206af6a3bb8117cc53f64c3c3",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/540cc7309c46bb3d77dbcd15904b88e7ecdf80a206af6a3bb8117cc53f64c3c3.jpg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "6dc9c7fc93bb488bb0520a6c780a8d3c0fb5486a4711aca49b4c53fac7393023",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/6dc9c7fc93bb488bb0520a6c780a8d3c0fb5486a4711aca49b4c53fac7393023.jpg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "6dc9c7fc93bb488bb0520a6c780a8d3c0fb5486a4711aca49b4c53fac7393023",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/6dc9c7fc93bb488bb0520a6c780a8d3c0fb5486a4711aca49b4c53fac7393023.jpg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "6dc9c7fc93bb488bb0520a6c780a8d3c0fb5486a4711aca49b4c53fac7393023",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/6dc9c7fc93bb488bb0520a6c780a8d3c0fb5486a4711aca49b4c53fac7393023.jpg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "6dc9c7fc93bb488bb0520a6c780a8d3c0fb5486a4711aca49b4c53fac7393023",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/6dc9c7fc93bb488bb0520a6c780a8d3c0fb5486a4711aca49b4c53fac7393023.jpg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "6dc9c7fc93bb488bb0520a6c780a8d3c0fb5486a4711aca49b4c53fac7393023",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/6dc9c7fc93bb488bb0520a6c780a8d3c0fb5486a4711aca49b4c53fac7393023.jpg"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "e47dfe3b6e42bd333150ea8968f977a49925f68ca27ce6da3e13482aae169e26",
+    "error": "not a supported image format: /home/losses/Downloads/data/images/e47dfe3b6e42bd333150ea8968f977a49925f68ca27ce6da3e13482aae169e26.bin"
+  },
+  {
+    "type": "attachment_materialize_error",
+    "sha256": "51e913228233e083754847eef3ac57b63a05421de3bd48b3518f85b15571b0f7",
+    "error": "Command failed: cwebp /home/losses/Downloads/data/images/51e913228233e083754847eef3ac57b63a05421de3bd48b3518f85b15571b0f7.webp -o /tmp/janbao-743ab3f9-ee60-4910-a205-da7b689dd6e4.webp -quiet -q 82"
   }
 ]
