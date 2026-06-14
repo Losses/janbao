@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-The discussion detail page currently only has PIN/UNPIN action buttons. Edit and delete functionality  - for both the original post (OP) and replies  - is entirely missing from the frontend UI, routes, and server-side endpoints. Additionally, the comment interaction on the Activity page has issues: the comment entry should be a "Comment" text link that expands a rich-text editor below the activity, rather than the current comment icon + plain-text input. This document plans the complete implementation of these features.
+The discussion detail page currently only has PIN/UNPIN action buttons. Edit and delete functionality - for both the original post (OP) and replies - is entirely missing from the frontend UI, routes, and server-side endpoints. Additionally, the comment interaction on the Activity page has issues: the comment entry should be a "Comment" text link that expands a rich-text editor below the activity, rather than the current comment icon + plain-text input. This document plans the complete implementation of these features.
 
 ---
 
@@ -22,7 +22,7 @@ The discussion detail page currently only has PIN/UNPIN action buttons. Edit and
 
 ### 2.2 Edit Behavior
 
-**Reply  - Inline Edit**
+**Reply - Inline Edit**
 
 1. Click Edit → the reply's content area becomes a `LexicalEditor`, pre-loaded with `contentJson`.
 2. Below the editor, "Cancel" and "Save Comment" buttons appear.
@@ -30,7 +30,7 @@ The discussion detail page currently only has PIN/UNPIN action buttons. Edit and
 4. Cancel → restore the rendered view, discard edits.
 5. Only one reply can be in edit mode at a time.
 
-**OP  - Navigate to Edit Page**
+**OP - Navigate to Edit Page**
 
 1. Click Edit → navigate to `/post/editDiscussion/[discussionId]`.
 2. The edit page layout is identical to the new-post page (`/post/discussion`), pre-loaded with: title, categorySlug, themeName, contentJson.
@@ -64,7 +64,7 @@ The layout of each activity row on the Activity page needs correction, along wit
 
 #### Layout Correction
 
-**Current layout (incorrect)**  - `ActivityRow.svelte`:
+**Current layout (incorrect)** - `ActivityRow.svelte`:
 
 - Row 1: Username + timestamp + recipient (all crammed on one line)
 - Row 2: Content
@@ -122,17 +122,17 @@ The Profile page (`/profile/[userId]/[userSlug]`) should have a rich-text editor
 
 ## 3. Development Cycles
 
-### Cycle 1: Server  - Data Plumbing & Form Actions
+### Cycle 1: Server - Data Plumbing & Form Actions
 
 - **Goal**: Complete permission data passing, create the edit page route load function, implement all edit/delete form actions.
 
 **Tasks**:
 
-1. **Discussion `+page.server.ts` load function**  - add to return value:
+1. **Discussion `+page.server.ts` load function** - add to return value:
    - Add `canUpdate: boolean`, `canCreate: boolean` (from `resolvePermissions`).
    - Add `user` object (current logged-in user, with `id`, `groupSlug`; `null` if not logged in).
 
-2. **Create `src/routes/post/editDiscussion/[discussionId]/+page.server.ts`**  - load + update action:
+2. **Create `src/routes/post/editDiscussion/[discussionId]/+page.server.ts`** - load + update action:
    - Load: verify user is logged in, query discussion + OP contentJson, verify `canUpdate` or author, query writable category list, return `{ discussion, opContentJson, categories, draftContent }`.
    - `?/update` action: verify login, get `title`, `categorySlug`, `themeName`, `contentJson`, verify permissions, UPDATE discussions + OP reply, redirect back to discussion detail page.
 
@@ -148,31 +148,31 @@ The Profile page (`/profile/[userId]/[userSlug]`) should have a rich-text editor
 
 ---
 
-### Cycle 2: Frontend  - Discussion Edit/Delete/Quick Reply
+### Cycle 2: Frontend - Discussion Edit/Delete/Quick Reply
 
 - **Goal**: Complete action button group for OP and replies, inline editing, OP edit page, Quick Reply.
 
 **Tasks**:
 
-1. **LexicalEditor programmatic insert API**  - modify `LexicalEditor.svelte`:
+1. **LexicalEditor programmatic insert API** - modify `LexicalEditor.svelte`:
    - Add `insertText(text: string)` method, exposed via `bind:this`.
    - Implement using `editorInstance.update()` + `$createTextNode()`.
 
-2. **OP action button group**  - modify discussion `+page.svelte`:
+2. **OP action button group** - modify discussion `+page.svelte`:
    - Pin (`canDelete`), Edit (`canUpdate` or author, `<a href="/post/editDiscussion/...">`), Delete (`canDelete`, ConfirmationModal).
 
 3. **Create `src/routes/post/editDiscussion/[discussionId]/+page.svelte`**:
    - Copy the new-post page structure, pre-load title / categorySlug / themeName / contentJson, action points to `?/update`.
 
-4. **Reply action buttons + inline edit**  - discussion `+page.svelte` in `{#each repliesList}`:
+4. **Reply action buttons + inline edit** - discussion `+page.svelte` in `{#each repliesList}`:
    - Reply (`canCreate`, calls `quickReply(username)`), Edit (`canUpdate` or author, inline LexicalEditor), Delete (`canDelete`, ConfirmationModal).
    - Reference `PrivateMessageWindow.svelte` inline edit pattern.
 
-5. **Quick Reply**  - discussion `+page.svelte`:
+5. **Quick Reply** - discussion `+page.svelte`:
    - `bind:this` to get the bottom editor instance.
    - `quickReply(username)` → `editor.insertText('@username ')` → `scrollIntoView` bottom editor.
 
-6. **i18n**  - `en.json` / `zh-CN.json` discussion block:
+6. **i18n** - `en.json` / `zh-CN.json` discussion block:
    - `editDiscussion` / `editReply` / `saveReply` / `deleteDiscussion` / `deleteReply` / `deleteDiscussionConfirm` / `deleteReplyConfirm` / `quickReply`.
 
 **Verification**:
@@ -193,7 +193,7 @@ The Profile page (`/profile/[userId]/[userSlug]`) should have a rich-text editor
 
 **Tasks**:
 
-1. **ActivityRow layout correction**  - modify `ActivityRow.svelte`:
+1. **ActivityRow layout correction** - modify `ActivityRow.svelte`:
    - Row 1: Username (→ recipient), remove `DateComponent`.
    - Row 2: Content.
    - Row 3: `DateComponent` + "Comment" text link + delete button.
@@ -203,16 +203,16 @@ The Profile page (`/profile/[userId]/[userSlug]`) should have a rich-text editor
    - Add `isTopLevel: boolean` prop to ActivityRow (default `true`).
    - "Comment" link only shows when `isTopLevel && currentUserId`.
 
-3. **Inline LexicalEditor**  - replace plain-text `<input>`:
+3. **Inline LexicalEditor** - replace plain-text `<input>`:
    - Expanded: LexicalEditor + submit button → comment list.
    - Submit calls existing `POST /api/activities/comments`, no backend changes needed.
 
-4. **Profile page editor**  - modify `src/routes/profile/[userId]/[userSlug]/+page.svelte`:
+4. **Profile page editor** - modify `src/routes/profile/[userId]/[userSlug]/+page.svelte`:
    - Change visibility condition from `user && !isOwner` to `user`.
    - `submitDirectedActivity()`: when `isOwner`, don't pass `recipientId` (normal activity); when not owner, pass `recipientId`.
    - Adjust prompt text based on `isOwner`.
 
-5. **i18n**  - `en.json` / `zh-CN.json` activity / profile block (if new keys are added).
+5. **i18n** - `en.json` / `zh-CN.json` activity / profile block (if new keys are added).
 
 **Verification**:
 
@@ -231,8 +231,8 @@ The Profile page (`/profile/[userId]/[userSlug]`) should have a rich-text editor
 | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `src/routes/discussion/[discussionId]/[slug]/[[page=page]]/+page.server.ts` | Add `canUpdate`, `user`, `canCreate` to load return; add `editReply`, `deleteReply`, `deleteDiscussion` actions                   |
 | `src/routes/discussion/[discussionId]/[slug]/[[page=page]]/+page.svelte`    | OP action buttons; reply action buttons (Reply / Edit / Delete); inline edit; Quick Reply; ConfirmationModal                      |
-| `src/routes/post/editDiscussion/[discussionId]/+page.server.ts`             | **New**  - load + update action                                                                                                    |
-| `src/routes/post/editDiscussion/[discussionId]/+page.svelte`                | **New**  - edit page (reuses new-post page structure)                                                                              |
+| `src/routes/post/editDiscussion/[discussionId]/+page.server.ts`             | **New** - load + update action                                                                                                    |
+| `src/routes/post/editDiscussion/[discussionId]/+page.svelte`                | **New** - edit page (reuses new-post page structure)                                                                              |
 | `src/lib/components/organisms/LexicalEditor.svelte`                         | Add `insertText()` method, exposed to parent via `bind:this`                                                                      |
 | `src/lib/components/organisms/ActivityRow.svelte`                           | Layout fix (timestamp moved to row 3); add `isTopLevel` prop; "Comment" text link; inline LexicalEditor replaces plain-text input |
 | `src/routes/profile/[userId]/[userSlug]/+page.svelte`                       | Change editor visibility from `user && !isOwner` to `user`; submit logic distinguishes isOwner (whether to pass recipientId)      |

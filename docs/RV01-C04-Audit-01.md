@@ -52,7 +52,7 @@ Five independent auditors reviewed the Cycle 4 codebase changes covering guest p
 
 ---
 
-## 3. Acknowledged Gaps (Not Fixed  - Low Priority)
+## 3. Acknowledged Gaps (Not Fixed - Low Priority)
 
 | #   | Issue                                                                                     | Impact                                              |
 | --- | ----------------------------------------------------------------------------------------- | --------------------------------------------------- |
@@ -80,8 +80,8 @@ Five independent auditors reviewed the Cycle 4 codebase changes covering guest p
 
 ## 5. Verification
 
-- `bun run check`  - 0 errors, 0 warnings ✅
-- `bun run lint`  - prettier ✅, eslint ✅, similarity-ts ✅
+- `bun run check` - 0 errors, 0 warnings ✅
+- `bun run lint` - prettier ✅, eslint ✅, similarity-ts ✅
 
 ---
 

@@ -37,11 +37,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		// UUID token from before the id migration) is treated as an invalid token.
 		const userId = payload?.sub !== undefined ? Number(payload.sub) : NaN;
 		if (payload && payload.sub && !Number.isNaN(userId)) {
-			const usersList = await db
-				.select()
-				.from(users)
-				.where(eq(users.id, userId))
-				.limit(1);
+			const usersList = await db.select().from(users).where(eq(users.id, userId)).limit(1);
 			if (usersList.length > 0) {
 				const userRecord = usersList[0];
 				// Redact password hash before exposing to locals

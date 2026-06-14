@@ -3,7 +3,7 @@
 ## Cycle 2: Sidebar Widgets, Tooltip Alignment & Translations (QA #2, #6)
 
 **Date:** 2026-06-12
-**Status:** Complete  - All 5 agents PASS (Round 2)
+**Status:** Complete - All 5 agents PASS (Round 2)
 
 ---
 
@@ -21,10 +21,10 @@
 
 **Modified sidebar snippets in 4 pages:**
 
-- `src/routes/+page.svelte` (Home)  - Added `<ActiveUsersWall {t} />` at bottom of sidebar card
-- `src/routes/categories/+page.svelte` (Categories)  - Added `<ActiveUsersWall {t} />` at bottom
-- `src/routes/category/[categorySlug]/+page.svelte` (Category)  - Added `<ActiveUsersWall {t} />` at bottom
-- `src/routes/discussion/[discussionId]/[slug]/[[page=page]]/+page.svelte` (Discussion)  - Added `<ActiveUsersWall {t} />` at bottom
+- `src/routes/+page.svelte` (Home) - Added `<ActiveUsersWall {t} />` at bottom of sidebar card
+- `src/routes/categories/+page.svelte` (Categories) - Added `<ActiveUsersWall {t} />` at bottom
+- `src/routes/category/[categorySlug]/+page.svelte` (Category) - Added `<ActiveUsersWall {t} />` at bottom
+- `src/routes/discussion/[discussionId]/[slug]/[[page=page]]/+page.svelte` (Discussion) - Added `<ActiveUsersWall {t} />` at bottom
 
 The ActiveUsersWall component already existed in `src/lib/components/molecules/ActiveUsersWall.svelte` (previously only rendered on `/messages/new`). Now it appears on all forum route sidebars per RQ00-Frontend §3.3.1.
 
@@ -54,7 +54,7 @@ The ActiveUsersWall component already existed in `src/lib/components/molecules/A
 
 - Added `"forum"` block with Chinese translations: `浏览`, `回复`, `最后回复`, `置顶`
 
-This prevents `DiscussionRow.svelte` from falling back to hardcoded English strings. The component already reads from `t.forum.*` with English defaults  - now it receives proper translations.
+This prevents `DiscussionRow.svelte` from falling back to hardcoded English strings. The component already reads from `t.forum.*` with English defaults - now it receives proper translations.
 
 ---
 
@@ -71,24 +71,24 @@ This prevents `DiscussionRow.svelte` from falling back to hardcoded English stri
 
 ### New Files
 
-- `src/routes/api/categories/+server.ts`  - Categories API endpoint
-- `src/lib/components/molecules/CategoryListWidget.svelte`  - Category navigation widget
+- `src/routes/api/categories/+server.ts` - Categories API endpoint
+- `src/lib/components/molecules/CategoryListWidget.svelte` - Category navigation widget
 
 ### Modified Files
 
-- `src/lib/components/atoms/Tooltip.svelte`  - Center-aligned popover positioning
-- `src/lib/i18n/en.json`  - Added `forum` block
-- `src/lib/i18n/zh-CN.json`  - Added `forum` block
-- `src/routes/+page.svelte`  - Added ActiveUsersWall + CategoryListWidget to sidebar
-- `src/routes/categories/+page.svelte`  - Added ActiveUsersWall + CategoryListWidget to sidebar
-- `src/routes/category/[categorySlug]/+page.svelte`  - Added ActiveUsersWall + CategoryListWidget to sidebar
-- `src/routes/discussion/[discussionId]/[slug]/[[page=page]]/+page.svelte`  - Added ActiveUsersWall + CategoryListWidget to sidebar
+- `src/lib/components/atoms/Tooltip.svelte` - Center-aligned popover positioning
+- `src/lib/i18n/en.json` - Added `forum` block
+- `src/lib/i18n/zh-CN.json` - Added `forum` block
+- `src/routes/+page.svelte` - Added ActiveUsersWall + CategoryListWidget to sidebar
+- `src/routes/categories/+page.svelte` - Added ActiveUsersWall + CategoryListWidget to sidebar
+- `src/routes/category/[categorySlug]/+page.svelte` - Added ActiveUsersWall + CategoryListWidget to sidebar
+- `src/routes/discussion/[discussionId]/[slug]/[[page=page]]/+page.svelte` - Added ActiveUsersWall + CategoryListWidget to sidebar
 
 ---
 
 ## 4. Audit Log
 
-### Audit Round 1  - 2026-06-12
+### Audit Round 1 - 2026-06-12
 
 **Method:** 5 independent audit agents reviewed all Cycle 2 files, findings consolidated into `docs/RV01-C02-Audit-01.md`.
 
@@ -100,18 +100,18 @@ This prevents `DiscussionRow.svelte` from falling back to hardcoded English stri
 | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | CategoryListWidget on `/categories`          | Added missing CategoryListWidget to the Categories page sidebar, making all 4 forum route sidebars consistent                          |
 | TranslationDict import in CategoryListWidget | Replaced local `TranslationDict` interface with `import type { TranslationDict } from '$lib/types/translation'` for proper type safety |
-| TranslationDict import in ActiveUsersWall    | Same fix  - replaced local declaration with shared import, simplified `t.sidebar.activeUsers` access (no cast needed)                   |
+| TranslationDict import in ActiveUsersWall    | Same fix - replaced local declaration with shared import, simplified `t.sidebar.activeUsers` access (no cast needed)                   |
 
 **Deferred (not Cycle 2 scope):**
 
-- Guest fallback `'member'` in `/api/categories`  - pre-existing, scheduled for Cycle 4 (QA #13)
+- Guest fallback `'member'` in `/api/categories` - pre-existing, scheduled for Cycle 4 (QA #13)
 
 **Round 1 verification:**
 
-- `bun run check`  - 0 errors, 0 warnings (1048 files)
-- `bun run lint`  - exit code 0
+- `bun run check` - 0 errors, 0 warnings (1048 files)
+- `bun run lint` - exit code 0
 
-### Audit Round 2  - 2026-06-12
+### Audit Round 2 - 2026-06-12
 
 **Method:** 5 independent audit agents re-reviewed all Cycle 2 files after Round 1 fixes.
 
@@ -126,9 +126,9 @@ This prevents `DiscussionRow.svelte` from falling back to hardcoded English stri
 
 **Modified files added:**
 
-- `src/lib/components/organisms/DiscussionRow.svelte`  - Shared TranslationDict import, simplified i18n derived values
+- `src/lib/components/organisms/DiscussionRow.svelte` - Shared TranslationDict import, simplified i18n derived values
 
 **Final verification:**
 
-- `bun run check`  - 0 errors, 0 warnings (1048 files)
-- `bun run lint`  - exit code 0
+- `bun run check` - 0 errors, 0 warnings (1048 files)
+- `bun run lint` - exit code 0

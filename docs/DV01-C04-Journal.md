@@ -1,6 +1,6 @@
 # DV01-C04-Journal: Cycle 4 Development Journal
 
-## Cycle: 4  - Permissions Fallback, Mistranslations & Mentions
+## Cycle: 4 - Permissions Fallback, Mistranslations & Mentions
 
 **Date:** 2026-06-12
 **Target Issues:** QA #8, QA #9, QA #13
@@ -20,12 +20,12 @@ Cycle 4 addresses three critical areas:
 
 ## 2. Changes Made
 
-### 2.1 Database Seeding  - Guest User Group
+### 2.1 Database Seeding - Guest User Group
 
 **File:** `src/lib/server/db/seed.ts`
 
 - Added `'guest'` user group to `groupsToSeed` array with `permissionsJson: '{}'`.
-- Guests get empty permissions  - all CRUD flags default to false except where `resolvePermissions` applies role-based defaults.
+- Guests get empty permissions - all CRUD flags default to false except where `resolvePermissions` applies role-based defaults.
 
 ### 2.2 Centralized Permission Resolution
 
@@ -51,7 +51,7 @@ All page server loaders that previously used `user?.groupSlug || 'member'` now u
 | `src/routes/categories/+page.server.ts`                        | Uses `resolveGroupSlug()` for permission mapping            |
 | `src/routes/post/discussion/+page.server.ts`                   | Uses `resolvePermissions()` and `resolveGroupSlug()`        |
 
-### 2.4 Secure Listings  - Category Permission Filtering
+### 2.4 Secure Listings - Category Permission Filtering
 
 **File:** `src/lib/server/db/dao/discussions.ts`
 
@@ -66,9 +66,9 @@ All page server loaders that previously used `user?.groupSlug || 'member'` now u
 
 **Callers updated:**
 
-- `src/routes/+page.server.ts`  - passes `groupSlug`
-- `src/routes/profile/discussions/[userId]/[userSlug]/+page.server.ts`  - passes `groupSlug`
-- `src/routes/profile/comments/[userId]/[userSlug]/+page.server.ts`  - passes `groupSlug`
+- `src/routes/+page.server.ts` - passes `groupSlug`
+- `src/routes/profile/discussions/[userId]/[userSlug]/+page.server.ts` - passes `groupSlug`
+- `src/routes/profile/comments/[userId]/[userSlug]/+page.server.ts` - passes `groupSlug`
 
 ### 2.5 Mention Resolution Server Utility
 
@@ -98,7 +98,7 @@ All content-serving load handlers now call `resolveMentions()` and return `menti
 | `src/routes/messages/[id]/[[page=page]]/+page.server.ts`          | Message contentJsons       |
 | `src/routes/profile/comments/[userId]/[userSlug]/+page.server.ts` | Comment contentJsons       |
 
-### 2.8 LexicalRenderer  - @mention Chip Rendering
+### 2.8 LexicalRenderer - @mention Chip Rendering
 
 **File:** `src/lib/components/molecules/LexicalRenderer.svelte`
 
@@ -132,8 +132,8 @@ Fixed lint issues found during this cycle's lint run:
 
 ## 3. Verification
 
-- [x] `bun run check`  - 0 errors, 0 warnings
-- [x] `bun run lint`  - prettier ✓, eslint ✓, similarity-ts ✓ (type duplicates: 0)
+- [x] `bun run check` - 0 errors, 0 warnings
+- [x] `bun run lint` - prettier ✓, eslint ✓, similarity-ts ✓ (type duplicates: 0)
 - [x] Guest users fallback to `'guest'` groupSlug, not `'member'`
 - [x] Discussion lists filtered by category read permissions
 - [x] User comments filtered by category read permissions
@@ -158,7 +158,7 @@ Fixed lint issues found during this cycle's lint run:
 - **Verdicts:** 4 PASS / 1 FAIL → All fixed
 - **Issues Found:** 7 (all fixed)
 - **Key Fixes:**
-  - F1 (Critical): Bookmarks page `totalPages` computed from unfiltered count  - refactored to use SQL-level category filtering via `getReadableCategorySlugs`
+  - F1 (Critical): Bookmarks page `totalPages` computed from unfiltered count - refactored to use SQL-level category filtering via `getReadableCategorySlugs`
   - F2: Dead ternary `guest ? true : true` simplified to `true`
   - F3: Duplicate `RecipientInfo` extracted to `$lib/types/api.ts`
   - F4: Bookmarks admin/moderator shortcut added via `getReadableCategorySlugs` (returns `null` for privileged groups)
@@ -168,11 +168,11 @@ Fixed lint issues found during this cycle's lint run:
 - **Verification:** `bun run check` ✅ (0 errors), `bun run lint` ✅ (0 type duplicates)
 - **See:** [RV01-C04-Audit-02.md](./RV01-C04-Audit-02.md)
 
-### Audit Round 3  - Verification Pass
+### Audit Round 3 - Verification Pass
 
 - **Date:** 2026-06-12
 - **Method:** 5 independent agents (full re-audit after Round 2 fixes)
-- **Verdicts:** 5/5 PASS ✅  - All auditors confirm C04 is complete
-- **Issues Found:** 0 critical, 0 medium. Low-priority items noted: wasteful double-query in `getDiscussionsCount`, `['__none__']` sentinel pattern, post-query filtering consistency with `getDiscussionsList`  - all deferred to follow-up optimization cycle.
+- **Verdicts:** 5/5 PASS ✅ - All auditors confirm C04 is complete
+- **Issues Found:** 0 critical, 0 medium. Low-priority items noted: wasteful double-query in `getDiscussionsCount`, `['__none__']` sentinel pattern, post-query filtering consistency with `getDiscussionsList` - all deferred to follow-up optimization cycle.
 - **Verification:** `bun run check` ✅ (0 errors), `bun run lint` ✅ (0 type duplicates)
 - **Conclusion:** All 5 independent auditors agree C04 is complete and ready for merge. Audit cycle closed.
