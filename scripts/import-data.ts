@@ -202,6 +202,7 @@ type ImageResolver = (src: string) => Promise<ImageResolution>;
 interface ConverterContext {
 	resolveMention: MentionResolver;
 	resolveImage: ImageResolver;
+	mentionMap: Map<string, number>;
 }
 
 // Block-level tags whose open/close flush the current paragraph.
@@ -296,18 +297,66 @@ async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promis
 	let inline: LexicalInlineNode[] = [];
 	let textBuf = '';
 
-	function flushText(): void {
-		if (textBuf) {
-			inline.push(buildTextNode(textBuf));
-			textBuf = '';
+	async function flushText(): Promise<void> {
+		if (!textBuf) return;
+
+		let idx = 0;
+		while (idx < textBuf.length) {
+			const atIdx = textBuf.indexOf('@', idx);
+			if (atIdx === -1) {
+				inline.push(buildTextNode(textBuf.slice(idx)));
+				break;
+			}
+
+			if (atIdx > idx) {
+				inline.push(buildTextNode(textBuf.slice(idx, atIdx)));
+			}
+
+			let matchedUsername = '';
+			const remainingText = textBuf.slice(atIdx + 1);
+			const maxCheckLen = Math.min(30, remainingText.length);
+
+			for (let len = maxCheckLen; len >= 1; len--) {
+				const candidate = remainingText.slice(0, len);
+				if (ctx.mentionMap.has(candidate)) {
+					let isValidMatch = true;
+					if (/^[a-zA-Z0-9_-]+$/.test(candidate)) {
+						const nextChar = remainingText.charAt(len);
+						if (nextChar && /[a-zA-Z0-9_-]/.test(nextChar)) {
+							isValidMatch = false;
+						}
+					}
+					if (isValidMatch) {
+						matchedUsername = candidate;
+						break;
+					}
+				}
+			}
+
+			if (matchedUsername) {
+				const res = await ctx.resolveMention(matchedUsername);
+				if (res.resolved) {
+					inline.push(buildMentionNode(matchedUsername, matchedUsername));
+				} else {
+					inline.push(buildTextNode('@' + matchedUsername));
+				}
+				idx = atIdx + 1 + matchedUsername.length;
+			} else {
+				inline.push(buildTextNode('@'));
+				idx = atIdx + 1;
+			}
 		}
+
+		textBuf = '';
 	}
 
-	function flushParagraph(): void {
-		flushText();
+	async function flushParagraph(forceEmpty = false): Promise<void> {
+		await flushText();
 		if (inline.length > 0) {
 			blocks.push(buildParagraphNode(inline));
 			inline = [];
+		} else if (forceEmpty) {
+			blocks.push(buildParagraphNode([]));
 		}
 	}
 
@@ -328,7 +377,7 @@ async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promis
 			const tag = openName.toLowerCase();
 
 			if (tag === 'br') {
-				flushParagraph();
+				await flushParagraph(true);
 			} else if (tag === 'img') {
 				const cls = getAttr(attrs, 'class') ?? '';
 				const src = getAttr(attrs, 'src') ?? '';
@@ -338,10 +387,10 @@ async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promis
 				} else {
 					const res = await ctx.resolveImage(src);
 					if (res.kind === 'live') {
-						flushParagraph();
+						await flushParagraph(false);
 						blocks.push(buildImageNode('/attachment/' + res.fileId, alt));
 					} else if (res.kind === 'dead') {
-						flushParagraph();
+						await flushParagraph(false);
 						blocks.push(buildDeadImageNode());
 					}
 					// kind === 'drop' → skip
@@ -359,7 +408,7 @@ async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promis
 					const username = decodeURIComponent(mentionMatch[1]).trim();
 					const display = innerText.replace(/^@/, '').trim() || username;
 					if (textBuf.endsWith('@')) textBuf = textBuf.slice(0, -1);
-					flushText();
+					await flushText();
 					const res = await ctx.resolveMention(username);
 					if (res.resolved) {
 						inline.push(buildMentionNode(username, display));
@@ -367,7 +416,7 @@ async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promis
 						inline.push(buildTextNode('@' + display));
 					}
 				} else {
-					flushText();
+					await flushText();
 					if (/^https?:\/\//i.test(href)) {
 						inline.push(buildLinkNode(href, innerText));
 					} else if (innerText) {
@@ -379,10 +428,10 @@ async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promis
 				lastIndex = afterClose;
 				continue;
 			} else if (BLOCK_TAGS.has(tag)) {
-				flushParagraph();
+				await flushParagraph(false);
 			}
 		} else if (closeName && BLOCK_TAGS.has(closeName.toLowerCase())) {
-			flushParagraph();
+			await flushParagraph(false);
 		}
 
 		lastIndex = tagRe.lastIndex;
@@ -391,7 +440,7 @@ async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promis
 	if (lastIndex < html.length) {
 		textBuf += decodeHtmlEntities(html.slice(lastIndex));
 	}
-	flushParagraph();
+	await flushParagraph(false);
 
 	return JSON.stringify({
 		root: {
@@ -427,6 +476,30 @@ function extractOpBody(html: string, discussionId: number): string | null {
 	const slice = rest.slice(0, endIdx);
 	const msgMatch = slice.match(/<div\s+class="Message">([\s\S]+?)<\/div>/);
 	return msgMatch ? msgMatch[1] : null;
+}
+
+/**
+ * Extract the creation time of a discussion from the first page HTML.
+ * Looks for <span class="MItem DateCreated"> containing a <time datetime="..."> tag.
+ */
+function extractDiscussionCreatedAt(html: string, discussionId: number): Date | null {
+	const startMarker = `id="Discussion_${discussionId}"`;
+	const startIdx = html.indexOf(startMarker);
+	if (startIdx === -1) return null;
+
+	const rest = html.slice(startIdx);
+	const endMarkers = ['class="Item ItemComment"', 'class="CommentsWrap"', '<div class="Comments"'];
+	let endIdx = rest.length;
+	for (const marker of endMarkers) {
+		const i = rest.indexOf(marker);
+		if (i !== -1 && i < endIdx) endIdx = i;
+	}
+
+	const slice = rest.slice(0, endIdx);
+	const timeMatch =
+		slice.match(/<span\s+class="[^"]*DateCreated"[^>]*>[\s\S]*?<time[^>]*datetime="([^"]+)"/i) ||
+		slice.match(/<time[^>]*datetime="([^"]+)"/i);
+	return timeMatch ? new Date(timeMatch[1]) : null;
 }
 
 // Robust Email obfuscation decoder
@@ -1073,7 +1146,8 @@ async function main() {
 			referencedImageUrls.add(src);
 			const entry = imageMaps.byUrl.get(src);
 			return entry ? { kind: 'live', fileId: entry.sha256 } : { kind: 'dead' };
-		}
+		},
+		mentionMap
 	};
 
 	// 3. Import data/posts
@@ -1445,44 +1519,71 @@ async function main() {
 			// Negative id keeps OP replies deterministic, idempotent, and clear of
 			// the positive Vanilla comment ids.
 			const opReplyId = -discussionId;
-			if (existingReplyIds.has(opReplyId)) continue;
 
 			const htmlPath = join(discussionsDir, String(discussionId), 'page-000001.html');
 			if (!existsSync(htmlPath)) {
-				conflicts.push({ type: 'op_body_missing', discussionId });
+				if (!existingReplyIds.has(opReplyId)) {
+					conflicts.push({ type: 'op_body_missing', discussionId });
+				}
 				continue;
 			}
 
 			let body: string | null;
+			let trueCreatedAt: Date | null;
 			try {
 				const opHtml = readFileSync(htmlPath, 'utf-8');
 				body = extractOpBody(opHtml, discussionId);
+				trueCreatedAt = extractDiscussionCreatedAt(opHtml, discussionId);
 			} catch (e: unknown) {
-				conflicts.push({
-					type: 'op_body_read_error',
-					discussionId,
-					error: getErrorMessage(e)
-				});
+				if (!existingReplyIds.has(opReplyId)) {
+					conflicts.push({
+						type: 'op_body_read_error',
+						discussionId,
+						error: getErrorMessage(e)
+					});
+				}
 				continue;
 			}
 
 			if (!body || !body.trim()) {
-				conflicts.push({ type: 'op_body_empty', discussionId });
+				if (!existingReplyIds.has(opReplyId)) {
+					conflicts.push({ type: 'op_body_empty', discussionId });
+				}
 				continue;
 			}
 
 			const authorId = meta.authorId;
+			const finalCreatedAt = trueCreatedAt ?? meta.createdAt;
 			try {
+				if (trueCreatedAt) {
+					await db
+						.update(schema.discussions)
+						.set({ createdAt: trueCreatedAt })
+						.where(eq(schema.discussions.id, discussionId));
+					meta.createdAt = trueCreatedAt;
+				}
+
 				const contentJson = await convertHtmlToLexical(body, converterCtx);
-				await db.insert(schema.replies).values({
-					id: opReplyId,
-					discussionId,
-					authorId,
-					contentJson,
-					createdAt: meta.createdAt,
-					updatedAt: meta.createdAt
-				});
-				existingReplyIds.add(opReplyId);
+				if (existingReplyIds.has(opReplyId)) {
+					await db
+						.update(schema.replies)
+						.set({
+							contentJson,
+							createdAt: finalCreatedAt,
+							updatedAt: finalCreatedAt
+						})
+						.where(eq(schema.replies.id, opReplyId));
+				} else {
+					await db.insert(schema.replies).values({
+						id: opReplyId,
+						discussionId,
+						authorId,
+						contentJson,
+						createdAt: finalCreatedAt,
+						updatedAt: finalCreatedAt
+					});
+					existingReplyIds.add(opReplyId);
+				}
 			} catch (e: unknown) {
 				conflicts.push({
 					type: 'op_body_insert_error',
