@@ -99,6 +99,64 @@ export async function pcloudUploadBytes(
 	}
 }
 
+/**
+ * PUT a streaming body to a pCloud path (folder/name). The request body streams
+ * straight through to pCloud (no buffering) — used by the upload route to pipe
+ * an incoming request body to pCloud while counting/hashing/sniffing in a
+ * TransformStream upstream.
+ */
+export async function pcloudUploadStream(
+	cfg: PcloudConfig,
+	folder: string,
+	name: string,
+	body: ReadableStream<Uint8Array>
+): Promise<void> {
+	const path = `${folder}/${name}`;
+	const res = await fetch(webdavUrl(cfg, path), {
+		method: 'PUT',
+		headers: {
+			Authorization: basicAuth(cfg),
+			'Content-Type': 'application/octet-stream'
+		},
+		body
+	});
+	if (!res.ok && res.status !== 201 && res.status !== 204) {
+		throw new Error(`pCloud WebDAV PUT (stream) ${path} -> HTTP ${res.status}`);
+	}
+}
+
+/** MOVE a pCloud path to another (WebDAV MOVE with Destination header). */
+export async function pcloudMove(
+	cfg: PcloudConfig,
+	fromPath: string,
+	toPath: string
+): Promise<void> {
+	const res = await fetch(webdavUrl(cfg, fromPath), {
+		method: 'MOVE',
+		headers: {
+			Authorization: basicAuth(cfg),
+			Destination: webdavUrl(cfg, toPath),
+			Overwrite: 'T'
+		}
+	});
+	// 201 = created at dest; 204 = overwritten. A failure because the dest
+	// already exists is fine for content-addressed dedup.
+	if (!res.ok && res.status !== 201 && res.status !== 204) {
+		throw new Error(`pCloud WebDAV MOVE ${fromPath} -> HTTP ${res.status}`);
+	}
+}
+
+/** DELETE a pCloud path (WebDAV DELETE) — used to clean up temp/partial files. */
+export async function pcloudDelete(cfg: PcloudConfig, path: string): Promise<void> {
+	const res = await fetch(webdavUrl(cfg, path), {
+		method: 'DELETE',
+		headers: { Authorization: basicAuth(cfg) }
+	});
+	if (!res.ok && res.status !== 204 && res.status !== 200) {
+		throw new Error(`pCloud WebDAV DELETE ${path} -> HTTP ${res.status}`);
+	}
+}
+
 /** Whether a file exists at folder/name (WebDAV HEAD). */
 export async function pcloudExists(
 	cfg: PcloudConfig,

@@ -4,7 +4,10 @@ import {
 	readFileSync,
 	createReadStream,
 	writeFileSync,
-	unlinkSync
+	unlinkSync,
+	openSync,
+	readSync,
+	closeSync
 } from 'fs';
 import { join } from 'path';
 import { createInterface } from 'readline';
@@ -14,8 +17,9 @@ import { randomUUID } from 'crypto';
 import { getLocalDb } from '../src/lib/server/db';
 import * as schema from '../src/lib/server/db/schema';
 import { eq } from 'drizzle-orm';
-import { GHOST_USER_ID, SYSTEM_USER_ID } from '../src/lib/server/constants';
+import { GHOST_USER_ID } from '../src/lib/server/constants';
 import { resolvePcloudConfig, pcloudUploadBytes, pcloudListFolder } from '../src/lib/server/pcloud';
+import { detectImageFormat } from '../src/lib/server/image';
 
 // Named interfaces to avoid inline object type literal lint errors
 interface ParsedProfile {
@@ -829,10 +833,28 @@ function ensureWebpTools(): void {
  * gif2webp (preserving animation); everything else through cwebp. APNG is
  * best-effort (cwebp takes the first frame). Returns the webp bytes.
  */
-function convertToWebp(srcPath: string, contentType: string | null): Uint8Array {
+/** Read the first `n` bytes of a file (for magic-byte format detection). */
+function readHead(srcPath: string, n: number): Buffer {
+	const fd = openSync(srcPath, 'r');
+	const head = Buffer.alloc(n);
+	readSync(fd, head, 0, n, 0);
+	closeSync(fd);
+	return head;
+}
+
+/**
+ * Convert a source image file to webp bytes. Format is detected from magic
+ * bytes (not the label): GIFs go through gif2webp (preserving animation);
+ * png/jpeg/webp/bmp through cwebp. Non-images throw (caller treats as dead).
+ */
+function convertToWebp(srcPath: string): Uint8Array {
+	const format = detectImageFormat(readHead(srcPath, 12));
+	if (format === 'other') {
+		throw new Error(`not a supported image format: ${srcPath}`);
+	}
 	const out = join(tmpdir(), `janbao-${randomUUID()}.webp`);
 	try {
-		if (contentType === 'image/gif') {
+		if (format === 'gif') {
 			execFileSync('gif2webp', [srcPath, '-o', out], { stdio: 'ignore' });
 		} else {
 			execFileSync('cwebp', [srcPath, '-o', out, '-quiet', '-q', '82'], { stdio: 'ignore' });
@@ -1494,7 +1516,7 @@ async function main() {
 		if (!attachmentsOnCloud.has(entry.sha256)) {
 			try {
 				const rel = entry.file.startsWith('data/') ? entry.file.slice(5) : entry.file;
-				const webp = convertToWebp(join(dataDir, rel), entry.contentType);
+				const webp = convertToWebp(join(dataDir, rel));
 				await pcloudUploadBytes(pcloudCfg, '/attachments', entry.sha256, webp);
 				attachmentsOnCloud.add(entry.sha256);
 			} catch (e: unknown) {
@@ -1509,7 +1531,7 @@ async function main() {
 		try {
 			await db
 				.insert(schema.attachments)
-				.values({ fileId: entry.sha256, contentType: 'image/webp', uploaderId: SYSTEM_USER_ID })
+				.values({ fileId: entry.sha256, contentType: 'image/webp', uploaderId: GHOST_USER_ID })
 				.onConflictDoNothing();
 		} catch (e: unknown) {
 			conflicts.push({
@@ -1545,7 +1567,7 @@ async function main() {
 			if (!avatarsOnCloud.has(rec.userId)) {
 				try {
 					const rel = rec.file.startsWith('data/') ? rec.file.slice(5) : rec.file;
-					const webp = convertToWebp(join(dataDir, rel), rec.contentType);
+					const webp = convertToWebp(join(dataDir, rel));
 					await pcloudUploadBytes(pcloudCfg, '/avatars', rec.userId, webp);
 					avatarsOnCloud.add(rec.userId);
 				} catch (e: unknown) {

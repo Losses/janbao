@@ -52,12 +52,12 @@
 		message = null;
 
 		try {
-			// Upload the file
-			const formData = new FormData();
-			formData.append('file', file);
-			formData.append('type', 'avatar');
-
-			const uploadRes = await fetch('/upload', { method: 'POST', body: formData });
+			// Upload the file (raw body — streamed server-side; X-Upload-Type marks avatar)
+			const uploadRes = await fetch('/upload', {
+				method: 'POST',
+				headers: { 'X-Upload-Type': 'avatar' },
+				body: file
+			});
 			const uploadResult: ApiResult = await uploadRes.json();
 
 			if (!uploadResult.fileId) {
