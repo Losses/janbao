@@ -14,7 +14,7 @@ import { randomUUID } from 'crypto';
 import { getLocalDb } from '../src/lib/server/db';
 import * as schema from '../src/lib/server/db/schema';
 import { eq } from 'drizzle-orm';
-import { GHOST_USER_ID } from '../src/lib/server/constants';
+import { GHOST_USER_ID, SYSTEM_USER_ID } from '../src/lib/server/constants';
 import { resolvePcloudConfig, pcloudUploadBytes, pcloudListFolder } from '../src/lib/server/pcloud';
 
 // Named interfaces to avoid inline object type literal lint errors
@@ -42,6 +42,21 @@ interface ParsedActivity {
 	id: string;
 	contentHtml: string;
 	createdAt: Date;
+}
+
+interface ProfileAvatarRecord {
+	file?: unknown;
+	contentType?: unknown;
+}
+
+interface ProfileAvatarsJson {
+	byUserId?: Record<string, ProfileAvatarRecord>;
+}
+
+interface AvatarEntry {
+	userId: string;
+	file: string;
+	contentType: string | null;
 }
 
 // HTML Entity decoder
@@ -832,6 +847,18 @@ function convertToWebp(srcPath: string, contentType: string | null): Uint8Array 
 	}
 }
 
+/**
+ * Run an async fn over items in fixed-size concurrent batches (waits for each
+ * batch before starting the next). Used to parallelize pCloud uploads.
+ */
+type PoolTask<T> = (item: T) => Promise<void>;
+
+async function mapPool<T>(items: T[], concurrency: number, fn: PoolTask<T>): Promise<void> {
+	for (let i = 0; i < items.length; i += concurrency) {
+		await Promise.all(items.slice(i, i + concurrency).map((item) => fn(item).catch(() => {})));
+	}
+}
+
 async function main() {
 	const args = process.argv.slice(2);
 	if (args.length < 1) {
@@ -1009,71 +1036,32 @@ async function main() {
 	}
 	console.log(`pCloud: ${pcloudCfg.host}${pcloudCfg.basePath}`);
 
-	// "ls before migration": the set of attachments already on pCloud, so a
-	// re-run skips re-converting/re-uploading them. Refreshed as we upload.
+	// "ls before migration": the sets already on pCloud, so a re-run skips
+	// re-converting/re-uploading them. Refreshed as we upload.
 	const attachmentsOnCloud = await pcloudListFolder(pcloudCfg, '/attachments');
+	const avatarsOnCloud = await pcloudListFolder(pcloudCfg, '/avatars');
 
-	/**
-	 * Convert a crawled image to webp and upload it to pCloud
-	 * /<basePath>/attachments/<sha256>, keyed by the pre-conversion sha256 so
-	 * the same image is uploaded once regardless of how many posts embed it.
-	 * Returns the sha256 on success, null on failure.
-	 */
-	async function materializeImage(entry: ImageEntry, uploaderId: number): Promise<string | null> {
-		if (!attachmentsOnCloud.has(entry.sha256)) {
-			try {
-				const rel = entry.file.startsWith('data/') ? entry.file.slice(5) : entry.file;
-				const srcPath = join(dataDir, rel);
-				const webp = convertToWebp(srcPath, entry.contentType);
-				await pcloudUploadBytes(pcloudCfg, '/attachments', entry.sha256, webp);
-				attachmentsOnCloud.add(entry.sha256);
-			} catch (e: unknown) {
-				conflicts.push({
-					type: 'attachment_materialize_error',
-					sha256: entry.sha256,
-					uploaderId,
-					error: getErrorMessage(e)
-				});
-				return null;
-			}
-		}
-		// File is on pCloud — record its metadata so the /attachment route can
-		// stream with the right content-type without sniffing.
-		try {
-			await db
-				.insert(schema.attachments)
-				.values({ fileId: entry.sha256, contentType: 'image/webp', uploaderId })
-				.onConflictDoNothing();
-		} catch (e: unknown) {
-			conflicts.push({
-				type: 'attachment_meta_error',
-				sha256: entry.sha256,
-				error: getErrorMessage(e)
-			});
-		}
-		return entry.sha256;
-	}
+	// Image src URLs referenced by imported content. The converter records them
+	// without uploading; a bulk parallel upload phase runs after all content is
+	// processed so uploads don't block conversion.
+	const referencedImageUrls = new Set<string>();
 
-	/** Build a converter context bound to a given content author (uploaderId). */
-	function makeContext(uploaderId: number): ConverterContext {
-		return {
-			resolveMention: async (username: string): Promise<MentionResolution> => {
-				const userId = mentionMap.get(username);
-				if (userId === undefined) return { resolved: false };
-				await ensureUser(userId, username);
-				return { resolved: true, userId };
-			},
-			resolveImage: async (src: string): Promise<ImageResolution> => {
-				const entry = imageMaps.byUrl.get(src);
-				if (entry) {
-					const sha = await materializeImage(entry, uploaderId);
-					return sha ? { kind: 'live', fileId: sha } : { kind: 'dead' };
-				}
-				// Not in images.json: deadlink or never crawled → dead-image placeholder.
-				return { kind: 'dead' };
-			}
-		};
-	}
+	/** Shared converter context. resolveImage records the src and returns the
+	 * live file id (pre-conversion sha256) without uploading — uploads happen in
+	 * the bulk phase. */
+	const converterCtx: ConverterContext = {
+		resolveMention: async (username: string): Promise<MentionResolution> => {
+			const userId = mentionMap.get(username);
+			if (userId === undefined) return { resolved: false };
+			await ensureUser(userId, username);
+			return { resolved: true, userId };
+		},
+		resolveImage: async (src: string): Promise<ImageResolution> => {
+			referencedImageUrls.add(src);
+			const entry = imageMaps.byUrl.get(src);
+			return entry ? { kind: 'live', fileId: entry.sha256 } : { kind: 'dead' };
+		}
+	};
 
 	// 3. Import data/posts
 	const postsDir = join(dataDir, 'posts');
@@ -1268,12 +1256,11 @@ async function main() {
 
 					// Import dynamic activity data from user's profile.html
 					const activities = parseActivitiesHtml(html);
-					const activityCtx = makeContext(userId);
 					for (const act of activities) {
 						const actId = Number(act.id);
 						if (existingActivityIds.has(actId)) continue;
 						try {
-							const contentJson = await convertHtmlToLexical(act.contentHtml, activityCtx);
+							const contentJson = await convertHtmlToLexical(act.contentHtml, converterCtx);
 							await db.insert(schema.activities).values({
 								id: actId,
 								authorId: userId,
@@ -1381,7 +1368,6 @@ async function main() {
 
 					const decodedHtml = Buffer.from(jsonContent.Data, 'base64').toString('utf-8');
 					const comments = parseCommentsHtml(decodedHtml);
-					const commentCtx = makeContext(userId);
 
 					for (const comment of comments) {
 						// Resolve parent discussion by title
@@ -1405,7 +1391,7 @@ async function main() {
 
 						try {
 							const createdAt = parseCommentTime(comment.timeText);
-							const contentJson = await convertHtmlToLexical(comment.contentHtml, commentCtx);
+							const contentJson = await convertHtmlToLexical(comment.contentHtml, converterCtx);
 							await db.insert(schema.replies).values({
 								id: commentId,
 								discussionId: discussionId,
@@ -1474,7 +1460,7 @@ async function main() {
 
 			const authorId = meta.authorId;
 			try {
-				const contentJson = await convertHtmlToLexical(body, makeContext(authorId));
+				const contentJson = await convertHtmlToLexical(body, converterCtx);
 				await db.insert(schema.replies).values({
 					id: opReplyId,
 					discussionId,
@@ -1496,43 +1482,100 @@ async function main() {
 		console.log('Warning: data/discussions directory not found; skipping OP bodies.');
 	}
 
-	// 4.6 Upload avatars: convert each crawled avatar to webp, PUT to
-	// /<basePath>/avatars/<userId> (filename = userId, overwrite-friendly), and
-	// set users.avatarFileId = '1' (truthy flag; the /avatar route resolves it).
+	// 4.6 Bulk-upload referenced attachments in parallel (32-way). The converter
+	// only recorded which image URLs are used; this converts + uploads them and
+	// records the metadata row so /attachment can stream with the right type.
+	const referencedList = [...referencedImageUrls]
+		.map((src) => imageMaps.byUrl.get(src))
+		.filter((e): e is ImageEntry => !!e);
+	console.log(`Uploading ${referencedList.length} attachments (32-way parallel)...`);
+	let attachmentDone = 0;
+	await mapPool(referencedList, 32, async (entry) => {
+		if (!attachmentsOnCloud.has(entry.sha256)) {
+			try {
+				const rel = entry.file.startsWith('data/') ? entry.file.slice(5) : entry.file;
+				const webp = convertToWebp(join(dataDir, rel), entry.contentType);
+				await pcloudUploadBytes(pcloudCfg, '/attachments', entry.sha256, webp);
+				attachmentsOnCloud.add(entry.sha256);
+			} catch (e: unknown) {
+				conflicts.push({
+					type: 'attachment_materialize_error',
+					sha256: entry.sha256,
+					error: getErrorMessage(e)
+				});
+				return;
+			}
+		}
+		try {
+			await db
+				.insert(schema.attachments)
+				.values({ fileId: entry.sha256, contentType: 'image/webp', uploaderId: SYSTEM_USER_ID })
+				.onConflictDoNothing();
+		} catch (e: unknown) {
+			conflicts.push({
+				type: 'attachment_meta_error',
+				sha256: entry.sha256,
+				error: getErrorMessage(e)
+			});
+		}
+		attachmentDone++;
+		if (attachmentDone % 200 === 0)
+			console.log(`  attachments: ${attachmentDone}/${referencedList.length}`);
+	});
+
+	// 4.7 Upload avatars in parallel (32-way). Filename = userId; sets the
+	// avatarFileId flag + avatarContentType. Already-on-cloud avatars still get
+	// their DB flag set (covers re-runs after a schema change).
 	const profileAvatarsPath = join(dataDir, 'profile-avatars.json');
 	if (existsSync(profileAvatarsPath)) {
-		console.log('Uploading avatars...');
-		const avatarsRaw = JSON.parse(readFileSync(profileAvatarsPath, 'utf-8')) as {
-			byUserId?: Record<string, unknown>;
-		};
-		const avatarsOnCloud = await pcloudListFolder(pcloudCfg, '/avatars');
-		for (const [userIdStr, val] of Object.entries(avatarsRaw.byUserId ?? {})) {
-			const rec = val as { file?: unknown; contentType?: unknown };
-			if (typeof rec.file !== 'string') continue;
-			if (avatarsOnCloud.has(userIdStr)) continue;
-			try {
-				const rel = rec.file.startsWith('data/') ? rec.file.slice(5) : rec.file;
-				const webp = convertToWebp(
-					join(dataDir, rel),
-					typeof rec.contentType === 'string' ? rec.contentType : null
-				);
-				await pcloudUploadBytes(pcloudCfg, '/avatars', userIdStr, webp);
-				const avatarUserId = Number(userIdStr);
-				if (Number.isFinite(avatarUserId) && existingUserIds.has(avatarUserId)) {
+		console.log('Uploading avatars (32-way parallel)...');
+		const avatarsRaw = JSON.parse(readFileSync(profileAvatarsPath, 'utf-8')) as ProfileAvatarsJson;
+		const avatarEntries: AvatarEntry[] = [];
+		for (const [userId, rec] of Object.entries(avatarsRaw.byUserId ?? {})) {
+			if (typeof rec.file === 'string') {
+				avatarEntries.push({
+					userId,
+					file: rec.file,
+					contentType: typeof rec.contentType === 'string' ? rec.contentType : null
+				});
+			}
+		}
+		let avatarDone = 0;
+		await mapPool(avatarEntries, 32, async (rec) => {
+			if (!avatarsOnCloud.has(rec.userId)) {
+				try {
+					const rel = rec.file.startsWith('data/') ? rec.file.slice(5) : rec.file;
+					const webp = convertToWebp(join(dataDir, rel), rec.contentType);
+					await pcloudUploadBytes(pcloudCfg, '/avatars', rec.userId, webp);
+					avatarsOnCloud.add(rec.userId);
+				} catch (e: unknown) {
+					conflicts.push({
+						type: 'avatar_upload_error',
+						userId: rec.userId,
+						error: getErrorMessage(e)
+					});
+					avatarDone++;
+					return;
+				}
+			}
+			const avatarUserId = Number(rec.userId);
+			if (Number.isFinite(avatarUserId) && existingUserIds.has(avatarUserId)) {
+				try {
 					await db
 						.update(schema.users)
 						.set({ avatarFileId: '1', avatarContentType: 'image/webp' })
 						.where(eq(schema.users.id, avatarUserId));
+				} catch (e: unknown) {
+					conflicts.push({
+						type: 'avatar_meta_error',
+						userId: rec.userId,
+						error: getErrorMessage(e)
+					});
 				}
-				avatarsOnCloud.add(userIdStr);
-			} catch (e: unknown) {
-				conflicts.push({
-					type: 'avatar_upload_error',
-					userId: userIdStr,
-					error: getErrorMessage(e)
-				});
 			}
-		}
+			avatarDone++;
+			if (avatarDone % 200 === 0) console.log(`  avatars: ${avatarDone}/${avatarEntries.length}`);
+		});
 	} else {
 		console.log('Warning: profile-avatars.json not found; skipping avatars.');
 	}
