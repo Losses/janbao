@@ -122,7 +122,7 @@ discussions/<id>/page-*.html   full discussion pages (OP body + comments)
 users.json                     userId → username map (drives @mention resolution)
 images.json                    crawled image URL → {sha256, file, contentType}
 image-deadlinks.jsonl          image URLs that failed to download (→ dead-image)
-profile-avatars.json           userId → crawled avatar {file, contentType}
+profile-avatars/               crawled avatars, one file per user: <userId>-<hash>.<ext>
 ```
 
 #### What it does

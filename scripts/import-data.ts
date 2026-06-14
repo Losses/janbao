@@ -48,21 +48,6 @@ interface ParsedActivity {
 	createdAt: Date;
 }
 
-interface ProfileAvatarRecord {
-	file?: unknown;
-	contentType?: unknown;
-}
-
-interface ProfileAvatarsJson {
-	byUserId?: Record<string, ProfileAvatarRecord>;
-}
-
-interface UsersAvatarRecord {
-	userId?: string;
-	avatarUrl?: string;
-	avatarFile?: string;
-}
-
 interface AvatarEntry {
 	userId: string;
 	file: string;
@@ -1555,39 +1540,19 @@ async function main() {
 	// avatarFileId flag + avatarContentType. Already-on-cloud avatars still get
 	// their DB flag set (covers re-runs after a schema change).
 	//
-	// Avatar sources are merged: profile-avatars.json (the canonical profile-page
-	// crawl) first, then users.json's real avatars (avatarUrl not the noicon
-	// default) for any user the first source missed — profile-avatars.json alone
-	// only covers a subset, so without the merge ~1300 users with real avatars
-	// would render with no avatar.
-	const avatarByUserId = new Map<string, string>(); // userId -> crawled file path
-	const profileAvatarsPath = join(dataDir, 'profile-avatars.json');
-	if (existsSync(profileAvatarsPath)) {
-		const avatarsRaw = JSON.parse(readFileSync(profileAvatarsPath, 'utf-8')) as ProfileAvatarsJson;
-		for (const [userId, rec] of Object.entries(avatarsRaw.byUserId ?? {})) {
-			if (typeof rec.file === 'string') avatarByUserId.set(userId, rec.file);
+	// Avatar source: the `profile-avatars/` directory itself — each file is named
+	// `<userId>-<hash>.<ext>`, so readdir + parse the filename gives every crawled
+	// user's avatar directly (one file per user). No JSON index needed.
+	const avatarEntries: AvatarEntry[] = [];
+	const profileAvatarsDir = join(dataDir, 'profile-avatars');
+	if (existsSync(profileAvatarsDir)) {
+		for (const fname of readdirSync(profileAvatarsDir)) {
+			const m = fname.match(/^(\d+)-/);
+			if (!m) continue;
+			avatarEntries.push({ userId: m[1], file: `profile-avatars/${fname}`, contentType: null });
 		}
 	}
-	const fromProfile = avatarByUserId.size;
-	const usersJsonPath = join(dataDir, 'users.json');
-	if (existsSync(usersJsonPath)) {
-		const usersArr = JSON.parse(readFileSync(usersJsonPath, 'utf-8')) as UsersAvatarRecord[];
-		for (const u of usersArr) {
-			if (!u.userId || avatarByUserId.has(u.userId)) continue;
-			if (!u.avatarFile) continue;
-			if (u.avatarUrl && u.avatarUrl.includes('noicon')) continue; // default placeholder
-			avatarByUserId.set(u.userId, u.avatarFile);
-		}
-	}
-	console.log(
-		`Uploading avatars (32-way parallel): ${avatarByUserId.size} ` +
-			`(${fromProfile} from profile-avatars + ${avatarByUserId.size - fromProfile} from users.json)...`
-	);
-	const avatarEntries: AvatarEntry[] = [...avatarByUserId].map(([userId, file]) => ({
-		userId,
-		file,
-		contentType: null
-	}));
+	console.log(`Uploading avatars (32-way parallel): ${avatarEntries.length}...`);
 	if (avatarEntries.length > 0) {
 		let avatarDone = 0;
 		await mapPool(avatarEntries, 32, async (rec) => {
