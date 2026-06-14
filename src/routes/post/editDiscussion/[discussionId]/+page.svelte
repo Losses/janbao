@@ -133,7 +133,7 @@
 </svelte:head>
 
 <DualColumnLayout {t}>
-	<div class="space-y-6 py-2">
+	<div class="space-y-3 py-2">
 		<!-- Header -->
 		<div class="border-b border-base-300 pb-4">
 			<h1 class="text-3xl font-extrabold tracking-tight text-base-content">

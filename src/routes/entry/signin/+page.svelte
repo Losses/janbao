@@ -59,7 +59,7 @@
 		<h2 class="text-3xl font-bold tracking-tight text-base-content">{t.nav.signin}</h2>
 	</div>
 
-	<form class="mt-8 space-y-6" onsubmit={handleSubmit}>
+	<form class="mt-8 space-y-3" onsubmit={handleSubmit}>
 		<AlertMessage message={errorMessage} />
 
 		<div class="space-y-4 rounded-field shadow-sm">

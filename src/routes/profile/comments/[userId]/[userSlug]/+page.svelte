@@ -55,7 +55,7 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-6">
+	<div class="space-y-3">
 		<h1 class="text-2xl font-bold border-b border-base-300 pb-4">
 			{targetUser.displayName} - {profileT.comments}
 		</h1>

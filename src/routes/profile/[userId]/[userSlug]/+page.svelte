@@ -71,7 +71,7 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-6">
+	<div class="space-y-3">
 		<!-- Profile Header -->
 		<div>
 			<div class="flex items-center gap-4">
