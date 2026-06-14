@@ -27,6 +27,7 @@
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"@types/better-sqlite3": "^7.6.13",
 		"@types/node": "^22",
+		"@types/nodemailer": "^8.0.1",
 		"better-sqlite3": "^12.10.0",
 		"daisyui": "^5.5.23",
 		"drizzle-kit": "^0.31.10",
@@ -35,6 +36,7 @@
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.19.0",
 		"globals": "^17.6.0",
+		"nodemailer": "^8.0.11",
 		"prettier": "^3.8.3",
 		"prettier-plugin-svelte": "^4.1.0",
 		"svelte": "^5.56.1",
@@ -51,7 +53,8 @@
 		"fast-xml-parser": "^5.8.0",
 		"lexical": "0.40.0",
 		"svelte-lexical": "^0.6.4",
-		"tailwindcss": "^4.3.0"
+		"tailwindcss": "^4.3.0",
+		"worker-mailer": "^1.2.1"
 	},
 	"overrides": {
 		"lexical": "0.40.0"

@@ -39,7 +39,15 @@
 		"invitationUsed": "Invitation code has already been used.",
 		"invitationExpired": "Invitation code has expired.",
 		"loginFieldsRequired": "Username/email and password are required.",
-		"usernameOrEmailExists": "Username or email already exists."
+		"usernameOrEmailExists": "Username or email already exists.",
+		"forgotPassword": "Forgot Password",
+		"forgotPasswordEmailSent": "If your email is registered, we have sent a reset password link to it.",
+		"resetPasswordSubject": "Reset Your Password",
+		"resetPassword": "Reset Password",
+		"resetPasswordSuccess": "Password reset successfully. Please log in with your new password.",
+		"invalidOrExpiredToken": "Invalid or expired reset token.",
+		"generateResetLink": "Generate Reset Link",
+		"confirmGenerateResetLink": "Are you sure you want to generate a password reset link for this user?"
 	},
 	"common": {
 		"welcome": "Welcome!",

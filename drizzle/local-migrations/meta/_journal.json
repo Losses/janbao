@@ -15,6 +15,13 @@
       "when": 1781397056428,
       "tag": "0001_safe_sunspot",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1781454151375,
+      "tag": "0002_right_grim_reaper",
+      "breakpoints": true
     }
   ]
 }

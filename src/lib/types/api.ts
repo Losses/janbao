@@ -22,6 +22,7 @@ export interface UserInfoSummary {
 	username: string;
 	displayName: string;
 	avatarFileId: string | null;
+	groupSlug?: string | null;
 }
 
 /** Recipient display info for directed activities (User A -> User B). */
@@ -273,4 +274,24 @@ export interface InvitationItem {
 	createdAt: Date;
 	expiresAt: Date;
 	status: 'used' | 'unused' | 'expired';
+}
+
+// --- Password Recovery API Types ---
+
+export interface AuthForgotPasswordBody {
+	email?: string;
+}
+
+export interface AuthResetPasswordBody {
+	token?: string;
+	password?: string;
+}
+
+export interface AuthAdminGenerateResetBody {
+	targetUserId?: number;
+}
+
+export interface AuthAdminGenerateResetResponse {
+	success: boolean;
+	resetLink: string;
 }
