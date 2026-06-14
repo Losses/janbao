@@ -95,6 +95,11 @@ export function getForumTimezone(platformEnv: App.Platform['env'] | undefined): 
 	return platformEnv?.FORUM_TIMEZONE || process.env.FORUM_TIMEZONE || 'UTC';
 }
 
+export function getAllowSlugChange(platformEnv: App.Platform['env'] | undefined): boolean {
+	const raw = platformEnv?.ALLOW_SLUG_CHANGE || process.env.ALLOW_SLUG_CHANGE;
+	return raw === 'true';
+}
+
 /**
  * Resolved category-level CRUD permission flags.
  * When no explicit categoryPermissions row exists, defaults are applied

@@ -2,8 +2,9 @@
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
 	import { formatTitle } from '$lib/utils/title';
-	import type { ApiResult, FeedbackMessage } from '$lib/types/api';
+	import type { ApiResult, FeedbackMessage, ProfileEditBody } from '$lib/types/api';
 	import type { PageData } from './$types';
+	import { isValidUsername } from '$lib/utils/validation';
 
 	interface PageProps {
 		data: PageData;
@@ -23,10 +24,13 @@
 	let showEmail = $state(data.user.showEmail);
 	// svelte-ignore state_referenced_locally
 	let languagePreference = $state(data.user.languagePreference);
+	// svelte-ignore state_referenced_locally
+	let username = $state(data.user.username);
 	let saving = $state(false);
 	let message = $state<FeedbackMessage | null>(null);
 
 	const isAdmin = $derived(data.user.groupSlug === 'admin');
+	const allowSlugChange = $derived(data.allowSlugChange);
 
 	async function handleSubmit(e: SubmitEvent) {
 		e.preventDefault();
@@ -34,15 +38,27 @@
 		message = null;
 
 		try {
+			const payload: ProfileEditBody = {
+				displayName,
+				email,
+				showEmail,
+				languagePreference
+			};
+
+			if (allowSlugChange && isAdmin && username !== data.user.username) {
+				const trimmedUsername = username.trim();
+				if (!isValidUsername(trimmedUsername)) {
+					message = { type: 'error', text: t.auth.invalidUsername };
+					saving = false;
+					return;
+				}
+				payload.username = trimmedUsername;
+			}
+
 			const res = await fetch('/api/profile/edit', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					displayName,
-					email,
-					showEmail,
-					languagePreference
-				})
+				body: JSON.stringify(payload)
 			});
 
 			const result: ApiResult = await res.json();
@@ -83,7 +99,7 @@
 		{/if}
 
 		<form onsubmit={handleSubmit} class="space-y-4">
-			<!-- Username (disabled for non-admins) -->
+			<!-- Username -->
 			<div class="form-control">
 				<label class="label" for="username">
 					<span class="label-text font-medium">{t.auth.username}</span>
@@ -91,12 +107,19 @@
 				<input
 					id="username"
 					type="text"
-					class="input input-bordered"
-					value={data.user.username}
-					disabled={!isAdmin}
-					aria-describedby="username-hint"
+					class="input input-bordered {username && !isValidUsername(username) ? 'input-error' : ''}"
+					bind:value={username}
+					disabled={!allowSlugChange || !isAdmin}
+					aria-describedby={allowSlugChange && !isAdmin ? 'username-hint' : undefined}
 				/>
-				{#if !isAdmin}
+				{#if username && !isValidUsername(username)}
+					<label class="label" for="username">
+						<span class="label-text-alt text-error">
+							{t.auth.invalidUsername}
+						</span>
+					</label>
+				{/if}
+				{#if allowSlugChange && !isAdmin}
 					<label class="label" id="username-hint" for="username">
 						<span class="label-text-alt text-base-content/50">
 							{profileT.usernameAdminOnly}
