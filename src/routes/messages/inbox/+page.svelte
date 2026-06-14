@@ -52,9 +52,7 @@
 		</div>
 
 		{#if conversations.length === 0}
-			<div
-				class="card bg-base-200/40 border border-base-200 p-10 text-center text-base-content/50"
-			>
+			<div class="card bg-base-200/40 border border-base-200 p-10 text-center text-base-content/50">
 				{messageT.noConversations}
 			</div>
 		{:else}
@@ -73,15 +71,14 @@
 								{#if authorHref}
 									<a href={authorHref}>
 										<Avatar
-											src={conv.lastAuthorAvatarFileId
-												? `/img/${conv.lastAuthorAvatarFileId}`
-												: null}
+											userId={conv.lastAuthorId}
+											avatarFileId={conv.lastAuthorAvatarFileId}
 											displayName={conv.lastAuthorDisplayName}
 											size="md"
 										/>
 									</a>
 								{:else}
-									<Avatar src={null} displayName="?" size="md" />
+									<Avatar displayName="?" size="md" />
 								{/if}
 							</div>
 

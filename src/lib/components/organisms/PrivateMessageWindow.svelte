@@ -91,7 +91,8 @@
 						class="flex-shrink-0"
 					>
 						<Avatar
-							src={msg.authorAvatarFileId ? `/img/${msg.authorAvatarFileId}` : null}
+							userId={msg.authorId}
+							avatarFileId={msg.authorAvatarFileId}
 							displayName={msg.authorDisplayName}
 							size="sm"
 						/>

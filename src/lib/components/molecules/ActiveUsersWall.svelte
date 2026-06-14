@@ -42,7 +42,8 @@
 					class="transition-transform hover:scale-110"
 				>
 					<Avatar
-						src={u.avatarFileId ? `/img/${u.avatarFileId}` : null}
+						userId={u.id}
+						avatarFileId={u.avatarFileId}
 						displayName={u.displayName}
 						size="sm"
 					/>

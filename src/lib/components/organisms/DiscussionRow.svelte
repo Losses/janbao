@@ -118,7 +118,8 @@
 	<!-- Left: User Avatar -->
 	<a href="/profile/{discussion.authorId}/{authorSlug}" class="flex-shrink-0">
 		<Avatar
-			src={discussion.authorAvatarFileId ? `/img/${discussion.authorAvatarFileId}` : null}
+			userId={discussion.authorId}
+			avatarFileId={discussion.authorAvatarFileId}
 			displayName={discussion.authorDisplayName}
 			size="md"
 		/>

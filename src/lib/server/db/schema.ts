@@ -23,6 +23,7 @@ export const users = sqliteTable('users', {
 	passwordHash: text('password_hash').notNull(),
 	displayName: text('display_name').notNull(),
 	avatarFileId: text('avatar_file_id'),
+	avatarContentType: text('avatar_content_type'),
 	groupSlug: text('group_slug')
 		.notNull()
 		.references(() => userGroups.slug),
@@ -339,6 +340,7 @@ export const attachments = sqliteTable(
 	'attachments',
 	{
 		fileId: text('file_id').primaryKey(),
+		contentType: text('content_type').notNull(),
 		uploaderId: integer('uploader_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),

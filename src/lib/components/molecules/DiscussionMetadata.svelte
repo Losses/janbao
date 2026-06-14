@@ -51,7 +51,7 @@
 
 <div class="flex items-center gap-3 {className}">
 	<a href="/profile/{userId}/{userSlug}" class="flex-shrink-0">
-		<Avatar src={avatarFileId ? `/img/${avatarFileId}` : null} {displayName} size="sm" />
+		<Avatar {userId} {avatarFileId} {displayName} size="sm" />
 	</a>
 	<div class="flex flex-col min-w-0">
 		<div class="flex items-center gap-1.5 flex-wrap">

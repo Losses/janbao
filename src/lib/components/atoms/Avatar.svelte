@@ -2,16 +2,22 @@
 	/**
 	 * Avatar Atom - Renders a circular user avatar image or a text-based fallback (first letter of displayName).
 	 * Supports sizes: xs (24px), sm (32px), md (40px), lg (56px).
+	 *
+	 * The avatar URL is derived here (not at every call site): when `avatarFileId`
+	 * is truthy the user has an uploaded avatar, served from `/avatar/<userId>`.
+	 * Pass `userId` + `avatarFileId`; omit both for a placeholder (letter fallback).
 	 */
 	interface AvatarProps {
-		src?: string | null;
+		userId?: number | null;
+		avatarFileId?: string | null;
 		displayName?: string | null;
 		size?: 'xs' | 'sm' | 'md' | 'lg';
 		class?: string;
 	}
 
 	let {
-		src = null,
+		userId = null,
+		avatarFileId = null,
 		displayName = null,
 		size = 'md',
 		class: className = ''
@@ -25,8 +31,8 @@
 	};
 
 	const sizeClass = $derived(sizeMap[size] ?? 'w-10 h-10 text-base');
-
 	const fallbackLetter = $derived(displayName?.[0]?.toUpperCase() ?? '?');
+	const src = $derived(avatarFileId && userId != null ? `/avatar/${userId}` : null);
 </script>
 
 <div class="avatar {className}">

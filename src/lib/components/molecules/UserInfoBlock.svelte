@@ -44,7 +44,8 @@
 	<!-- User Avatar + Display Name -->
 	<div class="flex items-center gap-3">
 		<Avatar
-			src={user.avatarFileId ? `/img/${user.avatarFileId}` : null}
+			userId={user.id}
+			avatarFileId={user.avatarFileId}
 			displayName={user.displayName}
 			size="md"
 		/>
