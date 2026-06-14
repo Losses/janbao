@@ -57,6 +57,12 @@ interface ProfileAvatarsJson {
 	byUserId?: Record<string, ProfileAvatarRecord>;
 }
 
+interface UsersAvatarRecord {
+	userId?: string;
+	avatarUrl?: string;
+	avatarFile?: string;
+}
+
 interface AvatarEntry {
 	userId: string;
 	file: string;
@@ -1548,20 +1554,41 @@ async function main() {
 	// 4.7 Upload avatars in parallel (32-way). Filename = userId; sets the
 	// avatarFileId flag + avatarContentType. Already-on-cloud avatars still get
 	// their DB flag set (covers re-runs after a schema change).
+	//
+	// Avatar sources are merged: profile-avatars.json (the canonical profile-page
+	// crawl) first, then users.json's real avatars (avatarUrl not the noicon
+	// default) for any user the first source missed — profile-avatars.json alone
+	// only covers a subset, so without the merge ~1300 users with real avatars
+	// would render with no avatar.
+	const avatarByUserId = new Map<string, string>(); // userId -> crawled file path
 	const profileAvatarsPath = join(dataDir, 'profile-avatars.json');
 	if (existsSync(profileAvatarsPath)) {
-		console.log('Uploading avatars (32-way parallel)...');
 		const avatarsRaw = JSON.parse(readFileSync(profileAvatarsPath, 'utf-8')) as ProfileAvatarsJson;
-		const avatarEntries: AvatarEntry[] = [];
 		for (const [userId, rec] of Object.entries(avatarsRaw.byUserId ?? {})) {
-			if (typeof rec.file === 'string') {
-				avatarEntries.push({
-					userId,
-					file: rec.file,
-					contentType: typeof rec.contentType === 'string' ? rec.contentType : null
-				});
-			}
+			if (typeof rec.file === 'string') avatarByUserId.set(userId, rec.file);
 		}
+	}
+	const fromProfile = avatarByUserId.size;
+	const usersJsonPath = join(dataDir, 'users.json');
+	if (existsSync(usersJsonPath)) {
+		const usersArr = JSON.parse(readFileSync(usersJsonPath, 'utf-8')) as UsersAvatarRecord[];
+		for (const u of usersArr) {
+			if (!u.userId || avatarByUserId.has(u.userId)) continue;
+			if (!u.avatarFile) continue;
+			if (u.avatarUrl && u.avatarUrl.includes('noicon')) continue; // default placeholder
+			avatarByUserId.set(u.userId, u.avatarFile);
+		}
+	}
+	console.log(
+		`Uploading avatars (32-way parallel): ${avatarByUserId.size} ` +
+			`(${fromProfile} from profile-avatars + ${avatarByUserId.size - fromProfile} from users.json)...`
+	);
+	const avatarEntries: AvatarEntry[] = [...avatarByUserId].map(([userId, file]) => ({
+		userId,
+		file,
+		contentType: null
+	}));
+	if (avatarEntries.length > 0) {
 		let avatarDone = 0;
 		await mapPool(avatarEntries, 32, async (rec) => {
 			if (!avatarsOnCloud.has(rec.userId)) {
@@ -1598,8 +1625,6 @@ async function main() {
 			avatarDone++;
 			if (avatarDone % 200 === 0) console.log(`  avatars: ${avatarDone}/${avatarEntries.length}`);
 		});
-	} else {
-		console.log('Warning: profile-avatars.json not found; skipping avatars.');
 	}
 
 	// 5. Generate log and output report
