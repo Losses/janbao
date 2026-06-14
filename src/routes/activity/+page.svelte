@@ -74,7 +74,7 @@
 		{/if}
 	{/snippet}
 
-	<div class="space-y-6">
+	<div class="space-y-3">
 		<!-- Activity Composer -->
 		{#if user}
 			<div class="space-y-3">

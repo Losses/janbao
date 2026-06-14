@@ -67,7 +67,7 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-6">
+	<div class="space-y-3">
 		<!-- Category Title + Description + RSS Link -->
 		<div class="border-b border-base-300 pb-4">
 			<div class="flex items-center gap-3 flex-wrap">

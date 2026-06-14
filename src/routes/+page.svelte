@@ -64,7 +64,7 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-6">
+	<div class="space-y-3">
 		<!-- Top Paginator -->
 		{#if totalPages > 1}
 			<div class="flex justify-end">
