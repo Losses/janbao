@@ -115,7 +115,7 @@
 		</div>
 
 		{#if views.length === 0}
-			<div class="card bg-base-200/40 border border-base-200 p-10 text-center text-base-content/50">
+			<div class="card bg-base-200/40 border border-base-300 p-10 text-center text-base-content/50">
 				{notificationT.allCaughtUp}
 			</div>
 		{:else}
@@ -123,7 +123,7 @@
 				{#each views as view (view.item.id)}
 					{@const item = view.item}
 					<div
-						class="flex gap-3 py-3 border-b border-base-200 last:border-b-0 {view.isRead
+						class="flex gap-3 py-3 border-b border-base-300 last:border-b-0 {view.isRead
 							? 'opacity-60'
 							: ''}"
 					>

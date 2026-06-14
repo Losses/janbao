@@ -74,12 +74,12 @@
 
 		<!-- Discussions Stream -->
 		{#if discussionsList.length === 0}
-			<div class="card bg-base-200/40 border border-base-200 p-10 text-center text-base-content/50">
+			<div class="card bg-base-200/40 border border-base-300 p-10 text-center text-base-content/50">
 				{t.common.noResults}
 			</div>
 		{:else}
 			<div class="bg-base-100 overflow-hidden">
-				<div class="divide-y divide-base-200">
+				<div class="divide-y divide-base-300">
 					{#each discussionsList as discussion (discussion.id)}
 						<DiscussionRow
 							{discussion}

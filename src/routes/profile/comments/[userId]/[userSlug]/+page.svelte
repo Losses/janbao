@@ -72,7 +72,7 @@
 							contentJson={view.comment.contentJson}
 							mentionedUsers={data.mentionedUsers}
 						/>
-						<div class="flex items-center justify-between gap-2 pt-2 border-t border-base-200">
+						<div class="flex items-center justify-between gap-2 pt-2 border-t border-base-300">
 							<a href={view.href} class="text-xs text-primary hover:underline truncate">
 								{view.contextLabel}
 							</a>

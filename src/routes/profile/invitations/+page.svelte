@@ -106,13 +106,13 @@
 		</div>
 
 		{#if invitations.length === 0}
-			<div class="card bg-base-200/40 border border-base-200 p-10 text-center text-base-content/50">
+			<div class="card bg-base-200/40 border border-base-300 p-10 text-center text-base-content/50">
 				{invitationT.noInvitations}
 			</div>
 		{:else}
 			<div class="overflow-hidden">
 				<div class="overflow-x-auto">
-					<table class="table table-sm">
+					<table class="table table-sm [&_tr]:border-base-300">
 						<thead>
 							<tr>
 								<th>{invitationT.code}</th>
