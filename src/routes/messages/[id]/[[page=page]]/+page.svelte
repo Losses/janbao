@@ -26,11 +26,13 @@
 	const currentPage = $derived(data.page);
 
 	const participantIds = $derived(participants.map((p) => p.userId));
-	let pendingParticipant = $state<UserSearchResult | null>(null);
+	let pendingParticipants = $state<UserSearchResult[]>([]);
 	let addError = $state<string | null>(null);
 
 	function onPick(u: UserSearchResult) {
-		pendingParticipant = u;
+		if (!pendingParticipants.some((p) => p.id === u.id)) {
+			pendingParticipants = [...pendingParticipants, u];
+		}
 	}
 
 	function handlePageChange(newPage: number) {
@@ -76,7 +78,7 @@
 					addError = null;
 					return async ({ result, update }) => {
 						if (result.type === 'success') {
-							pendingParticipant = null;
+							pendingParticipants = [];
 							update();
 						} else if (result.type === 'failure') {
 							addError = (result.data as { error?: string } | null)?.error ?? t.common.error;
@@ -88,11 +90,43 @@
 			>
 				<ParticipantAdder
 					placeholder={messageT.addParticipantPlaceholder}
-					excludeIds={participantIds}
+					excludeIds={[...participantIds, ...pendingParticipants.map((p) => p.id)]}
 					onSelect={onPick}
 				/>
-				<input type="hidden" name="userId" value={pendingParticipant?.id ?? ''} />
-				<button type="submit" class="btn btn-primary btn-sm w-full" disabled={!pendingParticipant}>
+				{#if pendingParticipants.length > 0}
+					<div class="mt-1 flex flex-wrap gap-1">
+						{#each pendingParticipants as p (p.id)}
+							<span
+								class="inline-flex items-center gap-1.5 rounded bg-primary/15 pl-1 pr-1.5 py-0.5 text-xs font-medium text-primary"
+							>
+								<Avatar
+									userId={p.id}
+									avatarFileId={p.avatarFileId}
+									displayName={p.displayName}
+									size="xs"
+								/>
+								<span class="truncate max-w-[120px]">{p.displayName}</span>
+								<button
+									type="button"
+									class="-mr-0.5 leading-none hover:opacity-70 font-bold"
+									aria-label="{messageT.removeRecipient} {p.displayName}"
+									onclick={() =>
+										(pendingParticipants = pendingParticipants.filter((item) => item.id !== p.id))}
+								>
+									×
+								</button>
+							</span>
+						{/each}
+					</div>
+				{/if}
+				{#each pendingParticipants as p (p.id)}
+					<input type="hidden" name="userId" value={p.id} />
+				{/each}
+				<button
+					type="submit"
+					class="btn btn-primary btn-sm w-full"
+					disabled={pendingParticipants.length === 0}
+				>
 					{messageT.addParticipant}
 				</button>
 			</form>

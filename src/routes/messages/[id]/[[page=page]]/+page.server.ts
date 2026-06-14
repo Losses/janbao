@@ -194,30 +194,37 @@ export const actions: Actions = {
 		}
 
 		const data = await request.formData();
-		const targetUserId = Number((data.get('userId') as string | null)?.trim());
+		const userIds = data
+			.getAll('userId')
+			.map((val) => Number((val as string).trim()))
+			.filter((id) => !isNaN(id) && id > 0);
 
-		if (!targetUserId) {
+		if (userIds.length === 0) {
 			return { success: false, error: t.message.userIdRequired };
 		}
 
-		const targetExists = await db
-			.select({ id: users.id })
-			.from(users)
-			.where(eq(users.id, targetUserId))
-			.limit(1);
+		for (const targetUserId of userIds) {
+			const targetExists = await db
+				.select({ id: users.id })
+				.from(users)
+				.where(eq(users.id, targetUserId))
+				.limit(1);
 
-		if (targetExists.length === 0) {
-			return { success: false, error: t.message.recipientNotFound };
+			if (targetExists.length === 0) {
+				return { success: false, error: t.message.recipientNotFound };
+			}
 		}
 
-		await db
-			.insert(conversationParticipants)
-			.values({
-				conversationId,
-				userId: targetUserId,
-				joinedAt: new Date()
-			})
-			.onConflictDoNothing();
+		for (const targetUserId of userIds) {
+			await db
+				.insert(conversationParticipants)
+				.values({
+					conversationId,
+					userId: targetUserId,
+					joinedAt: new Date()
+				})
+				.onConflictDoNothing();
+		}
 
 		return { success: true };
 	},
