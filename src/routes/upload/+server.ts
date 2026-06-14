@@ -78,7 +78,8 @@ export const POST: RequestHandler = async (event) => {
 	try {
 		await pcloudMkcol(cfg, '/tmp');
 		await pcloudUploadStream(cfg, '/tmp', tmpName, piped);
-	} catch {
+	} catch (err) {
+		console.error('[Upload API Error - stream]:', err);
 		await pcloudDelete(cfg, `/tmp/${tmpName}`).catch(() => {});
 		if (tooBig) return jsonError(t, 'upload.fileTooLarge', 400);
 		return jsonError(t, 'upload.uploadFailed', 502);
@@ -107,7 +108,8 @@ export const POST: RequestHandler = async (event) => {
 			.values({ fileId: sha, contentType: mime, uploaderId: user.id })
 			.onConflictDoNothing();
 		return json({ fileId: sha, url: `/attachment/${sha}` });
-	} catch {
+	} catch (err) {
+		console.error('[Upload API Error - move/db]:', err);
 		await pcloudDelete(cfg, `/tmp/${tmpName}`).catch(() => {});
 		return jsonError(t, 'upload.uploadFailed', 502);
 	}

@@ -121,7 +121,12 @@
 		"heading4": "Heading 4",
 		"quote": "Quote",
 		"codeBlock": "Code Block",
-		"close": "Close"
+		"close": "Close",
+		"uploadImage": "Upload Image",
+		"imageUrl": "Image URL",
+		"dragDropHint": "Drag & drop image here, or click to upload",
+		"altText": "Alt Text",
+		"uploading": "Uploading..."
 	},
 	"pagination": {
 		"previous": "Previous",

@@ -46,7 +46,9 @@
 		mdiMarker,
 		mdiEyeOff,
 		mdiChevronDown,
-		mdiClose
+		mdiClose,
+		mdiUpload,
+		mdiAlertCircle
 	} from '@mdi/js';
 	import type { TranslationDict } from '$lib/types/translation';
 
@@ -104,6 +106,21 @@
 	let imageAltText = $state('');
 	let linkUrl = $state('');
 
+	// Image upload related states
+	let imageActiveTab = $state<'upload' | 'url'>('upload');
+	let uploading = $state(false);
+	let uploadError = $state<string | null>(null);
+	let dragOver = $state(false);
+	let fileInput = $state<HTMLInputElement | undefined>(undefined);
+
+	function openImageModal() {
+		showImageModal = true;
+		imageActiveTab = 'upload';
+		uploadError = null;
+		imageUrl = '';
+		imageAltText = '';
+	}
+
 	function handleToggleLink() {
 		if (!$isLink) {
 			// Show modal for URL input instead of immediately applying a placeholder URL
@@ -141,6 +158,85 @@
 			imageUrl = '';
 			imageAltText = '';
 			activeEditor.focus();
+		}
+	}
+
+	async function handleFileUpload(file: File) {
+		const MAX_ATTACHMENT = 5 * 1024 * 1024;
+		if (file.size > MAX_ATTACHMENT) {
+			uploadError = t?.upload?.fileTooLarge ?? 'File size exceeds the limit';
+			return;
+		}
+
+		const allowedTypes = [
+			'image/png',
+			'image/jpeg',
+			'image/webp',
+			'image/gif',
+			'image/avif',
+			'image/bmp'
+		];
+		if (!allowedTypes.includes(file.type)) {
+			uploadError = t?.upload?.invalidType ?? 'Unsupported file type';
+			return;
+		}
+
+		uploading = true;
+		uploadError = null;
+
+		try {
+			const res = await fetch('/upload', {
+				method: 'POST',
+				body: file
+			});
+			const result = (await res.json()) as { url?: string; error?: string };
+
+			if (!res.ok || !result.url) {
+				uploadError = result.error || t?.upload?.uploadFailed || 'Upload failed';
+				uploading = false;
+				return;
+			}
+
+			// Insert image into editor
+			InsertImage(activeEditor, {
+				src: result.url,
+				altText: file.name
+			});
+
+			// Reset states and close modal
+			showImageModal = false;
+			imageUrl = '';
+			imageAltText = '';
+			uploadError = null;
+			activeEditor.focus();
+		} catch {
+			uploadError = t?.auth?.networkError ?? 'Network error, please try again.';
+		} finally {
+			uploading = false;
+		}
+	}
+
+	function handleFileSelect(event: Event) {
+		const target = event.target as HTMLInputElement;
+		if (target.files && target.files.length > 0) {
+			handleFileUpload(target.files[0]);
+		}
+	}
+
+	function handleDragOver(e: DragEvent) {
+		e.preventDefault();
+		dragOver = true;
+	}
+
+	function handleDragLeave() {
+		dragOver = false;
+	}
+
+	function handleDrop(e: DragEvent) {
+		e.preventDefault();
+		dragOver = false;
+		if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+			handleFileUpload(e.dataTransfer.files[0]);
 		}
 	}
 </script>
@@ -386,9 +482,7 @@
 			<button
 				type="button"
 				class="btn btn-xs btn-ghost"
-				onclick={() => {
-					showImageModal = true;
-				}}
+				onclick={openImageModal}
 				title={t?.editor?.image ?? 'Insert Image'}
 			>
 				<Icon path={mdiImage} size={16} />
@@ -459,53 +553,146 @@
 				class="btn btn-sm btn-circle btn-ghost absolute right-4 top-4 text-error"
 				onclick={() => (showImageModal = false)}
 				title={t?.editor?.close ?? 'Close'}
+				disabled={uploading}
 			>
 				<Icon path={mdiClose} size={18} />
 			</button>
 
 			<h3 class="text-lg font-bold mb-4">{t?.editor?.image ?? 'Insert Image'}</h3>
 
-			<div class="form-control w-full mb-3">
-				<label
-					for="editor-image-url"
-					class="label label-text font-semibold p-1 text-base-content/70">Image URL</label
+			<div class="tabs tabs-boxed mb-4 bg-base-200 p-1 rounded-lg">
+				<button
+					type="button"
+					class="tab tab-sm w-1/2 rounded-md transition-all font-semibold {imageActiveTab === 'upload' ? 'bg-primary text-primary-content shadow-sm' : 'text-base-content/70 hover:text-base-content'}"
+					onclick={() => {
+						if (!uploading) imageActiveTab = 'upload';
+					}}
+					disabled={uploading}
 				>
-				<input
-					id="editor-image-url"
-					type="text"
-					placeholder="i.e. https://source.unsplash.com/random"
-					class="input input-bordered input-sm w-full bg-base-100 text-base-content focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-					bind:value={imageUrl}
-				/>
-			</div>
-
-			<div class="form-control w-full mb-4">
-				<label
-					for="editor-image-alt"
-					class="label label-text font-semibold p-1 text-base-content/70">Alt Text</label
-				>
-				<input
-					id="editor-image-alt"
-					type="text"
-					placeholder="Random unsplash image"
-					class="input input-bordered input-sm w-full bg-base-100 text-base-content focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-					bind:value={imageAltText}
-				/>
-			</div>
-
-			<div class="modal-action mt-6 flex justify-end gap-2">
-				<button type="button" class="btn btn-sm btn-ghost" onclick={() => (showImageModal = false)}>
-					{t?.common?.cancel ?? 'Cancel'}
+					{t?.editor?.uploadImage ?? 'Upload Image'}
 				</button>
 				<button
 					type="button"
-					class="btn btn-sm btn-primary font-semibold"
-					disabled={!imageUrl.trim()}
-					onclick={handleInsertImage}
+					class="tab tab-sm w-1/2 rounded-md transition-all font-semibold {imageActiveTab === 'url' ? 'bg-primary text-primary-content shadow-sm' : 'text-base-content/70 hover:text-base-content'}"
+					onclick={() => {
+						if (!uploading) imageActiveTab = 'url';
+					}}
+					disabled={uploading}
 				>
-					{t?.common?.confirm ?? 'Confirm'}
+					{t?.editor?.imageUrl ?? 'Image URL'}
 				</button>
 			</div>
+
+			{#if imageActiveTab === 'upload'}
+				<div class="flex flex-col gap-4">
+					{#if uploading}
+						<div class="flex flex-col items-center justify-center p-8 border border-base-300 rounded-lg bg-base-200/30 gap-3 min-h-[160px]">
+							<span class="loading loading-spinner loading-md text-primary"></span>
+							<span class="text-sm font-medium text-base-content/70">{t?.editor?.uploading ?? 'Uploading...'}</span>
+						</div>
+					{:else}
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<!-- svelte-ignore a11y_click_events_have_key_events -->
+						<div
+							class="border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all duration-200 min-h-[160px]
+							{dragOver ? 'border-primary bg-primary/10 text-primary' : 'border-base-300 bg-base-200/20 hover:border-primary/50 hover:bg-base-200/50 text-base-content/60'}"
+							onclick={() => fileInput?.click()}
+							ondragover={handleDragOver}
+							ondragleave={handleDragLeave}
+							ondrop={handleDrop}
+						>
+							<Icon path={mdiUpload} size={32} class="opacity-80" />
+							<p class="text-center text-sm font-medium">
+								{t?.editor?.dragDropHint ?? 'Drag & drop image here, or click to upload'}
+							</p>
+							<span class="text-xs text-base-content/40 text-center">
+								{t?.profile?.avatarRequirements ? t.profile.avatarRequirements.replace('1MB', '5MB').replace('1M', '5M') : 'Max 5MB. Supports PNG, JPG, WebP, GIF, AVIF, BMP.'}
+							</span>
+						</div>
+						<input
+							type="file"
+							accept="image/*"
+							class="hidden"
+							bind:this={fileInput}
+							onchange={handleFileSelect}
+						/>
+					{/if}
+
+					{#if uploadError}
+						<div class="alert alert-error text-sm py-2 px-3 flex gap-2 rounded-lg items-center text-error-content bg-error/15 border border-error/30">
+							<Icon path={mdiAlertCircle} size={18} />
+							<span>{uploadError}</span>
+						</div>
+					{/if}
+
+					<div class="modal-action mt-4 flex justify-end">
+						<button
+							type="button"
+							class="btn btn-sm btn-ghost font-semibold"
+							onclick={() => (showImageModal = false)}
+							disabled={uploading}
+						>
+							{t?.common?.cancel ?? 'Cancel'}
+						</button>
+					</div>
+				</div>
+			{:else if imageActiveTab === 'url'}
+				<div class="form-control w-full mb-3">
+					<label
+						for="editor-image-url"
+						class="label label-text font-semibold p-1 text-base-content/70"
+					>
+						{t?.editor?.imageUrl ?? 'Image URL'}
+					</label>
+					<input
+						id="editor-image-url"
+						type="text"
+						class="input input-bordered input-sm w-full bg-base-100 text-base-content focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+						bind:value={imageUrl}
+						onkeydown={(e) => {
+							if (e.key === 'Enter') handleInsertImage();
+							if (e.key === 'Escape') showImageModal = false;
+						}}
+					/>
+				</div>
+
+				<div class="form-control w-full mb-4">
+					<label
+						for="editor-image-alt"
+						class="label label-text font-semibold p-1 text-base-content/70"
+					>
+						{t?.editor?.altText ?? 'Alt Text'}
+					</label>
+					<input
+						id="editor-image-alt"
+						type="text"
+						class="input input-bordered input-sm w-full bg-base-100 text-base-content focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+						bind:value={imageAltText}
+						onkeydown={(e) => {
+							if (e.key === 'Enter') handleInsertImage();
+							if (e.key === 'Escape') showImageModal = false;
+						}}
+					/>
+				</div>
+
+				<div class="modal-action mt-6 flex justify-end gap-2">
+					<button
+						type="button"
+						class="btn btn-sm btn-ghost font-semibold"
+						onclick={() => (showImageModal = false)}
+					>
+						{t?.common?.cancel ?? 'Cancel'}
+					</button>
+					<button
+						type="button"
+						class="btn btn-sm btn-primary font-semibold"
+						disabled={!imageUrl.trim()}
+						onclick={handleInsertImage}
+					>
+						{t?.common?.confirm ?? 'Confirm'}
+					</button>
+				</div>
+			{/if}
 		</div>
 	</div>
 {/if}
