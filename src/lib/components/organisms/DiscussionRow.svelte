@@ -110,7 +110,7 @@
 </script>
 
 <div
-	class="flex items-center gap-4 pl-3 pr-2 py-4 border-b border-base-200 transition-all hover:bg-base-200/20 {className} {unreadCount >
+	class="flex items-center gap-4 pl-3 pr-2 py-4 border-b border-base-300 transition-all hover:bg-base-200/20 {className} {unreadCount >
 	0
 		? 'bg-transparent'
 		: 'bg-base-200'}"

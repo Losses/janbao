@@ -42,11 +42,11 @@
 		<h1 class="text-2xl font-bold border-b border-base-300 pb-4">{bookmarkT.myBookmarks}</h1>
 
 		{#if bookmarks.length === 0}
-			<div class="card bg-base-200/40 border border-base-200 p-10 text-center text-base-content/50">
+			<div class="card bg-base-200/40 border border-base-300 p-10 text-center text-base-content/50">
 				{bookmarkT.noBookmarks}
 			</div>
 		{:else}
-			<div class="divide-y divide-base-200">
+			<div class="divide-y divide-base-300">
 				{#each bookmarks as bookmark (bookmark.discussionId)}
 					{@const authorSlug = generateSlug(bookmark.authorUsername || '')}
 					<div class="py-3 px-0">

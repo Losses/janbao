@@ -88,7 +88,7 @@
 			<ul class="max-h-64 overflow-y-auto">
 				{#each conversations as conv (conv.id)}
 					<li
-						class="border-b border-base-200 px-4 py-2 transition-colors duration-150 hover:bg-base-200"
+						class="border-b border-base-300 px-4 py-2 transition-colors duration-150 hover:bg-base-200"
 					>
 						<a href="/messages/{conv.id}" class="flex items-center justify-between gap-2">
 							<div class="min-w-0">

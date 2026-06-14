@@ -253,7 +253,7 @@
 			</div>
 
 			<!-- Bottom Actions Row -->
-			<div class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-base-200">
+			<div class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-base-300">
 				<!-- Left utilities -->
 				<div class="flex items-center gap-2">
 					<button

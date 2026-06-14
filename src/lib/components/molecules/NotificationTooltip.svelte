@@ -168,7 +168,7 @@
 			<!-- Notification List -->
 			<ul class="max-h-64 overflow-y-auto">
 				{#each views as view (view.item.id)}
-					<li class="border-b border-base-200 transition-colors duration-150 hover:bg-base-200">
+					<li class="border-b border-base-300 transition-colors duration-150 hover:bg-base-200">
 						<a href={view.href} class="flex gap-2 px-4 py-2">
 							<div class="flex-shrink-0">
 								<Avatar

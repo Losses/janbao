@@ -208,7 +208,7 @@
 			</div>
 
 			<!-- Row 3: Timestamp + action buttons -->
-			<div class="flex justify-end items-center gap-2 pt-2 border-t border-base-200/50 mt-2">
+			<div class="flex justify-end items-center gap-2 pt-2 border-t border-base-300/50 mt-2">
 				<div class="flex-1 text-sm text-base-content/50">
 					<DateComponent value={createdAt} {t} class="text-sm" />
 				</div>
@@ -293,7 +293,7 @@
 										</div>
 										<!-- Row 3: Timestamp + action buttons -->
 										<div
-											class="flex justify-end items-center gap-2 pt-1 border-t border-base-200/50 mt-1"
+											class="flex justify-end items-center gap-2 pt-1 border-t border-base-300/50 mt-1"
 										>
 											<div class="flex-1 text-xs text-base-content/50">
 												<DateComponent value={comment.createdAt} {t} class="text-xs" />

@@ -253,7 +253,11 @@
 
 		<!-- Replies Stream -->
 		{#if repliesList.length > 0}
-			<div class="divide-y divide-base-300">
+			<div
+				class="divide-y divide-base-300 {currentPage === 1 && opReply
+					? 'border-t border-base-300 pt-4'
+					: ''}"
+			>
 				{#each repliesList as reply (reply.id)}
 					<div id="reply-{reply.id}" class="space-y-4 py-4 first:pt-0 last:pb-0">
 						<DiscussionMetadata
@@ -317,7 +321,7 @@
 							<LexicalRenderer contentJson={reply.contentJson} {mentionedUsers} />
 							{#if user}
 								<div
-									class="flex justify-end items-center gap-2 pt-2 border-t border-base-200/50 mt-2"
+									class="flex justify-end items-center gap-2 pt-2 border-t border-base-300/50 mt-2"
 								>
 									{#if canCreate}
 										<button

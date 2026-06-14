@@ -161,7 +161,7 @@
 					<LexicalRenderer contentJson={msg.contentJson} {mentionedUsers} />
 
 					{#if msg.authorId === currentUserId}
-						<div class="flex justify-end items-center gap-2 pt-2 border-t border-base-200/50 mt-2">
+						<div class="flex justify-end items-center gap-2 pt-2 border-t border-base-300/50 mt-2">
 							<button
 								type="button"
 								class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
