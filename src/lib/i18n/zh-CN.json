@@ -121,7 +121,12 @@
 		"heading4": "标题 4",
 		"quote": "引用",
 		"codeBlock": "代码块",
-		"close": "关闭"
+		"close": "关闭",
+		"uploadImage": "本地上传",
+		"imageUrl": "图片外链",
+		"dragDropHint": "拖拽图片至此处，或点击上传",
+		"altText": "替代文本",
+		"uploading": "上传中..."
 	},
 	"pagination": {
 		"previous": "上一页",
