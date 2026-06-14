@@ -161,7 +161,7 @@
 					<LexicalRenderer contentJson={msg.contentJson} {mentionedUsers} />
 
 					{#if msg.authorId === currentUserId}
-						<div class="flex justify-end items-center gap-2 pt-2 border-t border-base-300/50 mt-2">
+						<div class="flex justify-end items-center gap-2 mt-2">
 							<button
 								type="button"
 								class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
@@ -177,20 +177,21 @@
 	</div>
 
 	<!-- Composer -->
-	{#if currentUserId}
+	{#if currentUserId !== null && currentUserId !== undefined}
 		<div class="border-t border-base-300 pt-4">
 			<form
 				method="POST"
 				action="?/post"
 				use:enhance={() => {
 					isPosting = true;
-					return async ({ result }) => {
+					return async ({ result, update }) => {
 						isPosting = false;
 						if (result.type === 'success') {
 							composeContent = '';
 							editorKey++;
 							const data = result.data as { page?: number } | null;
 							const page = data?.page;
+							await update({ reset: true });
 							if (page) {
 								const url =
 									page <= 1

@@ -320,9 +320,7 @@
 						{:else}
 							<LexicalRenderer contentJson={reply.contentJson} {mentionedUsers} />
 							{#if user}
-								<div
-									class="flex justify-end items-center gap-2 pt-2 border-t border-base-300/50 mt-2"
-								>
+								<div class="flex justify-end items-center gap-2 mt-2">
 									{#if canCreate}
 										<button
 											type="button"
