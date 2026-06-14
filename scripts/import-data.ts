@@ -20,6 +20,7 @@ import { eq } from 'drizzle-orm';
 import { GHOST_USER_ID } from '../src/lib/server/constants';
 import { resolvePcloudConfig, pcloudUploadBytes, pcloudListFolder } from '../src/lib/server/pcloud';
 import { detectImageFormat } from '../src/lib/server/image';
+import { ensureAndBackfillAll } from '../src/lib/server/search/backfill';
 
 // Named interfaces to avoid inline object type literal lint errors
 interface ParsedProfile {
@@ -1721,6 +1722,13 @@ async function main() {
 
 	writeFileSync('import-conflicts.json', JSON.stringify(conflicts, null, 2), 'utf-8');
 	console.log('Detailed conflict log saved to import-conflicts.json');
+
+	// Build the FTS5 search index for all imported content (idempotent).
+	const ftsCounts = await ensureAndBackfillAll(db);
+	console.log('FTS search index rebuilt:');
+	for (const [table, count] of Object.entries(ftsCounts)) {
+		console.log(`  ${table}: ${count} rows indexed`);
+	}
 
 	process.exit(0);
 }

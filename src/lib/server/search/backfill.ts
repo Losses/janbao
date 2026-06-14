@@ -8,15 +8,9 @@ import { lexicalToSearchText } from '$lib/utils/lexical';
  *
  * The indexed text is the *plain-text extraction* of Lexical JSON (not the raw
  * JSON), so backfill must run in JS — a pure-SQL `INSERT ... SELECT` would index
- * JSON structural noise. Idempotent: each table is cleared first, so this is safe
- * to re-run.
- *
- * Two entry points:
- *  - `ensureAndBackfillAll(db)`: clears + fully backfills every table. Use
- *    locally (no wall-time limit) or in a one-off long-running job.
- *  - `backfillTableStep(db, task, lastId, batch)`: processes one batch of one
- *    table and returns a cursor; the admin endpoint loops this to stay within a
- *    Worker's wall-time budget.
+ * JSON structural noise. Idempotent: each table is dropped and recreated first,
+ * so this is safe to re-run. Called from scripts/backfill-fts.ts and at the end
+ * of scripts/import-data.ts so freshly imported content is immediately searchable.
  */
 
 const BATCH_SIZE = 500;
@@ -79,16 +73,6 @@ const TASKS: BackfillTask[] = [
 	}
 ];
 
-/** Ordered task list (discussions → replies → activities → messages). */
-export function getBackfillTasks(): BackfillTask[] {
-	return TASKS;
-}
-
-/** Look up a task by source table name (for the cursor-driven admin endpoint). */
-export function findBackfillTask(table: string): BackfillTask | undefined {
-	return TASKS.find((t) => t.table === table);
-}
-
 /**
  * Initial cursor for keyset pagination. Must start below the minimum id, because
  * imported historical rows use *negative* ids — starting at 0 would skip them.
@@ -140,7 +124,7 @@ async function insertEntries(db: D1Db, task: BackfillTask, entries: IndexedEntry
 }
 
 /** Process one batch of one table. Returns the cursor for the next call. */
-export async function backfillTableStep(
+async function backfillTableStep(
 	db: D1Db,
 	task: BackfillTask,
 	lastId: number,
