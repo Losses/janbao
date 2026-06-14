@@ -1,6 +1,6 @@
 # DV02-C02-Journal: Cycle 2 Development Journal
 
-## Cycle 2: Frontend  - Discussion Edit/Delete/Quick Reply
+## Cycle 2: Frontend - Discussion Edit/Delete/Quick Reply
 
 **Date:** 2026-06-13  
 **Status:** Implementation Complete, Pending Audit

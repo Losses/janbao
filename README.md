@@ -2,8 +2,9 @@
 
 A forum application built with SvelteKit, designed to run on Cloudflare Workers
 with D1 in production. Janbao was migrated from a legacy Vanilla-forums dataset
- - the discussion corpus, users, comments, avatars, and content images are all
-imported from a crawl via the scripts documented below.
+
+- the discussion corpus, users, comments, avatars, and content images are all
+  imported from a crawl via the scripts documented below.
 
 ## Tech stack
 
@@ -51,7 +52,7 @@ bun run db:generate:local   # generate a local drizzle migration from schema cha
 
 Two standalone scripts live in `scripts/`. Run them with `bun scripts/<name>.ts`.
 
-### 1. pCloud setup  - `scripts/setup-pcloud.ts`
+### 1. pCloud setup - `scripts/setup-pcloud.ts`
 
 One-time setup that configures pCloud image storage. Run it **before** the first
 import or any image serving.
@@ -68,14 +69,14 @@ bun scripts/setup-pcloud.ts
 It interactively prompts for:
 
 - **pCloud email** and **password** (the password is used only for this login and
-  is written to `.env`; WebDAV needs it on every request  - there is no token).
-- **Region**  - `EU` (default, uses `ewebdav.pcloud.com`) or `US` (`webdav.pcloud.com`).
+  is written to `.env`; WebDAV needs it on every request - there is no token).
+- **Region** - `EU` (default, uses `ewebdav.pcloud.com`) or `US` (`webdav.pcloud.com`).
 
 It then:
 
 1. Creates the project folder `/Janbao` and the image sub-folders
    `/Janbao/avatars` and `/Janbao/attachments` under your pCloud account root.
-   (MKCOL also verifies the credentials  - a 401 means wrong email/password or 2FA is on.)
+   (MKCOL also verifies the credentials - a 401 means wrong email/password or 2FA is on.)
 2. Writes `PCLOUD_USERNAME`, `PCLOUD_PASSWORD`, `PCLOUD_WEBDAV_HOST`, and
    `PCLOUD_BASE_PATH` to `.env`.
 
@@ -88,17 +89,17 @@ wrangler secret put PCLOUD_WEBDAV_HOST     # ewebdav.pcloud.com for EU
 wrangler secret put PCLOUD_BASE_PATH        # /Janbao
 ```
 
-### 2. Data import  - `scripts/import-data.ts`
+### 2. Data import - `scripts/import-data.ts`
 
 Imports a crawled Vanilla-forums dataset into the local D1 database and uploads
-all images to pCloud. Idempotent  - safe to re-run; already-imported rows and
+all images to pCloud. Idempotent - safe to re-run; already-imported rows and
 already-uploaded images are skipped.
 
 #### Prerequisites
 
 - Run `scripts/setup-pcloud.ts` first (pCloud credentials in `.env`, folders created).
-- **Stop the dev server** (see the note above  - concurrent libsql writes fail).
-- `cwebp` and `gif2webp` on `PATH` (the `libwebp` package)  - used to convert
+- **Stop the dev server** (see the note above - concurrent libsql writes fail).
+- `cwebp` and `gif2webp` on `PATH` (the `libwebp` package) - used to convert
   images to webp. The script checks at startup and errors clearly if missing
   (e.g. `nix-env -iA nixos.libwebp`, `brew install webp`, or `apt install webp`).
 
@@ -133,7 +134,7 @@ profile-avatars/               crawled avatars, one file per user: <userId>-<has
    OP is stored as the chronologically earliest reply). `@mentions` resolve to
    real users via the `users.json` username map.
 3. Converts every referenced content image to **webp** (`cwebp` for static,
-   `gif2webp` for animated GIFs  - format detected from magic bytes, not the
+   `gif2webp` for animated GIFs - format detected from magic bytes, not the
    often-wrong crawl label) and uploads it to `/Janbao/attachments/<sha256>`
    (keyed by the pre-conversion sha256, so identical images dedup). Uploads run
    **32-way parallel**. Dead links (failed downloads / non-images) become
@@ -152,4 +153,4 @@ bodies, and crawled "images" that are actually HTML error pages (→ dead-image)
 Re-running skips work that's already done: existing DB rows (by id) and files
 already on pCloud (`listfolder` check, "ls before migration"). So a re-run after
 a partial failure, or after a code/schema change, completes only the missing
-pieces  - usually just DB metadata rows, fast.
+pieces - usually just DB metadata rows, fast.

@@ -123,7 +123,7 @@ i18n fallbacks removed (ActiveUsersWall), recipient-remove i18n+Icon, shared `Us
 
 **Full Report:** [RV00-C05-Audit-01.md](file:///home/losses/Development/janbao/docs/RV00-C05-Audit-01.md)
 
-### Audit Round 2  - 2026-06-12
+### Audit Round 2 - 2026-06-12
 
 **Method:** 5 independent full-scope audit agents dispatched in parallel. Each verified the Round-1 fixes (F-01/F-02/F-03, W-11/W-12/W-13) and re-audited the entire C05 codebase.
 
@@ -133,7 +133,7 @@ i18n fallbacks removed (ActiveUsersWall), recipient-remove i18n+Icon, shared `Us
 | ID | Description | Resolution |
 |----|-------------|------------|
 | R2-F-01 | `getConversations` latest-message join non-deterministic on `createdAt` ties | Select includes `messages.id`; latest map keeps the **largest id** per conversation (deterministic tie-break) |
-| R2-F-02 | `/messages/[id]` visit-marks-read built an unbounded `IN(...)` from all message ids | Single SQL `UPDATE ... WHERE messageId IN (SELECT id FROM messages WHERE conversation_id = ?)`  - no id round-trip, no bind ceiling |
+| R2-F-02 | `/messages/[id]` visit-marks-read built an unbounded `IN(...)` from all message ids | Single SQL `UPDATE ... WHERE messageId IN (SELECT id FROM messages WHERE conversation_id = ?)` - no id round-trip, no bind ceiling |
 | R2-F-03 | `PrivateMessageWindow` composer `contextId` collapsed to `''` on a zero-message page | Added an explicit `conversationId` prop sourced from `data.conversation.id` |
 | R2-F-04 | `isEligible` param used an inline type literal bypassing the no-inline-typing selector | Extracted named `NotificationPreferenceFields` interface |
 | R2-F-05 | `SelectedRecipient` / `Participant` local interfaces duplicated shared types | Reuse `UserSearchResult` / `ParticipantItem` |
@@ -148,7 +148,7 @@ i18n fallbacks removed (ActiveUsersWall), recipient-remove i18n+Icon, shared `Us
 
 **Full Report:** [RV00-C05-Audit-02.md](file:///home/losses/Development/janbao/docs/RV00-C05-Audit-02.md)
 
-### Audit Round 3 (Final)  - 2026-06-12
+### Audit Round 3 (Final) - 2026-06-12
 
 **Method:** 5 independent full-scope audit agents dispatched in parallel. Each verified all Round-1 + Round-2 fixes and re-audited the entire C05 codebase.
 
@@ -160,7 +160,7 @@ i18n fallbacks removed (ActiveUsersWall), recipient-remove i18n+Icon, shared `Us
 | R3-F-01 | `dispatchMessageNotifications` `rows` array used an inline object-type literal nested under `TSArrayType` (bypassed the no-inline-typing selector) | Extracted named `MessageNotificationRow` interface |
 | R3-F-02 | `DV00-C05-Journal.md` had a Prettier markdown emphasis nit making `bun run lint` exit 1 (doc only) | `prettier --write` applied; lint clean |
 
-Both were fixed **before** dispatching the final two agents (R3-A4, R3-A5), which audited the resolved state and returned **PASS with zero findings**  - confirming no inline-typing escapes remain and `bun run lint` is green.
+Both were fixed **before** dispatching the final two agents (R3-A4, R3-A5), which audited the resolved state and returned **PASS with zero findings** - confirming no inline-typing escapes remain and `bun run lint` is green.
 
 **Final Verification:** `bun run check` = 0 errors/0 warnings (1041 files); `bun run lint` = exit 0 (similarity-ts "No similar types found!"); i18n parity exact (260 = 260 keys); zero `any`/`as any`/`as unknown` and zero inline-object-typing across C05.
 

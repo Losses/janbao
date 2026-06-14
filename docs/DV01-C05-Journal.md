@@ -77,8 +77,8 @@
 
 Added two rule sets:
 
-1. `.spoiler-text` / `.spoiler-text:hover`  - for rendered content (LexicalRenderer)
-2. `.ContentEditable__root span[style*='janbao-spoiler']`  - for editor content (LexicalEditor)
+1. `.spoiler-text` / `.spoiler-text:hover` - for rendered content (LexicalRenderer)
+2. `.ContentEditable__root span[style*='janbao-spoiler']` - for editor content (LexicalEditor)
 
 Both use `!important` to override any inline styles, with `currentColor` matching for text/background concealment and transparent background + DaisyUI `--bc` variable for reveal on hover.
 
@@ -150,6 +150,6 @@ Added translation keys to both `en.json` and `zh-CN.json`:
 - `RichTextLinkEditor` has dead code checking `payload === 'https://'` (harmless)
 - Plan deviation: AutoLink uses default matchers instead of custom regex (functionally correct)
 
-**Verdict: ALL 5 AUDITORS AGREE  - C05 PASS after fix. Cycle complete.**
+**Verdict: ALL 5 AUDITORS AGREE - C05 PASS after fix. Cycle complete.**
 
 See [RV01-C05-Audit-01](./RV01-C05-Audit-01.md) for full audit report.
