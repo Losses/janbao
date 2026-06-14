@@ -88,19 +88,23 @@ export async function getDiscussionsList(
 			authorUsername: users.username,
 			authorAvatarFileId: users.avatarFileId,
 			// Left joins if userId is present
-			isBookmarked: userId
-				? sql<number>`CASE WHEN ${bookmarks.userId} IS NOT NULL THEN 1 ELSE 0 END`
-				: sql<number>`0`,
-			lastReadAt: userId ? discussionReads.lastReadAt : sql<null>`NULL`,
-			lastReadPage: userId ? discussionReads.lastReadPage : sql<null>`NULL`,
-			lastReadReplyId: userId ? discussionReads.lastReadReplyId : sql<null>`NULL`
+			isBookmarked:
+				userId !== null && userId !== undefined
+					? sql<number>`CASE WHEN ${bookmarks.userId} IS NOT NULL THEN 1 ELSE 0 END`
+					: sql<number>`0`,
+			lastReadAt:
+				userId !== null && userId !== undefined ? discussionReads.lastReadAt : sql<null>`NULL`,
+			lastReadPage:
+				userId !== null && userId !== undefined ? discussionReads.lastReadPage : sql<null>`NULL`,
+			lastReadReplyId:
+				userId !== null && userId !== undefined ? discussionReads.lastReadReplyId : sql<null>`NULL`
 		})
 		.from(discussions)
 		.innerJoin(users, eq(discussions.authorId, users.id))
 		.innerJoin(categories, eq(discussions.categorySlug, categories.slug));
 
 	// Apply left joins if userId is present
-	if (userId) {
+	if (userId !== null && userId !== undefined) {
 		baseQuery
 			.leftJoin(
 				bookmarks,
@@ -185,7 +189,7 @@ export async function getDiscussionsList(
 	// For discussions the user has read, count replies newer than lastReadAt.
 	// For discussions the user has never read, use commentCount directly.
 	const unreadMap = new Map<number, number>();
-	if (userId) {
+	if (userId !== null && userId !== undefined) {
 		// Separate into "read" and "unread" discussion sets
 		const readDiscussions = rows.filter((r) => r.lastReadAt !== null);
 		const unreadDiscussions = rows.filter((r) => r.lastReadAt === null);
