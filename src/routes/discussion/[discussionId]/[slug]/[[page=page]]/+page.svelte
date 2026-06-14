@@ -116,19 +116,25 @@
 	});
 
 	// 2. Navigation Anchor Smooth Scroll
+	let lastScrolledHash: string | null = null;
 	$effect(() => {
 		const hash = page.url.hash;
 		if (hash) {
-			const targetId = hash.startsWith('#') ? hash.substring(1) : hash;
-			// Match either exactly targetId or reply-targetId
-			const element =
-				document.getElementById(targetId) || document.getElementById(`reply-${targetId}`);
-			if (element) {
-				const timer = setTimeout(() => {
-					element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-				}, 200);
-				return () => clearTimeout(timer);
+			if (hash !== lastScrolledHash) {
+				const targetId = hash.startsWith('#') ? hash.substring(1) : hash;
+				// Match either exactly targetId or reply-targetId
+				const element =
+					document.getElementById(targetId) || document.getElementById(`reply-${targetId}`);
+				if (element) {
+					lastScrolledHash = hash;
+					const timer = setTimeout(() => {
+						element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+					}, 200);
+					return () => clearTimeout(timer);
+				}
 			}
+		} else {
+			lastScrolledHash = null;
 		}
 	});
 </script>
