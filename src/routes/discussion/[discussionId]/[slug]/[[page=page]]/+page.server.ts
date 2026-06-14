@@ -58,7 +58,14 @@ export const load: PageServerLoad = async (event) => {
 	const discussion = discussionRecords[0];
 
 	// Canonical slug redirect if slug in URL is mismatch
-	if (discussion.slug !== slug) {
+	let decodedDbSlug = discussion.slug;
+	try {
+		decodedDbSlug = decodeURIComponent(discussion.slug);
+	} catch {
+		// Ignore decode error and keep original slug
+	}
+
+	if (decodedDbSlug !== slug) {
 		const pageParam = event.params.page;
 		redirect(
 			302,
