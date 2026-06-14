@@ -86,7 +86,7 @@
 	/>
 	{#if showDropdown && (loading || filteredResults.length > 0)}
 		<div
-			class="absolute z-50 mt-1 w-full max-h-60 overflow-auto rounded-lg border border-base-300 bg-base-100 shadow-lg"
+			class="absolute z-50 mt-1 w-full max-h-60 overflow-auto rounded-box border border-base-300 bg-base-100 shadow-lg"
 		>
 			{#each filteredResults as user (user.id)}
 				<button

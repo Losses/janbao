@@ -51,7 +51,7 @@ export class DeadImageNode extends DecoratorNode<unknown> {
 	createDOM(): HTMLElement {
 		const span = document.createElement('span');
 		span.className =
-			'dead-image-placeholder inline-flex items-center gap-2 my-2 px-3 py-2 rounded-lg border border-dashed border-base-300 bg-base-200/50 text-base-content/60 text-sm';
+			'dead-image-placeholder inline-flex items-center gap-2 my-2 px-3 py-2 rounded-field border border-dashed border-base-300 bg-base-200/50 text-base-content/60 text-sm';
 		span.contentEditable = 'false';
 
 		// mdiImageBrokenVariant path data rendered as an inline SVG (the editor

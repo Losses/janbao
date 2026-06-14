@@ -66,7 +66,7 @@
 		{:else}
 			<div class="space-y-3">
 				{#each views as view (view.draft.id)}
-					<div class="card bg-base-100 border border-base-200 rounded-xl p-4 shadow-sm space-y-3">
+					<div class="card bg-base-100 border border-base-200 rounded-box p-4 shadow-sm space-y-3">
 						<div class="flex items-center justify-between gap-2">
 							<Badge variant="neutral">{view.label}</Badge>
 							<DateComponent

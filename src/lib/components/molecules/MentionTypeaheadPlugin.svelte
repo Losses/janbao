@@ -335,7 +335,7 @@
 {#if isVisible && results.length > 0}
 	<div
 		bind:this={menuRef}
-		class="absolute z-50 bg-base-100 border border-base-300 rounded-lg shadow-lg overflow-hidden"
+		class="absolute z-50 bg-base-100 border border-base-300 rounded-box shadow-lg overflow-hidden"
 		style="opacity: 0; min-width: 200px; max-height: 240px; overflow-y: auto;"
 		role="listbox"
 	>

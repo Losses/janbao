@@ -76,7 +76,7 @@
 				{profileT.stealthDescription}
 			</p>
 
-			<div class="flex items-center justify-between p-4 bg-base-200/50 rounded-lg">
+			<div class="flex items-center justify-between p-4 bg-base-200/50 rounded-box">
 				<div>
 					<p class="font-medium text-base-content">
 						{profileT.stealthMode}

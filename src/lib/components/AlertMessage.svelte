@@ -12,7 +12,7 @@
 </script>
 
 {#if message}
-	<div class="alert alert-warning text-sm rounded-lg py-2 {className}" role="alert">
+	<div class="alert alert-warning text-sm rounded-box py-2 {className}" role="alert">
 		<span>{message}</span>
 	</div>
 {/if}
