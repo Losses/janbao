@@ -297,69 +297,86 @@ async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promis
 	let inline: LexicalInlineNode[] = [];
 	let textBuf = '';
 
+	function pushParagraph(forceEmpty = false): void {
+		if (inline.length > 0) {
+			blocks.push(buildParagraphNode(inline));
+			inline = [];
+		} else if (forceEmpty) {
+			blocks.push(buildParagraphNode([]));
+		}
+	}
+
 	async function flushText(): Promise<void> {
 		if (!textBuf) return;
 
-		let idx = 0;
-		let lastPushedIdx = 0;
-		while (idx < textBuf.length) {
-			const atIdx = textBuf.indexOf('@', idx);
-			if (atIdx === -1) {
-				break;
-			}
+		const lines = textBuf.replace(/\r\n/g, '\n').split('\n');
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			let idx = 0;
+			let lastPushedIdx = 0;
+			while (idx < line.length) {
+				const atIdx = line.indexOf('@', idx);
+				if (atIdx === -1) {
+					break;
+				}
 
-			// Validate character before @ (must be whitespace or start of string)
-			const charBefore = atIdx > 0 ? textBuf.charAt(atIdx - 1) : '';
-			const isValidBefore = atIdx === 0 || /\s/.test(charBefore);
+				// Validate character before @ (must be whitespace or start of string)
+				const charBefore = atIdx > 0 ? line.charAt(atIdx - 1) : '';
+				const isValidBefore = atIdx === 0 || /\s/.test(charBefore);
 
-			let matchedUsername = '';
-			const remainingText = textBuf.slice(atIdx + 1);
-			const maxCheckLen = Math.min(30, remainingText.length);
+				let matchedUsername = '';
+				const remainingText = line.slice(atIdx + 1);
+				const maxCheckLen = Math.min(30, remainingText.length);
 
-			if (isValidBefore) {
-				for (let len = maxCheckLen; len >= 1; len--) {
-					const candidate = remainingText.slice(0, len);
-					if (ctx.mentionMap.has(candidate)) {
-						let isValidMatch = true;
-						if (/^[a-zA-Z0-9_-]+$/.test(candidate)) {
-							const nextChar = remainingText.charAt(len);
-							if (nextChar && /[a-zA-Z0-9_-]/.test(nextChar)) {
+				if (isValidBefore) {
+					for (let len = maxCheckLen; len >= 1; len--) {
+						const candidate = remainingText.slice(0, len);
+						if (ctx.mentionMap.has(candidate)) {
+							let isValidMatch = true;
+							if (/^[a-zA-Z0-9_-]+$/.test(candidate)) {
+								const nextChar = remainingText.charAt(len);
+								if (nextChar && /[a-zA-Z0-9_-]/.test(nextChar)) {
+									isValidMatch = false;
+								}
+							}
+							// Check if candidate is followed by a dot that is part of a domain/email (e.g. .com)
+							const rest = remainingText.slice(len);
+							if (/^\.[a-zA-Z0-9]/.test(rest)) {
 								isValidMatch = false;
 							}
-						}
-						// Check if candidate is followed by a dot that is part of a domain/email (e.g. .com)
-						const rest = remainingText.slice(len);
-						if (/^\.[a-zA-Z0-9]/.test(rest)) {
-							isValidMatch = false;
-						}
 
-						if (isValidMatch) {
-							matchedUsername = candidate;
-							break;
+							if (isValidMatch) {
+								matchedUsername = candidate;
+								break;
+							}
 						}
 					}
 				}
-			}
 
-			if (matchedUsername) {
-				if (atIdx > lastPushedIdx) {
-					inline.push(buildTextNode(textBuf.slice(lastPushedIdx, atIdx)));
-				}
-				const res = await ctx.resolveMention(matchedUsername);
-				if (res.resolved) {
-					inline.push(buildMentionNode(matchedUsername, matchedUsername));
+				if (matchedUsername) {
+					if (atIdx > lastPushedIdx) {
+						inline.push(buildTextNode(line.slice(lastPushedIdx, atIdx)));
+					}
+					const res = await ctx.resolveMention(matchedUsername);
+					if (res.resolved) {
+						inline.push(buildMentionNode(matchedUsername, matchedUsername));
+					} else {
+						inline.push(buildTextNode('@' + matchedUsername));
+					}
+					idx = atIdx + 1 + matchedUsername.length;
+					lastPushedIdx = idx;
 				} else {
-					inline.push(buildTextNode('@' + matchedUsername));
+					idx = atIdx + 1;
 				}
-				idx = atIdx + 1 + matchedUsername.length;
-				lastPushedIdx = idx;
-			} else {
-				idx = atIdx + 1;
 			}
-		}
 
-		if (lastPushedIdx < textBuf.length) {
-			inline.push(buildTextNode(textBuf.slice(lastPushedIdx)));
+			if (lastPushedIdx < line.length) {
+				inline.push(buildTextNode(line.slice(lastPushedIdx)));
+			}
+
+			if (i < lines.length - 1) {
+				pushParagraph(true);
+			}
 		}
 
 		textBuf = '';
@@ -367,12 +384,7 @@ async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promis
 
 	async function flushParagraph(forceEmpty = false): Promise<void> {
 		await flushText();
-		if (inline.length > 0) {
-			blocks.push(buildParagraphNode(inline));
-			inline = [];
-		} else if (forceEmpty) {
-			blocks.push(buildParagraphNode([]));
-		}
+		pushParagraph(forceEmpty);
 	}
 
 	const tagRe = /<(\w+)((?:[^>"]|"[^"]*")*)>|<\/(\w+)>/g;
