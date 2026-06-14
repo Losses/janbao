@@ -301,39 +301,50 @@ async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promis
 		if (!textBuf) return;
 
 		let idx = 0;
+		let lastPushedIdx = 0;
 		while (idx < textBuf.length) {
 			const atIdx = textBuf.indexOf('@', idx);
 			if (atIdx === -1) {
-				inline.push(buildTextNode(textBuf.slice(idx)));
 				break;
 			}
 
-			if (atIdx > idx) {
-				inline.push(buildTextNode(textBuf.slice(idx, atIdx)));
-			}
+			// Validate character before @ (must be whitespace or start of string)
+			const charBefore = atIdx > 0 ? textBuf.charAt(atIdx - 1) : '';
+			const isValidBefore = atIdx === 0 || /\s/.test(charBefore);
 
 			let matchedUsername = '';
 			const remainingText = textBuf.slice(atIdx + 1);
 			const maxCheckLen = Math.min(30, remainingText.length);
 
-			for (let len = maxCheckLen; len >= 1; len--) {
-				const candidate = remainingText.slice(0, len);
-				if (ctx.mentionMap.has(candidate)) {
-					let isValidMatch = true;
-					if (/^[a-zA-Z0-9_-]+$/.test(candidate)) {
-						const nextChar = remainingText.charAt(len);
-						if (nextChar && /[a-zA-Z0-9_-]/.test(nextChar)) {
+			if (isValidBefore) {
+				for (let len = maxCheckLen; len >= 1; len--) {
+					const candidate = remainingText.slice(0, len);
+					if (ctx.mentionMap.has(candidate)) {
+						let isValidMatch = true;
+						if (/^[a-zA-Z0-9_-]+$/.test(candidate)) {
+							const nextChar = remainingText.charAt(len);
+							if (nextChar && /[a-zA-Z0-9_-]/.test(nextChar)) {
+								isValidMatch = false;
+							}
+						}
+						// Check if candidate is followed by a dot that is part of a domain/email (e.g. .com)
+						const rest = remainingText.slice(len);
+						if (/^\.[a-zA-Z0-9]/.test(rest)) {
 							isValidMatch = false;
 						}
-					}
-					if (isValidMatch) {
-						matchedUsername = candidate;
-						break;
+
+						if (isValidMatch) {
+							matchedUsername = candidate;
+							break;
+						}
 					}
 				}
 			}
 
 			if (matchedUsername) {
+				if (atIdx > lastPushedIdx) {
+					inline.push(buildTextNode(textBuf.slice(lastPushedIdx, atIdx)));
+				}
 				const res = await ctx.resolveMention(matchedUsername);
 				if (res.resolved) {
 					inline.push(buildMentionNode(matchedUsername, matchedUsername));
@@ -341,10 +352,14 @@ async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promis
 					inline.push(buildTextNode('@' + matchedUsername));
 				}
 				idx = atIdx + 1 + matchedUsername.length;
+				lastPushedIdx = idx;
 			} else {
-				inline.push(buildTextNode('@'));
 				idx = atIdx + 1;
 			}
+		}
+
+		if (lastPushedIdx < textBuf.length) {
+			inline.push(buildTextNode(textBuf.slice(lastPushedIdx)));
 		}
 
 		textBuf = '';
