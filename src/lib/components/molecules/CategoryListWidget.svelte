@@ -4,6 +4,7 @@
 	 * categories. Uses a module-level store so data persists across page
 	 * navigations  - no skeleton flash on subsequent visits.
 	 */
+	import { afterNavigate } from '$app/navigation';
 	import type { TranslationDict } from '$lib/types/translation';
 	import { getCategoryStore } from '$lib/stores/categories.svelte';
 
@@ -19,7 +20,13 @@
 	const title = $derived(t.sidebar.categoryList);
 
 	$effect(() => {
-		void store.fetchIfNeeded();
+		if (!store.loaded) void store.load();
+	});
+
+	// Background refresh on navigation only - never inside the $effect, since
+	// the store mutates the same $state the effect tracks, which would loop.
+	afterNavigate(() => {
+		void store.refresh();
 	});
 </script>
 
