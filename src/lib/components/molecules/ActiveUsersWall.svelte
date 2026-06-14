@@ -35,7 +35,7 @@
 	{#if !store.loaded}
 		<div class="flex flex-wrap gap-2">
 			{#each [0, 1, 2, 3, 4, 5] as i (i)}
-				<div class="skeleton w-10 h-10 rounded-full"></div>
+				<div class="skeleton w-10 h-10 rounded-box"></div>
 			{/each}
 		</div>
 	{:else if store.users.length === 0}

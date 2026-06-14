@@ -37,10 +37,15 @@
 
 <div class="avatar {className}">
 	<div
-		class="{sizeClass} rounded-full bg-neutral text-neutral-content flex items-center justify-center"
+		class="{sizeClass} rounded-box bg-neutral text-neutral-content flex items-center justify-center"
 	>
 		{#if src}
-			<img {src} alt={displayName ?? 'User avatar'} loading="lazy" />
+			<img
+				{src}
+				alt={displayName ?? 'User avatar'}
+				loading="lazy"
+				class="w-full h-full object-cover"
+			/>
 		{:else}
 			<span class="font-medium">{fallbackLetter}</span>
 		{/if}
