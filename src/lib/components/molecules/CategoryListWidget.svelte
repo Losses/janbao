@@ -2,7 +2,7 @@
 	/**
 	 * CategoryListWidget Molecule - Displays a vertical navigation list of
 	 * categories. Uses a module-level store so data persists across page
-	 * navigations — no skeleton flash on subsequent visits.
+	 * navigations  - no skeleton flash on subsequent visits.
 	 */
 	import type { TranslationDict } from '$lib/types/translation';
 	import { getCategoryStore } from '$lib/stores/categories.svelte';

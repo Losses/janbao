@@ -56,7 +56,7 @@
 				{messageT.noConversations}
 			</div>
 		{:else}
-			<!-- Conversation stream — mirrors the homepage discussion list:
+			<!-- Conversation stream  - mirrors the homepage discussion list:
 			avatar left, content right, divide-y rows, no card chrome. -->
 			<div class="bg-base-100 overflow-hidden">
 				<div class="divide-y divide-base-200">

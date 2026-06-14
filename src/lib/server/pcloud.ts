@@ -1,5 +1,5 @@
 /**
- * pCloud WebDAV client — shared by the reverse-proxy routes (Cloudflare Worker /
+ * pCloud WebDAV client  - shared by the reverse-proxy routes (Cloudflare Worker /
  * local dev), the upload route, and the import/migration script (Bun). Uses
  * only Web APIs (fetch) so it loads in every runtime with no node imports.
  *
@@ -61,7 +61,7 @@ function webdavUrl(cfg: PcloudConfig, path: string): string {
 /**
  * GET a file from pCloud and return its streaming body for reverse-proxying.
  * Streams straight through (pCloud → client) with no buffering, so the caller
- * must supply the content-type (looked up in the DB) — pCloud always returns
+ * must supply the content-type (looked up in the DB)  - pCloud always returns
  * `application/octet-stream`. WebDAV serves the file in a single request in
  * both local and Worker runtimes.
  */
@@ -101,7 +101,7 @@ export async function pcloudUploadBytes(
 
 /**
  * PUT a streaming body to a pCloud path (folder/name). The request body streams
- * straight through to pCloud (no buffering) — used by the upload route to pipe
+ * straight through to pCloud (no buffering)  - used by the upload route to pipe
  * an incoming request body to pCloud while counting/hashing/sniffing in a
  * TransformStream upstream.
  */
@@ -146,7 +146,7 @@ export async function pcloudMove(
 	}
 }
 
-/** DELETE a pCloud path (WebDAV DELETE) — used to clean up temp/partial files. */
+/** DELETE a pCloud path (WebDAV DELETE)  - used to clean up temp/partial files. */
 export async function pcloudDelete(cfg: PcloudConfig, path: string): Promise<void> {
 	const res = await fetch(webdavUrl(cfg, path), {
 		method: 'DELETE',
@@ -181,7 +181,7 @@ export async function pcloudMkcol(cfg: PcloudConfig, folder: string): Promise<vo
 		method: 'MKCOL',
 		headers: { Authorization: basicAuth(cfg) }
 	});
-	if (res.status === 401) throw new Error('pCloud WebDAV auth failed (401) — check credentials');
+	if (res.status === 401) throw new Error('pCloud WebDAV auth failed (401)  - check credentials');
 	// 201 = created; 405 = already exists; both fine.
 }
 
@@ -195,7 +195,7 @@ export async function pcloudEnsureBase(cfg: PcloudConfig): Promise<void> {
 		method: 'MKCOL',
 		headers: { Authorization: basicAuth(cfg) }
 	});
-	if (res.status === 401) throw new Error('pCloud WebDAV auth failed (401) — check credentials');
+	if (res.status === 401) throw new Error('pCloud WebDAV auth failed (401)  - check credentials');
 	// 201 = created; 405 = already exists; both fine.
 }
 
@@ -220,7 +220,7 @@ export async function pcloudListFolder(cfg: PcloudConfig, folder: string): Promi
 	const names = new Set<string>();
 	const hrefRe = /<(?:[^:>]+:)?href[^>]*>([^<]+)<\/(?:[^:>]+:)?href>/gi;
 	let match: RegExpExecArray | null;
-	// Full path of the folder itself (basePath + folder) — its PROPFIND response
+	// Full path of the folder itself (basePath + folder)  - its PROPFIND response
 	// includes the folder as the first href, which we must skip.
 	const selfPath = fullPath(cfg, folder).replace(/^\/+/, '').replace(/\/+$/, '');
 	while ((match = hrefRe.exec(xml)) !== null) {

@@ -14,14 +14,14 @@ We conducted the Round 1 comprehensive review with 5 independent SubAgents perfo
 
 ### Issue 1: [CRITICAL] Draft contextId Mismatch for Profile Owner
 
-**Severity:** Critical — Draft autosave/load/clear pipeline completely broken for profile owners, partially broken for guests.
+**Severity:** Critical  - Draft autosave/load/clear pipeline completely broken for profile owners, partially broken for guests.
 
 **Root Cause:**
 
 - Profile page passed `contextId={isOwner ? undefined : targetUser.id}` to LexicalEditor.
 - When `isOwner`, `contextId` was `undefined`, which LexicalEditor normalized to `''` in autosave.
-- Server load (`+page.server.ts:132`) fetched draft with `eq(drafts.contextId, userId)` — a different value.
-- POST `/api/activities` cleared draft with `eq(drafts.contextId, 'new')` — yet another different value.
+- Server load (`+page.server.ts:132`) fetched draft with `eq(drafts.contextId, userId)`  - a different value.
+- POST `/api/activities` cleared draft with `eq(drafts.contextId, 'new')`  - yet another different value.
 
 **Impact:**
 
@@ -37,7 +37,7 @@ We conducted the Round 1 comprehensive review with 5 independent SubAgents perfo
 
 ### Issue 2: [MAJOR] Duplicate Type Definitions in ActivityRow
 
-**Severity:** Major — Violates similarity-ts zero-duplicate policy and shared type registry convention (RQ00-Backend §8.6/8.7).
+**Severity:** Major  - Violates similarity-ts zero-duplicate policy and shared type registry convention (RQ00-Backend §8.6/8.7).
 
 **Root Cause:** `ActivityComment` and `ActivityCommentsResponse` interfaces were declared locally in `ActivityRow.svelte` despite being structurally identical to `ActivityCommentItem` and `ActivityCommentsResponse` already exported from `$lib/types/api.ts`.
 
@@ -47,7 +47,7 @@ We conducted the Round 1 comprehensive review with 5 independent SubAgents perfo
 
 ### Issue 3: [MAJOR] Unnecessary `$derived` Wrappers Over Props
 
-**Severity:** Major — Dead code adding unnecessary indirection and cognitive overhead.
+**Severity:** Major  - Dead code adding unnecessary indirection and cognitive overhead.
 
 **Root Cause:** Five `$derived` wrappers (`initialCommentCount`, `resolvedAuthorUsername`, `resolvedCurrentUserId`, `resolvedAuthorId`, `resolvedIsAdmin`) mirrored props with no transformation. In Svelte 5, `$props()` destructured bindings are already reactive signals.
 
@@ -61,11 +61,11 @@ We conducted the Round 1 comprehensive review with 5 independent SubAgents perfo
 
 ### Issue 4: [MINOR] Silent Error Swallowing (Noted, Not Fixed)
 
-Three agents flagged that `catch {} // Silently fail` blocks in `ActivityRow.svelte` and `+page.svelte` provide no user feedback on API failures. Two agents (3, 4) classified this as acceptable for non-critical UI operations (comment loading, transient network errors). This is consistent with the existing project pattern across other components. No fix applied — left as-is pending consensus.
+Three agents flagged that `catch {} // Silently fail` blocks in `ActivityRow.svelte` and `+page.svelte` provide no user feedback on API failures. Two agents (3, 4) classified this as acceptable for non-critical UI operations (comment loading, transient network errors). This is consistent with the existing project pattern across other components. No fix applied  - left as-is pending consensus.
 
 ### Issue 5: [MINOR] `window.location.reload()` Usage (Noted, Not Fixed)
 
-All five agents noted `window.location.reload()` usage for state refresh. Three agents classified it as acceptable (top-level activity deletion requires parent data re-fetch; profile submission is pragmatic). Two agents suggested `invalidateAll()` but acknowledged it would require additional plumbing. No fix applied — left as-is.
+All five agents noted `window.location.reload()` usage for state refresh. Three agents classified it as acceptable (top-level activity deletion requires parent data re-fetch; profile submission is pragmatic). Two agents suggested `invalidateAll()` but acknowledged it would require additional plumbing. No fix applied  - left as-is.
 
 ---
 
@@ -79,7 +79,7 @@ All five agents noted `window.location.reload()` usage for state refresh. Three 
 - i18n keys (`common.comment`, `common.commentPlaceholder`, `profile.postNormalActivity`) present in both locales with full parity.
 - Delete permission logic correctly mirrors backend authorization (author, admin, recipient, parent author).
 - All component props use named `interface` definitions, no inline typing violations.
-- No hardcoded UI strings — all text resolved through i18n system.
+- No hardcoded UI strings  - all text resolved through i18n system.
 - DaisyUI/TailwindCSS usage follows project conventions (semantic colors, no extraneous animations).
 
 ---

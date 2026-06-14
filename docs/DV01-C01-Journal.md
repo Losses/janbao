@@ -34,7 +34,7 @@
 **Modified:** `src/routes/+page.svelte`
 
 - Removed the redundant `<h1 class="text-3xl font-extrabold tracking-tight">{t.nav.home}</h1>` title banner
-- Removed the old mobile header toolbar (hamburger + site name) — now handled by global Header
+- Removed the old mobile header toolbar (hamburger + site name)  - now handled by global Header
 - Removed `import { getSiteName } from '$lib/utils/title'` (no longer needed in this file)
 - Kept top Paginator in place of the removed title banner
 
@@ -57,26 +57,26 @@
 
 **Pages migrated to ProfileSidebar:**
 
-- `/notifications` — activeItem: `notifications`
-- `/profile/invitations` — activeItem: `invitations`
-- `/messages/inbox` — activeItem: `mailbox` (moved "New Message" button to content area)
-- `/bookmarks` — no activeItem (bookmarks not in profile nav)
-- `/drafts` — no activeItem
-- `/profile/[userId]/[userSlug]` — activeItem: `activities` (with owner/visitor guard)
-- `/profile/discussions/[userId]/[userSlug]` — activeItem: `discussions` (with owner/visitor guard)
-- `/profile/comments/[userId]/[userSlug]` — activeItem: `comments` (with owner/visitor guard)
+- `/notifications`  - activeItem: `notifications`
+- `/profile/invitations`  - activeItem: `invitations`
+- `/messages/inbox`  - activeItem: `mailbox` (moved "New Message" button to content area)
+- `/bookmarks`  - no activeItem (bookmarks not in profile nav)
+- `/drafts`  - no activeItem
+- `/profile/[userId]/[userSlug]`  - activeItem: `activities` (with owner/visitor guard)
+- `/profile/discussions/[userId]/[userSlug]`  - activeItem: `discussions` (with owner/visitor guard)
+- `/profile/comments/[userId]/[userSlug]`  - activeItem: `comments` (with owner/visitor guard)
 
 **Pages migrated to SettingsSidebar:**
 
-- `/profile/edit` — activeItem: `editAccount`
-- `/profile/password` — activeItem: `changePassword`
-- `/profile/preferences` — activeItem: `preferences`
-- `/profile/picture` — activeItem: `avatar`
-- `/profile/onlineNow` — activeItem: `stealthSettings`
+- `/profile/edit`  - activeItem: `editAccount`
+- `/profile/password`  - activeItem: `changePassword`
+- `/profile/preferences`  - activeItem: `preferences`
+- `/profile/picture`  - activeItem: `avatar`
+- `/profile/onlineNow`  - activeItem: `stealthSettings`
 
 ### 1.4 Supporting Changes
 
-**Shared type:** Added `UserInfoSummary` interface to `src/lib/types/api.ts` — used by Header, DualColumnLayout, ProfileSidebar, SettingsSidebar, and UserInfoBlock.
+**Shared type:** Added `UserInfoSummary` interface to `src/lib/types/api.ts`  - used by Header, DualColumnLayout, ProfileSidebar, SettingsSidebar, and UserInfoBlock.
 
 **i18n keys added:**
 
@@ -111,37 +111,37 @@
 
 ### Modified Files
 
-- `src/lib/types/api.ts` — Added `UserInfoSummary` interface
-- `src/lib/i18n/en.json` — Added `profile.backToProfile`
-- `src/lib/i18n/zh-CN.json` — Added `profile.backToProfile`
-- `src/lib/components/templates/DualColumnLayout.svelte` — Added Header integration + user/t props
-- `src/lib/components/molecules/UserInfoBlock.svelte` — Import shared type
-- `src/routes/+page.svelte` — Removed title + mobile header
-- `src/routes/categories/+page.svelte` — Pass user/t
-- `src/routes/category/[categorySlug]/+page.svelte` — Pass user/t
-- `src/routes/discussion/[discussionId]/[slug]/[[page=page]]/+page.svelte` — Pass user/t
-- `src/routes/activity/+page.svelte` — Pass user/t
-- `src/routes/notifications/+page.svelte` — ProfileSidebar
-- `src/routes/bookmarks/+page.svelte` — ProfileSidebar
-- `src/routes/drafts/+page.svelte` — ProfileSidebar
-- `src/routes/messages/inbox/+page.svelte` — ProfileSidebar
-- `src/routes/messages/new/+page.svelte` — Pass user/t
-- `src/routes/messages/[id]/[[page=page]]/+page.svelte` — Pass user/t
-- `src/routes/profile/edit/+page.svelte` — SettingsSidebar
-- `src/routes/profile/password/+page.svelte` — SettingsSidebar
-- `src/routes/profile/preferences/+page.svelte` — SettingsSidebar
-- `src/routes/profile/picture/+page.svelte` — SettingsSidebar
-- `src/routes/profile/onlineNow/+page.svelte` — SettingsSidebar
-- `src/routes/profile/invitations/+page.svelte` — ProfileSidebar
-- `src/routes/profile/[userId]/[userSlug]/+page.svelte` — ProfileSidebar
-- `src/routes/profile/discussions/[userId]/[userSlug]/+page.svelte` — ProfileSidebar
-- `src/routes/profile/comments/[userId]/[userSlug]/+page.svelte` — ProfileSidebar
+- `src/lib/types/api.ts`  - Added `UserInfoSummary` interface
+- `src/lib/i18n/en.json`  - Added `profile.backToProfile`
+- `src/lib/i18n/zh-CN.json`  - Added `profile.backToProfile`
+- `src/lib/components/templates/DualColumnLayout.svelte`  - Added Header integration + user/t props
+- `src/lib/components/molecules/UserInfoBlock.svelte`  - Import shared type
+- `src/routes/+page.svelte`  - Removed title + mobile header
+- `src/routes/categories/+page.svelte`  - Pass user/t
+- `src/routes/category/[categorySlug]/+page.svelte`  - Pass user/t
+- `src/routes/discussion/[discussionId]/[slug]/[[page=page]]/+page.svelte`  - Pass user/t
+- `src/routes/activity/+page.svelte`  - Pass user/t
+- `src/routes/notifications/+page.svelte`  - ProfileSidebar
+- `src/routes/bookmarks/+page.svelte`  - ProfileSidebar
+- `src/routes/drafts/+page.svelte`  - ProfileSidebar
+- `src/routes/messages/inbox/+page.svelte`  - ProfileSidebar
+- `src/routes/messages/new/+page.svelte`  - Pass user/t
+- `src/routes/messages/[id]/[[page=page]]/+page.svelte`  - Pass user/t
+- `src/routes/profile/edit/+page.svelte`  - SettingsSidebar
+- `src/routes/profile/password/+page.svelte`  - SettingsSidebar
+- `src/routes/profile/preferences/+page.svelte`  - SettingsSidebar
+- `src/routes/profile/picture/+page.svelte`  - SettingsSidebar
+- `src/routes/profile/onlineNow/+page.svelte`  - SettingsSidebar
+- `src/routes/profile/invitations/+page.svelte`  - ProfileSidebar
+- `src/routes/profile/[userId]/[userSlug]/+page.svelte`  - ProfileSidebar
+- `src/routes/profile/discussions/[userId]/[userSlug]/+page.svelte`  - ProfileSidebar
+- `src/routes/profile/comments/[userId]/[userSlug]/+page.svelte`  - ProfileSidebar
 
 ---
 
 ## 4. Audit Log
 
-### Audit Round 1 — 2026-06-12
+### Audit Round 1  - 2026-06-12
 
 **Method:** 5 independent audit agents reviewed all Cycle 1 files, findings consolidated into `docs/RV01-C01-Audit-01.md`.
 
@@ -160,5 +160,5 @@
 
 **Final verification:**
 
-- `bun run check` — 0 errors, 0 warnings
-- `bun run lint` — exit code 0
+- `bun run check`  - 0 errors, 0 warnings
+- `bun run lint`  - exit code 0

@@ -1,5 +1,5 @@
 /**
- * Badges Store — Module-level reactive state for the sidebar icon unread
+ * Badges Store  - Module-level reactive state for the sidebar icon unread
  * counts (notifications + private messages). Persists across component mounts
  * so navigating between forum pages does not flicker the badges.
  *

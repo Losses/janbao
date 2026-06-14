@@ -1,6 +1,6 @@
 /**
  * Shared image-format detection from magic bytes. Used by:
- *   - the import script (to route cwebp vs gif2webp — the crawler mislabels files)
+ *   - the import script (to route cwebp vs gif2webp  - the crawler mislabels files)
  *   - the upload route (to verify the real type of incoming bytes, since the
  *     client-provided Content-Type cannot be trusted)
  *

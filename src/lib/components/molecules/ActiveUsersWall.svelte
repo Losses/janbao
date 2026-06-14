@@ -2,7 +2,7 @@
 	/**
 	 * ActiveUsersWall Molecule - Grid of avatars for users active in the last
 	 * 10 minutes (stealth users excluded server-side). Uses a module-level
-	 * store so data persists across page navigations — no skeleton flash on
+	 * store so data persists across page navigations  - no skeleton flash on
 	 * subsequent visits.
 	 */
 	import Avatar from '$lib/components/atoms/Avatar.svelte';

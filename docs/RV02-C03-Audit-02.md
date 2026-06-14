@@ -12,20 +12,20 @@ We conducted the Round 2 comprehensive review with 5 independent SubAgents perfo
 
 ## 2. Round 1 Issue Verification
 
-### Issue 1: Draft contextId Mismatch — VERIFIED FIXED
+### Issue 1: Draft contextId Mismatch  - VERIFIED FIXED
 
 - `+page.svelte:131` now uses `contextId={targetUser.id}` unconditionally (both owner and guest).
-- Server draft load queries `eq(drafts.contextId, userId)` where `userId = targetUser.id` — pipeline aligned.
+- Server draft load queries `eq(drafts.contextId, userId)` where `userId = targetUser.id`  - pipeline aligned.
 - POST handler clears drafts with `inArray(drafts.contextId, ['new', user.id, recipientId?])` covering all contexts.
 - Full save → load → clear pipeline confirmed consistent.
 
-### Issue 2: Duplicate Type Definitions — VERIFIED FIXED
+### Issue 2: Duplicate Type Definitions  - VERIFIED FIXED
 
 - `ActivityRow.svelte` imports `ActivityCommentItem` and `ActivityCommentsResponse` from `$lib/types/api.ts`.
 - No local duplicate interface declarations remain.
 - State variable correctly typed as `ActivityCommentItem[]`.
 
-### Issue 3: Unnecessary `$derived` Wrappers — VERIFIED FIXED
+### Issue 3: Unnecessary `$derived` Wrappers  - VERIFIED FIXED
 
 - All five `$derived` wrappers removed (`initialCommentCount`, `resolvedAuthorUsername`, `resolvedCurrentUserId`, `resolvedAuthorId`, `resolvedIsAdmin`).
 - Template references props directly (`authorUsername`, `currentUserId`, `authorId`, `isAdmin`).

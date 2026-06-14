@@ -53,7 +53,7 @@ export const POST: RequestHandler = async ({ locals, platform }) => {
 	const expiresAt = new Date(now.getTime() + EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
 	// PK collisions are astronomically rare (30^12 ≈ 5.3×10^17 space).
-	// A single insert with try/catch is sufficient — no retry loop needed.
+	// A single insert with try/catch is sufficient  - no retry loop needed.
 	try {
 		await db.insert(invitations).values({
 			code: generateInvitationCode(),

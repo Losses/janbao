@@ -1,6 +1,6 @@
 # DV02-C01-Journal: Cycle 1 Development Journal
 
-## Cycle 1: Server — Data Plumbing & Form Actions
+## Cycle 1: Server  - Data Plumbing & Form Actions
 
 **Date:** 2026-06-13  
 **Status:** Implementation Complete, Pending Audit
@@ -82,7 +82,7 @@
 
 ## 4. Audit Log
 
-### Audit Round 1 — 2026-06-13
+### Audit Round 1  - 2026-06-13
 
 **Method:** 5 independent audit agents reviewing Cycle 1 codebase. Detailed findings and changes are documented in [RV02-C01-Audit-01.md](file:///home/losses/Development/janbao/docs/RV02-C01-Audit-01.md).
 
@@ -100,5 +100,5 @@
 
 **Final verification:**
 
-- `bun run check` — 0 errors, 0 warnings
-- `bun run lint` — exit code 0
+- `bun run check`  - 0 errors, 0 warnings
+- `bun run lint`  - exit code 0
