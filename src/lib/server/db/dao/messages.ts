@@ -45,7 +45,7 @@ export async function getConversations(
 		.select({
 			conversationId: messages.conversationId,
 			// MAX() over an integer column returns the raw stored epoch value
-			// (number), not a Date — the sql<number> reflects the runtime type,
+			// (number), not a Date  - the sql<number> reflects the runtime type,
 			// since Drizzle's timestamp mapper does not apply to raw aggregates.
 			maxAt: sql<number>`MAX(${messages.createdAt})`
 		})
@@ -192,7 +192,7 @@ export async function getConversations(
 
 /**
  * Count the active user's total unread private messages across all
- * conversations — the sum that `getConversations` computes per-conversation
+ * conversations  - the sum that `getConversations` computes per-conversation
  * (messages newer than the user's lastReadAt, excluding their own messages,
  * in non-deleted conversations they participate in), collapsed to one number.
  * Used by the root layout load to render the message icon badge.

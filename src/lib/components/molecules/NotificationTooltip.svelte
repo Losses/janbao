@@ -126,7 +126,7 @@
 				body: JSON.stringify({ all: true })
 			});
 		} catch {
-			// Non-critical — the next navigation re-syncs from the server
+			// Non-critical  - the next navigation re-syncs from the server
 		}
 	}
 </script>

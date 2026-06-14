@@ -23,7 +23,7 @@ const MAX_ATTACHMENT = 5 * 1024 * 1024;
  * Streaming image upload (raw request body, not multipart). The body is piped
  * through a TransformStream that counts bytes (aborts on size limit), sniffs the
  * real type from the first chunk (the client Content-Type is not trusted), and
- * hashes incrementally — all while forwarding bytes straight to pCloud with no
+ * hashes incrementally  - all while forwarding bytes straight to pCloud with no
  * full buffering. The file lands in /Janbao/tmp/<uuid> first, then MOVEs to its
  * final path once the sha/type are known (so a rejected upload never overwrites
  * an existing file). Avatars → /avatars/<userId>; attachments → /attachments/<sha>.
@@ -84,7 +84,7 @@ export const POST: RequestHandler = async (event) => {
 		return jsonError(t, 'upload.uploadFailed', 502);
 	}
 
-	// Stream finished — verify the real type (reject without touching the final file).
+	// Stream finished  - verify the real type (reject without touching the final file).
 	const mime = mimeForFormat(format);
 	if (!mime) {
 		await pcloudDelete(cfg, `/tmp/${tmpName}`).catch(() => {});

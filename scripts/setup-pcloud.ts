@@ -8,7 +8,7 @@
  * enabled. EU accounts use ewebdav.pcloud.com; US use webdav.pcloud.com.
  *
  * NOTE: the password is stored in .env (gitignored) because WebDAV needs it on
- * every request — there is no token to use instead.
+ * every request  - there is no token to use instead.
  */
 import { createInterface } from 'readline';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
@@ -42,7 +42,7 @@ function writeEnv(key: string, value: string): void {
 }
 
 async function main(): Promise<void> {
-	console.log('pCloud WebDAV setup — verify credentials and create image folders.\n');
+	console.log('pCloud WebDAV setup  - verify credentials and create image folders.\n');
 	const email = await ask('pCloud email: ');
 	if (!email) {
 		console.error('Email is required.');
@@ -53,7 +53,7 @@ async function main(): Promise<void> {
 		console.error('Password is required.');
 		process.exit(1);
 	}
-	const regionInput = await ask('Region — EU or US [EU]: ');
+	const regionInput = await ask('Region  - EU or US [EU]: ');
 	const host = regionInput.toUpperCase() === 'US' ? 'webdav.pcloud.com' : 'ewebdav.pcloud.com';
 	console.log(`Using WebDAV host: ${host}`);
 

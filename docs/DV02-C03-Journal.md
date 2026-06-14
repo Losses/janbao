@@ -3,7 +3,7 @@
 ## Cycle 3: Activity Row Layout, Inline Comment & Profile Editor
 
 **Date:** 2026-06-13
-**Status:** Audit Round 1 Complete — Fixes Applied, Pending Round 2
+**Status:** Audit Round 1 Complete  - Fixes Applied, Pending Round 2
 
 ---
 
@@ -67,7 +67,7 @@
 
 ## 4. Audit Log
 
-### Round 1 — 2026-06-13
+### Round 1  - 2026-06-13
 
 - **Verdict:** FAIL (3 FAIL / 2 PASS)
 - **Auditor:** 5 Independent SubAgents
@@ -75,15 +75,15 @@
 
 **Issues Found & Fixed:**
 
-1. **[CRITICAL] Draft contextId mismatch** — Profile owner's draft autosave/load/clear pipeline used three different contextId values (`''`, `userId`, `'new'`). Fixed by always using `targetUser.id` on the frontend and expanding the POST handler's draft clear to cover all relevant contexts via `inArray`.
-2. **[MAJOR] Duplicate type definitions** — `ActivityComment` and `ActivityCommentsResponse` in ActivityRow duplicated types from `$lib/types/api.ts`. Replaced with imports.
-3. **[MAJOR] Unnecessary `$derived` wrappers** — Five `$derived` wrappers over props that are already reactive. Removed; template now references props directly.
+1. **[CRITICAL] Draft contextId mismatch**  - Profile owner's draft autosave/load/clear pipeline used three different contextId values (`''`, `userId`, `'new'`). Fixed by always using `targetUser.id` on the frontend and expanding the POST handler's draft clear to cover all relevant contexts via `inArray`.
+2. **[MAJOR] Duplicate type definitions**  - `ActivityComment` and `ActivityCommentsResponse` in ActivityRow duplicated types from `$lib/types/api.ts`. Replaced with imports.
+3. **[MAJOR] Unnecessary `$derived` wrappers**  - Five `$derived` wrappers over props that are already reactive. Removed; template now references props directly.
 
 **Files additionally modified by audit fixes:**
 
 - `src/routes/api/activities/+server.ts` (expanded draft clear logic)
 
-### Round 2 — 2026-06-13
+### Round 2  - 2026-06-13
 
 - **Verdict:** PASS (5/5 unanimous)
 - **Auditor:** 5 Independent SubAgents

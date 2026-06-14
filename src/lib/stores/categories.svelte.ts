@@ -1,5 +1,5 @@
 /**
- * Categories Store — Module-level reactive state for the sidebar category
+ * Categories Store  - Module-level reactive state for the sidebar category
  * list. Persists across component mounts so navigation between forum pages
  * does not trigger skeleton screens.
  *
@@ -27,7 +27,7 @@ async function fetchIfNeeded(): Promise<void> {
 	if (loading) return;
 
 	if (!loaded) {
-		// First load — block until data arrives so skeleton shows correctly
+		// First load  - block until data arrives so skeleton shows correctly
 		loading = true;
 		try {
 			const res = await fetch('/api/categories');
@@ -35,14 +35,14 @@ async function fetchIfNeeded(): Promise<void> {
 				categories = (await res.json()) as CategoryItem[];
 			}
 		} catch {
-			// Non-critical — sidebar will show empty state
+			// Non-critical  - sidebar will show empty state
 		}
 		loaded = true;
 		loading = false;
 		return;
 	}
 
-	// Already loaded — background refresh, never show skeleton
+	// Already loaded  - background refresh, never show skeleton
 	loading = true;
 	try {
 		const res = await fetch('/api/categories');
@@ -50,7 +50,7 @@ async function fetchIfNeeded(): Promise<void> {
 			categories = (await res.json()) as CategoryItem[];
 		}
 	} catch {
-		// Non-critical — keep existing data
+		// Non-critical  - keep existing data
 	}
 	loading = false;
 }

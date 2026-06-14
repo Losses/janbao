@@ -23,8 +23,8 @@ export const SYSTEM_USER_ID = -1;
 
 /**
  * Sentinel for "original author no longer exists". Vanilla reserves UserID 0 for
- * this (rendered as "Unknown"); we remap it onto -2 so the positive id space —
- * including id 0 (the seeded admin) — stays clear for real accounts.
+ * this (rendered as "Unknown"); we remap it onto -2 so the positive id space  -
+ * including id 0 (the seeded admin)  - stays clear for real accounts.
  */
 export const GHOST_USER_ID = -2;
 

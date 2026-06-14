@@ -52,7 +52,7 @@
 		message = null;
 
 		try {
-			// Upload the file (raw body — streamed server-side; X-Upload-Type marks avatar)
+			// Upload the file (raw body  - streamed server-side; X-Upload-Type marks avatar)
 			const uploadRes = await fetch('/upload', {
 				method: 'POST',
 				headers: { 'X-Upload-Type': 'avatar' },

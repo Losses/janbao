@@ -40,7 +40,7 @@
 	/**
 	 * Defense-in-depth URL allowlist to prevent Stored XSS via <a href> / <img src>.
 	 * Allows absolute http(s) and same-origin relative references ("/avatar/<id>",
-	 * "./", "../", "#") — aligned with the editor's validateUrl. Rejects
+	 * "./", "../", "#")  - aligned with the editor's validateUrl. Rejects
 	 * protocol-relative "//host" and any non-http scheme (javascript:, data:, …).
 	 */
 	function safeUrl(url: string | undefined): string {

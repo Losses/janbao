@@ -479,7 +479,7 @@
 		</div>
 	</Composer>
 
-	<!-- Save Status — floating overlay (anchored to the relative root) rather
+	<!-- Save Status  - floating overlay (anchored to the relative root) rather
 	     than in-flow. Appearing/disappearing no longer changes the editor's
 	     height, so the page stops jumping on every autosave. -->
 	{#if saveStatusLabel}

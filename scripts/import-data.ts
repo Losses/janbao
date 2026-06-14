@@ -343,7 +343,7 @@ async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promis
 				const src = getAttr(attrs, 'src') ?? '';
 				const alt = getAttr(attrs, 'alt') ?? '';
 				if (/\bemoji\b/.test(cls)) {
-					// Emoji were never crawled — drop silently.
+					// Emoji were never crawled  - drop silently.
 				} else {
 					const res = await ctx.resolveImage(src);
 					if (res.kind === 'live') {
@@ -1069,7 +1069,7 @@ async function main() {
 	const referencedImageUrls = new Set<string>();
 
 	/** Shared converter context. resolveImage records the src and returns the
-	 * live file id (pre-conversion sha256) without uploading — uploads happen in
+	 * live file id (pre-conversion sha256) without uploading  - uploads happen in
 	 * the bulk phase. */
 	const converterCtx: ConverterContext = {
 		resolveMention: async (username: string): Promise<MentionResolution> => {
@@ -1445,7 +1445,7 @@ async function main() {
 	}
 
 	// 4.5 Import discussion OP bodies (first post) as the earliest reply.
-	// The discussions table has no content column — the OP is the chronologically
+	// The discussions table has no content column  - the OP is the chronologically
 	// earliest reply (see the discussion loader's orderBy(createdAt).limit(1)).
 	const discussionsDir = join(dataDir, 'discussions');
 	if (existsSync(discussionsDir)) {
