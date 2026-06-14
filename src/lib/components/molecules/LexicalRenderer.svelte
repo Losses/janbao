@@ -54,8 +54,9 @@
 	/**
 	 * Regex pattern to match @username mentions in text.
 	 * Matches @ followed by 2-30 alphanumeric, underscore, or hyphen characters.
+	 * Requires start/space before and end/space after the match to avoid matching email addresses.
 	 */
-	const MENTION_REGEX = /@[\p{L}\p{N}_-]{2,30}/gu;
+	const MENTION_REGEX = /(?<=^|\s)@[\p{L}\p{N}_-]{2,30}(?=$|\s)/gu;
 
 	/**
 	 * Split a text string into segments, replacing @username tokens
@@ -157,9 +158,9 @@
 				{@const user = mentionedUsers[segment.username]}
 				<a
 					href="/profile/{user.id}/{generateSlug(user.username)}"
-					class="inline-flex items-center gap-0.5 px-1.5 py-0 mx-0.5 rounded bg-primary/15 text-primary text-xs font-medium hover:bg-primary/25 transition-colors no-underline"
+					class="inline-flex items-center gap-0.5 px-1.5 py-0 mx-0.5 -my-0.5 rounded bg-primary/15 text-primary font-medium hover:bg-primary/25 transition-colors no-underline"
 				>
-					{user.displayName}
+					@{user.displayName}
 				</a>
 			{:else}
 				{@const hasSpoiler = (node.style ?? '').includes('janbao-spoiler')}
@@ -184,13 +185,13 @@
 		{#if mentionUser}
 			<a
 				href="/profile/{mentionUser.id}/{generateSlug(mentionUser.username)}"
-				class="inline-flex items-center gap-0.5 px-1.5 py-0 mx-0.5 rounded bg-primary/15 text-primary text-xs font-medium hover:bg-primary/25 transition-colors no-underline"
+				class="inline-flex items-center gap-0.5 px-1.5 py-0 mx-0.5 -my-0.5 rounded bg-primary/15 text-primary font-medium hover:bg-primary/25 transition-colors no-underline"
 			>
-				{mentionUser.displayName}
+				@{mentionUser.displayName}
 			</a>
 		{:else}
 			<span
-				class="inline-flex items-center px-1.5 py-0 mx-0.5 rounded bg-primary/15 text-primary text-xs font-medium"
+				class="inline-flex items-center px-1.5 py-0 mx-0.5 -my-0.5 rounded bg-primary/15 text-primary font-medium"
 			>
 				@{node.displayName ?? node.username ?? ''}
 			</span>

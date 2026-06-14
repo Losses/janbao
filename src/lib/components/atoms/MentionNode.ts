@@ -78,7 +78,7 @@ export class MentionNode extends DecoratorNode<unknown> {
 	createDOM(): HTMLElement {
 		const span = document.createElement('span');
 		span.className =
-			'inline-flex items-center px-1.5 py-0 mx-0.5 rounded bg-primary/15 text-primary text-xs font-medium';
+			'inline-flex items-center px-1.5 py-0 mx-0.5 -my-0.5 rounded bg-primary/15 text-primary font-medium';
 		span.contentEditable = 'false';
 		span.textContent = `@${this.__displayName}`;
 		return span;

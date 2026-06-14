@@ -245,7 +245,9 @@
 				</div>
 
 				{#if isPreview}
-					<div class="border border-base-300 rounded-box p-5 bg-base-100 min-h-[200px] shadow-inner">
+					<div
+						class="border border-base-300 rounded-box p-5 bg-base-100 min-h-[200px] shadow-inner"
+					>
 						{#if contentJson}
 							<LexicalRenderer {contentJson} />
 						{:else}
