@@ -95,7 +95,7 @@ export async function getConversations(
 		.groupBy(messages.conversationId);
 	const messageCountMap = new Map(messageCountRows.map((m) => [m.conversationId, m.count]));
 
-	// 5. Latest message detail (preview + author) per page conversation
+	// 5. Latest message detail (preview) per page conversation
 	const latestSubq = db
 		.select({
 			conversationId: messages.conversationId,
@@ -112,11 +112,7 @@ export async function getConversations(
 			maxAt: latestSubq.maxAt,
 			id: messages.id,
 			contentJson: messages.contentJson,
-			createdAt: messages.createdAt,
-			authorId: users.id,
-			authorUsername: users.username,
-			authorDisplayName: users.displayName,
-			authorAvatarFileId: users.avatarFileId
+			createdAt: messages.createdAt
 		})
 		.from(latestSubq)
 		.innerJoin(
@@ -125,16 +121,39 @@ export async function getConversations(
 				eq(messages.conversationId, latestSubq.conversationId),
 				eq(messages.createdAt, latestSubq.maxAt)
 			)
-		)
-		.innerJoin(users, eq(messages.authorId, users.id));
+		);
 	// Tie-break on timestamp ties: keep the row with the largest message id per
-	// conversation so the "latest" preview/author is deterministic.
+	// conversation so the "latest" preview is deterministic.
 	const latestMap = new Map<number, (typeof latestDetails)[number]>();
 	for (const row of latestDetails) {
 		const existing = latestMap.get(row.conversationId);
 		if (!existing || row.id > existing.id) {
 			latestMap.set(row.conversationId, row);
 		}
+	}
+
+	// 5b. Participants details per page conversation to identify the display user
+	// (the first participant who is not the active user, or the active user if self-chat)
+	const participants = await db
+		.select({
+			conversationId: conversationParticipants.conversationId,
+			userId: users.id,
+			username: users.username,
+			displayName: users.displayName,
+			avatarFileId: users.avatarFileId,
+			joinedAt: conversationParticipants.joinedAt
+		})
+		.from(conversationParticipants)
+		.innerJoin(users, eq(conversationParticipants.userId, users.id))
+		.where(inArray(conversationParticipants.conversationId, pageIds))
+		.orderBy(conversationParticipants.joinedAt);
+
+	const participantsMap = new Map<number, typeof participants>();
+	for (const row of participants) {
+		if (!participantsMap.has(row.conversationId)) {
+			participantsMap.set(row.conversationId, []);
+		}
+		participantsMap.get(row.conversationId)!.push(row);
 	}
 
 	// 6. Unread counts (pushed into SQL): count messages newer than the user's
@@ -167,6 +186,11 @@ export async function getConversations(
 
 	const items: ConversationListItem[] = pageIds.map((id) => {
 		const latest = latestMap.get(id);
+		const convParticipants = participantsMap.get(id) ?? [];
+		const otherParticipant =
+			convParticipants.find((p) => p.userId !== userId) ?? convParticipants[0];
+		const displayUser = otherParticipant ?? null;
+
 		return {
 			id,
 			title: titleMap.get(id) ?? '',
@@ -177,10 +201,10 @@ export async function getConversations(
 			// Generous cap so the card's CSS line-clamp-3 is the real visual limiter
 			// (≈3 lines on desktop); short messages render in full.
 			lastMessagePreview: latest ? extractPlainText(latest.contentJson, 300) : null,
-			lastAuthorId: latest?.authorId ?? null,
-			lastAuthorUsername: latest?.authorUsername ?? null,
-			lastAuthorDisplayName: latest?.authorDisplayName ?? null,
-			lastAuthorAvatarFileId: latest?.authorAvatarFileId ?? null,
+			lastAuthorId: displayUser?.userId ?? null,
+			lastAuthorUsername: displayUser?.username ?? null,
+			lastAuthorDisplayName: displayUser?.displayName ?? null,
+			lastAuthorAvatarFileId: displayUser?.avatarFileId ?? null,
 			participantCount: countMap.get(id) ?? 0,
 			messageCount: messageCountMap.get(id) ?? 0,
 			unreadCount: unreadMap.get(id) ?? 0
