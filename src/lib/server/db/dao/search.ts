@@ -1,6 +1,7 @@
 import { sql, eq, and, isNull, inArray } from 'drizzle-orm';
 import {
 	discussions,
+	replies,
 	activities,
 	messages,
 	conversations,
@@ -22,8 +23,9 @@ import { lexicalToSearchText } from '$lib/utils/lexical';
  * the source tables via JOIN.
  *
  * Queries shorter than 3 characters fall back to LIKE on the source tables,
- * because trigram tokens are 3 characters minimum. The `usedFallback` flag on
- * the result tells the UI to note that fuzzy matching is in effect.
+ * because trigram tokens are 3 characters minimum. Result items carry a plain-
+ * text preview (extracted via lexicalToSearchText) so the UI can highlight the
+ * matched term; the `usedFallback` flag lets the UI note fuzzy matching.
  */
 
 const MIN_FTS_LENGTH = 3;
@@ -37,6 +39,24 @@ export interface SearchPage<T> {
 	usedFallback: boolean;
 }
 
+export interface DiscussionSearchItem {
+	id: number;
+	title: string;
+	slug: string;
+	categorySlug: string;
+	categoryTitle: string;
+	authorId: number;
+	authorDisplayName: string;
+	authorUsername: string;
+	authorAvatarFileId: string | null;
+	createdAt: Date;
+	updatedAt: Date;
+	commentCount: number;
+	/** Plain text of the best-matching reply, when the body matched (null for title-only hits). */
+	bodyPreview: string | null;
+	rank: number;
+}
+
 export interface ActivitySearchItem {
 	id: number;
 	authorId: number;
@@ -44,7 +64,7 @@ export interface ActivitySearchItem {
 	authorUsername: string;
 	authorAvatarFileId: string | null;
 	recipientId: number | null;
-	contentJson: string;
+	previewText: string;
 	createdAt: Date;
 	rank: number;
 }
@@ -55,22 +75,6 @@ export interface MessageSearchItem {
 	hitCount: number;
 	previewText: string;
 	lastMessageAt: Date;
-	rank: number;
-}
-
-export interface DiscussionSearchItem {
-	id: number;
-	title: string;
-	slug: string;
-	categorySlug: string;
-	categoryTitle: string;
-	authorId: number;
-	authorDisplayName: string;
-	authorUsername: string;
-	createdAt: Date;
-	updatedAt: Date;
-	commentCount: number;
-	matchedField: 'title' | 'body';
 	rank: number;
 }
 
@@ -87,6 +91,23 @@ interface DiscussionFtsHit {
 	id: number;
 	rank: number;
 	matchedField: 'title' | 'body';
+	bestReplyId?: number;
+}
+
+interface DiscussionBodyHit {
+	id: number;
+	replyId: number;
+	rank: number;
+}
+
+interface BestBodyHit {
+	replyId: number;
+	rank: number;
+}
+
+interface ReplyIdHit {
+	id: number;
+	replyId: number;
 }
 
 interface ConversationFtsHit {
@@ -171,7 +192,17 @@ export async function searchActivities(
 	const paged = sorted.slice(offset, offset + limit);
 
 	return {
-		results: paged.map((r) => ({ ...r, rank: idToRank.get(r.id) ?? 0 })),
+		results: paged.map((r) => ({
+			id: r.id,
+			authorId: r.authorId,
+			authorDisplayName: r.authorDisplayName,
+			authorUsername: r.authorUsername,
+			authorAvatarFileId: r.authorAvatarFileId,
+			recipientId: r.recipientId,
+			previewText: lexicalToSearchText(r.contentJson),
+			createdAt: r.createdAt,
+			rank: idToRank.get(r.id) ?? 0
+		})),
 		total,
 		page,
 		totalPages: Math.max(1, Math.ceil(total / limit)),
@@ -256,7 +287,6 @@ export async function searchMessages(
 		};
 	}
 
-	// Hydrate conversation titles.
 	const convRows = await db
 		.select({ id: conversations.id, title: conversations.title })
 		.from(conversations)
@@ -271,7 +301,6 @@ export async function searchMessages(
 		);
 	const titleMap = new Map(convRows.map((c) => [c.id, c.title]));
 
-	// Hydrate a preview from the best-ranking message in each conversation.
 	const previewRows = await db
 		.select({
 			id: messages.id,
@@ -327,7 +356,6 @@ async function messagesLikeHits(
 	userId: number
 ): Promise<ConversationFtsHit[]> {
 	const pattern = `%${term}%`;
-	// LIKE fallback: only search conversations the user is in (cheaper + private).
 	return db.all<ConversationFtsHit>(sql`
 		SELECT m.conversation_id AS conversationId,
 		       0 AS rank,
@@ -370,7 +398,7 @@ export async function searchDiscussions(
 	if (hits.length === 0)
 		return { ...emptyPage<DiscussionSearchItem>(page), usedFallback: fallback };
 
-	// Category read-permission filter. Load categorySlug per hit, drop unreadable.
+	// Category read-permission filter.
 	const readable = await getReadableCategorySlugs(db, groupSlug);
 	const readableSet = readable === null ? null : new Set(readable);
 	const catRows = await db
@@ -386,10 +414,8 @@ export async function searchDiscussions(
 			)
 		);
 	const catMap = new Map(catRows.map((r) => [r.id, r.categorySlug]));
-	const rankMap = new Map(hits.map((h) => [h.id, h]));
-	const allowed = catRows
-		.map((r) => rankMap.get(r.id))
-		.filter((h): h is DiscussionFtsHit => h !== undefined)
+	const allowed = hits
+		.filter((h) => catMap.has(h.id))
 		.filter((h) => readableSet === null || readableSet.has(catMap.get(h.id) ?? ''));
 
 	const sorted = fallback
@@ -418,6 +444,7 @@ export async function searchDiscussions(
 			authorId: discussions.authorId,
 			authorDisplayName: users.displayName,
 			authorUsername: users.username,
+			authorAvatarFileId: users.avatarFileId,
 			createdAt: discussions.createdAt,
 			updatedAt: discussions.updatedAt,
 			commentCount: discussions.commentCount
@@ -434,14 +461,33 @@ export async function searchDiscussions(
 				isNull(discussions.deletedAt)
 			)
 		);
-
 	const rowMap = new Map(rows.map((r) => [r.id, r]));
-	// Re-attach the search ordering/rank (rows come back unordered from IN).
+
+	// Fetch plain-text preview for body hits (the best-matching reply's content).
+	const bestReplyIds = paged
+		.map((h) => h.bestReplyId)
+		.filter((id): id is number => id !== undefined);
+	const bodyPreviewMap = new Map<number, string>();
+	if (bestReplyIds.length > 0) {
+		const replyRows = await db
+			.select({ id: replies.id, contentJson: replies.contentJson })
+			.from(replies)
+			.where(inArray(replies.id, bestReplyIds));
+		for (const r of replyRows) {
+			bodyPreviewMap.set(r.id, lexicalToSearchText(r.contentJson));
+		}
+	}
+
 	const ordered = paged
 		.map((h) => {
 			const r = rowMap.get(h.id);
 			if (!r) return null;
-			return { ...r, matchedField: h.matchedField, rank: h.rank };
+			return {
+				...r,
+				bodyPreview:
+					h.bestReplyId !== undefined ? (bodyPreviewMap.get(h.bestReplyId) ?? null) : null,
+				rank: h.rank
+			};
 		})
 		.filter((r): r is DiscussionSearchItem => r !== null);
 
@@ -455,33 +501,40 @@ export async function searchDiscussions(
 }
 
 async function discussionsFtsHits(db: D1Db, phrase: string): Promise<DiscussionFtsHit[]> {
-	// Title matches + body (reply) matches, each aggregated to discussion id.
 	const [titleRows, bodyRows] = await Promise.all([
 		db.all<FtsHit>(sql`
 			SELECT discussions_fts.rowid AS id, discussions_fts.rank AS rank
 			FROM discussions_fts
 			WHERE discussions_fts MATCH ${phrase}
 		`),
-		db.all<FtsHit>(sql`
-			SELECT r.discussion_id AS id, MIN(replies_fts.rank) AS rank
+		db.all<DiscussionBodyHit>(sql`
+			SELECT r.discussion_id AS id, r.id AS replyId, replies_fts.rank AS rank
 			FROM replies_fts
 			JOIN replies r ON r.id = replies_fts.rowid
 			JOIN discussions d ON d.id = r.discussion_id
 			WHERE replies_fts MATCH ${phrase} AND r.deleted_at IS NULL AND d.deleted_at IS NULL
-			GROUP BY r.discussion_id
 		`)
 	]);
 
-	// Merge: a discussion may match in both; keep the better (lower) rank and a
-	// preferred matchedField (title wins on ties for clarity).
-	const merged = new Map<number, DiscussionFtsHit>();
-	for (const t of titleRows) {
-		merged.set(t.id, { id: t.id, rank: t.rank, matchedField: 'title' });
-	}
+	// Per discussion, keep the best-ranking body hit.
+	const bestBody = new Map<number, BestBodyHit>();
 	for (const b of bodyRows) {
-		const existing = merged.get(b.id);
-		if (!existing || b.rank < existing.rank) {
-			merged.set(b.id, { id: b.id, rank: b.rank, matchedField: 'body' });
+		const existing = bestBody.get(b.id);
+		if (!existing || b.rank < existing.rank)
+			bestBody.set(b.id, { replyId: b.replyId, rank: b.rank });
+	}
+
+	const merged = new Map<number, DiscussionFtsHit>();
+	for (const t of titleRows) merged.set(t.id, { id: t.id, rank: t.rank, matchedField: 'title' });
+	for (const [discId, best] of bestBody) {
+		const existing = merged.get(discId);
+		if (!existing || best.rank < existing.rank) {
+			merged.set(discId, {
+				id: discId,
+				rank: best.rank,
+				matchedField: 'body',
+				bestReplyId: best.replyId
+			});
 		}
 	}
 	return [...merged.values()];
@@ -495,8 +548,8 @@ async function discussionsLikeHits(db: D1Db, term: string): Promise<DiscussionFt
 			WHERE deleted_at IS NULL AND title LIKE ${pattern} ESCAPE '\\'
 			LIMIT ${LIKE_FALLBACK_LIMIT}
 		`),
-		db.all<IdLikeHit>(sql`
-			SELECT DISTINCT r.discussion_id AS id
+		db.all<ReplyIdHit>(sql`
+			SELECT r.discussion_id AS id, r.id AS replyId
 			FROM replies r
 			JOIN discussions d ON d.id = r.discussion_id
 			WHERE r.deleted_at IS NULL AND d.deleted_at IS NULL
@@ -504,15 +557,20 @@ async function discussionsLikeHits(db: D1Db, term: string): Promise<DiscussionFt
 			LIMIT ${LIKE_FALLBACK_LIMIT}
 		`)
 	]);
+	const bestBody = new Map<number, number>();
+	for (const b of bodyRows) {
+		if (!bestBody.has(b.id)) bestBody.set(b.id, b.replyId);
+	}
 	const merged = new Map<number, DiscussionFtsHit>();
 	for (const t of titleRows) merged.set(t.id, { id: t.id, rank: 0, matchedField: 'title' });
-	for (const b of bodyRows) {
-		if (!merged.has(b.id)) merged.set(b.id, { id: b.id, rank: 0, matchedField: 'body' });
+	for (const [discId, replyId] of bestBody) {
+		if (!merged.has(discId))
+			merged.set(discId, { id: discId, rank: 0, matchedField: 'body', bestReplyId: replyId });
 	}
 	return [...merged.values()];
 }
 
-function truncate(text: string, max = 120): string {
+function truncate(text: string, max = 160): string {
 	if (text.length <= max) return text;
 	return `${text.slice(0, max).trimEnd()}…`;
 }
