@@ -5,6 +5,7 @@ import { eq, and, isNull, desc, sql, or, inArray } from 'drizzle-orm';
 import { generateSlug } from '$lib/utils/slug';
 import { SYSTEM_USER_ID } from '$lib/server/constants';
 import { resolveMentions } from '$lib/server/utils/mentions';
+import { getInviter } from '$lib/server/db/dao/invitations';
 import type { RecipientInfo } from '$lib/types/api';
 
 export const load: PageServerLoad = async (event) => {
@@ -56,7 +57,10 @@ export const load: PageServerLoad = async (event) => {
 		targetUser.viewCount += 1;
 	}
 
-	// 3. Fetch profile activities (directed to this user OR authored by this user, no parent)
+	// 3. Resolve who invited this user (null if joined without an invitation)
+	const invitedBy = await getInviter(db, userId);
+
+	// 4. Fetch profile activities (directed to this user OR authored by this user, no parent)
 	const profileActivities = await db
 		.select({
 			id: activities.id,
@@ -80,7 +84,7 @@ export const load: PageServerLoad = async (event) => {
 		.orderBy(desc(activities.createdAt))
 		.limit(20);
 
-	// 4. Batch-fetch recipient display names for directed activities
+	// 5. Batch-fetch recipient display names for directed activities
 	const recipientIds = profileActivities
 		.map((a) => a.recipientId)
 		.filter((id): id is number => id !== null && id !== SYSTEM_USER_ID);
@@ -98,7 +102,7 @@ export const load: PageServerLoad = async (event) => {
 		}
 	}
 
-	// 5. Batch-fetch comment counts per activity
+	// 6. Batch-fetch comment counts per activity
 	const activityIds = profileActivities.map((a) => a.id);
 	const commentCountMap = new Map<number, number>();
 
@@ -119,10 +123,10 @@ export const load: PageServerLoad = async (event) => {
 		}
 	}
 
-	// 6. Determine if current user is the owner
+	// 7. Determine if current user is the owner
 	const isOwner = currentUser ? currentUser.id === userId : false;
 
-	// 7. Fetch existing draft for directed activity composer
+	// 8. Fetch existing draft for directed activity composer
 	let activityDraft: string | null = null;
 	if (currentUser) {
 		const draftRecords = await db
@@ -142,7 +146,7 @@ export const load: PageServerLoad = async (event) => {
 		}
 	}
 
-	// 8. Resolve @mentions across profile activity content for chip rendering
+	// 9. Resolve @mentions across profile activity content for chip rendering
 	const mentionedUsers = await resolveMentions(
 		profileActivities.map((a) => a.contentJson),
 		db
@@ -150,6 +154,7 @@ export const load: PageServerLoad = async (event) => {
 
 	return {
 		targetUser,
+		invitedBy,
 		activities: profileActivities.map((a) => ({
 			...a,
 			recipientDisplayName: a.recipientId

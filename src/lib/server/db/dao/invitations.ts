@@ -1,7 +1,7 @@
 import { invitations, users } from '../schema';
 import { eq, and, gte, lt, inArray, count, desc } from 'drizzle-orm';
 import type { D1Db } from '../index';
-import type { InvitationItem } from '$lib/types/api';
+import type { InvitationItem, UserInfoSummary } from '$lib/types/api';
 import type { DateBoundary } from '../welcome';
 
 /**
@@ -54,6 +54,27 @@ export async function getInvitations(db: D1Db, userId: number): Promise<Invitati
 			status
 		};
 	});
+}
+
+/**
+ * Find the user who invited `userId` — the creator of the invitation code that
+ * `userId` redeemed at sign-up. Returns null for users who joined without an
+ * invitation (e.g. the seed admin) or whose inviter's account was deleted.
+ */
+export async function getInviter(db: D1Db, userId: number): Promise<UserInfoSummary | null> {
+	const rows = await db
+		.select({
+			id: users.id,
+			username: users.username,
+			displayName: users.displayName,
+			avatarFileId: users.avatarFileId
+		})
+		.from(invitations)
+		.innerJoin(users, eq(invitations.creatorId, users.id))
+		.where(eq(invitations.usedById, userId))
+		.limit(1);
+
+	return rows.length > 0 ? rows[0] : null;
 }
 
 /**

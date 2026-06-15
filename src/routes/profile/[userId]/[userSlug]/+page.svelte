@@ -8,7 +8,13 @@
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
-	import { mdiAccountGroup, mdiCalendarClock, mdiClockOutline, mdiEyeOutline } from '@mdi/js';
+	import {
+		mdiAccountGroup,
+		mdiCalendarClock,
+		mdiClockOutline,
+		mdiEyeOutline,
+		mdiAccountPlusOutline
+	} from '@mdi/js';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -21,6 +27,7 @@
 	const profileT = $derived(t.profile);
 	const user = $derived(data.user);
 	const targetUser = $derived(data.targetUser);
+	const invitedBy = $derived(data.invitedBy);
 	const isOwner = $derived(data.isOwner);
 	const activityList = $derived(data.activities);
 
@@ -112,6 +119,16 @@
 					<span class="font-medium text-base-content">{profileT.views}</span>
 					<span>{targetUser.viewCount}</span>
 				</div>
+				{#if invitedBy}
+					<div class="flex items-center gap-1.5">
+						<Icon path={mdiAccountPlusOutline} size={16} class="text-base-content/50" />
+						<span class="font-medium text-base-content">{profileT.invitedBy}</span>
+						<a
+							href="/profile/{invitedBy.id}/{generateSlug(invitedBy.username)}"
+							class="hover:underline">{invitedBy.displayName}</a
+						>
+					</div>
+				{/if}
 			</div>
 		</div>
 
