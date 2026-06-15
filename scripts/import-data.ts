@@ -41,6 +41,13 @@ interface DiscussionMeta {
 	createdAt: Date;
 }
 
+// Fields §4.5 corrects on a discussion row from its crawled page-1 HTML.
+interface DiscussionCorrection {
+	createdAt: Date;
+	slug?: string;
+	title?: string;
+}
+
 interface ConflictRecord {
 	type: string;
 	[key: string]: unknown;
@@ -1645,6 +1652,7 @@ async function main() {
 			// Collect every comment across all pages, dedup by id (a page can list
 			// the same comment id more than once). First occurrence wins.
 			const byId = new Map<string, ParsedDiscussionComment>();
+			let page1Html: string | null = null;
 			for (const pf of pageFiles) {
 				let pageHtml: string;
 				try {
@@ -1660,6 +1668,13 @@ async function main() {
 				}
 				for (const c of parseDiscussionComments(pageHtml, discussionId)) {
 					if (!byId.has(c.id)) byId.set(c.id, c);
+				}
+				// Capture the canonical slug + title from page 1. Some discussions
+				// entered the DB from a profile discussions-page feed (which carries
+				// only a title, no slug) and got a placeholder slug "discussion-{id}";
+				// this lets us correct both with the page's real values.
+				if (pf === 'page-000001.html') {
+					page1Html = pageHtml;
 				}
 			}
 
@@ -1693,11 +1708,34 @@ async function main() {
 						createdAt: opComment.createdAt,
 						updatedAt: opComment.createdAt
 					});
+					// Correct the discussion's slug/title/createdAt from page 1.
+					// The real slug comes from the page's pager/bookmark URLs
+					// (/discussion/{id}/{slug}/pN); the title from the <h1>.
+					const discUpdate: DiscussionCorrection = {
+						createdAt: opComment.createdAt
+					};
+					if (page1Html) {
+						const slugMatch = page1Html.match(
+							new RegExp(`/discussion/${discussionId}/([^"?#\\s/]+)(?:/p\\d+)?["?#]`)
+						);
+						if (slugMatch) {
+							const realSlug = decodeHtmlEntities(slugMatch[1]);
+							if (realSlug && realSlug !== 'bookmark' && realSlug !== 'comment') {
+								discUpdate.slug = realSlug;
+							}
+						}
+						const titleMatch = page1Html.match(/<h1>([\s\S]+?)<\/h1>/);
+						if (titleMatch) {
+							const realTitle = decodeHtmlEntities(titleMatch[1].replace(/<[^>]+>/g, '')).trim();
+							if (realTitle) discUpdate.title = realTitle;
+						}
+					}
 					await db
 						.update(schema.discussions)
-						.set({ createdAt: opComment.createdAt })
+						.set(discUpdate)
 						.where(eq(schema.discussions.id, discussionId));
 					meta.createdAt = opComment.createdAt;
+					if (discUpdate.title) meta.title = discUpdate.title;
 				} else {
 					conflicts.push({ type: 'op_body_empty', discussionId });
 				}

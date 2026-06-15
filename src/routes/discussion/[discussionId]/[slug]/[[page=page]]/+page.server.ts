@@ -18,7 +18,6 @@ import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 import { indexReply, reindexReply, unindexReply, unindexDiscussion } from '$lib/server/search/fts';
 
 export const load: PageServerLoad = async (event) => {
-	const slug = event.params.slug;
 	const discussionId = Number(event.params.discussionId);
 	if (!discussionId) {
 		error(404, event.locals.t.discussion.notFound);
@@ -58,21 +57,10 @@ export const load: PageServerLoad = async (event) => {
 	}
 	const discussion = discussionRecords[0];
 
-	// Canonical slug redirect if slug in URL is mismatch
-	let decodedDbSlug = discussion.slug;
-	try {
-		decodedDbSlug = decodeURIComponent(discussion.slug);
-	} catch {
-		// Ignore decode error and keep original slug
-	}
-
-	if (decodedDbSlug !== slug) {
-		const pageParam = event.params.page;
-		redirect(
-			302,
-			`/discussion/${discussionId}/${discussion.slug}${pageParam ? '/' + pageParam : ''}`
-		);
-	}
+	// The URL slug is decorative — discussionId alone identifies the post, so we
+	// neither validate nor canonicalize it. This matches the profile [userSlug]
+	// routes: renamed posts and stale links keep working without a redirect hop.
+	// Internal links always render with the current discussion.slug from the DB.
 
 	// 2. Check read permissions for this category (guest-safe via resolvePermissions)
 	const perms = await resolvePermissions(db, discussion.categorySlug, user);
