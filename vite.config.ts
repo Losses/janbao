@@ -1,4 +1,5 @@
-import adapter from '@sveltejs/adapter-auto';
+import adapterAuto from '@sveltejs/adapter-auto';
+import adapterNode from '@sveltejs/adapter-node';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
@@ -13,11 +14,9 @@ export default defineConfig({
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
 
-			// adapter-auto detects Cloudflare Pages via CF_PAGES env var and uses
-			// @sveltejs/adapter-cloudflare when deployed. Both adapters are installed
-			// to ensure the Cloudflare adapter is available at build time.
-			// See https://svelte.dev/docs/kit/adapter-auto for supported environments.
-			adapter: adapter(),
+			// adapter-auto keeps Cloudflare deployment behavior unchanged. Docker builds set
+			// ADAPTER=node to emit a standalone server for the Bun runtime image.
+			adapter: process.env.ADAPTER === 'node' ? adapterNode() : adapterAuto(),
 
 			typescript: {
 				config: (config) => ({

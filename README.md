@@ -48,6 +48,38 @@ bun run db:generate:local   # generate a local drizzle migration from schema cha
 
 ---
 
+## Self-hosting with Docker
+
+The Docker image runs the SvelteKit app as an adapter-node server on Bun and stores
+SQLite data outside the image in a mounted volume.
+
+```sh
+cp .env.docker.example .env.docker
+# Fill JWT_SECRET before first boot. For example:
+# openssl rand -hex 32
+
+docker compose up --build
+```
+
+The compose file exposes the app at <http://localhost:3000> and mounts `./data`
+to `/data` in the container. By default the database file is
+`./data/janbao.db`, controlled by `LOCAL_DB_PATH=/data/janbao.db`.
+
+To reuse an existing local database, stop the app and copy it into the mounted
+volume:
+
+```sh
+mkdir -p data
+cp .local.db data/janbao.db
+docker compose up --build
+```
+
+`getLocalDb()` applies pending migrations from `drizzle/local-migrations/` on
+startup. Run `scripts/import-data.ts` on the host when importing crawled data;
+the Docker image only serves the app and does not include `cwebp`/`gif2webp`.
+
+---
+
 ## Scripts
 
 Two standalone scripts live in `scripts/`. Run them with `bun scripts/<name>.ts`.

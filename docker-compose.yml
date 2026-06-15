@@ -1,0 +1,15 @@
+services:
+  janbao:
+    build: .
+    image: janbao:local
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      LOCAL_DB_PATH: /data/janbao.db
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./data:/data

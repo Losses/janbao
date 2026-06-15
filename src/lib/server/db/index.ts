@@ -40,7 +40,8 @@ export async function getLocalDb(): Promise<D1Db> {
 		const { drizzle: drizzleLibsql } = await import('drizzle-orm/libsql');
 		const { migrate } = await import('drizzle-orm/libsql/migrator');
 
-		const client = createClient({ url: 'file:.local.db' });
+		const dbPath = process.env.LOCAL_DB_PATH ?? '.local.db';
+		const client = createClient({ url: `file:${dbPath}` });
 		// WAL allows concurrent readers (dev server) alongside a writer (import scripts),
 		// so running import-data without stopping `bun run dev` no longer 500s on lock
 		// errors. busy_timeout makes a contended writer wait briefly instead of failing.
