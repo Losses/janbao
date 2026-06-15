@@ -22,6 +22,7 @@ export const users = sqliteTable('users', {
 	email: text('email').notNull().unique(),
 	passwordHash: text('password_hash').notNull(),
 	displayName: text('display_name').notNull(),
+	bio: text('bio'),
 	avatarFileId: text('avatar_file_id'),
 	avatarContentType: text('avatar_content_type'),
 	groupSlug: text('group_slug')

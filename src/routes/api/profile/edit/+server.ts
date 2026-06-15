@@ -15,7 +15,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	}
 
 	const body: ProfileEditBody = await request.json();
-	const { displayName, email, showEmail, languagePreference, username, avatarFileId } = body;
+	const { displayName, email, showEmail, languagePreference, username, avatarFileId, bio } = body;
 
 	const updates: Partial<ProfileEditBody> = {};
 
@@ -25,6 +25,14 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			return jsonError(t, 'profile.displayNameEmpty', 400);
 		}
 		updates.displayName = trimmed;
+	}
+
+	if (bio !== undefined) {
+		const trimmed = bio.trim();
+		if (trimmed.length > 100) {
+			return jsonError(t, 'profile.bioTooLong', 400);
+		}
+		updates.bio = trimmed;
 	}
 
 	if (email !== undefined) {

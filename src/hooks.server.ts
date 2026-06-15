@@ -46,6 +46,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 					username: userRecord.username,
 					email: userRecord.email,
 					displayName: userRecord.displayName,
+					bio: userRecord.bio,
 					avatarFileId: userRecord.avatarFileId,
 					groupSlug: userRecord.groupSlug,
 					signupTime: userRecord.signupTime,

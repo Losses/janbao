@@ -36,6 +36,13 @@
       "when": 1781555009029,
       "tag": "0004_classy_enchantress",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1781557783346,
+      "tag": "0005_long_snowbird",
+      "breakpoints": true
     }
   ]
 }

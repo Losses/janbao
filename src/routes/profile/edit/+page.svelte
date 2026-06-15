@@ -19,6 +19,8 @@
 	// svelte-ignore state_referenced_locally
 	let displayName = $state(data.user.displayName);
 	// svelte-ignore state_referenced_locally
+	let bio = $state(data.user.bio ?? '');
+	// svelte-ignore state_referenced_locally
 	let email = $state(data.user.email);
 	// svelte-ignore state_referenced_locally
 	let showEmail = $state(data.user.showEmail);
@@ -42,7 +44,8 @@
 				displayName,
 				email,
 				showEmail,
-				languagePreference
+				languagePreference,
+				bio
 			};
 
 			if (allowSlugChange && isAdmin && username !== data.user.username) {
@@ -138,6 +141,21 @@
 					bind:value={displayName}
 					required
 				/>
+			</div>
+
+			<!-- Bio -->
+			<div class="form-control">
+				<label class="label" for="bio">
+					<span class="label-text font-medium">{t.auth.bio}</span>
+					<span class="label-text-alt text-base-content/50">{bio.length}/100</span>
+				</label>
+				<textarea
+					id="bio"
+					class="textarea textarea-bordered"
+					rows="2"
+					maxlength="100"
+					bind:value={bio}
+				></textarea>
 			</div>
 
 			<!-- Email -->

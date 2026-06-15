@@ -22,6 +22,7 @@ export const load: PageServerLoad = async (event) => {
 			id: users.id,
 			username: users.username,
 			displayName: users.displayName,
+			bio: users.bio,
 			avatarFileId: users.avatarFileId,
 			signupTime: users.signupTime,
 			lastActiveTime: users.lastActiveTime,
@@ -101,9 +102,7 @@ export const load: PageServerLoad = async (event) => {
 		.limit(20);
 
 	// 4b. Batch-fetch members of any isJoined activities on this profile feed.
-	const joinedActivityIds = profileActivities
-		.filter((a) => a.isJoined)
-		.map((a) => a.id);
+	const joinedActivityIds = profileActivities.filter((a) => a.isJoined).map((a) => a.id);
 	const joinedMembersMap = new Map<number, JoinedMember[]>();
 	if (joinedActivityIds.length > 0) {
 		const joinRows = await db
@@ -202,7 +201,7 @@ export const load: PageServerLoad = async (event) => {
 				: null,
 			recipientUsername: a.recipientId ? recipientMap.get(a.recipientId)?.username || null : null,
 			commentCount: commentCountMap.get(a.id) || 0,
-			joinedMembers: a.isJoined ? joinedMembersMap.get(a.id) ?? [] : []
+			joinedMembers: a.isJoined ? (joinedMembersMap.get(a.id) ?? []) : []
 		})),
 		isOwner,
 		activityDraft,

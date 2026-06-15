@@ -105,6 +105,7 @@ export interface ProfileEditBody {
 	languagePreference?: string;
 	username?: string;
 	avatarFileId?: string;
+	bio?: string;
 }
 
 export interface ProfilePasswordBody {

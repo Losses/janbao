@@ -17,6 +17,7 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
 			username: user.username,
 			email: user.email,
 			displayName: user.displayName,
+			bio: user.bio,
 			avatarFileId: user.avatarFileId,
 			showEmail: user.showEmail,
 			languagePreference: user.languagePreference,

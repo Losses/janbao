@@ -27,6 +27,9 @@ import { appendJoinedMember } from '../src/lib/server/db/joined-activity';
 interface ParsedProfile {
 	username: string | null;
 	displayName: string | null;
+	// One-line personal blurb from <div id="Status" itemprop="description">.
+	// Truncated to the app's 100-char bio cap; null when the profile has none.
+	bio: string | null;
 	email: string | null;
 	signupTime: Date | null;
 	lastActiveTime: Date | null;
@@ -659,6 +662,14 @@ function parseProfileHtml(html: string): ParsedProfile {
 		? decodeHtmlEntities(h1Match[1].replace(/<[^>]+>/g, '')).trim()
 		: null;
 
+	// Bio: <div id="Status" itemprop="description"><span>…</span></div>.
+	// Capped at 100 chars to match the edit API invariant.
+	const statusMatch = html.match(/<div id="Status"[^>]*>([\s\S]*?)<\/div>/);
+	const statusText = statusMatch
+		? decodeHtmlEntities(statusMatch[1].replace(/<[^>]+>/g, '')).trim()
+		: '';
+	const bio = statusText ? statusText.slice(0, 100) : null;
+
 	const email = parseEmail(html);
 
 	const joinedMatch =
@@ -684,6 +695,7 @@ function parseProfileHtml(html: string): ParsedProfile {
 	return {
 		username,
 		displayName,
+		bio,
 		email,
 		signupTime,
 		lastActiveTime,
@@ -1457,6 +1469,7 @@ async function main() {
 							.set({
 								username: profile.username || dbUser.username,
 								displayName: profile.displayName || profile.username || dbUser.displayName,
+								bio: profile.bio ?? dbUser.bio,
 								email: emailToSet,
 								signupTime: profile.signupTime || dbUser.signupTime,
 								lastActiveTime: profile.lastActiveTime || dbUser.lastActiveTime,
@@ -1487,6 +1500,7 @@ async function main() {
 							id: userId,
 							username: profile.username || `user_${userId}`,
 							displayName: profile.displayName || profile.username || `User ${userId}`,
+							bio: profile.bio,
 							email: emailToSet,
 							passwordHash: 'NO_PASSWORD',
 							groupSlug: 'member',

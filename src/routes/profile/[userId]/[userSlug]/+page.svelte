@@ -90,6 +90,9 @@
 				/>
 				<div>
 					<h1 class="text-2xl font-bold text-base-content">{targetUser.displayName}</h1>
+					{#if targetUser.bio}
+						<p class="text-base-content/70 mt-1 whitespace-pre-line">{targetUser.bio}</p>
+					{/if}
 				</div>
 			</div>
 

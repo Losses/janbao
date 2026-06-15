@@ -31,6 +31,7 @@ interface UserData {
 	username: string;
 	email: string;
 	displayName: string;
+	bio: string | null;
 	avatarFileId: string | null;
 	groupSlug: string;
 	signupTime: Date;
