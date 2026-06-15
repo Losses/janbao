@@ -53,6 +53,26 @@ bun run db:generate:local   # generate a local drizzle migration from schema cha
 The Docker image runs the SvelteKit app as an adapter-node server on Bun and stores
 SQLite data outside the image in a mounted volume.
 
+### Build locally
+
+```sh
+docker build -t janbao:local .
+```
+
+Run the image directly:
+
+```sh
+mkdir -p data
+docker run --rm \
+  --env-file .env.docker \
+  -e LOCAL_DB_PATH=/data/janbao.db \
+  -p 3000:3000 \
+  -v "$PWD/data:/data" \
+  janbao:local
+```
+
+Or use compose, which builds the image and mounts `./data` automatically:
+
 ```sh
 cp .env.docker.example .env.docker
 # Fill JWT_SECRET before first boot. For example:
@@ -61,9 +81,9 @@ cp .env.docker.example .env.docker
 docker compose up --build
 ```
 
-The compose file exposes the app at <http://localhost:3000> and mounts `./data`
-to `/data` in the container. By default the database file is
-`./data/janbao.db`, controlled by `LOCAL_DB_PATH=/data/janbao.db`.
+The compose file exposes the app at <http://localhost:3000>. By default the
+database file is `./data/janbao.db`, controlled by
+`LOCAL_DB_PATH=/data/janbao.db`.
 
 To reuse an existing local database, stop the app and copy it into the mounted
 volume:
@@ -77,6 +97,32 @@ docker compose up --build
 `getLocalDb()` applies pending migrations from `drizzle/local-migrations/` on
 startup. Run `scripts/import-data.ts` on the host when importing crawled data;
 the Docker image only serves the app and does not include `cwebp`/`gif2webp`.
+
+### Published images
+
+GitHub Actions builds and publishes Docker images to GitHub Container Registry
+(GHCR):
+
+```sh
+docker pull ghcr.io/<owner>/<repo>:latest
+```
+
+The workflow publishes these tags:
+
+- `latest` on pushes to the default branch
+- the branch name on branch pushes, e.g. `master`
+- the git tag on version tags, e.g. `v1.0.0`
+- `sha-<commit>` for every published build
+
+To publish a versioned Docker image, create and push a version tag:
+
+```sh
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The workflow uses `GITHUB_TOKEN` with `packages: write`, so no extra registry
+secret is required for GHCR in the same repository.
 
 ---
 
