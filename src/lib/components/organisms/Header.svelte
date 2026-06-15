@@ -40,14 +40,6 @@
 			<!-- Desktop Navigation (hidden on mobile) -->
 			<div class="hidden md:flex items-end gap-4">
 				<a
-					href="/"
-					class="text-sm font-medium text-neutral-content/70 hover:text-neutral-content hover:underline"
-					class:text-accent={isNavActive('/')}
-					aria-current={isNavActive('/') ? 'page' : undefined}
-				>
-					{tNav['home']}
-				</a>
-				<a
 					href="/activity"
 					class="text-sm font-medium text-neutral-content/70 hover:text-neutral-content hover:underline"
 					class:text-accent={isNavActive('/activity')}
