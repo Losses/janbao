@@ -88,6 +88,14 @@ export interface ActivityCommentItem {
 	authorAvatarFileId: string | null;
 }
 
+// A member of an isJoined activity (a user who registered that day). Names render
+// as clickable profile links in the joined render pipeline.
+export interface JoinedMember {
+	userId: number;
+	displayName: string;
+	username: string;
+}
+
 // --- Profile Edit API Types ---
 
 export interface ProfileEditBody {

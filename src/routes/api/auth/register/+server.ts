@@ -1,5 +1,6 @@
 import { users, invitations, notificationPreferences } from '$lib/server/db/schema';
 import type { DbTransaction } from '$lib/server/db';
+import { appendJoinedMember } from '$lib/server/db/joined-activity';
 import { hashPassword, signJwt, createSessionToken } from '$lib/server/auth';
 import { getJwtSecret, getCookieSecure } from '$lib/server/constants';
 import { jsonError } from '$lib/server/errors';
@@ -102,6 +103,10 @@ export const POST: RequestHandler = async (event) => {
 					.update(invitations)
 					.set({ usedById: inserted[0].id })
 					.where(eq(invitations.code, invitationCode));
+
+				// Append the new member into today's "who joined" activity (created
+				// lazily per calendar day). Replaces the old next-day welcome-post cron.
+				await appendJoinedMember(tx, inserted[0].id, new Date(), event.platform?.env);
 
 				return inserted[0].id;
 			});

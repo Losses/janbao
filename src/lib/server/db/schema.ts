@@ -290,6 +290,12 @@ export const activities = sqliteTable(
 		// predate the column or were created by the app; the profile query
 		// COALESCEs to createdAt, so null is fine.
 		updatedAt: integer('updated_at', { mode: 'timestamp' }),
+		// A system-generated "who joined" rollup. The named members live in
+		// activity_joins; this flag routes the row to the joined render pipeline
+		// (i18n "X and Y joined." + excerpt) instead of treating contentJson as
+		// the body. Exactly one isJoined row per calendar day (FORUM_TIMEZONE);
+		// new members append into it at write time, so feeds/pagination stay simple.
+		isJoined: integer('is_joined', { mode: 'boolean' }).notNull().default(false),
 		deletedAt: integer('deleted_at', { mode: 'timestamp' })
 	},
 	(table) => ({
@@ -297,10 +303,31 @@ export const activities = sqliteTable(
 		parentIdx: index('activities_parent_idx').on(table.parentActivityId),
 		recipientIdx: index('activities_recipient_idx').on(table.recipientId),
 		createdIdx: index('activities_created_idx').on(table.createdAt),
+		joinedIdx: index('activities_joined_idx').on(table.isJoined, table.createdAt),
 		parentCreatedIdx: index('activities_parent_created_idx').on(
 			table.parentActivityId,
 			table.createdAt
 		)
+	})
+);
+
+// Members of an isJoined activity (the users who registered that day). Kept in a
+// side table so a join activity's membership grows by write-time append without
+// rewriting the contentJson blob.
+export const activityJoins = sqliteTable(
+	'activity_joins',
+	{
+		activityId: integer('activity_id')
+			.notNull()
+			.references(() => activities.id, { onDelete: 'cascade' }),
+		userId: integer('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		joinedAt: integer('joined_at', { mode: 'timestamp' }).notNull()
+	},
+	(table) => ({
+		pk: primaryKey({ columns: [table.activityId, table.userId] }),
+		userIdx: index('activity_joins_user_idx').on(table.userId)
 	})
 );
 

@@ -4,7 +4,7 @@
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import DateComponent from '$lib/components/atoms/Date.svelte';
-	import ActivityRow from '$lib/components/organisms/ActivityRow.svelte';
+	import ActivityList from '$lib/components/organisms/ActivityList.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
@@ -170,25 +170,14 @@
 			</div>
 		{:else}
 			<div class="overflow-hidden">
-				{#each activityList as activity (activity.id)}
-					<ActivityRow
-						id={activity.id}
-						authorId={activity.authorId}
-						authorDisplayName={activity.authorDisplayName}
-						authorUsername={activity.authorUsername}
-						authorAvatarFileId={activity.authorAvatarFileId}
-						recipientId={activity.recipientId}
-						contentJson={activity.contentJson}
-						createdAt={activity.createdAt}
-						commentCount={activity.commentCount}
-						recipientDisplayName={activity.recipientDisplayName}
-						recipientUsername={activity.recipientUsername}
-						currentUserId={user?.id}
-						isAdmin={user?.groupSlug === 'admin'}
-						{t}
-						mentionedUsers={data.mentionedUsers}
-					/>
-				{/each}
+				<ActivityList
+					items={activityList}
+					locale={data.locale}
+					currentUserId={user?.id}
+					isAdmin={user?.groupSlug === 'admin'}
+					mentionedUsers={data.mentionedUsers}
+					{t}
+				/>
 			</div>
 		{/if}
 	</div>

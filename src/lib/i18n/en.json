@@ -189,7 +189,9 @@
 		"recipientNotFound": "Recipient not found",
 		"activityIdRequired": "Activity ID is required",
 		"activityNotFound": "Activity not found",
-		"cannotNestComments": "Cannot nest comments beyond one level"
+		"cannotNestComments": "Cannot nest comments beyond one level",
+		"joined": "{users} joined",
+		"welcome": "Welcome!"
 	},
 	"profile": {
 		"activities": "Activities",

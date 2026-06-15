@@ -1,20 +1,17 @@
 import type { PageServerLoad } from './$types';
-import { activities, users, drafts } from '$lib/server/db/schema';
+import { activities, users, drafts, activityJoins } from '$lib/server/db/schema';
 import { and, isNull, desc, eq, sql, inArray } from 'drizzle-orm';
-import { checkAndCreateWelcomePost } from '$lib/server/db/welcome';
 import { getActivitiesLimit, SYSTEM_USER_ID } from '$lib/server/constants';
 import { resolveMentions } from '$lib/server/utils/mentions';
-import type { RecipientInfo } from '$lib/types/api';
+import type { JoinedMember, RecipientInfo } from '$lib/types/api';
 
 export const load: PageServerLoad = async (event) => {
 	const db = event.locals.db;
 	const platformEnv = event.platform?.env;
 	const user = event.locals.user;
+	const locale = event.locals.lang;
 
-	// 1. Daily Welcome Post Check (Runs on activity square access)
-	await checkAndCreateWelcomePost(db, platformEnv);
-
-	// 2. Parse pagination
+	// 1. Parse pagination
 	const pageParam = event.url.searchParams.get('page');
 	let page = pageParam ? parseInt(pageParam, 10) : 1;
 	if (isNaN(page) || page < 1) {
@@ -24,7 +21,7 @@ export const load: PageServerLoad = async (event) => {
 	const limit = getActivitiesLimit(platformEnv);
 	const offset = (page - 1) * limit;
 
-	// 3. Fetch root activities (no parentActivityId), excluding deleted, ordered by createdAt DESC
+	// 2. Fetch root activities (no parentActivityId), excluding deleted, ordered by createdAt DESC
 	const activityList = await db
 		.select({
 			id: activities.id,
@@ -32,6 +29,7 @@ export const load: PageServerLoad = async (event) => {
 			recipientId: activities.recipientId,
 			contentJson: activities.contentJson,
 			createdAt: activities.createdAt,
+			isJoined: activities.isJoined,
 			authorDisplayName: users.displayName,
 			authorUsername: users.username,
 			authorAvatarFileId: users.avatarFileId
@@ -42,6 +40,28 @@ export const load: PageServerLoad = async (event) => {
 		.orderBy(desc(activities.createdAt))
 		.limit(limit)
 		.offset(offset);
+
+	// 2b. Batch-fetch members of any isJoined activities on this page.
+	const joinedActivityIds = activityList.filter((a) => a.isJoined).map((a) => a.id);
+	const joinedMembersMap = new Map<number, JoinedMember[]>();
+	if (joinedActivityIds.length > 0) {
+		const joinRows = await db
+			.select({
+				activityId: activityJoins.activityId,
+				userId: activityJoins.userId,
+				displayName: users.displayName,
+				username: users.username
+			})
+			.from(activityJoins)
+			.innerJoin(users, eq(activityJoins.userId, users.id))
+			.where(inArray(activityJoins.activityId, joinedActivityIds))
+			.orderBy(activityJoins.joinedAt);
+		for (const r of joinRows) {
+			const arr = joinedMembersMap.get(r.activityId) ?? [];
+			arr.push({ userId: r.userId, displayName: r.displayName, username: r.username });
+			joinedMembersMap.set(r.activityId, arr);
+		}
+	}
 
 	// 4. Fetch recipient display names for directed activities
 	const recipientIds = activityList
@@ -124,12 +144,14 @@ export const load: PageServerLoad = async (event) => {
 				? recipientMap.get(a.recipientId)?.displayName || null
 				: null,
 			recipientUsername: a.recipientId ? recipientMap.get(a.recipientId)?.username || null : null,
-			commentCount: commentCountMap.get(a.id) || 0
+			commentCount: commentCountMap.get(a.id) || 0,
+			joinedMembers: a.isJoined ? (joinedMembersMap.get(a.id) ?? []) : []
 		})),
 		page,
 		totalPages,
 		totalCount,
 		activityDraft,
-		mentionedUsers
+		mentionedUsers,
+		locale
 	};
 };

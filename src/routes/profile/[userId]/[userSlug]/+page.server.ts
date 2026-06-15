@@ -1,12 +1,12 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { users, activities, drafts } from '$lib/server/db/schema';
+import { users, activities, drafts, activityJoins } from '$lib/server/db/schema';
 import { eq, and, isNull, desc, sql, or, inArray } from 'drizzle-orm';
 import { generateSlug } from '$lib/utils/slug';
 import { SYSTEM_USER_ID } from '$lib/server/constants';
 import { resolveMentions } from '$lib/server/utils/mentions';
 import { getInviter } from '$lib/server/db/dao/invitations';
-import type { RecipientInfo } from '$lib/types/api';
+import type { JoinedMember, RecipientInfo } from '$lib/types/api';
 
 export const load: PageServerLoad = async (event) => {
 	const userId = Number(event.params.userId);
@@ -60,7 +60,8 @@ export const load: PageServerLoad = async (event) => {
 	// 3. Resolve who invited this user (null if joined without an invitation)
 	const invitedBy = await getInviter(db, userId);
 
-	// 4. Fetch profile activities (directed to this user OR authored by this user, no parent)
+	// 4. Fetch profile activities (directed to this user OR authored by this user,
+	//    OR isJoined activities this user is a member of), no parent.
 	const profileActivities = await db
 		.select({
 			id: activities.id,
@@ -68,6 +69,7 @@ export const load: PageServerLoad = async (event) => {
 			recipientId: activities.recipientId,
 			contentJson: activities.contentJson,
 			createdAt: activities.createdAt,
+			isJoined: activities.isJoined,
 			authorDisplayName: users.displayName,
 			authorUsername: users.username,
 			authorAvatarFileId: users.avatarFileId
@@ -78,7 +80,13 @@ export const load: PageServerLoad = async (event) => {
 			and(
 				isNull(activities.deletedAt),
 				isNull(activities.parentActivityId),
-				or(eq(activities.authorId, userId), eq(activities.recipientId, userId))
+				or(
+					eq(activities.authorId, userId),
+					eq(activities.recipientId, userId),
+					// isJoined activities have author=SYSTEM_USER_ID; surface the ones
+					// where this profile's user is a member.
+					sql`(${activities.isJoined} = 1 AND EXISTS (SELECT 1 FROM activity_joins aj WHERE aj.activity_id = ${activities.id} AND aj.user_id = ${userId}))`
+				)
 			)
 		)
 		.orderBy(
@@ -91,6 +99,30 @@ export const load: PageServerLoad = async (event) => {
 			desc(activities.id)
 		)
 		.limit(20);
+
+	// 4b. Batch-fetch members of any isJoined activities on this profile feed.
+	const joinedActivityIds = profileActivities
+		.filter((a) => a.isJoined)
+		.map((a) => a.id);
+	const joinedMembersMap = new Map<number, JoinedMember[]>();
+	if (joinedActivityIds.length > 0) {
+		const joinRows = await db
+			.select({
+				activityId: activityJoins.activityId,
+				userId: activityJoins.userId,
+				displayName: users.displayName,
+				username: users.username
+			})
+			.from(activityJoins)
+			.innerJoin(users, eq(activityJoins.userId, users.id))
+			.where(inArray(activityJoins.activityId, joinedActivityIds))
+			.orderBy(activityJoins.joinedAt);
+		for (const r of joinRows) {
+			const arr = joinedMembersMap.get(r.activityId) ?? [];
+			arr.push({ userId: r.userId, displayName: r.displayName, username: r.username });
+			joinedMembersMap.set(r.activityId, arr);
+		}
+	}
 
 	// 5. Batch-fetch recipient display names for directed activities
 	const recipientIds = profileActivities
@@ -169,10 +201,12 @@ export const load: PageServerLoad = async (event) => {
 				? recipientMap.get(a.recipientId)?.displayName || null
 				: null,
 			recipientUsername: a.recipientId ? recipientMap.get(a.recipientId)?.username || null : null,
-			commentCount: commentCountMap.get(a.id) || 0
+			commentCount: commentCountMap.get(a.id) || 0,
+			joinedMembers: a.isJoined ? joinedMembersMap.get(a.id) ?? [] : []
 		})),
 		isOwner,
 		activityDraft,
-		mentionedUsers
+		mentionedUsers,
+		locale: event.locals.lang
 	};
 };

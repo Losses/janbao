@@ -1,6 +1,5 @@
 import type { PageServerLoad } from './$types';
 import { loadDiscussionsPage } from '$lib/server/db/dao/discussions';
-import { checkAndCreateWelcomePost } from '$lib/server/db/welcome';
 import { parseDiscussionPageFromPath, resolveGroupSlug } from '$lib/server/constants';
 
 export const load: PageServerLoad = async (event) => {
@@ -9,10 +8,7 @@ export const load: PageServerLoad = async (event) => {
 	const platformEnv = event.platform?.env;
 	const groupSlug = resolveGroupSlug(user);
 
-	// 1. Daily Welcome Post Check (Runs on home page access)
-	await checkAndCreateWelcomePost(db, platformEnv);
-
-	// 2. Home is always page 1 — deeper pages live at /discussions/pN
+	// 1. Home is always page 1 — deeper pages live at /discussions/pN
 	const { limit, offset } = parseDiscussionPageFromPath(undefined, platformEnv);
 
 	// 3. Fetch discussions list (filtered by category read permissions)

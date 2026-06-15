@@ -1,7 +1,7 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
-	import ActivityRow from '$lib/components/organisms/ActivityRow.svelte';
+	import ActivityList from '$lib/components/organisms/ActivityList.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
 	import { formatTitle } from '$lib/utils/title';
@@ -118,25 +118,14 @@
 			</div>
 		{:else}
 			<div class="space-y-0">
-				{#each activityList as activity (activity.id)}
-					<ActivityRow
-						id={activity.id}
-						authorId={activity.authorId}
-						authorDisplayName={activity.authorDisplayName}
-						authorUsername={activity.authorUsername}
-						authorAvatarFileId={activity.authorAvatarFileId}
-						recipientId={activity.recipientId}
-						recipientDisplayName={activity.recipientDisplayName}
-						recipientUsername={activity.recipientUsername}
-						contentJson={activity.contentJson}
-						createdAt={activity.createdAt}
-						commentCount={activity.commentCount}
-						currentUserId={user?.id}
-						isAdmin={user?.groupSlug === 'admin'}
-						{t}
-						mentionedUsers={data.mentionedUsers}
-					/>
-				{/each}
+				<ActivityList
+					items={activityList}
+					locale={data.locale}
+					currentUserId={user?.id}
+					isAdmin={user?.groupSlug === 'admin'}
+					mentionedUsers={data.mentionedUsers}
+					{t}
+				/>
 			</div>
 
 			<!-- Bottom Paginator -->

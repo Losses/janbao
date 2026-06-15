@@ -17,10 +17,11 @@ import { randomUUID } from 'crypto';
 import { getLocalDb } from '../src/lib/server/db';
 import * as schema from '../src/lib/server/db/schema';
 import { eq, sql } from 'drizzle-orm';
-import { GHOST_USER_ID } from '../src/lib/server/constants';
+import { GHOST_USER_ID, SYSTEM_USER_ID } from '../src/lib/server/constants';
 import { resolvePcloudConfig, pcloudUploadBytes, pcloudListFolder } from '../src/lib/server/pcloud';
 import { detectImageFormat } from '../src/lib/server/image';
 import { ensureAndBackfillAll } from '../src/lib/server/search/backfill';
+import { appendJoinedMember } from '../src/lib/server/db/joined-activity';
 
 // Named interfaces to avoid inline object type literal lint errors
 interface ParsedProfile {
@@ -69,6 +70,11 @@ interface ParsedActivity {
 	// For a top-level WallPost activity (Title "author → recipient"), the user the
 	// message was directed at. null for status updates and sub-comments.
 	recipientId: number | null;
+	// A system "who joined" activity. Members listed in joinMemberIds are folded
+	// into that calendar day's isJoined activity at write time (see
+	// appendJoinedMember); contentHtml carries only the excerpt (e.g. "欢迎加入!").
+	isJoined: boolean;
+	joinMemberIds: number[];
 }
 
 interface AvatarEntry {
@@ -836,15 +842,37 @@ function parseActivitiesHtml(html: string): ParsedActivity[] {
 		const titleHtml = titleMatch ? titleMatch[1] : '';
 		const nameHrefs = [...titleHtml.matchAll(/href="\/profile\/(\d+)\/([^"'/?#]*)"/g)];
 		const isWallPost = /&rarr;|→/.test(titleHtml);
-		const authorRef = nameHrefs[0] ? extractProfileUser('href="' + nameHrefs[0][0]) : null;
-		const recipientRef =
-			isWallPost && nameHrefs[1] ? extractProfileUser('href="' + nameHrefs[1][0]) : null;
-		// Prefer the Title's explicit author; fall back to the Author Photo link.
-		const topLevelAuthor =
-			authorRef ?? extractProfileUser(part.slice(0, part.indexOf('class="Excerpt"')));
+		const isRegistration = /Activity-Registration\b/.test(part) || /joined/i.test(titleHtml);
 
 		const excerptMatch = part.match(/<div\s+class="Excerpt">([\s\S]+?)<\/div>/);
-		const contentHtml = excerptMatch ? excerptMatch[1] : '';
+		const excerptHtml = excerptMatch ? excerptMatch[1] : '';
+
+		// Registration ("X and Y joined") is a system "who joined" activity. Its
+		// named users become members of that calendar day's isJoined activity
+		// (folded in at write time via appendJoinedMember); the excerpt (e.g.
+		// "欢迎加入!") is kept as content for the joined render pipeline.
+		let topLevelAuthor: ProfileUserRef;
+		let recipientRef: ProfileUserRef | null;
+		let contentHtml: string;
+		let isJoined = false;
+		let joinMemberIds: number[] = [];
+		if (isRegistration) {
+			isJoined = true;
+			topLevelAuthor = { userId: SYSTEM_USER_ID, username: null };
+			recipientRef = null;
+			contentHtml = excerptHtml;
+			joinMemberIds = nameHrefs
+				.map((m) => extractProfileUser('href="' + m[0]).userId)
+				.filter((u): u is number => u !== null);
+		} else {
+			const authorRef = nameHrefs[0] ? extractProfileUser('href="' + nameHrefs[0][0]) : null;
+			recipientRef =
+				isWallPost && nameHrefs[1] ? extractProfileUser('href="' + nameHrefs[1][0]) : null;
+			// Prefer the Title's explicit author; fall back to the Author Photo link.
+			topLevelAuthor =
+				authorRef ?? extractProfileUser(part.slice(0, part.indexOf('class="Excerpt"')));
+			contentHtml = excerptHtml;
+		}
 
 		const dateMatch = part.match(/<span\s+class="MItem\s+DateCreated">([\s\S]+?)<\/span>/);
 		let createdAt = new Date();
@@ -892,7 +920,9 @@ function parseActivitiesHtml(html: string): ParsedActivity[] {
 				parentActivityId: Number(parentId),
 				authorId: author.userId,
 				authorUsername: author.username,
-				recipientId: null
+				recipientId: null,
+				isJoined: false,
+				joinMemberIds: []
 			});
 		}
 
@@ -907,7 +937,9 @@ function parseActivitiesHtml(html: string): ParsedActivity[] {
 			parentActivityId: null,
 			authorId: topLevelAuthor.userId,
 			authorUsername: topLevelAuthor.username,
-			recipientId: recipientRef?.userId ?? null
+			recipientId: recipientRef?.userId ?? null,
+			isJoined,
+			joinMemberIds
 		});
 	}
 	return activities;
@@ -1508,6 +1540,17 @@ async function main() {
 							}
 							if (act.recipientId !== null) {
 								await ensureUser(act.recipientId, '');
+							}
+							// isJoined activities are folded into that calendar day's
+							// join activity (one row per day), with each named user
+							// appended as a member. They are not inserted as standalone
+							// rows keyed by their Vanilla id.
+							if (act.isJoined) {
+								for (const memberId of act.joinMemberIds) {
+									await ensureUser(memberId, '');
+									await appendJoinedMember(db, memberId, act.createdAt, undefined);
+								}
+								return;
 							}
 							const contentJson = await convertHtmlToLexical(act.contentHtml, converterCtx);
 							await db.insert(schema.activities).values({
