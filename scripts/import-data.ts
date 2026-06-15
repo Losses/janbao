@@ -1693,52 +1693,56 @@ async function main() {
 
 			// Write the OP as a negative-id reply, and stamp the discussion's
 			// createdAt with the OP's real time so list views order correctly.
+			// Even when the OP body is empty (some posts were blanked out on the
+			// original site), we still insert an OP reply attributed to the OP
+			// author — otherwise the discussion loader would mistake the first
+			// reply for the OP.
 			try {
-				if (opComment.contentHtml.trim()) {
-					const opAuthorId = opComment.authorId ?? meta.authorId;
-					if (opComment.authorId !== null) {
-						await ensureUser(opComment.authorId, opComment.authorUsername ?? '');
-					}
-					const opContentJson = await convertHtmlToLexical(opComment.contentHtml, converterCtx);
-					await db.insert(schema.replies).values({
-						id: opReplyId,
-						discussionId,
-						authorId: opAuthorId,
-						contentJson: opContentJson,
-						createdAt: opComment.createdAt,
-						updatedAt: opComment.createdAt
-					});
-					// Correct the discussion's slug/title/createdAt from page 1.
-					// The real slug comes from the page's pager/bookmark URLs
-					// (/discussion/{id}/{slug}/pN); the title from the <h1>.
-					const discUpdate: DiscussionCorrection = {
-						createdAt: opComment.createdAt
-					};
-					if (page1Html) {
-						const slugMatch = page1Html.match(
-							new RegExp(`/discussion/${discussionId}/([^"?#\\s/]+)(?:/p\\d+)?["?#]`)
-						);
-						if (slugMatch) {
-							const realSlug = decodeHtmlEntities(slugMatch[1]);
-							if (realSlug && realSlug !== 'bookmark' && realSlug !== 'comment') {
-								discUpdate.slug = realSlug;
-							}
-						}
-						const titleMatch = page1Html.match(/<h1>([\s\S]+?)<\/h1>/);
-						if (titleMatch) {
-							const realTitle = decodeHtmlEntities(titleMatch[1].replace(/<[^>]+>/g, '')).trim();
-							if (realTitle) discUpdate.title = realTitle;
-						}
-					}
-					await db
-						.update(schema.discussions)
-						.set(discUpdate)
-						.where(eq(schema.discussions.id, discussionId));
-					meta.createdAt = opComment.createdAt;
-					if (discUpdate.title) meta.title = discUpdate.title;
-				} else {
+				const opAuthorId = opComment.authorId ?? meta.authorId;
+				if (opComment.authorId !== null) {
+					await ensureUser(opComment.authorId, opComment.authorUsername ?? '');
+				}
+				const opContentHtml = opComment.contentHtml.trim() ? opComment.contentHtml : '';
+				const opContentJson = await convertHtmlToLexical(opContentHtml, converterCtx);
+				if (!opComment.contentHtml.trim()) {
 					conflicts.push({ type: 'op_body_empty', discussionId });
 				}
+				await db.insert(schema.replies).values({
+					id: opReplyId,
+					discussionId,
+					authorId: opAuthorId,
+					contentJson: opContentJson,
+					createdAt: opComment.createdAt,
+					updatedAt: opComment.createdAt
+				});
+				// Correct the discussion's slug/title/createdAt from page 1.
+				// The real slug comes from the page's pager/bookmark URLs
+				// (/discussion/{id}/{slug}/pN); the title from the <h1>.
+				const discUpdate: DiscussionCorrection = {
+					createdAt: opComment.createdAt
+				};
+				if (page1Html) {
+					const slugMatch = page1Html.match(
+						new RegExp(`/discussion/${discussionId}/([^"?#\\s/]+)(?:/p\\d+)?["?#]`)
+					);
+					if (slugMatch) {
+						const realSlug = decodeHtmlEntities(slugMatch[1]);
+						if (realSlug && realSlug !== 'bookmark' && realSlug !== 'comment') {
+							discUpdate.slug = realSlug;
+						}
+					}
+					const titleMatch = page1Html.match(/<h1>([\s\S]+?)<\/h1>/);
+					if (titleMatch) {
+						const realTitle = decodeHtmlEntities(titleMatch[1].replace(/<[^>]+>/g, '')).trim();
+						if (realTitle) discUpdate.title = realTitle;
+					}
+				}
+				await db
+					.update(schema.discussions)
+					.set(discUpdate)
+					.where(eq(schema.discussions.id, discussionId));
+				meta.createdAt = opComment.createdAt;
+				if (discUpdate.title) meta.title = discUpdate.title;
 			} catch (e: unknown) {
 				conflicts.push({
 					type: 'op_body_insert_error',
