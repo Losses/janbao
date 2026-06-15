@@ -10,12 +10,16 @@ import {
 	drafts
 } from '$lib/server/db/schema';
 import { eq, and, isNull, count, ne, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 import { getPaginationLimit, resolvePermissions } from '$lib/server/constants';
 import { dispatchReplyNotifications } from '$lib/server/db/notifications';
 import { resolveMentions } from '$lib/server/utils/mentions';
 import type { DbTransaction } from '$lib/server/db';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 import { indexReply, reindexReply, unindexReply, unindexDiscussion } from '$lib/server/search/fts';
+
+// Self-join of users for the reply editor (distinct from the author join).
+const editors = alias(users, 'editors');
 
 export const load: PageServerLoad = async (event) => {
 	const discussionId = Number(event.params.discussionId);
@@ -90,6 +94,9 @@ export const load: PageServerLoad = async (event) => {
 			contentJson: replies.contentJson,
 			createdAt: replies.createdAt,
 			updatedAt: replies.updatedAt,
+			editedAt: replies.editedAt,
+			editedByDisplayName: editors.displayName,
+			editedByUsername: editors.username,
 			authorId: replies.authorId,
 			authorDisplayName: users.displayName,
 			authorUsername: users.username,
@@ -97,6 +104,7 @@ export const load: PageServerLoad = async (event) => {
 		})
 		.from(replies)
 		.innerJoin(users, eq(replies.authorId, users.id))
+		.leftJoin(editors, eq(editors.id, replies.editedBy))
 		.where(and(eq(replies.discussionId, discussionId), isNull(replies.deletedAt)))
 		.orderBy(replies.createdAt)
 		.limit(1);
@@ -129,6 +137,9 @@ export const load: PageServerLoad = async (event) => {
 				contentJson: replies.contentJson,
 				createdAt: replies.createdAt,
 				updatedAt: replies.updatedAt,
+				editedAt: replies.editedAt,
+				editedByDisplayName: editors.displayName,
+				editedByUsername: editors.username,
 				authorId: replies.authorId,
 				authorDisplayName: users.displayName,
 				authorUsername: users.username,
@@ -136,6 +147,7 @@ export const load: PageServerLoad = async (event) => {
 			})
 			.from(replies)
 			.innerJoin(users, eq(replies.authorId, users.id))
+			.leftJoin(editors, eq(editors.id, replies.editedBy))
 			.where(
 				and(
 					eq(replies.discussionId, discussionId),
@@ -457,7 +469,7 @@ export const actions: Actions = {
 		await db.transaction(async (tx: DbTransaction) => {
 			await tx
 				.update(replies)
-				.set({ contentJson, updatedAt: new Date() })
+				.set({ contentJson, updatedAt: new Date(), editedAt: new Date(), editedBy: user.id })
 				.where(eq(replies.id, replyId));
 			await reindexReply(tx, replyId, replyRecord.contentJson, contentJson);
 		});

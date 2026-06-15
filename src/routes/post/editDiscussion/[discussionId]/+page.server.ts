@@ -237,10 +237,10 @@ export const actions: Actions = {
 					.set({ title, slug, categorySlug, themeName, updatedAt: new Date() })
 					.where(eq(discussions.id, discussionId));
 
-				// Update OP reply contentJson, updatedAt
+				// Update OP reply contentJson, updatedAt, and mark as edited
 				await tx
 					.update(replies)
-					.set({ contentJson, updatedAt: new Date() })
+					.set({ contentJson, updatedAt: new Date(), editedAt: new Date(), editedBy: user.id })
 					.where(eq(replies.id, opReply.id));
 
 				// Reindex search text (title + OP body)

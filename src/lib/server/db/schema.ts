@@ -126,6 +126,11 @@ export const replies = sqliteTable(
 		updatedAt: integer('updated_at', { mode: 'timestamp' })
 			.notNull()
 			.default(sql`(strftime('%s', 'now'))`),
+		// Both NULL until the body is actually edited. editedAt drives the
+		// "last edited" marker; editedBy is who made that edit (may differ from
+		// authorId since moderators can edit others' posts).
+		editedAt: integer('edited_at', { mode: 'timestamp' }),
+		editedBy: integer('edited_by').references(() => users.id),
 		deletedAt: integer('deleted_at', { mode: 'timestamp' })
 	},
 	(table) => ({

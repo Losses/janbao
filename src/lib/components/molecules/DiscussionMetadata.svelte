@@ -17,7 +17,10 @@
 		displayName: string;
 		avatarFileId?: string | null;
 		createdAt: string | number | Date;
-		updatedAt?: string | number | Date | null;
+		/** When the body was last edited (null/absent = never edited). */
+		editedAt?: string | number | Date | null;
+		/** Display name of the user who last edited (may differ from the author). */
+		editedByDisplayName?: string | null;
 		/** Translation dictionary */
 		t?: TranslationDict | null;
 		class?: string;
@@ -29,23 +32,26 @@
 		displayName,
 		avatarFileId = null,
 		createdAt,
-		updatedAt = null,
+		editedAt = null,
+		editedByDisplayName = null,
 		t = null,
 		class: className = ''
 	}: DiscussionMetadataProps = $props();
 
 	const userSlug = $derived(generateSlug(username || displayName || 'user'));
-	const isEdited = $derived.by(() => {
-		if (!updatedAt) return false;
-		const created = new Date(createdAt).getTime();
-		const updated = new Date(updatedAt).getTime();
-		return updated - created > 1000; // Consider edited if > 1s difference
-	});
 
-	// Get translation for "edited" (falls back to "edited" or "已编辑")
-	const editedText = $derived.by(() => {
-		const common = (t as Record<string, Record<string, string>> | null)?.common ?? {};
-		return common.edited ?? 'edited';
+	const commonT = $derived((t as Record<string, Record<string, string>> | null)?.common ?? {});
+
+	// "Last edited" label shown before the edit timestamp.
+	const lastEditedLabel = $derived(commonT.lastEdited ?? 'last edited');
+
+	// Tooltip over the "last edited" label naming the editor (hover-only, per
+	// the chosen display style). Undefined when the editor is unknown, so the
+	// hover simply doesn't appear.
+	const editorHoverTitle = $derived.by(() => {
+		if (!editedByDisplayName) return undefined;
+		const template = commonT.editedBy ?? 'edited by {name}';
+		return template.replace('{name}', editedByDisplayName);
 	});
 </script>
 
@@ -65,8 +71,11 @@
 		<div class="flex items-center gap-2 text-xs text-base-content/50 flex-wrap">
 			<DateAtom value={createdAt} {t} />
 
-			{#if isEdited}
-				<span class="text-base-content/40">({editedText})</span>
+			{#if editedAt}
+				<span class="inline-flex items-center gap-1">
+					<span class="text-base-content/40" title={editorHoverTitle}>{lastEditedLabel}</span>
+					<DateAtom value={editedAt} {t} />
+				</span>
 			{/if}
 		</div>
 	</div>

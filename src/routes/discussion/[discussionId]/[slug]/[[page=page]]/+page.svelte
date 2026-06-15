@@ -198,7 +198,8 @@
 					displayName={opReply.authorDisplayName}
 					avatarFileId={opReply.authorAvatarFileId}
 					createdAt={opReply.createdAt}
-					updatedAt={opReply.updatedAt}
+					editedAt={opReply.editedAt}
+					editedByDisplayName={opReply.editedByDisplayName}
 					{t}
 				/>
 				<LexicalRenderer contentJson={opReply.contentJson} {mentionedUsers} />
@@ -272,7 +273,8 @@
 							displayName={reply.authorDisplayName}
 							avatarFileId={reply.authorAvatarFileId}
 							createdAt={reply.createdAt}
-							updatedAt={reply.updatedAt}
+							editedAt={reply.editedAt}
+							editedByDisplayName={reply.editedByDisplayName}
 							{t}
 						/>
 						{#if editingReplyId === reply.id}

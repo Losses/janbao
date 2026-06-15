@@ -88,13 +88,27 @@ interface AvatarEntry {
 
 // HTML Entity decoder
 function decodeHtmlEntities(str: string): string {
-	return str
-		.replace(/&amp;/g, '&')
-		.replace(/&lt;/g, '<')
-		.replace(/&gt;/g, '>')
-		.replace(/&quot;/g, '"')
-		.replace(/&#39;/g, "'")
-		.replace(/&nbsp;/g, ' ');
+	return (
+		str
+			.replace(/&amp;/g, '&')
+			.replace(/&lt;/g, '<')
+			.replace(/&gt;/g, '>')
+			.replace(/&quot;/g, '"')
+			.replace(/&#39;/g, "'")
+			.replace(/&nbsp;/g, ' ')
+			// Numeric entities — Vanilla emits apostrophes as &#039; (with a leading
+			// zero) and other chars as &#8230; etc., which the literal replacements
+			// above miss. Guard against out-of-range codes so malformed input can't
+			// throw inside String.fromCodePoint.
+			.replace(/&#(\d+);/g, (_, code) => {
+				const n = Number(code);
+				return n <= 0x10ffff ? String.fromCodePoint(n) : '';
+			})
+			.replace(/&#x([0-9a-f]+);/gi, (_, code) => {
+				const n = parseInt(code, 16);
+				return n <= 0x10ffff ? String.fromCodePoint(n) : '';
+			})
+	);
 }
 
 // ===== Lexical node shapes produced by the converter =====
@@ -537,6 +551,43 @@ interface ParsedDiscussionComment {
 	contentHtml: string;
 	createdAt: Date;
 	itemPosition: number;
+	// From the comment's <span class="DateUpdated" title="Edited <cn-dt> by <name>.">;
+	// null when the comment was never edited.
+	editedAt: Date | null;
+	editedByName: string | null;
+}
+
+// Parsed edit marker: when + who last edited a comment. Both null means the
+// comment was never edited on the source site.
+interface ParsedEditMarker {
+	editedAt: Date | null;
+	editedByName: string | null;
+}
+
+// Extract the edit timestamp + editor username from a comment's
+// <span class="DateUpdated" title="Edited 2014年09月07日 星期日 09时57分19秒 by 海鮮販子.">.
+// The title carries both the precise edit time (Chinese-locale datetime, parsed
+// in local time like parseCommentTime) and the editor's username. Returns nulls
+// when the comment was never edited.
+function parseEditMarker(html: string): ParsedEditMarker {
+	const m = html.match(
+		/title="Edited\s+(\d{4})年(\d{2})月(\d{2})日\s+\S+\s+(\d{2})时(\d{2})分(\d{2})秒\s+by\s+(.+?)\."/
+	);
+	if (!m) return { editedAt: null, editedByName: null };
+	const [, y, mo, d, h, mi, s, name] = m;
+	return {
+		editedAt: new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s)),
+		editedByName: name.trim()
+	};
+}
+
+// Resolve an editor username (from a source edit marker) to a user id via the
+// mention map built from users.json. Returns null when the name isn't known
+// (rare — usually a since-purged account); the caller then leaves editedBy null.
+function lookupEditorId(name: string | null, mentionMap: Map<string, number>): number | null {
+	if (!name) return null;
+	const uid = mentionMap.get(name);
+	return uid === undefined ? null : uid;
 }
 
 /**
@@ -581,6 +632,7 @@ function parseDiscussionComments(html: string, discussionId: number): ParsedDisc
 			if (!isNaN(d.getTime())) opCreatedAt = d;
 		}
 		if (opMsg) {
+			const opEdit = parseEditMarker(opSlice);
 			out.push({
 				// 'op' is a synthetic id; the caller writes it under -discussionId.
 				id: 'op',
@@ -588,7 +640,9 @@ function parseDiscussionComments(html: string, discussionId: number): ParsedDisc
 				authorUsername: opAuthor.username,
 				contentHtml: opMsg[1],
 				createdAt: opCreatedAt,
-				itemPosition: 0
+				itemPosition: 0,
+				editedAt: opEdit.editedAt,
+				editedByName: opEdit.editedByName
 			});
 		}
 	}
@@ -618,13 +672,16 @@ function parseDiscussionComments(html: string, discussionId: number): ParsedDisc
 		const itemMatch = part.match(/name="Item_(\d+)"/);
 		const itemPosition = itemMatch ? parseInt(itemMatch[1], 10) : Number.MAX_SAFE_INTEGER;
 
+		const edit = parseEditMarker(part);
 		out.push({
 			id: idMatch[1],
 			authorId: author.userId,
 			authorUsername: author.username,
 			contentHtml,
 			createdAt,
-			itemPosition
+			itemPosition,
+			editedAt: edit.editedAt,
+			editedByName: edit.editedByName
 		});
 	}
 	return out;
@@ -1764,13 +1821,19 @@ async function main() {
 				if (!opComment.contentHtml.trim()) {
 					conflicts.push({ type: 'op_body_empty', discussionId });
 				}
+				const opEditedById = lookupEditorId(opComment.editedByName, mentionMap);
+				if (opEditedById !== null && opComment.editedByName) {
+					await ensureUser(opEditedById, opComment.editedByName);
+				}
 				await db.insert(schema.replies).values({
 					id: opReplyId,
 					discussionId,
 					authorId: opAuthorId,
 					contentJson: opContentJson,
 					createdAt: opComment.createdAt,
-					updatedAt: opComment.createdAt
+					updatedAt: opComment.createdAt,
+					editedAt: opComment.editedAt,
+					editedBy: opEditedById
 				});
 				// Correct the discussion's slug/title/createdAt from page 1.
 				// The real slug comes from the page's pager/bookmark URLs
@@ -1820,13 +1883,19 @@ async function main() {
 				if (!contentHtml || !contentHtml.trim()) continue;
 				try {
 					const contentJson = await convertHtmlToLexical(contentHtml, converterCtx);
+					const editedById = lookupEditorId(c.editedByName, mentionMap);
+					if (editedById !== null && c.editedByName) {
+						await ensureUser(editedById, c.editedByName);
+					}
 					await db.insert(schema.replies).values({
 						id: replyId,
 						discussionId,
 						authorId,
 						contentJson,
 						createdAt: c.createdAt,
-						updatedAt: c.createdAt
+						updatedAt: c.createdAt,
+						editedAt: c.editedAt,
+						editedBy: editedById
 					});
 				} catch (e: unknown) {
 					conflicts.push({

@@ -80,6 +80,8 @@
 		"confirm": "Confirm",
 		"delete": "Delete",
 		"edit": "Edit",
+		"lastEdited": "Last edited",
+		"editedBy": "Edited by {name}",
 		"reply": "Reply",
 		"submit": "Submit",
 		"showAll": "Show All",

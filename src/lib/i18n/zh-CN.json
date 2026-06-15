@@ -80,6 +80,8 @@
 		"confirm": "确认",
 		"delete": "删除",
 		"edit": "编辑",
+		"lastEdited": "最后编辑",
+		"editedBy": "由 {name} 编辑",
 		"reply": "回复",
 		"submit": "提交",
 		"showAll": "查看全部",
