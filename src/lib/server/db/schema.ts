@@ -285,6 +285,11 @@ export const activities = sqliteTable(
 		createdAt: integer('created_at', { mode: 'timestamp' })
 			.notNull()
 			.default(sql`(strftime('%s', 'now'))`),
+		// Bumped to the latest comment time (see import-data.ts) so the activity
+		// feed can order by last-updated the way Vanilla does. Null for rows that
+		// predate the column or were created by the app; the profile query
+		// COALESCEs to createdAt, so null is fine.
+		updatedAt: integer('updated_at', { mode: 'timestamp' }),
 		deletedAt: integer('deleted_at', { mode: 'timestamp' })
 	},
 	(table) => ({

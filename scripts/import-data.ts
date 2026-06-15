@@ -30,6 +30,9 @@ interface ParsedProfile {
 	signupTime: Date | null;
 	lastActiveTime: Date | null;
 	viewCount: number | null;
+	// The user who invited this profile (from <dd class="Invited">). null when the
+	// profile shows no inviter.
+	inviterId: number | null;
 }
 
 interface DiscussionMeta {
@@ -47,11 +50,18 @@ interface ParsedActivity {
 	id: string;
 	contentHtml: string;
 	createdAt: Date;
+	// Bumped time used for feed ordering: for a top-level activity this is the
+	// later of its own post time and its latest sub-comment (Vanilla surfaces an
+	// activity by last-updated); for a sub-comment it equals createdAt.
+	updatedAt: Date;
 	// null for top-level activities (attributed to the profile owner); set for the
 	// nested ActivityComment rows that reply to a top-level activity.
 	parentActivityId: number | null;
 	authorId: number | null;
 	authorUsername: string | null;
+	// For a top-level WallPost activity (Title "author → recipient"), the user the
+	// message was directed at. null for status updates and sub-comments.
+	recipientId: number | null;
 }
 
 interface AvatarEntry {
@@ -487,80 +497,107 @@ async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promis
 	});
 }
 
-/**
- * Extract the OP (first post) body from a discussion page: the first
- * <div class="Message"> inside <div id="Discussion_<id>">, terminated before the
- * comment list begins. Returns null if the Discussion wrapper or Message is
- * absent.
- */
-function extractOpBody(html: string, discussionId: number): string | null {
-	const startMarker = `id="Discussion_${discussionId}"`;
-	const startIdx = html.indexOf(startMarker);
-	if (startIdx === -1) return null;
-
-	const rest = html.slice(startIdx);
-	const endMarkers = ['class="Item ItemComment"', 'class="CommentsWrap"', '<div class="Comments"'];
-	let endIdx = rest.length;
-	for (const marker of endMarkers) {
-		const i = rest.indexOf(marker);
-		if (i !== -1 && i < endIdx) endIdx = i;
-	}
-
-	const slice = rest.slice(0, endIdx);
-	const msgMatch = slice.match(/<div\s+class="Message">([\s\S]+?)<\/div>/);
-	return msgMatch ? msgMatch[1] : null;
+// One comment parsed from a discussion page. The OP is the comment whose
+// Vanilla item position is lowest (name="Item_1" on the new template, or the
+// single post inside the Discussion_NNN wrapper on the old template).
+interface ParsedDiscussionComment {
+	id: string;
+	authorId: number | null;
+	authorUsername: string | null;
+	contentHtml: string;
+	createdAt: Date;
+	itemPosition: number;
 }
 
 /**
- * Extract the creation time of a discussion from the first page HTML.
- * Looks for <span class="MItem DateCreated"> containing a <time datetime="..."> tag.
- */
-function extractDiscussionCreatedAt(html: string, discussionId: number): Date | null {
-	const startMarker = `id="Discussion_${discussionId}"`;
-	const startIdx = html.indexOf(startMarker);
-	if (startIdx === -1) return null;
-
-	const rest = html.slice(startIdx);
-	const endMarkers = ['class="Item ItemComment"', 'class="CommentsWrap"', '<div class="Comments"'];
-	let endIdx = rest.length;
-	for (const marker of endMarkers) {
-		const i = rest.indexOf(marker);
-		if (i !== -1 && i < endIdx) endIdx = i;
-	}
-
-	const slice = rest.slice(0, endIdx);
-	const timeMatch =
-		slice.match(/<span\s+class="[^"]*DateCreated"[^>]*>[\s\S]*?<time[^>]*datetime="([^"]+)"/i) ||
-		slice.match(/<time[^>]*datetime="([^"]+)"/i);
-	return timeMatch ? new Date(timeMatch[1]) : null;
-}
-
-/**
- * Extract precise creation times for every comment in a discussion page.
+ * Parse every comment <li> out of a discussion page, each with its author
+ * (profile link), precise <time datetime>, Message body, and Vanilla item
+ * position. This is the authoritative source for replies: unlike the per-user
+ * comment feeds it binds each comment to this discussion by location (no
+ * title-based matching) and carries the full ISO datetime (not date-only).
  *
- * Vanilla's discussion pages carry the full ISO datetime on each comment's
- * <time> tag, whereas the per-user comment feeds only carry a date (which
- * parseCommentTime truncates to midnight). Returns a map of commentId → Date so
- * the importer can re-stamp replies that were given a midnight timestamp when
- * imported from the comment feeds  - without that correction, same-day replies
- * sort before the OP's precise posted time and a reply is mistaken for the OP.
+ * The OP is identified as the comment with the lowest item position. On the old
+ * template the OP lives in a <div id="Discussion_NNN"> wrapper (not a Comment_
+ * <li>); on the new template the wrapper is gone and the OP is the first
+ * ItemComment. We detect the wrapper and synthesize an OP entry at position 0
+ * so it always sorts first, working uniformly across both templates.
  */
-function extractCommentTimes(html: string): Map<string, Date> {
-	const map = new Map<string, Date>();
-	// Discussion-page <li>s render class before id (<li class="..." id="Comment_N">),
-	// so split on the id attribute itself rather than on <li id=.
+function parseDiscussionComments(html: string, discussionId: number): ParsedDiscussionComment[] {
+	const out: ParsedDiscussionComment[] = [];
+
+	// Old template: the OP is the first <div class="Message"> inside the
+	// Discussion_NNN wrapper, before the comment list begins.
+	const wrapMarker = `id="Discussion_${discussionId}"`;
+	const wrapIdx = html.indexOf(wrapMarker);
+	if (wrapIdx !== -1) {
+		const rest = html.slice(wrapIdx);
+		const endMarkers = [
+			'class="Item ItemComment"',
+			'class="CommentsWrap"',
+			'<div class="Comments"'
+		];
+		let endIdx = rest.length;
+		for (const marker of endMarkers) {
+			const i = rest.indexOf(marker);
+			if (i !== -1 && i < endIdx) endIdx = i;
+		}
+		const opSlice = rest.slice(0, endIdx);
+		const opMsg = opSlice.match(/<div\s+class="Message">([\s\S]+?)<\/div>/);
+		const opAuthor = extractProfileUser(opSlice);
+		const opTimeMatch = opSlice.match(/<time[^>]*datetime="([^"]+)"/);
+		let opCreatedAt = new Date();
+		if (opTimeMatch) {
+			const d = new Date(opTimeMatch[1]);
+			if (!isNaN(d.getTime())) opCreatedAt = d;
+		}
+		if (opMsg) {
+			out.push({
+				// 'op' is a synthetic id; the caller writes it under -discussionId.
+				id: 'op',
+				authorId: opAuthor.userId,
+				authorUsername: opAuthor.username,
+				contentHtml: opMsg[1],
+				createdAt: opCreatedAt,
+				itemPosition: 0
+			});
+		}
+	}
+
+	// <li>s render class before id (<li class="..." id="Comment_N">), so split on
+	// the id attribute itself.
 	const parts = html.split(/id="Comment_/);
 	for (let i = 1; i < parts.length; i++) {
 		const part = parts[i];
 		const idMatch = part.match(/^(\d+)/);
 		if (!idMatch) continue;
+
+		const author = extractProfileUser(part);
+
 		const timeMatch = part.match(/<time[^>]*datetime="([^"]+)"/);
+		let createdAt = new Date();
 		if (timeMatch) {
 			const d = new Date(timeMatch[1]);
-			if (!isNaN(d.getTime())) map.set(idMatch[1], d);
+			if (!isNaN(d.getTime())) createdAt = d;
 		}
+
+		const msgMatch = part.match(
+			/<div\s+class="Message">([\s\S]+?)<\/div>\s*<div\s+class="Reactions"/
+		);
+		const contentHtml = msgMatch ? msgMatch[1] : '';
+
+		const itemMatch = part.match(/name="Item_(\d+)"/);
+		const itemPosition = itemMatch ? parseInt(itemMatch[1], 10) : Number.MAX_SAFE_INTEGER;
+
+		out.push({
+			id: idMatch[1],
+			authorId: author.userId,
+			authorUsername: author.username,
+			contentHtml,
+			createdAt,
+			itemPosition
+		});
 	}
-	return map;
+	return out;
 }
 
 // Robust Email obfuscation decoder
@@ -613,71 +650,19 @@ function parseProfileHtml(html: string): ParsedProfile {
 	);
 	const viewCount = visitsMatch ? parseInt(visitsMatch[1].replace(/,/g, '')) : null;
 
+	// Inviter: <dt class="Invited">邀请</dt><dd class="Invited"><a href="/profile/ID/slug">…</a></dd>
+	const inviterMatch = html.match(/<dd class="Invited">[\s\S]*?<a\s+href="\/profile\/(\d+)\//);
+	const inviterId = inviterMatch ? Number(inviterMatch[1]) : null;
+
 	return {
 		username,
 		displayName,
 		email,
 		signupTime,
 		lastActiveTime,
-		viewCount
+		viewCount,
+		inviterId
 	};
-}
-
-// Parse comments from HTML string in comments-page-*.json
-interface ParsedComment {
-	id: string;
-	contentHtml: string;
-	discussionTitle: string;
-	timeText: string;
-}
-
-function parseCommentsHtml(html: string): ParsedComment[] {
-	const comments: ParsedComment[] = [];
-	const parts = html.split(/<li\s+id="Comment_/);
-	for (let i = 1; i < parts.length; i++) {
-		const part = parts[i];
-		const idMatch = part.match(/^(\d+)/);
-		if (!idMatch) continue;
-		const id = idMatch[1];
-
-		const messageMatch = part.match(/<div\s+class="Message">([\s\S]+?)<\/div>/);
-		const contentHtml = messageMatch ? messageMatch[1] : '';
-
-		const titleMatch = part.match(/in\s*<b><a[^>]*>([\s\S]+?)<\/a><\/b>/);
-		let discussionTitle = '';
-		if (titleMatch) {
-			discussionTitle = decodeHtmlEntities(titleMatch[1].replace(/<[^>]+>/g, '')).trim();
-		}
-
-		const metaMatch = part.match(/<div\s+class="Meta">([\s\S]+?)<\/div>/);
-		let timeText = '';
-		if (metaMatch) {
-			const spanRegex = /<span\s+class="MItem">([\s\S]+?)<\/span>/g;
-			let m;
-			const spans: string[] = [];
-			while ((m = spanRegex.exec(metaMatch[1])) !== null) {
-				spans.push(m[1]);
-			}
-			for (const span of spans) {
-				const aMatch = span.match(/<a[^>]*>([\s\S]+?)<\/a>/);
-				const text = aMatch ? aMatch[1] : span;
-				const cleanText = text.replace(/<[^>]+>/g, '').trim();
-				if (
-					/[\d\u4e00-\u9fa5]+/.test(cleanText) &&
-					(cleanText.includes('月') ||
-						cleanText.includes('年') ||
-						cleanText.includes(':') ||
-						cleanText.includes('前') ||
-						cleanText.includes('ago'))
-				) {
-					timeText = cleanText;
-				}
-			}
-		}
-
-		comments.push({ id, contentHtml, discussionTitle, timeText });
-	}
-	return comments;
 }
 
 // Convert parsed comment date strings to Date object
@@ -821,8 +806,22 @@ function parseActivitiesHtml(html: string): ParsedActivity[] {
 		if (!idMatch) continue;
 		const parentId = idMatch[1];
 
-		// Top-level activity: its Excerpt + MItem DateCreated appear before the
-		// nested ActivityComments block, so the non-greedy matches pick the right ones.
+		// Top-level activity: its Title + Excerpt + MItem DateCreated appear before
+		// the nested ActivityComments block, so the non-greedy matches pick the right
+		// ones. The Title distinguishes a status update (one <a class="Name"> = the
+		// author) from a directed WallPost (two names around a &rarr; arrow: author
+		// then recipient). The Author Photo also carries the author.
+		const titleMatch = part.match(/<div\s+class="Title">([\s\S]+?)<\/div>/);
+		const titleHtml = titleMatch ? titleMatch[1] : '';
+		const nameHrefs = [...titleHtml.matchAll(/href="\/profile\/(\d+)\/([^"'/?#]*)"/g)];
+		const isWallPost = /&rarr;|→/.test(titleHtml);
+		const authorRef = nameHrefs[0] ? extractProfileUser('href="' + nameHrefs[0][0]) : null;
+		const recipientRef =
+			isWallPost && nameHrefs[1] ? extractProfileUser('href="' + nameHrefs[1][0]) : null;
+		// Prefer the Title's explicit author; fall back to the Author Photo link.
+		const topLevelAuthor =
+			authorRef ?? extractProfileUser(part.slice(0, part.indexOf('class="Excerpt"')));
+
 		const excerptMatch = part.match(/<div\s+class="Excerpt">([\s\S]+?)<\/div>/);
 		const contentHtml = excerptMatch ? excerptMatch[1] : '';
 
@@ -833,18 +832,11 @@ function parseActivitiesHtml(html: string): ParsedActivity[] {
 			createdAt = parseCommentTime(dateText);
 		}
 
-		activities.push({
-			id: parentId,
-			contentHtml,
-			createdAt,
-			parentActivityId: null,
-			authorId: null,
-			authorUsername: null
-		});
-
 		// Nested activity comments. Split on ActivityComment_ (distinct from the
 		// Activity_ split key) so each sub-comment stays within its parent's part
-		// and inherits this activity's id as its parentActivityId.
+		// and inherits this activity's id as its parentActivityId. Parse them first
+		// so the parent's updatedAt can be bumped to the latest comment time.
+		let latestCommentMs = 0;
 		const commentParts = part.split(/<li\s+id="ActivityComment_/);
 		for (let j = 1; j < commentParts.length; j++) {
 			const cpart = commentParts[j];
@@ -869,16 +861,33 @@ function parseActivitiesHtml(html: string): ParsedActivity[] {
 					cCreatedAt = parseCommentTime(cDateSpan[1].replace(/<[^>]+>/g, '').trim());
 				}
 			}
+			if (cCreatedAt.getTime() > latestCommentMs) latestCommentMs = cCreatedAt.getTime();
 
 			activities.push({
 				id: cidMatch[1],
 				contentHtml: cContentHtml,
 				createdAt: cCreatedAt,
+				updatedAt: cCreatedAt,
 				parentActivityId: Number(parentId),
 				authorId: author.userId,
-				authorUsername: author.username
+				authorUsername: author.username,
+				recipientId: null
 			});
 		}
+
+		// Vanilla surfaces an activity by last-updated, so bump the parent's
+		// updatedAt to its latest sub-comment time when there is one.
+		const updatedAt = latestCommentMs > createdAt.getTime() ? new Date(latestCommentMs) : createdAt;
+		activities.push({
+			id: parentId,
+			contentHtml,
+			createdAt,
+			updatedAt,
+			parentActivityId: null,
+			authorId: topLevelAuthor.userId,
+			authorUsername: topLevelAuthor.username,
+			recipientId: recipientRef?.userId ?? null
+		});
 	}
 	return activities;
 }
@@ -1450,6 +1459,34 @@ async function main() {
 						existingUserIds.add(userId);
 					}
 
+					// Synthesize the inviter relationship. Vanilla exposes it as
+					// <dd class="Invited"><a href="/profile/inviterId/…">…</a></dd>. The app
+					// resolves "invited by" via getInviter, which joins invitations on
+					// usedById → creatorId, so record one synthetic invitation per user.
+					if (profile.inviterId !== null && profile.inviterId !== userId) {
+						await ensureUser(profile.inviterId, '');
+						const invitedAt = profile.signupTime ?? new Date();
+						try {
+							await db
+								.insert(schema.invitations)
+								.values({
+									code: `legacy-${userId}-${profile.inviterId}`,
+									creatorId: profile.inviterId,
+									usedById: userId,
+									createdAt: invitedAt,
+									expiresAt: invitedAt
+								})
+								.onConflictDoNothing({ target: schema.invitations.code });
+						} catch (e: unknown) {
+							conflicts.push({
+								type: 'invitation_insert_error',
+								userId,
+								inviterId: profile.inviterId,
+								error: getErrorMessage(e)
+							});
+						}
+					}
+
 					// Import dynamic activity data from user's profile.html. Top-level
 					// activities are inserted first so each parent exists before its
 					// sub-comments reference it (parentActivityId is a plain column, not a
@@ -1457,18 +1494,40 @@ async function main() {
 					const activities = parseActivitiesHtml(html);
 					const insertActivity = async (act: ParsedActivity) => {
 						const actId = Number(act.id);
-						if (existingActivityIds.has(actId)) return;
+						// For a status update with no resolvable author, attribute to the
+						// profile owner (the wall it appeared on).
+						const authorId = act.authorId ?? userId;
 						try {
 							if (act.authorId !== null) {
 								await ensureUser(act.authorId, act.authorUsername ?? '');
 							}
+							if (act.recipientId !== null) {
+								await ensureUser(act.recipientId, '');
+							}
+							if (existingActivityIds.has(actId)) {
+								// Row imported by a prior run (possibly before the directed-activity
+								// / updatedAt logic landed). Refresh author/recipient/ordering fields
+								// without re-converting content.
+								await db
+									.update(schema.activities)
+									.set({
+										authorId,
+										recipientId: act.recipientId,
+										parentActivityId: act.parentActivityId,
+										updatedAt: act.updatedAt
+									})
+									.where(eq(schema.activities.id, actId));
+								return;
+							}
 							const contentJson = await convertHtmlToLexical(act.contentHtml, converterCtx);
 							await db.insert(schema.activities).values({
 								id: actId,
-								authorId: act.authorId ?? userId,
+								authorId,
+								recipientId: act.recipientId,
 								parentActivityId: act.parentActivityId,
 								contentJson,
-								createdAt: act.createdAt
+								createdAt: act.createdAt,
+								updatedAt: act.updatedAt
 							});
 							existingActivityIds.add(actId);
 						} catch (e: unknown) {
@@ -1565,87 +1624,32 @@ async function main() {
 				}
 			}
 
-			// C. Parse comments-page-*.json to import replies
-			const commentFiles = files.filter(
-				(f) => f.startsWith('comments-page-') && f.endsWith('.json')
-			);
-			for (const file of commentFiles) {
-				const filePath = join(userDir, file);
-				try {
-					const jsonContent = JSON.parse(readFileSync(filePath, 'utf-8'));
-					if (!jsonContent.Data) continue;
-
-					const decodedHtml = Buffer.from(jsonContent.Data, 'base64').toString('utf-8');
-					const comments = parseCommentsHtml(decodedHtml);
-
-					for (const comment of comments) {
-						// Resolve parent discussion by title
-						const discussionId = discussionTitleToIdMap.get(comment.discussionTitle);
-
-						if (!discussionId) {
-							conflicts.push({
-								type: 'reply_discussion_missing',
-								commentId: comment.id,
-								discussionTitle: comment.discussionTitle,
-								userId: userId,
-								reason: `Parent discussion "${comment.discussionTitle}" not found in database. Skipping reply.`
-							});
-							continue;
-						}
-
-						const commentId = Number(comment.id);
-						if (existingReplyIds.has(commentId)) {
-							continue;
-						}
-
-						try {
-							const createdAt = parseCommentTime(comment.timeText);
-							const contentJson = await convertHtmlToLexical(comment.contentHtml, converterCtx);
-							await db.insert(schema.replies).values({
-								id: commentId,
-								discussionId: discussionId,
-								authorId: userId,
-								contentJson,
-								createdAt: createdAt,
-								updatedAt: createdAt
-							});
-							existingReplyIds.add(commentId);
-						} catch (e: unknown) {
-							conflicts.push({
-								type: 'reply_insert_error',
-								commentId: comment.id,
-								error: getErrorMessage(e)
-							});
-						}
-					}
-				} catch (e: unknown) {
-					conflicts.push({
-						type: 'comment_file_parse_error',
-						filePath,
-						error: getErrorMessage(e)
-					});
-				}
-			}
+			// C. Replies are imported from the discussion pages in §4.5 (authoritative:
+			// bound by location, precise timestamps, correct authors). The per-user
+			// comments-page feeds are not used for replies  - they only carry a title
+			// (collision-prone) and a date-only timestamp.
 		}
 	} else {
 		console.log('Warning: data/profiles directory not found.');
 	}
 
-	// 4.5 Import discussion OP bodies (first post) as the earliest reply, and
-	// re-stamp reply timestamps from the discussion pages.
+	// 4.5 Import the OP + every reply from the discussion pages.
 	//
 	// The discussions table has no content column  - the OP is the chronologically
 	// earliest reply (see the discussion loader's orderBy(createdAt).limit(1)).
 	//
-	// Replies imported from the per-user comment feeds only carry a date, so
-	// parseCommentTime truncates them to midnight  - which lets same-day replies
-	// sort before the OP's precise posted time. The discussion pages carry the
-	// full ISO datetime on every comment, so we walk all of a discussion's pages
-	// here and correct each reply's timestamp. Replies absent from the crawled
-	// pages keep their original date-only time.
+	// The discussion pages are the authoritative source: each <li id="Comment_N">
+	// carries its author (profile link), full ISO datetime, body, and is bound to
+	// this discussion by location. This avoids two failure modes of the per-user
+	// comment feeds  - title-based discussion matching (collisions across the 85
+	// duplicated titles) and date-only timestamps (truncated to midnight, which
+	// let same-day replies sort before the OP). The OP is the comment with the
+	// lowest Vanilla item position (Item_1); the new template dropped the
+	// Discussion_NNN wrapper, so position is the only reliable OP marker.
 	const discussionsDir = join(dataDir, 'discussions');
 	if (existsSync(discussionsDir)) {
-		console.log('Importing discussion bodies (OP) + reply timestamps...');
+		console.log('Importing discussion OP + replies from discussion pages...');
+		let opMissing = 0;
 		for (const [discussionId, meta] of existingDiscussionsMap) {
 			// Negative id keeps OP replies deterministic, idempotent, and clear of
 			// the positive Vanilla comment ids.
@@ -1658,104 +1662,136 @@ async function main() {
 						.sort()
 				: [];
 
-			let body: string | null = null;
-			let trueCreatedAt: Date | null = null;
-			const commentTimes = new Map<string, Date>();
-
+			// Collect every comment across all pages, dedup by id (a partial re-crawl
+			// can re-fetch a page). First occurrence wins on ties.
+			const byId = new Map<string, ParsedDiscussionComment>();
 			for (const pf of pageFiles) {
 				let pageHtml: string;
 				try {
 					pageHtml = readFileSync(join(discDir, pf), 'utf-8');
 				} catch (e: unknown) {
-					if (pf === 'page-000001.html' && !existingReplyIds.has(opReplyId)) {
-						conflicts.push({
-							type: 'op_body_read_error',
-							discussionId,
-							error: getErrorMessage(e)
-						});
-					}
+					conflicts.push({
+						type: 'discussion_page_read_error',
+						discussionId,
+						file: pf,
+						error: getErrorMessage(e)
+					});
 					continue;
 				}
-				if (pf === 'page-000001.html') {
-					body = extractOpBody(pageHtml, discussionId);
-					trueCreatedAt = extractDiscussionCreatedAt(pageHtml, discussionId);
-				}
-				for (const [cid, d] of extractCommentTimes(pageHtml)) {
-					commentTimes.set(cid, d);
+				for (const c of parseDiscussionComments(pageHtml, discussionId)) {
+					if (!byId.has(c.id)) byId.set(c.id, c);
 				}
 			}
 
-			// OP body insert/update (guarded by body presence).
-			if (pageFiles.length === 0) {
+			if (byId.size === 0) {
 				if (!existingReplyIds.has(opReplyId)) {
+					opMissing++;
 					conflicts.push({ type: 'op_body_missing', discussionId });
 				}
-			} else if (!body || !body.trim()) {
-				if (!existingReplyIds.has(opReplyId)) {
-					conflicts.push({ type: 'op_body_empty', discussionId });
-				}
-			} else {
-				const authorId = meta.authorId;
-				const finalCreatedAt = trueCreatedAt ?? meta.createdAt;
-				try {
-					if (trueCreatedAt) {
-						await db
-							.update(schema.discussions)
-							.set({ createdAt: trueCreatedAt })
-							.where(eq(schema.discussions.id, discussionId));
-						meta.createdAt = trueCreatedAt;
-					}
+				continue;
+			}
 
-					const contentJson = await convertHtmlToLexical(body, converterCtx);
+			// OP = lowest item position. Ties (e.g. an old-template Discussion_NNN
+			// post plus comments) resolve to whichever sorts first by position.
+			const sorted = [...byId.values()].sort(
+				(a, b) => a.itemPosition - b.itemPosition || a.createdAt.getTime() - b.createdAt.getTime()
+			);
+			const opComment = sorted[0];
+
+			// Write the OP as a negative-id reply, and stamp the discussion's
+			// createdAt with the OP's real time so list views order correctly.
+			try {
+				if (opComment.contentHtml.trim()) {
+					const opAuthorId = opComment.authorId ?? meta.authorId;
+					if (opComment.authorId !== null) {
+						await ensureUser(opComment.authorId, opComment.authorUsername ?? '');
+					}
+					const opContentJson = await convertHtmlToLexical(opComment.contentHtml, converterCtx);
 					if (existingReplyIds.has(opReplyId)) {
 						await db
 							.update(schema.replies)
 							.set({
-								contentJson,
-								createdAt: finalCreatedAt,
-								updatedAt: finalCreatedAt
+								authorId: opAuthorId,
+								contentJson: opContentJson,
+								createdAt: opComment.createdAt,
+								updatedAt: opComment.createdAt
 							})
 							.where(eq(schema.replies.id, opReplyId));
 					} else {
 						await db.insert(schema.replies).values({
 							id: opReplyId,
 							discussionId,
-							authorId,
-							contentJson,
-							createdAt: finalCreatedAt,
-							updatedAt: finalCreatedAt
+							authorId: opAuthorId,
+							contentJson: opContentJson,
+							createdAt: opComment.createdAt,
+							updatedAt: opComment.createdAt
 						});
 						existingReplyIds.add(opReplyId);
 					}
+					await db
+						.update(schema.discussions)
+						.set({ createdAt: opComment.createdAt })
+						.where(eq(schema.discussions.id, discussionId));
+					meta.createdAt = opComment.createdAt;
+				} else if (!existingReplyIds.has(opReplyId)) {
+					conflicts.push({ type: 'op_body_empty', discussionId });
+				}
+			} catch (e: unknown) {
+				conflicts.push({
+					type: 'op_body_insert_error',
+					discussionId,
+					error: getErrorMessage(e)
+				});
+			}
+
+			// Upsert every non-OP comment as a reply bound to this discussion by id.
+			// Upsert (not skip) so a re-run corrects author/timestamps from prior
+			// title-based imports, and so re-crawled pages fill in missing replies.
+			for (const c of sorted) {
+				if (c.id === opComment.id) continue;
+				const replyId = Number(c.id);
+				const authorId = c.authorId ?? GHOST_USER_ID;
+				if (c.authorId !== null) {
+					await ensureUser(c.authorId, c.authorUsername ?? '');
+				}
+				const contentHtml = c.contentHtml;
+				if (!contentHtml || !contentHtml.trim()) continue;
+				try {
+					const contentJson = await convertHtmlToLexical(contentHtml, converterCtx);
+					if (existingReplyIds.has(replyId)) {
+						await db
+							.update(schema.replies)
+							.set({
+								discussionId,
+								authorId,
+								contentJson,
+								createdAt: c.createdAt,
+								updatedAt: c.createdAt
+							})
+							.where(eq(schema.replies.id, replyId));
+					} else {
+						await db.insert(schema.replies).values({
+							id: replyId,
+							discussionId,
+							authorId,
+							contentJson,
+							createdAt: c.createdAt,
+							updatedAt: c.createdAt
+						});
+						existingReplyIds.add(replyId);
+					}
 				} catch (e: unknown) {
 					conflicts.push({
-						type: 'op_body_insert_error',
+						type: 'reply_insert_error',
+						commentId: c.id,
 						discussionId,
 						error: getErrorMessage(e)
 					});
 				}
 			}
-
-			// Re-stamp reply timestamps with the precise ISO datetimes from the
-			// discussion pages so the OP (precise) is no longer leapfrogged by
-			// same-day replies (midnight).
-			for (const [cid, d] of commentTimes) {
-				const replyId = Number(cid);
-				if (replyId === opReplyId) continue;
-				if (!existingReplyIds.has(replyId)) continue;
-				try {
-					await db
-						.update(schema.replies)
-						.set({ createdAt: d, updatedAt: d })
-						.where(eq(schema.replies.id, replyId));
-				} catch (e: unknown) {
-					conflicts.push({
-						type: 'reply_timestamp_update_error',
-						commentId: cid,
-						error: getErrorMessage(e)
-					});
-				}
-			}
+		}
+		if (opMissing > 0) {
+			console.log(`  ${opMissing} discussions had no crawlable pages (OP missing).`);
 		}
 	} else {
 		console.log('Warning: data/discussions directory not found; skipping OP bodies.');

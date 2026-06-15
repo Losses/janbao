@@ -81,7 +81,15 @@ export const load: PageServerLoad = async (event) => {
 				or(eq(activities.authorId, userId), eq(activities.recipientId, userId))
 			)
 		)
-		.orderBy(desc(activities.createdAt))
+		.orderBy(
+			// Vanilla surfaces an activity by its last-updated time (a comment bumps
+			// the parent status), not its insertion time. updatedAt holds that bumped
+			// time; fall back to createdAt for rows without it. The id tiebreaker
+			// keeps same-day activities (midnight-truncated timestamps from the
+			// date-only source) in newest-first order.
+			sql`COALESCE(${activities.updatedAt}, ${activities.createdAt}) DESC`,
+			desc(activities.id)
+		)
 		.limit(20);
 
 	// 5. Batch-fetch recipient display names for directed activities
