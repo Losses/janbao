@@ -85,10 +85,7 @@ export async function appendJoinedMember(
 	}
 
 	// Append the member (idempotent on the (activityId, userId) PK).
-	await dbOrTx
-		.insert(activityJoins)
-		.values({ activityId, userId, joinedAt })
-		.onConflictDoNothing();
+	await dbOrTx.insert(activityJoins).values({ activityId, userId, joinedAt }).onConflictDoNothing();
 }
 
 /**
