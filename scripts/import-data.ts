@@ -47,6 +47,11 @@ interface ParsedActivity {
 	id: string;
 	contentHtml: string;
 	createdAt: Date;
+	// null for top-level activities (attributed to the profile owner); set for the
+	// nested ActivityComment rows that reply to a top-level activity.
+	parentActivityId: number | null;
+	authorId: number | null;
+	authorUsername: string | null;
 }
 
 interface AvatarEntry {
@@ -530,6 +535,34 @@ function extractDiscussionCreatedAt(html: string, discussionId: number): Date | 
 	return timeMatch ? new Date(timeMatch[1]) : null;
 }
 
+/**
+ * Extract precise creation times for every comment in a discussion page.
+ *
+ * Vanilla's discussion pages carry the full ISO datetime on each comment's
+ * <time> tag, whereas the per-user comment feeds only carry a date (which
+ * parseCommentTime truncates to midnight). Returns a map of commentId → Date so
+ * the importer can re-stamp replies that were given a midnight timestamp when
+ * imported from the comment feeds  - without that correction, same-day replies
+ * sort before the OP's precise posted time and a reply is mistaken for the OP.
+ */
+function extractCommentTimes(html: string): Map<string, Date> {
+	const map = new Map<string, Date>();
+	// Discussion-page <li>s render class before id (<li class="..." id="Comment_N">),
+	// so split on the id attribute itself rather than on <li id=.
+	const parts = html.split(/id="Comment_/);
+	for (let i = 1; i < parts.length; i++) {
+		const part = parts[i];
+		const idMatch = part.match(/^(\d+)/);
+		if (!idMatch) continue;
+		const timeMatch = part.match(/<time[^>]*datetime="([^"]+)"/);
+		if (timeMatch) {
+			const d = new Date(timeMatch[1]);
+			if (!isNaN(d.getTime())) map.set(idMatch[1], d);
+		}
+	}
+	return map;
+}
+
 // Robust Email obfuscation decoder
 function parseEmail(html: string): string | null {
 	const match = html.match(/<dd class="Email"[^>]*>([\s\S]+?)<\/dd>/);
@@ -749,7 +782,30 @@ function parseDiscussionsHtml(html: string): ParsedDiscussion[] {
 	return discussions;
 }
 
-// Parse discussions-activities in user's profile.html
+interface ProfileUserRef {
+	userId: number | null;
+	username: string | null;
+}
+
+/** URL-decode a profile slug, falling back to the raw value on malformed input. */
+function decodeProfileSlug(slug: string): string {
+	try {
+		return decodeURIComponent(slug).trim();
+	} catch {
+		return slug;
+	}
+}
+
+/** Extract {userId, username} from the first /profile/<id>/<slug> href in an HTML slice. */
+function extractProfileUser(html: string): ProfileUserRef {
+	const m = html.match(/\/profile\/(\d+)\/([^"'/?#]+)/);
+	if (!m) return { userId: null, username: null };
+	return { userId: Number(m[1]), username: decodeProfileSlug(m[2]) || null };
+}
+
+// Parse discussions-activities in user's profile.html. Captures both top-level
+// activities and the nested ActivityComment rows that reply to them (Vanilla
+// stores both in the same list, comments nested under their parent <li>).
 function parseActivitiesHtml(html: string): ParsedActivity[] {
 	const activities: ParsedActivity[] = [];
 	const activitiesBlockMatch = html.match(
@@ -763,8 +819,10 @@ function parseActivitiesHtml(html: string): ParsedActivity[] {
 		const part = parts[i];
 		const idMatch = part.match(/^(\d+)/);
 		if (!idMatch) continue;
-		const id = idMatch[1];
+		const parentId = idMatch[1];
 
+		// Top-level activity: its Excerpt + MItem DateCreated appear before the
+		// nested ActivityComments block, so the non-greedy matches pick the right ones.
 		const excerptMatch = part.match(/<div\s+class="Excerpt">([\s\S]+?)<\/div>/);
 		const contentHtml = excerptMatch ? excerptMatch[1] : '';
 
@@ -776,10 +834,51 @@ function parseActivitiesHtml(html: string): ParsedActivity[] {
 		}
 
 		activities.push({
-			id,
+			id: parentId,
 			contentHtml,
-			createdAt
+			createdAt,
+			parentActivityId: null,
+			authorId: null,
+			authorUsername: null
 		});
+
+		// Nested activity comments. Split on ActivityComment_ (distinct from the
+		// Activity_ split key) so each sub-comment stays within its parent's part
+		// and inherits this activity's id as its parentActivityId.
+		const commentParts = part.split(/<li\s+id="ActivityComment_/);
+		for (let j = 1; j < commentParts.length; j++) {
+			const cpart = commentParts[j];
+			const cidMatch = cpart.match(/^(\d+)/);
+			if (!cidMatch) continue;
+
+			const cExcerptMatch = cpart.match(/<div\s+class="Excerpt">([\s\S]+?)<\/div>/);
+			const cContentHtml = cExcerptMatch ? cExcerptMatch[1] : '';
+			const author = extractProfileUser(cpart);
+
+			// Sub-comments carry a precise <time datetime> (unlike top-level
+			// activities, whose DateCreated is date-only text); fall back to the
+			// visible date if the datetime attribute is absent.
+			const cTimeMatch = cpart.match(/<time[^>]*datetime="([^"]+)"/);
+			let cCreatedAt = new Date();
+			if (cTimeMatch) {
+				const d = new Date(cTimeMatch[1]);
+				if (!isNaN(d.getTime())) cCreatedAt = d;
+			} else {
+				const cDateSpan = cpart.match(/<span\s+class="DateCreated">([\s\S]+?)<\/span>/);
+				if (cDateSpan) {
+					cCreatedAt = parseCommentTime(cDateSpan[1].replace(/<[^>]+>/g, '').trim());
+				}
+			}
+
+			activities.push({
+				id: cidMatch[1],
+				contentHtml: cContentHtml,
+				createdAt: cCreatedAt,
+				parentActivityId: Number(parentId),
+				authorId: author.userId,
+				authorUsername: author.username
+			});
+		}
 	}
 	return activities;
 }
@@ -1351,16 +1450,23 @@ async function main() {
 						existingUserIds.add(userId);
 					}
 
-					// Import dynamic activity data from user's profile.html
+					// Import dynamic activity data from user's profile.html. Top-level
+					// activities are inserted first so each parent exists before its
+					// sub-comments reference it (parentActivityId is a plain column, not a
+					// FK, but keeping parents ahead of children keeps existingActivityIds sane).
 					const activities = parseActivitiesHtml(html);
-					for (const act of activities) {
+					const insertActivity = async (act: ParsedActivity) => {
 						const actId = Number(act.id);
-						if (existingActivityIds.has(actId)) continue;
+						if (existingActivityIds.has(actId)) return;
 						try {
+							if (act.authorId !== null) {
+								await ensureUser(act.authorId, act.authorUsername ?? '');
+							}
 							const contentJson = await convertHtmlToLexical(act.contentHtml, converterCtx);
 							await db.insert(schema.activities).values({
 								id: actId,
-								authorId: userId,
+								authorId: act.authorId ?? userId,
+								parentActivityId: act.parentActivityId,
 								contentJson,
 								createdAt: act.createdAt
 							});
@@ -1373,6 +1479,12 @@ async function main() {
 								error: getErrorMessage(e)
 							});
 						}
+					};
+					for (const act of activities) {
+						if (act.parentActivityId === null) await insertActivity(act);
+					}
+					for (const act of activities) {
+						if (act.parentActivityId !== null) await insertActivity(act);
 					}
 				} catch (e: unknown) {
 					conflicts.push({
@@ -1519,87 +1631,130 @@ async function main() {
 		console.log('Warning: data/profiles directory not found.');
 	}
 
-	// 4.5 Import discussion OP bodies (first post) as the earliest reply.
+	// 4.5 Import discussion OP bodies (first post) as the earliest reply, and
+	// re-stamp reply timestamps from the discussion pages.
+	//
 	// The discussions table has no content column  - the OP is the chronologically
 	// earliest reply (see the discussion loader's orderBy(createdAt).limit(1)).
+	//
+	// Replies imported from the per-user comment feeds only carry a date, so
+	// parseCommentTime truncates them to midnight  - which lets same-day replies
+	// sort before the OP's precise posted time. The discussion pages carry the
+	// full ISO datetime on every comment, so we walk all of a discussion's pages
+	// here and correct each reply's timestamp. Replies absent from the crawled
+	// pages keep their original date-only time.
 	const discussionsDir = join(dataDir, 'discussions');
 	if (existsSync(discussionsDir)) {
-		console.log('Importing discussion bodies (OP)...');
+		console.log('Importing discussion bodies (OP) + reply timestamps...');
 		for (const [discussionId, meta] of existingDiscussionsMap) {
 			// Negative id keeps OP replies deterministic, idempotent, and clear of
 			// the positive Vanilla comment ids.
 			const opReplyId = -discussionId;
 
-			const htmlPath = join(discussionsDir, String(discussionId), 'page-000001.html');
-			if (!existsSync(htmlPath)) {
+			const discDir = join(discussionsDir, String(discussionId));
+			const pageFiles = existsSync(discDir)
+				? readdirSync(discDir)
+						.filter((f) => /^page-\d+\.html$/.test(f))
+						.sort()
+				: [];
+
+			let body: string | null = null;
+			let trueCreatedAt: Date | null = null;
+			const commentTimes = new Map<string, Date>();
+
+			for (const pf of pageFiles) {
+				let pageHtml: string;
+				try {
+					pageHtml = readFileSync(join(discDir, pf), 'utf-8');
+				} catch (e: unknown) {
+					if (pf === 'page-000001.html' && !existingReplyIds.has(opReplyId)) {
+						conflicts.push({
+							type: 'op_body_read_error',
+							discussionId,
+							error: getErrorMessage(e)
+						});
+					}
+					continue;
+				}
+				if (pf === 'page-000001.html') {
+					body = extractOpBody(pageHtml, discussionId);
+					trueCreatedAt = extractDiscussionCreatedAt(pageHtml, discussionId);
+				}
+				for (const [cid, d] of extractCommentTimes(pageHtml)) {
+					commentTimes.set(cid, d);
+				}
+			}
+
+			// OP body insert/update (guarded by body presence).
+			if (pageFiles.length === 0) {
 				if (!existingReplyIds.has(opReplyId)) {
 					conflicts.push({ type: 'op_body_missing', discussionId });
 				}
-				continue;
-			}
-
-			let body: string | null;
-			let trueCreatedAt: Date | null;
-			try {
-				const opHtml = readFileSync(htmlPath, 'utf-8');
-				body = extractOpBody(opHtml, discussionId);
-				trueCreatedAt = extractDiscussionCreatedAt(opHtml, discussionId);
-			} catch (e: unknown) {
+			} else if (!body || !body.trim()) {
 				if (!existingReplyIds.has(opReplyId)) {
+					conflicts.push({ type: 'op_body_empty', discussionId });
+				}
+			} else {
+				const authorId = meta.authorId;
+				const finalCreatedAt = trueCreatedAt ?? meta.createdAt;
+				try {
+					if (trueCreatedAt) {
+						await db
+							.update(schema.discussions)
+							.set({ createdAt: trueCreatedAt })
+							.where(eq(schema.discussions.id, discussionId));
+						meta.createdAt = trueCreatedAt;
+					}
+
+					const contentJson = await convertHtmlToLexical(body, converterCtx);
+					if (existingReplyIds.has(opReplyId)) {
+						await db
+							.update(schema.replies)
+							.set({
+								contentJson,
+								createdAt: finalCreatedAt,
+								updatedAt: finalCreatedAt
+							})
+							.where(eq(schema.replies.id, opReplyId));
+					} else {
+						await db.insert(schema.replies).values({
+							id: opReplyId,
+							discussionId,
+							authorId,
+							contentJson,
+							createdAt: finalCreatedAt,
+							updatedAt: finalCreatedAt
+						});
+						existingReplyIds.add(opReplyId);
+					}
+				} catch (e: unknown) {
 					conflicts.push({
-						type: 'op_body_read_error',
+						type: 'op_body_insert_error',
 						discussionId,
 						error: getErrorMessage(e)
 					});
 				}
-				continue;
 			}
 
-			if (!body || !body.trim()) {
-				if (!existingReplyIds.has(opReplyId)) {
-					conflicts.push({ type: 'op_body_empty', discussionId });
-				}
-				continue;
-			}
-
-			const authorId = meta.authorId;
-			const finalCreatedAt = trueCreatedAt ?? meta.createdAt;
-			try {
-				if (trueCreatedAt) {
-					await db
-						.update(schema.discussions)
-						.set({ createdAt: trueCreatedAt })
-						.where(eq(schema.discussions.id, discussionId));
-					meta.createdAt = trueCreatedAt;
-				}
-
-				const contentJson = await convertHtmlToLexical(body, converterCtx);
-				if (existingReplyIds.has(opReplyId)) {
+			// Re-stamp reply timestamps with the precise ISO datetimes from the
+			// discussion pages so the OP (precise) is no longer leapfrogged by
+			// same-day replies (midnight).
+			for (const [cid, d] of commentTimes) {
+				const replyId = Number(cid);
+				if (replyId === opReplyId) continue;
+				if (!existingReplyIds.has(replyId)) continue;
+				try {
 					await db
 						.update(schema.replies)
-						.set({
-							contentJson,
-							createdAt: finalCreatedAt,
-							updatedAt: finalCreatedAt
-						})
-						.where(eq(schema.replies.id, opReplyId));
-				} else {
-					await db.insert(schema.replies).values({
-						id: opReplyId,
-						discussionId,
-						authorId,
-						contentJson,
-						createdAt: finalCreatedAt,
-						updatedAt: finalCreatedAt
+						.set({ createdAt: d, updatedAt: d })
+						.where(eq(schema.replies.id, replyId));
+				} catch (e: unknown) {
+					conflicts.push({
+						type: 'reply_timestamp_update_error',
+						commentId: cid,
+						error: getErrorMessage(e)
 					});
-					existingReplyIds.add(opReplyId);
 				}
-			} catch (e: unknown) {
-				conflicts.push({
-					type: 'op_body_insert_error',
-					discussionId,
-					error: getErrorMessage(e)
-				});
 			}
 		}
 	} else {
