@@ -9,11 +9,9 @@
 	import type { ApiResult, ActivityCommentItem, ActivityCommentsResponse } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 
-	// Comment thread section (editor + list) for any top-level activity. The
-	// toggle BUTTON lives in the parent row's action bar (so it sits on the same
-	// line as timestamp/delete); this component renders only the collapsible
-	// section below it. `open` is controlled by the parent; `commentCount` is
-	// bindable so the parent's button count stays in sync after a submit.
+	// Collapsible comment thread for a top-level activity. The toggle button
+	// lives in the parent row; this renders the editor + list. `open` is
+	// parent-controlled, `commentCount` is bindable.
 
 	interface ActivityCommentsProps {
 		activityId: number;

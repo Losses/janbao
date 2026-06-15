@@ -75,7 +75,9 @@
 			<div class="flex items-center gap-1 flex-wrap">
 				{joinedParts[0]}
 				{#each members as m, i (m.userId)}
-					{#if i > 0}<span class="text-base-content/60">{i === members.length - 1 ? lastSep : itemSep}</span>{/if}
+					{#if i > 0}<span class="text-base-content/60"
+							>{i === members.length - 1 ? lastSep : itemSep}</span
+						>{/if}
 					<a
 						href="/profile/{m.userId}/{generateSlug(m.username)}"
 						class="font-semibold text-base-content hover:text-primary transition-colors"
