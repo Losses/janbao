@@ -9,6 +9,7 @@
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import type { TranslationDict } from '$lib/types/translation';
 	import { getActiveUsersStore } from '$lib/stores/active-users.svelte';
+	import { generateSlug } from '$lib/utils/slug';
 
 	interface ActiveUsersWallProps {
 		t: TranslationDict;
@@ -44,7 +45,7 @@
 		<div class="flex flex-wrap gap-2">
 			{#each store.users as u (u.id)}
 				<a
-					href="/messages/new?recipient={u.id}"
+					href="/profile/{u.id}/{generateSlug(u.username)}"
 					title={u.displayName}
 					class="transition-transform hover:scale-110"
 				>
