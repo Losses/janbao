@@ -9,7 +9,6 @@ export const load: PageServerLoad = async (event) => {
 	const db = event.locals.db;
 	const platformEnv = event.platform?.env;
 	const user = event.locals.user;
-	const locale = event.locals.lang;
 
 	// 1. Parse pagination
 	const pageParam = event.url.searchParams.get('page');
@@ -157,7 +156,6 @@ export const load: PageServerLoad = async (event) => {
 		totalPages,
 		totalCount,
 		activityDraft,
-		mentionedUsers,
-		locale
+		mentionedUsers
 	};
 };

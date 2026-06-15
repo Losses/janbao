@@ -25,7 +25,6 @@
 
 	interface ActivityListProps {
 		items: ActivityListItem[];
-		locale: string;
 		currentUserId?: number | null;
 		isAdmin?: boolean;
 		mentionedUsers?: MentionedUsersMap | null;
@@ -34,7 +33,6 @@
 
 	let {
 		items,
-		locale,
 		currentUserId = null,
 		isAdmin = false,
 		mentionedUsers = null,
@@ -48,7 +46,6 @@
 			id={activity.id}
 			createdAt={activity.createdAt}
 			members={activity.joinedMembers}
-			{locale}
 			commentCount={activity.commentCount}
 			authorId={activity.authorId}
 			{currentUserId}

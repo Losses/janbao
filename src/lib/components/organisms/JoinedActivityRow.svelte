@@ -10,7 +10,6 @@
 		id: number;
 		createdAt: Date;
 		members: JoinedMember[];
-		locale: string;
 		commentCount: number;
 		authorId: number;
 		currentUserId?: number | null;
@@ -22,7 +21,6 @@
 		id,
 		createdAt,
 		members,
-		locale,
 		commentCount = 0,
 		authorId,
 		currentUserId = null,
@@ -34,9 +32,19 @@
 	// svelte-ignore state_referenced_locally
 	let commentCountState = $state(commentCount);
 
-	// Avatar = first member's avatar.
 	const first = $derived(members[0]);
-	const isZh = $derived(locale.startsWith('zh'));
+	const activityT = $derived(
+		t.activity as {
+			joined?: string;
+			welcome?: string;
+			listItemSeparator?: string;
+			listLastSeparator?: string;
+		}
+	);
+	const joinedParts = $derived((activityT.joined ?? '{users} joined').split('{users}'));
+	const itemSep = $derived(activityT.listItemSeparator ?? ', ');
+	const lastSep = $derived(activityT.listLastSeparator ?? ' and ');
+	const welcomeLine = $derived(activityT.welcome ?? '');
 
 	function gtc(key: string): string {
 		const common = t['common'] as Record<string, string> | undefined;
@@ -46,17 +54,6 @@
 		}
 		return key;
 	}
-
-	// Separator BEFORE each name (index 0 = none): en "A, B and C", zh "A、B 和 C".
-	function sepBefore(i: number, count: number): string {
-		if (i === 0) return '';
-		const last = i === count - 1;
-		if (isZh) return last ? '和' : '、';
-		return last ? 'and' : ',';
-	}
-
-	const verb = $derived(isZh ? '加入了' : 'joined');
-	const welcomeLine = $derived((t.activity as { welcome?: string }).welcome ?? '');
 </script>
 
 <div class="py-4 border-b border-base-300 last:border-b-0">
@@ -74,12 +71,11 @@
 			</div>
 		{/if}
 		<div class="flex-1 min-w-0">
-			<!-- Row 1: "{u1} and {u2} joined." -->
+			<!-- Row 1: "{u1} and {u2} joined." — every connector/suffix from i18n -->
 			<div class="flex items-center gap-1 flex-wrap">
+				{joinedParts[0]}
 				{#each members as m, i (m.userId)}
-					{#if sepBefore(i, members.length)}<span class="text-base-content/60"
-							>{sepBefore(i, members.length)}</span
-						>{/if}
+					{#if i > 0}<span class="text-base-content/60">{i === members.length - 1 ? lastSep : itemSep}</span>{/if}
 					<a
 						href="/profile/{m.userId}/{generateSlug(m.username)}"
 						class="font-semibold text-base-content hover:text-primary transition-colors"
@@ -87,7 +83,7 @@
 						{m.displayName || m.username || `user-${m.userId}`}
 					</a>
 				{/each}
-				<span class="text-base-content/70">{verb}</span>
+				<span class="text-base-content/70">{joinedParts[1]}</span>
 			</div>
 
 			<!-- Row 2: excerpt -->

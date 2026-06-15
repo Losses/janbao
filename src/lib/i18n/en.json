@@ -194,7 +194,9 @@
 		"activityNotFound": "Activity not found",
 		"cannotNestComments": "Cannot nest comments beyond one level",
 		"joined": "{users} joined",
-		"welcome": "Welcome!"
+		"welcome": "Welcome!",
+		"listItemSeparator": ", ",
+		"listLastSeparator": " and "
 	},
 	"profile": {
 		"activities": "Activities",

@@ -175,7 +175,6 @@
 			<div class="overflow-hidden">
 				<ActivityList
 					items={activityList}
-					locale={data.locale}
 					currentUserId={user?.id}
 					isAdmin={user?.groupSlug === 'admin'}
 					mentionedUsers={data.mentionedUsers}

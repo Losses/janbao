@@ -194,7 +194,9 @@
 		"activityNotFound": "动态未找到",
 		"cannotNestComments": "评论不能嵌套超过一级",
 		"joined": "{users} 加入了",
-		"welcome": "欢迎加入！"
+		"welcome": "欢迎加入！",
+		"listItemSeparator": "、",
+		"listLastSeparator": "和"
 	},
 	"profile": {
 		"activities": "动态",

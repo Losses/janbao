@@ -120,7 +120,6 @@
 			<div class="space-y-0">
 				<ActivityList
 					items={activityList}
-					locale={data.locale}
 					currentUserId={user?.id}
 					isAdmin={user?.groupSlug === 'admin'}
 					mentionedUsers={data.mentionedUsers}

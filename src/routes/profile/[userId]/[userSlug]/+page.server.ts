@@ -211,7 +211,6 @@ export const load: PageServerLoad = async (event) => {
 		})),
 		isOwner,
 		activityDraft,
-		mentionedUsers,
-		locale: event.locals.lang
+		mentionedUsers
 	};
 };
