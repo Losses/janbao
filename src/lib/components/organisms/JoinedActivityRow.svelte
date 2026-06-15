@@ -1,18 +1,34 @@
 <script lang="ts">
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import DateComponent from '$lib/components/atoms/Date.svelte';
+	import ActivityComments from '$lib/components/organisms/ActivityComments.svelte';
 	import { generateSlug } from '$lib/utils/slug';
 	import type { JoinedMember } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 
 	interface JoinedActivityRowProps {
+		id: number;
 		createdAt: Date;
 		members: JoinedMember[];
 		locale: string;
+		commentCount: number;
+		authorId: number;
+		currentUserId?: number | null;
+		isAdmin?: boolean;
 		t: TranslationDict;
 	}
 
-	let { createdAt, members, locale, t }: JoinedActivityRowProps = $props();
+	let {
+		id,
+		createdAt,
+		members,
+		locale,
+		commentCount = 0,
+		authorId,
+		currentUserId = null,
+		isAdmin = false,
+		t
+	}: JoinedActivityRowProps = $props();
 
 	// Avatar = first member's avatar (matches how Vanilla shows the OP of the
 	// "who joined" event).
@@ -78,6 +94,16 @@
 					<DateComponent value={createdAt} {t} class="text-sm" />
 				</div>
 			</div>
+
+			<!-- Comment thread (shared with ActivityRow) -->
+			<ActivityComments
+				activityId={id}
+				{commentCount}
+				{currentUserId}
+				{isAdmin}
+				activityAuthorId={authorId}
+				{t}
+			/>
 		</div>
 	</div>
 </div>

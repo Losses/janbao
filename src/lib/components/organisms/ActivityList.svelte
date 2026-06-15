@@ -45,9 +45,14 @@
 {#each items as activity (activity.id)}
 	{#if activity.isJoined}
 		<JoinedActivityRow
+			id={activity.id}
 			createdAt={activity.createdAt}
 			members={activity.joinedMembers}
 			{locale}
+			commentCount={activity.commentCount}
+			authorId={activity.authorId}
+			{currentUserId}
+			{isAdmin}
 			{t}
 		/>
 	{:else}
