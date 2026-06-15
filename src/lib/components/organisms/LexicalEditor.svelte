@@ -170,14 +170,56 @@
 		setStyle?: SetStyleFn;
 	}
 
-	interface SelectionWithNodes {
-		getNodes?: GetNodesFn;
-	}
-
 	type InsertNodesFn = (nodes: unknown[]) => void;
 
 	interface SelectionWithInsertNodes {
 		insertNodes?: InsertNodesFn;
+	}
+
+	// Structural types for the spoiler toggle command. We mirror Lexical's
+	// RangeSelection/TextNode/Point shapes instead of importing them directly,
+	// to avoid cross-package type conflicts with svelte-lexical's bundled lexical.
+	type GetTextContentSizeFn = () => number;
+	type IsFlagFn = () => boolean;
+	type IsNodeFn = (node: unknown) => boolean;
+	type SetPointFn = (key: string, offset: number, type: string) => void;
+	type SplitTextFn = (...offsets: number[]) => SpoilerTextNode[];
+
+	interface SpoilerPointLike {
+		type: string;
+		offset: number;
+		set: SetPointFn;
+	}
+
+	interface SpoilerSelectionLike {
+		anchor: SpoilerPointLike;
+		focus: SpoilerPointLike;
+		isBackward: IsFlagFn;
+		getNodes: GetNodesFn;
+	}
+
+	interface SpoilerTextNode {
+		__key: string;
+		is: IsNodeFn;
+		getStyle: GetStyleFn;
+		setStyle: SetStyleFn;
+		getTextContentSize: GetTextContentSizeFn;
+		splitText: SplitTextFn;
+	}
+
+	/**
+	 * Add or remove the spoiler sentinel on a text node's inline style string.
+	 * No-op when the node already matches the requested state (prevents the
+	 * whole-node toggle thrash that the old per-node loop produced).
+	 */
+	function applySpoilerStyle(node: SpoilerTextNode, add: boolean): void {
+		const style = node.getStyle() ?? '';
+		const hasSpoiler = style.includes('janbao-spoiler');
+		if (add && !hasSpoiler) {
+			node.setStyle(style ? `${style} ${SPOILER_STYLE_MARKER}` : SPOILER_STYLE_MARKER);
+		} else if (!add && hasSpoiler) {
+			node.setStyle(style.replace(/janbao-spoiler;?\s*/g, '').trim());
+		}
 	}
 
 	$effect(() => {
@@ -204,21 +246,77 @@
 			() => {
 				castEditor.update!(() => {
 					const selection = getSelection();
-					if (isRangeSelection(selection)) {
-						const nodes = (selection as SelectionWithNodes).getNodes?.() ?? [];
-						for (const node of nodes) {
-							if (isTextNodeFn(node as Parameters<typeof isTextNodeFn>[0])) {
-								const textNode = node as NodeWithStyle;
-								const currentStyle = textNode.getStyle?.() ?? '';
-								if (currentStyle.includes('janbao-spoiler')) {
-									textNode.setStyle?.(currentStyle.replace(/janbao-spoiler;?\s*/g, '').trim());
-								} else {
-									textNode.setStyle?.(
-										currentStyle ? `${currentStyle} ${SPOILER_STYLE_MARKER}` : SPOILER_STYLE_MARKER
-									);
-								}
-							}
+					if (!isRangeSelection(selection)) return;
+					const rangeSelection = selection as SpoilerSelectionLike;
+					const anchor = rangeSelection.anchor;
+					const focus = rangeSelection.focus;
+					const isBackward = rangeSelection.isBackward();
+					const startPoint = isBackward ? focus : anchor;
+					const endPoint = isBackward ? anchor : focus;
+
+					const nodes = rangeSelection.getNodes() ?? [];
+					// Filter to text nodes; style only applies to TextNodes.
+					const textNodes = nodes.filter((node) =>
+						isTextNodeFn(node as Parameters<typeof isTextNodeFn>[0])
+					) as SpoilerTextNode[];
+					if (textNodes.length === 0) return;
+
+					let firstIndex = 0;
+					let firstNode = textNodes[0];
+					let startOffset = startPoint.type === 'element' ? 0 : startPoint.offset;
+
+					// If selection begins at the very end of the first text node,
+					// the first node contributes nothing - advance to the next.
+					if (startPoint.type === 'text' && startOffset === firstNode.getTextContentSize()) {
+						firstIndex = 1;
+						firstNode = textNodes[1];
+						startOffset = 0;
+					}
+					if (!firstNode) return;
+
+					const lastIndex = textNodes.length - 1;
+					let lastNode = textNodes[lastIndex];
+					const endOffset =
+						endPoint.type === 'element' ? lastNode.getTextContentSize() : endPoint.offset;
+
+					// Toggle direction mirrors Lexical's formatText: invert based on
+					// whether the first selected node already carries the marker.
+					const add = !(firstNode.getStyle() ?? '').includes('janbao-spoiler');
+
+					if (firstNode.is(lastNode)) {
+						// Single node selected. Nothing actually highlighted -> no-op
+						// (also handles collapsed selections safely).
+						if (startOffset === endOffset) return;
+						if (startOffset === 0 && endOffset === firstNode.getTextContentSize()) {
+							// Entire node is selected - style it whole.
+							applySpoilerStyle(firstNode, add);
+						} else {
+							// Partial selection - split so only the highlighted span is styled.
+							const splitNodes = firstNode.splitText(startOffset, endOffset);
+							const target = startOffset === 0 ? splitNodes[0] : splitNodes[1];
+							applySpoilerStyle(target, add);
 						}
+						return;
+					}
+
+					// Multiple nodes: trim the partially-selected head and tail, then
+					// style the head remainder, every middle node, and the tail prefix.
+					if (startOffset !== 0) {
+						const headParts = firstNode.splitText(startOffset);
+						firstNode = headParts[headParts.length - 1];
+					}
+					applySpoilerStyle(firstNode, add);
+
+					if (endOffset > 0) {
+						if (endOffset !== lastNode.getTextContentSize()) {
+							const tailParts = lastNode.splitText(endOffset);
+							lastNode = tailParts[0];
+						}
+						applySpoilerStyle(lastNode, add);
+					}
+
+					for (let i = firstIndex + 1; i < lastIndex; i++) {
+						applySpoilerStyle(textNodes[i], add);
 					}
 				});
 				return true;
