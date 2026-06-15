@@ -16,7 +16,7 @@ import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
 import { getLocalDb } from '../src/lib/server/db';
 import * as schema from '../src/lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { GHOST_USER_ID } from '../src/lib/server/constants';
 import { resolvePcloudConfig, pcloudUploadBytes, pcloudListFolder } from '../src/lib/server/pcloud';
 import { detectImageFormat } from '../src/lib/server/image';
@@ -313,9 +313,19 @@ async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promis
 	let inline: LexicalInlineNode[] = [];
 	let textBuf = '';
 
+	// Leading/trailing whitespace from the crawled Message wrapper would otherwise
+	// become a whitespace-only first/last paragraph.
+	const source = html.trim();
+
 	function pushParagraph(forceEmpty = false): void {
 		if (inline.length > 0) {
-			blocks.push(buildParagraphNode(inline));
+			// Skip paragraphs that are only whitespace (stray newlines/spaces
+			// between block elements), but keep paragraphs that contain real
+			// inline content (text, mentions, links, etc.).
+			const onlyWs = inline.every((n) => n.type === 'text' && n.text.trim() === '');
+			if (!onlyWs) {
+				blocks.push(buildParagraphNode(inline));
+			}
 			inline = [];
 		} else if (forceEmpty) {
 			blocks.push(buildParagraphNode([]));
@@ -407,9 +417,9 @@ async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promis
 	let lastIndex = 0;
 	let m: RegExpExecArray | null;
 
-	while ((m = tagRe.exec(html)) !== null) {
+	while ((m = tagRe.exec(source)) !== null) {
 		if (m.index > lastIndex) {
-			textBuf += decodeHtmlEntities(html.slice(lastIndex, m.index));
+			textBuf += decodeHtmlEntities(source.slice(lastIndex, m.index));
 		}
 
 		const openName = m[1];
@@ -420,7 +430,11 @@ async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promis
 			const tag = openName.toLowerCase();
 
 			if (tag === 'br') {
-				await flushParagraph(true);
+				// <br> is a paragraph separator, not a paragraph of its own: flush
+				// whatever inline text has accumulated, but never emit an empty
+				// paragraph (so consecutive <br>s or a trailing <br> don't create
+				// blank paragraph nodes).
+				await flushParagraph(false);
 			} else if (tag === 'img') {
 				const cls = getAttr(attrs, 'class') ?? '';
 				const src = getAttr(attrs, 'src') ?? '';
@@ -440,11 +454,11 @@ async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promis
 				}
 			} else if (tag === 'a') {
 				const href = getAttr(attrs, 'href') ?? '';
-				const closeIdx = html.indexOf('</a>', tagRe.lastIndex);
-				const innerEnd = closeIdx === -1 ? html.length : closeIdx;
-				const innerRaw = html.slice(tagRe.lastIndex, innerEnd);
+				const closeIdx = source.indexOf('</a>', tagRe.lastIndex);
+				const innerEnd = closeIdx === -1 ? source.length : closeIdx;
+				const innerRaw = source.slice(tagRe.lastIndex, innerEnd);
 				const innerText = decodeHtmlEntities(innerRaw.replace(/<[^>]+>/g, '')).trim();
-				const afterClose = closeIdx === -1 ? html.length : closeIdx + 4;
+				const afterClose = closeIdx === -1 ? source.length : closeIdx + 4;
 
 				const mentionMatch = href.match(/^\/profile\/(.+)$/);
 				if (mentionMatch) {
@@ -480,8 +494,8 @@ async function convertHtmlToLexical(html: string, ctx: ConverterContext): Promis
 		lastIndex = tagRe.lastIndex;
 	}
 
-	if (lastIndex < html.length) {
-		textBuf += decodeHtmlEntities(html.slice(lastIndex));
+	if (lastIndex < source.length) {
+		textBuf += decodeHtmlEntities(source.slice(lastIndex));
 	}
 	await flushParagraph(false);
 
@@ -1133,11 +1147,8 @@ async function main() {
 	const existingUserIds = new Set<number>();
 	const existingCategorySlugs = new Set<string>();
 	const existingDiscussionIds = new Set<number>();
-	const existingReplyIds = new Set<number>();
-	const existingActivityIds = new Set<number>();
 
 	const existingDiscussionsMap = new Map<number, DiscussionMeta>();
-	const discussionTitleToIdMap = new Map<string, number>();
 
 	const usersInDb = await db.select({ id: schema.users.id }).from(schema.users);
 	for (const u of usersInDb) {
@@ -1164,17 +1175,6 @@ async function main() {
 			authorId: d.authorId,
 			createdAt: d.createdAt
 		});
-		discussionTitleToIdMap.set(d.title, d.id);
-	}
-
-	const repliesInDb = await db.select({ id: schema.replies.id }).from(schema.replies);
-	for (const r of repliesInDb) {
-		existingReplyIds.add(r.id);
-	}
-
-	const actsInDb = await db.select({ id: schema.activities.id }).from(schema.activities);
-	for (const a of actsInDb) {
-		existingActivityIds.add(a.id);
 	}
 
 	const conflicts: ConflictRecord[] = [];
@@ -1343,7 +1343,6 @@ async function main() {
 							authorId,
 							createdAt: createdAt
 						});
-						discussionTitleToIdMap.set(post.title, discussionId);
 					} catch (e: unknown) {
 						conflicts.push({
 							type: 'discussion_insert_error',
@@ -1489,8 +1488,7 @@ async function main() {
 
 					// Import dynamic activity data from user's profile.html. Top-level
 					// activities are inserted first so each parent exists before its
-					// sub-comments reference it (parentActivityId is a plain column, not a
-					// FK, but keeping parents ahead of children keeps existingActivityIds sane).
+					// sub-comments reference it.
 					const activities = parseActivitiesHtml(html);
 					const insertActivity = async (act: ParsedActivity) => {
 						const actId = Number(act.id);
@@ -1504,21 +1502,6 @@ async function main() {
 							if (act.recipientId !== null) {
 								await ensureUser(act.recipientId, '');
 							}
-							if (existingActivityIds.has(actId)) {
-								// Row imported by a prior run (possibly before the directed-activity
-								// / updatedAt logic landed). Refresh author/recipient/ordering fields
-								// without re-converting content.
-								await db
-									.update(schema.activities)
-									.set({
-										authorId,
-										recipientId: act.recipientId,
-										parentActivityId: act.parentActivityId,
-										updatedAt: act.updatedAt
-									})
-									.where(eq(schema.activities.id, actId));
-								return;
-							}
 							const contentJson = await convertHtmlToLexical(act.contentHtml, converterCtx);
 							await db.insert(schema.activities).values({
 								id: actId,
@@ -1529,7 +1512,6 @@ async function main() {
 								createdAt: act.createdAt,
 								updatedAt: act.updatedAt
 							});
-							existingActivityIds.add(actId);
 						} catch (e: unknown) {
 							conflicts.push({
 								type: 'activity_insert_error',
@@ -1605,7 +1587,6 @@ async function main() {
 								authorId: userId,
 								createdAt: d.lastActiveTime
 							});
-							discussionTitleToIdMap.set(d.title, discId);
 						} catch (e: unknown) {
 							conflicts.push({
 								type: 'discussion_insert_error',
@@ -1651,8 +1632,7 @@ async function main() {
 		console.log('Importing discussion OP + replies from discussion pages...');
 		let opMissing = 0;
 		for (const [discussionId, meta] of existingDiscussionsMap) {
-			// Negative id keeps OP replies deterministic, idempotent, and clear of
-			// the positive Vanilla comment ids.
+			// Negative id keeps OP replies clear of the positive Vanilla comment ids.
 			const opReplyId = -discussionId;
 
 			const discDir = join(discussionsDir, String(discussionId));
@@ -1662,8 +1642,8 @@ async function main() {
 						.sort()
 				: [];
 
-			// Collect every comment across all pages, dedup by id (a partial re-crawl
-			// can re-fetch a page). First occurrence wins on ties.
+			// Collect every comment across all pages, dedup by id (a page can list
+			// the same comment id more than once). First occurrence wins.
 			const byId = new Map<string, ParsedDiscussionComment>();
 			for (const pf of pageFiles) {
 				let pageHtml: string;
@@ -1684,10 +1664,8 @@ async function main() {
 			}
 
 			if (byId.size === 0) {
-				if (!existingReplyIds.has(opReplyId)) {
-					opMissing++;
-					conflicts.push({ type: 'op_body_missing', discussionId });
-				}
+				opMissing++;
+				conflicts.push({ type: 'op_body_missing', discussionId });
 				continue;
 			}
 
@@ -1707,33 +1685,20 @@ async function main() {
 						await ensureUser(opComment.authorId, opComment.authorUsername ?? '');
 					}
 					const opContentJson = await convertHtmlToLexical(opComment.contentHtml, converterCtx);
-					if (existingReplyIds.has(opReplyId)) {
-						await db
-							.update(schema.replies)
-							.set({
-								authorId: opAuthorId,
-								contentJson: opContentJson,
-								createdAt: opComment.createdAt,
-								updatedAt: opComment.createdAt
-							})
-							.where(eq(schema.replies.id, opReplyId));
-					} else {
-						await db.insert(schema.replies).values({
-							id: opReplyId,
-							discussionId,
-							authorId: opAuthorId,
-							contentJson: opContentJson,
-							createdAt: opComment.createdAt,
-							updatedAt: opComment.createdAt
-						});
-						existingReplyIds.add(opReplyId);
-					}
+					await db.insert(schema.replies).values({
+						id: opReplyId,
+						discussionId,
+						authorId: opAuthorId,
+						contentJson: opContentJson,
+						createdAt: opComment.createdAt,
+						updatedAt: opComment.createdAt
+					});
 					await db
 						.update(schema.discussions)
 						.set({ createdAt: opComment.createdAt })
 						.where(eq(schema.discussions.id, discussionId));
 					meta.createdAt = opComment.createdAt;
-				} else if (!existingReplyIds.has(opReplyId)) {
+				} else {
 					conflicts.push({ type: 'op_body_empty', discussionId });
 				}
 			} catch (e: unknown) {
@@ -1744,9 +1709,7 @@ async function main() {
 				});
 			}
 
-			// Upsert every non-OP comment as a reply bound to this discussion by id.
-			// Upsert (not skip) so a re-run corrects author/timestamps from prior
-			// title-based imports, and so re-crawled pages fill in missing replies.
+			// Insert every non-OP comment as a reply bound to this discussion by id.
 			for (const c of sorted) {
 				if (c.id === opComment.id) continue;
 				const replyId = Number(c.id);
@@ -1758,28 +1721,14 @@ async function main() {
 				if (!contentHtml || !contentHtml.trim()) continue;
 				try {
 					const contentJson = await convertHtmlToLexical(contentHtml, converterCtx);
-					if (existingReplyIds.has(replyId)) {
-						await db
-							.update(schema.replies)
-							.set({
-								discussionId,
-								authorId,
-								contentJson,
-								createdAt: c.createdAt,
-								updatedAt: c.createdAt
-							})
-							.where(eq(schema.replies.id, replyId));
-					} else {
-						await db.insert(schema.replies).values({
-							id: replyId,
-							discussionId,
-							authorId,
-							contentJson,
-							createdAt: c.createdAt,
-							updatedAt: c.createdAt
-						});
-						existingReplyIds.add(replyId);
-					}
+					await db.insert(schema.replies).values({
+						id: replyId,
+						discussionId,
+						authorId,
+						contentJson,
+						createdAt: c.createdAt,
+						updatedAt: c.createdAt
+					});
 				} catch (e: unknown) {
 					conflicts.push({
 						type: 'reply_insert_error',
@@ -1896,9 +1845,11 @@ async function main() {
 
 	// 5. Generate log and output report
 	console.log('\n====== IMPORT COMPLETED ======');
+	const [repliesCount] = await db.select({ n: sql<number>`COUNT(*)` }).from(schema.replies);
+	const [activitiesCount] = await db.select({ n: sql<number>`COUNT(*)` }).from(schema.activities);
 	console.log(`Discussions in database: ${existingDiscussionIds.size}`);
-	console.log(`Replies in database: ${existingReplyIds.size}`);
-	console.log(`Activities in database: ${existingActivityIds.size}`);
+	console.log(`Replies in database: ${repliesCount.n}`);
+	console.log(`Activities in database: ${activitiesCount.n}`);
 	console.log(`Users in database: ${existingUserIds.size}`);
 	console.log(`Total conflicts recorded: ${conflicts.length}`);
 

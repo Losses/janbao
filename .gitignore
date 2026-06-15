@@ -34,3 +34,5 @@ draft-*.md
 .local-uploads/**
 import-conflicts.json
 scratch/**/*
+discussion-page-audit.json
+recrawl.log
