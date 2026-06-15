@@ -30,13 +30,24 @@
 		t
 	}: JoinedActivityRowProps = $props();
 
-	// Avatar = first member's avatar (matches how Vanilla shows the OP of the
-	// "who joined" event).
+	let showEditor = $state(false);
+	// svelte-ignore state_referenced_locally
+	let commentCountState = $state(commentCount);
+
+	// Avatar = first member's avatar.
 	const first = $derived(members[0]);
 	const isZh = $derived(locale.startsWith('zh'));
 
-	// Separator rendered BEFORE each name (index 0 = none). Matches the requested
-	// format: en "A, B and C", zh "A、B 和 C".
+	function gtc(key: string): string {
+		const common = t['common'] as Record<string, string> | undefined;
+		if (common && key in common) {
+			const val = common[key];
+			return typeof val === 'string' ? val : key;
+		}
+		return key;
+	}
+
+	// Separator BEFORE each name (index 0 = none): en "A, B and C", zh "A、B 和 C".
 	function sepBefore(i: number, count: number): string {
 		if (i === 0) return '';
 		const last = i === count - 1;
@@ -44,9 +55,7 @@
 		return last ? 'and' : ',';
 	}
 
-	// "joined" verb tail.
 	const verb = $derived(isZh ? '加入了' : 'joined');
-	// Excerpt line ("欢迎加入!" / "Welcome!").
 	const welcomeLine = $derived((t.activity as { welcome?: string }).welcome ?? '');
 </script>
 
@@ -65,7 +74,7 @@
 			</div>
 		{/if}
 		<div class="flex-1 min-w-0">
-			<!-- Row 1: "{u1} and {u2} joined." — inline, same size as ActivityRow title -->
+			<!-- Row 1: "{u1} and {u2} joined." -->
 			<div class="flex items-center gap-1 flex-wrap">
 				{#each members as m, i (m.userId)}
 					{#if sepBefore(i, members.length)}<span class="text-base-content/60"
@@ -88,17 +97,27 @@
 				</div>
 			{/if}
 
-			<!-- Row 3: timestamp -->
+			<!-- Row 3: Timestamp + comment (same line) -->
 			<div class="flex justify-end items-center gap-2 mt-2">
 				<div class="flex-1 text-sm text-base-content/50">
 					<DateComponent value={createdAt} {t} class="text-sm" />
 				</div>
+				{#if currentUserId !== null && currentUserId !== undefined}
+					<button
+						type="button"
+						class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
+						onclick={() => (showEditor = !showEditor)}
+					>
+						{gtc('comment')}{commentCountState > 0 ? ` (${commentCountState})` : ''}
+					</button>
+				{/if}
 			</div>
 
-			<!-- Comment thread (shared with ActivityRow) -->
+			<!-- Comment thread section -->
 			<ActivityComments
 				activityId={id}
-				{commentCount}
+				open={showEditor}
+				bind:commentCount={commentCountState}
 				{currentUserId}
 				{isAdmin}
 				activityAuthorId={authorId}

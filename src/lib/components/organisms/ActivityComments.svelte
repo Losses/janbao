@@ -9,12 +9,15 @@
 	import type { ApiResult, ActivityCommentItem, ActivityCommentsResponse } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 
-	// Shared comment thread for any top-level activity (status, WallPost, or the
-	// system "who joined" activity). Owns the load/submit/delete-comment logic so
-	// both ActivityRow and JoinedActivityRow get identical commenting.
+	// Comment thread section (editor + list) for any top-level activity. The
+	// toggle BUTTON lives in the parent row's action bar (so it sits on the same
+	// line as timestamp/delete); this component renders only the collapsible
+	// section below it. `open` is controlled by the parent; `commentCount` is
+	// bindable so the parent's button count stays in sync after a submit.
 
 	interface ActivityCommentsProps {
 		activityId: number;
+		open: boolean;
 		commentCount: number;
 		currentUserId?: number | null;
 		isAdmin?: boolean;
@@ -25,7 +28,8 @@
 
 	let {
 		activityId,
-		commentCount = 0,
+		open = false,
+		commentCount = $bindable(0),
 		currentUserId = null,
 		isAdmin = false,
 		activityAuthorId,
@@ -33,14 +37,11 @@
 		t
 	}: ActivityCommentsProps = $props();
 
-	let showEditor = $state(false);
 	let commentsLoaded = $state(false);
 	let comments = $state<ActivityCommentItem[]>([]);
 	let loadingComments = $state(false);
 	let commentContentJson = $state('');
 	let submittingComment = $state(false);
-	// svelte-ignore state_referenced_locally
-	let commentCountState = $state(commentCount);
 	let showDeleteModal = $state(false);
 	let deleteTargetId = $state<number | null>(null);
 	let editorKey = $state(0);
@@ -59,10 +60,6 @@
 			return typeof val === 'string' ? val : key;
 		}
 		return key;
-	}
-
-	function toggleEditor() {
-		showEditor = !showEditor;
 	}
 
 	function handleCommentEditorChange(json: string) {
@@ -104,8 +101,7 @@
 			if (res.ok) {
 				commentContentJson = '';
 				editorKey += 1;
-				commentCountState += 1;
-				showEditor = false;
+				commentCount += 1;
 				await loadComments();
 			}
 		} catch {
@@ -130,7 +126,7 @@
 			const result: ApiResult = await res.json();
 			if (result.success) {
 				comments = comments.filter((c) => c.id !== deleteTargetId);
-				commentCountState = Math.max(0, commentCountState - 1);
+				commentCount = Math.max(0, commentCount - 1);
 			}
 		} catch {
 			// Silently fail
@@ -153,21 +149,9 @@
 	}}
 />
 
-{#if currentUserId !== null && currentUserId !== undefined}
-	<div class="flex justify-end items-center mt-2">
-		<button
-			type="button"
-			class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
-			onclick={toggleEditor}
-		>
-			{gtc('comment')}{commentCountState > 0 ? ` (${commentCountState})` : ''}
-		</button>
-	</div>
-{/if}
-
-{#if showEditor || loadingComments || comments.length > 0}
+{#if open || loadingComments || comments.length > 0}
 	<div class="mt-3 bg-base-200/50 rounded-box p-3">
-		{#if showEditor && currentUserId !== null && currentUserId !== undefined}
+		{#if open && currentUserId !== null && currentUserId !== undefined}
 			<div class="mb-3 flex flex-col gap-2">
 				{#key editorKey}
 					<LexicalEditor

@@ -49,6 +49,9 @@
 		isTopLevel = true
 	}: ActivityRowProps = $props();
 
+	let showEditor = $state(false);
+	// svelte-ignore state_referenced_locally
+	let commentCountState = $state(commentCount);
 	let showDeleteModal = $state(false);
 
 	function gtc(key: string): string {
@@ -133,11 +136,20 @@
 				<LexicalRenderer {contentJson} {mentionedUsers} />
 			</div>
 
-			<!-- Row 3: Timestamp + delete -->
+			<!-- Row 3: Timestamp + comment + delete (same line) -->
 			<div class="flex justify-end items-center gap-2 mt-2">
 				<div class="flex-1 text-sm text-base-content/50">
 					<DateComponent value={createdAt} {t} class="text-sm" />
 				</div>
+				{#if isTopLevel && currentUserId !== null && currentUserId !== undefined}
+					<button
+						type="button"
+						class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
+						onclick={() => (showEditor = !showEditor)}
+					>
+						{gtc('comment')}{commentCountState > 0 ? ` (${commentCountState})` : ''}
+					</button>
+				{/if}
 				{#if currentUserId === authorId || isAdmin || currentUserId === recipientId}
 					<button
 						type="button"
@@ -152,7 +164,8 @@
 			{#if isTopLevel}
 				<ActivityComments
 					activityId={id}
-					{commentCount}
+					open={showEditor}
+					bind:commentCount={commentCountState}
 					{currentUserId}
 					{isAdmin}
 					activityAuthorId={authorId}
