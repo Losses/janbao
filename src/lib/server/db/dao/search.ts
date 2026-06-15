@@ -42,6 +42,8 @@ export interface SearchPage<T> {
 
 export type MatchKind = 'title' | 'op' | 'reply';
 
+export type SearchSort = 'newest' | 'oldest' | 'relevance' | 'replies';
+
 export interface DiscussionSearchItem {
 	id: number;
 	title: string;
@@ -159,7 +161,8 @@ export async function searchActivities(
 	query: string,
 	userId: number,
 	page: number,
-	platformEnv: App.Platform['env'] | undefined
+	platformEnv: App.Platform['env'] | undefined,
+	sort: SearchSort = 'newest'
 ): Promise<SearchPage<ActivitySearchItem>> {
 	const trimmed = query.trim();
 	if (trimmed.length === 0) return emptyPage(page);
@@ -199,9 +202,20 @@ export async function searchActivities(
 	const visible = rows.filter(
 		(r) => r.recipientId === null || r.recipientId === userId || r.authorId === userId
 	);
-	const sorted = fallback
-		? [...visible].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-		: [...visible].sort((a, b) => (idToRank.get(a.id) ?? 0) - (idToRank.get(b.id) ?? 0));
+	const ranked = (id: number) => idToRank.get(id) ?? 0;
+	// Activities have no reply count; 'replies' falls back to newest.
+	const sorted = [...visible].sort((a, b) => {
+		switch (sort) {
+			case 'oldest':
+				return a.createdAt.getTime() - b.createdAt.getTime();
+			case 'relevance':
+				return fallback
+					? b.createdAt.getTime() - a.createdAt.getTime()
+					: ranked(a.id) - ranked(b.id);
+			default:
+				return b.createdAt.getTime() - a.createdAt.getTime();
+		}
+	});
 	const total = sorted.length;
 	const paged = sorted.slice(offset, offset + limit);
 
@@ -255,7 +269,8 @@ export async function searchMessages(
 	query: string,
 	userId: number,
 	page: number,
-	platformEnv: App.Platform['env'] | undefined
+	platformEnv: App.Platform['env'] | undefined,
+	sort: SearchSort = 'newest'
 ): Promise<SearchPage<MessageSearchItem>> {
 	const trimmed = query.trim();
 	if (trimmed.length === 0) return emptyPage(page);
@@ -285,9 +300,17 @@ export async function searchMessages(
 	const participantSet = new Set(participantRows.map((p) => p.conversationId));
 	const allowed = hits.filter((h) => participantSet.has(h.conversationId));
 
-	const sorted = fallback
-		? [...allowed].sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime())
-		: [...allowed].sort((a, b) => a.rank - b.rank);
+	// Messages have no reply count; 'replies' falls back to newest.
+	const sorted = [...allowed].sort((a, b) => {
+		switch (sort) {
+			case 'oldest':
+				return a.lastMessageAt.getTime() - b.lastMessageAt.getTime();
+			case 'relevance':
+				return fallback ? b.lastMessageAt.getTime() - a.lastMessageAt.getTime() : a.rank - b.rank;
+			default:
+				return b.lastMessageAt.getTime() - a.lastMessageAt.getTime();
+		}
+	});
 	const total = sorted.length;
 	const paged = sorted.slice(offset, offset + limit);
 
@@ -397,7 +420,8 @@ export async function searchDiscussions(
 	userId: number | null,
 	groupSlug: string,
 	page: number,
-	platformEnv: App.Platform['env'] | undefined
+	platformEnv: App.Platform['env'] | undefined,
+	sort: SearchSort = 'newest'
 ): Promise<SearchPage<DiscussionSearchItem>> {
 	const trimmed = query.trim();
 	if (trimmed.length === 0) return emptyPage(page);
@@ -412,11 +436,16 @@ export async function searchDiscussions(
 	if (hits.length === 0)
 		return { ...emptyPage<DiscussionSearchItem>(page), usedFallback: fallback };
 
-	// Category read-permission filter.
+	// Category read-permission filter + sort metadata (createdAt, commentCount).
 	const readable = await getReadableCategorySlugs(db, groupSlug);
 	const readableSet = readable === null ? null : new Set(readable);
-	const catRows = await db
-		.select({ id: discussions.id, categorySlug: discussions.categorySlug })
+	const metaRows = await db
+		.select({
+			id: discussions.id,
+			categorySlug: discussions.categorySlug,
+			createdAt: discussions.createdAt,
+			commentCount: discussions.commentCount
+		})
 		.from(discussions)
 		.where(
 			and(
@@ -427,14 +456,27 @@ export async function searchDiscussions(
 				isNull(discussions.deletedAt)
 			)
 		);
-	const catMap = new Map(catRows.map((r) => [r.id, r.categorySlug]));
-	const allowed = hits
-		.filter((h) => catMap.has(h.id))
-		.filter((h) => readableSet === null || readableSet.has(catMap.get(h.id) ?? ''));
+	const metaMap = new Map(metaRows.map((r) => [r.id, r]));
+	const allowed = hits.filter((h) => {
+		const m = metaMap.get(h.id);
+		return m !== undefined && (readableSet === null || readableSet.has(m.categorySlug));
+	});
 
-	const sorted = fallback
-		? [...allowed].sort((a, b) => b.id - a.id)
-		: [...allowed].sort((a, b) => a.rank - b.rank);
+	const sorted = [...allowed].sort((a, b) => {
+		const ma = metaMap.get(a.id);
+		const mb = metaMap.get(b.id);
+		if (!ma || !mb) return 0;
+		switch (sort) {
+			case 'oldest':
+				return ma.createdAt.getTime() - mb.createdAt.getTime();
+			case 'relevance':
+				return fallback ? mb.createdAt.getTime() - ma.createdAt.getTime() : a.rank - b.rank;
+			case 'replies':
+				return mb.commentCount - ma.commentCount;
+			default:
+				return mb.createdAt.getTime() - ma.createdAt.getTime();
+		}
+	});
 	const total = sorted.length;
 	const paged = sorted.slice(offset, offset + limit);
 

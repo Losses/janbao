@@ -21,7 +21,12 @@
 		"noQuery": "输入关键词开始搜索。",
 		"tooShortHint": "短关键词，使用模糊匹配（LIKE）。",
 		"resultsLabel": "条结果",
-		"matchedReply": "命中回复"
+		"matchedReply": "命中回复",
+		"sortBy": "排序",
+		"sortNewest": "最新",
+		"sortOldest": "最早",
+		"sortRelevance": "相关性",
+		"sortReplies": "最多回复"
 	},
 	"auth": {
 		"usernameOrEmail": "Email/用户名",

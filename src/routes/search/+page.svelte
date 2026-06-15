@@ -19,6 +19,7 @@
 	interface UrlOptions {
 		scope?: string;
 		page?: number;
+		sort?: string;
 	}
 
 	interface HighlightSegment {
@@ -35,6 +36,7 @@
 	const query = $derived(data.query);
 	const scope = $derived(data.scope);
 	const user = $derived(data.user);
+	const sort = $derived(data.sort);
 	const currentPage = $derived(data.page);
 	const totalPages = $derived(data.totalPages);
 	const total = $derived(data.total);
@@ -49,6 +51,7 @@
 		const params = new SvelteURLSearchParams();
 		if (query) params.set('q', query);
 		params.set('scope', opts.scope ?? scope);
+		params.set('sort', opts.sort ?? sort);
 		if (opts.page !== undefined) params.set('page', String(opts.page));
 		return `/search?${params.toString()}`;
 	}
@@ -104,8 +107,8 @@
 	<div class="space-y-3">
 		<h1 class="text-2xl font-bold py-2">{tSearch.title}</h1>
 
-		<!-- Scope selector (single-choice) -->
-		<div class="flex flex-wrap gap-2">
+		<!-- Scope selector (single-choice) + sort on the right -->
+		<div class="flex flex-wrap items-center gap-2">
 			{#each SCOPES as s (s)}
 				<a
 					href={urlWith({ scope: s, page: 1 })}
@@ -115,6 +118,19 @@
 					{scopeLabel(s)}
 				</a>
 			{/each}
+			<select
+				class="select select-bordered select-sm ml-auto w-fit"
+				value={sort}
+				aria-label={tSearch.sortBy}
+				onchange={(e) => goto(urlWith({ sort: e.currentTarget.value, page: 1 }))}
+			>
+				<option value="newest">{tSearch.sortNewest}</option>
+				<option value="oldest">{tSearch.sortOldest}</option>
+				<option value="relevance">{tSearch.sortRelevance}</option>
+				{#if scope === 'discussions'}
+					<option value="replies">{tSearch.sortReplies}</option>
+				{/if}
+			</select>
 		</div>
 
 		<!-- Search form (GET → /search?q=&scope=) -->
