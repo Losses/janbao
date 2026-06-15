@@ -3,7 +3,9 @@
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import DateAtom from '$lib/components/atoms/Date.svelte';
+	import Icon from '$lib/components/atoms/Icon.svelte';
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
+	import { mdiCommentOutline } from '@mdi/js';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
 	import { goto } from '$app/navigation';
@@ -144,18 +146,32 @@
 					{#if scope === 'discussions' && data.discussions}
 						{#each data.discussions as d (d.id)}
 							{@const authorSlug = generateSlug(d.authorUsername || 'user')}
+							{@const dUrl =
+								d.matchKind === 'reply' && d.bestReplyId !== null && d.replyPage !== null
+									? `/discussion/${d.id}/${d.slug}/p${d.replyPage}#reply-${d.bestReplyId}`
+									: `/discussion/${d.id}/${d.slug}`}
 							<div class="flex items-start gap-4 pl-3 pr-2 py-4 hover:bg-base-200/20">
-								<a href="/profile/{d.authorId}/{authorSlug}" class="flex-shrink-0">
-									<Avatar
-										userId={d.authorId}
-										avatarFileId={d.authorAvatarFileId}
-										displayName={d.authorDisplayName}
-										size="md"
-									/>
-								</a>
+								<div class="relative flex-shrink-0">
+									<a href="/profile/{d.authorId}/{authorSlug}">
+										<Avatar
+											userId={d.authorId}
+											avatarFileId={d.authorAvatarFileId}
+											displayName={d.authorDisplayName}
+											size="md"
+										/>
+									</a>
+									{#if d.matchKind === 'reply'}
+										<span
+											class="absolute -bottom-1 -right-1 badge badge-primary badge-xs flex items-center justify-center w-5 h-5 p-0"
+											title={tSearch.matchedReply}
+										>
+											<Icon path={mdiCommentOutline} size={12} />
+										</span>
+									{/if}
+								</div>
 								<div class="flex-1 min-w-0">
 									<a
-										href="/discussion/{d.id}/{d.slug}"
+										href={dUrl}
 										class="font-semibold text-lg hover:text-primary hover:underline break-words leading-snug"
 									>
 										{#each highlightSegments(d.title, query) as seg, i (i)}{#if seg.match}<mark
@@ -163,10 +179,7 @@
 												>{:else}{seg.text}{/if}{/each}
 									</a>
 									{#if d.bodyPreview}
-										<a
-											href="/discussion/{d.id}/{d.slug}"
-											class="block mt-1 text-sm text-base-content/70 line-clamp-2"
-										>
+										<a href={dUrl} class="block mt-1 text-sm text-base-content/70 line-clamp-2">
 											{#each highlightSegments(contextPreview(d.bodyPreview, query), query) as seg, i (i)}{#if seg.match}<mark
 														>{seg.text}</mark
 													>{:else}{seg.text}{/if}{/each}

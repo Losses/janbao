@@ -21,8 +21,7 @@
 		"noQuery": "输入关键词开始搜索。",
 		"tooShortHint": "短关键词，使用模糊匹配（LIKE）。",
 		"resultsLabel": "条结果",
-		"matchedTitle": "标题",
-		"matchedBody": "正文"
+		"matchedReply": "命中回复"
 	},
 	"auth": {
 		"usernameOrEmail": "Email/用户名",
