@@ -1,6 +1,6 @@
+import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { loadDiscussionsPage } from '$lib/server/db/dao/discussions';
-import { checkAndCreateWelcomePost } from '$lib/server/db/welcome';
 import { parseDiscussionPageFromPath, resolveGroupSlug } from '$lib/server/constants';
 
 export const load: PageServerLoad = async (event) => {
@@ -9,13 +9,13 @@ export const load: PageServerLoad = async (event) => {
 	const platformEnv = event.platform?.env;
 	const groupSlug = resolveGroupSlug(user);
 
-	// 1. Daily Welcome Post Check (Runs on home page access)
-	await checkAndCreateWelcomePost(db, platformEnv);
+	const { page, limit, offset } = parseDiscussionPageFromPath(event.params.page, platformEnv);
 
-	// 2. Home is always page 1 — deeper pages live at /discussions/pN
-	const { limit, offset } = parseDiscussionPageFromPath(undefined, platformEnv);
+	// Page 1 canonically lives at "/" — collapse /discussions and /discussions/p1 back home.
+	if (page <= 1) {
+		redirect(308, '/');
+	}
 
-	// 3. Fetch discussions list (filtered by category read permissions)
 	const { discussions, totalPages, totalCount } = await loadDiscussionsPage(db, {
 		userId: user?.id ?? null,
 		limit,
@@ -25,7 +25,7 @@ export const load: PageServerLoad = async (event) => {
 
 	return {
 		discussions,
-		page: 1,
+		page,
 		totalPages,
 		totalCount
 	};

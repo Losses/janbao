@@ -2,9 +2,9 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { categories } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
-import { getDiscussionsList, getDiscussionsCount } from '$lib/server/db/dao/discussions';
+import { loadDiscussionsPage } from '$lib/server/db/dao/discussions';
 import {
-	parseDiscussionPagination,
+	parseDiscussionPageFromPath,
 	resolvePermissions,
 	resolveGroupSlug
 } from '$lib/server/constants';
@@ -34,13 +34,16 @@ export const load: PageServerLoad = async (event) => {
 		error(403, t.common.forbidden);
 	}
 
-	// 3. Parse page
-	const { page, limit, offset } = parseDiscussionPagination(event.url, event.platform?.env);
+	// 3. Parse page from /category/[slug]/pN segment (page 1 = bare /category/[slug])
+	const { page, limit, offset } = parseDiscussionPageFromPath(
+		event.params.page,
+		event.platform?.env
+	);
 
 	// 4. Fetch discussions list in this category
 	const groupSlug = resolveGroupSlug(user);
 
-	const discussionsList = await getDiscussionsList(db, {
+	const { discussions, totalPages, totalCount } = await loadDiscussionsPage(db, {
 		userId: user?.id ?? null,
 		categorySlug,
 		groupSlug,
@@ -48,12 +51,9 @@ export const load: PageServerLoad = async (event) => {
 		offset
 	});
 
-	const totalCount = await getDiscussionsCount(db, { categorySlug, groupSlug });
-	const totalPages = Math.ceil(totalCount / limit);
-
 	return {
 		category,
-		discussions: discussionsList,
+		discussions,
 		page,
 		totalPages,
 		totalCount

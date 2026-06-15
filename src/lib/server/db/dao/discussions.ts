@@ -38,7 +38,7 @@ interface LastReplyAuthor {
 	displayName: string;
 }
 
-interface GetDiscussionsListOptions {
+export interface GetDiscussionsListOptions {
 	userId?: number | null;
 	categorySlug?: string | null;
 	authorId?: number | null;
@@ -310,6 +310,31 @@ export async function getDiscussionsCount(
 	}
 
 	return res[0]?.count || 0;
+}
+
+interface DiscussionsPageResult {
+	discussions: DiscussionListItem[];
+	totalPages: number;
+	totalCount: number;
+}
+
+/**
+ * Shared page-load helper for discussion listings (home, /discussions, category).
+ * Runs the list query + total count and derives totalPages so route loads stay
+ * thin and free of duplicated query/count boilerplate. Reuses
+ * {@link GetDiscussionsListOptions} so it also supports author filtering.
+ */
+export async function loadDiscussionsPage(
+	db: D1Db,
+	options: GetDiscussionsListOptions
+): Promise<DiscussionsPageResult> {
+	const { categorySlug, authorId, groupSlug, limit } = options;
+
+	const discussions = await getDiscussionsList(db, options);
+	const totalCount = await getDiscussionsCount(db, { categorySlug, authorId, groupSlug });
+	const totalPages = Math.ceil(totalCount / limit);
+
+	return { discussions, totalPages, totalCount };
 }
 
 /**

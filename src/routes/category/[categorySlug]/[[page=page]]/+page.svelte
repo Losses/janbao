@@ -26,7 +26,7 @@
 	const totalPages = $derived(data.totalPages);
 
 	function handlePageChange(newPage: number) {
-		goto(`?page=${newPage}`);
+		goto(newPage === 1 ? `/category/${category.slug}` : `/category/${category.slug}/p${newPage}`);
 	}
 </script>
 

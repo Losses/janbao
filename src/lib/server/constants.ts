@@ -50,6 +50,37 @@ interface PaginationParams {
 	offset: number;
 }
 
+/**
+ * Parse a `pN` path segment (the optional [[page=page]] matcher yields e.g. "p3").
+ * Returns 1 when the param is absent or malformed, so callers can pass
+ * `event.params.page` directly — undefined collapses to page 1.
+ */
+export function parsePagePathParam(raw: string | undefined): number {
+	if (!raw) return 1;
+	const parsed = parseInt(raw.substring(1), 10);
+	return !isNaN(parsed) && parsed >= 1 ? parsed : 1;
+}
+
+/**
+ * Resolve discussion-list pagination from a `pN` path param rather than a
+ * `?page=` query string. Home (`/`) passes undefined → always page 1;
+ * `/discussions/pN` and `/category/[slug]/pN` pass `event.params.page`.
+ */
+export function parseDiscussionPageFromPath(
+	rawPage: string | undefined,
+	platformEnv: App.Platform['env'] | undefined
+): PaginationParams {
+	const page = parsePagePathParam(rawPage);
+	const limit = getDiscussionsLimit(platformEnv);
+	const offset = (page - 1) * limit;
+	return { page, limit, offset };
+}
+
+/**
+ * Resolve discussion-list pagination from a `?page=` query string. Used by
+ * listings that still paginate via query params (e.g. profile/discussions);
+ * home and category use {@link parseDiscussionPageFromPath} instead.
+ */
 export function parseDiscussionPagination(
 	url: URL,
 	platformEnv: App.Platform['env'] | undefined
