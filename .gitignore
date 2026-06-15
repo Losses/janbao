@@ -27,6 +27,7 @@ vite.config.ts.timestamp-*
 
 # Local database
 *.db
+.d1-upload-state.json
 
 draft.md
 draft-*.md

@@ -240,11 +240,23 @@ function extractImageSrcs(html: string): string[] {
 		let m: RegExpExecArray | null;
 		while ((m = imgRe.exec(body)) !== null) {
 			const tag = m[0];
-			const src = m[1];
+			let src = m[1];
 			if (/\bemoji\b|\bProfilePhoto\b|\bPhotoWrap\b/.test(tag)) continue;
 			if (/noicon\.png/.test(src)) continue; // default avatar
 			if (src.startsWith('data:')) continue;
-			if (/^https?:\/\//i.test(src) || src.startsWith('/')) out.push(src);
+			// Drop analytics/tracking pixels (piwik/matomo rec=1 beacons).
+			if (/[?&]rec=1\b|piwik\.|\/pixel\b/i.test(src)) continue;
+			// Normalize the URL. Protocol-relative (//host) → https://host (NOT
+			// joined to janbao.net, which would mangle youtube/thumb URLs). Absolute
+			// site path (/foo) → https://janbao.net/foo.
+			if (src.startsWith('//')) {
+				src = 'https:' + src;
+			} else if (src.startsWith('/')) {
+				src = BASE + src;
+			} else if (!/^https?:\/\//i.test(src)) {
+				continue;
+			}
+			out.push(src);
 		}
 	}
 	return out;
@@ -296,6 +308,8 @@ interface DownloadResult {
 	ok: boolean;
 	bytes: Uint8Array;
 	contentType: string | null;
+	// Why it failed (http status or short error) when ok=false, for logging.
+	reason: string | null;
 }
 
 async function downloadImage(url: string): Promise<DownloadResult> {
@@ -304,21 +318,29 @@ async function downloadImage(url: string): Promise<DownloadResult> {
 	// a plain curl-style UA. Download images with a non-browser UA. Also try the
 	// https upgrade as a fallback (some http endpoints 403 under any UA).
 	const candidates = url.startsWith('http://') ? [url, 'https' + url.slice(4)] : [url];
+	let lastReason: string | null = null;
 	for (const candidate of candidates) {
 		try {
 			const res = await fetch(candidate, {
 				headers: { 'User-Agent': 'curl/8.7.1' },
 				redirect: 'follow'
 			});
-			if (!res.ok) continue;
+			if (!res.ok) {
+				lastReason = `HTTP ${res.status}`;
+				continue;
+			}
 			const buf = new Uint8Array(await res.arrayBuffer());
-			if (buf.length === 0) continue;
-			return { ok: true, bytes: buf, contentType: res.headers.get('content-type') };
-		} catch {
+			if (buf.length === 0) {
+				lastReason = 'empty body';
+				continue;
+			}
+			return { ok: true, bytes: buf, contentType: res.headers.get('content-type'), reason: null };
+		} catch (e: unknown) {
+			lastReason = e instanceof Error ? e.message : String(e);
 			// try next candidate
 		}
 	}
-	return { ok: false, bytes: new Uint8Array(), contentType: null };
+	return { ok: false, bytes: new Uint8Array(), contentType: null, reason: lastReason };
 }
 
 interface HarvestStats {
@@ -345,8 +367,9 @@ async function harvestImages(
 	delayMs: number
 ): Promise<void> {
 	const ref = { file: pageFileRel, discussionId: String(discussionId), page };
-	for (const rawSrc of extractImageSrcs(html)) {
-		const src = rawSrc.startsWith('/') ? `${BASE}${rawSrc}` : rawSrc;
+	// extractImageSrcs returns fully-normalized absolute URLs (http(s)://...,
+	// protocol-relative resolved, site paths joined to BASE).
+	for (const src of extractImageSrcs(html)) {
 		const existing = idx.byUrl[src];
 		// Already recorded dead (in image-deadlinks.jsonl, or in the index without
 		// a sha256) → skip entirely. These URLs have no live index entry, so don't
@@ -377,10 +400,12 @@ async function harvestImages(
 			// post renders a dead-image node instead of a live attachment.
 			stats.failed++;
 			deadUrls.add(src);
+			const reason = dl.reason ?? (dl.ok ? 'empty body' : 'fetch failed');
+			log(`    [imgfail] ${reason}  ${src}`);
 			deadlinesBuffer.push(
 				JSON.stringify({
 					url: src,
-					reason: dl.ok ? 'empty body' : 'fetch failed',
+					reason,
 					ref,
 					checkedAt: HARVEST_TIMESTAMP
 				})
