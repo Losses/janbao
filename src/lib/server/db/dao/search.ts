@@ -13,7 +13,8 @@ import type { D1Db } from '$lib/server/db';
 import {
 	getReadableCategorySlugs,
 	getDiscussionsLimit,
-	getActivitiesLimit
+	getActivitiesLimit,
+	getPaginationLimit
 } from '$lib/server/constants';
 import { lexicalToSearchText } from '$lib/utils/lexical';
 
@@ -39,6 +40,8 @@ export interface SearchPage<T> {
 	usedFallback: boolean;
 }
 
+export type MatchKind = 'title' | 'op' | 'reply';
+
 export interface DiscussionSearchItem {
 	id: number;
 	title: string;
@@ -54,6 +57,12 @@ export interface DiscussionSearchItem {
 	commentCount: number;
 	/** Plain text of the best-matching reply, when the body matched (null for title-only hits). */
 	bodyPreview: string | null;
+	/** The reply id the body match came from, for deep-linking (null for title-only hits). */
+	bestReplyId: number | null;
+	/** Whether the hit was in the title, the OP body, or a reply. */
+	matchKind: MatchKind;
+	/** Page the best reply lands on, for deep-linking (null unless matchKind is 'reply'). */
+	replyPage: number | null;
 	rank: number;
 }
 
@@ -108,6 +117,11 @@ interface BestBodyHit {
 interface ReplyIdHit {
 	id: number;
 	replyId: number;
+}
+
+interface ReplyPosition {
+	replyId: number;
+	position: number;
 }
 
 interface ConversationFtsHit {
@@ -478,14 +492,44 @@ export async function searchDiscussions(
 		}
 	}
 
+	// For body hits, compute each best reply's floor position so the card can
+	// deep-link to the right page + anchor, and detect whether it is the OP.
+	const replyPosition = new Map<number, number>();
+	if (bestReplyIds.length > 0) {
+		const idList = sql.join(
+			bestReplyIds.map((id) => sql`${id}`),
+			sql`, `
+		);
+		const posRows = await db.all<ReplyPosition>(sql`
+			SELECT r.id AS replyId,
+			       (SELECT COUNT(*) FROM replies r2
+			         WHERE r2.discussion_id = r.discussion_id AND r2.deleted_at IS NULL
+			           AND (r2.created_at < r.created_at
+			                OR (r2.created_at = r.created_at AND r2.id < r.id))) + 1 AS position
+			FROM replies r
+			WHERE r.id IN (${idList}) AND r.deleted_at IS NULL
+		`);
+		for (const p of posRows) replyPosition.set(p.replyId, p.position);
+	}
+	const replyLimit = getPaginationLimit(platformEnv);
+
 	const ordered = paged
 		.map((h) => {
 			const r = rowMap.get(h.id);
 			if (!r) return null;
+			const bestReplyId = h.bestReplyId ?? null;
+			const position = bestReplyId !== null ? (replyPosition.get(bestReplyId) ?? null) : null;
+			const matchKind: MatchKind = bestReplyId === null ? 'title' : position === 1 ? 'op' : 'reply';
+			const replyPage =
+				bestReplyId !== null && position !== null && position > 1
+					? Math.ceil((position - 1) / replyLimit)
+					: null;
 			return {
 				...r,
-				bodyPreview:
-					h.bestReplyId !== undefined ? (bodyPreviewMap.get(h.bestReplyId) ?? null) : null,
+				bodyPreview: bestReplyId !== null ? (bodyPreviewMap.get(bestReplyId) ?? null) : null,
+				bestReplyId,
+				matchKind,
+				replyPage,
 				rank: h.rank
 			};
 		})

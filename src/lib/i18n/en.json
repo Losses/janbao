@@ -21,8 +21,7 @@
 		"noQuery": "Enter a search term to begin.",
 		"tooShortHint": "Short query — using fuzzy match (LIKE).",
 		"resultsLabel": "results",
-		"matchedTitle": "title",
-		"matchedBody": "content"
+		"matchedReply": "Matched in a reply"
 	},
 	"auth": {
 		"usernameOrEmail": "Email or Username",
