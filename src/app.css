@@ -107,9 +107,15 @@
 
 /*
  * Spoiler styling inside the Lexical editor content area.
- * Targets spans whose inline style attribute contains the sentinel marker.
+ * Matches any element whose inline style carries the `--janbao-spoiler` custom
+ * property. We must not scope this to `span` only: Lexical renders a text node's
+ * tag from its format bits, so a spoiler applied to bold text is a
+ * `<strong style="--janbao-spoiler: 1;">`, italic is `<em>`, code is `<code>`,
+ * highlight is `<mark>`, etc. - only plain-text spoiler is a `<span>`.
+ * The marker is a valid-CSS custom property so it survives the browser's
+ * `dom.style.cssText` round-trip (a bare token would be dropped to `style=""`).
  */
-.ContentEditable__root span[style*='janbao-spoiler'] {
+.ContentEditable__root [style*='--janbao-spoiler'] {
 	background-color: currentColor !important;
 	color: currentColor !important;
 	cursor: pointer;
@@ -118,7 +124,7 @@
 		background-color 0.2s ease-out;
 }
 
-.ContentEditable__root span[style*='janbao-spoiler']:hover {
+.ContentEditable__root [style*='--janbao-spoiler']:hover {
 	background-color: transparent !important;
 	color: var(--fallback-bc, oklch(var(--bc) / 1)) !important;
 }

@@ -60,8 +60,16 @@
 	/** Custom Lexical command to toggle spoiler formatting on selected text */
 	import { TOGGLE_SPOILER_COMMAND } from '$lib/types/editor-commands';
 
-	/** Sentinel string embedded in TextNode style to mark spoiler formatting */
-	const SPOILER_STYLE_MARKER = 'janbao-spoiler;';
+	/**
+	 * Sentinel embedded in a TextNode's inline style to mark spoiler formatting.
+	 * MUST be valid CSS: Lexical writes the style string via `dom.style.cssText`,
+	 * and the browser drops any invalid declaration during parsing - a bare
+	 * `janbao-spoiler;` (no `: value`) is discarded, leaving `style=""`, so the
+	 * editor's `[style*='--janbao-spoiler']` rule never matches and the live
+	 * contentEditable shows no spoiler effect. A CSS custom property survives
+	 * the round-trip and matches the attribute selector.
+	 */
+	const SPOILER_STYLE_MARKER = '--janbao-spoiler: 1;';
 
 	type ContentChangeHandler = (json: string) => void;
 	type NodeTransformFn = (node: unknown) => void;
@@ -214,11 +222,12 @@
 	 */
 	function applySpoilerStyle(node: SpoilerTextNode, add: boolean): void {
 		const style = node.getStyle() ?? '';
-		const hasSpoiler = style.includes('janbao-spoiler');
+		const hasSpoiler = style.includes('--janbao-spoiler');
 		if (add && !hasSpoiler) {
 			node.setStyle(style ? `${style} ${SPOILER_STYLE_MARKER}` : SPOILER_STYLE_MARKER);
 		} else if (!add && hasSpoiler) {
-			node.setStyle(style.replace(/janbao-spoiler;?\s*/g, '').trim());
+			// Strip the whole `--janbao-spoiler: <value>;` custom-property declaration.
+			node.setStyle(style.replace(/--janbao-spoiler:\s*[^;]*;?\s*/g, '').trim());
 		}
 	}
 
@@ -281,7 +290,7 @@
 
 					// Toggle direction mirrors Lexical's formatText: invert based on
 					// whether the first selected node already carries the marker.
-					const add = !(firstNode.getStyle() ?? '').includes('janbao-spoiler');
+					const add = !(firstNode.getStyle() ?? '').includes('--janbao-spoiler');
 
 					if (firstNode.is(lastNode)) {
 						// Single node selected. Nothing actually highlighted -> no-op

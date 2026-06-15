@@ -163,7 +163,7 @@
 					@{user.displayName}
 				</a>
 			{:else}
-				{@const hasSpoiler = (node.style ?? '').includes('janbao-spoiler')}
+				{@const hasSpoiler = (node.style ?? '').includes('--janbao-spoiler')}
 				{#if hasSpoiler}
 					<span class={formatTextClasses(node.format, true)}>
 						{segment.text}

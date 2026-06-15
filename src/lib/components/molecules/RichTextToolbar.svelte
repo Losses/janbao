@@ -87,7 +87,7 @@
 					const nodes = selection.getNodes();
 					isSpoiler = nodes.some((node) => {
 						if (isTextNodeFn(node)) {
-							return (node.getStyle() ?? '').includes('janbao-spoiler');
+							return (node.getStyle() ?? '').includes('--janbao-spoiler');
 						}
 						return false;
 					});
