@@ -4,16 +4,19 @@ import { searchDiscussions, searchActivities, searchMessages } from '$lib/server
 import type {
 	DiscussionSearchItem,
 	ActivitySearchItem,
-	MessageSearchItem
+	MessageSearchItem,
+	SearchSort
 } from '$lib/server/db/dao/search';
 
 type SearchScope = 'discussions' | 'activities' | 'messages';
 
 const SCOPES: SearchScope[] = ['discussions', 'activities', 'messages'];
+const SORTS: SearchSort[] = ['newest', 'oldest', 'relevance', 'replies'];
 
 interface SearchLoadData {
 	query: string;
 	scope: SearchScope;
+	sort: SearchSort;
 	page: number;
 	totalPages: number;
 	total: number;
@@ -23,10 +26,11 @@ interface SearchLoadData {
 	messages: MessageSearchItem[] | null;
 }
 
-function emptyResult(query: string, scope: SearchScope): SearchLoadData {
+function emptyResult(query: string, scope: SearchScope, sort: SearchSort): SearchLoadData {
 	return {
 		query,
 		scope,
+		sort,
 		page: 1,
 		totalPages: 0,
 		total: 0,
@@ -41,6 +45,10 @@ function parseScope(value: string | null): SearchScope {
 	return SCOPES.includes(value as SearchScope) ? (value as SearchScope) : 'discussions';
 }
 
+function parseSort(value: string | null): SearchSort {
+	return SORTS.includes(value as SearchSort) ? (value as SearchSort) : 'newest';
+}
+
 export const load: PageServerLoad = async (event) => {
 	const db = event.locals.db;
 	const user = event.locals.user;
@@ -48,23 +56,25 @@ export const load: PageServerLoad = async (event) => {
 
 	const q = event.url.searchParams.get('q') ?? '';
 	const scope = parseScope(event.url.searchParams.get('scope'));
+	const sort = parseSort(event.url.searchParams.get('sort'));
 	const pageParam = event.url.searchParams.get('page');
 	let page = pageParam ? parseInt(pageParam, 10) : 1;
 	if (isNaN(page) || page < 1) page = 1;
 
 	if (q.trim().length === 0) {
-		return emptyResult(q, scope);
+		return emptyResult(q, scope, sort);
 	}
 
 	// Activity and message search require a signed-in user (they key on userId
 	// for visibility). Discussions are searchable by guests, filtered by category
 	// read permissions inside the DAO.
 	if (scope === 'activities') {
-		if (!user) return emptyResult(q, scope);
-		const r = await searchActivities(db, q, user.id, page, platformEnv);
+		if (!user) return emptyResult(q, scope, sort);
+		const r = await searchActivities(db, q, user.id, page, platformEnv, sort);
 		return {
 			query: q,
 			scope,
+			sort,
 			page: r.page,
 			totalPages: r.totalPages,
 			total: r.total,
@@ -76,11 +86,12 @@ export const load: PageServerLoad = async (event) => {
 	}
 
 	if (scope === 'messages') {
-		if (!user) return emptyResult(q, scope);
-		const r = await searchMessages(db, q, user.id, page, platformEnv);
+		if (!user) return emptyResult(q, scope, sort);
+		const r = await searchMessages(db, q, user.id, page, platformEnv, sort);
 		return {
 			query: q,
 			scope,
+			sort,
 			page: r.page,
 			totalPages: r.totalPages,
 			total: r.total,
@@ -92,10 +103,11 @@ export const load: PageServerLoad = async (event) => {
 	}
 
 	const groupSlug = resolveGroupSlug(user);
-	const r = await searchDiscussions(db, q, user?.id ?? null, groupSlug, page, platformEnv);
+	const r = await searchDiscussions(db, q, user?.id ?? null, groupSlug, page, platformEnv, sort);
 	return {
 		query: q,
 		scope,
+		sort,
 		page: r.page,
 		totalPages: r.totalPages,
 		total: r.total,

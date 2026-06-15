@@ -21,7 +21,12 @@
 		"noQuery": "Enter a search term to begin.",
 		"tooShortHint": "Short query — using fuzzy match (LIKE).",
 		"resultsLabel": "results",
-		"matchedReply": "Matched in a reply"
+		"matchedReply": "Matched in a reply",
+		"sortBy": "Sort",
+		"sortNewest": "Newest",
+		"sortOldest": "Oldest",
+		"sortRelevance": "Relevance",
+		"sortReplies": "Most replies"
 	},
 	"auth": {
 		"usernameOrEmail": "Email or Username",
