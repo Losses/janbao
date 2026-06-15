@@ -45,13 +45,27 @@
 	// "Last edited" label shown before the edit timestamp.
 	const lastEditedLabel = $derived(commonT.lastEdited ?? 'last edited');
 
-	// Tooltip over the "last edited" label naming the editor (hover-only, per
-	// the chosen display style). Undefined when the editor is unknown, so the
-	// hover simply doesn't appear.
-	const editorHoverTitle = $derived.by(() => {
-		if (!editedByDisplayName) return undefined;
-		const template = commonT.editedBy ?? 'edited by {name}';
-		return template.replace('{name}', editedByDisplayName);
+	// Single unified tooltip for the whole "last edited" marker: the editor
+	// (if known) plus the absolute edit timestamp. Applied to both the wrapper
+	// span and the <time> element so hovering any part shows the same full
+	// text instead of two fragmentary titles.
+	const editFullTitle = $derived.by(() => {
+		if (!editedAt) return undefined;
+		const d = new Date(editedAt);
+		if (isNaN(d.getTime())) return undefined;
+		const abs = d.toLocaleString(undefined, {
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		});
+		if (editedByDisplayName) {
+			const template = commonT.editedFull ?? 'edited by {name} · {time}';
+			return template.replace('{name}', editedByDisplayName).replace('{time}', abs);
+		}
+		return abs;
 	});
 </script>
 
@@ -72,9 +86,9 @@
 			<DateAtom value={createdAt} {t} />
 
 			{#if editedAt}
-				<span class="inline-flex items-center gap-1">
-					<span class="text-base-content/40" title={editorHoverTitle}>{lastEditedLabel}</span>
-					<DateAtom value={editedAt} {t} />
+				<span class="inline-flex items-center gap-1" title={editFullTitle}>
+					<span class="text-base-content/40">{lastEditedLabel}</span>
+					<DateAtom value={editedAt} {t} title={editFullTitle} />
 				</span>
 			{/if}
 		</div>

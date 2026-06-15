@@ -191,7 +191,7 @@
 				</a>
 				{#if recipientId && recipientDisplayName}
 					<span class="flex items-center gap-1 text-base-content/60">
-						<Icon path={mdiArrowRight} size={0.8} />
+						<Icon path={mdiArrowRight} size={16} />
 						<a
 							href="/profile/{recipientId}/{generateSlug(recipientUsername || '')}"
 							class="font-semibold text-base-content hover:text-primary transition-colors"

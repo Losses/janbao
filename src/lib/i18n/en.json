@@ -81,7 +81,7 @@
 		"delete": "Delete",
 		"edit": "Edit",
 		"lastEdited": "Last edited",
-		"editedBy": "Edited by {name}",
+		"editedFull": "Edited by {name} · {time}",
 		"reply": "Reply",
 		"submit": "Submit",
 		"showAll": "Show All",

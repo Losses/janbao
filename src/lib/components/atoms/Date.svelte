@@ -11,9 +11,11 @@
 		/** Translation dictionary (from locals.t). Falls back to English if not provided. */
 		t?: TranslationDict | null;
 		class?: string;
+		/** Override the default hover title (the absolute timestamp). */
+		title?: string;
 	}
 
-	let { value, t = null, class: className = '' }: DateProps = $props();
+	let { value, t = null, class: className = '', title: customTitle }: DateProps = $props();
 
 	const dateObj = $derived(new Date(value));
 	const isValid = $derived(!isNaN(dateObj.getTime()));
@@ -113,7 +115,7 @@
 {#if isValid}
 	<time
 		datetime={dateObj.toISOString()}
-		title={absoluteString}
+		title={customTitle ?? absoluteString}
 		class="text-xs text-base-content/60 {className}"
 	>
 		{relativeString}

@@ -73,11 +73,17 @@ interface ParsedActivity {
 	// For a top-level WallPost activity (Title "author → recipient"), the user the
 	// message was directed at. null for status updates and sub-comments.
 	recipientId: number | null;
-	// A system "who joined" activity. Members listed in joinMemberIds are folded
+	// A system "who joined" activity. Members listed in joinMembers are folded
 	// into that calendar day's isJoined activity at write time (see
 	// appendJoinedMember); contentHtml carries only the excerpt (e.g. "欢迎加入!").
 	isJoined: boolean;
-	joinMemberIds: number[];
+	joinMembers: JoinedMemberRef[];
+}
+
+// A named member of a registration ("who joined") activity, in document order.
+interface JoinedMemberRef {
+	userId: number;
+	username: string | null;
 }
 
 interface AvatarEntry {
@@ -924,15 +930,20 @@ function parseActivitiesHtml(html: string): ParsedActivity[] {
 		let recipientRef: ProfileUserRef | null;
 		let contentHtml: string;
 		let isJoined = false;
-		let joinMemberIds: number[] = [];
+		let joinMembers: JoinedMemberRef[] = [];
 		if (isRegistration) {
 			isJoined = true;
 			topLevelAuthor = { userId: SYSTEM_USER_ID, username: null };
 			recipientRef = null;
 			contentHtml = excerptHtml;
-			joinMemberIds = nameHrefs
-				.map((m) => extractProfileUser('href="' + m[0]).userId)
-				.filter((u): u is number => u !== null);
+			// Keep each named user's username (from the profile URL slug) so the
+			// member row gets a real display name, and preserve document order.
+			joinMembers = nameHrefs
+				.map((m) => {
+					const ref = extractProfileUser('href="' + m[0]);
+					return ref.userId !== null ? { userId: ref.userId, username: ref.username } : null;
+				})
+				.filter((r): r is JoinedMemberRef => r !== null);
 		} else {
 			const authorRef = nameHrefs[0] ? extractProfileUser('href="' + nameHrefs[0][0]) : null;
 			recipientRef =
@@ -991,7 +1002,7 @@ function parseActivitiesHtml(html: string): ParsedActivity[] {
 				authorUsername: author.username,
 				recipientId: null,
 				isJoined: false,
-				joinMemberIds: []
+				joinMembers: []
 			});
 		}
 
@@ -1008,7 +1019,7 @@ function parseActivitiesHtml(html: string): ParsedActivity[] {
 			authorUsername: topLevelAuthor.username,
 			recipientId: recipientRef?.userId ?? null,
 			isJoined,
-			joinMemberIds
+			joinMembers
 		});
 	}
 	return activities;
@@ -1617,9 +1628,19 @@ async function main() {
 							// appended as a member. They are not inserted as standalone
 							// rows keyed by their Vanilla id.
 							if (act.isJoined) {
-								for (const memberId of act.joinMemberIds) {
-									await ensureUser(memberId, '');
-									await appendJoinedMember(db, memberId, act.createdAt, undefined);
+								// Append each named member with its real username (so the
+								// member row gets a real display name, not a placeholder) and
+								// an incrementing joinedAt so the batch fetch's ORDER BY
+								// joinedAt preserves the document order from the Title.
+								for (let index = 0; index < act.joinMembers.length; index++) {
+									const member = act.joinMembers[index];
+									await ensureUser(member.userId, member.username ?? '');
+									await appendJoinedMember(
+										db,
+										member.userId,
+										new Date(act.createdAt.getTime() + index * 1000),
+										undefined
+									);
 								}
 								return;
 							}

@@ -94,6 +94,7 @@ export interface JoinedMember {
 	userId: number;
 	displayName: string;
 	username: string;
+	avatarFileId: string | null;
 }
 
 // --- Profile Edit API Types ---

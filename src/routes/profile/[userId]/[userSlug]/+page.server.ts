@@ -110,7 +110,8 @@ export const load: PageServerLoad = async (event) => {
 				activityId: activityJoins.activityId,
 				userId: activityJoins.userId,
 				displayName: users.displayName,
-				username: users.username
+				username: users.username,
+				avatarFileId: users.avatarFileId
 			})
 			.from(activityJoins)
 			.innerJoin(users, eq(activityJoins.userId, users.id))
@@ -118,7 +119,12 @@ export const load: PageServerLoad = async (event) => {
 			.orderBy(activityJoins.joinedAt);
 		for (const r of joinRows) {
 			const arr = joinedMembersMap.get(r.activityId) ?? [];
-			arr.push({ userId: r.userId, displayName: r.displayName, username: r.username });
+			arr.push({
+				userId: r.userId,
+				displayName: r.displayName,
+				username: r.username,
+				avatarFileId: r.avatarFileId
+			});
 			joinedMembersMap.set(r.activityId, arr);
 		}
 	}
