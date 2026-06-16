@@ -59,9 +59,12 @@
 			user?.id !== targetUserId
 	);
 	// The reset-link button mirrors the server rule: only the super-admin may
-	// reset another admin's password. Peers cannot (prevents account takeover).
+	// reset another admin's password, and NO ONE resets the system sentinel.
 	const canResetTarget = $derived(
-		isAdmin && user?.id !== targetUserId && (isSuperAdmin || targetUserGroupSlug !== 'admin')
+		isAdmin &&
+			user?.id !== targetUserId &&
+			targetUserGroupSlug !== 'system' &&
+			(isSuperAdmin || targetUserGroupSlug !== 'admin')
 	);
 
 	let generatedLink = $state('');

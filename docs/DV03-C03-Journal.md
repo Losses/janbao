@@ -133,3 +133,28 @@ colt (id 1158) was promoted to admin during verification and restored to `member
 - **C1 verified end-to-end via API:** super-admin (user 0) can reset a member (200); a peer admin (temporarily-promoted colt) is **denied 403** when targeting the super-admin, but can still reset a member. Test data (colt's temporary admin promotion + test password + 2 reset tokens) created and fully restored/cleaned via libsql.
 
 **Status:** Round 1 fixes applied and verified. Proceeding to Round 2 re-audit.
+
+---
+
+## 6. Audit Round 2 — 2026-06-16
+
+**Method:** 5 independent sub-agents re-audited the post-Round-1 working tree. The model gateway hit a sustained 529 outage (10 failed launches, 0 tool-uses); after a 12-min cooldown a probe confirmed recovery and the remaining four were launched. Reports consolidated into [RV03-C03-Audit-02.md](./RV03-C03-Audit-02.md).
+
+**Round 2 Verdicts:** **3× PASS** (unconditional), **2× PASS_WITH_NOTES**. All Round-1 fixes CONFIRMED-FIXED; no regressions.
+
+**New issues found & fixed:**
+
+| Severity | Issue                                                                                                                                                          | Fix                                                                                                        |
+| :------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- |
+| MAJOR    | System sentinel (user -1) still resettable by a peer admin via the reset endpoint (same family as C1, parallel to the M3 `system` protection in `users/group`) | Reset-endpoint guard now blocks `system` unconditionally (no one resets it) and `admin` unless super-admin |
+| MINOR    | `canManageTargetGroup` client gate excluded only `admin`, not `system` (server already blocked it; UX-only)                                                    | Added `targetUserGroupSlug !== 'system'` for client/server parity                                          |
+
+**Deliberately not fixed (non-blocking, judged acceptable by multiple PASS agents):** m5 (matrix `$effect` wipe on unrelated `invalidateAll`), m7 (`users/group` TOCTOU), m9 (sequential upsert), m10 (similarity-ts informational).
+
+**Verification after fixes:**
+
+- `bun run check` — 0 errors, 0 warnings
+- `bun run lint` — exit code 0 (full chain incl. docs)
+- All Round-1 fixes remain CONFIRMED-FIXED; no regressions.
+
+**Status:** Round 2 fixes applied and verified. Proceeding to Round 3 re-audit to seek unanimous unconditional PASS.
