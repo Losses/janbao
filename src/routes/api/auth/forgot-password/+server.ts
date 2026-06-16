@@ -25,6 +25,12 @@ export const POST: RequestHandler = async (event) => {
 			return jsonError(t, 'auth.invalidEmail', 400);
 		}
 
+		// Cap email length (RFC 5321 max is 254) so it cannot bloat the throttle
+		// table or the lower() expression index.
+		if (email.length > 254) {
+			return jsonError(t, 'auth.invalidEmail', 400);
+		}
+
 		// Rate limit: per-IP and per-email fixed windows (shared across isolates).
 		const ip = getClientAddressSafe(event);
 		const ipResult = await enforceThrottle(db, 'forgot:ip', ip, FORGOT_IP_THROTTLE);

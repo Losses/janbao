@@ -61,13 +61,21 @@ export async function enforceThrottle(
 		})
 		.returning({ count: authThrottle.count });
 
-	// Best-effort prune of stale windows (older than the previous epoch).
-	try {
-		await db
-			.delete(authThrottle)
-			.where(and(eq(authThrottle.bucket, bucket), lt(authThrottle.windowEpoch, epoch - 1)));
-	} catch {
-		// Pruning is advisory; never fail the request because of it.
+	// Best-effort prune of stale windows for THIS bucket only. The epoch is on a
+	// per-bucket scale (floor(now / windowSec)), so it is only comparable within a
+	// single bucket - a cross-bucket prune would delete live rows belonging to a
+	// bucket with a larger window. Runs on ~10% of calls to stay off the hot path.
+	// Pruning is advisory and never fails the request.
+	if (Math.random() < 0.1) {
+		try {
+			await db
+				.delete(authThrottle)
+				.where(
+					and(eq(authThrottle.bucket, bucket), lt(authThrottle.windowEpoch, epoch - 1))
+				);
+		} catch {
+			// ignore - prune is best-effort
+		}
 	}
 
 	const count = inserted[0]?.count ?? 1;

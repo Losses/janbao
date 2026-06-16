@@ -17,7 +17,11 @@ export const POST: RequestHandler = async (event) => {
 		const body = (await event.request.json()) as AuthAdminGenerateResetBody;
 		const { targetUserId } = body;
 
-		if (targetUserId === undefined || targetUserId === null || Number.isNaN(Number(targetUserId))) {
+		if (
+			typeof targetUserId !== 'number' ||
+			!Number.isFinite(targetUserId) ||
+			Number.isNaN(targetUserId)
+		) {
 			return jsonError(t, 'common.badRequest', 400);
 		}
 
@@ -25,7 +29,7 @@ export const POST: RequestHandler = async (event) => {
 		const targetUserList = await db
 			.select({ email: users.email, groupSlug: users.groupSlug })
 			.from(users)
-			.where(eq(users.id, Number(targetUserId)))
+			.where(eq(users.id, targetUserId))
 			.limit(1);
 
 		if (targetUserList.length === 0) {

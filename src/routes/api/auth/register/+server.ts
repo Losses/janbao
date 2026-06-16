@@ -31,6 +31,10 @@ export const POST: RequestHandler = async (event) => {
 			return jsonError(t, 'auth.invalidEmail', 400);
 		}
 
+		if (email.length > 254) {
+			return jsonError(t, 'auth.invalidEmail', 400);
+		}
+
 		if (password.length < 8) {
 			return jsonError(t, 'auth.passwordTooShort', 400);
 		}

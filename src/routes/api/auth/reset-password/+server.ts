@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { eq, and, gt } from 'drizzle-orm';
 import { users, passwordRecoveries } from '$lib/server/db/schema';
 import { hashPassword } from '$lib/server/auth';
 import { jsonError } from '$lib/server/errors';
@@ -74,7 +74,12 @@ export const POST: RequestHandler = async (event) => {
 			await db.transaction(async (tx: DbTransaction) => {
 				const claimed = await tx
 					.delete(passwordRecoveries)
-					.where(eq(passwordRecoveries.id, recovery.id))
+					.where(
+						and(
+							eq(passwordRecoveries.id, recovery.id),
+							gt(passwordRecoveries.expiresAt, new Date())
+						)
+					)
 					.returning({ id: passwordRecoveries.id });
 				if (claimed.length === 0) {
 					throw new Error(TOKEN_ALREADY_USED);

@@ -35,21 +35,21 @@ Per DV04-Plan §2: each round, **5 independent sub-agents run the same full un-r
 
 **Issues found & fixed:**
 
-| Sev   | Issue                                                                                                          | Fix                                                                                                                                                       |
-| :---- | :------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| MAJOR | System sentinel participates in `forgot-password`/`reset-password`/`login` (no `groupSlug==='system'` guard)  | Mirrored the `admin-generate-reset` sentinel guard: block `system` in all three flows.                                                                    |
-| MAJOR | Login timing oracle (user-not-found returns instantly; wrong-password runs PBKDF2)                            | Precomputed dummy PBKDF2 hash; every failure path (unknown user / sentinel / wrong password) runs a real derivation.                                      |
-| MAJOR | No rate limiting anywhere on the auth surface                                                                  | New `authThrottle` table (migration `0008`) + `enforceThrottle` helper (D1/libsql fixed-window, shared across isolates); per-IP + per-identifier on login/forgot/reset. |
-| MAJOR | Invitation single-use TOCTOU race (in-tx consume unconditional)                                               | Conditional consume `WHERE code=? AND usedById IS NULL` + `.returning()`; abort + rollback if 0 rows.                                                     |
-| MAJOR | Reset-password consume non-atomic                                                                              | Atomic conditional `DELETE … RETURNING` claims the token inside a transaction; only one racing request succeeds.                                           |
-| MAJOR | Invitation monthly-limit race                                                                                  | Count-check + insert wrapped in one transaction.                                                                                                          |
-| MAJOR | Insecure JWT-secret fallback, no production guard                                                              | `getJwtSecret` fails closed (throws) in production builds (`import.meta.env.DEV` false); fallback kept only in dev.                                       |
-| MAJOR | Case-sensitive identity columns (`Alice` ≠ `alice`)                                                            | `lower()` lookups; email lower-cased on write; DB-level `lower()` unique indexes (`0008`) close the concurrent-case race.                                 |
-| MINOR | Register duplicate used wrong i18n key `discussion.alreadyExists`                                              | Switched to `auth.usernameOrEmailExists`.                                                                                                                 |
-| MINOR | Weak password floor (≥5)                                                                                       | Raised to ≥8 in `register`, `reset-password`, and entry UI; updated i18n message.                                                                         |
-| MINOR | `displayName` unbounded + unescaped in reset-email HTML                                                        | `displayName` length cap (≤64); `escapeHtml` on `displayName`/`siteName` in email body.                                                                   |
-| MINOR | Login response leaked `userId`                                                                                 | Dropped from the response (unused by the signin page).                                                                                                    |
-| MINOR | Logout cookie delete flags inconsistent                                                                         | Aligned `secure`/`sameSite` with the set path.                                                                                                            |
+| Sev   | Issue                                                                                                        | Fix                                                                                                                                                                     |
+| :---- | :----------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MAJOR | System sentinel participates in `forgot-password`/`reset-password`/`login` (no `groupSlug==='system'` guard) | Mirrored the `admin-generate-reset` sentinel guard: block `system` in all three flows.                                                                                  |
+| MAJOR | Login timing oracle (user-not-found returns instantly; wrong-password runs PBKDF2)                           | Precomputed dummy PBKDF2 hash; every failure path (unknown user / sentinel / wrong password) runs a real derivation.                                                    |
+| MAJOR | No rate limiting anywhere on the auth surface                                                                | New `authThrottle` table (migration `0008`) + `enforceThrottle` helper (D1/libsql fixed-window, shared across isolates); per-IP + per-identifier on login/forgot/reset. |
+| MAJOR | Invitation single-use TOCTOU race (in-tx consume unconditional)                                              | Conditional consume `WHERE code=? AND usedById IS NULL` + `.returning()`; abort + rollback if 0 rows.                                                                   |
+| MAJOR | Reset-password consume non-atomic                                                                            | Atomic conditional `DELETE … RETURNING` claims the token inside a transaction; only one racing request succeeds.                                                        |
+| MAJOR | Invitation monthly-limit race                                                                                | Count-check + insert wrapped in one transaction.                                                                                                                        |
+| MAJOR | Insecure JWT-secret fallback, no production guard                                                            | `getJwtSecret` fails closed (throws) in production builds (`import.meta.env.DEV` false); fallback kept only in dev.                                                     |
+| MAJOR | Case-sensitive identity columns (`Alice` ≠ `alice`)                                                          | `lower()` lookups; email lower-cased on write; DB-level `lower()` unique indexes (`0008`) close the concurrent-case race.                                               |
+| MINOR | Register duplicate used wrong i18n key `discussion.alreadyExists`                                            | Switched to `auth.usernameOrEmailExists`.                                                                                                                               |
+| MINOR | Weak password floor (≥5)                                                                                     | Raised to ≥8 in `register`, `reset-password`, and entry UI; updated i18n message.                                                                                       |
+| MINOR | `displayName` unbounded + unescaped in reset-email HTML                                                      | `displayName` length cap (≤64); `escapeHtml` on `displayName`/`siteName` in email body.                                                                                 |
+| MINOR | Login response leaked `userId`                                                                               | Dropped from the response (unused by the signin page).                                                                                                                  |
+| MINOR | Logout cookie delete flags inconsistent                                                                      | Aligned `secure`/`sameSite` with the set path.                                                                                                                          |
 
 **New files:** `src/lib/server/throttle.ts`, `src/lib/utils/escape.ts`, migration `drizzle/local-migrations/0008_mushy_jack_power.sql`.
 
@@ -62,3 +62,26 @@ Per DV04-Plan §2: each round, **5 independent sub-agents run the same full un-r
 - Runtime smoke test of `enforceThrottle`: 12 attempts / limit 10 → 2 blocked; per-identifier isolation correct; `retryAfter` correct; throwaway rows cleaned.
 
 **Status:** Round 1 fixes applied and verified. Proceeding to Round 2 re-audit.
+
+---
+
+## 4. Audit Round 2 - 2026-06-16
+
+**Method:** 5 agents re-audited the post-Round-1 C01 scope (full, un-roled). Consolidated → [RV04-C01-Audit-02.md](./RV04-C01-Audit-02.md).
+
+**Round 2 Verdicts:** 1× PASS (Agent 2, unconditional), 4× PASS_WITH_NOTES. All 13 Round-1 fixes CONFIRMED-FIXED (5/5); **no regressions**. Not yet unanimous PASS.
+
+**Issues found & fixed (Round 3 fixes):**
+
+| Sev   | Issue                                                                                                | Fix                                                                     |
+| :---- | :--------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------- | --- | ----------------------- |
+| MINOR | `DV04-C01-Journal.md` failed Prettier → lint gate red                                                | `prettier --write` on the journal.                                      |
+| MINOR | `usernameOrEmail`/`email` not capped before throttle identifier use (unbounded write surface)        | Capped at 320 (login) / 254 (forgot) before the throttle call.          |
+| MINOR | Throttle prune ran every call, scoped to current bucket (hot-path cost + churned-identifier leakage) | Prune now ~10% of calls (`Math.random() < 0.1`) and across all buckets. |
+| LOW   | `admin-generate-reset` `targetUserId` guard `Number.isNaN(Number(x))` let `Number("")===0` through   | Tightened to `typeof targetUserId !== 'number'                          |     | !Number.isFinite(...)`. |
+
+**Carry-overs confirmed acceptable:** throttle fail-closed availability (security choice); prod D1 migration is a manual deploy step (`0008` ships via next `bun run db:generate`); `getClientAddressSafe` `'unknown'` fallback is CF-safe; `forgot-password` SMTP-timing not equalized (scoped to login); throttle within-window count growth (bounded, epoch-GC'd).
+
+**Verification after Round 3 fixes:** `bun run check` → 0/0; `bun run lint` → exit 0.
+
+**Status:** Round 3 fixes applied and verified. Proceeding to Round 3 re-audit to seek 5/5 unconditional PASS.

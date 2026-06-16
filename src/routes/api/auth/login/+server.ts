@@ -32,6 +32,13 @@ export const POST: RequestHandler = async (event) => {
 			return jsonError(t, 'auth.loginFieldsRequired', 400);
 		}
 
+		// Bound the identifier early so it cannot bloat the throttle table or the
+		// lower() expression index (RFC 5321 caps an email at 254 chars; usernames
+		// are far shorter). 320 leaves generous headroom.
+		if (usernameOrEmail.length > 320) {
+			return jsonError(t, 'auth.invalidCredentials', 400);
+		}
+
 		// Rate limit: per-IP and per-identity fixed windows (shared across isolates).
 		const ip = getClientAddressSafe(event);
 		const identityKey = usernameOrEmail.toLowerCase();
