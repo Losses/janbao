@@ -19,6 +19,9 @@ import { bytesToHex } from '@noble/hashes/utils.js';
 const MAX_AVATAR = 1 * 1024 * 1024;
 const MAX_ATTACHMENT = 5 * 1024 * 1024;
 
+// Per-isolate flag: the /tmp upload folder is ensured once and reused.
+let tmpEnsured = false;
+
 /**
  * Streaming image upload (raw request body, not multipart). The body is piped
  * through a TransformStream that counts bytes (aborts on size limit), sniffs the
@@ -57,6 +60,10 @@ export const POST: RequestHandler = async (event) => {
 	let seen = 0;
 	let format: ImageFormat = 'other';
 	let tooBig = false;
+	// Accumulate up to 12 bytes before type-sniffing: webp/avif magic needs all
+	// 12, and a sub-12-byte first chunk would otherwise mis-detect as 'other'.
+	const sniff = new Uint8Array(12);
+	let sniffFill = 0;
 	const transform = new TransformStream<Uint8Array, Uint8Array>({
 		transform(chunk, controller) {
 			seen += chunk.byteLength;
@@ -65,8 +72,13 @@ export const POST: RequestHandler = async (event) => {
 				controller.error(new Error('upload exceeds size limit'));
 				return;
 			}
-			if (format === 'other' && seen <= chunk.byteLength) {
-				format = detectImageFormat(chunk);
+			if (format === 'other' && sniffFill < sniff.byteLength) {
+				const take = Math.min(sniff.byteLength - sniffFill, chunk.byteLength);
+				sniff.set(chunk.subarray(0, take), sniffFill);
+				sniffFill += take;
+				if (sniffFill >= sniff.byteLength) {
+					format = detectImageFormat(sniff);
+				}
 			}
 			hasher.update(chunk);
 			controller.enqueue(chunk);
@@ -76,7 +88,12 @@ export const POST: RequestHandler = async (event) => {
 
 	const tmpName = crypto.randomUUID();
 	try {
-		await pcloudMkcol(cfg, '/tmp');
+		// /tmp is created once and never removed; skip the WebDAV round-trip on
+		// every subsequent upload in this isolate.
+		if (!tmpEnsured) {
+			await pcloudMkcol(cfg, '/tmp');
+			tmpEnsured = true;
+		}
 		await pcloudUploadStream(cfg, '/tmp', tmpName, piped);
 	} catch (err) {
 		console.error('[Upload API Error - stream]:', err);

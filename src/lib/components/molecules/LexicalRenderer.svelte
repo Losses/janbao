@@ -29,12 +29,14 @@
 		contentJson?: string | null;
 		class?: string;
 		mentionedUsers?: MentionedUsersMap | null;
+		deadImageLabel?: string;
 	}
 
 	let {
 		contentJson = null,
 		class: className = '',
-		mentionedUsers = null
+		mentionedUsers = null,
+		deadImageLabel = 'Image no longer available'
 	}: LexicalRendererProps = $props();
 
 	/**
@@ -312,7 +314,7 @@
 				class="dead-image-placeholder inline-flex items-center gap-2 my-3 px-3 py-2 rounded-field border border-dashed border-base-300 bg-base-200/50 text-base-content/60 text-sm"
 			>
 				<Icon path={mdiImageBrokenVariant} size={20} class="opacity-50" />
-				图片已失效
+				{deadImageLabel}
 			</span>
 		{:else if node.children}
 			{#each node.children as child, i (i)}

@@ -207,7 +207,11 @@
 					editedByDisplayName={opReply.editedByDisplayName}
 					{t}
 				/>
-				<LexicalRenderer contentJson={opReply.contentJson} {mentionedUsers} />
+				<LexicalRenderer
+					contentJson={opReply.contentJson}
+					{mentionedUsers}
+					deadImageLabel={t.img.deadImage}
+				/>
 				{#if user}
 					<div class="flex justify-end items-center gap-2 pt-2">
 						{#if canDelete}
@@ -331,7 +335,11 @@
 								</button>
 							</form>
 						{:else}
-							<LexicalRenderer contentJson={reply.contentJson} {mentionedUsers} />
+							<LexicalRenderer
+								contentJson={reply.contentJson}
+								{mentionedUsers}
+								deadImageLabel={t.img.deadImage}
+							/>
 							{#if user}
 								<div class="flex justify-end items-center gap-2 mt-2">
 									{#if canCreate}

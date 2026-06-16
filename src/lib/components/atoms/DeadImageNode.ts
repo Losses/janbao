@@ -14,6 +14,17 @@ import { DecoratorNode, $applyNodeReplacement } from 'lexical';
 import type { NodeKey, SerializedLexicalNode } from 'lexical';
 import { mdiImageBrokenVariant } from '@mdi/js';
 
+/**
+ * Locale-aware label for the dead-image placeholder. The editor (which has the
+ * request locale via `t`) sets this on mount; the default keeps it
+ * language-neutral so English users never see the legacy Chinese string.
+ */
+let deadImageLabel = 'Image no longer available';
+
+export function setDeadImageLabel(label: string): void {
+	deadImageLabel = label;
+}
+
 interface SerializedDeadImageNode extends SerializedLexicalNode {
 	type: 'dead-image';
 	version: number;
@@ -69,7 +80,7 @@ export class DeadImageNode extends DecoratorNode<unknown> {
 		svg.appendChild(path);
 
 		const label = document.createElement('span');
-		label.textContent = '图片已失效';
+		label.textContent = deadImageLabel;
 
 		span.appendChild(svg);
 		span.appendChild(label);

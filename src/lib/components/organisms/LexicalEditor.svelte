@@ -44,7 +44,7 @@
 	import RichTextLinkEditor from '$lib/components/molecules/RichTextLinkEditor.svelte';
 	import { CodeNode, CodeHighlightNode } from '@lexical/code';
 	import { MentionNode, createMentionNode } from '$lib/components/atoms/MentionNode';
-	import { DeadImageNode } from '$lib/components/atoms/DeadImageNode';
+	import { DeadImageNode, setDeadImageLabel } from '$lib/components/atoms/DeadImageNode';
 	import MentionTypeaheadPlugin from '$lib/components/molecules/MentionTypeaheadPlugin.svelte';
 	import {
 		COMMAND_PRIORITY_EDITOR,
@@ -137,6 +137,12 @@
 	}: LexicalEditorProps = $props();
 
 	const tEditor = $derived((t?.editor ?? {}) as Record<string, string>);
+
+	// Keep the dead-image placeholder label locale-aware (the Lexical node builds
+	// its DOM imperatively and has no access to `t`, so it reads a module value).
+	$effect(() => {
+		setDeadImageLabel(t?.img?.deadImage ?? 'Image no longer available');
+	});
 
 	// Use i18n placeholder if no override provided
 	const resolvedPlaceholder = $derived(

@@ -202,7 +202,11 @@
 								</a>
 							</div>
 							<div class="mt-0.5">
-								<LexicalRenderer contentJson={comment.contentJson} class="text-sm" />
+								<LexicalRenderer
+									contentJson={comment.contentJson}
+									class="text-sm"
+									deadImageLabel={t.img.deadImage}
+								/>
 							</div>
 							<div class="flex justify-end items-center gap-2 mt-1">
 								<div class="flex-1 text-xs text-base-content/50">

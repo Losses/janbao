@@ -158,7 +158,11 @@
 						</form>
 					</div>
 				{:else}
-					<LexicalRenderer contentJson={msg.contentJson} {mentionedUsers} />
+					<LexicalRenderer
+						contentJson={msg.contentJson}
+						{mentionedUsers}
+						deadImageLabel={t.img.deadImage}
+					/>
 
 					{#if msg.authorId === currentUserId}
 						<div class="flex justify-end items-center gap-2 mt-2">

@@ -133,7 +133,7 @@
 
 			<!-- Row 2: Content -->
 			<div class="mt-1">
-				<LexicalRenderer {contentJson} {mentionedUsers} />
+				<LexicalRenderer {contentJson} {mentionedUsers} deadImageLabel={t.img.deadImage} />
 			</div>
 
 			<!-- Row 3: Timestamp + comment + delete (same line) -->

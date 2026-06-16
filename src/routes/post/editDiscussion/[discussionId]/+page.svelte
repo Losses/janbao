@@ -249,7 +249,7 @@
 						class="border border-base-300 rounded-box p-5 bg-base-100 min-h-[200px] shadow-inner"
 					>
 						{#if contentJson}
-							<LexicalRenderer {contentJson} />
+							<LexicalRenderer {contentJson} deadImageLabel={t.img.deadImage} />
 						{:else}
 							<p class="text-base-content/40 italic">{t.discussion.previewEmpty}</p>
 						{/if}

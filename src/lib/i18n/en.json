@@ -32,7 +32,6 @@
 		"searchBtn": "Search",
 		"noResults": "No results found.",
 		"noQuery": "Enter a search term to begin.",
-		"tooShortHint": "Short query - using fuzzy match (LIKE).",
 		"resultsLabel": "results",
 		"matchedReply": "Matched in a reply",
 		"sortBy": "Sort",
@@ -350,7 +349,8 @@
 	},
 	"img": {
 		"notFound": "Not found",
-		"storageError": "Failed to retrieve file"
+		"storageError": "Failed to retrieve file",
+		"deadImage": "Image no longer available"
 	},
 	"rss": {
 		"unauthorized": "Unauthorized"
