@@ -1,11 +1,11 @@
-# RV04-C04-Audit-01: DV04 Cycle 4 — Round 1 Audit
+# RV04-C04-Audit-01: DV04 Cycle 4 - Round 1 Audit
 
 **Date:** 2026-06-16
-**Cycle:** C04 — User Profile
+**Cycle:** C04 - User Profile
 **Method:** 5 independent sub-agents, each performing the full un-roled audit of the C04 scope. No roles assigned. Reports consolidated below.
 
 **Round 1 Verdicts:** **0× PASS**, **5× PASS_WITH_NOTES**.
-**Consolidated consensus: FAIL** — five actionable MAJORs (input-validation parity + two stealth leaks) plus MINORs.
+**Consolidated consensus: FAIL** - five actionable MAJORs (input-validation parity + two stealth leaks) plus MINORs.
 
 ---
 
@@ -13,7 +13,7 @@
 
 ### MAJOR
 
-- **C4-1 (5/5 unanimous):** `src/routes/api/profile/password/+server.ts` enforces `newPassword.length < 5`, but C01 (register/reset) enforces `< 8` and the shared i18n `auth.passwordTooShort` says "at least 8 characters". A user can weaken their own password to 5–7 chars after registration — a real downgrade of the C01 policy. Fix: `< 8` (server + `password/+page.svelte`).
+- **C4-1 (5/5 unanimous):** `src/routes/api/profile/password/+server.ts` enforces `newPassword.length < 5`, but C01 (register/reset) enforces `< 8` and the shared i18n `auth.passwordTooShort` says "at least 8 characters". A user can weaken their own password to 5–7 chars after registration - a real downgrade of the C01 policy. Fix: `< 8` (server + `password/+page.svelte`).
 - **C4-2 (Agents 2, 3, 4, 5):** `src/routes/api/profile/edit/+server.ts` accepts an email with no format check and no ≤254 cap (register has `EMAIL_REGEX` + ≤254). A user can store `"x"` or a 10 KB string as their email. Fix: mirror register's validation.
 - **C4-3 (Agents 1, 2, 3, 4):** `src/routes/api/profile/edit/+server.ts` caps `displayName` only at non-empty (register caps ≤64, i18n `auth.displayNameTooLong`). Unbounded display name → layout/DB hygiene. Fix: ≤64 cap.
 - **C4-4 (Agent 5):** **Stealth leak via `lastActiveTime`.** `hooks.server.ts` updates `lastActiveTime` unconditionally (including stealth users), and the public profile header renders `lastActiveTime` to ANY visitor. A stealth user (who opted out of presence) has their live "last active: a few seconds ago" exposed on their profile. The plan §5 says stealth users must be hidden from activity walls. Fix: suppress `lastActiveTime` in the public profile payload when the target is stealth and the viewer is not the owner/admin.
@@ -25,7 +25,7 @@
 
 ### Carry-overs (documented, accepted)
 
-- **C4-co1 (Agents 1, 2, 5):** `showEmail` is a stored/edited toggle that is **never read** on any render path (the public profile payload omits `email` entirely). It is a no-op feature (safe — no leak). Product decision: wire it up or remove. Accepted as-is.
+- **C4-co1 (Agents 1, 2, 5):** `showEmail` is a stored/edited toggle that is **never read** on any render path (the public profile payload omits `email` entirely). It is a no-op feature (safe - no leak). Product decision: wire it up or remove. Accepted as-is.
 - **C4-co2 (Agent 1):** profile-comment (wall reply) notification is only created for top-level directed activities, not for replies on a wall post. C05-scope (activities/notifications). Accepted.
 - **C4-co3 (Agent 3):** the "who joined today" wall (`activity/+page.server.ts`, profile joinedMembers) does not filter `isStealth`. It is a historical signup record, not live presence; judgment call. Accepted.
 - **C4-co4:** `/profile/onlineNow` is misleadingly named (it is the stealth-settings page; the real online wall is `/api/users/online`). Cosmetic; a route rename is out of scope/risky. Accepted.

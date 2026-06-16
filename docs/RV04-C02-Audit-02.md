@@ -1,10 +1,10 @@
-# RV04-C02-Audit-02: DV04 Cycle 2 — Round 2 Audit (FINAL)
+# RV04-C02-Audit-02: DV04 Cycle 2 - Round 2 Audit (FINAL)
 
 **Date:** 2026-06-16
-**Cycle:** C02 — Discussion Core (read & write)
+**Cycle:** C02 - Discussion Core (read & write)
 **Method:** 5 independent sub-agents re-audited the C02 scope after Round 1 fixes, each performing the full un-roled audit. Reports consolidated below.
 
-**Round 2 Verdicts:** **5× PASS** (unconditional) — Agents 1, 2, 3, 4, 5. All Round-1 fixes CONFIRMED; DV03 C2 intact; no regressions; no new actionable defects.
+**Round 2 Verdicts:** **5× PASS** (unconditional) - Agents 1, 2, 3, 4, 5. All Round-1 fixes CONFIRMED; DV03 C2 intact; no regressions; no new actionable defects.
 **Consolidated consensus: UNANIMOUS PASS. Audit loop closed.**
 
 ---
@@ -16,14 +16,14 @@
 - **C2-5 (MINOR)**: `reply` wraps `dispatchReplyNotifications` in try/catch (reply already committed; a notification blip no longer surfaces a 500 or risks a duplicate on resubmit).
 - **C2-9 (MINOR)**: detail `+page.svelte` uses a named `ReplyActionResult` interface (no inline object-type cast).
 - **DV03 C2** (editReply/deleteReply disabled-category JOIN): **INTACT (5/5)**.
-- **Verification gate GREEN** — every agent re-ran `bun run check` (0/0) and `bun run lint` (exit 0).
+- **Verification gate GREEN** - every agent re-ran `bun run check` (0/0) and `bun run lint` (exit 0).
 
 ## 2. Findings raised in Round 2
 
 **None actionable.** All five agents returned unconditional PASS. Two non-actionable observations recorded (out-of-scope / carry-over-class, not re-reported):
 
-- `LexicalRenderer.svelte` has a hardcoded Chinese string (`图片已失效`, dead-image fallback) — i18n debt on a cross-cutting component, deferred to **C07**.
-- `themeName` is not server-validated against a DaisyUI allowlist; it is reflected only as a `data-theme` attribute (Svelte `setAttribute`, no script execution) — "an attacker breaks their own post's theme." Defense-in-depth; accepted.
+- `LexicalRenderer.svelte` has a hardcoded Chinese string (`图片已失效`, dead-image fallback) - i18n debt on a cross-cutting component, deferred to **C07**.
+- `themeName` is not server-validated against a DaisyUI allowlist; it is reflected only as a `data-theme` attribute (Svelte `setAttribute`, no script execution) - "an attacker breaks their own post's theme." Defense-in-depth; accepted.
 
 ## 3. Carry-overs (final, accepted for C02)
 
@@ -32,7 +32,7 @@
 3. latest-replier self-join ties on `MAX(createdAt)` (non-deterministic on same-second; cosmetic).
 4. unread-count loads all non-deleted replies of read threads into memory (perf; bounded by page size).
 5. detail `load` duplicates `parsePagePathParam` (consistency; functionally correct).
-6. `<img>` render lacks `referrerPolicy` (defense-in-depth; not exploitable — `safeUrl` already rejects non-http schemes).
+6. `<img>` render lacks `referrerPolicy` (defense-in-depth; not exploitable - `safeUrl` already rejects non-http schemes).
 7. falsy-on-zero guards on `replyId`/`discussionId` (latent; ids ≥ 1).
 8. reply destination-page count runs outside the tx (cosmetic; can land one page off under concurrency).
 9. (cross-cutting) `LexicalRenderer` hardcoded dead-image string → **C07** (i18n).

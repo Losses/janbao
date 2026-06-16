@@ -1,11 +1,16 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { users } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { jsonError } from '$lib/server/errors';
 import type { ProfileEditBody } from '$lib/types/api';
 import { getAllowSlugChange } from '$lib/server/constants';
-import { isValidUsername } from '$lib/utils/validation';
+import {
+	isValidUsername,
+	EMAIL_REGEX,
+	MAX_DISPLAY_NAME_LENGTH,
+	MAX_EMAIL_LENGTH
+} from '$lib/utils/validation';
 
 export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	const user = locals.user;
@@ -24,6 +29,9 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		if (trimmed.length === 0) {
 			return jsonError(t, 'profile.displayNameEmpty', 400);
 		}
+		if (trimmed.length > MAX_DISPLAY_NAME_LENGTH) {
+			return jsonError(t, 'auth.displayNameTooLong', 400);
+		}
 		updates.displayName = trimmed;
 	}
 
@@ -40,19 +48,29 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		if (trimmed.length === 0) {
 			return jsonError(t, 'profile.emailEmpty', 400);
 		}
+		if (trimmed.length > MAX_EMAIL_LENGTH || !EMAIL_REGEX.test(trimmed)) {
+			return jsonError(t, 'auth.invalidEmail', 400);
+		}
+		// Canonicalise to lower case (matching register) and check uniqueness
+		// case-insensitively so a case variant does not slip past the app check
+		// only to throw a raw unique-constraint 500.
+		const canonical = trimmed.toLowerCase();
 		const existing = await locals.db
 			.select({ id: users.id })
 			.from(users)
-			.where(eq(users.email, trimmed))
+			.where(sql`lower(${users.email}) = lower(${canonical})`)
 			.limit(1);
 
 		if (existing.length > 0 && existing[0].id !== user.id) {
 			return jsonError(t, 'profile.emailInUse', 409);
 		}
-		updates.email = trimmed;
+		updates.email = canonical;
 	}
 
 	if (showEmail !== undefined) {
+		if (typeof showEmail !== 'boolean') {
+			return jsonError(t, 'common.invalidValue', 400);
+		}
 		updates.showEmail = showEmail;
 	}
 

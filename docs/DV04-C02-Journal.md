@@ -3,7 +3,7 @@
 ## Cycle 2: Discussion Core (read & write)
 
 **Date:** 2026-06-16
-**Status:** ✅ CLOSED — 5/5 unconditional PASS (Round 2)
+**Status:** ✅ CLOSED - 5/5 unconditional PASS (Round 2)
 
 ---
 
@@ -33,7 +33,7 @@ Consolidated → [RV04-C02-Audit-01.md](./RV04-C02-Audit-01.md).
 
 **Issues found and fixed (Round 2 fixes):**
 
-- **MAJOR (5/5)** - Bare-path redirect `/discussion/[id]` leaked the slug (title-derived) of a disabled/forbidden-category discussion via the 302 `Location` header — the one read path that skipped `resolvePermissions` + the `isNull(categories.disabledAt)` filter. Fix: JOIN `categories` + disabledAt filter + `resolvePermissions(...).canRead` gate before redirect; also added the disabledAt JOIN to the `editDiscussion` load/update fetches for uniform "disabled-category discussion is unreachable" semantics.
+- **MAJOR (5/5)** - Bare-path redirect `/discussion/[id]` leaked the slug (title-derived) of a disabled/forbidden-category discussion via the 302 `Location` header - the one read path that skipped `resolvePermissions` + the `isNull(categories.disabledAt)` filter. Fix: JOIN `categories` + disabledAt filter + `resolvePermissions(...).canRead` gate before redirect; also added the disabledAt JOIN to the `editDiscussion` load/update fetches for uniform "disabled-category discussion is unreachable" semantics.
 - **MINOR** - `deleteReply` decremented `commentCount` with no floor (`commentCount - 1`); drift/race could drive it negative. Fix: `MAX(commentCount - 1, 0)`.
 - **MINOR** - `reply` action ran `dispatchReplyNotifications` outside the tx with no try/catch; a notification blip turned a committed reply into a user-facing 500 (and risked a duplicate on resubmit). Fix: wrapped dispatch in try/catch + log.
 - **MINOR** - Detail `+page.svelte` cast a reply action result with an inline object type, violating no-inline-typing. Fix: extracted a named `ReplyActionResult` interface.
@@ -48,13 +48,13 @@ Consolidated → [RV04-C02-Audit-01.md](./RV04-C02-Audit-01.md).
 
 ---
 
-## 4. Audit Round 2 — 2026-06-16 (FINAL)
+## 4. Audit Round 2 - 2026-06-16 (FINAL)
 
 Consolidated → [RV04-C02-Audit-02.md](./RV04-C02-Audit-02.md).
-**Verdicts:** 5× PASS (Agents 1, 2, 3, 4, 5 — all unconditional). All Round-1 fixes CONFIRMED (C2-1 slug leak closed, C2-3 floor, C2-5 try/catch, C2-9 named interface, editDiscussion JOINs); DV03 C2 intact; no regressions; no new actionable defects. Each agent independently re-ran the gate (`bun run check` 0/0, `bun run lint` exit 0).
+**Verdicts:** 5× PASS (Agents 1, 2, 3, 4, 5 - all unconditional). All Round-1 fixes CONFIRMED (C2-1 slug leak closed, C2-3 floor, C2-5 try/catch, C2-9 named interface, editDiscussion JOINs); DV03 C2 intact; no regressions; no new actionable defects. Each agent independently re-ran the gate (`bun run check` 0/0, `bun run lint` exit 0).
 
 Two non-actionable observations (out-of-scope / carry-over): `LexicalRenderer` hardcoded dead-image string (→ C07 i18n); `themeName` not server-allowlisted (defense-in-depth, `data-theme` only, no script execution). Neither blocks C02.
 
-**Status: ✅ UNANIMOUS PASS — C02 audit loop closed.** All five agents consider Cycle 2 (Discussion Core) complete and clean for its scope. C02 converged in 2 rounds (vs C01's 5) — C01 had hardened the cross-cutting infra (throttle, escape, doc-pipe discipline) and DV03 had already done most of the disabled-category work, leaving C02 with one real MAJOR plus minor hardening.
+**Status: ✅ UNANIMOUS PASS - C02 audit loop closed.** All five agents consider Cycle 2 (Discussion Core) complete and clean for its scope. C02 converged in 2 rounds (vs C01's 5) - C01 had hardened the cross-cutting infra (throttle, escape, doc-pipe discipline) and DV03 had already done most of the disabled-category work, leaving C02 with one real MAJOR plus minor hardening.
 
 **Cycle 2 complete. Advancing to Cycle 3 (Categories + RSS + Search).**
