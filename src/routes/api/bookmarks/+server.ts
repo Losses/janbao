@@ -4,7 +4,11 @@ import type { RequestHandler } from './$types';
 import { bookmarks, discussions, categories } from '$lib/server/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
 import { getBookmarks } from '$lib/server/db/dao/bookmarks';
-import { resolvePermissions } from '$lib/server/constants';
+import {
+	getReadableCategorySlugs,
+	resolveGroupSlug,
+	resolvePermissions
+} from '$lib/server/constants';
 import type { BookmarkToggleBody } from '$lib/types/api';
 
 const DEFAULT_LIMIT = 20;
@@ -29,7 +33,15 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	if (isNaN(page) || page < 1) page = 1;
 	const offset = (page - 1) * limit;
 
-	const items = await getBookmarks(locals.db, user.id, { limit, offset });
+	// Apply the same readable-category filter the /bookmarks page loader uses, so
+	// the tooltip widget (and direct API calls) do not surface bookmarks in
+	// categories the caller's group can no longer read.
+	const readableSlugs = await getReadableCategorySlugs(locals.db, resolveGroupSlug(user));
+	const filters = {
+		readableCategorySlugs: readableSlugs.length > 0 ? readableSlugs : ['__none__']
+	};
+
+	const items = await getBookmarks(locals.db, user.id, { limit, offset }, filters);
 	return json({ bookmarks: items, page, limit });
 };
 

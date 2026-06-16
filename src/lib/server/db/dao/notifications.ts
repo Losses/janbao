@@ -1,5 +1,5 @@
-import { notifications, users, discussions } from '../schema';
-import { eq, and, desc, inArray, sql } from 'drizzle-orm';
+import { notifications, users, discussions, categories } from '../schema';
+import { eq, and, desc, inArray, isNull, sql } from 'drizzle-orm';
 import type { D1Db } from '../index';
 import type { NotificationItem } from '$lib/types/api';
 
@@ -68,10 +68,21 @@ export async function getNotifications(
 	const discussionMap = new Map<number, DiscussionInfo>();
 	if (discussionIds.length > 0) {
 		const uniqueDiscussionIds = [...new Set(discussionIds)];
+		// Resolve titles only for live discussions in enabled categories; a
+		// notification referencing a soft-deleted or now-disabled-category
+		// discussion yields a null title (the UI already null-guards) rather than
+		// leaking its content.
 		const discussionRecords = await db
 			.select({ id: discussions.id, title: discussions.title, slug: discussions.slug })
 			.from(discussions)
-			.where(inArray(discussions.id, uniqueDiscussionIds));
+			.innerJoin(categories, eq(discussions.categorySlug, categories.slug))
+			.where(
+				and(
+					inArray(discussions.id, uniqueDiscussionIds),
+					isNull(discussions.deletedAt),
+					isNull(categories.disabledAt)
+				)
+			);
 		for (const d of discussionRecords) {
 			discussionMap.set(d.id, { title: d.title, slug: d.slug });
 		}

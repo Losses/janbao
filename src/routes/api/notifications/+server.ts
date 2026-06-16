@@ -57,7 +57,7 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	}
 
 	const ids = Array.isArray(body.ids)
-		? body.ids.filter((id) => typeof id === 'string').slice(0, MAX_MARK_READ_IDS)
+		? body.ids.filter((id) => typeof id === 'number').slice(0, MAX_MARK_READ_IDS)
 		: [];
 	if (ids.length === 0) {
 		return jsonError(t, 'common.badRequest', 400);

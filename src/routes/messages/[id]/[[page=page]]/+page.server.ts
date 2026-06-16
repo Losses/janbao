@@ -15,6 +15,7 @@ import { indexMessage, reindexMessage } from '$lib/server/search/fts';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 
 const MESSAGE_PAGE_FALLBACK = 50;
+const MAX_ADD_PARTICIPANTS = 20;
 
 export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user;
@@ -204,6 +205,10 @@ export const actions: Actions = {
 			return { success: false, error: t.message.userIdRequired };
 		}
 
+		if (userIds.length > MAX_ADD_PARTICIPANTS) {
+			return { success: false, error: t.message.tooManyRecipients };
+		}
+
 		for (const targetUserId of userIds) {
 			const targetExists = await db
 				.select({ id: users.id })
@@ -231,7 +236,7 @@ export const actions: Actions = {
 	},
 
 	// Post a new message in the conversation.
-	post: async ({ request, locals, params }) => {
+	post: async ({ request, locals, params, platform }) => {
 		const user = locals.user;
 		if (!user) {
 			error(401, locals.t.common.unauthorized);
@@ -317,7 +322,7 @@ export const actions: Actions = {
 			.from(messages)
 			.where(eq(messages.conversationId, conversationId));
 		const newTotal = newTotalRes[0]?.value ?? 1;
-		const limit = getPaginationLimit(undefined) || MESSAGE_PAGE_FALLBACK;
+		const limit = getPaginationLimit(platform?.env) || MESSAGE_PAGE_FALLBACK;
 		const messagePage = Math.max(1, Math.ceil(newTotal / limit));
 
 		return { success: true, messageId, page: messagePage };

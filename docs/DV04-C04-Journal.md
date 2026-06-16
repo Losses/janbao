@@ -3,7 +3,7 @@
 ## Cycle 4: User Profile
 
 **Date:** 2026-06-16
-**Status:** Audit in progress (Round 1 fixed; Round 2 pending)
+**Status:** ✅ CLOSED - 5/5 unconditional PASS (Round 2)
 
 ---
 
@@ -38,10 +38,23 @@ Consolidated → [RV04-C04-Audit-01.md](./RV04-C04-Audit-01.md).
 - **MAJOR (Agent 5)** - Stealth leak: `/api/users/search` empty-`q` suggestion list ordered by `lastActiveTime` with no `isStealth=false` filter. Fix: added `eq(users.isStealth, false)` to the base conditions.
 - **MINOR** - `/api/profile/edit` email not lower-cased on write + case-sensitive uniqueness check (case variants → raw 500 instead of 409). Fix: lowercase on write + `lower()` existence check; username existence check also switched to `lower()` for parity; `showEmail` now `typeof === 'boolean'`-validated.
 
-**Carry-overs (documented, accepted):** `showEmail` toggle is never read on any render path (no-op feature, no leak — product decision); profile-comment (wall-reply) notification only for top-level directed activities (C05 scope); "who joined today" wall does not filter `isStealth` (historical signup record, judgment call); `/profile/onlineNow` misleading route name (cosmetic); `avatarFileId` accepted unvalidated (defense-in-depth, upload writes `'1'`); username-change does not reserve group slugs (admin-gated, low impact); redundant `as InvitationItem[]` cast + `parseDiscussionPagination` no upper page bound (cosmetic).
+**Carry-overs (documented, accepted):** `showEmail` toggle is never read on any render path (no-op feature, no leak - product decision); profile-comment (wall-reply) notification only for top-level directed activities (C05 scope); "who joined today" wall does not filter `isStealth` (historical signup record, judgment call); `/profile/onlineNow` misleading route name (cosmetic); `avatarFileId` accepted unvalidated (defense-in-depth, upload writes `'1'`); username-change does not reserve group slugs (admin-gated, low impact); redundant `as InvitationItem[]` cast + `parseDiscussionPagination` no upper page bound (cosmetic).
 
 **DV03 verified intact (5/5):** DV03 M1 sub-page admin-sidebar parity + target-email leak prevention; no IDOR on any self-mutation; password-change verifies current password.
 
 **Verification after Round 2 fixes:** `bun run check` 0/0; `bun run lint` exit 0.
 
 **Status:** Round 2 fixes applied and verified. Proceeding to Round 2 re-audit to seek 5/5 unconditional PASS.
+
+---
+
+## 4. Audit Round 2 - 2026-06-16 (FINAL)
+
+Consolidated → [RV04-C04-Audit-02.md](./RV04-C04-Audit-02.md).
+**Verdicts:** 5× PASS (Agents 1, 2, 3, 4, 5 - all unconditional). All six Round-1 fix groups CONFIRMED; no regressions; DV03 M1 intact; no IDOR; gate green (each agent re-ran `bun run check` 0/0, `bun run lint` exit 0).
+
+Non-actionable observations: stealth `lastActiveTime` remains in the SSR page-data JSON but is frozen/stale (not live) and UI-gated (carry-over); C01 entry-route literals (`8`/`254`) match the centralized constants (informational).
+
+**Status: ✅ UNANIMOUS PASS - C04 audit loop closed.** All five agents consider Cycle 4 (User Profile) complete and clean. The stealth surface is now defended at four layers (hooks freeze, online-wall filter, typeahead filter, profile render gate). C04 converged in 2 rounds.
+
+**Cycle 4 complete. Advancing to Cycle 5 (PM / Notifications / Bookmarks / Activity).**
