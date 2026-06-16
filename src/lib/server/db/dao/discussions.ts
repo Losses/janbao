@@ -121,7 +121,7 @@ export async function getDiscussionsList(
 	if (categorySlug) {
 		whereClauses.push(eq(discussions.categorySlug, categorySlug));
 	}
-	if (authorId) {
+	if (authorId != null) {
 		whereClauses.push(eq(discussions.authorId, authorId));
 	}
 
@@ -283,7 +283,7 @@ export async function getDiscussionsCount(
 	if (categorySlug) {
 		whereClauses.push(eq(discussions.categorySlug, categorySlug));
 	}
-	if (authorId) {
+	if (authorId != null) {
 		whereClauses.push(eq(discussions.authorId, authorId));
 	}
 
