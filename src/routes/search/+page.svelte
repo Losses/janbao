@@ -105,7 +105,7 @@
 
 <DualColumnLayout {sidebar} {t} {user}>
 	<div class="space-y-3">
-		<h1 class="text-2xl font-bold py-2">{tSearch.title}</h1>
+		<h1 class="page-title border-b border-base-300 pb-4">{tSearch.title}</h1>
 
 		<!-- Scope selector (single-choice) + sort on the right -->
 		<div class="flex flex-wrap items-center gap-2">

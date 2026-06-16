@@ -47,7 +47,7 @@
 <DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-3">
 		<div class="flex items-center justify-between border-b border-base-300 pb-4">
-			<h1 class="text-2xl font-bold">{messageT.inbox}</h1>
+			<h1 class="page-title">{messageT.inbox}</h1>
 			<a href="/messages/new" class="btn btn-primary btn-sm">{messageT.newMessage}</a>
 		</div>
 

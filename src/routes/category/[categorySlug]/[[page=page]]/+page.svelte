@@ -71,7 +71,7 @@
 		<!-- Category Title + Description + RSS Link -->
 		<div class="border-b border-base-300 pb-4">
 			<div class="flex items-center gap-3 flex-wrap">
-				<h1 class="text-3xl font-extrabold tracking-tight text-base-content">{category.title}</h1>
+				<h1 class="page-title">{category.title}</h1>
 
 				{#if user && user.rssToken}
 					<a

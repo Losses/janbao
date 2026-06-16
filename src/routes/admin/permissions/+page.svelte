@@ -151,7 +151,7 @@
 <DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-3">
 		<div class="border-b border-base-300 pb-4">
-			<h1 class="text-2xl font-bold">{adminT.categoryPermissions}</h1>
+			<h1 class="page-title">{adminT.categoryPermissions}</h1>
 		</div>
 
 		{#if message}

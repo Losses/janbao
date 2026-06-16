@@ -136,7 +136,7 @@
 	<div class="space-y-3 py-2">
 		<!-- Header -->
 		<div class="border-b border-base-300 pb-4">
-			<h1 class="text-3xl font-extrabold tracking-tight text-base-content">
+			<h1 class="page-title">
 				{t.discussion.editDiscussion}
 			</h1>
 		</div>

@@ -182,9 +182,7 @@
 	<div class="space-y-3">
 		<!-- Discussion Header -->
 		<div class="border-b border-base-300 pb-4">
-			<h1
-				class="text-3xl font-extrabold tracking-tight text-base-content break-words leading-tight"
-			>
+			<h1 class="text-lg font-extrabold tracking-tight text-base-content break-words leading-tight">
 				{discussion.title}
 			</h1>
 		</div>

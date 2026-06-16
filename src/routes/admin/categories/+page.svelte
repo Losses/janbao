@@ -129,7 +129,7 @@
 <DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-3">
 		<div class="flex items-center justify-between border-b border-base-300 pb-4">
-			<h1 class="text-2xl font-bold">{adminT.categories}</h1>
+			<h1 class="page-title">{adminT.categories}</h1>
 			<button class="btn btn-primary btn-sm" onclick={openAdd} disabled={saving}>
 				{adminT.addCategory}
 			</button>

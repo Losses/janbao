@@ -105,7 +105,7 @@
 
 		<!-- Title Banner -->
 		<div class="flex items-center justify-between border-b border-base-300 pb-4">
-			<h1 class="text-3xl font-extrabold tracking-tight">{t.nav.activity}</h1>
+			<h1 class="page-title">{t.nav.activity}</h1>
 			{#if totalPages > 1}
 				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
 			{/if}

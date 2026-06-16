@@ -92,7 +92,9 @@
 					size="lg"
 				/>
 				<div>
-					<h1 class="text-2xl font-bold text-base-content">{targetUser.displayName}</h1>
+					<h1 class="user-display-name page-title">
+						{targetUser.displayName}
+					</h1>
 					{#if targetUser.bio}
 						<p class="text-base-content/70 mt-1 whitespace-pre-line">{targetUser.bio}</p>
 					{/if}

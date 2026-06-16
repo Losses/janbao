@@ -57,7 +57,7 @@
 
 <DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-3">
-		<h1 class="text-2xl font-bold border-b border-base-300 pb-4">{draftT.myDrafts}</h1>
+		<h1 class="page-title border-b border-base-300 pb-4">{draftT.myDrafts}</h1>
 
 		{#if views.length === 0}
 			<div class="card bg-base-200/40 border border-base-200 p-10 text-center text-base-content/50">

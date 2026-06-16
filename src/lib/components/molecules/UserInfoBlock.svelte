@@ -54,7 +54,7 @@
 		<div>
 			<a
 				href="/profile/{user.id}/{userSlug}"
-				class="font-medium text-base-content hover:text-primary"
+				class="user-display-name text-base-content hover:text-primary"
 			>
 				{user.displayName}
 			</a>

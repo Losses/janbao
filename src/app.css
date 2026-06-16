@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+
 @plugin "daisyui" {
 	themes:
 		light,
@@ -76,19 +77,27 @@
       regardless of `data-theme`, so all themes inherit the Songti/serif stack.
    daisyUI's reset consumes `var(--default-font-family, …)` on `:host,html`. */
 :root {
-	--default-font-family:
-		'Songti SC', 'Songti TC', STSong, SimSun, 'Source Han Serif SC', 'Source Han Serif TC',
-		'Noto Serif SC', 'Noto Serif TC', 'Noto Serif CJK SC', 'Noto Serif CJK TC', 'AR PL UMing CN',
-		'AR PL New Sung', serif;
+	--default-font-family: Tahoma, Arial, 'Hiragino Sans GB W3', STHeiti, 'Microsoft YaHei', serif;
+	--font-sans: 'Helvetica Neue', Helvetica, arial, sans-serif;
 }
 
 /* UI chrome keeps the default sans-serif stack (Tailwind's --font-sans) rather
    than the Songti/serif body font: buttons, badges, and the header nav.
    `--font-sans` is exactly the font daisyUI used before the serif override. */
 .btn,
-.badge,
 header nav {
 	font-family: var(--font-sans);
+}
+
+.badge {
+	font: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+/* User display names (profile header + sidebar UserInfoBlock widget) use the
+   sans (hei) stack instead of the Songti/serif body font, rendered bold. */
+.user-display-name {
+	font-family: var(--font-sans);
+	font-weight: 700;
 }
 
 [data-theme='huoxin'] {
@@ -109,6 +118,22 @@ header nav {
 	.bookmark-btn.text-primary {
 		color: #e5c970;
 	}
+}
+
+/*
+ * Functional page title - the heading at the top of a route single-page
+ * (search, messages, notifications, bookmarks, drafts, activity, category
+ * list, profile sub-pages, admin pages, plus content headings like a category
+ * name or conversation title). One consistent 16px bold style; pair with
+ * `border-b border-base-300 pb-4` on the heading (or its header wrapper) for
+ * the under-title divider. The Discussion thread title is the lone exception
+ * (18px, inline `text-lg`).
+ */
+.page-title {
+	font-size: 1rem;
+	font-weight: 700;
+	line-height: 1.5;
+	font-family: var(--font-sans);
 }
 
 /*
