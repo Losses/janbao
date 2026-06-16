@@ -10,6 +10,7 @@
 	import { generateSlug } from '$lib/utils/slug';
 	import {
 		mdiAccountGroup,
+		mdiArrowRight,
 		mdiCalendarClock,
 		mdiClockOutline,
 		mdiEyeOutline,
@@ -147,7 +148,11 @@
 					{#if isOwner}
 						{profileT.postNormalActivity}
 					{:else}
-						{profileT.postToProfile} → {targetUser.displayName}
+						<span class="inline-flex items-center gap-1 flex-wrap">
+							{profileT.postToProfile}
+							<Icon path={mdiArrowRight} size={16} class="text-base-content/60" />
+							{targetUser.displayName}
+						</span>
 					{/if}
 				</p>
 				<LexicalEditor
