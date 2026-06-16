@@ -3,7 +3,7 @@
 ## Cycle 5: User Dashboards (PM / Notifications / Bookmarks / Activity)
 
 **Date:** 2026-06-16
-**Status:** Audit in progress (Round 1 fixed; Round 2 pending)
+**Status:** ✅ CLOSED - 5/5 unconditional PASS (Round 2)
 
 ---
 
@@ -48,3 +48,18 @@ Consolidated → [RV04-C05-Audit-01.md](./RV04-C05-Audit-01.md).
 **Verification after Round 2 fixes:** `bun run check` 0/0; `bun run lint` exit 0.
 
 **Status:** Round 2 fixes applied and verified. Proceeding to Round 2 re-audit to seek 5/5 unconditional PASS.
+
+---
+
+## 4. Audit Round 2 - 2026-06-16 (FINAL)
+
+Consolidated → [RV04-C05-Audit-02.md](./RV04-C05-Audit-02.md).
+**Verdicts:** 5× PASS (Agents 1, 2, 3, 4, 5 - all unconditional). All six Round-1 fixes CONFIRMED; no regressions; gate green (each agent re-ran `bun run check` 0/0, `bun run lint` exit 0).
+
+**C5-1/C5-2 calibration confirmed by all 5 agents** - including Agent 3 (the Round-1 FAIL agent), which retracted its CRITICALs after re-examining the evidence: `ActivityRow.svelte` renders "author → recipient" as a deliberate wall-post affordance; the profile page surfaces directed activities publicly; PMs are a fully separate system; `search.ts`'s recipientId filter is a search-scope choice. Directed activities are public wall posts by design.
+
+Non-actionable observations: `/api/activities` POST `recipientId` doesn't API-block GHOST sentinel (cosmetic, public-wall); `messages/new` prefill accepts sentinel ids for display only (creation blocked by `id > 0`). Both accepted.
+
+**Status: ✅ UNANIMOUS PASS - C05 audit loop closed.** All five agents consider Cycle 5 (User Dashboards) complete and clean. C05 converged in 2 rounds.
+
+**Cycle 5 complete. Advancing to Cycle 6 (Admin & Permissions - fresh full re-audit).**
