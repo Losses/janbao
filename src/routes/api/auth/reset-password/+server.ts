@@ -55,7 +55,7 @@ export const POST: RequestHandler = async (event) => {
 		}
 
 		// Block the system sentinel (and any account whose user row is gone) from
-		// having a password installed via reset — parity with admin-generate-reset.
+		// having a password installed via reset - parity with admin-generate-reset.
 		const targetList = await db
 			.select({ groupSlug: users.groupSlug })
 			.from(users)
