@@ -158,3 +158,29 @@ colt (id 1158) was promoted to admin during verification and restored to `member
 - All Round-1 fixes remain CONFIRMED-FIXED; no regressions.
 
 **Status:** Round 2 fixes applied and verified. Proceeding to Round 3 re-audit to seek unanimous unconditional PASS.
+
+---
+
+## 7. Audit Round 3 — 2026-06-16
+
+**Method:** 5 independent sub-agents re-audited after Round 1 + Round 2 fixes (probe-then-batch; gateway stable this round). Reports consolidated into [RV03-C03-Audit-03.md](./RV03-C03-Audit-03.md).
+
+**Round 3 Verdicts:** **4× PASS** (unconditional), **1× PASS_WITH_NOTES** (the lone note was fixed mid-round). N1 + N2 CONFIRMED-FIXED by all 5. No regressions.
+
+**Round-3 fix applied mid-round:**
+
+| Severity | Issue                                                                                                                                                                                                                     | Fix                                                                                        |
+| :------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :----------------------------------------------------------------------------------------- |
+| MINOR    | `canResetTarget` (ProfileSidebar) excluded only `admin`, not `system` — an admin viewing the system sentinel saw the reset button (clicking 403s server-side; no escalation). Same parity gap as N2 on the reset control. | Added `targetUserGroupSlug !== 'system'` to `canResetTarget` for full client/server parity |
+
+**Non-blocking items raised but not withholding PASS** (all hygiene/defense-in-depth or carry-overs, no live vulnerability, no regression): bookmarks-API readable-filter, `validateCategoryPermissionTargets` disabled-category check, permissive `categoryPermissions` schema defaults, and carry-overs m5/m7/m9/m10.
+
+**Pre-existing issues flagged OUTSIDE DV03 scope** (filed for a separate change; predate the `13f289f` baseline, untouched by this feature): notifications discussion-title resolution and the bare-path discussion redirect don't filter `disabledAt`.
+
+**Verification after the Round-3 fix:**
+
+- `bun run check` — 0 errors, 0 warnings
+- `bun run lint` — exit code 0 (full chain incl. docs)
+- All Round-1 + Round-2 fixes remain CONFIRMED-FIXED; no regressions.
+
+**Status: ✅ UNANIMOUS PASS — audit loop closed.** All 5 agents consider DV03 Cycle 3 complete and clean for its scope.

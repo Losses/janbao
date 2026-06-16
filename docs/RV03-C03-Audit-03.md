@@ -9,10 +9,10 @@
 
 ## 1. Round-2 fix verification (all 5 agents)
 
-| Fix | Verdict |
-| :-- | :------ |
+| Fix                                                                            | Verdict                                                                                                                                                     |
+| :----------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | N1 reset endpoint blocks `system` unconditionally + `admin` unless super-admin | **CONFIRMED-FIXED** (5/5) — guard reads the target's `groupSlug` server-side before minting; system sentinel blocked for everyone, admin blocked for peers. |
-| N2 `canManageTargetGroup` excludes `system` client-side | **CONFIRMED-FIXED** (5/5) — client/server parity with `users/group` `isProtectedTarget`. |
+| N2 `canManageTargetGroup` excludes `system` client-side                        | **CONFIRMED-FIXED** (5/5) — client/server parity with `users/group` `isProtectedTarget`.                                                                    |
 
 **No regressions reported by any agent.** All Round-1 fixes (C1, C2, M1–M4, m1–m4) re-verified intact.
 
@@ -21,7 +21,8 @@
 ## 2. Round-3 fix
 
 ### N3 (MINOR) — `canResetTarget` did not exclude `system`
-*(Found by probe + agent 4; fixed mid-round)*
+
+_(Found by probe + agent 4; fixed mid-round)_
 
 `ProfileSidebar.svelte` `canResetTarget` excluded only `'admin'`. An admin viewing the system sentinel would see the "Generate Reset Link" button (clicking it 403s at the server — no escalation). For full client/server parity with N1/N2.
 
@@ -41,7 +42,9 @@ Multiple agents surfaced items but **all still returned PASS**:
 None is a live vulnerability or a regression. No agent withheld PASS on them.
 
 ### Pre-existing issues OUTSIDE DV03 scope (flagged for awareness, not blockers)
+
 Two agents independently flagged pre-existing leaks in files DV03 did not touch:
+
 - `src/lib/server/db/dao/notifications.ts` — notification discussion-title resolution doesn't filter `disabledAt`.
 - `src/routes/discussion/[discussionId]/+page.server.ts` (bare-path redirect) — leaks slug via `Location` header for disabled-category discussions.
 
