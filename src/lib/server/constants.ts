@@ -24,7 +24,7 @@ export const SYSTEM_USER_ID = -1;
 /**
  * The bootstrap admin (id 0), seeded from ADMIN_EMAIL/ADMIN_PASSWORD when no
  * admin-group user exists yet. It is the only account that may promote another
- * user into the `admin` group or generate reset links for other admins — i.e.
+ * user into the `admin` group or generate reset links for other admins - i.e.
  * the super-admin. See src/lib/server/db/seed.ts.
  */
 export const BOOTSTRAP_ADMIN_ID = 0;
@@ -61,7 +61,7 @@ interface PaginationParams {
 /**
  * Parse a `pN` path segment (the optional [[page=page]] matcher yields e.g. "p3").
  * Returns 1 when the param is absent or malformed, so callers can pass
- * `event.params.page` directly — undefined collapses to page 1.
+ * `event.params.page` directly - undefined collapses to page 1.
  */
 export function parsePagePathParam(raw: string | undefined): number {
 	if (!raw) return 1;

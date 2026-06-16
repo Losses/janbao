@@ -32,12 +32,12 @@
 ### 1.3 Editable Reserved User Groups
 
 **Created DAO helper:** `updateUserGroupMeta(db, slug, title, description)` in `src/lib/server/db/dao/admin-permissions.ts`.
-**Added API:** `PATCH /api/admin/user-groups` (`src/routes/api/admin/user-groups/+server.ts`) — edits title/description, matched by slug. Reserved groups are editable; seeding is idempotent (`onConflictDoNothing`) and never overwrites existing rows, so editing `system`/`admin`/`moderator`/`member`/`guest` is safe. Slug is never mutated.
+**Added API:** `PATCH /api/admin/user-groups` (`src/routes/api/admin/user-groups/+server.ts`) - edits title/description, matched by slug. Reserved groups are editable; seeding is idempotent (`onConflictDoNothing`) and never overwrites existing rows, so editing `system`/`admin`/`moderator`/`member`/`guest` is safe. Slug is never mutated.
 **Added type:** `AdminUserGroupUpdateBody` in `src/lib/types/api.ts`.
 
 ### 1.4 Editable Categories
 
-**No new backend needed** — the existing `PATCH /api/admin/categories` already accepts full metadata (title/description/displayOrder/priority/themeName) and leaves `disabledAt` untouched when `disabled` is omitted.
+**No new backend needed** - the existing `PATCH /api/admin/categories` already accepts full metadata (title/description/displayOrder/priority/themeName) and leaves `disabledAt` untouched when `disabled` is omitted.
 
 ### 1.5 Reused Add/Edit Modals
 
@@ -105,17 +105,17 @@ colt (id 1158) was promoted to admin during verification and restored to `member
 
 ---
 
-## 5. Audit Round 1 — 2026-06-16
+## 5. Audit Round 1 - 2026-06-16
 
 **Method:** 5 independent sub-agents performed full audits of the DV03 diff (`13f289f..4017ef0`). Several agents hit transient 529 gateway errors and were restarted; final reports consolidated into [RV03-C03-Audit-01.md](./RV03-C03-Audit-01.md).
 
-**Round 1 Verdicts:** 4× PASS_WITH_NOTES, 1× PASS_WITH_NOTES-with-CRITICAL-escalation (Agent D). **Consolidated consensus: FAIL** — one CRITICAL privilege-escalation had to be fixed before PASS.
+**Round 1 Verdicts:** 4× PASS_WITH_NOTES, 1× PASS_WITH_NOTES-with-CRITICAL-escalation (Agent D). **Consolidated consensus: FAIL** - one CRITICAL privilege-escalation had to be fixed before PASS.
 
 **Issues found & fixed:**
 
 | Severity | Issue                                                                                                                                                                          | Fix                                                                                                                                                                                                                                                                |
 | :------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CRITICAL | Peer admin could take over any admin (incl. super-admin user 0) via `/api/auth/admin-generate-reset` — the reset endpoint authorised only the caller, never the target's group | Endpoint now fetches the target's groupSlug and rejects (403) admin targets unless the caller is the super-admin (id 0); also switched to `requireAdmin` + imported `BOOTSTRAP_ADMIN_ID` from constants; UI "Generate Reset Link" button gated on `canResetTarget` |
+| CRITICAL | Peer admin could take over any admin (incl. super-admin user 0) via `/api/auth/admin-generate-reset` - the reset endpoint authorised only the caller, never the target's group | Endpoint now fetches the target's groupSlug and rejects (403) admin targets unless the caller is the super-admin (id 0); also switched to `requireAdmin` + imported `BOOTSTRAP_ADMIN_ID` from constants; UI "Generate Reset Link" button gated on `canResetTarget` |
 | CRITICAL | `editReply` author-bypass let an author edit a reply inside a disabled category (direct form POST)                                                                             | Added `categories` JOIN + `isNull(categories.disabledAt)` to the `editReply` and `deleteReply` reply-fetch queries (disabled-category replies now 404)                                                                                                             |
 | MAJOR    | Admin controls absent on `/profile/discussions` and `/profile/comments` (and the props/email never fetched)                                                                    | New `getProfileAdminSidebarData` DAO helper; both sub-page loaders now fetch and pass `targetUserGroupSlug` / `targetUserEmail` / `manageableGroups` to `ProfileSidebar`                                                                                           |
 | MAJOR    | `targetUserId === 0` rejected by falsy guard (`!targetUserId`)                                                                                                                 | Replaced with explicit `undefined`/`NaN` check so id 0 is a valid target                                                                                                                                                                                           |
@@ -128,15 +128,15 @@ colt (id 1158) was promoted to admin during verification and restored to `member
 
 **Verification after fixes:**
 
-- `bun run check` — 0 errors, 0 warnings
-- `bun run lint` — exit code 0
+- `bun run check` - 0 errors, 0 warnings
+- `bun run lint` - exit code 0
 - **C1 verified end-to-end via API:** super-admin (user 0) can reset a member (200); a peer admin (temporarily-promoted colt) is **denied 403** when targeting the super-admin, but can still reset a member. Test data (colt's temporary admin promotion + test password + 2 reset tokens) created and fully restored/cleaned via libsql.
 
 **Status:** Round 1 fixes applied and verified. Proceeding to Round 2 re-audit.
 
 ---
 
-## 6. Audit Round 2 — 2026-06-16
+## 6. Audit Round 2 - 2026-06-16
 
 **Method:** 5 independent sub-agents re-audited the post-Round-1 working tree. The model gateway hit a sustained 529 outage (10 failed launches, 0 tool-uses); after a 12-min cooldown a probe confirmed recovery and the remaining four were launched. Reports consolidated into [RV03-C03-Audit-02.md](./RV03-C03-Audit-02.md).
 
@@ -153,15 +153,15 @@ colt (id 1158) was promoted to admin during verification and restored to `member
 
 **Verification after fixes:**
 
-- `bun run check` — 0 errors, 0 warnings
-- `bun run lint` — exit code 0 (full chain incl. docs)
+- `bun run check` - 0 errors, 0 warnings
+- `bun run lint` - exit code 0 (full chain incl. docs)
 - All Round-1 fixes remain CONFIRMED-FIXED; no regressions.
 
 **Status:** Round 2 fixes applied and verified. Proceeding to Round 3 re-audit to seek unanimous unconditional PASS.
 
 ---
 
-## 7. Audit Round 3 — 2026-06-16
+## 7. Audit Round 3 - 2026-06-16
 
 **Method:** 5 independent sub-agents re-audited after Round 1 + Round 2 fixes (probe-then-batch; gateway stable this round). Reports consolidated into [RV03-C03-Audit-03.md](./RV03-C03-Audit-03.md).
 
@@ -171,7 +171,7 @@ colt (id 1158) was promoted to admin during verification and restored to `member
 
 | Severity | Issue                                                                                                                                                                                                                     | Fix                                                                                        |
 | :------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :----------------------------------------------------------------------------------------- |
-| MINOR    | `canResetTarget` (ProfileSidebar) excluded only `admin`, not `system` — an admin viewing the system sentinel saw the reset button (clicking 403s server-side; no escalation). Same parity gap as N2 on the reset control. | Added `targetUserGroupSlug !== 'system'` to `canResetTarget` for full client/server parity |
+| MINOR    | `canResetTarget` (ProfileSidebar) excluded only `admin`, not `system` - an admin viewing the system sentinel saw the reset button (clicking 403s server-side; no escalation). Same parity gap as N2 on the reset control. | Added `targetUserGroupSlug !== 'system'` to `canResetTarget` for full client/server parity |
 
 **Non-blocking items raised but not withholding PASS** (all hygiene/defense-in-depth or carry-overs, no live vulnerability, no regression): bookmarks-API readable-filter, `validateCategoryPermissionTargets` disabled-category check, permissive `categoryPermissions` schema defaults, and carry-overs m5/m7/m9/m10.
 
@@ -179,8 +179,8 @@ colt (id 1158) was promoted to admin during verification and restored to `member
 
 **Verification after the Round-3 fix:**
 
-- `bun run check` — 0 errors, 0 warnings
-- `bun run lint` — exit code 0 (full chain incl. docs)
+- `bun run check` - 0 errors, 0 warnings
+- `bun run lint` - exit code 0 (full chain incl. docs)
 - All Round-1 + Round-2 fixes remain CONFIRMED-FIXED; no regressions.
 
-**Status: ✅ UNANIMOUS PASS — audit loop closed.** All 5 agents consider DV03 Cycle 3 complete and clean for its scope.
+**Status: ✅ UNANIMOUS PASS - audit loop closed.** All 5 agents consider DV03 Cycle 3 complete and clean for its scope.

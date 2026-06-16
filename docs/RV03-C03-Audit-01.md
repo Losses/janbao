@@ -1,9 +1,9 @@
-# RV03-C03-Audit-01: DV03 Cycle 3 — Round 1 Audit
+# RV03-C03-Audit-01: DV03 Cycle 3 - Round 1 Audit
 
 **Date:** 2026-06-16
 **Method:** 5 independent sub-agents performed full audits of the DV03 permission-management feature (diff `13f289f..4017ef0`). Reports consolidated below (deduped, cross-referenced). Agents ran in independent contexts; several were restarted due to transient 529 gateway errors.
 
-**Round 1 Verdicts:** PASS_WITH_NOTES × 4, PASS_WITH_NOTES × 1 (one agent — D — escalated two issues to CRITICAL that the others rated MAJOR or missed entirely). **Consolidated consensus: FAIL (one CRITICAL privilege-escalation must be fixed before PASS).**
+**Round 1 Verdicts:** PASS_WITH_NOTES × 4, PASS_WITH_NOTES × 1 (one agent - D - escalated two issues to CRITICAL that the others rated MAJOR or missed entirely). **Consolidated consensus: FAIL (one CRITICAL privilege-escalation must be fixed before PASS).**
 
 ---
 
@@ -13,7 +13,7 @@
 
 _(Found by Agent D; missed by Agents 3, 4, B, C)_
 
-`src/routes/api/auth/admin-generate-reset/+server.ts:13` authorises only on the **caller** being admin; it never inspects the **target's** group. A peer (non-super) admin can POST `targetUserId: 0` (or any admin id) and receive a 48-hour password-reset link, then complete the reset flow and sign in as that admin — gaining super-admin powers and entirely defeating the C03 "admins cannot change an existing admin's group" rule via a different endpoint.
+`src/routes/api/auth/admin-generate-reset/+server.ts:13` authorises only on the **caller** being admin; it never inspects the **target's** group. A peer (non-super) admin can POST `targetUserId: 0` (or any admin id) and receive a 48-hour password-reset link, then complete the reset flow and sign in as that admin - gaining super-admin powers and entirely defeating the C03 "admins cannot change an existing admin's group" rule via a different endpoint.
 
 This is a real privilege-escalation: the group-change API is locked down, but the reset-link API is an open backdoor into any admin account.
 
@@ -25,7 +25,7 @@ _(Also addresses the related MINOR that this endpoint uses an inline check inste
 
 _(Found by Agents 3, B, C, D; Agent D rated CRITICAL, others MAJOR)_
 
-`src/routes/discussion/[discussionId]/[slug]/[[page=page]]/+page.server.ts:~455` (`editReply` action) gates on `!perms.canUpdate && !isAuthor`. `resolvePermissions` returns all-false for a disabled category, but the `isAuthor` short-circuit lets the original author edit their reply via a direct form POST that skips the page `load` 404 guard. This violates "a disabled category is inaccessible everywhere outside the admin UI." (Note: `editDiscussion` is NOT vulnerable — its `canRead` check fires before the author bypass; `deleteReply` is also safe — it checks `canDelete` only.)
+`src/routes/discussion/[discussionId]/[slug]/[[page=page]]/+page.server.ts:~455` (`editReply` action) gates on `!perms.canUpdate && !isAuthor`. `resolvePermissions` returns all-false for a disabled category, but the `isAuthor` short-circuit lets the original author edit their reply via a direct form POST that skips the page `load` 404 guard. This violates "a disabled category is inaccessible everywhere outside the admin UI." (Note: `editDiscussion` is NOT vulnerable - its `canRead` check fires before the author bypass; `deleteReply` is also safe - it checks `canDelete` only.)
 
 **Fix:** Add `isNull(categories.disabledAt)` to the `editReply` reply-fetch JOIN (so a disabled-category reply 404s), mirroring the read-side filter.
 
@@ -35,9 +35,9 @@ _(Found by Agents 3, B, C, D; Agent D rated CRITICAL, others MAJOR)_
 
 ### M1. Admin controls absent on `/profile/discussions` and `/profile/comments` (and `/profile/invitations`)
 
-_(Found by Agents 4, B, C, D — unanimous)_
+_(Found by Agents 4, B, C, D - unanimous)_
 
-`ProfileSidebar` accepts `targetUserGroupSlug`, `targetUserEmail`, `manageableGroups`, but only `/profile/[userId]/[userSlug]/+page.svelte` passes them. The discussion/comment sub-pages render `ProfileSidebar` without the props, so an admin on those pages loses the group dropdown, reset-link button, and promote-to-admin button — and the reset copy sentence would render with an empty `{email}`. Their `load` functions also do not fetch the data.
+`ProfileSidebar` accepts `targetUserGroupSlug`, `targetUserEmail`, `manageableGroups`, but only `/profile/[userId]/[userSlug]/+page.svelte` passes them. The discussion/comment sub-pages render `ProfileSidebar` without the props, so an admin on those pages loses the group dropdown, reset-link button, and promote-to-admin button - and the reset copy sentence would render with an empty `{email}`. Their `load` functions also do not fetch the data.
 
 **Fix:** Fetch `manageableGroups` + `targetUserEmail` (admin-only) + target `groupSlug` in each sub-page's `+page.server.ts` (mirror `/profile/[userId]/[userSlug]/+page.server.ts:201-215`) and pass the three props through.
 
@@ -86,12 +86,12 @@ _(Found by Agent D)_
 
 ## 4. Consensus POSITIVE observations
 
-- **Disabled-category read-path filtering is exhaustive** — every list/count/detail/RSS/search/bookmark/post path filters `categories.disabledAt IS NULL`. The only gaps are write-action endpoints (C2). Centralisation through `resolvePermissions` (all-false for disabled) + `getReadableCategorySlugs` is clean.
-- **Super-admin / mutual-exclusion logic in `/api/admin/users/group` is correct** for its scope — bootstrap id 0, peers cannot touch admins or self, self-lockout prevented. (The escalation bypass is via the reset endpoint, C1, not this one.)
-- **Email-leak prevention is correct** — `targetUserEmail` fetched admin-only in a separate query, never in the public `targetUser` payload.
+- **Disabled-category read-path filtering is exhaustive** - every list/count/detail/RSS/search/bookmark/post path filters `categories.disabledAt IS NULL`. The only gaps are write-action endpoints (C2). Centralisation through `resolvePermissions` (all-false for disabled) + `getReadableCategorySlugs` is clean.
+- **Super-admin / mutual-exclusion logic in `/api/admin/users/group` is correct** for its scope - bootstrap id 0, peers cannot touch admins or self, self-lockout prevented. (The escalation bypass is via the reset endpoint, C1, not this one.)
+- **Email-leak prevention is correct** - `targetUserEmail` fetched admin-only in a separate query, never in the public `targetUser` payload.
 - **i18n parity is exact** between `en.json` and `zh-CN.json` for all ~47 new keys including `{email}`/`{link}` interpolation.
-- **Type/lint discipline holds** — named interfaces, no inline typings, `bun run check` 0 errors, eslint clean on `src/`.
-- **`FormField` atom + Svelte 5 runes usage is idiomatic** — `$derived` for computed, `$state` for mutable, no `$effect` loops.
+- **Type/lint discipline holds** - named interfaces, no inline typings, `bun run check` 0 errors, eslint clean on `src/`.
+- **`FormField` atom + Svelte 5 runes usage is idiomatic** - `$derived` for computed, `$state` for mutable, no `$effect` loops.
 - **Migration `0007`** adds a single nullable column correctly.
 
 ---

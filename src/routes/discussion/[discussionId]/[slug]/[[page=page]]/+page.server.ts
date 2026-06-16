@@ -67,7 +67,7 @@ export const load: PageServerLoad = async (event) => {
 	}
 	const discussion = discussionRecords[0];
 
-	// The URL slug is decorative — discussionId alone identifies the post, so we
+	// The URL slug is decorative - discussionId alone identifies the post, so we
 	// neither validate nor canonicalize it. This matches the profile [userSlug]
 	// routes: renamed posts and stale links keep working without a redirect hop.
 	// Internal links always render with the current discussion.slug from the DB.

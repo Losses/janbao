@@ -7,7 +7,7 @@ import { lexicalToSearchText } from '$lib/utils/lexical';
  * Backfill the contentless FTS5 tables from the source tables.
  *
  * The indexed text is the *plain-text extraction* of Lexical JSON (not the raw
- * JSON), so backfill must run in JS — a pure-SQL `INSERT ... SELECT` would index
+ * JSON), so backfill must run in JS - a pure-SQL `INSERT ... SELECT` would index
  * JSON structural noise. Idempotent: each table is dropped and recreated first,
  * so this is safe to re-run. Called from scripts/backfill-fts.ts and at the end
  * of scripts/import-data.ts so freshly imported content is immediately searchable.
@@ -75,7 +75,7 @@ const TASKS: BackfillTask[] = [
 
 /**
  * Initial cursor for keyset pagination. Must start below the minimum id, because
- * imported historical rows use *negative* ids — starting at 0 would skip them.
+ * imported historical rows use *negative* ids - starting at 0 would skip them.
  */
 export async function getBackfillStartCursor(db: D1Db, task: BackfillTask): Promise<number> {
 	const row = await db.get<MinIdRow>(sql`SELECT MIN(id) AS minId FROM ${sql.raw(task.table)}`);

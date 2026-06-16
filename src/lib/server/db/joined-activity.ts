@@ -3,7 +3,7 @@
  *
  * One isJoined activity row per calendar day (FORUM_TIMEZONE). When a user
  * registers (or an imported registration event is replayed), this appends the
- * user into that day's join activity — creating it if today is the first
+ * user into that day's join activity - creating it if today is the first
  * signup. Reads stay trivial (a normal activity row) and feeds/pagination need
  * no special-casing; the joined render pipeline surfaces the member list from
  * activity_joins.
@@ -14,7 +14,7 @@ import type { D1Db, DbTransaction } from './index';
 import { SYSTEM_USER_ID, getForumTimezone } from '../constants';
 import { getTzBoundaries } from './welcome';
 
-// Either the db instance or an in-flight transaction — both expose the same
+// Either the db instance or an in-flight transaction - both expose the same
 // query-builder API (select/insert/update/where), so this helper runs
 // identically whether called from the signup transaction (tx) or the import
 // script (which has no transaction and passes the db handle directly).

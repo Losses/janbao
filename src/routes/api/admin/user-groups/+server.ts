@@ -35,8 +35,8 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 	if (!slug || !title || !description)
 		return jsonError(locals.t, 'permissions.fieldsRequired', 400);
-	// Reserved groups are editable (title/description) — seeding is idempotent and
-	// never overwrites existing rows — but their slug must stay fixed. We match by
+	// Reserved groups are editable (title/description) - seeding is idempotent and
+	// never overwrites existing rows - but their slug must stay fixed. We match by
 	// slug only and never let the client rename it.
 	if (!(await userGroupExists(locals.db, slug))) return jsonError(locals.t, 'common.notFound', 404);
 

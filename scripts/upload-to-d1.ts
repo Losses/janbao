@@ -1,7 +1,7 @@
 /**
  * Batch-upload the baked local dev database (.local.db) into Cloudflare D1,
  * *including* the contentless FTS5 shadow tables, so the remote site boots with
- * a working search index — no production-side backfill step required.
+ * a working search index - no production-side backfill step required.
  *
  * Usage:
  *   bun scripts/upload-to-d1.ts            # ensure schema + load (resumable) + verify
@@ -56,7 +56,7 @@ const LOCAL_URL = 'file:.local.db';
 const STATE_PATH = '.d1-upload-state.json';
 const QUERY_URL = `https://api.cloudflare.com/client/v4/accounts/${CREDENTIALS.accountId}/d1/database/${CREDENTIALS.databaseId}/query`;
 
-/** Bound params per statement — keep well under SQLite's variable limit. */
+/** Bound params per statement - keep well under SQLite's variable limit. */
 const MAX_PARAMS = 800;
 /** Rows per multi-row INSERT (also bounded by MAX_PARAMS / ncols). */
 const MAX_ROWS = 1000;
@@ -510,14 +510,14 @@ async function loadTable(
 	state: UploadState
 ): Promise<number> {
 	if (state.tables[spec.name]) {
-		console.log(`  ✓ ${spec.name} — already loaded, skipping`);
+		console.log(`  ✓ ${spec.name} - already loaded, skipping`);
 		return 0;
 	}
 	const rows = await streamRows(local, spec);
 	// Idempotent: clear any partial data from a prior interrupted run before re-inserting.
 	await d1Exec(credentials, `DELETE FROM "${spec.name}"`);
 	if (rows.length === 0) {
-		console.log(`  • ${spec.name} — 0 rows (schema only)`);
+		console.log(`  • ${spec.name} - 0 rows (schema only)`);
 		state.tables[spec.name] = true;
 		saveState(state);
 		return 0;
@@ -534,7 +534,7 @@ async function loadTable(
 	state.tables[spec.name] = true;
 	saveState(state);
 	console.log(
-		`  ✓ ${spec.name} — ${rows.length} rows in ${statements.length} stmts${
+		`  ✓ ${spec.name} - ${rows.length} rows in ${statements.length} stmts${
 			spec.hasBlob ? ' (blob literals)' : ''
 		}`
 	);
@@ -630,7 +630,7 @@ async function verify(
 			`\n  ${ok ? '✓' : '✗'} FTS MATCH '${term}'  local ${localHits}  remote ${remoteHits}`
 		);
 	} else {
-		console.log('\n  (skipped FTS MATCH probe — no discussions with a >=4-char title)');
+		console.log('\n  (skipped FTS MATCH probe - no discussions with a >=4-char title)');
 	}
 
 	if (mismatches > 0) {

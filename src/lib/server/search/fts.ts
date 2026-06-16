@@ -5,7 +5,7 @@ import { lexicalToSearchText } from '$lib/utils/lexical';
 /**
  * FTS5 index maintenance for full-text search.
  *
- * CONTRACT — every content write path must keep the FTS tables in sync, or search
+ * CONTRACT - every content write path must keep the FTS tables in sync, or search
  * results go stale (ghost hits on deleted rows, or new rows unsearchable). The
  * callers in the route handlers own the source-table SELECT/INSERT and pass the
  * exact text here; this module never reads source tables. That keeps reindex
@@ -13,7 +13,7 @@ import { lexicalToSearchText } from '$lib/utils/lexical';
  * with*, which only the caller knows at edit time (the source row may already
  * hold the new value).
  *
- * Tables (contentless, rowid = source PK — see fts-schema.ts):
+ * Tables (contentless, rowid = source PK - see fts-schema.ts):
  *   discussions_fts(title)  replies_fts(body)  activities_fts(body)  messages_fts(body)
  */
 export type DbLike = D1Db | DbTransaction;
@@ -34,7 +34,7 @@ async function ftsInsert(
 /**
  * Delete one row from a contentless FTS table.
  * Contentless tables have no content snapshot, so the original text must be
- * resupplied — FTS5 recomputes the terms from it and removes them from the index.
+ * resupplied - FTS5 recomputes the terms from it and removes them from the index.
  */
 async function ftsDelete(
 	db: DbLike,

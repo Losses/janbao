@@ -57,7 +57,7 @@ export async function getInvitations(db: D1Db, userId: number): Promise<Invitati
 }
 
 /**
- * Find the user who invited `userId` — the creator of the invitation code that
+ * Find the user who invited `userId` - the creator of the invitation code that
  * `userId` redeemed at sign-up. Returns null for users who joined without an
  * invitation (e.g. the seed admin) or whose inviter's account was deleted.
  */

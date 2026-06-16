@@ -15,17 +15,17 @@
 
 - Centralized admin guard: redirect-to-signin when unauthenticated, `error(403)` for non-admins. Individual admin pages no longer repeat the guard.
 
-**Created:** `src/routes/admin/+layout.svelte` — thin passthrough (no chrome); each page renders its own `DualColumnLayout` + `AdminSidebar`.
+**Created:** `src/routes/admin/+layout.svelte` - thin passthrough (no chrome); each page renders its own `DualColumnLayout` + `AdminSidebar`.
 
-**Created:** `src/routes/admin/+page.server.ts` — `redirect(302, '/admin/user-groups')` so `/admin` lands on the first nav item.
+**Created:** `src/routes/admin/+page.server.ts` - `redirect(302, '/admin/user-groups')` so `/admin` lands on the first nav item.
 
 **Created:** three page pairs (server load + Svelte):
 
-- `src/routes/admin/user-groups/+page.{server,svelte}` — table (counts, reserved/custom status, delete) + "Add User Group" button → modal.
-- `src/routes/admin/categories/+page.{server,svelte}` — table (status, disable/restore) + "Add Category" button → modal.
-- `src/routes/admin/permissions/+page.{server,svelte}` — group selector + read/create/update/delete matrix over enabled categories + Save.
+- `src/routes/admin/user-groups/+page.{server,svelte}` - table (counts, reserved/custom status, delete) + "Add User Group" button → modal.
+- `src/routes/admin/categories/+page.{server,svelte}` - table (status, disable/restore) + "Add Category" button → modal.
+- `src/routes/admin/permissions/+page.{server,svelte}` - group selector + read/create/update/delete matrix over enabled categories + Save.
 
-**Deleted:** `src/routes/profile/permissions/+page.{server,svelte}` and its `SettingsSidebar` entry — the feature no longer lives under `/profile`.
+**Deleted:** `src/routes/profile/permissions/+page.{server,svelte}` and its `SettingsSidebar` entry - the feature no longer lives under `/profile`.
 
 ### 1.2 Admin Entry Icon
 
@@ -46,7 +46,7 @@
 - Abstracts the register-page pattern: `<div class="form-control">` → label-on-top (`label text-sm font-semibold`) → `input input-bordered w-full` (or `textarea` via `as="textarea"`) → optional error `<p>` or `hint` snippet.
 - Bindable `value`; props: `label`, `id`, `type`, `placeholder`, `required`, `error`, `as`, `rows`, `maxlength`, `class`.
 
-**Modified:** `src/routes/entry/register/+page.svelte` — replaced the six hand-written field blocks with `<FormField>`; password-strength kept via the `hint` snippet.
+**Modified:** `src/routes/entry/register/+page.svelte` - replaced the six hand-written field blocks with `<FormField>`; password-strength kept via the `hint` snippet.
 
 ### 1.5 Button + Modal Add Flows
 
@@ -63,10 +63,10 @@
 
 - Added `targetUserEmail` prop; the reset copyable block is now the i18n sentence `auth.resetLinkCopyText` with `{email}`/`{link}` substituted. The copy button copies the whole sentence.
 
-**Modified:** `src/routes/profile/invitations/+page.svelte` — invitation copyable block becomes `invitation.inviteLinkCopyText` with `{link}` substituted; copy copies the sentence.
+**Modified:** `src/routes/profile/invitations/+page.svelte` - invitation copyable block becomes `invitation.inviteLinkCopyText` with `{link}` substituted; copy copies the sentence.
 
-**Modified:** `src/routes/profile/[userId]/[userSlug]/+page.server.ts` — returns `targetUserEmail` to admins only, fetched in a separate query and never included in the public `targetUser` payload (no email leak to non-admin viewers).
-**Modified:** `src/routes/profile/[userId]/[userSlug]/+page.svelte` — passes `targetUserEmail` into `ProfileSidebar`.
+**Modified:** `src/routes/profile/[userId]/[userSlug]/+page.server.ts` - returns `targetUserEmail` to admins only, fetched in a separate query and never included in the public `targetUser` payload (no email leak to non-admin viewers).
+**Modified:** `src/routes/profile/[userId]/[userSlug]/+page.svelte` - passes `targetUserEmail` into `ProfileSidebar`.
 
 ### 1.8 i18n
 

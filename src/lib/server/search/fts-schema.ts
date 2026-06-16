@@ -7,7 +7,7 @@ import type { D1Db } from '$lib/server/db';
  * All four are *contentless* (content=''): FTS5 stores only the inverted index,
  * not the original text, which keeps storage at ~3.5x the plain text (measured)
  * instead of duplicating it. Trade-offs: a contentless table only yields rowid +
- * rank on MATCH, and its delete command must resupply the original text — see
+ * rank on MATCH, and its delete command must resupply the original text - see
  * src/lib/server/search/fts.ts. Each table's rowid = the source table's PK, so
  * MATCH results map straight back to the source row with no join-table.
  *

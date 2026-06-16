@@ -8,12 +8,12 @@
  * We compare that against the filename's implied page (page-000001 → 1, etc.)
  * and flag:
  *
- *   missing_real_page — a real page (1..N) that no file covers. Most serious:
+ *   missing_real_page - a real page (1..N) that no file covers. Most serious:
  *                       real page 1 missing means the OP + early replies are lost.
- *   duplicate_page    — two or more files cover the same real page (e.g. 1054,
+ *   duplicate_page    - two or more files cover the same real page (e.g. 1054,
  *                       where page-1 and page-3 are both real page 3).
- *   out_of_order      — files are not in ascending real-page order.
- *   no_real_page_1    — no file covers real page 1 (OP is gone), regardless of
+ *   out_of_order      - files are not in ascending real-page order.
+ *   no_real_page_1    - no file covers real page 1 (OP is gone), regardless of
  *                       whether other pages duplicate.
  *
  * Output: writes discussion-page-audit.json (full detail) and prints a summary

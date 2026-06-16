@@ -223,7 +223,7 @@ export const actions: Actions = {
 
 		try {
 			await db.transaction(async (tx: DbTransaction) => {
-				// Capture pre-edit values — contentless FTS delete needs the old text.
+				// Capture pre-edit values - contentless FTS delete needs the old text.
 				const oldDisc = await tx
 					.select({ title: discussions.title })
 					.from(discussions)

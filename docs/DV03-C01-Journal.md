@@ -15,7 +15,7 @@
 
 - Added `disabledAt: integer('disabled_at', { mode: 'timestamp' })` to the `categories` table for soft-delete/restore semantics.
 
-**Created:** `drizzle/local-migrations/0007_nervous_shinko_yamashiro.sql` (+ meta snapshot / journal) via `bun run db:generate:local` — single statement `ALTER TABLE categories ADD disabled_at integer`.
+**Created:** `drizzle/local-migrations/0007_nervous_shinko_yamashiro.sql` (+ meta snapshot / journal) via `bun run db:generate:local` - single statement `ALTER TABLE categories ADD disabled_at integer`.
 
 ### 1.2 Centralized Disabled-Category Access Rules
 
@@ -42,10 +42,10 @@
 
 ### 1.4 Admin APIs
 
-**Created:** `src/routes/api/admin/user-groups/+server.ts` — `GET` list with counts, `POST` create (rejects reserved slug / existing slug / invalid slug), `DELETE` (rejects reserved, rejects group with members).
-**Created:** `src/routes/api/admin/categories/+server.ts` — `GET` (incl. disabled), `POST` create, `PATCH` (metadata + disable/restore), `DELETE` (soft delete via `disabledAt`).
-**Created:** `src/routes/api/admin/category-permissions/+server.ts` — `PUT` batch upsert (rejects non-assignable group slugs, validates targets).
-**Created:** `src/routes/api/admin/users/group/+server.ts` — `PATCH` target user's group (admin-only, non-admin target groups only, blocks admin targets and self).
+**Created:** `src/routes/api/admin/user-groups/+server.ts` - `GET` list with counts, `POST` create (rejects reserved slug / existing slug / invalid slug), `DELETE` (rejects reserved, rejects group with members).
+**Created:** `src/routes/api/admin/categories/+server.ts` - `GET` (incl. disabled), `POST` create, `PATCH` (metadata + disable/restore), `DELETE` (soft delete via `disabledAt`).
+**Created:** `src/routes/api/admin/category-permissions/+server.ts` - `PUT` batch upsert (rejects non-assignable group slugs, validates targets).
+**Created:** `src/routes/api/admin/users/group/+server.ts` - `PATCH` target user's group (admin-only, non-admin target groups only, blocks admin targets and self).
 
 ### 1.5 Single-Page Admin UI
 
@@ -55,7 +55,7 @@
 - Loads groups (with counts), categories (incl. disabled), and category permissions.
 - Three sections on one page: user-group table, category table (disable/restore), per-group permission matrix.
 
-**Modified:** `src/lib/components/molecules/SettingsSidebar.svelte` — admin-only "Permission Management" item.
+**Modified:** `src/lib/components/molecules/SettingsSidebar.svelte` - admin-only "Permission Management" item.
 
 ### 1.6 Profile Sidebar: Group Dropdown & Link Modals
 
@@ -65,10 +65,10 @@
 - Reset flow: confirm modal → result modal with the generated link.
 - Added a no-label `<select>` under "Generate Reset Link" for admins viewing non-admin targets; uses a writable `$derived` (`overrideGroupSlug` + `targetUserGroupSlug`) to satisfy `svelte/prefer-writable-derived`.
 
-**Modified:** `src/routes/api/auth/admin-generate-reset/+server.ts` — selects target `email`; returns `guidance` built server-side from `t.auth.resetLinkGuidance` with the email substituted.
+**Modified:** `src/routes/api/auth/admin-generate-reset/+server.ts` - selects target `email`; returns `guidance` built server-side from `t.auth.resetLinkGuidance` with the email substituted.
 
-**Modified:** `src/routes/api/invitations/request/+server.ts` — returns `{ code, inviteLink }` so the page can show a modal instead of an alert-style success block.
-**Modified:** `src/routes/profile/invitations/+page.svelte` — success opens a DaisyUI modal with the link + copy button; inline feedback kept only for errors.
+**Modified:** `src/routes/api/invitations/request/+server.ts` - returns `{ code, inviteLink }` so the page can show a modal instead of an alert-style success block.
+**Modified:** `src/routes/profile/invitations/+page.svelte` - success opens a DaisyUI modal with the link + copy button; inline feedback kept only for errors.
 
 ### 1.7 i18n
 
@@ -130,7 +130,7 @@ Throwaway test data (custom group, test category, test invitation code) created 
 
 ## 4. Notes for Subsequent Cycles
 
-- The single-page UI and scattered inline form fields did not match the app's nav/button+modal conventions — addressed in **C02**.
-- The reset/invite copyable blocks were bare links, not semantic sentences — addressed in **C02**.
-- Reserved groups are not deletable but should be editable; categories lack an edit affordance — addressed in **C03**.
-- No super-admin concept yet: admins cannot promote peers, and the guard rejects all admin-target changes uniformly — addressed in **C03**.
+- The single-page UI and scattered inline form fields did not match the app's nav/button+modal conventions - addressed in **C02**.
+- The reset/invite copyable blocks were bare links, not semantic sentences - addressed in **C02**.
+- Reserved groups are not deletable but should be editable; categories lack an edit affordance - addressed in **C03**.
+- No super-admin concept yet: admins cannot promote peers, and the guard rejects all admin-target changes uniformly - addressed in **C03**.

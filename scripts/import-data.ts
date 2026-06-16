@@ -114,7 +114,7 @@ function decodeHtmlEntities(str: string): string {
 			.replace(/&quot;/g, '"')
 			.replace(/&#39;/g, "'")
 			.replace(/&nbsp;/g, ' ')
-			// Numeric entities — Vanilla emits apostrophes as &#039; (with a leading
+			// Numeric entities - Vanilla emits apostrophes as &#039; (with a leading
 			// zero) and other chars as &#8230; etc., which the literal replacements
 			// above miss. Guard against out-of-range codes so malformed input can't
 			// throw inside String.fromCodePoint.
@@ -601,7 +601,7 @@ function parseEditMarker(html: string): ParsedEditMarker {
 
 // Resolve an editor username (from a source edit marker) to a user id via the
 // mention map built from users.json. Returns null when the name isn't known
-// (rare — usually a since-purged account); the caller then leaves editedBy null.
+// (rare - usually a since-purged account); the caller then leaves editedBy null.
 function lookupEditorId(name: string | null, mentionMap: Map<string, number>): number | null {
 	if (!name) return null;
 	const uid = mentionMap.get(name);
@@ -1962,7 +1962,7 @@ async function main() {
 			// createdAt with the OP's real time so list views order correctly.
 			// Even when the OP body is empty (some posts were blanked out on the
 			// original site), we still insert an OP reply attributed to the OP
-			// author — otherwise the discussion loader would mistake the first
+			// author - otherwise the discussion loader would mistake the first
 			// reply for the OP.
 			try {
 				const opAuthorId = opComment.authorId ?? meta.authorId;
@@ -2112,7 +2112,7 @@ async function main() {
 	// avatarFileId flag + avatarContentType. Already-on-cloud avatars still get
 	// their DB flag set (covers re-runs after a schema change).
 	//
-	// Avatar source: the `profile-avatars/` directory itself — each file is named
+	// Avatar source: the `profile-avatars/` directory itself - each file is named
 	// `<userId>-<hash>.<ext>`, so readdir + parse the filename gives every crawled
 	// user's avatar directly (one file per user). No JSON index needed.
 	const avatarEntries: AvatarEntry[] = [];

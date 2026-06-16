@@ -8,7 +8,7 @@ export const load: PageServerLoad = async (event) => {
 	const platformEnv = event.platform?.env;
 	const groupSlug = resolveGroupSlug(user);
 
-	// 1. Home is always page 1 — deeper pages live at /discussions/pN
+	// 1. Home is always page 1 - deeper pages live at /discussions/pN
 	const { limit, offset } = parseDiscussionPageFromPath(undefined, platformEnv);
 
 	// 3. Fetch discussions list (filtered by category read permissions)

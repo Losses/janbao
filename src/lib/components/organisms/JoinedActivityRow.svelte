@@ -71,7 +71,7 @@
 			</div>
 		{/if}
 		<div class="flex-1 min-w-0">
-			<!-- Row 1: "{u1} and {u2} joined." — every connector/suffix from i18n -->
+			<!-- Row 1: "{u1} and {u2} joined." - every connector/suffix from i18n -->
 			<div class="flex items-center gap-1 flex-wrap">
 				{joinedParts[0]}
 				{#each members as m, i (m.userId)}

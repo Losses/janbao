@@ -79,7 +79,7 @@
 				: defaultPermissions(activeGroupSlug);
 		}
 		permissionDraft = nextDraft;
-		// Rebuilding the draft means we just (re)loaded from the server — clear dirty.
+		// Rebuilding the draft means we just (re)loaded from the server - clear dirty.
 		dirtyCategories = [];
 	});
 
@@ -108,7 +108,7 @@
 		try {
 			// Only send categories the admin actually changed. Sending every enabled
 			// category would overwrite untouched rows with their (possibly default)
-			// draft values — a silent mass-lockout.
+			// draft values - a silent mass-lockout.
 			const permissions: AdminCategoryPermissionItem[] = enabledCategories
 				.filter((category) => dirtyCategories.includes(category.slug))
 				.map((category) => ({

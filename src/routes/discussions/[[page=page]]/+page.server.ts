@@ -11,7 +11,7 @@ export const load: PageServerLoad = async (event) => {
 
 	const { page, limit, offset } = parseDiscussionPageFromPath(event.params.page, platformEnv);
 
-	// Page 1 canonically lives at "/" — collapse /discussions and /discussions/p1 back home.
+	// Page 1 canonically lives at "/" - collapse /discussions and /discussions/p1 back home.
 	if (page <= 1) {
 		redirect(308, '/');
 	}

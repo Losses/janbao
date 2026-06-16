@@ -6,9 +6,9 @@ This document plans the addition of a full **administrator permission-management
 
 The work is partitioned into three sequential **Development Cycles**:
 
-- **Cycle 1 (C01)** — Initial implementation: schema + migration, centralized disabled-category access rules, admin APIs, a single-page settings UI under `/profile/permissions`, the profile-sidebar group dropdown, and the reset/invite link modals.
-- **Cycle 2 (C02)** — Refactor: move the feature into a dedicated multi-page `/admin` area with its own sidebar; add an admin-only entry icon in the user-info block; abstract the register-page form-field pattern into a reusable `FormField` atom; convert "Add" flows to button + modal; and rewrite the link copyable blocks as polished i18n sentences.
-- **Cycle 3 (C03)** — Detail fixes: a super-admin rule (user `0` may promote others to `admin`; admins may not alter each other), and editable (not just deletable) reserved user groups and categories via reused modals.
+- **Cycle 1 (C01)** - Initial implementation: schema + migration, centralized disabled-category access rules, admin APIs, a single-page settings UI under `/profile/permissions`, the profile-sidebar group dropdown, and the reset/invite link modals.
+- **Cycle 2 (C02)** - Refactor: move the feature into a dedicated multi-page `/admin` area with its own sidebar; add an admin-only entry icon in the user-info block; abstract the register-page form-field pattern into a reusable `FormField` atom; convert "Add" flows to button + modal; and rewrite the link copyable blocks as polished i18n sentences.
+- **Cycle 3 (C03)** - Detail fixes: a super-admin rule (user `0` may promote others to `admin`; admins may not alter each other), and editable (not just deletable) reserved user groups and categories via reused modals.
 
 The goal throughout is to follow the existing architecture: SvelteKit + Svelte 5 runes, Drizzle ORM, Cloudflare D1 (libsql locally), strict lint rules (no inline typing, interface-first, similarity-ts), and the atomic component design paradigm.
 
@@ -24,7 +24,7 @@ The goal throughout is to follow the existing architecture: SvelteKit + Svelte 5
 ### 2.2 User Groups
 
 - Admins can **add** and **delete** custom (non-reserved) user groups. A group that still has members cannot be deleted.
-- Reserved slugs (`system`, `admin`, `moderator`, `member`, `guest`) cannot be deleted — but they **can be edited** (title/description). Seeding is idempotent (`onConflictDoNothing`) and never overwrites existing rows, so editing reserved groups is safe.
+- Reserved slugs (`system`, `admin`, `moderator`, `member`, `guest`) cannot be deleted - but they **can be edited** (title/description). Seeding is idempotent (`onConflictDoNothing`) and never overwrites existing rows, so editing reserved groups is safe.
 - Reserved groups and groups with members show a disabled delete button.
 
 ### 2.3 Categories (Soft Delete / Restore)
@@ -47,7 +47,7 @@ The goal throughout is to follow the existing architecture: SvelteKit + Svelte 5
 
 ### 2.6 Link Flows (Modals, Not Alerts)
 
-- Reset-link and invitation-link generation use DaisyUI modals — no browser `alert()`/`confirm()`.
+- Reset-link and invitation-link generation use DaisyUI modals - no browser `alert()`/`confirm()`.
 - The copyable block in each modal is a polished i18n **sentence**, not a bare link:
   - Reset: "Your account email is {email}. To reset your password, open this link: {link}"
   - Invitation: "To join the forum, open this link and register: {link}"

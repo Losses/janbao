@@ -66,6 +66,31 @@
 	--border: 1px;
 }
 
+/* Global font stack. This is a plain CSS rule (NOT inside the `@plugin
+   "daisyui/theme"` block) for two reasons:
+   1. Tailwind v4 mis-parses a multi-line comma-separated value inside an
+      `@plugin` block, splitting it into one declaration per font name (so
+      only the last survives). Plain rules go through normal CSS parsing.
+   2. Defining it on `:root` makes it apply to every theme. daisyUI's built-in
+      themes (dark, cupcake, …) declare no font, and `:root` is always `html`
+      regardless of `data-theme`, so all themes inherit the Songti/serif stack.
+   daisyUI's reset consumes `var(--default-font-family, …)` on `:host,html`. */
+:root {
+	--default-font-family:
+		'Songti SC', 'Songti TC', STSong, SimSun, 'Source Han Serif SC', 'Source Han Serif TC',
+		'Noto Serif SC', 'Noto Serif TC', 'Noto Serif CJK SC', 'Noto Serif CJK TC', 'AR PL UMing CN',
+		'AR PL New Sung', serif;
+}
+
+/* UI chrome keeps the default sans-serif stack (Tailwind's --font-sans) rather
+   than the Songti/serif body font: buttons, badges, and the header nav.
+   `--font-sans` is exactly the font daisyUI used before the serif override. */
+.btn,
+.badge,
+header nav {
+	font-family: var(--font-sans);
+}
+
 [data-theme='huoxin'] {
 	.btn:not(.btn-ghost):not(.btn-link):not(:disabled):not([disabled]) {
 		border-width: 1px;

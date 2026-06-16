@@ -26,8 +26,8 @@ export interface UserCommentsPageQuery extends UserCommentsQuery {
  * Predicate that excludes a discussion's OP ("index-0" reply). The OP body is
  * stored as the first {@link replies} row of its discussion (see
  * `post/discussion/+page.server.ts`), so without this it would leak into the
- * comments feed. The OP is identified positionally — the earliest non-deleted
- * reply in a discussion — exactly mirroring the discussion detail page, which
+ * comments feed. The OP is identified positionally - the earliest non-deleted
+ * reply in a discussion - exactly mirroring the discussion detail page, which
  * picks the earliest reply as the OP and drops it by id.
  */
 const isNotOpReply = sql`EXISTS (
@@ -68,7 +68,7 @@ async function buildReplyConditions(db: D1Db, query: UserCommentsQuery) {
 /**
  * A user's discussion replies (newest first), excluding soft-deleted rows,
  * soft-deleted parents, the OP reply of each thread, and replies from
- * categories the viewer cannot read. Paginated via limit/offset — pair with
+ * categories the viewer cannot read. Paginated via limit/offset - pair with
  * {@link getUserCommentsCount} to render a Paginator.
  */
 export async function getUserComments(

@@ -224,7 +224,7 @@ function extForContentType(ct: string | null): string {
 
 /**
  * Content-image URLs from a page. The original crawl only harvested images
- * inside <div class="Message"> bodies (post/comment content) — avatars
+ * inside <div class="Message"> bodies (post/comment content) - avatars
  * (<img class="ProfilePhoto">) and the default noicon.png are page chrome, not
  * content, and are absent from images.json. Restrict to Message bodies and drop
  * the avatar/noicon/emoji classes so we match that set.
@@ -270,7 +270,7 @@ function loadImageIndex(dataDir: string): ImageIndex {
 			const raw = JSON.parse(readFileSync(path, 'utf-8')) as Partial<ImageIndex>;
 			return { byUrl: raw.byUrl ?? {}, byHash: raw.byHash ?? {} };
 		} catch {
-			// corrupt — start fresh
+			// corrupt - start fresh
 		}
 	}
 	return { byUrl: {}, byHash: {} };
@@ -633,7 +633,7 @@ async function main() {
 
 	// Optional pre-pass: re-download images missing from disk on already-crawled
 	// pages (e.g. a prior run crashed after writing a page but before its images).
-	// Enable with JANBAO_BACKFILL_IMAGES=1. Idempotent — pages whose images are all
+	// Enable with JANBAO_BACKFILL_IMAGES=1. Idempotent - pages whose images are all
 	// present are skipped via the on-disk check in harvestImages.
 	if (process.env.JANBAO_BACKFILL_IMAGES) {
 		log('Backfilling missing images across all crawled pages...');
