@@ -20,7 +20,7 @@ export const load: PageServerLoad = async (event) => {
 	const limit = getActivitiesLimit(platformEnv);
 	const offset = (page - 1) * limit;
 
-	// 2. Fetch root activities (no parentActivityId), excluding deleted, ordered by createdAt DESC
+	// 2. Fetch root activities (no parentActivityId), excluding deleted, ordered like Vanilla's feed
 	const activityList = await db
 		.select({
 			id: activities.id,
@@ -36,7 +36,10 @@ export const load: PageServerLoad = async (event) => {
 		.from(activities)
 		.innerJoin(users, eq(activities.authorId, users.id))
 		.where(and(isNull(activities.parentActivityId), isNull(activities.deletedAt)))
-		.orderBy(desc(activities.createdAt))
+		.orderBy(
+			sql`COALESCE(${activities.updatedAt}, ${activities.createdAt}) DESC`,
+			desc(activities.id)
+		)
 		.limit(limit)
 		.offset(offset);
 

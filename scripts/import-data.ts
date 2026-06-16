@@ -21,7 +21,6 @@ import { GHOST_USER_ID, SYSTEM_USER_ID } from '../src/lib/server/constants';
 import { resolvePcloudConfig, pcloudUploadBytes, pcloudListFolder } from '../src/lib/server/pcloud';
 import { detectImageFormat } from '../src/lib/server/image';
 import { ensureAndBackfillAll } from '../src/lib/server/search/backfill';
-import { appendJoinedMember } from '../src/lib/server/db/joined-activity';
 
 // Named interfaces to avoid inline object type literal lint errors
 interface ParsedProfile {
@@ -74,8 +73,8 @@ interface ParsedActivity {
 	// message was directed at. null for status updates and sub-comments.
 	recipientId: number | null;
 	// A system "who joined" activity. Members listed in joinMembers are folded
-	// into that calendar day's isJoined activity at write time (see
-	// appendJoinedMember); contentHtml carries only the excerpt (e.g. "欢迎加入!").
+	// into the activity_joins side table; contentHtml carries only the excerpt
+	// (e.g. "欢迎加入!").
 	isJoined: boolean;
 	joinMembers: JoinedMemberRef[];
 }
@@ -84,6 +83,19 @@ interface ParsedActivity {
 interface JoinedMemberRef {
 	userId: number;
 	username: string | null;
+}
+
+interface ExistingActivityRow {
+	isJoined: boolean;
+}
+
+interface ExistingJoinedMigrationRow {
+	id: number;
+}
+
+interface ExistingJoinedMemberRow {
+	userId: number;
+	joinedAt: Date;
 }
 
 interface AvatarEntry {
@@ -805,6 +817,14 @@ function parseCommentTime(timeText: string): Date {
 	return now;
 }
 
+function localDayStart(date: Date): Date {
+	return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function localDayEnd(date: Date): Date {
+	return new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1, 0, 0, 0, -1);
+}
+
 // Parse discussions from HTML string in discussions-page-*.json
 interface ParsedDiscussion {
 	id: string;
@@ -895,13 +915,10 @@ function extractProfileUser(html: string): ProfileUserRef {
 // stores both in the same list, comments nested under their parent <li>).
 function parseActivitiesHtml(html: string): ParsedActivity[] {
 	const activities: ParsedActivity[] = [];
-	const activitiesBlockMatch = html.match(
-		/<ul\s+class="DataList\s+Activities">([\s\S]+?)<\/ul>\s*<\/div>/
-	);
-	if (!activitiesBlockMatch) return [];
-
-	const block = activitiesBlockMatch[1];
-	const parts = block.split(/<li\s+id="Activity_/);
+	// Split on the per-activity <li> directly. This is self-scoping (each
+	// activity is delimited by its id) and works whether or not the enclosing
+	// list is closed with </ul></div> (the site-wide /activity feed omits it).
+	const parts = html.split(/<li\s+id="Activity_/);
 	for (let i = 1; i < parts.length; i++) {
 		const part = parts[i];
 		const idMatch = part.match(/^(\d+)/);
@@ -923,9 +940,8 @@ function parseActivitiesHtml(html: string): ParsedActivity[] {
 		const excerptHtml = excerptMatch ? excerptMatch[1] : '';
 
 		// Registration ("X and Y joined") is a system "who joined" activity. Its
-		// named users become members of that calendar day's isJoined activity
-		// (folded in at write time via appendJoinedMember); the excerpt (e.g.
-		// "欢迎加入!") is kept as content for the joined render pipeline.
+		// named users become activity_joins members on the source Activity id; the
+		// excerpt (e.g. "欢迎加入!") is kept as content for the joined render pipeline.
 		let topLevelAuthor: ProfileUserRef;
 		let recipientRef: ProfileUserRef | null;
 		let contentHtml: string;
@@ -1483,6 +1499,145 @@ async function main() {
 		console.log('Warning: data/posts directory not found.');
 	}
 
+	// Shared activity upsert. Profile pages contain a subset of the same Activity IDs
+	// present in /data/activities; the Activity id itself is the dedup and ordering key.
+	const processedActivityIds = new Set<number>();
+
+	async function upsertJoinedActivity(act: ParsedActivity, actId: number): Promise<void> {
+		const contentJson = await convertHtmlToLexical(act.contentHtml, converterCtx);
+		const existing = await db
+			.select({ isJoined: schema.activities.isJoined })
+			.from(schema.activities)
+			.where(eq(schema.activities.id, actId))
+			.limit(1);
+		const existingActivity: ExistingActivityRow | undefined = existing[0];
+		if (existingActivity) {
+			await db
+				.update(schema.activities)
+				.set({
+					authorId: SYSTEM_USER_ID,
+					recipientId: null,
+					parentActivityId: null,
+					contentJson,
+					createdAt: act.createdAt,
+					updatedAt: act.updatedAt,
+					isJoined: true,
+					deletedAt: null
+				})
+				.where(eq(schema.activities.id, actId));
+		} else {
+			await db.insert(schema.activities).values({
+				id: actId,
+				authorId: SYSTEM_USER_ID,
+				recipientId: null,
+				parentActivityId: null,
+				contentJson,
+				createdAt: act.createdAt,
+				updatedAt: act.updatedAt,
+				isJoined: true
+			});
+		}
+
+		const oldJoinedRows: ExistingJoinedMigrationRow[] = await db
+			.select({ id: schema.activities.id })
+			.from(schema.activities)
+			.where(
+				sql`${schema.activities.id} != ${actId} AND ${schema.activities.isJoined} = 1 AND ${schema.activities.createdAt} >= ${localDayStart(act.createdAt)} AND ${schema.activities.createdAt} <= ${localDayEnd(act.createdAt)}`
+			);
+		for (const oldRow of oldJoinedRows) {
+			const oldMembers: ExistingJoinedMemberRow[] = await db
+				.select({ userId: schema.activityJoins.userId, joinedAt: schema.activityJoins.joinedAt })
+				.from(schema.activityJoins)
+				.where(eq(schema.activityJoins.activityId, oldRow.id));
+			for (const oldMember of oldMembers) {
+				await db
+					.insert(schema.activityJoins)
+					.values({ activityId: actId, userId: oldMember.userId, joinedAt: oldMember.joinedAt })
+					.onConflictDoNothing();
+			}
+			await db.delete(schema.activities).where(eq(schema.activities.id, oldRow.id));
+		}
+
+		for (let index = 0; index < act.joinMembers.length; index++) {
+			const member = act.joinMembers[index];
+			await ensureUser(member.userId, member.username ?? '');
+			await db
+				.insert(schema.activityJoins)
+				.values({
+					activityId: actId,
+					userId: member.userId,
+					joinedAt: new Date(act.createdAt.getTime() + index * 1000)
+				})
+				.onConflictDoNothing();
+		}
+	}
+
+	async function upsertRegularActivity(
+		act: ParsedActivity,
+		actId: number,
+		authorId: number
+	): Promise<void> {
+		const contentJson = await convertHtmlToLexical(act.contentHtml, converterCtx);
+		const existing = await db
+			.select({ isJoined: schema.activities.isJoined })
+			.from(schema.activities)
+			.where(eq(schema.activities.id, actId))
+			.limit(1);
+		const existingActivity: ExistingActivityRow | undefined = existing[0];
+		if (existingActivity) {
+			await db
+				.update(schema.activities)
+				.set({
+					authorId,
+					recipientId: act.recipientId,
+					parentActivityId: act.parentActivityId,
+					contentJson,
+					createdAt: act.createdAt,
+					updatedAt: act.updatedAt,
+					isJoined: false,
+					deletedAt: null
+				})
+				.where(eq(schema.activities.id, actId));
+		} else {
+			await db.insert(schema.activities).values({
+				id: actId,
+				authorId,
+				recipientId: act.recipientId,
+				parentActivityId: act.parentActivityId,
+				contentJson,
+				createdAt: act.createdAt,
+				updatedAt: act.updatedAt
+			});
+		}
+	}
+
+	const processActivity = async (act: ParsedActivity, fallbackUserId: number) => {
+		const actId = Number(act.id);
+		if (processedActivityIds.has(actId)) return;
+
+		const authorId = act.authorId ?? fallbackUserId;
+		try {
+			if (act.authorId !== null) {
+				await ensureUser(act.authorId, act.authorUsername ?? '');
+			}
+			if (act.recipientId !== null) {
+				await ensureUser(act.recipientId, '');
+			}
+			if (act.isJoined) {
+				await upsertJoinedActivity(act, actId);
+			} else {
+				await upsertRegularActivity(act, actId, authorId);
+			}
+			processedActivityIds.add(actId);
+		} catch (e: unknown) {
+			conflicts.push({
+				type: 'activity_insert_error',
+				id: act.id,
+				error: getErrorMessage(e)
+			});
+		}
+	};
+
 	// 4. Import data/profiles
 	const profilesDir = join(dataDir, 'profiles');
 	if (existsSync(profilesDir)) {
@@ -1611,63 +1766,11 @@ async function main() {
 					// activities are inserted first so each parent exists before its
 					// sub-comments reference it.
 					const activities = parseActivitiesHtml(html);
-					const insertActivity = async (act: ParsedActivity) => {
-						const actId = Number(act.id);
-						// For a status update with no resolvable author, attribute to the
-						// profile owner (the wall it appeared on).
-						const authorId = act.authorId ?? userId;
-						try {
-							if (act.authorId !== null) {
-								await ensureUser(act.authorId, act.authorUsername ?? '');
-							}
-							if (act.recipientId !== null) {
-								await ensureUser(act.recipientId, '');
-							}
-							// isJoined activities are folded into that calendar day's
-							// join activity (one row per day), with each named user
-							// appended as a member. They are not inserted as standalone
-							// rows keyed by their Vanilla id.
-							if (act.isJoined) {
-								// Append each named member with its real username (so the
-								// member row gets a real display name, not a placeholder) and
-								// an incrementing joinedAt so the batch fetch's ORDER BY
-								// joinedAt preserves the document order from the Title.
-								for (let index = 0; index < act.joinMembers.length; index++) {
-									const member = act.joinMembers[index];
-									await ensureUser(member.userId, member.username ?? '');
-									await appendJoinedMember(
-										db,
-										member.userId,
-										new Date(act.createdAt.getTime() + index * 1000),
-										undefined
-									);
-								}
-								return;
-							}
-							const contentJson = await convertHtmlToLexical(act.contentHtml, converterCtx);
-							await db.insert(schema.activities).values({
-								id: actId,
-								authorId,
-								recipientId: act.recipientId,
-								parentActivityId: act.parentActivityId,
-								contentJson,
-								createdAt: act.createdAt,
-								updatedAt: act.updatedAt
-							});
-						} catch (e: unknown) {
-							conflicts.push({
-								type: 'activity_insert_error',
-								id: act.id,
-								userId,
-								error: getErrorMessage(e)
-							});
-						}
-					};
 					for (const act of activities) {
-						if (act.parentActivityId === null) await insertActivity(act);
+						if (act.parentActivityId === null) await processActivity(act, userId);
 					}
 					for (const act of activities) {
-						if (act.parentActivityId !== null) await insertActivity(act);
+						if (act.parentActivityId !== null) await processActivity(act, userId);
 					}
 				} catch (e: unknown) {
 					conflicts.push({
@@ -1754,6 +1857,35 @@ async function main() {
 		}
 	} else {
 		console.log('Warning: data/profiles directory not found.');
+	}
+
+	// 4.4 Import the site-wide activity feed (/data/activities/p*).
+	// It is the global superset of the same Activity IDs found in profile pages;
+	// profile import above may have already inserted some rows, and this fills in the rest.
+	const activitiesFeedDir = join(dataDir, 'activities');
+	if (existsSync(activitiesFeedDir)) {
+		const feedFiles = readdirSync(activitiesFeedDir)
+			.filter((f) => /^p\d+$/.test(f))
+			.sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
+		console.log(`Importing site-wide activity feed (${feedFiles.length} pages)...`);
+		for (const file of feedFiles) {
+			try {
+				const html = readFileSync(join(activitiesFeedDir, file), 'utf-8');
+				const acts = parseActivitiesHtml(html);
+				for (const act of acts) {
+					if (act.parentActivityId === null) await processActivity(act, GHOST_USER_ID);
+				}
+				for (const act of acts) {
+					if (act.parentActivityId !== null) await processActivity(act, GHOST_USER_ID);
+				}
+			} catch (e: unknown) {
+				conflicts.push({
+					type: 'activity_feed_parse_error',
+					file,
+					error: getErrorMessage(e)
+				});
+			}
+		}
 	}
 
 	// 4.5 Import the OP + every reply from the discussion pages.
