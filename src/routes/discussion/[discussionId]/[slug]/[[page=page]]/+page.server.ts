@@ -339,13 +339,20 @@ export const actions: Actions = {
 			error(500, locals.t.common.internalError);
 		}
 
-		// Dispatch notifications (mentions, owner, participants, bookmarkers)
-		await dispatchReplyNotifications(db, {
-			discussionId,
-			replyId,
-			authorId: user.id,
-			contentJson
-		});
+		// Dispatch notifications (mentions, owner, participants, bookmarkers).
+		// Best-effort: the reply is already committed, so a notification blip must
+		// not turn a successful post into a user-facing failure (which could also
+		// prompt a duplicate reply on resubmit).
+		try {
+			await dispatchReplyNotifications(db, {
+				discussionId,
+				replyId,
+				authorId: user.id,
+				contentJson
+			});
+		} catch (err) {
+			console.error('Failed to dispatch reply notifications:', err);
+		}
 
 		// Calculate which page the new reply lands on (excluding OP)
 		const opRecord = await db
@@ -562,7 +569,7 @@ export const actions: Actions = {
 				await tx
 					.update(discussions)
 					.set({
-						commentCount: sql`${discussions.commentCount} - 1`,
+						commentCount: sql`MAX(${discussions.commentCount} - 1, 0)`,
 						updatedAt: new Date()
 					})
 					.where(eq(discussions.id, replyRecord.discussionId));

@@ -3,7 +3,7 @@ import { categories, discussions, users } from '$lib/server/db/schema';
 import { and, eq, isNull, desc } from 'drizzle-orm';
 import { formatTitle } from '$lib/utils/title';
 import { XMLBuilder } from 'fast-xml-parser';
-import { resolvePermissions } from '$lib/server/constants';
+import { resolvePermissions, getSiteUrl } from '$lib/server/constants';
 
 export const GET: RequestHandler = async (event) => {
 	const { categorySlug } = event.params;
@@ -57,9 +57,9 @@ export const GET: RequestHandler = async (event) => {
 		.orderBy(desc(discussions.createdAt))
 		.limit(20);
 
-	const host = event.url.host;
-	const protocol = event.url.protocol;
-	const siteUrl = `${protocol}//${host}`;
+	// Prefer a configured SITE_URL so a client-controlled Host header can't
+	// poison the feed's link/guid URLs.
+	const siteUrl = getSiteUrl(event.platform?.env, event.url);
 
 	// 4. Build structured feed object - all text is auto-escaped by XMLBuilder
 	const items: Record<string, unknown>[] = recentDiscussions.map((d) => {
@@ -104,7 +104,10 @@ export const GET: RequestHandler = async (event) => {
 	return new Response(xml, {
 		headers: {
 			'Content-Type': 'application/xml; charset=utf-8',
-			'X-Content-Type-Options': 'nosniff'
+			'X-Content-Type-Options': 'nosniff',
+			// Per-user-secret feed (rssToken in the query string): never cache
+			// where another consumer of the same client/proxy could receive it.
+			'Cache-Control': 'private, no-store'
 		}
 	});
 };

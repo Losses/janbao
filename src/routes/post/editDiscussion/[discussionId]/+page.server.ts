@@ -26,7 +26,8 @@ export const load: PageServerLoad = async (event) => {
 		error(404, event.locals.t.discussion.notFound);
 	}
 
-	// 1. Fetch discussion
+	// 1. Fetch discussion (only if its category is enabled; a disabled-category
+	// discussion must not be editable).
 	const discussionRecords = await db
 		.select({
 			id: discussions.id,
@@ -37,7 +38,14 @@ export const load: PageServerLoad = async (event) => {
 			authorId: discussions.authorId
 		})
 		.from(discussions)
-		.where(and(eq(discussions.id, discussionId), isNull(discussions.deletedAt)))
+		.innerJoin(categories, eq(discussions.categorySlug, categories.slug))
+		.where(
+			and(
+				eq(discussions.id, discussionId),
+				isNull(discussions.deletedAt),
+				isNull(categories.disabledAt)
+			)
+		)
 		.limit(1);
 
 	if (discussionRecords.length === 0) {
@@ -162,7 +170,7 @@ export const actions: Actions = {
 			return { success: false, error: event.locals.t.common.contentTooLarge };
 		}
 
-		// 1. Fetch current discussion record
+		// 1. Fetch current discussion record (must be in an enabled category).
 		const discussionRecords = await db
 			.select({
 				id: discussions.id,
@@ -170,7 +178,14 @@ export const actions: Actions = {
 				categorySlug: discussions.categorySlug
 			})
 			.from(discussions)
-			.where(and(eq(discussions.id, discussionId), isNull(discussions.deletedAt)))
+			.innerJoin(categories, eq(discussions.categorySlug, categories.slug))
+			.where(
+				and(
+					eq(discussions.id, discussionId),
+					isNull(discussions.deletedAt),
+					isNull(categories.disabledAt)
+				)
+			)
 			.limit(1);
 
 		if (discussionRecords.length === 0) {

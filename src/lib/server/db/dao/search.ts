@@ -531,7 +531,7 @@ export async function searchDiscussions(
 		const replyRows = await db
 			.select({ id: replies.id, contentJson: replies.contentJson })
 			.from(replies)
-			.where(inArray(replies.id, bestReplyIds));
+			.where(and(inArray(replies.id, bestReplyIds), isNull(replies.deletedAt)));
 		for (const r of replyRows) {
 			bodyPreviewMap.set(r.id, lexicalToSearchText(r.contentJson));
 		}

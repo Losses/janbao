@@ -27,6 +27,18 @@ export function getCookieSecure(url: URL): boolean {
 	return url.protocol === 'https:';
 }
 
+/**
+ * Resolve the site's public origin for link construction (RSS feed links/guids,
+ * etc.). Prefers a configured SITE_URL so a client-controlled Host /
+ * X-Forwarded-Host header can't poison generated URLs (feed cache-poisoning /
+ * phishing); falls back to the request's own origin.
+ */
+export function getSiteUrl(platformEnv: App.Platform['env'] | undefined, url: URL): string {
+	const configured = platformEnv?.SITE_URL || process.env.SITE_URL;
+	if (configured) return configured.replace(/\/+$/, '');
+	return `${url.protocol}//${url.host}`;
+}
+
 export const SYSTEM_USER_ID = -1;
 
 /**

@@ -18,6 +18,7 @@ interface PlatformEnv {
 	PAGINATION_LIMIT?: string;
 	ACTIVITIES_LIMIT?: string;
 	ALLOW_SLUG_CHANGE?: string;
+	SITE_URL?: string;
 }
 
 type WaitUntilFn = (promise: Promise<unknown>) => void;

@@ -20,6 +20,13 @@
 		data: PageData;
 	}
 
+	interface ReplyActionResult {
+		success?: boolean;
+		error?: string;
+		replyId?: string;
+		page?: number;
+	}
+
 	let { data }: PageProps = $props();
 
 	const t = $derived(data.t);
@@ -402,12 +409,7 @@
 							return async ({ result, update }) => {
 								isSubmitting = false;
 								if (result.type === 'success') {
-									const resData = result.data as {
-										success?: boolean;
-										error?: string;
-										replyId?: string;
-										page?: number;
-									} | null;
+									const resData = result.data as ReplyActionResult | null;
 									if (resData && resData.success === false) {
 										alert(resData.error || 'Failed to create reply');
 										return;
