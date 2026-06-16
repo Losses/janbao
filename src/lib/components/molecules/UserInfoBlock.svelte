@@ -51,62 +51,62 @@
 			displayName={user.displayName}
 			size="md"
 		/>
-		<div>
+		<div class="flex flex-col">
 			<a
 				href="/profile/{user.id}/{userSlug}"
 				class="user-display-name text-base-content hover:text-primary"
 			>
 				{user.displayName}
 			</a>
+
+			<!-- Icon Button Row -->
+			<div class="flex items-center gap-1">
+				<!-- Notifications -->
+				<NotificationTooltip
+					isOpen={openTooltip === 'notifications'}
+					onToggle={() => toggleTooltip('notifications')}
+					onClose={closeTooltip}
+					{t}
+				/>
+
+				<!-- Messages -->
+				<MessageTooltip
+					isOpen={openTooltip === 'messages'}
+					onToggle={() => toggleTooltip('messages')}
+					onClose={closeTooltip}
+					{t}
+				/>
+
+				<!-- Bookmarks -->
+				<BookmarkTooltip
+					isOpen={openTooltip === 'bookmarks'}
+					onToggle={() => toggleTooltip('bookmarks')}
+					onClose={closeTooltip}
+					{t}
+				/>
+
+				<!-- Settings (direct link, no tooltip) -->
+				<a
+					href="/profile/edit"
+					class="btn btn-ghost btn-xs sidebar-icon-btn"
+					aria-label={tSidebar['settings']}
+					title={tSidebar['settings']}
+				>
+					<Icon path={mdiCog} size={16} />
+				</a>
+
+				<!-- Admin panel (admin-only direct link) -->
+				{#if isAdmin}
+					<a
+						href="/admin"
+						class="btn btn-ghost btn-xs sidebar-icon-btn"
+						aria-label={tAdmin['adminPanel']}
+						title={tAdmin['adminPanel']}
+					>
+						<Icon path={mdiShieldAccount} size={16} />
+					</a>
+				{/if}
+			</div>
 		</div>
-	</div>
-
-	<!-- Icon Button Row -->
-	<div class="flex items-center gap-1">
-		<!-- Notifications -->
-		<NotificationTooltip
-			isOpen={openTooltip === 'notifications'}
-			onToggle={() => toggleTooltip('notifications')}
-			onClose={closeTooltip}
-			{t}
-		/>
-
-		<!-- Messages -->
-		<MessageTooltip
-			isOpen={openTooltip === 'messages'}
-			onToggle={() => toggleTooltip('messages')}
-			onClose={closeTooltip}
-			{t}
-		/>
-
-		<!-- Bookmarks -->
-		<BookmarkTooltip
-			isOpen={openTooltip === 'bookmarks'}
-			onToggle={() => toggleTooltip('bookmarks')}
-			onClose={closeTooltip}
-			{t}
-		/>
-
-		<!-- Settings (direct link, no tooltip) -->
-		<a
-			href="/profile/edit"
-			class="btn btn-ghost btn-xs sidebar-icon-btn"
-			aria-label={tSidebar['settings']}
-			title={tSidebar['settings']}
-		>
-			<Icon path={mdiCog} size={16} />
-		</a>
-
-		<!-- Admin panel (admin-only direct link) -->
-		{#if isAdmin}
-			<a
-				href="/admin"
-				class="btn btn-ghost btn-xs sidebar-icon-btn"
-				aria-label={tAdmin['adminPanel']}
-				title={tAdmin['adminPanel']}
-			>
-				<Icon path={mdiShieldAccount} size={16} />
-			</a>
-		{/if}
 	</div>
 </div>

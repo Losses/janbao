@@ -90,7 +90,9 @@ header nav {
 }
 
 .badge {
-	font: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+	font:
+		ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+		'Noto Color Emoji';
 }
 
 /* User display names (profile header + sidebar UserInfoBlock widget) use the
@@ -109,6 +111,12 @@ header nav {
 
 	.sidebar-icon-btn {
 		color: #7f7f7f;
+		/* Square icon button: pin width to the btn-xs height (1.5rem) with zero
+		   padding so the icon centers in a 24x24 box instead of a wide rectangle. */
+		width: 1.5rem;
+		min-width: 1.5rem;
+		height: 1.5rem;
+		padding: 0;
 
 		&:hover {
 			color: #111;
