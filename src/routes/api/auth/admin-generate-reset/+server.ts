@@ -32,11 +32,14 @@ export const POST: RequestHandler = async (event) => {
 			return jsonError(t, 'common.notFound', 404);
 		}
 
-		// Only the super-admin (bootstrap admin) may reset another admin's password.
-		// Peers cannot — otherwise any admin could take over the super-admin (id 0)
-		// or any other admin via a reset link, bypassing group-change protection.
+		// Protected sentinels: only the super-admin (bootstrap admin) may reset an
+		// admin's password, and NO ONE may reset the 'system' sentinel (it authors the
+		// isJoined activities and is never meant to be signed in as). Otherwise any
+		// admin could take over another admin / the super-admin (id 0) / the system
+		// sentinel via a reset link, bypassing group-change protection.
 		const isSuperAdmin = currentUser?.id === BOOTSTRAP_ADMIN_ID;
-		if (targetUserList[0].groupSlug === 'admin' && !isSuperAdmin) {
+		const targetGroupSlug = targetUserList[0].groupSlug;
+		if (targetGroupSlug === 'system' || (targetGroupSlug === 'admin' && !isSuperAdmin)) {
 			return jsonError(t, 'permissions.adminGroupChangeForbidden', 403);
 		}
 

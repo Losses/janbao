@@ -49,6 +49,7 @@
 		isAdmin &&
 			targetUserGroupSlug !== null &&
 			targetUserGroupSlug !== 'admin' &&
+			targetUserGroupSlug !== 'system' &&
 			user?.id !== targetUserId
 	);
 	const canPromoteToAdmin = $derived(
