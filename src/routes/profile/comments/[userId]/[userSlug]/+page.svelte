@@ -65,25 +65,27 @@
 				{commentT.noComments}
 			</div>
 		{:else}
-			<div class="space-y-4">
-				{#each views as view (view.comment.id)}
-					<div class="card bg-base-100 py-4 space-y-2">
-						<LexicalRenderer
-							contentJson={view.comment.contentJson}
-							mentionedUsers={data.mentionedUsers}
-						/>
-						<div class="flex items-center justify-between gap-2 pt-2 border-t border-base-300">
-							<a href={view.href} class="text-xs text-primary hover:underline truncate">
-								{view.contextLabel}
-							</a>
-							<DateComponent
-								value={view.comment.createdAt}
-								{t}
-								class="text-xs text-base-content/40 flex-shrink-0"
+			<div class="bg-base-100 overflow-hidden">
+				<div class="divide-y divide-base-300">
+					{#each views as view (view.comment.id)}
+						<div class="py-4 space-y-2">
+							<LexicalRenderer
+								contentJson={view.comment.contentJson}
+								mentionedUsers={data.mentionedUsers}
 							/>
+							<div class="flex items-center justify-between gap-2 pt-2">
+								<a href={view.href} class="text-xs text-primary hover:underline truncate">
+									{view.contextLabel}
+								</a>
+								<DateComponent
+									value={view.comment.createdAt}
+									{t}
+									class="text-xs text-base-content/40 flex-shrink-0"
+								/>
+							</div>
 						</div>
-					</div>
-				{/each}
+					{/each}
+				</div>
 			</div>
 		{/if}
 	</div>
