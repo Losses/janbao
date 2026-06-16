@@ -31,7 +31,7 @@ export const GET: RequestHandler = async (event) => {
 	const categoryRecords = await db
 		.select()
 		.from(categories)
-		.where(eq(categories.slug, categorySlug))
+		.where(and(eq(categories.slug, categorySlug), isNull(categories.disabledAt)))
 		.limit(1);
 	if (categoryRecords.length === 0) {
 		return new Response(t.category.notFound, { status: 404 });

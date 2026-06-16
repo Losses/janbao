@@ -438,7 +438,7 @@ export async function searchDiscussions(
 
 	// Category read-permission filter + sort metadata (createdAt, commentCount).
 	const readable = await getReadableCategorySlugs(db, groupSlug);
-	const readableSet = readable === null ? null : new Set(readable);
+	const readableSet = new Set(readable);
 	const metaRows = await db
 		.select({
 			id: discussions.id,
@@ -447,19 +447,21 @@ export async function searchDiscussions(
 			commentCount: discussions.commentCount
 		})
 		.from(discussions)
+		.innerJoin(categories, eq(discussions.categorySlug, categories.slug))
 		.where(
 			and(
 				inArray(
 					discussions.id,
 					hits.map((h) => h.id)
 				),
-				isNull(discussions.deletedAt)
+				isNull(discussions.deletedAt),
+				isNull(categories.disabledAt)
 			)
 		);
 	const metaMap = new Map(metaRows.map((r) => [r.id, r]));
 	const allowed = hits.filter((h) => {
 		const m = metaMap.get(h.id);
-		return m !== undefined && (readableSet === null || readableSet.has(m.categorySlug));
+		return m !== undefined && readableSet.has(m.categorySlug);
 	});
 
 	const sorted = [...allowed].sort((a, b) => {
@@ -514,7 +516,8 @@ export async function searchDiscussions(
 					discussions.id,
 					paged.map((h) => h.id)
 				),
-				isNull(discussions.deletedAt)
+				isNull(discussions.deletedAt),
+				isNull(categories.disabledAt)
 			)
 		);
 	const rowMap = new Map(rows.map((r) => [r.id, r]));

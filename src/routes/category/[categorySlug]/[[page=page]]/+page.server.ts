@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { categories } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { loadDiscussionsPage } from '$lib/server/db/dao/discussions';
 import {
 	parseDiscussionPageFromPath,
@@ -20,7 +20,7 @@ export const load: PageServerLoad = async (event) => {
 	const categoryRecords = await db
 		.select()
 		.from(categories)
-		.where(eq(categories.slug, categorySlug))
+		.where(and(eq(categories.slug, categorySlug), isNull(categories.disabledAt)))
 		.limit(1);
 
 	if (categoryRecords.length === 0) {

@@ -53,7 +53,13 @@ export const load: PageServerLoad = async (event) => {
 		.from(discussions)
 		.innerJoin(categories, eq(discussions.categorySlug, categories.slug))
 		.innerJoin(users, eq(discussions.authorId, users.id))
-		.where(and(eq(discussions.id, discussionId), isNull(discussions.deletedAt)))
+		.where(
+			and(
+				eq(discussions.id, discussionId),
+				isNull(discussions.deletedAt),
+				isNull(categories.disabledAt)
+			)
+		)
 		.limit(1);
 
 	if (discussionRecords.length === 0) {

@@ -6,7 +6,12 @@
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
 	import { invalidateAll } from '$app/navigation';
-	import type { InvitationItem, ApiResult, FeedbackMessage } from '$lib/types/api';
+	import type {
+		InvitationItem,
+		InvitationRequestResponse,
+		ApiResult,
+		FeedbackMessage
+	} from '$lib/types/api';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -22,6 +27,10 @@
 	const invitations = $derived(data.invitations as InvitationItem[]);
 	let requesting = $state(false);
 	let feedback = $state<FeedbackMessage | null>(null);
+	let inviteLink = $state('');
+	let showInviteModal = $state(false);
+
+	const inviteCopyText = $derived(t.invitation.inviteLinkCopyText.replace('{link}', inviteLink));
 
 	const userSlug = $derived(generateSlug(user?.username || ''));
 	const remaining = $derived(Math.max(0, data.monthlyLimit - data.requestedThisMonth));
@@ -48,8 +57,10 @@
 		feedback = null;
 		try {
 			const res = await fetch('/api/invitations/request', { method: 'POST' });
-			const result: ApiResult = await res.json();
+			const result = (await res.json()) as InvitationRequestResponse & ApiResult;
 			if (result.success) {
+				inviteLink = result.inviteLink;
+				showInviteModal = true;
 				await invalidateAll();
 				requesting = false;
 				return;
@@ -59,6 +70,11 @@
 			feedback = { type: 'error', text: t.auth.networkError };
 		}
 		requesting = false;
+	}
+
+	async function copyInviteLink() {
+		await navigator.clipboard.writeText(inviteCopyText);
+		feedback = { type: 'success', text: invitationT.inviteLinkCopied };
 	}
 </script>
 
@@ -151,3 +167,25 @@
 		{/if}
 	</div>
 </DualColumnLayout>
+
+{#if showInviteModal}
+	<div class="modal modal-open">
+		<div class="modal-box">
+			<h3 class="font-bold text-lg">{invitationT.inviteLinkModalTitle}</h3>
+			<p class="py-2 text-sm text-base-content/80">{invitationT.inviteLinkGuidance}</p>
+			<p
+				class="py-3 text-sm break-all select-all whitespace-pre-line border border-dashed border-base-300 p-2 rounded bg-base-200"
+			>
+				{inviteCopyText}
+			</p>
+			<div class="modal-action gap-2">
+				<button class="btn btn-sm btn-primary" onclick={copyInviteLink}>
+					{invitationT.copyInviteLink}
+				</button>
+				<button class="btn btn-sm btn-ghost" onclick={() => (showInviteModal = false)}>
+					{t.common.cancel}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}

@@ -27,7 +27,7 @@ function generateInvitationCode(): string {
 // POST /api/invitations/request - Mint a new invitation code for the active
 // user, enforcing the per-month limit defined by MONTHLY_INVITATION_LIMIT.
 // Administrators bypass the monthly limit entirely.
-export const POST: RequestHandler = async ({ locals, platform }) => {
+export const POST: RequestHandler = async ({ locals, platform, url }) => {
 	const user = locals.user;
 	const t = locals.t;
 	if (!user) {
@@ -54,9 +54,10 @@ export const POST: RequestHandler = async ({ locals, platform }) => {
 
 	// PK collisions are astronomically rare (30^12 ≈ 5.3×10^17 space).
 	// A single insert with try/catch is sufficient  - no retry loop needed.
+	const code = generateInvitationCode();
 	try {
 		await db.insert(invitations).values({
-			code: generateInvitationCode(),
+			code,
 			creatorId: user.id,
 			usedById: null,
 			createdAt: now,
@@ -66,5 +67,6 @@ export const POST: RequestHandler = async ({ locals, platform }) => {
 		return jsonError(t, 'common.internalError', 500);
 	}
 
-	return json({ success: true }, { status: 201 });
+	const inviteLink = `${url.origin}/entry/register?code=${code}`;
+	return json({ success: true, code, inviteLink }, { status: 201 });
 };

@@ -1,6 +1,6 @@
 import type { D1Db } from './db/index';
 import { categoryPermissions, categories } from './db/schema';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 const DEV_JWT_SECRET = 'fallback-secret-key-for-local-dev-only';
 
@@ -162,6 +162,16 @@ export async function resolvePermissions(
 ): Promise<ResolvedPermissions> {
 	const groupSlug = resolveGroupSlug(user);
 
+	const categoryRows = await db
+		.select({ slug: categories.slug })
+		.from(categories)
+		.where(and(eq(categories.slug, categorySlug), isNull(categories.disabledAt)))
+		.limit(1);
+
+	if (categoryRows.length === 0) {
+		return { canRead: false, canCreate: false, canUpdate: false, canDelete: false };
+	}
+
 	const rows = await db
 		.select()
 		.from(categoryPermissions)
@@ -205,21 +215,17 @@ export function resolveGroupSlug(user: UserData | null | undefined): string {
 }
 
 /**
- * Get the list of category slugs the given group can read.
- * Returns null if all categories are readable (admin/moderator default).
+ * Get the enabled category slugs the given group can read.
  */
-export async function getReadableCategorySlugs(
-	db: D1Db,
-	groupSlug: string
-): Promise<string[] | null> {
-	if (groupSlug === 'admin' || groupSlug === 'moderator') {
-		return null;
-	}
-
-	const allCats = await db.select({ slug: categories.slug }).from(categories);
+export async function getReadableCategorySlugs(db: D1Db, groupSlug: string): Promise<string[]> {
+	const allCats = await db
+		.select({ slug: categories.slug })
+		.from(categories)
+		.where(isNull(categories.disabledAt));
 	const allSlugs = allCats.map((c) => c.slug);
 
 	if (allSlugs.length === 0) return [];
+	if (groupSlug === 'admin' || groupSlug === 'moderator') return allSlugs;
 
 	const permRows = await db
 		.select({

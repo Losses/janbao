@@ -51,7 +51,8 @@ export const categories = sqliteTable('categories', {
 	description: text('description').notNull(),
 	priority: integer('priority').notNull().default(1),
 	displayOrder: integer('display_order').notNull().default(1),
-	themeName: text('theme_name')
+	themeName: text('theme_name'),
+	disabledAt: integer('disabled_at', { mode: 'timestamp' })
 });
 
 export const categoryPermissions = sqliteTable(

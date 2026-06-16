@@ -6,8 +6,15 @@
 	 * Visitor sees: Activities, Discussions, Comments only.
 	 * Guest sees: Same as visitor + Sign-in/Register links.
 	 */
+	import { invalidateAll } from '$app/navigation';
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
-	import type { UserInfoSummary } from '$lib/types/api';
+	import type {
+		AdminManageableGroupItem,
+		ApiResult,
+		AuthAdminGenerateResetResponse,
+		FeedbackMessage,
+		UserInfoSummary
+	} from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 
 	interface ProfileSidebarProps {
@@ -16,55 +23,134 @@
 		activeItem?: string;
 		targetUserId: number;
 		targetUserSlug: string;
+		targetUserGroupSlug?: string | null;
+		targetUserEmail?: string | null;
+		manageableGroups?: AdminManageableGroupItem[];
 	}
 
-	let { user, t, activeItem = '', targetUserId, targetUserSlug }: ProfileSidebarProps = $props();
+	let {
+		user,
+		t,
+		activeItem = '',
+		targetUserId,
+		targetUserSlug,
+		targetUserGroupSlug = null,
+		targetUserEmail = null,
+		manageableGroups = []
+	}: ProfileSidebarProps = $props();
 
 	const profileT = $derived(t.profile);
 	const tNav = $derived(t.nav);
 
 	const isOwner = $derived(!!user && user.id === targetUserId);
 	const isAdmin = $derived(!!user && user.groupSlug === 'admin');
+	const canManageTargetGroup = $derived(
+		isAdmin &&
+			targetUserGroupSlug !== null &&
+			targetUserGroupSlug !== 'admin' &&
+			user?.id !== targetUserId
+	);
 
 	let generatedLink = $state('');
-	let showModal = $state(false);
+	let resetGuidance = $state('');
+	let showResetConfirm = $state(false);
+	let showResetLink = $state(false);
+	let groupSaving = $state(false);
+	let overrideGroupSlug = $state<string | null>(null);
+	let selectedGroupSlug = $derived(overrideGroupSlug ?? targetUserGroupSlug ?? '');
+	let feedback = $state<FeedbackMessage | null>(null);
 
-	interface ResetLinkResponse {
-		resetLink: string;
-	}
+	const resetCopyText = $derived(
+		t.auth.resetLinkCopyText
+			.replace('{email}', targetUserEmail ?? '')
+			.replace('{link}', generatedLink)
+	);
 
-	interface ResetLinkErrorResponse {
-		error: string;
-	}
-
-	async function handleGenerateResetLink() {
-		const confirmed = confirm(t.auth.confirmGenerateResetLink);
-		if (!confirmed) return;
-
+	async function generateResetLink() {
+		showResetConfirm = false;
+		feedback = null;
 		try {
 			const res = await fetch('/api/auth/admin-generate-reset', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ targetUserId })
 			});
-			if (res.ok) {
-				const data = (await res.json()) as ResetLinkResponse;
+			const data = (await res.json()) as AuthAdminGenerateResetResponse & ApiResult;
+			if (res.ok && data.success) {
 				generatedLink = data.resetLink;
-				showModal = true;
+				resetGuidance = data.guidance;
+				showResetLink = true;
 			} else {
-				const err = (await res.json()) as ResetLinkErrorResponse;
-				alert(err.error || t.common.error);
+				feedback = { type: 'error', text: data.error || t.common.error };
 			}
 		} catch {
-			alert(t.auth.networkError);
+			feedback = { type: 'error', text: t.auth.networkError };
 		}
 	}
 
-	function copyLink() {
-		navigator.clipboard.writeText(generatedLink);
-		alert(t.common.saved || 'Copied!');
+	async function copyLink() {
+		await navigator.clipboard.writeText(resetCopyText);
+		feedback = { type: 'success', text: t.auth.resetLinkCopied };
+	}
+
+	async function handleGroupChange(event: Event) {
+		const value = (event.currentTarget as HTMLSelectElement).value;
+		overrideGroupSlug = value;
+		if (!value || value === targetUserGroupSlug) return;
+		groupSaving = true;
+		feedback = null;
+		try {
+			const res = await fetch('/api/admin/users/group', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ targetUserId, groupSlug: value })
+			});
+			const result = (await res.json()) as ApiResult;
+			if (result.success) {
+				feedback = { type: 'success', text: t.permissions.userGroupUpdated };
+				await invalidateAll();
+				overrideGroupSlug = null;
+			} else {
+				overrideGroupSlug = null;
+				feedback = { type: 'error', text: result.error || t.common.error };
+			}
+		} catch {
+			overrideGroupSlug = null;
+			feedback = { type: 'error', text: t.auth.networkError };
+		}
+		groupSaving = false;
 	}
 </script>
+
+{#snippet adminControls()}
+	{#if isAdmin}
+		<li class="mt-2 pt-2 border-t border-base-content/10 space-y-2">
+			<button
+				onclick={() => (showResetConfirm = true)}
+				class="btn btn-xs btn-outline btn-primary w-full text-center"
+			>
+				{t.auth.generateResetLink}
+			</button>
+			{#if canManageTargetGroup && manageableGroups.length > 0}
+				<select
+					class="select select-bordered select-xs w-full"
+					value={selectedGroupSlug}
+					onchange={handleGroupChange}
+					disabled={groupSaving}
+				>
+					{#each manageableGroups as group (group.slug)}
+						<option value={group.slug}>{group.title}</option>
+					{/each}
+				</select>
+			{/if}
+			{#if feedback}
+				<p class="text-xs {feedback.type === 'success' ? 'text-primary' : 'text-warning'}">
+					{feedback.text}
+				</p>
+			{/if}
+		</li>
+	{/if}
+{/snippet}
 
 <div class="space-y-4">
 	{#if user}
@@ -111,16 +197,7 @@
 						{profileT['comments']}
 					</a>
 				</li>
-				{#if isAdmin}
-					<li class="mt-2 pt-2 border-t border-base-content/10">
-						<button
-							onclick={handleGenerateResetLink}
-							class="btn btn-xs btn-outline btn-primary w-full text-center"
-						>
-							{t.auth.generateResetLink}
-						</button>
-					</li>
-				{/if}
+				{@render adminControls()}
 			</ul>
 		{:else}
 			<!-- Visitor View: Public navigation only -->
@@ -149,16 +226,7 @@
 						{profileT['comments']}
 					</a>
 				</li>
-				{#if isAdmin}
-					<li class="mt-2 pt-2 border-t border-base-content/10">
-						<button
-							onclick={handleGenerateResetLink}
-							class="btn btn-xs btn-outline btn-primary w-full text-center"
-						>
-							{t.auth.generateResetLink}
-						</button>
-					</li>
-				{/if}
+				{@render adminControls()}
 			</ul>
 		{/if}
 	{:else}
@@ -198,21 +266,39 @@
 	{/if}
 </div>
 
-{#if showModal}
+{#if showResetConfirm}
 	<div class="modal modal-open">
 		<div class="modal-box">
-			<h3 class="font-bold text-lg">{t.auth.resetPassword}</h3>
+			<h3 class="font-bold text-lg">{t.auth.resetLinkModalTitle}</h3>
+			<p class="py-2 text-sm text-base-content/80">{t.auth.confirmGenerateResetLink}</p>
+			<div class="modal-action gap-2">
+				<button class="btn btn-sm btn-primary" onclick={generateResetLink}>
+					{t.common.confirm}
+				</button>
+				<button class="btn btn-sm btn-ghost" onclick={() => (showResetConfirm = false)}>
+					{t.common.cancel}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+{#if showResetLink}
+	<div class="modal modal-open">
+		<div class="modal-box">
+			<h3 class="font-bold text-lg">{t.auth.resetLinkModalTitle}</h3>
+			<p class="py-2 text-sm text-base-content/80">{resetGuidance}</p>
 			<p
-				class="py-4 text-sm break-all select-all border border-dashed border-base-300 p-2 rounded bg-base-200"
+				class="py-3 text-sm break-all select-all whitespace-pre-line border border-dashed border-base-300 p-2 rounded bg-base-200"
 			>
-				{generatedLink}
+				{resetCopyText}
 			</p>
 			<div class="modal-action gap-2">
 				<button class="btn btn-sm btn-primary" onclick={copyLink}>
-					{t.common.confirm || 'Copy'}
+					{t.auth.copyResetLink}
 				</button>
-				<button class="btn btn-sm btn-ghost" onclick={() => (showModal = false)}>
-					{t.common.cancel || 'Close'}
+				<button class="btn btn-sm btn-ghost" onclick={() => (showResetLink = false)}>
+					{t.common.cancel}
 				</button>
 			</div>
 		</div>

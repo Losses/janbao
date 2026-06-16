@@ -1,4 +1,4 @@
-import { replies, discussions, activities } from '../schema';
+import { replies, discussions, activities, categories } from '../schema';
 import { eq, and, isNull, isNotNull, sql } from 'drizzle-orm';
 import type { D1Db } from '../index';
 import { getReadableCategorySlugs } from '$lib/server/constants';
@@ -35,9 +35,9 @@ export async function getUserComments(
 ): Promise<UserCommentItem[]> {
 	// Determine readable category slugs if groupSlug provided
 	let readableCategorySlugs: Set<string> | null = null;
-	if (groupSlug && groupSlug !== 'admin' && groupSlug !== 'moderator') {
+	if (groupSlug) {
 		const readableSlugs = await getReadableCategorySlugs(db, groupSlug);
-		readableCategorySlugs = readableSlugs !== null ? new Set(readableSlugs) : null;
+		readableCategorySlugs = new Set(readableSlugs);
 	}
 
 	// 1. Discussion replies (excluding soft-deleted replies and discussions)
@@ -53,8 +53,14 @@ export async function getUserComments(
 		})
 		.from(replies)
 		.innerJoin(discussions, eq(replies.discussionId, discussions.id))
+		.innerJoin(categories, eq(discussions.categorySlug, categories.slug))
 		.where(
-			and(eq(replies.authorId, userId), isNull(replies.deletedAt), isNull(discussions.deletedAt))
+			and(
+				eq(replies.authorId, userId),
+				isNull(replies.deletedAt),
+				isNull(discussions.deletedAt),
+				isNull(categories.disabledAt)
+			)
 		)
 		.limit(COMMENT_LIST_LIMIT);
 

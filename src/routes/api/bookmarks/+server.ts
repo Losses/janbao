@@ -1,9 +1,10 @@
 import { json } from '@sveltejs/kit';
 import { jsonError } from '$lib/server/errors';
 import type { RequestHandler } from './$types';
-import { bookmarks, discussions } from '$lib/server/db/schema';
+import { bookmarks, discussions, categories } from '$lib/server/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
 import { getBookmarks } from '$lib/server/db/dao/bookmarks';
+import { resolvePermissions } from '$lib/server/constants';
 import type { BookmarkToggleBody } from '$lib/types/api';
 
 const DEFAULT_LIMIT = 20;
@@ -46,15 +47,27 @@ export const POST: RequestHandler = async (event) => {
 
 	const db = event.locals.db;
 
-	// Check if discussion exists and is not soft-deleted
+	// Check if discussion exists and is not soft-deleted or in a disabled category
 	const discussionExists = await db
-		.select()
+		.select({ categorySlug: discussions.categorySlug })
 		.from(discussions)
-		.where(and(eq(discussions.id, discussionId), isNull(discussions.deletedAt)))
+		.innerJoin(categories, eq(discussions.categorySlug, categories.slug))
+		.where(
+			and(
+				eq(discussions.id, discussionId),
+				isNull(discussions.deletedAt),
+				isNull(categories.disabledAt)
+			)
+		)
 		.limit(1);
 
 	if (discussionExists.length === 0) {
 		return jsonError(t, 'bookmark.notFound', 404);
+	}
+
+	const perms = await resolvePermissions(db, discussionExists[0].categorySlug, user);
+	if (!perms.canRead) {
+		return jsonError(t, 'common.forbidden', 403);
 	}
 
 	try {

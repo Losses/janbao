@@ -74,6 +74,9 @@
 		activeItem="activities"
 		targetUserId={targetUser.id}
 		{targetUserSlug}
+		targetUserGroupSlug={targetUser.groupSlug}
+		targetUserEmail={data.targetUserEmail}
+		manageableGroups={data.manageableGroups}
 	/>
 {/snippet}
 

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import SingleColumnLayout from '$lib/components/templates/SingleColumnLayout.svelte';
 	import AlertMessage from '$lib/components/AlertMessage.svelte';
+	import FormField from '$lib/components/atoms/FormField.svelte';
 	import { goto } from '$app/navigation';
 	import { formatTitle } from '$lib/utils/title';
 	import type { PageData } from './$types';
@@ -92,101 +93,65 @@
 		<AlertMessage message={errorMessage} />
 
 		<div class="space-y-3">
-			<div class="form-control">
-				<label class="label text-sm font-semibold" for="invitationCode">
-					<span class="label-text">{t.auth.invitationCode}</span>
-				</label>
-				<input
-					id="invitationCode"
-					type="text"
-					required
-					bind:value={invitationCode}
-					class="input input-bordered w-full"
-					placeholder="ABC-123-XYZ"
-				/>
-			</div>
+			<FormField
+				id="invitationCode"
+				label={t.auth.invitationCode}
+				bind:value={invitationCode}
+				placeholder="ABC-123-XYZ"
+				required
+			/>
 
-			<div class="form-control">
-				<label class="label text-sm font-semibold" for="username">
-					<span class="label-text">{t.auth.username}</span>
-				</label>
-				<input
-					id="username"
-					type="text"
-					required
-					bind:value={username}
-					class="input input-bordered w-full {username && !isValidUsername(username)
-						? 'input-error'
-						: ''}"
-					placeholder="username"
-				/>
-				{#if username && !isValidUsername(username)}
-					<p class="text-xs text-error mt-1">
-						{t.auth.invalidUsername}
-					</p>
-				{/if}
-			</div>
+			<FormField
+				id="username"
+				label={t.auth.username}
+				bind:value={username}
+				placeholder="username"
+				required
+				error={username && !isValidUsername(username) ? t.auth.invalidUsername : ''}
+			/>
 
-			<div class="form-control">
-				<label class="label text-sm font-semibold" for="displayName">
-					<span class="label-text">{t.auth.displayName}</span>
-				</label>
-				<input
-					id="displayName"
-					type="text"
-					required
-					bind:value={displayName}
-					class="input input-bordered w-full"
-					placeholder={t.auth.displayName}
-				/>
-			</div>
+			<FormField
+				id="displayName"
+				label={t.auth.displayName}
+				bind:value={displayName}
+				placeholder={t.auth.displayName}
+				required
+			/>
 
-			<div class="form-control">
-				<label class="label text-sm font-semibold" for="email">
-					<span class="label-text">{t.auth.email}</span>
-				</label>
-				<input
-					id="email"
-					type="email"
-					required
-					bind:value={email}
-					class="input input-bordered w-full"
-					placeholder="name@example.com"
-				/>
-			</div>
+			<FormField
+				id="email"
+				type="email"
+				label={t.auth.email}
+				bind:value={email}
+				placeholder="name@example.com"
+				required
+			/>
 
-			<div class="form-control">
-				<label class="label text-sm font-semibold" for="password">
-					<span class="label-text">{t.auth.password}</span>
-				</label>
-				<input
-					id="password"
-					type="password"
-					required
-					bind:value={password}
-					class="input input-bordered w-full"
-					placeholder="••••••••"
-				/>
-				{#if password.length > 0}
-					<span class="text-xs mt-1 {isPasswordStrong ? 'text-primary' : 'text-warning'}">
-						{isPasswordStrong ? t.auth.passwordStrengthOk : t.auth.passwordTooShort}
-					</span>
-				{/if}
-			</div>
+			<FormField
+				id="password"
+				type="password"
+				label={t.auth.password}
+				bind:value={password}
+				placeholder="••••••••"
+				required
+			>
+				{#snippet hint()}
+					{#if password.length > 0}
+						<span class="text-xs mt-1 {isPasswordStrong ? 'text-primary' : 'text-warning'}">
+							{isPasswordStrong ? t.auth.passwordStrengthOk : t.auth.passwordTooShort}
+						</span>
+					{/if}
+				{/snippet}
+			</FormField>
 
-			<div class="form-control">
-				<label class="label text-sm font-semibold" for="confirmPassword">
-					<span class="label-text">{t.auth.confirmPassword}</span>
-				</label>
-				<input
-					id="confirmPassword"
-					type="password"
-					required
-					bind:value={confirmPassword}
-					class="input input-bordered w-full"
-					placeholder="••••••••"
-				/>
-			</div>
+			<FormField
+				id="confirmPassword"
+				type="password"
+				label={t.auth.confirmPassword}
+				bind:value={confirmPassword}
+				placeholder="••••••••"
+				required
+			/>
 		</div>
 
 		<div class="pt-2">

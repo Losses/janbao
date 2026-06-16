@@ -24,11 +24,9 @@ export const load: PageServerLoad = async (event) => {
 	const groupSlug = resolveGroupSlug(user);
 	const readableSlugs = await getReadableCategorySlugs(db, groupSlug);
 
-	// null = all readable (admin/moderator), undefined/empty = nothing readable
-	const filters =
-		readableSlugs === null
-			? undefined
-			: { readableCategorySlugs: readableSlugs.length > 0 ? readableSlugs : ['__none__'] };
+	const filters = {
+		readableCategorySlugs: readableSlugs.length > 0 ? readableSlugs : ['__none__']
+	};
 
 	const [items, totalCount] = await Promise.all([
 		getBookmarks(db, user.id, { limit, offset }, filters),

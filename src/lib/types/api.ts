@@ -304,4 +304,87 @@ export interface AuthAdminGenerateResetBody {
 export interface AuthAdminGenerateResetResponse {
 	success: boolean;
 	resetLink: string;
+	guidance: string;
+}
+
+// --- Admin Permission Management Types ---
+
+export interface AdminUserGroupItem {
+	slug: string;
+	title: string;
+	description: string;
+	userCount: number;
+	reserved: boolean;
+}
+
+export interface AdminCategoryItem {
+	slug: string;
+	title: string;
+	description: string;
+	priority: number;
+	displayOrder: number;
+	themeName: string | null;
+	disabledAt: Date | null;
+}
+
+export interface AdminCategoryPermissionItem {
+	categorySlug: string;
+	groupSlug: string;
+	canRead: boolean;
+	canCreate: boolean;
+	canUpdate: boolean;
+	canDelete: boolean;
+}
+
+export interface AdminManageableGroupItem {
+	slug: string;
+	title: string;
+}
+
+export interface AdminUserGroupCreateBody {
+	slug?: string;
+	title?: string;
+	description?: string;
+}
+
+export interface AdminUserGroupDeleteBody {
+	slug?: string;
+}
+
+export interface AdminCategoryCreateBody {
+	slug?: string;
+	title?: string;
+	description?: string;
+	priority?: number;
+	displayOrder?: number;
+	themeName?: string | null;
+}
+
+export interface AdminCategoryUpdateBody {
+	slug?: string;
+	title?: string;
+	description?: string;
+	priority?: number;
+	displayOrder?: number;
+	themeName?: string | null;
+	disabled?: boolean;
+}
+
+export interface AdminCategoryDeleteBody {
+	slug?: string;
+}
+
+export interface AdminCategoryPermissionsUpdateBody {
+	permissions?: AdminCategoryPermissionItem[];
+}
+
+export interface AdminUserGroupChangeBody {
+	targetUserId?: number;
+	groupSlug?: string;
+}
+
+export interface InvitationRequestResponse {
+	success: boolean;
+	code: string;
+	inviteLink: string;
 }

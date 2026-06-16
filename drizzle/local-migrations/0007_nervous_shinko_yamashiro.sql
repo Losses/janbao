@@ -1,0 +1,1 @@
+ALTER TABLE `categories` ADD `disabled_at` integer;

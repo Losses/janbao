@@ -6,6 +6,7 @@ import { generateSlug } from '$lib/utils/slug';
 import { SYSTEM_USER_ID } from '$lib/server/constants';
 import { resolveMentions } from '$lib/server/utils/mentions';
 import { getInviter } from '$lib/server/db/dao/invitations';
+import { listManageableUserGroups } from '$lib/server/db/dao/admin-permissions';
 import type { JoinedMember, RecipientInfo } from '$lib/types/api';
 
 export const load: PageServerLoad = async (event) => {
@@ -197,8 +198,26 @@ export const load: PageServerLoad = async (event) => {
 		db
 	);
 
+	// 9b. Fetch manageable groups for admin sidebar controls
+	const manageableGroups =
+		currentUser?.groupSlug === 'admin' ? await listManageableUserGroups(db) : [];
+
+	// Email is needed only for the admin reset-link copy sentence, so it is fetched
+	// separately and only exposed to admins (never reaches the public targetUser payload).
+	let targetUserEmail: string | null = null;
+	if (currentUser?.groupSlug === 'admin') {
+		const emailRecord = await db
+			.select({ email: users.email })
+			.from(users)
+			.where(eq(users.id, userId))
+			.limit(1);
+		targetUserEmail = emailRecord[0]?.email ?? null;
+	}
+
 	return {
 		targetUser,
+		// Only expose the target user's email to admins (for the reset-link copy sentence).
+		targetUserEmail,
 		invitedBy,
 		activities: profileActivities.map((a) => ({
 			...a,
@@ -211,6 +230,7 @@ export const load: PageServerLoad = async (event) => {
 		})),
 		isOwner,
 		activityDraft,
-		mentionedUsers
+		mentionedUsers,
+		manageableGroups
 	};
 };

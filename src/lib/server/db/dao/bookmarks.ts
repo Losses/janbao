@@ -18,7 +18,11 @@ export async function getBookmarks(
 	options: ListOffsetOptions,
 	filters?: BookmarkFilterOptions
 ): Promise<BookmarkListItem[]> {
-	const conditions = [eq(bookmarks.userId, userId), isNull(discussions.deletedAt)];
+	const conditions = [
+		eq(bookmarks.userId, userId),
+		isNull(discussions.deletedAt),
+		isNull(categories.disabledAt)
+	];
 
 	if (filters?.readableCategorySlugs && filters.readableCategorySlugs.length > 0) {
 		conditions.push(inArray(discussions.categorySlug, filters.readableCategorySlugs));
@@ -66,7 +70,11 @@ export async function getBookmarksCount(
 	userId: number,
 	filters?: BookmarkFilterOptions
 ): Promise<number> {
-	const conditions = [eq(bookmarks.userId, userId), isNull(discussions.deletedAt)];
+	const conditions = [
+		eq(bookmarks.userId, userId),
+		isNull(discussions.deletedAt),
+		isNull(categories.disabledAt)
+	];
 
 	if (filters?.readableCategorySlugs && filters.readableCategorySlugs.length > 0) {
 		conditions.push(inArray(discussions.categorySlug, filters.readableCategorySlugs));
@@ -76,6 +84,7 @@ export async function getBookmarksCount(
 		.select({ value: count() })
 		.from(bookmarks)
 		.innerJoin(discussions, eq(bookmarks.discussionId, discussions.id))
+		.innerJoin(categories, eq(discussions.categorySlug, categories.slug))
 		.where(and(...conditions));
 	return result[0]?.value ?? 0;
 }

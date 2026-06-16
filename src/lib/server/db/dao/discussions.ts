@@ -117,7 +117,7 @@ export async function getDiscussionsList(
 	}
 
 	// Apply where filters
-	const whereClauses = [isNull(discussions.deletedAt)];
+	const whereClauses = [isNull(discussions.deletedAt), isNull(categories.disabledAt)];
 	if (categorySlug) {
 		whereClauses.push(eq(discussions.categorySlug, categorySlug));
 	}
@@ -279,7 +279,7 @@ export async function getDiscussionsCount(
 ): Promise<number> {
 	const { categorySlug, authorId, groupSlug } = options;
 
-	const whereClauses = [isNull(discussions.deletedAt)];
+	const whereClauses = [isNull(discussions.deletedAt), isNull(categories.disabledAt)];
 	if (categorySlug) {
 		whereClauses.push(eq(discussions.categorySlug, categorySlug));
 	}
@@ -287,27 +287,18 @@ export async function getDiscussionsCount(
 		whereClauses.push(eq(discussions.authorId, authorId));
 	}
 
-	let res = await db
-		.select({ count: count() })
-		.from(discussions)
-		.where(and(...whereClauses));
-
-	// Security: If groupSlug provided and no explicit categorySlug filter, filter by readable categories
 	if (groupSlug && !categorySlug) {
 		const readableSlugs = await getReadableCategorySlugs(db, groupSlug);
-		if (readableSlugs !== null) {
-			// null means all categories are readable (privileged)
-			res = await db
-				.select({ count: count() })
-				.from(discussions)
-				.where(
-					and(
-						...whereClauses,
-						readableSlugs.length > 0 ? inArray(discussions.categorySlug, readableSlugs) : sql`1 = 0`
-					)
-				);
-		}
+		whereClauses.push(
+			readableSlugs.length > 0 ? inArray(discussions.categorySlug, readableSlugs) : sql`1 = 0`
+		);
 	}
+
+	const res = await db
+		.select({ count: count() })
+		.from(discussions)
+		.innerJoin(categories, eq(discussions.categorySlug, categories.slug))
+		.where(and(...whereClauses));
 
 	return res[0]?.count || 0;
 }
@@ -346,13 +337,7 @@ async function filterByCategoryReadAccess<T extends { categorySlug: string }>(
 	rows: T[],
 	groupSlug: string
 ): Promise<T[]> {
-	if (groupSlug === 'admin' || groupSlug === 'moderator') {
-		return rows;
-	}
-
 	const readableSlugs = await getReadableCategorySlugs(db, groupSlug);
-	if (readableSlugs === null) return rows; // all readable
-
 	const readableSet = new Set(readableSlugs);
 	return rows.filter((row) => readableSet.has(row.categorySlug));
 }

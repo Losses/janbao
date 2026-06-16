@@ -23,7 +23,7 @@ export const POST: RequestHandler = async (event) => {
 
 		// Verify target user exists
 		const targetUserList = await db
-			.select()
+			.select({ email: users.email })
 			.from(users)
 			.where(eq(users.id, Number(targetUserId)))
 			.limit(1);
@@ -43,10 +43,12 @@ export const POST: RequestHandler = async (event) => {
 		});
 
 		const resetLink = `${event.url.origin}/entry/reset-password?token=${token}`;
+		const guidance = t.auth.resetLinkGuidance.replace('{email}', targetUserList[0].email);
 
 		const response: AuthAdminGenerateResetResponse = {
 			success: true,
-			resetLink
+			resetLink,
+			guidance
 		};
 
 		return json(response);

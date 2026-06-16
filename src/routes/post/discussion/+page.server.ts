@@ -7,7 +7,7 @@ import {
 	replies,
 	drafts
 } from '$lib/server/db/schema';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { generateSlug } from '$lib/utils/slug';
 import { resolvePermissions, resolveGroupSlug } from '$lib/server/constants';
 import type { DbTransaction } from '$lib/server/db';
@@ -24,7 +24,11 @@ export const load: PageServerLoad = async (event) => {
 	const groupSlug = resolveGroupSlug(user);
 
 	// 1. Fetch categories
-	const allCategories = await db.select().from(categories).orderBy(categories.displayOrder);
+	const allCategories = await db
+		.select()
+		.from(categories)
+		.where(isNull(categories.disabledAt))
+		.orderBy(categories.displayOrder);
 
 	// 2. Batch-fetch permissions for this group across all categories (2 queries total)
 	const perms = await db

@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { categories, categoryPermissions } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, isNull } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { resolveGroupSlug } from '$lib/server/constants';
 import { resolveCategoriesI18n } from '$lib/server/i18n';
@@ -21,6 +21,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			description: categories.description
 		})
 		.from(categories)
+		.where(isNull(categories.disabledAt))
 		.orderBy(categories.displayOrder);
 
 	if (allCategories.length === 0) {

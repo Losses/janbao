@@ -11,7 +11,7 @@
 	import { generateSlug } from '$lib/utils/slug';
 	import type { UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
-	import { mdiCog } from '@mdi/js';
+	import { mdiCog, mdiShieldAccount } from '@mdi/js';
 
 	interface UserInfoBlockProps {
 		user: UserInfoSummary;
@@ -25,7 +25,9 @@
 	let openTooltip: 'notifications' | 'messages' | 'bookmarks' | null = $state(null);
 
 	const tSidebar = $derived(t.sidebar);
+	const tAdmin = $derived(t.admin);
 	const userSlug = $derived(generateSlug(user.username));
+	const isAdmin = $derived(user.groupSlug === 'admin');
 
 	function toggleTooltip(name: 'notifications' | 'messages' | 'bookmarks') {
 		if (openTooltip === name) {
@@ -94,5 +96,17 @@
 		>
 			<Icon path={mdiCog} size={16} />
 		</a>
+
+		<!-- Admin panel (admin-only direct link) -->
+		{#if isAdmin}
+			<a
+				href="/admin"
+				class="btn btn-ghost btn-xs sidebar-icon-btn"
+				aria-label={tAdmin['adminPanel']}
+				title={tAdmin['adminPanel']}
+			>
+				<Icon path={mdiShieldAccount} size={16} />
+			</a>
+		{/if}
 	</div>
 </div>

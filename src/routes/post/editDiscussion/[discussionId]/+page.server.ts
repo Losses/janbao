@@ -73,7 +73,11 @@ export const load: PageServerLoad = async (event) => {
 
 	// 4. Fetch writeable categories list
 	const groupSlug = resolveGroupSlug(user);
-	const allCategories = await db.select().from(categories).orderBy(categories.displayOrder);
+	const allCategories = await db
+		.select()
+		.from(categories)
+		.where(isNull(categories.disabledAt))
+		.orderBy(categories.displayOrder);
 
 	const permsQuery = await db
 		.select({
@@ -189,7 +193,7 @@ export const actions: Actions = {
 			const categoryRecord = await db
 				.select({ slug: categories.slug })
 				.from(categories)
-				.where(eq(categories.slug, categorySlug))
+				.where(and(eq(categories.slug, categorySlug), isNull(categories.disabledAt)))
 				.limit(1);
 
 			if (categoryRecord.length === 0) {
