@@ -41,20 +41,20 @@ export function detectImageFormat(head: Uint8Array): ImageFormat {
 	) {
 		return 'webp'; // RIFF....WEBP
 	}
-	// AVIF: ISOBMFF 'ftyp' box (bytes 4-7) with an AVIF major brand (bytes 8-11):
-	// 'avif' (image), 'avis' (sequence), or 'mif1' (HEIF generic, used by some
-	// AVIF encoders). Matches the AVIF support advertised in the UI.
+	// AVIF: ISOBMFF 'ftyp' box (bytes 4-7) with an AVIF-specific major brand
+	// (bytes 8-11): 'avif' (image) or 'avis' (sequence). The generic 'mif1' brand
+	// is deliberately NOT accepted because it is also the HEIC major brand, which
+	// would mislabel HEIC uploads as AVIF.
 	if (
 		head.length >= 12 &&
 		head[4] === 0x66 &&
 		head[5] === 0x74 &&
 		head[6] === 0x79 &&
 		head[7] === 0x70 &&
-		((head[8] === 0x61 &&
-			head[9] === 0x76 &&
-			head[10] === 0x69 &&
-			(head[11] === 0x66 || head[11] === 0x73)) || // 'avif' / 'avis'
-			(head[8] === 0x6d && head[9] === 0x69 && head[10] === 0x66 && head[11] === 0x31)) // 'mif1'
+		head[8] === 0x61 &&
+		head[9] === 0x76 &&
+		head[10] === 0x69 &&
+		(head[11] === 0x66 || head[11] === 0x73) // 'avif' / 'avis'
 	) {
 		return 'avif';
 	}
