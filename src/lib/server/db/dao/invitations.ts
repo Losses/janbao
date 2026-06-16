@@ -1,8 +1,11 @@
 import { invitations, users } from '../schema';
 import { eq, and, gte, lt, inArray, count, desc } from 'drizzle-orm';
-import type { D1Db } from '../index';
+import type { D1Db, DbTransaction } from '../index';
 import type { InvitationItem, UserInfoSummary } from '$lib/types/api';
 import type { DateBoundary } from '../welcome';
+
+/** A database handle that may be either the top-level client or a transaction. */
+type DbOrTx = D1Db | DbTransaction;
 
 /**
  * List all invitation codes created by `userId`, each with its status resolved
@@ -81,7 +84,7 @@ export async function getInviter(db: D1Db, userId: number): Promise<UserInfoSumm
  * Count the invitation codes a user has created within a half-open month window.
  */
 export async function getMonthlyRequestCount(
-	db: D1Db,
+	db: DbOrTx,
 	userId: number,
 	window: DateBoundary
 ): Promise<number> {

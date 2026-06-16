@@ -24,7 +24,7 @@
 	let errorMessage = $state('');
 	let loading = $state(false);
 
-	const isPasswordStrong = $derived(password.length >= 5);
+	const isPasswordStrong = $derived(password.length >= 8);
 
 	async function handleSubmit(e: SubmitEvent) {
 		e.preventDefault();

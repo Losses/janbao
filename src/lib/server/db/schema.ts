@@ -16,33 +16,46 @@ export const userGroups = sqliteTable('user_groups', {
 	permissionsJson: text('permissions_json').notNull().default('{}')
 });
 
-export const users = sqliteTable('users', {
-	id: integer('id').primaryKey(),
-	username: text('username').notNull().unique(),
-	email: text('email').notNull().unique(),
-	passwordHash: text('password_hash').notNull(),
-	displayName: text('display_name').notNull(),
-	bio: text('bio'),
-	avatarFileId: text('avatar_file_id'),
-	avatarContentType: text('avatar_content_type'),
-	groupSlug: text('group_slug')
-		.notNull()
-		.references(() => userGroups.slug),
-	signupTime: integer('signup_time', { mode: 'timestamp' })
-		.notNull()
-		.default(sql`(strftime('%s', 'now'))`),
-	lastActiveTime: integer('last_active_time', { mode: 'timestamp' })
-		.notNull()
-		.default(sql`(strftime('%s', 'now'))`),
-	showEmail: integer('show_email', { mode: 'boolean' }).notNull().default(false),
-	languagePreference: text('language_preference').notNull().default('en'),
-	isStealth: integer('is_stealth', { mode: 'boolean' }).notNull().default(false),
-	rssToken: text('rss_token')
-		.notNull()
-		.unique()
-		.$defaultFn(() => crypto.randomUUID()),
-	viewCount: integer('view_count').notNull().default(0)
-});
+export const users = sqliteTable(
+	'users',
+	{
+		id: integer('id').primaryKey(),
+		username: text('username').notNull().unique(),
+		email: text('email').notNull().unique(),
+		passwordHash: text('password_hash').notNull(),
+		displayName: text('display_name').notNull(),
+		bio: text('bio'),
+		avatarFileId: text('avatar_file_id'),
+		avatarContentType: text('avatar_content_type'),
+		groupSlug: text('group_slug')
+			.notNull()
+			.references(() => userGroups.slug),
+		signupTime: integer('signup_time', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(strftime('%s', 'now'))`),
+		lastActiveTime: integer('last_active_time', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(strftime('%s', 'now'))`),
+		showEmail: integer('show_email', { mode: 'boolean' }).notNull().default(false),
+		languagePreference: text('language_preference').notNull().default('en'),
+		isStealth: integer('is_stealth', { mode: 'boolean' }).notNull().default(false),
+		rssToken: text('rss_token')
+			.notNull()
+			.unique()
+			.$defaultFn(() => crypto.randomUUID()),
+		viewCount: integer('view_count').notNull().default(0)
+	},
+	(table) => ({
+		// Case-insensitive identity uniqueness. The base columns keep a BINARY
+		// unique index (above); these expression indexes close the race where two
+		// concurrent registrations create near-identical accounts (Alice/alice) by
+		// enforcing uniqueness on the lower-cased form at the DB level.
+		usernameLowerUnique: uniqueIndex('users_username_lower_unique').on(
+			sql`lower(${table.username})`
+		),
+		emailLowerUnique: uniqueIndex('users_email_lower_unique').on(sql`lower(${table.email})`)
+	})
+);
 
 // --- Forum Schema ---
 export const categories = sqliteTable('categories', {
@@ -425,5 +438,21 @@ export const passwordRecoveries = sqliteTable(
 	},
 	(table) => ({
 		tokenIdx: index('password_recoveries_token_idx').on(table.token)
+	})
+);
+
+// Fixed-window counters for auth-flow rate limiting (login / forgot-password /
+// reset-password). One row per (bucket, identifier, window-epoch). Shared across
+// isolates because it lives in the same D1/libsql store as everything else.
+export const authThrottle = sqliteTable(
+	'auth_throttle',
+	{
+		bucket: text('bucket').notNull(),
+		identifier: text('identifier').notNull(),
+		windowEpoch: integer('window_epoch').notNull(),
+		count: integer('count').notNull().default(0)
+	},
+	(table) => ({
+		pk: primaryKey({ columns: [table.bucket, table.identifier, table.windowEpoch] })
 	})
 );

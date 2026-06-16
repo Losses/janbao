@@ -1,11 +1,26 @@
 import { users } from '$lib/server/db/schema';
-import { verifyPassword, signJwt, createSessionToken } from '$lib/server/auth';
+import { verifyPassword, signJwt, createSessionToken, hashPassword } from '$lib/server/auth';
 import { getJwtSecret, getCookieSecure } from '$lib/server/constants';
 import { jsonError } from '$lib/server/errors';
 import { json } from '@sveltejs/kit';
-import { eq, or } from 'drizzle-orm';
+import { sql, or } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import type { AuthLoginBody, SessionCookieOptions } from '$lib/types/api';
+import {
+	enforceThrottle,
+	getClientAddressSafe,
+	tooManyRequests,
+	LOGIN_IP_THROTTLE,
+	LOGIN_IDENTITY_THROTTLE
+} from '$lib/server/throttle';
+
+// Precomputed PBKDF2 hash used to equalise timing on the user-not-found path so
+// every login failure (unknown user, system sentinel, wrong password) costs a
+// full PBKDF2 derivation and is indistinguishable by latency.
+let dummyHashPromise: Promise<string> | null = null;
+function getDummyHash(): Promise<string> {
+	return (dummyHashPromise ??= hashPassword('timing-equalization-dummy-secret'));
+}
 
 export const POST: RequestHandler = async (event) => {
 	try {
@@ -17,18 +32,35 @@ export const POST: RequestHandler = async (event) => {
 			return jsonError(t, 'auth.loginFieldsRequired', 400);
 		}
 
-		// Find user by username or email
+		// Rate limit: per-IP and per-identity fixed windows (shared across isolates).
+		const ip = getClientAddressSafe(event);
+		const identityKey = usernameOrEmail.toLowerCase();
+		const ipResult = await enforceThrottle(db, 'login:ip', ip, LOGIN_IP_THROTTLE);
+		if (ipResult.blocked) return tooManyRequests(t.auth.tooManyAttempts, ipResult.retryAfter);
+		const idResult = await enforceThrottle(db, 'login:id', identityKey, LOGIN_IDENTITY_THROTTLE);
+		if (idResult.blocked) return tooManyRequests(t.auth.tooManyAttempts, idResult.retryAfter);
+
+		// Case-insensitive lookup: username/email use BINARY collation, so compare
+		// on the lower-cased form to let users sign in regardless of case.
 		const userList = await db
 			.select()
 			.from(users)
-			.where(or(eq(users.username, usernameOrEmail), eq(users.email, usernameOrEmail)))
+			.where(
+				or(
+					sql`lower(${users.username}) = lower(${usernameOrEmail})`,
+					sql`lower(${users.email}) = lower(${usernameOrEmail})`
+				)
+			)
 			.limit(1);
 
-		if (userList.length === 0) {
+		const user = userList[0];
+
+		// The system sentinel must never authenticate. Unknown user and sentinel
+		// both fall through to a dummy PBKDF2 verify so timing stays uniform.
+		if (!user || user.groupSlug === 'system') {
+			await verifyPassword(password, await getDummyHash());
 			return jsonError(t, 'auth.invalidCredentials', 400);
 		}
-
-		const user = userList[0];
 
 		// Verify password hash
 		const isValid = await verifyPassword(password, user.passwordHash);
@@ -60,7 +92,7 @@ export const POST: RequestHandler = async (event) => {
 
 		event.cookies.set('session_token', token, cookieOptions);
 
-		return json({ success: true, userId: user.id });
+		return json({ success: true });
 	} catch (e) {
 		console.error('Login error:', e);
 		return jsonError(event.locals.t, 'common.internalError', 500);

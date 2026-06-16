@@ -35,7 +35,7 @@
 			return;
 		}
 
-		if (password.length < 5) {
+		if (password.length < 8) {
 			errorMessage = t.auth.passwordTooShort;
 			return;
 		}

@@ -7,10 +7,18 @@ const DEV_JWT_SECRET = 'fallback-secret-key-for-local-dev-only';
 export function getJwtSecret(platformEnv: App.Platform['env'] | undefined): string {
 	const secret = platformEnv?.JWT_SECRET || process.env.JWT_SECRET;
 	if (!secret) {
-		console.warn(
-			'[SECURITY WARNING] JWT_SECRET is not set. Using insecure fallback. Never deploy this to production.'
+		// Fail closed in production builds: a missing JWT_SECRET would otherwise
+		// silently sign/verify with a publicly-known secret, allowing trivial
+		// token forgery. The insecure fallback is only ever used in local dev.
+		if (import.meta.env.DEV) {
+			console.warn(
+				'[SECURITY WARNING] JWT_SECRET is not set. Using insecure fallback. Never deploy this to production.'
+			);
+			return DEV_JWT_SECRET;
+		}
+		throw new Error(
+			'JWT_SECRET is not configured. Refusing to run with an insecure secret in a production build.'
 		);
-		return DEV_JWT_SECRET;
 	}
 	return secret;
 }

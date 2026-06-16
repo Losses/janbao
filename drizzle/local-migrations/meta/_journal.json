@@ -57,6 +57,13 @@
       "when": 1781573510085,
       "tag": "0007_nervous_shinko_yamashiro",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1781644083849,
+      "tag": "0008_mushy_jack_power",
+      "breakpoints": true
     }
   ]
 }

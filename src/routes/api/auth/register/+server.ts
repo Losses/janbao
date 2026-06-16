@@ -5,7 +5,7 @@ import { hashPassword, signJwt, createSessionToken } from '$lib/server/auth';
 import { getJwtSecret, getCookieSecure } from '$lib/server/constants';
 import { jsonError } from '$lib/server/errors';
 import { json } from '@sveltejs/kit';
-import { eq, or } from 'drizzle-orm';
+import { eq, or, and, isNull, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import type { AuthRegisterBody } from '$lib/types/api';
 import { isValidUsername } from '$lib/utils/validation';
@@ -31,12 +31,16 @@ export const POST: RequestHandler = async (event) => {
 			return jsonError(t, 'auth.invalidEmail', 400);
 		}
 
-		if (password.length < 5) {
+		if (password.length < 8) {
 			return jsonError(t, 'auth.passwordTooShort', 400);
 		}
 
 		if (password !== confirmPassword) {
 			return jsonError(t, 'auth.passwordsMismatch', 400);
+		}
+
+		if (displayName.length > 64) {
+			return jsonError(t, 'auth.displayNameTooLong', 400);
 		}
 
 		// 2. Validate Invitation Code dynamically
@@ -70,23 +74,31 @@ export const POST: RequestHandler = async (event) => {
 		let newUserId: number;
 		try {
 			newUserId = await db.transaction(async (tx: DbTransaction) => {
-				// Check for existing username or email inside the transaction
+				// Check for existing username or email inside the transaction,
+				// case-insensitively (columns use BINARY collation; a lower() unique
+				// index backstops this against concurrent registrations).
 				const existingUser = await tx
 					.select()
 					.from(users)
-					.where(or(eq(users.username, username), eq(users.email, email)))
+					.where(
+						or(
+							sql`lower(${users.username}) = lower(${username})`,
+							sql`lower(${users.email}) = lower(${email})`
+						)
+					)
 					.limit(1);
 
 				if (existingUser.length > 0) {
 					throw new Error('USERNAME_EMAIL_EXISTS');
 				}
 
-				// Create user under the standard 'member' role; id is auto-assigned
+				// Create user under the standard 'member' role; id is auto-assigned.
+				// Email is canonicalised to lower case so lookups stay consistent.
 				const inserted = await tx
 					.insert(users)
 					.values({
 						username,
-						email,
+						email: email.toLowerCase(),
 						passwordHash,
 						displayName,
 						groupSlug: 'member'
@@ -98,11 +110,17 @@ export const POST: RequestHandler = async (event) => {
 					userId: inserted[0].id
 				});
 
-				// Link invitation (marks as used)
-				await tx
+				// Claim the invitation code atomically: the conditional update
+				// (usedById IS NULL) ensures two concurrent registrations cannot both
+				// consume the same code. Roll back if another request got there first.
+				const consumed = await tx
 					.update(invitations)
 					.set({ usedById: inserted[0].id })
-					.where(eq(invitations.code, invitationCode));
+					.where(and(eq(invitations.code, invitationCode), isNull(invitations.usedById)))
+					.returning({ code: invitations.code });
+				if (consumed.length === 0) {
+					throw new Error('INVITATION_CONSUMED');
+				}
 
 				// Append the new member into today's "who joined" activity (created
 				// lazily per calendar day). Replaces the old next-day welcome-post cron.
@@ -116,7 +134,10 @@ export const POST: RequestHandler = async (event) => {
 			jwtToken = await signJwt(payload, jwtSecret);
 		} catch (e) {
 			if (e instanceof Error && e.message === 'USERNAME_EMAIL_EXISTS') {
-				return jsonError(event.locals.t, 'discussion.alreadyExists', 400);
+				return jsonError(event.locals.t, 'auth.usernameOrEmailExists', 400);
+			}
+			if (e instanceof Error && e.message === 'INVITATION_CONSUMED') {
+				return jsonError(event.locals.t, 'auth.invitationUsed', 400);
 			}
 			throw e;
 		}
