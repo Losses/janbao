@@ -3,7 +3,7 @@ import type { PageServerLoad } from './$types';
 import { users, activities, drafts, activityJoins } from '$lib/server/db/schema';
 import { eq, and, isNull, desc, sql, or, inArray } from 'drizzle-orm';
 import { generateSlug } from '$lib/utils/slug';
-import { SYSTEM_USER_ID } from '$lib/server/constants';
+import { BOOTSTRAP_ADMIN_ID, SYSTEM_USER_ID } from '$lib/server/constants';
 import { resolveMentions } from '$lib/server/utils/mentions';
 import { getInviter } from '$lib/server/db/dao/invitations';
 import { listManageableUserGroups } from '$lib/server/db/dao/admin-permissions';
@@ -198,9 +198,15 @@ export const load: PageServerLoad = async (event) => {
 		db
 	);
 
-	// 9b. Fetch manageable groups for admin sidebar controls
+	// 9b. Fetch manageable groups for admin sidebar controls. The bootstrap
+	// super-admin additionally sees the reserved `admin` group so promotion is a
+	// dropdown option (peer admins never see it).
 	const manageableGroups =
-		currentUser?.groupSlug === 'admin' ? await listManageableUserGroups(db) : [];
+		currentUser?.groupSlug === 'admin'
+			? await listManageableUserGroups(db, {
+					includeAdmin: currentUser.id === BOOTSTRAP_ADMIN_ID
+				})
+			: [];
 
 	// Email is needed only for the admin reset-link copy sentence, so it is fetched
 	// separately and only exposed to admins (never reaches the public targetUser payload).

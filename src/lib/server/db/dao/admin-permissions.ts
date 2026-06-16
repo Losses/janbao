@@ -1,6 +1,7 @@
 import { count, eq, inArray } from 'drizzle-orm';
 import { categories, categoryPermissions, userGroups, users } from '../schema';
 import type { D1Db } from '../index';
+import { BOOTSTRAP_ADMIN_ID } from '$lib/server/constants';
 import type {
 	AdminCategoryItem,
 	AdminCategoryPermissionItem,
@@ -41,10 +42,25 @@ export async function listUserGroupsWithCounts(db: D1Db): Promise<AdminUserGroup
 	}));
 }
 
-export async function listManageableUserGroups(db: D1Db): Promise<AdminManageableGroupItem[]> {
+export interface ManageableUserGroupsOptions {
+	/**
+	 * When true (caller is the bootstrap super-admin), the reserved `admin` group
+	 * is included in the list so promotion is exposed as a dropdown option rather
+	 * than a separate button. Peer admins never see `admin`.
+	 */
+	includeAdmin?: boolean;
+}
+
+export async function listManageableUserGroups(
+	db: D1Db,
+	options: ManageableUserGroupsOptions = {}
+): Promise<AdminManageableGroupItem[]> {
 	const groups = await db.select().from(userGroups).orderBy(userGroups.slug);
 	return groups
-		.filter((group) => isAssignableGroupSlug(group.slug))
+		.filter(
+			(group) =>
+				isAssignableGroupSlug(group.slug) || (options.includeAdmin && group.slug === 'admin')
+		)
 		.map((group) => ({ slug: group.slug, title: group.title }));
 }
 
@@ -56,13 +72,14 @@ export interface ProfileAdminSidebarData {
 
 /**
  * Fetch the data `ProfileSidebar` needs to render admin controls for a target
- * user (group dropdown, reset-link copy email, promote-to-admin button). Returns
- * empty/null values when the caller is not an admin, so this can be called from
- * any profile sub-page load without leaking data to non-admins.
+ * user (group dropdown, reset-link copy email). Returns empty/null values when
+ * the caller is not an admin, so this can be called from any profile sub-page
+ * load without leaking data to non-admins.
  */
 export async function getProfileAdminSidebarData(
 	db: D1Db,
 	callerGroupSlug: string | null | undefined,
+	callerUserId: number | null | undefined,
 	targetUserId: number
 ): Promise<ProfileAdminSidebarData> {
 	const empty: ProfileAdminSidebarData = { groupSlug: null, email: null, manageableGroups: [] };
@@ -74,7 +91,7 @@ export async function getProfileAdminSidebarData(
 			.from(users)
 			.where(eq(users.id, targetUserId))
 			.limit(1),
-		listManageableUserGroups(db)
+		listManageableUserGroups(db, { includeAdmin: callerUserId === BOOTSTRAP_ADMIN_ID })
 	]);
 	return {
 		groupSlug: target[0]?.groupSlug ?? null,

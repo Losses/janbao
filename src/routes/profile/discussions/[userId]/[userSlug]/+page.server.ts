@@ -56,7 +56,7 @@ export const load: PageServerLoad = async (event) => {
 	const totalCount = await getDiscussionsCount(db, { authorId: userId, groupSlug });
 	const totalPages = Math.ceil(totalCount / limit);
 
-	const adminSidebar = await getProfileAdminSidebarData(db, user?.groupSlug, userId);
+	const adminSidebar = await getProfileAdminSidebarData(db, user?.groupSlug, user?.id, userId);
 
 	return {
 		targetUser,

@@ -440,7 +440,6 @@
 		"savePermissions": "Save Permissions",
 		"permissionsSaved": "Permissions saved",
 		"userGroupUpdated": "User group updated",
-		"promoteToAdmin": "Promote to Admin",
 		"adminGroupChangeForbidden": "Administrators cannot be reassigned from here",
 		"fieldsRequired": "All fields are required",
 		"invalidSlug": "Slug must be 2-40 lowercase letters, digits, or hyphens",

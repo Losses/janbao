@@ -49,7 +49,7 @@ export const load: PageServerLoad = async (event) => {
 		db
 	);
 
-	const adminSidebar = await getProfileAdminSidebarData(db, user?.groupSlug, userId);
+	const adminSidebar = await getProfileAdminSidebarData(db, user?.groupSlug, user?.id, userId);
 
 	return {
 		targetUser,

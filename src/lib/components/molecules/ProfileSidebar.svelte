@@ -52,12 +52,6 @@
 			targetUserGroupSlug !== 'system' &&
 			user?.id !== targetUserId
 	);
-	const canPromoteToAdmin = $derived(
-		isSuperAdmin &&
-			targetUserGroupSlug !== null &&
-			targetUserGroupSlug !== 'admin' &&
-			user?.id !== targetUserId
-	);
 	// The reset-link button mirrors the server rule: only the super-admin may
 	// reset another admin's password, and NO ONE resets the system sentinel.
 	const canResetTarget = $derived(
@@ -136,29 +130,6 @@
 		}
 		groupSaving = false;
 	}
-
-	async function promoteToAdmin() {
-		if (!canPromoteToAdmin) return;
-		groupSaving = true;
-		feedback = null;
-		try {
-			const res = await fetch('/api/admin/users/group', {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ targetUserId, groupSlug: 'admin' })
-			});
-			const result = (await res.json()) as ApiResult;
-			if (result.success) {
-				feedback = { type: 'success', text: t.permissions.userGroupUpdated };
-				await invalidateAll();
-			} else {
-				feedback = { type: 'error', text: result.error || t.common.error };
-			}
-		} catch {
-			feedback = { type: 'error', text: t.auth.networkError };
-		}
-		groupSaving = false;
-	}
 </script>
 
 {#snippet adminControls()}
@@ -183,15 +154,6 @@
 						<option value={group.slug}>{group.title}</option>
 					{/each}
 				</select>
-			{/if}
-			{#if canPromoteToAdmin}
-				<button
-					onclick={promoteToAdmin}
-					disabled={groupSaving}
-					class="btn btn-xs btn-outline btn-warning w-full text-center"
-				>
-					{t.permissions.promoteToAdmin}
-				</button>
 			{/if}
 			{#if feedback}
 				<p class="text-xs {feedback.type === 'success' ? 'text-primary' : 'text-warning'}">

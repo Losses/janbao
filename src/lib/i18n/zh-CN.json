@@ -440,7 +440,6 @@
 		"savePermissions": "保存权限",
 		"permissionsSaved": "权限已保存",
 		"userGroupUpdated": "用户身份组已更新",
-		"promoteToAdmin": "设为管理员",
 		"adminGroupChangeForbidden": "无法在此处修改管理员用户的身份组",
 		"fieldsRequired": "请填写所有必填项",
 		"invalidSlug": "Slug 必须为 2-40 位小写字母、数字或连字符",
