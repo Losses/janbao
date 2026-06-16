@@ -40,6 +40,9 @@
 		activeItem="discussions"
 		targetUserId={targetUser.id}
 		{targetUserSlug}
+		targetUserGroupSlug={data.targetUserGroupSlug}
+		targetUserEmail={data.targetUserEmail}
+		manageableGroups={data.manageableGroups}
 	/>
 {/snippet}
 

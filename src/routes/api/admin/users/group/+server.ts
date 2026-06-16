@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { jsonError } from '$lib/server/errors';
 import { requireAdmin } from '$lib/server/admin';
+import { BOOTSTRAP_ADMIN_ID } from '$lib/server/constants';
 import {
 	getTargetUserGroup,
 	updateUserGroup,
@@ -12,8 +13,6 @@ import type { AdminUserGroupChangeBody } from '$lib/types/api';
 // The bootstrap admin (id 0, seeded from ADMIN_EMAIL) is the only account that
 // may promote another user into the 'admin' group. All other admins are peers:
 // they can change a non-admin's group but cannot touch another admin or themselves.
-const BOOTSTRAP_ADMIN_ID = 0;
-
 function isValidTargetGroup(slug: string, isSuperAdmin: boolean): boolean {
 	// 'system' and 'guest' are never assignable as a real user group. 'admin' is
 	// only assignable by the bootstrap super-admin.
@@ -30,7 +29,10 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	const targetUserId = Number(body.targetUserId);
 	const groupSlug = body.groupSlug?.trim().toLowerCase();
 
-	if (!targetUserId || !groupSlug) return jsonError(locals.t, 'permissions.fieldsRequired', 400);
+	// Note: use an explicit NaN check so id 0 (the bootstrap admin) is a valid target.
+	if (targetUserId === undefined || Number.isNaN(targetUserId) || !groupSlug) {
+		return jsonError(locals.t, 'permissions.fieldsRequired', 400);
+	}
 
 	const isSuperAdmin = locals.user?.id === BOOTSTRAP_ADMIN_ID;
 	if (!isValidTargetGroup(groupSlug, isSuperAdmin))
@@ -40,12 +42,14 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 	const currentGroupSlug = await getTargetUserGroup(locals.db, targetUserId);
 	if (!currentGroupSlug) return jsonError(locals.t, 'profile.userNotFound', 404);
-	// Peers (non-super-admins) cannot change an existing admin or their own account.
-	if (!isSuperAdmin && (currentGroupSlug === 'admin' || targetUserId === locals.user?.id)) {
+	// Peers (non-super-admins) cannot change an existing admin, a system sentinel,
+	// or their own account. The super-admin may promote peers to admin but still
+	// cannot touch the system sentinel or itself.
+	const isProtectedTarget = currentGroupSlug === 'system' || targetUserId === locals.user?.id;
+	if (isProtectedTarget) {
 		return jsonError(locals.t, 'permissions.adminGroupChangeForbidden', 403);
 	}
-	// Even the super-admin cannot demote themselves (lockout prevention).
-	if (targetUserId === locals.user?.id) {
+	if (!isSuperAdmin && currentGroupSlug === 'admin') {
 		return jsonError(locals.t, 'permissions.adminGroupChangeForbidden', 403);
 	}
 

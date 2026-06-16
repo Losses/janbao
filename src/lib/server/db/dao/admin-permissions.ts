@@ -15,7 +15,6 @@ export const RESERVED_USER_GROUP_SLUGS = [
 	'member',
 	'guest'
 ] as const;
-export const ASSIGNABLE_RESERVED_USER_GROUP_SLUGS = ['moderator', 'member'] as const;
 
 export function isReservedUserGroupSlug(slug: string): boolean {
 	return RESERVED_USER_GROUP_SLUGS.includes(slug as ReservedUserGroupSlug);
@@ -47,6 +46,41 @@ export async function listManageableUserGroups(db: D1Db): Promise<AdminManageabl
 	return groups
 		.filter((group) => isAssignableGroupSlug(group.slug))
 		.map((group) => ({ slug: group.slug, title: group.title }));
+}
+
+export interface ProfileAdminSidebarData {
+	groupSlug: string | null;
+	email: string | null;
+	manageableGroups: AdminManageableGroupItem[];
+}
+
+/**
+ * Fetch the data `ProfileSidebar` needs to render admin controls for a target
+ * user (group dropdown, reset-link copy email, promote-to-admin button). Returns
+ * empty/null values when the caller is not an admin, so this can be called from
+ * any profile sub-page load without leaking data to non-admins.
+ */
+export async function getProfileAdminSidebarData(
+	db: D1Db,
+	callerGroupSlug: string | null | undefined,
+	targetUserId: number
+): Promise<ProfileAdminSidebarData> {
+	const empty: ProfileAdminSidebarData = { groupSlug: null, email: null, manageableGroups: [] };
+	if (callerGroupSlug !== 'admin') return empty;
+
+	const [target, groups] = await Promise.all([
+		db
+			.select({ groupSlug: users.groupSlug, email: users.email })
+			.from(users)
+			.where(eq(users.id, targetUserId))
+			.limit(1),
+		listManageableUserGroups(db)
+	]);
+	return {
+		groupSlug: target[0]?.groupSlug ?? null,
+		email: target[0]?.email ?? null,
+		manageableGroups: groups
+	};
 }
 
 export async function getUserGroupCount(db: D1Db, groupSlug: string): Promise<number> {

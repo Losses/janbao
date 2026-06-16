@@ -433,7 +433,9 @@ export const actions: Actions = {
 			error(400, locals.t.common.contentTooLarge);
 		}
 
-		// Fetch reply and associated discussion categorySlug to check permissions
+		// Fetch reply and associated discussion categorySlug to check permissions.
+		// JOIN categories + disabledAt filter so a reply in a soft-disabled category
+		// 404s here (the author-bypass below must not allow edits to disabled content).
 		const replyRecords = await db
 			.select({
 				id: replies.id,
@@ -444,7 +446,15 @@ export const actions: Actions = {
 			})
 			.from(replies)
 			.innerJoin(discussions, eq(replies.discussionId, discussions.id))
-			.where(and(eq(replies.id, replyId), isNull(replies.deletedAt), isNull(discussions.deletedAt)))
+			.innerJoin(categories, eq(discussions.categorySlug, categories.slug))
+			.where(
+				and(
+					eq(replies.id, replyId),
+					isNull(replies.deletedAt),
+					isNull(discussions.deletedAt),
+					isNull(categories.disabledAt)
+				)
+			)
 			.limit(1);
 
 		if (replyRecords.length === 0) {
@@ -497,7 +507,10 @@ export const actions: Actions = {
 			error(400, locals.t.common.badRequest);
 		}
 
-		// Fetch reply and associated discussion categorySlug to check permissions
+		// Fetch reply and associated discussion categorySlug to check permissions.
+		// JOIN categories + disabledAt filter for defense-in-depth (deleteReply only
+		// checks canDelete, which resolvePermissions returns false for disabled
+		// categories, but the explicit filter keeps this consistent with editReply).
 		const replyRecords = await db
 			.select({
 				id: replies.id,
@@ -507,7 +520,15 @@ export const actions: Actions = {
 			})
 			.from(replies)
 			.innerJoin(discussions, eq(replies.discussionId, discussions.id))
-			.where(and(eq(replies.id, replyId), isNull(replies.deletedAt), isNull(discussions.deletedAt)))
+			.innerJoin(categories, eq(discussions.categorySlug, categories.slug))
+			.where(
+				and(
+					eq(replies.id, replyId),
+					isNull(replies.deletedAt),
+					isNull(discussions.deletedAt),
+					isNull(categories.disabledAt)
+				)
+			)
 			.limit(1);
 
 		if (replyRecords.length === 0) {

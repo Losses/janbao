@@ -57,6 +57,11 @@
 			targetUserGroupSlug !== 'admin' &&
 			user?.id !== targetUserId
 	);
+	// The reset-link button mirrors the server rule: only the super-admin may
+	// reset another admin's password. Peers cannot (prevents account takeover).
+	const canResetTarget = $derived(
+		isAdmin && user?.id !== targetUserId && (isSuperAdmin || targetUserGroupSlug !== 'admin')
+	);
 
 	let generatedLink = $state('');
 	let resetGuidance = $state('');
@@ -155,12 +160,14 @@
 {#snippet adminControls()}
 	{#if isAdmin}
 		<li class="mt-2 pt-2 border-t border-base-content/10 space-y-2">
-			<button
-				onclick={() => (showResetConfirm = true)}
-				class="btn btn-xs btn-outline btn-primary w-full text-center"
-			>
-				{t.auth.generateResetLink}
-			</button>
+			{#if canResetTarget}
+				<button
+					onclick={() => (showResetConfirm = true)}
+					class="btn btn-xs btn-outline btn-primary w-full text-center"
+				>
+					{t.auth.generateResetLink}
+				</button>
+			{/if}
 			{#if canManageTargetGroup && manageableGroups.length > 0}
 				<select
 					class="select select-bordered select-xs w-full"

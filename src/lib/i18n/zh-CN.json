@@ -236,7 +236,6 @@
 		"languageEnglish": "English",
 		"languageChinese": "简体中文",
 		"group": "用户组",
-		"permissionManagement": "权限管理",
 		"joined": "注册时间",
 		"lastActive": "最后活跃",
 		"views": "访问量",
@@ -425,7 +424,6 @@
 	"permissions": {
 		"description": "管理用户组、分类，以及不同用户组对各分类的权限。",
 		"userGroups": "用户组",
-		"addGroup": "添加用户组",
 		"groupCreated": "用户组已创建",
 		"groupUpdated": "用户组已更新",
 		"groupDeleted": "用户组已删除",
@@ -433,7 +431,6 @@
 		"groupExists": "该 slug 的用户组已存在",
 		"reservedGroup": "该用户组为保留组，不可修改",
 		"categories": "分类",
-		"addCategory": "添加分类",
 		"categoryCreated": "分类已创建",
 		"categoryUpdated": "分类已更新",
 		"categoryDisabled": "分类已禁用",

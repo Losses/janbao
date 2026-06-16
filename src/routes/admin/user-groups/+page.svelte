@@ -26,6 +26,11 @@
 	let description = $state('');
 	let saving = $state(false);
 	let message = $state<FeedbackMessage | null>(null);
+	let pendingDeleteSlug = $state<string | null>(null);
+
+	const pendingDeleteGroup = $derived(
+		pendingDeleteSlug ? (groups.find((group) => group.slug === pendingDeleteSlug) ?? null) : null
+	);
 
 	const modalHeading = $derived(modalMode === 'add' ? adminT.newGroup : adminT.editUserGroup);
 
@@ -97,6 +102,12 @@
 		}
 		saving = false;
 	}
+
+	async function confirmDelete() {
+		const target = pendingDeleteSlug;
+		pendingDeleteSlug = null;
+		if (target) await deleteGroup(target);
+	}
 </script>
 
 <svelte:head>
@@ -157,7 +168,7 @@
 									</button>
 									<button
 										class="btn btn-warning btn-xs"
-										onclick={() => deleteGroup(group.slug)}
+										onclick={() => (pendingDeleteSlug = group.slug)}
 										disabled={saving || group.reserved || group.userCount > 0}
 									>
 										{t.common.delete}
@@ -207,6 +218,26 @@
 					</button>
 				</div>
 			</form>
+		</div>
+	</div>
+{/if}
+
+{#if pendingDeleteGroup}
+	<div class="modal modal-open">
+		<div class="modal-box">
+			<h3 class="font-bold text-lg">{t.common.delete}</h3>
+			<p class="py-4 text-sm text-base-content/80">
+				{t.common.deleteConfirm}
+				<span class="font-mono text-xs">{pendingDeleteGroup.slug}</span>
+			</p>
+			<div class="modal-action gap-2">
+				<button class="btn btn-warning btn-sm" onclick={confirmDelete} disabled={saving}>
+					{saving ? t.common.saving : t.common.delete}
+				</button>
+				<button class="btn btn-ghost btn-sm" onclick={() => (pendingDeleteSlug = null)}>
+					{t.common.cancel}
+				</button>
+			</div>
 		</div>
 	</div>
 {/if}

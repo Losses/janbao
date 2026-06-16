@@ -2,6 +2,8 @@ import { json } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { users, passwordRecoveries } from '$lib/server/db/schema';
 import { jsonError } from '$lib/server/errors';
+import { requireAdmin } from '$lib/server/admin';
+import { BOOTSTRAP_ADMIN_ID } from '$lib/server/constants';
 import type { RequestHandler } from './$types';
 import type { AuthAdminGenerateResetBody, AuthAdminGenerateResetResponse } from '$lib/types/api';
 
@@ -9,10 +11,8 @@ export const POST: RequestHandler = async (event) => {
 	try {
 		const { db, t, user: currentUser } = event.locals;
 
-		// Authorize: Only admin group users can access this endpoint
-		if (!currentUser || currentUser.groupSlug !== 'admin') {
-			return jsonError(t, 'common.forbidden', 403);
-		}
+		const authError = requireAdmin(currentUser, t);
+		if (authError) return authError;
 
 		const body = (await event.request.json()) as AuthAdminGenerateResetBody;
 		const { targetUserId } = body;
@@ -21,15 +21,23 @@ export const POST: RequestHandler = async (event) => {
 			return jsonError(t, 'common.badRequest', 400);
 		}
 
-		// Verify target user exists
+		// Verify target user exists; fetch group to enforce admin-mutual-exclusion.
 		const targetUserList = await db
-			.select({ email: users.email })
+			.select({ email: users.email, groupSlug: users.groupSlug })
 			.from(users)
 			.where(eq(users.id, Number(targetUserId)))
 			.limit(1);
 
 		if (targetUserList.length === 0) {
 			return jsonError(t, 'common.notFound', 404);
+		}
+
+		// Only the super-admin (bootstrap admin) may reset another admin's password.
+		// Peers cannot — otherwise any admin could take over the super-admin (id 0)
+		// or any other admin via a reset link, bypassing group-change protection.
+		const isSuperAdmin = currentUser?.id === BOOTSTRAP_ADMIN_ID;
+		if (targetUserList[0].groupSlug === 'admin' && !isSuperAdmin) {
+			return jsonError(t, 'permissions.adminGroupChangeForbidden', 403);
 		}
 
 		const token = crypto.randomUUID();

@@ -22,6 +22,14 @@ export function getCookieSecure(url: URL): boolean {
 export const SYSTEM_USER_ID = -1;
 
 /**
+ * The bootstrap admin (id 0), seeded from ADMIN_EMAIL/ADMIN_PASSWORD when no
+ * admin-group user exists yet. It is the only account that may promote another
+ * user into the `admin` group or generate reset links for other admins — i.e.
+ * the super-admin. See src/lib/server/db/seed.ts.
+ */
+export const BOOTSTRAP_ADMIN_ID = 0;
+
+/**
  * Sentinel for "original author no longer exists". Vanilla reserves UserID 0 for
  * this (rendered as "Unknown"); we remap it onto -2 so the positive id space  -
  * including id 0 (the seeded admin)  - stays clear for real accounts.

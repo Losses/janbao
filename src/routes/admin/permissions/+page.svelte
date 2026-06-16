@@ -39,8 +39,13 @@
 	let saving = $state(false);
 	let message = $state<FeedbackMessage | null>(null);
 	let permissionDraft = $state<Record<string, PermissionFlags>>({});
+	// Categories the admin has actually touched since the last save/load. Only these
+	// are sent on save, so toggling one checkbox can't silently reset every other
+	// category for the group to its draft default.
+	let dirtyCategories = $state<string[]>([]);
 
 	const activeGroupSlug = $derived(overrideGroupSlug || selectedGroupSlug || groups[0]?.slug || '');
+	const hasDirty = $derived(dirtyCategories.length > 0);
 
 	$effect(() => {
 		if (
@@ -55,6 +60,7 @@
 	$effect(() => {
 		if (!activeGroupSlug) {
 			permissionDraft = {};
+			dirtyCategories = [];
 			return;
 		}
 		const nextDraft: Record<string, PermissionFlags> = {};
@@ -73,6 +79,8 @@
 				: defaultPermissions(activeGroupSlug);
 		}
 		permissionDraft = nextDraft;
+		// Rebuilding the draft means we just (re)loaded from the server — clear dirty.
+		dirtyCategories = [];
 	});
 
 	function defaultPermissions(slug: string): PermissionFlags {
@@ -88,21 +96,29 @@
 			...permissionDraft,
 			[category]: { ...permissionDraft[category], [key]: value }
 		};
+		dirtyCategories = dirtyCategories.includes(category)
+			? dirtyCategories
+			: [...dirtyCategories, category];
 	}
 
 	async function savePermissions() {
-		if (!activeGroupSlug) return;
+		if (!activeGroupSlug || !hasDirty) return;
 		saving = true;
 		message = null;
 		try {
-			const permissions: AdminCategoryPermissionItem[] = enabledCategories.map((category) => ({
-				categorySlug: category.slug,
-				groupSlug: activeGroupSlug,
-				canRead: permissionDraft[category.slug]?.canRead ?? false,
-				canCreate: permissionDraft[category.slug]?.canCreate ?? false,
-				canUpdate: permissionDraft[category.slug]?.canUpdate ?? false,
-				canDelete: permissionDraft[category.slug]?.canDelete ?? false
-			}));
+			// Only send categories the admin actually changed. Sending every enabled
+			// category would overwrite untouched rows with their (possibly default)
+			// draft values — a silent mass-lockout.
+			const permissions: AdminCategoryPermissionItem[] = enabledCategories
+				.filter((category) => dirtyCategories.includes(category.slug))
+				.map((category) => ({
+					categorySlug: category.slug,
+					groupSlug: activeGroupSlug,
+					canRead: permissionDraft[category.slug]?.canRead ?? false,
+					canCreate: permissionDraft[category.slug]?.canCreate ?? false,
+					canUpdate: permissionDraft[category.slug]?.canUpdate ?? false,
+					canDelete: permissionDraft[category.slug]?.canDelete ?? false
+				}));
 			const res = await fetch('/api/admin/category-permissions', {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
@@ -112,6 +128,7 @@
 			if (result.success) {
 				message = { type: 'success', text: permissionsT.permissionsSaved };
 				overrideGroupSlug = null;
+				dirtyCategories = [];
 				await invalidateAll();
 			} else {
 				message = { type: 'error', text: result.error || t.common.error };
@@ -220,7 +237,7 @@
 			<button
 				class="btn btn-primary btn-sm"
 				onclick={savePermissions}
-				disabled={saving || !activeGroupSlug}
+				disabled={saving || !activeGroupSlug || !hasDirty}
 			>
 				{saving ? t.common.saving : permissionsT.savePermissions}
 			</button>

@@ -59,6 +59,9 @@
 		activeItem="comments"
 		targetUserId={targetUser.id}
 		targetUserSlug={targetSlug}
+		targetUserGroupSlug={data.targetUserGroupSlug}
+		targetUserEmail={data.targetUserEmail}
+		manageableGroups={data.manageableGroups}
 	/>
 {/snippet}
 

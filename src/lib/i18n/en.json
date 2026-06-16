@@ -236,7 +236,6 @@
 		"languageEnglish": "English",
 		"languageChinese": "简体中文",
 		"group": "Group",
-		"permissionManagement": "Permission Management",
 		"joined": "Joined",
 		"lastActive": "Last Active",
 		"views": "Views",
@@ -425,7 +424,6 @@
 	"permissions": {
 		"description": "Manage user groups, categories, and per-group category permissions.",
 		"userGroups": "User Groups",
-		"addGroup": "Add Group",
 		"groupCreated": "User group created",
 		"groupUpdated": "User group updated",
 		"groupDeleted": "User group deleted",
@@ -433,7 +431,6 @@
 		"groupExists": "A group with this slug already exists",
 		"reservedGroup": "This group is reserved and cannot be modified",
 		"categories": "Categories",
-		"addCategory": "Add Category",
 		"categoryCreated": "Category created",
 		"categoryUpdated": "Category updated",
 		"categoryDisabled": "Category disabled",

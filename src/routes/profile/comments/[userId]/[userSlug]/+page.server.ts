@@ -4,6 +4,7 @@ import { users } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { getUserComments, getUserCommentsCount } from '$lib/server/db/dao/comments';
 import { parseDiscussionPagination, resolveGroupSlug } from '$lib/server/constants';
+import { getProfileAdminSidebarData } from '$lib/server/db/dao/admin-permissions';
 import { resolveMentions } from '$lib/server/utils/mentions';
 
 export const load: PageServerLoad = async (event) => {
@@ -48,12 +49,17 @@ export const load: PageServerLoad = async (event) => {
 		db
 	);
 
+	const adminSidebar = await getProfileAdminSidebarData(db, user?.groupSlug, userId);
+
 	return {
 		targetUser,
 		comments,
 		mentionedUsers,
 		page,
 		totalPages,
-		totalCount
+		totalCount,
+		targetUserGroupSlug: adminSidebar.groupSlug,
+		targetUserEmail: adminSidebar.email,
+		manageableGroups: adminSidebar.manageableGroups
 	};
 };

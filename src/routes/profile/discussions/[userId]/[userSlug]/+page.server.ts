@@ -4,6 +4,7 @@ import { users } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { getDiscussionsList, getDiscussionsCount } from '$lib/server/db/dao/discussions';
 import { parseDiscussionPagination, resolveGroupSlug } from '$lib/server/constants';
+import { getProfileAdminSidebarData } from '$lib/server/db/dao/admin-permissions';
 import { generateSlug } from '$lib/utils/slug';
 
 export const load: PageServerLoad = async (event) => {
@@ -55,11 +56,16 @@ export const load: PageServerLoad = async (event) => {
 	const totalCount = await getDiscussionsCount(db, { authorId: userId, groupSlug });
 	const totalPages = Math.ceil(totalCount / limit);
 
+	const adminSidebar = await getProfileAdminSidebarData(db, user?.groupSlug, userId);
+
 	return {
 		targetUser,
 		discussions: discussionsList,
 		page,
 		totalPages,
-		totalCount
+		totalCount,
+		targetUserGroupSlug: adminSidebar.groupSlug,
+		targetUserEmail: adminSidebar.email,
+		manageableGroups: adminSidebar.manageableGroups
 	};
 };
