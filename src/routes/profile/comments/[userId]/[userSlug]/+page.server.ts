@@ -2,8 +2,8 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { users } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
-import { getUserComments } from '$lib/server/db/dao/comments';
-import { resolveGroupSlug } from '$lib/server/constants';
+import { getUserComments, getUserCommentsCount } from '$lib/server/db/dao/comments';
+import { parseDiscussionPagination, resolveGroupSlug } from '$lib/server/constants';
 import { resolveMentions } from '$lib/server/utils/mentions';
 
 export const load: PageServerLoad = async (event) => {
@@ -33,10 +33,16 @@ export const load: PageServerLoad = async (event) => {
 
 	const targetUser = targetUserRecords[0];
 
-	// 2. Fetch merged comments (replies + activity comments), filtered by category permissions
-	const comments = await getUserComments(db, userId, groupSlug);
+	// 2. Parse pagination (?page=N, matching profile/discussions)
+	const { page, limit, offset } = parseDiscussionPagination(event.url, event.platform?.env);
 
-	// 3. Resolve @mentions across comment content for chip rendering
+	// 3. Fetch paginated replies (excluding OP, filtered by category permissions)
+	const comments = await getUserComments(db, { userId, groupSlug, limit, offset });
+
+	const totalCount = await getUserCommentsCount(db, { userId, groupSlug });
+	const totalPages = Math.ceil(totalCount / limit);
+
+	// 4. Resolve @mentions across this page's comment content for chip rendering
 	const mentionedUsers = await resolveMentions(
 		comments.map((c) => c.contentJson),
 		db
@@ -45,6 +51,9 @@ export const load: PageServerLoad = async (event) => {
 	return {
 		targetUser,
 		comments,
-		mentionedUsers
+		mentionedUsers,
+		page,
+		totalPages,
+		totalCount
 	};
 };

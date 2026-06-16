@@ -78,6 +78,15 @@ export async function deleteUserGroup(db: D1Db, slug: string): Promise<void> {
 	await db.delete(userGroups).where(eq(userGroups.slug, slug));
 }
 
+export async function updateUserGroupMeta(
+	db: D1Db,
+	slug: string,
+	title: string,
+	description: string
+): Promise<void> {
+	await db.update(userGroups).set({ title, description }).where(eq(userGroups.slug, slug));
+}
+
 export async function listAdminCategories(db: D1Db): Promise<AdminCategoryItem[]> {
 	const rows = await db.select().from(categories).orderBy(categories.displayOrder);
 	return rows.map((category) => ({

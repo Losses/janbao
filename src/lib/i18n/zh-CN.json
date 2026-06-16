@@ -19,7 +19,9 @@
 		"addCategory": "添加分类",
 		"adminPanel": "管理面板",
 		"newGroup": "新建用户组",
-		"newCategory": "新建分类"
+		"newCategory": "新建分类",
+		"editUserGroup": "编辑用户组",
+		"editCategory": "编辑分类"
 	},
 	"search": {
 		"title": "搜索",
@@ -425,6 +427,7 @@
 		"userGroups": "用户组",
 		"addGroup": "添加用户组",
 		"groupCreated": "用户组已创建",
+		"groupUpdated": "用户组已更新",
 		"groupDeleted": "用户组已删除",
 		"groupInUse": "该用户组仍有成员，无法删除",
 		"groupExists": "该 slug 的用户组已存在",
@@ -432,6 +435,7 @@
 		"categories": "分类",
 		"addCategory": "添加分类",
 		"categoryCreated": "分类已创建",
+		"categoryUpdated": "分类已更新",
 		"categoryDisabled": "分类已禁用",
 		"categoryRestored": "分类已恢复",
 		"categoryExists": "该 slug 的分类已存在",
@@ -439,6 +443,7 @@
 		"savePermissions": "保存权限",
 		"permissionsSaved": "权限已保存",
 		"userGroupUpdated": "用户身份组已更新",
+		"promoteToAdmin": "设为管理员",
 		"adminGroupChangeForbidden": "无法在此处修改管理员用户的身份组",
 		"fieldsRequired": "请填写所有必填项",
 		"invalidSlug": "Slug 必须为 2-40 位小写字母、数字或连字符",

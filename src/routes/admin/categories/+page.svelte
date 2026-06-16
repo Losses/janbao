@@ -19,7 +19,8 @@
 	const user = $derived(data.user);
 	const categories = $derived(data.categories as AdminCategoryItem[]);
 
-	let showAddModal = $state(false);
+	let showModal = $state(false);
+	let modalMode = $state<'add' | 'edit'>('add');
 	let slug = $state('');
 	let title = $state('');
 	let description = $state('');
@@ -29,26 +30,41 @@
 	let saving = $state(false);
 	let message = $state<FeedbackMessage | null>(null);
 
+	const modalHeading = $derived(modalMode === 'add' ? adminT.newCategory : adminT.editCategory);
+
 	function openAdd() {
+		modalMode = 'add';
 		slug = '';
 		title = '';
 		description = '';
 		displayOrder = '1';
 		priority = '1';
 		themeName = '';
-		showAddModal = true;
+		showModal = true;
+	}
+
+	function openEdit(category: AdminCategoryItem) {
+		modalMode = 'edit';
+		slug = category.slug;
+		title = category.title;
+		description = category.description;
+		displayOrder = String(category.displayOrder);
+		priority = String(category.priority);
+		themeName = category.themeName ?? '';
+		showModal = true;
 	}
 
 	function setMessage(type: FeedbackMessage['type'], text: string) {
 		message = { type, text };
 	}
 
-	async function addCategory() {
+	async function submitCategory() {
 		saving = true;
 		message = null;
 		try {
+			const method = modalMode === 'add' ? 'POST' : 'PATCH';
 			const res = await fetch('/api/admin/categories', {
-				method: 'POST',
+				method,
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					slug,
@@ -61,8 +77,11 @@
 			});
 			const result = (await res.json()) as ApiResult;
 			if (result.success) {
-				showAddModal = false;
-				setMessage('success', permissionsT.categoryCreated);
+				showModal = false;
+				setMessage(
+					'success',
+					modalMode === 'add' ? permissionsT.categoryCreated : permissionsT.categoryUpdated
+				);
 				await invalidateAll();
 			} else {
 				setMessage('error', result.error || t.common.error);
@@ -147,23 +166,32 @@
 							<td>{category.displayOrder}</td>
 							<td>{category.disabledAt ? permissionsT.disabled : permissionsT.enabled}</td>
 							<td>
-								{#if category.disabledAt}
+								<div class="flex gap-1">
 									<button
 										class="btn btn-outline btn-xs"
-										onclick={() => setCategoryDisabled(category.slug, false)}
+										onclick={() => openEdit(category)}
 										disabled={saving}
 									>
-										{permissionsT.restore}
+										{t.common.edit}
 									</button>
-								{:else}
-									<button
-										class="btn btn-warning btn-xs"
-										onclick={() => setCategoryDisabled(category.slug, true)}
-										disabled={saving}
-									>
-										{permissionsT.disable}
-									</button>
-								{/if}
+									{#if category.disabledAt}
+										<button
+											class="btn btn-outline btn-xs"
+											onclick={() => setCategoryDisabled(category.slug, false)}
+											disabled={saving}
+										>
+											{permissionsT.restore}
+										</button>
+									{:else}
+										<button
+											class="btn btn-warning btn-xs"
+											onclick={() => setCategoryDisabled(category.slug, true)}
+											disabled={saving}
+										>
+											{permissionsT.disable}
+										</button>
+									{/if}
+								</div>
 							</td>
 						</tr>
 					{/each}
@@ -173,18 +201,24 @@
 	</div>
 </DualColumnLayout>
 
-{#if showAddModal}
+{#if showModal}
 	<div class="modal modal-open">
 		<div class="modal-box">
-			<h3 class="font-bold text-lg">{adminT.newCategory}</h3>
+			<h3 class="font-bold text-lg">{modalHeading}</h3>
 			<form
 				class="space-y-3 py-4"
 				onsubmit={(e) => {
 					e.preventDefault();
-					addCategory();
+					submitCategory();
 				}}
 			>
-				<FormField id="category-slug" label={permissionsT.slug} bind:value={slug} required />
+				<FormField
+					id="category-slug"
+					label={permissionsT.slug}
+					bind:value={slug}
+					required
+					disabled={modalMode === 'edit'}
+				/>
 				<FormField id="category-title" label={permissionsT.title} bind:value={title} required />
 				<FormField
 					id="category-description"
@@ -212,7 +246,7 @@
 					<button type="submit" class="btn btn-primary btn-sm" disabled={saving}>
 						{saving ? t.common.saving : t.common.submit}
 					</button>
-					<button type="button" class="btn btn-ghost btn-sm" onclick={() => (showAddModal = false)}>
+					<button type="button" class="btn btn-ghost btn-sm" onclick={() => (showModal = false)}>
 						{t.common.cancel}
 					</button>
 				</div>

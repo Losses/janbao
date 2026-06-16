@@ -1,117 +1,113 @@
-import { replies, discussions, activities, categories } from '../schema';
-import { eq, and, isNull, isNotNull, sql } from 'drizzle-orm';
+import { replies, discussions, categories } from '../schema';
+import { eq, and, isNull, desc, sql, count, inArray } from 'drizzle-orm';
 import type { D1Db } from '../index';
 import { getReadableCategorySlugs } from '$lib/server/constants';
 
 export interface UserCommentItem {
 	id: number;
-	kind: 'reply' | 'activity_comment';
 	contentJson: string;
 	createdAt: Date;
-	discussionId: number | null;
-	discussionTitle: string | null;
-	discussionSlug: string | null;
-	parentActivityId: number | null;
+	discussionId: number;
+	discussionTitle: string;
+	discussionSlug: string;
 }
 
-// Defensive cap bounding each leg of the UNION (spec §6.13 says "all"; this
-// guards D1/worker memory for prolific authors without truncating normal use).
-const COMMENT_LIST_LIMIT = 500;
+export interface UserCommentsQuery {
+	userId: number;
+	groupSlug?: string;
+}
+
+export interface UserCommentsPageQuery extends UserCommentsQuery {
+	limit: number;
+	offset: number;
+}
 
 /**
- * UNION-style merge of a user's discussion replies and activity comments,
- * sorted chronologically (newest first). Per RQ00-Backend §6.3, both datasets
- * are fetched independently and merged in memory, each carrying its context
- * indicator (discussion title for replies, parent activity id for comments).
- * Both legs exclude soft-deleted rows AND soft-deleted parents.
- *
- * Security: When groupSlug is provided, discussion replies are filtered to only
- * include those from categories the user/guest can read.
+ * Predicate that excludes a discussion's OP ("index-0" reply). The OP body is
+ * stored as the first {@link replies} row of its discussion (see
+ * `post/discussion/+page.server.ts`), so without this it would leak into the
+ * comments feed. The OP is identified positionally — the earliest non-deleted
+ * reply in a discussion — exactly mirroring the discussion detail page, which
+ * picks the earliest reply as the OP and drops it by id.
+ */
+const isNotOpReply = sql`EXISTS (
+	SELECT 1 FROM replies earlier
+	WHERE earlier.discussion_id = replies.discussion_id
+		AND earlier.deleted_at IS NULL
+		AND (
+			earlier.created_at < replies.created_at
+			OR (earlier.created_at = replies.created_at AND earlier.id < replies.id)
+		)
+)`;
+
+/**
+ * Build the shared WHERE conditions for a user's comment (reply) feed:
+ * authored by the user, not soft-deleted, parent discussion + category live,
+ * not the OP, and restricted to categories the viewer can read when groupSlug
+ * is provided.
+ */
+async function buildReplyConditions(db: D1Db, query: UserCommentsQuery) {
+	const conditions = [
+		eq(replies.authorId, query.userId),
+		isNull(replies.deletedAt),
+		isNull(discussions.deletedAt),
+		isNull(categories.disabledAt),
+		isNotOpReply
+	];
+
+	if (query.groupSlug) {
+		const readableSlugs = await getReadableCategorySlugs(db, query.groupSlug);
+		conditions.push(
+			readableSlugs.length > 0 ? inArray(discussions.categorySlug, readableSlugs) : sql`1 = 0`
+		);
+	}
+
+	return conditions;
+}
+
+/**
+ * A user's discussion replies (newest first), excluding soft-deleted rows,
+ * soft-deleted parents, the OP reply of each thread, and replies from
+ * categories the viewer cannot read. Paginated via limit/offset — pair with
+ * {@link getUserCommentsCount} to render a Paginator.
  */
 export async function getUserComments(
 	db: D1Db,
-	userId: number,
-	groupSlug?: string
+	query: UserCommentsPageQuery
 ): Promise<UserCommentItem[]> {
-	// Determine readable category slugs if groupSlug provided
-	let readableCategorySlugs: Set<string> | null = null;
-	if (groupSlug) {
-		const readableSlugs = await getReadableCategorySlugs(db, groupSlug);
-		readableCategorySlugs = new Set(readableSlugs);
-	}
+	const conditions = await buildReplyConditions(db, query);
 
-	// 1. Discussion replies (excluding soft-deleted replies and discussions)
-	const replyRows = await db
+	return db
 		.select({
 			id: replies.id,
 			contentJson: replies.contentJson,
 			createdAt: replies.createdAt,
 			discussionId: replies.discussionId,
 			discussionTitle: discussions.title,
-			discussionSlug: discussions.slug,
-			categorySlug: discussions.categorySlug
+			discussionSlug: discussions.slug
 		})
 		.from(replies)
 		.innerJoin(discussions, eq(replies.discussionId, discussions.id))
 		.innerJoin(categories, eq(discussions.categorySlug, categories.slug))
-		.where(
-			and(
-				eq(replies.authorId, userId),
-				isNull(replies.deletedAt),
-				isNull(discussions.deletedAt),
-				isNull(categories.disabledAt)
-			)
-		)
-		.limit(COMMENT_LIST_LIMIT);
+		.where(and(...conditions))
+		.orderBy(desc(replies.createdAt), desc(replies.id))
+		.limit(query.limit)
+		.offset(query.offset);
+}
 
-	// Filter replies by readable categories
-	const filteredReplyRows = readableCategorySlugs
-		? replyRows.filter((r) => readableCategorySlugs!.has(r.categorySlug))
-		: replyRows;
+/**
+ * Total count matching {@link getUserComments} (same filters, no pagination),
+ * for computing total pages.
+ */
+export async function getUserCommentsCount(db: D1Db, query: UserCommentsQuery): Promise<number> {
+	const conditions = await buildReplyConditions(db, query);
 
-	const replyItems: UserCommentItem[] = filteredReplyRows.map((r) => ({
-		id: r.id,
-		kind: 'reply',
-		contentJson: r.contentJson,
-		createdAt: r.createdAt,
-		discussionId: r.discussionId,
-		discussionTitle: r.discussionTitle,
-		discussionSlug: r.discussionSlug,
-		parentActivityId: null
-	}));
+	const res = await db
+		.select({ count: count() })
+		.from(replies)
+		.innerJoin(discussions, eq(replies.discussionId, discussions.id))
+		.innerJoin(categories, eq(discussions.categorySlug, categories.slug))
+		.where(and(...conditions));
 
-	// 2. Activity comments - exclude comments whose parent activity is soft-deleted
-	const commentRows = await db
-		.select({
-			id: activities.id,
-			contentJson: activities.contentJson,
-			createdAt: activities.createdAt,
-			parentActivityId: activities.parentActivityId
-		})
-		.from(activities)
-		.where(
-			and(
-				eq(activities.authorId, userId),
-				isNull(activities.deletedAt),
-				isNotNull(activities.parentActivityId),
-				sql`NOT EXISTS (SELECT 1 FROM activities p WHERE p.id = activities.parent_activity_id AND p.deleted_at IS NOT NULL)`
-			)
-		)
-		.limit(COMMENT_LIST_LIMIT);
-
-	const commentItems: UserCommentItem[] = commentRows.map((c) => ({
-		id: c.id,
-		kind: 'activity_comment',
-		contentJson: c.contentJson,
-		createdAt: c.createdAt,
-		discussionId: null,
-		discussionTitle: null,
-		discussionSlug: null,
-		parentActivityId: c.parentActivityId
-	}));
-
-	// 3. Merge + sort newest first
-	return [...replyItems, ...commentItems].sort(
-		(a, b) => b.createdAt.getTime() - a.createdAt.getTime()
-	);
+	return res[0]?.count || 0;
 }

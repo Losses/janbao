@@ -17,6 +17,7 @@
 		value: string;
 		placeholder?: string;
 		required?: boolean;
+		disabled?: boolean;
 		error?: string;
 		as?: FieldElement;
 		rows?: number;
@@ -32,6 +33,7 @@
 		value = $bindable(''),
 		placeholder = '',
 		required = false,
+		disabled = false,
 		error = '',
 		as = 'input',
 		rows = 2,
@@ -49,6 +51,7 @@
 		<textarea
 			{id}
 			{required}
+			{disabled}
 			{placeholder}
 			{rows}
 			{maxlength}
@@ -60,6 +63,7 @@
 			{id}
 			{type}
 			{required}
+			{disabled}
 			{placeholder}
 			{maxlength}
 			bind:value

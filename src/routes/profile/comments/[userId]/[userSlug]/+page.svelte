@@ -3,8 +3,10 @@
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import DateComponent from '$lib/components/atoms/Date.svelte';
+	import Paginator from '$lib/components/atoms/Paginator.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
+	import { goto } from '$app/navigation';
 	import type { UserCommentItem } from '$lib/server/db/dao/comments';
 	import type { PageData } from './$types';
 
@@ -19,7 +21,9 @@
 	const profileT = $derived(t.profile);
 	const user = $derived(data.user);
 	const targetUser = $derived(data.targetUser);
-	const comments = $derived((data.comments as UserCommentItem[]).filter((c) => c.kind === 'reply'));
+	const comments = $derived(data.comments);
+	const currentPage = $derived(data.page);
+	const totalPages = $derived(data.totalPages);
 
 	const targetSlug = $derived(generateSlug(targetUser.username));
 
@@ -32,9 +36,13 @@
 	function buildView(comment: UserCommentItem): CommentView {
 		return {
 			comment,
-			contextLabel: `${commentT.replyIn}: ${comment.discussionTitle ?? ''}`,
-			href: `/discussion/${comment.discussionId}/${comment.discussionSlug ?? 'discussion'}`
+			contextLabel: `${commentT.replyIn}: ${comment.discussionTitle}`,
+			href: `/discussion/${comment.discussionId}/${comment.discussionSlug}`
 		};
+	}
+
+	function handlePageChange(newPage: number) {
+		goto(`?page=${newPage}`);
 	}
 
 	const views = $derived(comments.map(buildView));
@@ -56,9 +64,15 @@
 
 <DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-3">
-		<h1 class="text-2xl font-bold border-b border-base-300 pb-4">
-			{targetUser.displayName} - {profileT.comments}
-		</h1>
+		<!-- Title Banner -->
+		<div class="flex items-center justify-between border-b border-base-300 pb-4">
+			<h1 class="text-2xl font-bold tracking-tight">
+				{targetUser.displayName} - {profileT.comments}
+			</h1>
+			{#if totalPages > 1}
+				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+			{/if}
+		</div>
 
 		{#if views.length === 0}
 			<div class="card bg-base-200/40 py-10 text-center text-base-content/50">
@@ -87,6 +101,13 @@
 					{/each}
 				</div>
 			</div>
+
+			<!-- Bottom Paginator -->
+			{#if totalPages > 1}
+				<div class="flex justify-end pt-2">
+					<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+				</div>
+			{/if}
 		{/if}
 	</div>
 </DualColumnLayout>

@@ -347,6 +347,12 @@ export interface AdminUserGroupCreateBody {
 	description?: string;
 }
 
+export interface AdminUserGroupUpdateBody {
+	slug?: string;
+	title?: string;
+	description?: string;
+}
+
 export interface AdminUserGroupDeleteBody {
 	slug?: string;
 }

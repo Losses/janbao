@@ -19,7 +19,9 @@
 		"addCategory": "Add Category",
 		"adminPanel": "Admin Panel",
 		"newGroup": "New User Group",
-		"newCategory": "New Category"
+		"newCategory": "New Category",
+		"editUserGroup": "Edit User Group",
+		"editCategory": "Edit Category"
 	},
 	"search": {
 		"title": "Search",
@@ -425,6 +427,7 @@
 		"userGroups": "User Groups",
 		"addGroup": "Add Group",
 		"groupCreated": "User group created",
+		"groupUpdated": "User group updated",
 		"groupDeleted": "User group deleted",
 		"groupInUse": "This group still has members and cannot be deleted",
 		"groupExists": "A group with this slug already exists",
@@ -432,6 +435,7 @@
 		"categories": "Categories",
 		"addCategory": "Add Category",
 		"categoryCreated": "Category created",
+		"categoryUpdated": "Category updated",
 		"categoryDisabled": "Category disabled",
 		"categoryRestored": "Category restored",
 		"categoryExists": "A category with this slug already exists",
@@ -439,6 +443,7 @@
 		"savePermissions": "Save Permissions",
 		"permissionsSaved": "Permissions saved",
 		"userGroupUpdated": "User group updated",
+		"promoteToAdmin": "Promote to Admin",
 		"adminGroupChangeForbidden": "Administrators cannot be reassigned from here",
 		"fieldsRequired": "All fields are required",
 		"invalidSlug": "Slug must be 2-40 lowercase letters, digits, or hyphens",

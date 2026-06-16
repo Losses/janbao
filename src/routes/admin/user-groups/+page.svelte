@@ -19,37 +19,53 @@
 	const user = $derived(data.user);
 	const groups = $derived(data.groups as AdminUserGroupItem[]);
 
-	let showAddModal = $state(false);
+	let showModal = $state(false);
+	let modalMode = $state<'add' | 'edit'>('add');
 	let slug = $state('');
 	let title = $state('');
 	let description = $state('');
 	let saving = $state(false);
 	let message = $state<FeedbackMessage | null>(null);
 
+	const modalHeading = $derived(modalMode === 'add' ? adminT.newGroup : adminT.editUserGroup);
+
 	function openAdd() {
+		modalMode = 'add';
 		slug = '';
 		title = '';
 		description = '';
-		showAddModal = true;
+		showModal = true;
+	}
+
+	function openEdit(group: AdminUserGroupItem) {
+		modalMode = 'edit';
+		slug = group.slug;
+		title = group.title;
+		description = group.description;
+		showModal = true;
 	}
 
 	function setMessage(type: FeedbackMessage['type'], text: string) {
 		message = { type, text };
 	}
 
-	async function addGroup() {
+	async function submitGroup() {
 		saving = true;
 		message = null;
 		try {
+			const method = modalMode === 'add' ? 'POST' : 'PATCH';
 			const res = await fetch('/api/admin/user-groups', {
-				method: 'POST',
+				method,
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ slug, title, description })
 			});
 			const result = (await res.json()) as ApiResult;
 			if (result.success) {
-				showAddModal = false;
-				setMessage('success', permissionsT.groupCreated);
+				showModal = false;
+				setMessage(
+					'success',
+					modalMode === 'add' ? permissionsT.groupCreated : permissionsT.groupUpdated
+				);
 				await invalidateAll();
 			} else {
 				setMessage('error', result.error || t.common.error);
@@ -131,13 +147,22 @@
 							<td>{group.userCount}</td>
 							<td>{group.reserved ? permissionsT.reserved : permissionsT.custom}</td>
 							<td>
-								<button
-									class="btn btn-warning btn-xs"
-									onclick={() => deleteGroup(group.slug)}
-									disabled={saving || group.reserved || group.userCount > 0}
-								>
-									{t.common.delete}
-								</button>
+								<div class="flex gap-1">
+									<button
+										class="btn btn-outline btn-xs"
+										onclick={() => openEdit(group)}
+										disabled={saving}
+									>
+										{t.common.edit}
+									</button>
+									<button
+										class="btn btn-warning btn-xs"
+										onclick={() => deleteGroup(group.slug)}
+										disabled={saving || group.reserved || group.userCount > 0}
+									>
+										{t.common.delete}
+									</button>
+								</div>
 							</td>
 						</tr>
 					{/each}
@@ -147,18 +172,24 @@
 	</div>
 </DualColumnLayout>
 
-{#if showAddModal}
+{#if showModal}
 	<div class="modal modal-open">
 		<div class="modal-box">
-			<h3 class="font-bold text-lg">{adminT.newGroup}</h3>
+			<h3 class="font-bold text-lg">{modalHeading}</h3>
 			<form
 				class="space-y-3 py-4"
 				onsubmit={(e) => {
 					e.preventDefault();
-					addGroup();
+					submitGroup();
 				}}
 			>
-				<FormField id="group-slug" label={permissionsT.slug} bind:value={slug} required />
+				<FormField
+					id="group-slug"
+					label={permissionsT.slug}
+					bind:value={slug}
+					required
+					disabled={modalMode === 'edit'}
+				/>
 				<FormField id="group-title" label={permissionsT.title} bind:value={title} required />
 				<FormField
 					id="group-description"
@@ -171,7 +202,7 @@
 					<button type="submit" class="btn btn-primary btn-sm" disabled={saving}>
 						{saving ? t.common.saving : t.common.submit}
 					</button>
-					<button type="button" class="btn btn-ghost btn-sm" onclick={() => (showAddModal = false)}>
+					<button type="button" class="btn btn-ghost btn-sm" onclick={() => (showModal = false)}>
 						{t.common.cancel}
 					</button>
 				</div>
