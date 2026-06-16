@@ -86,3 +86,20 @@ Round 3 caught a genuine regression introduced by the Round-2 prune change, plus
 **Verification after Round 4 fixes:** `bun run check` 0/0; `bun run lint` exit 0.
 
 **Status:** Round 4 fixes applied and verified. Proceeding to Round 4 re-audit to seek 5/5 unconditional PASS.
+
+---
+
+## 6. Audit Round 4 - 2026-06-16
+
+Consolidated → [RV04-C01-Audit-04.md](./RV04-C01-Audit-04.md).
+**Verdicts:** 4× PASS (Agents 1, 2, 3, 4 unconditional), 1× PASS_WITH_NOTES (Agent 5). All Round-1/2/3 fixes CONFIRMED; C3-1 per-bucket prune verified correct; gate green (each agent re-ran it). Not yet 5/5.
+
+**Issue found and fixed (Round 5 fix):**
+
+- **LOW** - `register`'s in-tx invitation consume conditioned only on `usedById IS NULL`; it did not re-check `expiresAt > now`, so an invitation could expire in the ~100 ms `hashPassword` gap and still create a user - the same race class C3-4 closed for password-reset (Agent 5). Fix: the invitation claim `UPDATE … WHERE` now also requires `gte(expiresAt, now)`, making single-use + expiry atomic (parity with reset-password).
+
+**Non-actionable (deferred):** Agent 1's `appendJoinedMember` daily-rollup TOCTOU (no DB uniqueness on the per-day isJoined activity) - cosmetic/perf only, lives on the activities surface; deferred to C05.
+
+**Verification after Round 5 fix:** `bun run check` 0/0; `bun run lint` exit 0.
+
+**Status:** Round 5 fix applied and verified. Proceeding to Round 5 re-audit to seek 5/5 unconditional PASS.

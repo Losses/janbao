@@ -5,7 +5,7 @@ import { hashPassword, signJwt, createSessionToken } from '$lib/server/auth';
 import { getJwtSecret, getCookieSecure } from '$lib/server/constants';
 import { jsonError } from '$lib/server/errors';
 import { json } from '@sveltejs/kit';
-import { eq, or, and, isNull, sql } from 'drizzle-orm';
+import { eq, or, and, isNull, gte, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import type { AuthRegisterBody } from '$lib/types/api';
 import { isValidUsername } from '$lib/utils/validation';
@@ -115,12 +115,21 @@ export const POST: RequestHandler = async (event) => {
 				});
 
 				// Claim the invitation code atomically: the conditional update
-				// (usedById IS NULL) ensures two concurrent registrations cannot both
-				// consume the same code. Roll back if another request got there first.
+				// (usedById IS NULL AND still unexpired) ensures two concurrent
+				// registrations cannot both consume the same code, and an invitation
+				// that expires mid-request cannot be consumed either. Roll back
+				// (rollback of the user insert too) if another request got there first
+				// or the code has just expired.
 				const consumed = await tx
 					.update(invitations)
 					.set({ usedById: inserted[0].id })
-					.where(and(eq(invitations.code, invitationCode), isNull(invitations.usedById)))
+					.where(
+						and(
+							eq(invitations.code, invitationCode),
+							isNull(invitations.usedById),
+							gte(invitations.expiresAt, new Date())
+						)
+					)
 					.returning({ code: invitations.code });
 				if (consumed.length === 0) {
 					throw new Error('INVITATION_CONSUMED');
