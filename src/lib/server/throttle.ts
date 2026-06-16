@@ -70,9 +70,7 @@ export async function enforceThrottle(
 		try {
 			await db
 				.delete(authThrottle)
-				.where(
-					and(eq(authThrottle.bucket, bucket), lt(authThrottle.windowEpoch, epoch - 1))
-				);
+				.where(and(eq(authThrottle.bucket, bucket), lt(authThrottle.windowEpoch, epoch - 1)));
 		} catch {
 			// ignore - prune is best-effort
 		}
