@@ -12,6 +12,7 @@ import {
 import type { DbTransaction } from '$lib/server/db';
 import type { RequestHandler } from './$types';
 import type { AuthResetPasswordBody } from '$lib/types/api';
+import { MIN_PASSWORD_LENGTH } from '$lib/utils/validation';
 
 const TOKEN_ALREADY_USED = 'TOKEN_ALREADY_USED';
 
@@ -25,7 +26,7 @@ export const POST: RequestHandler = async (event) => {
 			return jsonError(t, 'auth.fillAllFields', 400);
 		}
 
-		if (password.length < 8) {
+		if (password.length < MIN_PASSWORD_LENGTH) {
 			return jsonError(t, 'auth.passwordTooShort', 400);
 		}
 

@@ -59,10 +59,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 				};
 				event.locals.user = safeUser;
 
-				// Throttled active status updates (only write to DB if lastActiveTime is > 60 seconds old)
+				// Throttled active status updates (only write to DB if lastActiveTime
+				// is > 60 seconds old). Stealth users opt out of presence tracking, so
+				// their lastActiveTime is left frozen (never revealed as "current"),
+				// consistent with the /api/users/online and /api/users/search filters.
 				const now = Date.now();
 				const lastActive = safeUser.lastActiveTime.getTime();
-				if (now - lastActive > 60000) {
+				if (!safeUser.isStealth && now - lastActive > 60000) {
 					// Async update without blocking request
 					const promise = db
 						.update(users)

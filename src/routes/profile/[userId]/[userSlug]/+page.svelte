@@ -116,13 +116,15 @@
 						<DateComponent value={targetUser.signupTime} {t} />
 					</span>
 				</div>
-				<div class="flex items-center gap-1.5">
-					<Icon path={mdiClockOutline} size={16} class="text-base-content/50" />
-					<span class="font-medium text-base-content">{profileT.lastActive}</span>
-					<span>
-						<DateComponent value={targetUser.lastActiveTime} {t} />
-					</span>
-				</div>
+				{#if !targetUser.isStealth || isOwner || user?.groupSlug === 'admin'}
+					<div class="flex items-center gap-1.5">
+						<Icon path={mdiClockOutline} size={16} class="text-base-content/50" />
+						<span class="font-medium text-base-content">{profileT.lastActive}</span>
+						<span>
+							<DateComponent value={targetUser.lastActiveTime} {t} />
+						</span>
+					</div>
+				{/if}
 				<div class="flex items-center gap-1.5">
 					<Icon path={mdiEyeOutline} size={16} class="text-base-content/50" />
 					<span class="font-medium text-base-content">{profileT.views}</span>

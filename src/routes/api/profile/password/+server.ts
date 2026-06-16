@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { verifyPassword, hashPassword } from '$lib/server/auth';
 import { jsonError } from '$lib/server/errors';
 import type { ProfilePasswordBody } from '$lib/types/api';
+import { MIN_PASSWORD_LENGTH } from '$lib/utils/validation';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const user = locals.user;
@@ -25,7 +26,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return jsonError(t, 'profile.newPasswordRequired', 400);
 	}
 
-	if (newPassword.length < 5) {
+	if (newPassword.length < MIN_PASSWORD_LENGTH) {
 		return jsonError(t, 'auth.passwordTooShort', 400);
 	}
 

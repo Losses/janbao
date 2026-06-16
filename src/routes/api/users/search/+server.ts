@@ -27,8 +27,13 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
 	const db = locals.db;
 
-	// Excludes the caller and the System User in both branches.
-	const baseConditions = and(not(eq(users.id, SYSTEM_USER_ID)), ne(users.id, user.id));
+	// Excludes the caller, the System User, and stealth users (who opted out of
+	// presence surfacing) in both branches.
+	const baseConditions = and(
+		not(eq(users.id, SYSTEM_USER_ID)),
+		ne(users.id, user.id),
+		eq(users.isStealth, false)
+	);
 
 	const query = db
 		.select({

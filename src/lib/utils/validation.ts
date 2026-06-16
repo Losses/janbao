@@ -17,4 +17,3 @@ export const MAX_BIO_LENGTH = 100;
 export function isValidUsername(username: string): boolean {
 	return USERNAME_REGEX.test(username);
 }
-

@@ -8,9 +8,13 @@ import { json } from '@sveltejs/kit';
 import { eq, or, and, isNull, gte, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import type { AuthRegisterBody } from '$lib/types/api';
-import { isValidUsername } from '$lib/utils/validation';
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import {
+	isValidUsername,
+	EMAIL_REGEX,
+	MIN_PASSWORD_LENGTH,
+	MAX_DISPLAY_NAME_LENGTH,
+	MAX_EMAIL_LENGTH
+} from '$lib/utils/validation';
 
 export const POST: RequestHandler = async (event) => {
 	try {
@@ -31,11 +35,11 @@ export const POST: RequestHandler = async (event) => {
 			return jsonError(t, 'auth.invalidEmail', 400);
 		}
 
-		if (email.length > 254) {
+		if (email.length > MAX_EMAIL_LENGTH) {
 			return jsonError(t, 'auth.invalidEmail', 400);
 		}
 
-		if (password.length < 8) {
+		if (password.length < MIN_PASSWORD_LENGTH) {
 			return jsonError(t, 'auth.passwordTooShort', 400);
 		}
 
@@ -43,7 +47,7 @@ export const POST: RequestHandler = async (event) => {
 			return jsonError(t, 'auth.passwordsMismatch', 400);
 		}
 
-		if (displayName.length > 64) {
+		if (displayName.length > MAX_DISPLAY_NAME_LENGTH) {
 			return jsonError(t, 'auth.displayNameTooLong', 400);
 		}
 

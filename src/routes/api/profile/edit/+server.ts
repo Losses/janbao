@@ -99,7 +99,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		const existingUsername = await locals.db
 			.select({ id: users.id })
 			.from(users)
-			.where(eq(users.username, trimmed))
+			.where(sql`lower(${users.username}) = lower(${trimmed})`)
 			.limit(1);
 
 		if (existingUsername.length > 0 && existingUsername[0].id !== user.id) {

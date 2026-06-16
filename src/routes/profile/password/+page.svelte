@@ -2,6 +2,7 @@
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
 	import { formatTitle } from '$lib/utils/title';
+	import { MIN_PASSWORD_LENGTH } from '$lib/utils/validation';
 	import type { ApiResult, FeedbackMessage } from '$lib/types/api';
 	import type { PageData } from './$types';
 
@@ -25,7 +26,7 @@
 		e.preventDefault();
 		message = null;
 
-		if (newPassword.length < 5) {
+		if (newPassword.length < MIN_PASSWORD_LENGTH) {
 			message = { type: 'error', text: t.auth.passwordTooShort };
 			return;
 		}
