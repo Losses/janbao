@@ -156,9 +156,14 @@
 				</select>
 			{/if}
 			{#if feedback}
-				<p class="text-xs {feedback.type === 'success' ? 'text-primary' : 'text-warning'}">
+				<div
+					class="alert {feedback.type === 'success'
+						? 'alert-primary'
+						: 'alert-warning'} shadow-sm text-xs py-2 px-3 justify-start"
+					role="alert"
+				>
 					{feedback.text}
-				</p>
+				</div>
 			{/if}
 		</li>
 	{/if}
