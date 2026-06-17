@@ -51,6 +51,7 @@
 		"@mdi/js": "^7.4.47",
 		"@noble/hashes": "^2.2.0",
 		"@tailwindcss/vite": "^4.3.0",
+		"dexie": "^4.4.4",
 		"drizzle-orm": "^0.45.2",
 		"fast-xml-parser": "^5.8.0",
 		"lexical": "0.40.0",

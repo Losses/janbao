@@ -132,7 +132,9 @@ export const discussions = sqliteTable(
 		categoryLastReplyIdx: index('discussions_category_last_reply_idx').on(
 			table.categorySlug,
 			table.lastReplyAt
-		)
+		),
+		updatedIdIdx: index('discussions_updated_id_idx').on(table.updatedAt, table.id),
+		deletedIdx: index('discussions_deleted_idx').on(table.deletedAt)
 	})
 );
 
@@ -167,7 +169,9 @@ export const replies = sqliteTable(
 		discussionCreatedIdx: index('replies_discussion_created_idx').on(
 			table.discussionId,
 			table.createdAt
-		)
+		),
+		updatedIdIdx: index('replies_updated_id_idx').on(table.updatedAt, table.id),
+		deletedIdx: index('replies_deleted_idx').on(table.deletedAt)
 	})
 );
 

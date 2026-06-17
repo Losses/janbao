@@ -547,6 +547,16 @@
 	"offline": {
 		"status": "You're offline",
 		"hint": "Some features are unavailable. Cached content is still readable.",
-		"retry": "Retry"
+		"retry": "Retry",
+		"openReader": "Read offline",
+		"reader": {
+			"listTitle": "Offline reading",
+			"listHint": "Cached discussions are available without a connection.",
+			"empty": "No discussions cached yet. Reconnect to sync.",
+			"notCached": "This discussion isn't cached for offline reading.",
+			"backToList": "Back to offline list",
+			"readerBadge": "Offline",
+			"replies": "replies"
+		}
 	}
 }

@@ -39,16 +39,27 @@
 		});
 	});
 
-	// Online/offline status drives the offline banner; the reconnect path will
-	// also trigger the offline sync (wired in C02). Service-worker registration
-	// is production-only so dev assets are never cached.
+	// Online/offline status drives the offline banner and the delta-sync trigger.
+	// SW registration is production-only so dev assets are never cached.
 	let isOnline = $state(true);
+
+	function triggerSync(): void {
+		void import('$lib/offline/sync-orchestrator')
+			.then(({ runSync }) => runSync())
+			.catch((err: unknown) => console.error('[offline] sync failed:', err));
+	}
+
 	onMount(() => {
 		isOnline = navigator.onLine;
-		const markOnline = () => (isOnline = true);
+		const markOnline = () => {
+			isOnline = true;
+			triggerSync();
+		};
 		const markOffline = () => (isOnline = false);
 		window.addEventListener('online', markOnline);
 		window.addEventListener('offline', markOffline);
+		// Keep the offline cache fresh on load when already online.
+		if (navigator.onLine) triggerSync();
 		if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 			navigator.serviceWorker.register('/service-worker.js').catch((err: unknown) => {
 				console.error('[sw] registration failed:', err);
@@ -73,7 +84,8 @@
 	>
 		<span class="font-medium">{data.t.offline.status}</span>
 		<span class="opacity-80">{data.t.offline.hint}</span>
-		<button type="button" class="btn btn-ghost btn-xs ml-auto" onclick={() => location.reload()}>
+		<a class="link link-hover ml-auto" href="/offline">{data.t.offline.openReader}</a>
+		<button type="button" class="btn btn-ghost btn-xs" onclick={() => location.reload()}>
 			{data.t.offline.retry}
 		</button>
 	</div>

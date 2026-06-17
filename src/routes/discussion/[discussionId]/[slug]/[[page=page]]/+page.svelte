@@ -15,6 +15,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { enhance } from '$app/forms';
+	import { onMount } from 'svelte';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -29,6 +30,24 @@
 	}
 
 	let { data }: PageProps = $props();
+
+	// Offline fallback: when the network drops while viewing a discussion that is
+	// cached locally, switch to the client-only offline reader (IDB, no server
+	// round-trip). The online read-mutation has already run for this view.
+	onMount(() => {
+		const discussionId = Number(page.params.discussionId);
+		const redirectIfCached = () => {
+			if (navigator.onLine) return;
+			void (async () => {
+				const { getOfflineDB } = await import('$lib/offline/idb');
+				const cached = await getOfflineDB().discussions.get(discussionId);
+				if (cached) await goto(`/offline/${discussionId}`);
+			})();
+		};
+		redirectIfCached();
+		window.addEventListener('offline', redirectIfCached);
+		return () => window.removeEventListener('offline', redirectIfCached);
+	});
 
 	const t = $derived(data.t);
 	const user = $derived(data.user);

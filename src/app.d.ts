@@ -21,6 +21,7 @@ interface PlatformEnv {
 	POST_THROTTLE_WINDOW_SEC?: string;
 	POST_THROTTLE_LIMIT?: string;
 	SITE_URL?: string;
+	OFFLINE_RETENTION_DAYS?: string;
 }
 
 type WaitUntilFn = (promise: Promise<unknown>) => void;

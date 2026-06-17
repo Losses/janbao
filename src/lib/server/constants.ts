@@ -42,6 +42,20 @@ export function getSiteUrl(platformEnv: App.Platform['env'] | undefined, url: UR
 export const SYSTEM_USER_ID = -1;
 
 /**
+ * Offline cache retention in days. Cached discussions scroll out of the offline
+ * store once they are no longer on the front page AND older than this window.
+ * Read from platform env (Cloudflare) or process.env (local), defaulting to 14.
+ */
+export function getOfflineRetentionDays(platformEnv: App.Platform['env'] | undefined): number {
+	const raw = platformEnv?.OFFLINE_RETENTION_DAYS || process.env.OFFLINE_RETENTION_DAYS;
+	if (raw) {
+		const n = parseInt(raw, 10);
+		if (!isNaN(n) && n > 0) return n;
+	}
+	return 14;
+}
+
+/**
  * The bootstrap admin (id 0), seeded from ADMIN_EMAIL/ADMIN_PASSWORD when no
  * admin-group user exists yet. It is the only account that may promote another
  * user into the `admin` group or generate reset links for other admins - i.e.

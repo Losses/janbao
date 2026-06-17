@@ -405,3 +405,82 @@ export interface InvitationRequestResponse {
 	code: string;
 	inviteLink: string;
 }
+
+// --- Offline Sync (DV06 C02) ---
+
+export interface SyncDiscussionDTO {
+	id: number;
+	title: string;
+	slug: string;
+	categorySlug: string;
+	authorId: number;
+	commentCount: number;
+	isPinned: boolean;
+	createdAt: number;
+	updatedAt: number;
+	lastReplyAt: number | null;
+}
+
+export interface SyncReplyDTO {
+	id: number;
+	discussionId: number;
+	authorId: number;
+	contentJson: string;
+	createdAt: number;
+	updatedAt: number;
+	editedAt: number | null;
+	editedBy: number | null;
+}
+
+export interface SyncTombstoneDTO {
+	id: number;
+	deletedAt: number;
+}
+
+export interface SyncCursors {
+	discussions: string;
+	replies: string;
+	tombstoneAfter: number;
+}
+
+export interface SyncHasMore {
+	discussions: boolean;
+	replies: boolean;
+	tombstones: boolean;
+}
+
+export interface SyncContentResponse {
+	discussions: SyncDiscussionDTO[];
+	replies: SyncReplyDTO[];
+	discussionTombstones: SyncTombstoneDTO[];
+	replyTombstones: SyncTombstoneDTO[];
+	frontPageDiscussionIds: number[];
+	bookmarkedDiscussionIds: number[];
+	cursors: SyncCursors;
+	hasMore: SyncHasMore;
+	serverTimeSeconds: number;
+	retentionDays: number;
+}
+
+export interface ReadStateDelta {
+	discussionId: number;
+	lastReadReplyId: number | null;
+	lastReadPage: number;
+	lastReadAt: number;
+}
+
+export interface SyncReadStateBody {
+	deltas: ReadStateDelta[];
+}
+
+export interface ReadStateConflict {
+	discussionId: number;
+	serverLastReadAt: number;
+	serverLastReadReplyId: number | null;
+}
+
+export interface SyncReadStateResponse {
+	applied: number;
+	skipped: number;
+	conflicts: ReadStateConflict[];
+}
