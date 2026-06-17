@@ -1,4 +1,4 @@
-import { users } from '../schema';
+import { userGroups, users } from '../schema';
 import { eq } from 'drizzle-orm';
 import type { D1Db } from '../index';
 import type { ProfileHeaderUser, UserInfoSummary } from '$lib/types/api';
@@ -33,23 +33,27 @@ export async function getProfileHeaderPayload(
 			signupTime: users.signupTime,
 			lastActiveTime: users.lastActiveTime,
 			groupSlug: users.groupSlug,
+			groupTitle: userGroups.title,
 			viewCount: users.viewCount,
 			isStealth: users.isStealth,
 			showEmail: users.showEmail,
 			email: users.email
 		})
 		.from(users)
+		.leftJoin(userGroups, eq(users.groupSlug, userGroups.slug))
 		.where(eq(users.id, targetUserId))
 		.limit(1);
 
 	if (rows.length === 0) return null;
 
 	const row = rows[0];
-	const { email, ...headerUser } = row;
+	const { email, groupTitle, ...headerUser } = row;
 	const invitedBy = await getInviter(db, targetUserId);
 
 	return {
-		user: headerUser,
+		// Fall back to the slug if the group row is somehow missing (orphaned
+		// FK) so the header always renders a value rather than `null`.
+		user: { ...headerUser, groupTitle: groupTitle ?? headerUser.groupSlug },
 		invitedBy,
 		email
 	};

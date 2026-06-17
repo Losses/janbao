@@ -58,7 +58,7 @@
 		<div class="flex items-center gap-1.5">
 			<Icon path={mdiAccountGroup} size={16} class="text-base-content/50" />
 			<span class="font-medium text-base-content">{profileT.group}</span>
-			<span>{targetUser.groupSlug}</span>
+			<span>{targetUser.groupTitle}</span>
 		</div>
 		<div class="flex items-center gap-1.5">
 			<Icon path={mdiCalendarClock} size={16} class="text-base-content/50" />

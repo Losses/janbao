@@ -47,6 +47,7 @@ export interface ProfileHeaderUser {
 	signupTime: Date;
 	lastActiveTime: Date;
 	groupSlug: string;
+	groupTitle: string;
 	viewCount: number;
 	isStealth: boolean;
 	showEmail: boolean;
