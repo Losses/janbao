@@ -11,11 +11,7 @@ import {
 	updateUserGroupMeta,
 	userGroupExists
 } from '$lib/server/db/dao/admin-permissions';
-import type {
-	AdminUserGroupCreateBody,
-	AdminUserGroupDeleteBody,
-	AdminUserGroupUpdateBody
-} from '$lib/types/api';
+import type { AdminUserGroupDeleteBody, AdminUserGroupWriteBody } from '$lib/types/api';
 
 export const GET: RequestHandler = async ({ locals }) => {
 	const authError = requireAdmin(locals.user, locals.t);
@@ -28,7 +24,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 	const authError = requireAdmin(locals.user, locals.t);
 	if (authError) return authError;
 
-	const body: AdminUserGroupUpdateBody = await request.json();
+	const body: AdminUserGroupWriteBody = await request.json();
 	const slug = body.slug?.trim().toLowerCase();
 	const title = body.title?.trim();
 	const description = body.description?.trim();
@@ -48,7 +44,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const authError = requireAdmin(locals.user, locals.t);
 	if (authError) return authError;
 
-	const body: AdminUserGroupCreateBody = await request.json();
+	const body: AdminUserGroupWriteBody = await request.json();
 	const slug = body.slug?.trim().toLowerCase();
 	const title = body.title?.trim();
 	const description = body.description?.trim();

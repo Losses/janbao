@@ -1,13 +1,10 @@
+import type { UserCard } from '$lib/types/api';
+
 /**
  * Shared type for the mentionedUsers map passed from server loaders
  * to LexicalRenderer for @username chip rendering.
  */
-interface MentionedUserEntry {
-	id: number;
-	displayName: string;
-	username: string;
-	avatarFileId: string | null;
-}
+type MentionedUserEntry = UserCard;
 
 interface MentionedUsersMap {
 	[username: string]: MentionedUserEntry;

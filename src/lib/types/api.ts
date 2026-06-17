@@ -8,20 +8,22 @@ export interface CategoryItem {
 	title: string;
 }
 
-/** Online user item used by ActiveUsersWall and active-users store. */
-export interface OnlineUser {
+/**
+ * Minimal user identity for rendering an avatar chip/card: id + name + avatar.
+ * Shared base for online users, search/mention results, and viewer summaries.
+ */
+export interface UserCard {
 	id: number;
 	username: string;
 	displayName: string;
 	avatarFileId: string | null;
 }
 
+/** Online user item used by ActiveUsersWall and active-users store. */
+export type OnlineUser = UserCard;
+
 /** Minimal user identity used by Header, sidebars, and user-facing molecules. */
-export interface UserInfoSummary {
-	id: number;
-	username: string;
-	displayName: string;
-	avatarFileId: string | null;
+export interface UserInfoSummary extends UserCard {
 	groupSlug?: string | null;
 }
 
@@ -271,12 +273,7 @@ export interface PostMessageBody {
 
 // --- User Search API Types ---
 
-export interface UserSearchResult {
-	id: number;
-	username: string;
-	displayName: string;
-	avatarFileId: string | null;
-}
+export type UserSearchResult = UserCard;
 
 // --- Drafts API Types ---
 
@@ -360,13 +357,7 @@ export interface AdminManageableGroupItem {
 	title: string;
 }
 
-export interface AdminUserGroupCreateBody {
-	slug?: string;
-	title?: string;
-	description?: string;
-}
-
-export interface AdminUserGroupUpdateBody {
+export interface AdminUserGroupWriteBody {
 	slug?: string;
 	title?: string;
 	description?: string;
