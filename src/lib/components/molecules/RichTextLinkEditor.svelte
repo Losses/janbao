@@ -230,7 +230,7 @@
 				setFloatingElemPositionForLinkEditor(domRect, editorElem, anchorElem);
 			}
 			lastSelection = selection as RangeSelection | NodeSelection | null;
-		} else if (!activeElement || activeElement.className !== 'link-input') {
+		} else if (!activeElement || !activeElement.classList.contains('link-input')) {
 			if (rootElement !== null && anchorElem) {
 				setFloatingElemPositionForLinkEditor(null, editorElem, anchorElem);
 			}
@@ -270,7 +270,7 @@
 				SELECTION_CHANGE_COMMAND,
 				() => {
 					updateLinkEditor();
-					return true;
+					return false;
 				},
 				COMMAND_PRIORITY_LOW
 			),
