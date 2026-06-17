@@ -145,7 +145,7 @@
 		</div>
 
 		<!-- Metadata: author, views, replies, last replier, updated date -->
-		<div class="flex items-center gap-2 text-xs text-base-content/60 flex-wrap">
+		<div class="flex items-center gap-x-4 gap-y-2 text-xs text-base-content/60 flex-wrap">
 			{#if discussion.isPinned}
 				<span
 					class="bg-base-content text-base-100 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider text-[10px]"
