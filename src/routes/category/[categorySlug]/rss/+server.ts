@@ -6,7 +6,7 @@ import { XMLBuilder } from 'fast-xml-parser';
 import { resolvePermissions, getSiteUrl } from '$lib/server/constants';
 
 // Custom namespace for forum-specific metadata exposed on each item (e.g. the
-// last-reply / edit times). These are descriptive only — the feed is ordered by
+// last-reply / edit times). These are descriptive only - the feed is ordered by
 // post time (createdAt) so a reader's timeline tracks when threads were posted.
 const FORUM_NS = 'urn:janbao:rss:forum';
 const RSS_LIMIT = 100;
@@ -50,7 +50,7 @@ export const GET: RequestHandler = async (event) => {
 		return new Response(t.common.forbidden, { status: 403 });
 	}
 
-	// 3. RSS is ordered strictly by post time (createdAt, newest first) — NOT by
+	// 3. RSS is ordered strictly by post time (createdAt, newest first) - NOT by
 	// lastReplyAt/updatedAt, which only drive the on-site list. A feed reader's
 	// timeline must reflect when threads were actually posted, not when they were
 	// bumped by a reply or touched by an edit.

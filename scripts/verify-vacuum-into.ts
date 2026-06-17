@@ -1,6 +1,6 @@
 /**
  * One-off: verify @libsql/client supports VACUUM INTO to an arbitrary path
- * (the snapshot strategy for the backup feature). Self-contained — creates a
+ * (the snapshot strategy for the backup feature). Self-contained - creates a
  * throwaway temp db, populates it (incl. a WAL-backed transaction), runs
  * VACUUM INTO, then re-opens the snapshot to confirm integrity + data.
  *
@@ -33,7 +33,7 @@ await src.batch([
 // A committed-but-uncheckpointed txn lives in the WAL; the snapshot must still
 // capture it, which is the whole point of VACUUM INTO over copying the main file.
 // Use raw BEGIN/COMMIT (not client.transaction) so the row stays in the WAL
-// without a checkpoint — and because the local driver's transaction() requires
+// without a checkpoint - and because the local driver's transaction() requires
 // an explicit mode string, which we don't need here.
 await src.execute('BEGIN');
 await src.execute({ sql: `INSERT INTO demo (body) VALUES (?)`, args: ['in-wal'] });
@@ -78,12 +78,12 @@ const integrityOk = String((integrity.rows[0] as Record<string, unknown>).integr
 
 if (integrityOk && got === expected) {
 	console.log(
-		`\nRESULT: PASS — snapshot is consistent and captured the WAL txn (got ${got}/${expected} rows).`
+		`\nRESULT: PASS - snapshot is consistent and captured the WAL txn (got ${got}/${expected} rows).`
 	);
 	rmSync(dir, { recursive: true, force: true });
 	process.exit(0);
 } else {
-	console.error(`\nRESULT: FAIL — integrity=${integrityOk}, rows=${got}/${expected}.`);
+	console.error(`\nRESULT: FAIL - integrity=${integrityOk}, rows=${got}/${expected}.`);
 	rmSync(dir, { recursive: true, force: true });
 	process.exit(1);
 }

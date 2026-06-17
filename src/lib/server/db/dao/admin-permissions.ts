@@ -30,7 +30,7 @@ export function isAssignableGroupSlug(slug: string): boolean {
  * Unlike {@link isAssignableGroupSlug} (which gates *assigning a group to a
  * user*), this is about *editing what a group may do in each category*.
  * `guest` is included so admins can configure what anonymous visitors may
- * read/create — its permissions are read from `categoryPermissions` at request
+ * read/create - its permissions are read from `categoryPermissions` at request
  * time (`resolvePermissions`), so they must be editable here. `system` and
  * `admin` stay excluded: `system` is never assigned, and `admin` always has
  * full access regardless of rows.

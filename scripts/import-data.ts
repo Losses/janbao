@@ -2006,7 +2006,7 @@ async function main() {
 				// (/discussion/{id}/{slug}/pN); the title from the <h1>.
 				// lastReplyAt = time of the latest post in the thread (OP included as
 				// the floor). sorted orders by item-position then createdAt, so its
-				// last element is not necessarily the time-max — reduce explicitly.
+				// last element is not necessarily the time-max - reduce explicitly.
 				const lastReplyAt = new Date(Math.max(...sorted.map((c) => c.createdAt.getTime())));
 				const discUpdate: DiscussionCorrection = {
 					createdAt: opComment.createdAt,

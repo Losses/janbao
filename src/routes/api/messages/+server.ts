@@ -14,12 +14,13 @@ import { indexMessage } from '$lib/server/search/fts';
 import type { RequestHandler } from './$types';
 import type { MessageCreateBody } from '$lib/types/api';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
+import { enforcePostThrottle, tooManyRequests } from '$lib/server/throttle';
 
 const MAX_RECIPIENTS = 20;
 
 // POST /api/messages - Create a new private conversation with an initial
 // message authored by the active user and the selected recipients.
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	const user = locals.user;
 	const t = locals.t;
 	if (!user) {
@@ -69,6 +70,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	if (recipientRecords.length !== recipientIds.length) {
 		return jsonError(t, 'message.recipientNotFound', 404);
+	}
+
+	// Throttle rapid/duplicate conversation creation (client also guards; this is
+	// authoritative against cross-tab/retry/script double-posts that would
+	// otherwise spawn two identical conversations).
+	const conversationThrottle = await enforcePostThrottle(
+		locals.db,
+		'post:conversation',
+		user.id,
+		platform?.env
+	);
+	if (conversationThrottle.blocked) {
+		return tooManyRequests(t.common.tooManyRequests, conversationThrottle.retryAfter);
 	}
 
 	const now = new Date();

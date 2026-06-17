@@ -35,7 +35,7 @@ export interface RecipientInfo {
 
 /**
  * The target user's columns needed by the shared profile header (avatar, name,
- * bio, and the statistics row). Email is deliberately excluded — it is fetched
+ * bio, and the statistics row). Email is deliberately excluded - it is fetched
  * alongside this but gated by the caller (guests never see it).
  */
 export interface ProfileHeaderUser {

@@ -1,4 +1,4 @@
-import { error, redirect } from '@sveltejs/kit';
+import { error, redirect, fail } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import {
 	discussions,
@@ -302,7 +302,7 @@ export const actions: Actions = {
 		// against cross-tab/retry/script double-posts).
 		const replyThrottle = await enforcePostThrottle(db, 'post:reply', user.id, platform?.env);
 		if (replyThrottle.blocked) {
-			return { success: false, error: locals.t.common.tooManyRequests };
+			return fail(429, { error: locals.t.common.tooManyRequests });
 		}
 
 		// Insert the reply, update discussion stats, and clear draft in a transaction.

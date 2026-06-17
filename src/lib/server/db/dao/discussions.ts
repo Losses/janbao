@@ -128,7 +128,7 @@ export async function getDiscussionsList(
 	baseQuery.where(and(...whereClauses));
 
 	// Order: Pinned discussions first, then lastReplyAt descending (real time of
-	// the latest reply — not updatedAt, which pin/edit/delete also bump).
+	// the latest reply - not updatedAt, which pin/edit/delete also bump).
 	baseQuery.orderBy(desc(discussions.isPinned), desc(discussions.lastReplyAt));
 
 	baseQuery.limit(limit).offset(offset);

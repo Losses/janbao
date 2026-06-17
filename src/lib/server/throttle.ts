@@ -111,7 +111,9 @@ export function getPostThrottleConfig(
 	}
 	if (limitRaw) {
 		const parsed = parseInt(limitRaw, 10);
-		if (!isNaN(parsed) && parsed >= 0) limit = parsed;
+		// limit must be >= 1: 0 would block every submission (count > 0 is always
+		// true) with no safe escape hatch, so a 0/misconfig falls back to default.
+		if (!isNaN(parsed) && parsed >= 1) limit = parsed;
 	}
 	return { limit, windowSec };
 }

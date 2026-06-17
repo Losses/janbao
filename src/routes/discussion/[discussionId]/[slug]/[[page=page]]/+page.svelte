@@ -442,6 +442,8 @@
 												: `/discussion/${discussion.id}/${discussion.slug}/p${page}#reply-${replyId}`;
 										goto(url);
 									}
+								} else if (result.type === 'failure') {
+									alert(result.data?.error || 'Failed to create reply');
 								}
 							};
 						}}

@@ -18,7 +18,7 @@
  * matching the getLocalDb dynamic-import isolation pattern.
  */
 import { sql } from 'drizzle-orm';
-import type { BackupPolicy } from '$lib/types/backup';
+import type { BackupPolicy, BackupRunStatus } from '$lib/types/backup';
 import type { D1Db } from './db';
 import type { PcloudConfig } from './pcloud';
 import {
@@ -62,6 +62,14 @@ interface BackupFilePaths {
 	lockPath: string;
 }
 
+/** Outcome of a detached manual-trigger attempt. */
+interface BackupTriggerResult {
+	/** A run was launched in the background. */
+	started: boolean;
+	/** Another run was already in flight (nothing started). */
+	busy: boolean;
+}
+
 const BACKUP_FOLDER = '/backups';
 const NAME_PREFIX = 'janbao';
 // janbao-YYYYMMDD-HHMMSS.db
@@ -74,6 +82,10 @@ let inFlight: Promise<BackupEntry> | null = null;
 // In-memory day string of the last auto-backup this process ran, to skip the
 // settings read on every request after the first-of-day one.
 let memLastDay: string | null = null;
+// In-memory status of the most recent run (manual or daily), so the admin UI
+// can poll the running → succeeded/failed transition. Lost on process restart;
+// the cross-process lockfile still prevents concurrent runs in that window.
+let lastStatus: BackupRunStatus | null = null;
 
 export function isValidBackupName(name: string): boolean {
 	return NAME_PATTERN.test(name);
@@ -122,17 +134,68 @@ export async function deleteBackup(cfg: PcloudConfig, name: string): Promise<voi
 }
 
 /**
- * Manually trigger a backup now. Independent of `backup.enabled`; retention
- * still trims by age. Throws BackupBusyError if another backup is running.
+ * Manually trigger a backup now, detached. Independent of `backup.enabled`;
+ * retention still trims by age. Returns immediately: `{ started: true }` once
+ * the run is launched in the background (its lifecycle tracked in-memory for
+ * polling via `getBackupRunStatus`), or `{ busy: true }` if a run is already in
+ * flight. Never throws.
+ *
+ * Unlike the daily path (fire-and-forget from hooks.server.ts with no caller
+ * observing the result), this records an in-memory run status so the admin UI
+ * can poll GET /api/admin/backups for the running → succeeded/failed transition
+ * WITHOUT holding the POST request open for the entire multi-minute upload of a
+ * 1GB snapshot (which would be vulnerable to proxy/browser/server timeouts).
  */
-export async function runBackupNow(
+export async function startBackupDetached(
 	db: D1Db,
 	cfg: PcloudConfig,
 	platformEnv: App.Platform['env'] | undefined
-): Promise<BackupEntry> {
+): Promise<BackupTriggerResult> {
+	if (inFlight) return { started: false, busy: true };
 	const tz = getForumTimezone(platformEnv);
 	const policy = await getBackupPolicy(db);
-	return acquireAndRun(db, cfg, tz, policy.retentionDays);
+	// Re-check after the async settings read - a daily run may have started.
+	if (inFlight) return { started: false, busy: true };
+
+	const startedAt = new Date().toISOString();
+	markRunning(startedAt);
+	// Detach the heavy work. acquireAndRun sets `inFlight` synchronously before
+	// its first await, so this function's `inFlight` guards above stay sound for
+	// any later request in the same tick.
+	void acquireAndRun(db, cfg, tz, policy.retentionDays)
+		.then((entry) => markSucceeded(startedAt, entry))
+		.catch((err) => markFailed(startedAt, err));
+	return { started: true, busy: false };
+}
+
+/** In-memory status of the most recent run (null until the first run). */
+export function getBackupRunStatus(): BackupRunStatus | null {
+	return lastStatus;
+}
+
+function markRunning(startedAt: string): void {
+	lastStatus = { state: 'running', startedAt, finishedAt: null, name: null, error: null };
+}
+
+function markSucceeded(startedAt: string, entry: BackupEntry): void {
+	lastStatus = {
+		state: 'succeeded',
+		startedAt,
+		finishedAt: new Date().toISOString(),
+		name: entry.name,
+		error: null
+	};
+}
+
+function markFailed(startedAt: string, err: unknown): void {
+	lastStatus = {
+		state: 'failed',
+		startedAt,
+		finishedAt: new Date().toISOString(),
+		name: null,
+		error: err instanceof Error ? err.message : String(err)
+	};
+	console.error('[backup] background backup failed:', err);
 }
 
 /**
@@ -165,13 +228,16 @@ export async function maybeRunDailyBackup(
 	await setSetting(db, BACKUP_LAST_BACKUP_DAY_KEY, dayKey);
 	memLastDay = dayKey;
 
+	const startedAt = new Date().toISOString();
+	markRunning(startedAt);
 	try {
-		await acquireAndRun(db, cfg, tz, policy.retentionDays);
+		const entry = await acquireAndRun(db, cfg, tz, policy.retentionDays);
+		markSucceeded(startedAt, entry);
 	} catch (err) {
 		// Either busy (another process is backing up) or a genuine failure. The
 		// day is already claimed, so we won't retry automatically; admin can use
 		// "backup now". Keep it quiet so the request path stays unaffected.
-		console.error('[backup] daily backup failed:', err);
+		markFailed(startedAt, err);
 	}
 }
 
@@ -208,10 +274,10 @@ async function performBackup(
 	// it compacts and yields a clean point-in-time copy without blocking app I/O.
 	// It can fail on a database whose virtual tables can't be reconstructed on a
 	// fresh connection (e.g. a contentless FTS5 table whose shadow rows are
-	// inconsistent — a fresh connect then can't build the vtable to read it). In
+	// inconsistent - a fresh connect then can't build the vtable to read it). In
 	// that case fall back to checkpointing the WAL into the main file and copying
 	// the raw bytes, which never constructs any vtable. The copy is byte-identical
-	// to the live (post-checkpoint) db — a faithful restore target.
+	// to the live (post-checkpoint) db - a faithful restore target.
 	const escaped = snapshotPath.replace(/'/g, "''");
 	try {
 		await db.run(sql.raw(`VACUUM INTO '${escaped}'`));
