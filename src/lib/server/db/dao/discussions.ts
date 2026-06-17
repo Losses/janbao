@@ -263,9 +263,9 @@ export async function getDiscussionsList(
 				}
 			: null,
 		unreadCount: unreadMap.get(row.id) || 0,
-		lastReplyAuthorDisplayName: lastReplyMap.get(row.id)?.displayName || null,
-		lastReplyAuthorId: lastReplyMap.get(row.id)?.id || null,
-		lastReplyAuthorUsername: lastReplyMap.get(row.id)?.username || null
+		lastReplyAuthorDisplayName: lastReplyMap.get(row.id)?.displayName ?? null,
+		lastReplyAuthorId: lastReplyMap.get(row.id)?.id ?? null,
+		lastReplyAuthorUsername: lastReplyMap.get(row.id)?.username ?? null
 	}));
 }
 
