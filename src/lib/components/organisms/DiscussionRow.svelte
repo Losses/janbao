@@ -156,7 +156,7 @@
 
 			<a
 				href="/profile/{discussion.authorId}/{authorSlug}"
-				class="hover:underline font-medium text-base-content/85"
+				class="hover:underline font-medium text-base-content/60"
 			>
 				{discussion.authorDisplayName}
 			</a>
@@ -170,7 +170,7 @@
 				<span class="text-base-content/30">•</span>
 				<a
 					href="/profile/{lastReplyAuthorId}/{lastReplyAuthorSlug}"
-					class="hover:underline font-medium text-base-content/80">{lastReplyAuthorDisplayName}</a
+					class="hover:underline font-medium text-base-content/60">{lastReplyAuthorDisplayName}</a
 				>
 			{/if}
 
