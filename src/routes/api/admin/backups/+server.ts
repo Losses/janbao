@@ -8,8 +8,8 @@ import {
 	getBackupPolicy,
 	setBackupPolicy,
 	listBackups,
-	runBackupNow,
-	BackupBusyError
+	startBackupDetached,
+	getBackupRunStatus
 } from '$lib/server/backup';
 import { BACKUP_SETTING_DEFAULTS } from '$lib/server/db/dao/app-settings';
 import type { BackupPolicy } from '$lib/types/backup';
@@ -39,7 +39,7 @@ export const GET: RequestHandler = async ({ locals, platform }) => {
 				date: entry.date.toISOString()
 			}))
 		: [];
-	return json({ available, policy, backups });
+	return json({ available, policy, backups, run: getBackupRunStatus() });
 };
 
 export const POST: RequestHandler = async ({ locals, platform }) => {
@@ -49,17 +49,13 @@ export const POST: RequestHandler = async ({ locals, platform }) => {
 	const { cfg, available } = resolveBackupEnv(platform);
 	if (!available) return jsonError(locals.t, 'backup.notAvailable', 400);
 
-	try {
-		const entry = await runBackupNow(locals.db, cfg, platform?.env);
-		return json({
-			success: true,
-			backup: { name: entry.name, date: entry.date.toISOString() }
-		});
-	} catch (err) {
-		if (err instanceof BackupBusyError) return jsonError(locals.t, 'backup.backupInProgress', 409);
-		console.error('[backup] manual backup failed:', err);
-		return jsonError(locals.t, 'backup.backupFailed', 500);
-	}
+	// Detached: returns the instant the run is launched (or 409 if one is
+	// already in flight). The client polls GET for the running → terminal
+	// transition, so the upload's multi-minute duration never blocks this
+	// request and cannot trip a proxy/browser/server timeout.
+	const result = await startBackupDetached(locals.db, cfg, platform?.env);
+	if (result.busy) return jsonError(locals.t, 'backup.backupInProgress', 409);
+	return json({ success: true, started: true });
 };
 
 export const PUT: RequestHandler = async ({ request, locals }) => {

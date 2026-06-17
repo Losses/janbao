@@ -1,16 +1,27 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import AdminSidebar from '$lib/components/molecules/AdminSidebar.svelte';
 	import DateAtom from '$lib/components/atoms/Date.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import type { ApiResult, FeedbackMessage } from '$lib/types/api';
-	import type { BackupListItem, BackupPolicy } from '$lib/types/backup';
+	import type { BackupListItem, BackupPolicy, BackupRunStatus } from '$lib/types/backup';
 	import type { PageData } from './$types';
 
 	interface PageProps {
 		data: PageData;
 	}
+
+	/** Shape of the GET /api/admin/backups response, used by the poll loop. */
+	interface BackupPollResponse {
+		available: boolean;
+		policy: BackupPolicy;
+		backups: BackupListItem[];
+		run: BackupRunStatus | null;
+	}
+
+	const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 	let { data }: PageProps = $props();
 
@@ -69,22 +80,70 @@
 	}
 
 	async function backupNow() {
+		if (backing) return;
 		backing = true;
 		message = null;
 		try {
 			const res = await fetch('/api/admin/backups', { method: 'POST' });
-			const result = (await res.json()) as ApiResult;
-			if (result.success) {
-				setMessage('success', backupT.backupCreated);
-				await invalidateAll();
-			} else {
-				setMessage('error', result.error || t.common.error);
+			// 409 = another run is already in flight (e.g. the daily backup). Poll it
+			// the same way as a fresh start so the UI tracks it to completion.
+			if (res.ok || res.status === 409) {
+				await pollBackupStatus();
+				return;
 			}
+			const result = (await res.json()) as ApiResult;
+			backing = false;
+			setMessage('error', result.error || t.common.error);
 		} catch {
+			backing = false;
 			setMessage('error', t.auth.networkError);
 		}
+	}
+
+	/**
+	 * Poll GET /api/admin/backups every few seconds until the in-memory run
+	 * status reaches a terminal state (or the safety deadline elapses). Because
+	 * the actual upload runs detached server-side, this loop only transfers the
+	 * tiny status object — the 1GB upload never flows through these requests.
+	 */
+	async function pollBackupStatus() {
+		const POLL_MS = 3000;
+		const MAX_MS = 10 * 60 * 1000; // safety cap; longer than this is likely stuck
+		const deadline = Date.now() + MAX_MS;
+		while (Date.now() < deadline) {
+			await sleep(POLL_MS);
+			try {
+				const res = await fetch('/api/admin/backups', { method: 'GET' });
+				const data = (await res.json()) as BackupPollResponse;
+				const run = data.run;
+				if (run && run.state === 'running') continue; // still uploading
+				// Terminal (succeeded/failed) or status lost on process restart.
+				await invalidateAll();
+				if (run?.state === 'succeeded') {
+					setMessage('success', backupT.backupCreated);
+				} else {
+					setMessage('error', backupT.backupFailed);
+				}
+				backing = false;
+				return;
+			} catch {
+				// Transient network blip mid-poll — keep going until the deadline.
+			}
+		}
+		// Deadline exceeded without a terminal state.
+		await invalidateAll();
+		setMessage('error', backupT.backupTimedOut);
 		backing = false;
 	}
+
+	// If a run is already in progress when the page loads (e.g. the daily backup
+	// started while the admin was elsewhere), show the running state and poll.
+	onMount(() => {
+		if (data.run?.state === 'running') {
+			backing = true;
+			void pollBackupStatus();
+		}
+	});
 
 	async function deleteBackup(name: string) {
 		if (!confirm(backupT.confirmDelete)) return;
@@ -122,7 +181,7 @@
 			<h1 class="page-title">{backupT.title}</h1>
 			{#if available}
 				<button class="btn btn-primary btn-sm" onclick={backupNow} disabled={backing}>
-					{backing ? t.common.saving : backupT.backupNow}
+					{backing ? backupT.backingUp : backupT.backupNow}
 				</button>
 			{/if}
 		</div>

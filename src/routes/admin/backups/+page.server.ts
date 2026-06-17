@@ -1,7 +1,7 @@
 import type { PageServerLoad } from './$types';
 import { env } from '$env/dynamic/private';
 import { resolvePcloudConfig, pcloudIsConfigured } from '$lib/server/pcloud';
-import { getBackupPolicy, listBackups } from '$lib/server/backup';
+import { getBackupPolicy, listBackups, getBackupRunStatus } from '$lib/server/backup';
 import { BACKUP_SETTING_DEFAULTS } from '$lib/server/db/dao/app-settings';
 import type { BackupListItem } from '$lib/types/backup';
 
@@ -25,6 +25,7 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
 		pcloudConfigured: pcloudIsConfigured(cfg),
 		policy,
 		backups,
+		run: getBackupRunStatus(),
 		retentionDaysDefault: BACKUP_SETTING_DEFAULTS.retentionDays
 	};
 };
