@@ -91,6 +91,7 @@
 	"common": {
 		"welcome": "Welcome!",
 		"error": "An error occurred",
+		"tooManyRequests": "You're posting too quickly. Please wait a moment and try again.",
 		"success": "Success",
 		"loading": "Loading...",
 		"saving": "Saving...",

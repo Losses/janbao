@@ -186,7 +186,11 @@
 			<form
 				method="POST"
 				action="?/post"
-				use:enhance={() => {
+				use:enhance={({ cancel }) => {
+					if (isPosting) {
+						cancel();
+						return;
+					}
 					isPosting = true;
 					return async ({ result, update }) => {
 						isPosting = false;
@@ -203,6 +207,8 @@
 										: `/messages/${conversationId}/p${page}`;
 								goto(url);
 							}
+						} else if (result.type === 'failure') {
+							alert(result.data?.error || gtc('error'));
 						}
 					};
 				}}

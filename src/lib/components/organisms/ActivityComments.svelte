@@ -88,6 +88,7 @@
 	}
 
 	async function submitComment() {
+		if (submittingComment) return;
 		if (isLexicalEmpty(commentContentJson) || commentContentJson.length > MAX_CONTENT_SIZE) return;
 		submittingComment = true;
 		try {

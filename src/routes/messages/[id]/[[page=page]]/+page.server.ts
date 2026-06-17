@@ -1,4 +1,4 @@
-import { error } from '@sveltejs/kit';
+import { error, fail } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import {
 	conversations,
@@ -13,6 +13,7 @@ import { getPaginationLimit } from '$lib/server/constants';
 import { resolveMentions } from '$lib/server/utils/mentions';
 import { indexMessage, reindexMessage } from '$lib/server/search/fts';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
+import { enforcePostThrottle } from '$lib/server/throttle';
 
 const MESSAGE_PAGE_FALLBACK = 50;
 const MAX_ADD_PARTICIPANTS = 20;
@@ -275,6 +276,13 @@ export const actions: Actions = {
 		}
 		if (contentJson.length > MAX_CONTENT_SIZE) {
 			return { success: false, error: t.common.contentTooLarge };
+		}
+
+		// Throttle rapid/duplicate messages (client also guards; this is authoritative
+		// against cross-tab/retry/script double-posts).
+		const messageThrottle = await enforcePostThrottle(db, 'post:message', user.id, platform?.env);
+		if (messageThrottle.blocked) {
+			return fail(429, { error: t.common.tooManyRequests });
 		}
 
 		const now = new Date();

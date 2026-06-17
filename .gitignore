@@ -38,3 +38,4 @@ import-conflicts.json
 scratch/**/*
 discussion-page-audit.json
 recrawl.log
+non-placeholder-user-emails.txt

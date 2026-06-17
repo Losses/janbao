@@ -91,6 +91,7 @@
 	"common": {
 		"welcome": "欢迎加入！",
 		"error": "发生错误",
+		"tooManyRequests": "操作过于频繁，请稍候再试。",
 		"success": "操作成功",
 		"loading": "加载中...",
 		"saving": "保存中...",

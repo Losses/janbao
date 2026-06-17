@@ -148,7 +148,11 @@
 			<form
 				method="POST"
 				action="?/publish"
-				use:enhance={() => {
+				use:enhance={({ cancel }) => {
+					if (isSubmitting) {
+						cancel();
+						return;
+					}
 					isSubmitting = true;
 					return async ({ result }) => {
 						isSubmitting = false;

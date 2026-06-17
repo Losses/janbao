@@ -470,6 +470,23 @@ export const authThrottle = sqliteTable(
 	})
 );
 
+// Generic fixed-window rate-limit counters for non-auth write surfaces
+// (posting, replies, activities, messages). Physically separate from
+// authThrottle so the auth rate-limit surface and its naming/assumptions
+// stay isolated.
+export const rateLimits = sqliteTable(
+	'rate_limits',
+	{
+		bucket: text('bucket').notNull(),
+		identifier: text('identifier').notNull(),
+		windowEpoch: integer('window_epoch').notNull(),
+		count: integer('count').notNull().default(0)
+	},
+	(table) => ({
+		pk: primaryKey({ columns: [table.bucket, table.identifier, table.windowEpoch] })
+	})
+);
+
 // Generic key-value application settings store (VS Code-style dotted keys,
 // e.g. "backup.enabled"). Defaults live in code (BACKUP_SETTING_DEFAULTS etc.),
 // so the table starts empty and a missing key resolves to the code default.

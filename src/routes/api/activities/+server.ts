@@ -13,6 +13,7 @@ import type { DbTransaction } from '$lib/server/db';
 import { indexActivity, unindexActivity } from '$lib/server/search/fts';
 import type { ActivityCreateBody, ActivityDeleteBody } from '$lib/types/api';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
+import { enforcePostThrottle, tooManyRequests } from '$lib/server/throttle';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
 	const t = locals.t;
@@ -49,7 +50,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	return json({ comments });
 };
 
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	const user = locals.user;
 	const t = locals.t;
 	if (!user) {
@@ -78,6 +79,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		if (recipient.length === 0) {
 			return jsonError(t, 'activity.recipientNotFound', 404);
 		}
+	}
+
+	// Throttle rapid/duplicate activity posts (client also guards; this is
+	// authoritative against cross-tab/retry/script double-posts).
+	const activityThrottle = await enforcePostThrottle(
+		locals.db,
+		'post:activity',
+		user.id,
+		platform?.env
+	);
+	if (activityThrottle.blocked) {
+		return tooManyRequests(t.common.tooManyRequests, activityThrottle.retryAfter);
 	}
 
 	const activityId = await locals.db.transaction(async (tx: DbTransaction) => {

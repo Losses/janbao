@@ -18,6 +18,8 @@ interface PlatformEnv {
 	PAGINATION_LIMIT?: string;
 	ACTIVITIES_LIMIT?: string;
 	ALLOW_SLUG_CHANGE?: string;
+	POST_THROTTLE_WINDOW_SEC?: string;
+	POST_THROTTLE_LIMIT?: string;
 	SITE_URL?: string;
 }
 

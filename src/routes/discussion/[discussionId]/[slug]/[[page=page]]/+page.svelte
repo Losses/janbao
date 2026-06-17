@@ -411,7 +411,11 @@
 					<form
 						method="POST"
 						action="?/reply"
-						use:enhance={() => {
+						use:enhance={({ cancel }) => {
+							if (isSubmitting) {
+								cancel();
+								return;
+							}
 							isSubmitting = true;
 							return async ({ result, update }) => {
 								isSubmitting = false;

@@ -17,6 +17,7 @@ import { resolveMentions } from '$lib/server/utils/mentions';
 import type { DbTransaction } from '$lib/server/db';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 import { indexReply, reindexReply, unindexReply, unindexDiscussion } from '$lib/server/search/fts';
+import { enforcePostThrottle } from '$lib/server/throttle';
 
 // Self-join of users for the reply editor (distinct from the author join).
 const editors = alias(users, 'editors');
@@ -295,6 +296,13 @@ export const actions: Actions = {
 		}
 		if (contentJson.length > MAX_CONTENT_SIZE) {
 			return { success: false, error: locals.t.common.contentTooLarge };
+		}
+
+		// Throttle rapid/duplicate replies (client also guards; this is authoritative
+		// against cross-tab/retry/script double-posts).
+		const replyThrottle = await enforcePostThrottle(db, 'post:reply', user.id, platform?.env);
+		if (replyThrottle.blocked) {
+			return { success: false, error: locals.t.common.tooManyRequests };
 		}
 
 		// Insert the reply, update discussion stats, and clear draft in a transaction.

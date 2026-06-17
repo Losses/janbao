@@ -6,8 +6,9 @@ import { jsonError } from '$lib/server/errors';
 import { indexActivity } from '$lib/server/search/fts';
 import type { ActivityCommentCreateBody } from '$lib/types/api';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
+import { enforcePostThrottle, tooManyRequests } from '$lib/server/throttle';
 
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	const user = locals.user;
 	const t = locals.t;
 	if (!user) {
@@ -42,6 +43,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	if (parentRecords[0].parentActivityId !== null) {
 		return jsonError(t, 'activity.cannotNestComments', 400);
+	}
+
+	// Throttle rapid/duplicate comments (client also guards; this is authoritative
+	// against cross-tab/retry/script double-posts).
+	const commentThrottle = await enforcePostThrottle(
+		locals.db,
+		'post:activity_comment',
+		user.id,
+		platform?.env
+	);
+	if (commentThrottle.blocked) {
+		return tooManyRequests(t.common.tooManyRequests, commentThrottle.retryAfter);
 	}
 
 	const inserted = await locals.db

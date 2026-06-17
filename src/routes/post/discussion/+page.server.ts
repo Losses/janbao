@@ -1,4 +1,4 @@
-import { error, redirect } from '@sveltejs/kit';
+import { error, redirect, fail } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import {
 	categories,
@@ -13,6 +13,7 @@ import { resolvePermissions, resolveGroupSlug } from '$lib/server/constants';
 import type { DbTransaction } from '$lib/server/db';
 import { indexDiscussionTitle, indexReply } from '$lib/server/search/fts';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
+import { enforcePostThrottle } from '$lib/server/throttle';
 
 export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user;
@@ -112,6 +113,18 @@ export const actions: Actions = {
 		const perms = await resolvePermissions(db, categorySlug, user);
 		if (!perms.canCreate) {
 			return { success: false, error: event.locals.t.discussion.noPermission };
+		}
+
+		// Throttle rapid/duplicate submissions. The client also guards this; this
+		// is the authoritative check that survives cross-tab and retry double-posts.
+		const postThrottle = await enforcePostThrottle(
+			db,
+			'post:discuss',
+			user.id,
+			event.platform?.env
+		);
+		if (postThrottle.blocked) {
+			return fail(429, { error: event.locals.t.common.tooManyRequests });
 		}
 
 		const slug = generateSlug(title);
