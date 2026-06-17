@@ -51,15 +51,6 @@
 		}
 	});
 
-	function gtc(key: string): string {
-		const common = t['common'] as Record<string, string> | undefined;
-		if (common && key in common) {
-			const val = common[key];
-			return typeof val === 'string' ? val : key;
-		}
-		return key;
-	}
-
 	function handleCommentEditorChange(json: string) {
 		commentContentJson = json;
 	}
@@ -103,7 +94,7 @@
 				commentCount += 1;
 				await loadComments();
 			} else if (res.status === 429) {
-				alert(gtc('tooManyRequests'));
+				alert(t.common.tooManyRequests);
 			}
 		} catch {
 			// Silently fail
@@ -139,10 +130,10 @@
 
 <ConfirmationModal
 	open={showDeleteModal}
-	title={gtc('delete')}
-	message={gtc('deleteConfirm')}
-	confirmLabel={gtc('delete')}
-	cancelLabel={gtc('cancel')}
+	title={t.common.delete}
+	message={t.common.deleteConfirm}
+	confirmLabel={t.common.delete}
+	cancelLabel={t.common.cancel}
 	onconfirm={handleDelete}
 	oncancel={() => {
 		showDeleteModal = false;
@@ -156,7 +147,7 @@
 			<div class="mb-3 flex flex-col gap-2">
 				{#key editorKey}
 					<LexicalEditor
-						placeholder={gtc('commentPlaceholder')}
+						placeholder={t.common.commentPlaceholder}
 						contextType="activity"
 						contextId={activityId}
 						{t}
@@ -174,14 +165,14 @@
 							isLexicalEmpty(commentContentJson) ||
 							commentContentJson.length > MAX_CONTENT_SIZE}
 					>
-						{submittingComment ? gtc('saving') : gtc('submit')}
+						{submittingComment ? t.common.saving : t.common.submit}
 					</button>
 				</div>
 			</div>
 		{/if}
 
 		{#if loadingComments}
-			<p class="text-sm text-base-content/50">{gtc('loading')}</p>
+			<p class="text-sm text-base-content/50">{t.common.loading}</p>
 		{:else if comments.length > 0}
 			<div class="space-y-3">
 				{#each comments as comment (comment.id)}
@@ -222,7 +213,7 @@
 										class="btn btn-xs btn-ghost text-error/60 hover:text-error"
 										onclick={() => confirmDelete(comment.id)}
 									>
-										{gtc('delete')}
+										{t.common.delete}
 									</button>
 								{/if}
 							</div>

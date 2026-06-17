@@ -33,27 +33,10 @@
 	let commentCountState = $state(commentCount);
 
 	const first = $derived(members[0]);
-	const activityT = $derived(
-		t.activity as {
-			joined?: string;
-			welcome?: string;
-			listItemSeparator?: string;
-			listLastSeparator?: string;
-		}
-	);
-	const joinedParts = $derived((activityT.joined ?? '{users} joined').split('{users}'));
-	const itemSep = $derived(activityT.listItemSeparator ?? ', ');
-	const lastSep = $derived(activityT.listLastSeparator ?? ' and ');
-	const welcomeLine = $derived(activityT.welcome ?? '');
-
-	function gtc(key: string): string {
-		const common = t['common'] as Record<string, string> | undefined;
-		if (common && key in common) {
-			const val = common[key];
-			return typeof val === 'string' ? val : key;
-		}
-		return key;
-	}
+	const joinedParts = $derived(t.activity.joined.split('{users}'));
+	const itemSep = $derived(t.activity.listItemSeparator);
+	const lastSep = $derived(t.activity.listLastSeparator);
+	const welcomeLine = $derived(t.activity.welcome);
 </script>
 
 <div class="py-4 border-b border-base-300 last:border-b-0">
@@ -106,7 +89,7 @@
 						class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
 						onclick={() => (showEditor = !showEditor)}
 					>
-						{gtc('comment')}{commentCountState > 0 ? ` (${commentCountState})` : ''}
+						{t.common.comment}{commentCountState > 0 ? ` (${commentCountState})` : ''}
 					</button>
 				{/if}
 			</div>

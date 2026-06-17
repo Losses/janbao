@@ -62,14 +62,6 @@
 	let composeForm: HTMLFormElement | undefined = $state();
 	let editForm: HTMLFormElement | undefined = $state();
 
-	const common = $derived((t.common ?? {}) as Record<string, string>);
-	const messageT = $derived((t.message ?? {}) as Record<string, string>);
-	const editorT = $derived((t.editor ?? {}) as Record<string, string>);
-
-	function gtc(key: string): string {
-		return common[key] ?? key;
-	}
-
 	function startEdit(msg: PrivateMessage) {
 		editingMessageId = msg.id;
 		editContent = msg.contentJson;
@@ -108,7 +100,7 @@
 						</a>
 						<DateComponent value={msg.createdAt} {t} class="text-xs text-base-content/40" />
 						{#if msg.updatedAt.getTime() !== msg.createdAt.getTime()}
-							<span class="text-xs text-base-content/40">({gtc('edit')})</span>
+							<span class="text-xs text-base-content/40">({t.common.edit})</span>
 						{/if}
 					</div>
 				</div>
@@ -120,7 +112,7 @@
 							contextType="message"
 							contextId={msg.id}
 							initialContent={msg.contentJson}
-							placeholder={editorT['placeholderMessage'] ?? ''}
+							placeholder={t.editor.placeholderMessage}
 							disableImageUpload={true}
 							onContentChange={(json) => (editContent = json)}
 							onSubmit={() => {
@@ -156,10 +148,10 @@
 									editContent.length > MAX_CONTENT_SIZE ||
 									isSavingEdit}
 							>
-								{isSavingEdit ? gtc('saving') : gtc('confirm')}
+								{isSavingEdit ? t.common.saving : t.common.confirm}
 							</button>
 							<button type="button" class="btn btn-ghost btn-sm" onclick={cancelEdit}>
-								{gtc('cancel')}
+								{t.common.cancel}
 							</button>
 						</form>
 					</div>
@@ -177,7 +169,7 @@
 								class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
 								onclick={() => startEdit(msg)}
 							>
-								{gtc('edit')}
+								{t.common.edit}
 							</button>
 						</div>
 					{/if}
@@ -215,7 +207,7 @@
 								goto(url);
 							}
 						} else if (result.type === 'failure') {
-							alert(result.data?.error || gtc('error'));
+							alert(result.data?.error || t.common.error);
 						}
 					};
 				}}
@@ -226,7 +218,7 @@
 						contextType="message"
 						contextId={conversationId}
 						initialContent={editorKey === 0 ? messageDraft : null}
-						placeholder={editorT['placeholderMessage'] ?? messageT['content'] ?? ''}
+						placeholder={t.editor.placeholderMessage}
 						disableImageUpload={true}
 						onContentChange={(json) => (composeContent = json)}
 						onSubmit={() => {
@@ -244,7 +236,7 @@
 							composeContent.length > MAX_CONTENT_SIZE ||
 							isPosting}
 					>
-						{isPosting ? gtc('saving') : (messageT['send'] ?? gtc('submit'))}
+						{isPosting ? t.common.saving : t.message.send}
 					</button>
 				</div>
 			</form>

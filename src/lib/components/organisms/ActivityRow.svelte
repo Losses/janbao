@@ -54,15 +54,6 @@
 	let commentCountState = $state(commentCount);
 	let showDeleteModal = $state(false);
 
-	function gtc(key: string): string {
-		const common = t['common'] as Record<string, string> | undefined;
-		if (common && key in common) {
-			const val = common[key];
-			return typeof val === 'string' ? val : key;
-		}
-		return key;
-	}
-
 	function confirmDelete() {
 		showDeleteModal = true;
 	}
@@ -87,10 +78,10 @@
 
 <ConfirmationModal
 	open={showDeleteModal}
-	title={gtc('delete')}
-	message={gtc('deleteConfirm')}
-	confirmLabel={gtc('delete')}
-	cancelLabel={gtc('cancel')}
+	title={t.common.delete}
+	message={t.common.deleteConfirm}
+	confirmLabel={t.common.delete}
+	cancelLabel={t.common.cancel}
 	onconfirm={handleDelete}
 	oncancel={() => {
 		showDeleteModal = false;
@@ -147,7 +138,7 @@
 						class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
 						onclick={() => (showEditor = !showEditor)}
 					>
-						{gtc('comment')}{commentCountState > 0 ? ` (${commentCountState})` : ''}
+						{t.common.comment}{commentCountState > 0 ? ` (${commentCountState})` : ''}
 					</button>
 				{/if}
 				{#if currentUserId === authorId || isAdmin || currentUserId === recipientId}
@@ -156,7 +147,7 @@
 						class="btn btn-xs btn-ghost text-error/60 hover:text-error"
 						onclick={confirmDelete}
 					>
-						{gtc('delete')}
+						{t.common.delete}
 					</button>
 				{/if}
 			</div>
