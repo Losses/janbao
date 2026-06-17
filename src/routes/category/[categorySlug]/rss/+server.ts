@@ -5,6 +5,12 @@ import { formatTitle } from '$lib/utils/title';
 import { XMLBuilder } from 'fast-xml-parser';
 import { resolvePermissions, getSiteUrl } from '$lib/server/constants';
 
+// Custom namespace for forum-specific metadata exposed on each item (e.g. the
+// last-reply / edit times). These are descriptive only — the feed is ordered by
+// post time (createdAt) so a reader's timeline tracks when threads were posted.
+const FORUM_NS = 'urn:janbao:rss:forum';
+const RSS_LIMIT = 100;
+
 export const GET: RequestHandler = async (event) => {
 	const { categorySlug } = event.params;
 	const token = event.url.searchParams.get('token');
@@ -44,24 +50,31 @@ export const GET: RequestHandler = async (event) => {
 		return new Response(t.common.forbidden, { status: 403 });
 	}
 
-	// 3. Query the 20 most recent discussions in this category
+	// 3. RSS is ordered strictly by post time (createdAt, newest first) — NOT by
+	// lastReplyAt/updatedAt, which only drive the on-site list. A feed reader's
+	// timeline must reflect when threads were actually posted, not when they were
+	// bumped by a reply or touched by an edit.
 	const recentDiscussions = await db
 		.select({
 			id: discussions.id,
 			title: discussions.title,
 			slug: discussions.slug,
-			createdAt: discussions.createdAt
+			createdAt: discussions.createdAt,
+			lastReplyAt: discussions.lastReplyAt,
+			updatedAt: discussions.updatedAt
 		})
 		.from(discussions)
 		.where(and(eq(discussions.categorySlug, categorySlug), isNull(discussions.deletedAt)))
 		.orderBy(desc(discussions.createdAt))
-		.limit(20);
+		.limit(RSS_LIMIT);
 
 	// Prefer a configured SITE_URL so a client-controlled Host header can't
 	// poison the feed's link/guid URLs.
 	const siteUrl = getSiteUrl(event.platform?.env, event.url);
 
-	// 4. Build structured feed object - all text is auto-escaped by XMLBuilder
+	// 4. Build structured feed object - all text is auto-escaped by XMLBuilder.
+	// pubDate is the post time (createdAt) so readers order the feed by it; the
+	// forum:* fields only describe last-reply/edit activity and never affect order.
 	const items: Record<string, unknown>[] = recentDiscussions.map((d) => {
 		const link = `${siteUrl}/discussion/${d.id}/${d.slug}`;
 		return {
@@ -69,6 +82,8 @@ export const GET: RequestHandler = async (event) => {
 			link,
 			guid: { '@_isPermaLink': 'true', '#text': link },
 			pubDate: new Date(d.createdAt).toUTCString(),
+			'forum:lastReplyDate': new Date(d.lastReplyAt ?? d.createdAt).toUTCString(),
+			'forum:updatedDate': new Date(d.updatedAt).toUTCString(),
 			description: d.title
 		};
 	});
@@ -77,6 +92,7 @@ export const GET: RequestHandler = async (event) => {
 		rss: {
 			'@_version': '2.0',
 			'@_xmlns:atom': 'http://www.w3.org/2005/Atom',
+			'@_xmlns:forum': FORUM_NS,
 			channel: {
 				title: formatTitle(category.title),
 				link: `${siteUrl}/category/${categorySlug}`,

@@ -302,14 +302,15 @@ export const actions: Actions = {
 		let replyId: number;
 		try {
 			replyId = await db.transaction(async (tx: DbTransaction) => {
+				const now = new Date();
 				const inserted = await tx
 					.insert(replies)
 					.values({
 						discussionId,
 						authorId: user.id,
 						contentJson,
-						createdAt: new Date(),
-						updatedAt: new Date()
+						createdAt: now,
+						updatedAt: now
 					})
 					.returning({ id: replies.id });
 				await indexReply(tx, inserted[0].id, contentJson);
@@ -318,7 +319,8 @@ export const actions: Actions = {
 					.update(discussions)
 					.set({
 						commentCount: sql`${discussions.commentCount} + 1`,
-						updatedAt: new Date()
+						updatedAt: now,
+						lastReplyAt: now
 					})
 					.where(eq(discussions.id, discussionId));
 
@@ -570,7 +572,12 @@ export const actions: Actions = {
 					.update(discussions)
 					.set({
 						commentCount: sql`MAX(${discussions.commentCount} - 1, 0)`,
-						updatedAt: new Date()
+						updatedAt: new Date(),
+						// Recompute from remaining replies (the soft-delete above already
+						// marked the reply deleted in this tx, so MAX reflects post-delete
+						// state). OP is never deletable, so there is always ≥1 reply.
+						// Pure SQL recompute keeps seconds units intact (no Date round-trip).
+						lastReplyAt: sql`(SELECT MAX(${replies.createdAt}) FROM replies WHERE ${replies.discussionId} = ${replyRecord.discussionId} AND ${replies.deletedAt} IS NULL)`
 					})
 					.where(eq(discussions.id, replyRecord.discussionId));
 			});

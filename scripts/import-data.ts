@@ -47,6 +47,7 @@ interface DiscussionMeta {
 // Fields §4.5 corrects on a discussion row from its crawled page-1 HTML.
 interface DiscussionCorrection {
 	createdAt: Date;
+	lastReplyAt: Date;
 	slug?: string;
 	title?: string;
 }
@@ -1470,7 +1471,8 @@ async function main() {
 							viewCount: post.viewCount || 0,
 							commentCount: post.commentCount || 0,
 							createdAt: createdAt,
-							updatedAt: createdAt
+							updatedAt: createdAt,
+							lastReplyAt: createdAt
 						});
 						existingDiscussionIds.add(discussionId);
 						existingDiscussionsMap.set(discussionId, {
@@ -2002,8 +2004,13 @@ async function main() {
 				// Correct the discussion's slug/title/createdAt from page 1.
 				// The real slug comes from the page's pager/bookmark URLs
 				// (/discussion/{id}/{slug}/pN); the title from the <h1>.
+				// lastReplyAt = time of the latest post in the thread (OP included as
+				// the floor). sorted orders by item-position then createdAt, so its
+				// last element is not necessarily the time-max — reduce explicitly.
+				const lastReplyAt = new Date(Math.max(...sorted.map((c) => c.createdAt.getTime())));
 				const discUpdate: DiscussionCorrection = {
-					createdAt: opComment.createdAt
+					createdAt: opComment.createdAt,
+					lastReplyAt
 				};
 				if (page1Html) {
 					const slugMatch = page1Html.match(

@@ -6,7 +6,7 @@
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
-	import { goto } from '$app/navigation';
+	import { goto, invalidate } from '$app/navigation';
 	import { enhance } from '$app/forms';
 	import type { UserSearchResult, ParticipantItem } from '$lib/types/api';
 	import type { PageData } from './$types';
@@ -38,6 +38,18 @@
 	function handlePageChange(newPage: number) {
 		goto(`/messages/${conversation.id}/p${newPage}`);
 	}
+
+	// Entering a conversation marks it read server-side (see +page.server.ts
+	// step 6). The root layout load reads no params, so it is not re-run on
+	// plain client-side navigation and the sidebar unread badge would stay
+	// stale until a full reload. Invalidate the badges dependency so the
+	// layout re-fetches the true count whenever the open conversation changes
+	// (the component is reused across conversations, so onMount would only
+	// fire once).
+	$effect(() => {
+		void conversation.id; // track cross-conversation navigation
+		void invalidate('app:badges');
+	});
 </script>
 
 <svelte:head>

@@ -23,7 +23,7 @@ export interface DiscussionListItem {
 	commentCount: number;
 	isPinned: boolean;
 	createdAt: Date;
-	updatedAt: Date;
+	lastReplyAt: Date;
 	isBookmarked: boolean;
 	readHistory: ReadHistory | null;
 	unreadCount: number;
@@ -83,7 +83,7 @@ export async function getDiscussionsList(
 			commentCount: discussions.commentCount,
 			isPinned: discussions.isPinned,
 			createdAt: discussions.createdAt,
-			updatedAt: discussions.updatedAt,
+			lastReplyAt: discussions.lastReplyAt,
 			authorDisplayName: users.displayName,
 			authorUsername: users.username,
 			authorAvatarFileId: users.avatarFileId,
@@ -127,8 +127,9 @@ export async function getDiscussionsList(
 
 	baseQuery.where(and(...whereClauses));
 
-	// Order: Pinned discussions first, then updatedAt descending
-	baseQuery.orderBy(desc(discussions.isPinned), desc(discussions.updatedAt));
+	// Order: Pinned discussions first, then lastReplyAt descending (real time of
+	// the latest reply — not updatedAt, which pin/edit/delete also bump).
+	baseQuery.orderBy(desc(discussions.isPinned), desc(discussions.lastReplyAt));
 
 	baseQuery.limit(limit).offset(offset);
 
@@ -253,7 +254,9 @@ export async function getDiscussionsList(
 		commentCount: row.commentCount,
 		isPinned: row.isPinned,
 		createdAt: row.createdAt,
-		updatedAt: row.updatedAt,
+		// Column is nullable (SQLite ALTER TABLE limitation); backfill + every
+		// insert set it, but coalesce to createdAt so the DTO stays non-null.
+		lastReplyAt: row.lastReplyAt ?? row.createdAt,
 		isBookmarked: row.isBookmarked === 1,
 		readHistory: row.lastReadAt
 			? {

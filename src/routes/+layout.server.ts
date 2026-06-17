@@ -2,18 +2,36 @@ import type { LayoutServerLoad } from './$types';
 import { countUnreadNotifications } from '$lib/server/db/dao/notifications';
 import { countTotalUnreadMessages } from '$lib/server/db/dao/messages';
 
-export const load: LayoutServerLoad = async ({ locals }) => {
+export const load: LayoutServerLoad = async ({ locals, depends }) => {
+	depends('app:badges');
 	const user = locals.user;
 
-	// Sidebar icon unread counts. Fetched once per navigation (no polling) and
-	// seeded into the badges store by +layout.svelte. Logged-out users get 0.
+	// Sidebar icon unread counts. Seeded into the badges store by
+	// +layout.svelte. The layout load reads no params, so it is NOT re-run on
+	// plain client-side navigation; callers that mutate unread state (e.g.
+	// reading a conversation) invalidate 'app:badges' to force a re-fetch.
+	// Logged-out users get 0.
 	let unreadNotificationCount = 0;
 	let unreadMessageCount = 0;
 	if (user) {
-		[unreadNotificationCount, unreadMessageCount] = await Promise.all([
+		// Badge counts are non-critical: a DB/FTS hiccup here must not crash
+		// the whole layout (and therefore the entire app). Run the two counts
+		// independently via allSettled so one failing does not mask the other,
+		// and fall back to 0 on rejection.
+		const [notifications, messages] = await Promise.allSettled([
 			countUnreadNotifications(locals.db, user.id),
 			countTotalUnreadMessages(locals.db, user.id)
 		]);
+		if (notifications.status === 'fulfilled') {
+			unreadNotificationCount = notifications.value;
+		} else {
+			console.error('[badges] countUnreadNotifications failed:', notifications.reason);
+		}
+		if (messages.status === 'fulfilled') {
+			unreadMessageCount = messages.value;
+		} else {
+			console.error('[badges] countTotalUnreadMessages failed:', messages.reason);
+		}
 	}
 
 	return {

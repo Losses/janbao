@@ -21,7 +21,7 @@
 		viewCount: number;
 		commentCount: number;
 		isPinned: boolean;
-		updatedAt: Date | string | number;
+		lastReplyAt: Date | string | number;
 	}
 
 	interface DiscussionReadHistory {
@@ -175,7 +175,7 @@
 			{/if}
 
 			<span class="text-base-content/30">•</span>
-			<DateAtom value={discussion.updatedAt} {t} />
+			<DateAtom value={discussion.lastReplyAt} {t} />
 		</div>
 	</div>
 

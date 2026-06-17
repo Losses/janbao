@@ -116,6 +116,9 @@ export const actions: Actions = {
 
 		const slug = generateSlug(title);
 		let discussionId: number;
+		// Single timestamp for the discussion row, its OP reply, and lastReplyAt
+		// so they never drift apart by microseconds across separate new Date() calls.
+		const now = new Date();
 
 		try {
 			// Insert discussion + OP reply + clear draft atomically, keeping the
@@ -132,8 +135,9 @@ export const actions: Actions = {
 						viewCount: 0,
 						commentCount: 0,
 						isPinned: false,
-						createdAt: new Date(),
-						updatedAt: new Date()
+						createdAt: now,
+						updatedAt: now,
+						lastReplyAt: now
 					})
 					.returning({ id: discussions.id });
 				const did = inserted[0].id;
@@ -146,8 +150,8 @@ export const actions: Actions = {
 						discussionId: did,
 						authorId: user.id,
 						contentJson,
-						createdAt: new Date(),
-						updatedAt: new Date()
+						createdAt: now,
+						updatedAt: now
 					})
 					.returning({ id: replies.id });
 				await indexReply(tx, opInserted[0].id, contentJson);

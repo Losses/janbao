@@ -71,6 +71,13 @@
       "when": 1781665052622,
       "tag": "0009_giant_terrax",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1781675519181,
+      "tag": "0010_smooth_kinsey_walden",
+      "breakpoints": true
     }
   ]
 }

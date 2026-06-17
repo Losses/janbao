@@ -109,6 +109,14 @@ export const discussions = sqliteTable(
 		updatedAt: integer('updated_at', { mode: 'timestamp' })
 			.notNull()
 			.default(sql`(strftime('%s', 'now'))`),
+		// Denormalized "time of the latest non-deleted reply" (OP included).
+		// Maintained on reply create/delete + at import; NOT bumped by pin/edit/
+		// delete (those touch updatedAt only). Drives list display + sort so the
+		// list time matches the actual last post inside the thread.
+		// Nullable: SQLite ALTER TABLE ADD COLUMN rejects non-constant defaults
+		// (strftime('%s','now')), so the migration adds it nullable and backfills.
+		// Every insert sets it; the DAO coalesces NULL → createdAt for consumers.
+		lastReplyAt: integer('last_reply_at', { mode: 'timestamp' }),
 		deletedAt: integer('deleted_at', { mode: 'timestamp' })
 	},
 	(table) => ({
@@ -116,9 +124,14 @@ export const discussions = sqliteTable(
 		authorIdx: index('discussions_author_idx').on(table.authorId),
 		createdIdx: index('discussions_created_idx').on(table.createdAt),
 		updatedIdx: index('discussions_updated_idx').on(table.updatedAt),
+		lastReplyIdx: index('discussions_last_reply_idx').on(table.lastReplyAt),
 		categoryUpdatedIdx: index('discussions_category_updated_idx').on(
 			table.categorySlug,
 			table.updatedAt
+		),
+		categoryLastReplyIdx: index('discussions_category_last_reply_idx').on(
+			table.categorySlug,
+			table.lastReplyAt
 		)
 	})
 );
