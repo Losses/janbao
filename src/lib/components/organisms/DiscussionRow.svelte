@@ -161,20 +161,16 @@
 				{discussion.authorDisplayName}
 			</a>
 
-			<span class="text-base-content/30">•</span>
 			<span>{discussion.viewCount} {viewsText}</span>
-			<span class="text-base-content/30">•</span>
 			<span>{discussion.commentCount} {repliesText}</span>
 
 			{#if lastReplyAuthorDisplayName}
-				<span class="text-base-content/30">•</span>
 				<a
 					href="/profile/{lastReplyAuthorId}/{lastReplyAuthorSlug}"
 					class="hover:underline font-medium text-base-content/60">{lastReplyAuthorDisplayName}</a
 				>
 			{/if}
 
-			<span class="text-base-content/30">•</span>
 			<DateAtom value={discussion.lastReplyAt} {t} />
 		</div>
 	</div>
