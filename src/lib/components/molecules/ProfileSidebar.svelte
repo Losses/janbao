@@ -48,9 +48,9 @@
 	const canManageTargetGroup = $derived(
 		isAdmin &&
 			targetUserGroupSlug !== null &&
-			targetUserGroupSlug !== 'admin' &&
 			targetUserGroupSlug !== 'system' &&
-			user?.id !== targetUserId
+			user?.id !== targetUserId &&
+			(isSuperAdmin || targetUserGroupSlug !== 'admin')
 	);
 	// The reset-link button mirrors the server rule: only the super-admin may
 	// reset another admin's password, and NO ONE resets the system sentinel.
