@@ -1,15 +1,18 @@
 <script lang="ts">
+	import type { TranslationDict } from '$lib/types/translation';
+
 	/**
 	 * Logo Atom - Renders a theme-aware SVG logo component.
 	 */
 	interface LogoProps {
+		t: TranslationDict;
 		class?: string;
 	}
 
-	let { class: className = '' }: LogoProps = $props();
+	let { t, class: className = '' }: LogoProps = $props();
 </script>
 
-<a href="/" class="flex items-center {className}" aria-label="Home">
+<a href="/" class="flex items-center {className}" aria-label={t.nav.home}>
 	<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 40" class="h-10 w-auto">
 		<g paint-order="markers stroke fill">
 			<path

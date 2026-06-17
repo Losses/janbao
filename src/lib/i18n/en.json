@@ -136,7 +136,8 @@
 		"myDrafts": "My Drafts",
 		"activeUsers": "Active Users",
 		"categoryList": "Categories",
-		"quickLinks": "Quick Links"
+		"quickLinks": "Quick Links",
+		"closeAria": "Close sidebar"
 	},
 	"editor": {
 		"placeholder": "Write something...",
@@ -176,12 +177,14 @@
 		"imageUrl": "Image URL",
 		"dragDropHint": "Drag & drop image here, or click to upload",
 		"altText": "Alt Text",
-		"uploading": "Uploading..."
+		"uploading": "Uploading...",
+		"urlLabel": "URL"
 	},
 	"pagination": {
 		"previous": "Previous",
 		"next": "Next",
-		"page": "Page"
+		"page": "Page",
+		"label": "Pagination"
 	},
 	"date": {
 		"justNow": "just now",
@@ -311,7 +314,11 @@
 		"category": "Category",
 		"content": "Content",
 		"previewEmpty": "Nothing to preview yet.",
-		"updateFailed": "Failed to update discussion"
+		"updateFailed": "Failed to update discussion",
+		"createReplyFailed": "Failed to create reply",
+		"editReplyFailed": "Failed to edit reply",
+		"deleteReplyFailed": "Failed to delete reply",
+		"deleteDiscussionFailed": "Failed to delete discussion"
 	},
 	"category": {
 		"notFound": "Category not found",
@@ -341,7 +348,8 @@
 		"dbError": "Database error",
 		"myBookmarks": "Bookmarks",
 		"noBookmarks": "You have no bookmarks yet",
-		"startedBy": "Started by"
+		"startedBy": "Started by",
+		"toggleAria": "Bookmark"
 	},
 	"upload": {
 		"noFile": "No file uploaded",
@@ -352,7 +360,8 @@
 	"img": {
 		"notFound": "Not found",
 		"storageError": "Failed to retrieve file",
-		"deadImage": "Image no longer available"
+		"deadImage": "Image no longer available",
+		"image": "Image"
 	},
 	"rss": {
 		"unauthorized": "Unauthorized"
@@ -381,14 +390,14 @@
 		"startedBy": "Started by",
 		"participantAdded": "Participant added",
 		"participantExists": "User is already a participant",
-		"removeRecipient": "Remove recipient"
+		"removeRecipient": "Remove recipient",
+		"removeRecipientAria": "Remove {name}"
 	},
 	"invitation": {
 		"thisMonthAllowance": "This month you have {count} invitation code(s) available.",
 		"requestCode": "Request Invitation Code",
 		"code": "Code",
 		"usedBy": "Used By",
-		"unused": "Unused",
 		"requestedAt": "Requested At",
 		"status": "Status",
 		"expiresAt": "Expires At",

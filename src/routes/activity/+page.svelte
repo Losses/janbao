@@ -56,6 +56,8 @@
 				await invalidateAll();
 			} else if (res.status === 429) {
 				alert(t.common.tooManyRequests);
+			} else {
+				alert(t.common.error);
 			}
 		} catch {
 			// Silently fail

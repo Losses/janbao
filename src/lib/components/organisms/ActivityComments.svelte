@@ -95,6 +95,9 @@
 				await loadComments();
 			} else if (res.status === 429) {
 				alert(t.common.tooManyRequests);
+			} else {
+				const data = (await res.json().catch(() => null)) as ApiResult | null;
+				alert(data?.error || t.common.error);
 			}
 		} catch {
 			// Silently fail
@@ -197,11 +200,7 @@
 								</a>
 							</div>
 							<div class="mt-0.5">
-								<LexicalRenderer
-									contentJson={comment.contentJson}
-									class="text-sm"
-									deadImageLabel={t.img.deadImage}
-								/>
+								<LexicalRenderer contentJson={comment.contentJson} class="text-sm" {t} />
 							</div>
 							<div class="flex justify-end items-center gap-2 mt-1">
 								<div class="flex-1 text-xs text-base-content/50">

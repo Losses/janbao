@@ -3,6 +3,7 @@
 	import { generateSlug } from '$lib/utils/slug';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import { mdiImageBrokenVariant } from '@mdi/js';
+	import type { TranslationDict } from '$lib/types/translation';
 	/**
 	 * LexicalRenderer Molecule - Recursively renders Lexical JSON states securely on the client.
 	 * Supports standard text formats (bold, italic, underline, strikethrough, inline code),
@@ -29,14 +30,14 @@
 		contentJson?: string | null;
 		class?: string;
 		mentionedUsers?: MentionedUsersMap | null;
-		deadImageLabel?: string;
+		t: TranslationDict;
 	}
 
 	let {
 		contentJson = null,
 		class: className = '',
 		mentionedUsers = null,
-		deadImageLabel = 'Image no longer available'
+		t
 	}: LexicalRendererProps = $props();
 
 	/**
@@ -304,7 +305,7 @@
 			{#if safeUrl(node.src)}
 				<img
 					src={safeUrl(node.src)}
-					alt={node.altText || 'Image'}
+					alt={node.altText || t.img.image}
 					class="max-w-full my-3 rounded-field border border-base-300 shadow-sm"
 					loading="lazy"
 				/>
@@ -314,7 +315,7 @@
 				class="dead-image-placeholder inline-flex items-center gap-2 my-3 px-3 py-2 rounded-field border border-dashed border-base-300 bg-base-200/50 text-base-content/60 text-sm"
 			>
 				<Icon path={mdiImageBrokenVariant} size={20} class="opacity-50" />
-				{deadImageLabel}
+				{t.img.deadImage}
 			</span>
 		{:else if node.children}
 			{#each node.children as child, i (i)}

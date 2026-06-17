@@ -2,6 +2,7 @@
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import DateAtom from '$lib/components/atoms/Date.svelte';
 	import { generateSlug } from '$lib/utils/slug';
+	import { getContext } from 'svelte';
 
 	/**
 	 * DiscussionMetadata Molecule - Displays a unified header for threads and replies.
@@ -9,7 +10,7 @@
 	 *   - Top: User Display Name (links to /profile/:userId/:userSlug)
 	 *   - Bottom: Relative date (via Date component), last edited indicator.
 	 */
-	import type { TranslationDict } from '$lib/types/translation';
+	import type { TranslationDict, LocaleGetter } from '$lib/types/translation';
 
 	interface DiscussionMetadataProps {
 		userId: number;
@@ -22,7 +23,7 @@
 		/** Display name of the user who last edited (may differ from the author). */
 		editedByDisplayName?: string | null;
 		/** Translation dictionary */
-		t?: TranslationDict | null;
+		t: TranslationDict;
 		class?: string;
 	}
 
@@ -34,16 +35,17 @@
 		createdAt,
 		editedAt = null,
 		editedByDisplayName = null,
-		t = null,
+		t,
 		class: className = ''
 	}: DiscussionMetadataProps = $props();
 
+	/** App locale ('en' | 'zh-CN') published by the root layout via context. */
+	const getLang = getContext<LocaleGetter>('app:lang');
+
 	const userSlug = $derived(generateSlug(username || displayName || 'user'));
 
-	const commonT = $derived((t as Record<string, Record<string, string>> | null)?.common ?? {});
-
 	// "Last edited" label shown before the edit timestamp.
-	const lastEditedLabel = $derived(commonT.lastEdited ?? 'last edited');
+	const lastEditedLabel = $derived(t.common.lastEdited);
 
 	// Single unified tooltip for the whole "last edited" marker: the editor
 	// (if known) plus the absolute edit timestamp. Applied to both the wrapper
@@ -53,7 +55,7 @@
 		if (!editedAt) return undefined;
 		const d = new Date(editedAt);
 		if (isNaN(d.getTime())) return undefined;
-		const abs = d.toLocaleString(undefined, {
+		const abs = d.toLocaleString(getLang?.() ?? undefined, {
 			year: 'numeric',
 			month: '2-digit',
 			day: '2-digit',
@@ -62,8 +64,7 @@
 			second: '2-digit'
 		});
 		if (editedByDisplayName) {
-			const template = commonT.editedFull ?? 'edited by {name} · {time}';
-			return template.replace('{name}', editedByDisplayName).replace('{time}', abs);
+			return t.common.editedFull.replace('{name}', editedByDisplayName).replace('{time}', abs);
 		}
 		return abs;
 	});

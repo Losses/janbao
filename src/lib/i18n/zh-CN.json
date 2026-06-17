@@ -136,7 +136,8 @@
 		"myDrafts": "我的草稿",
 		"activeUsers": "在线用户",
 		"categoryList": "话题列表",
-		"quickLinks": "快捷链接"
+		"quickLinks": "快捷链接",
+		"closeAria": "关闭侧边栏"
 	},
 	"editor": {
 		"placeholder": "写点什么...",
@@ -176,12 +177,14 @@
 		"imageUrl": "图片外链",
 		"dragDropHint": "拖拽图片至此处，或点击上传",
 		"altText": "替代文本",
-		"uploading": "上传中..."
+		"uploading": "上传中...",
+		"urlLabel": "URL"
 	},
 	"pagination": {
 		"previous": "上一页",
 		"next": "下一页",
-		"page": "页"
+		"page": "页",
+		"label": "分页"
 	},
 	"date": {
 		"justNow": "刚刚",
@@ -311,7 +314,11 @@
 		"category": "板块",
 		"content": "正文",
 		"previewEmpty": "暂无预览内容。",
-		"updateFailed": "更新讨论失败"
+		"updateFailed": "更新讨论失败",
+		"createReplyFailed": "创建回复失败",
+		"editReplyFailed": "编辑回复失败",
+		"deleteReplyFailed": "删除回复失败",
+		"deleteDiscussionFailed": "删除讨论失败"
 	},
 	"category": {
 		"notFound": "话题分类未找到",
@@ -341,7 +348,8 @@
 		"dbError": "数据库错误",
 		"myBookmarks": "收藏",
 		"noBookmarks": "暂无收藏",
-		"startedBy": "发起人"
+		"startedBy": "发起人",
+		"toggleAria": "收藏"
 	},
 	"upload": {
 		"noFile": "未上传文件",
@@ -352,7 +360,8 @@
 	"img": {
 		"notFound": "未找到",
 		"storageError": "无法获取文件",
-		"deadImage": "图片已失效"
+		"deadImage": "图片已失效",
+		"image": "图片"
 	},
 	"rss": {
 		"unauthorized": "未授权"
@@ -381,14 +390,14 @@
 		"startedBy": "发起人",
 		"participantAdded": "参与者已添加",
 		"participantExists": "该用户已是参与者",
-		"removeRecipient": "移除收件人"
+		"removeRecipient": "移除收件人",
+		"removeRecipientAria": "移除 {name}"
 	},
 	"invitation": {
 		"thisMonthAllowance": "本月你还有 {count} 个邀请码可用。",
 		"requestCode": "申请邀请码",
 		"code": "邀请码",
 		"usedBy": "使用者",
-		"unused": "未使用",
 		"requestedAt": "申请时间",
 		"status": "状态",
 		"expiresAt": "过期时间",

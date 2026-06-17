@@ -209,11 +209,7 @@
 					editedByDisplayName={opReply.editedByDisplayName}
 					{t}
 				/>
-				<LexicalRenderer
-					contentJson={opReply.contentJson}
-					{mentionedUsers}
-					deadImageLabel={t.img.deadImage}
-				/>
+				<LexicalRenderer contentJson={opReply.contentJson} {mentionedUsers} {t} />
 				{#if user}
 					<div class="flex justify-end items-center gap-2 pt-2">
 						{#if canDelete}
@@ -299,16 +295,27 @@
 							<form
 								method="POST"
 								action="?/editReply"
-								use:enhance={() => {
+								use:enhance={({ cancel }) => {
+									if (isSubmitting) {
+										cancel();
+										return;
+									}
 									isSubmitting = true;
 									return async ({ result, update }) => {
 										isSubmitting = false;
-										if (result.type === 'success') {
+										if (
+											result.type === 'success' &&
+											result.data &&
+											'success' in result.data &&
+											result.data.success === false
+										) {
+											alert(result.data.error || t.discussion.editReplyFailed);
+										} else if (result.type === 'success') {
 											await update();
 											editingReplyId = null;
 											editReplyContent = '';
 										} else if (result.type === 'failure') {
-											alert(result.data?.error || 'Failed to edit reply');
+											alert(result.data?.error || t.discussion.editReplyFailed);
 										}
 									};
 								}}
@@ -337,11 +344,7 @@
 								</button>
 							</form>
 						{:else}
-							<LexicalRenderer
-								contentJson={reply.contentJson}
-								{mentionedUsers}
-								deadImageLabel={t.img.deadImage}
-							/>
+							<LexicalRenderer contentJson={reply.contentJson} {mentionedUsers} {t} />
 							{#if user}
 								<div class="flex justify-end items-center gap-2 mt-2">
 									{#if canCreate}
@@ -427,7 +430,7 @@
 								if (result.type === 'success') {
 									const resData = result.data as ReplyActionResult | null;
 									if (resData && resData.success === false) {
-										alert(resData.error || 'Failed to create reply');
+										alert(resData.error || t.discussion.createReplyFailed);
 										return;
 									}
 									await update({ reset: true });
@@ -443,7 +446,7 @@
 										goto(url);
 									}
 								} else if (result.type === 'failure') {
-									alert(result.data?.error || 'Failed to create reply');
+									alert(result.data?.error || t.discussion.createReplyFailed);
 								}
 							};
 						}}
@@ -508,7 +511,7 @@
 			if (result.type === 'redirect') {
 				goto(result.location);
 			} else if (result.type === 'failure') {
-				alert(result.data?.error || 'Failed to delete discussion');
+				alert(result.data?.error || t.discussion.deleteDiscussionFailed);
 			}
 		};
 	}}
@@ -522,7 +525,7 @@
 	use:enhance={() => {
 		return async ({ result, update }) => {
 			if (result.type === 'failure') {
-				alert(result.data?.error || 'Failed to delete reply');
+				alert(result.data?.error || t.discussion.deleteReplyFailed);
 			}
 			await update();
 		};

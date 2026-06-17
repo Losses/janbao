@@ -56,15 +56,10 @@
 		activeEditor: LexicalEditor;
 		disableHeadings?: boolean;
 		disableImageUpload?: boolean;
-		t?: TranslationDict | null;
+		t: TranslationDict;
 	}
 
-	let {
-		activeEditor,
-		disableHeadings = false,
-		disableImageUpload = false,
-		t = null
-	}: Props = $props();
+	let { activeEditor, disableHeadings = false, disableImageUpload = false, t }: Props = $props();
 
 	// Retrieve stores from svelte-lexical's context
 	const isBold = getContext<Writable<boolean>>('isBold');
@@ -164,7 +159,7 @@
 	async function handleFileUpload(file: File) {
 		const MAX_ATTACHMENT = 5 * 1024 * 1024;
 		if (file.size > MAX_ATTACHMENT) {
-			uploadError = t?.upload?.fileTooLarge ?? 'File size exceeds the limit';
+			uploadError = t.upload.fileTooLarge;
 			return;
 		}
 
@@ -177,7 +172,7 @@
 			'image/bmp'
 		];
 		if (!allowedTypes.includes(file.type)) {
-			uploadError = t?.upload?.invalidType ?? 'Unsupported file type';
+			uploadError = t.upload.invalidType;
 			return;
 		}
 
@@ -192,7 +187,7 @@
 			const result = (await res.json()) as { url?: string; error?: string };
 
 			if (!res.ok || !result.url) {
-				uploadError = result.error || t?.upload?.uploadFailed || 'Upload failed';
+				uploadError = result.error || t.upload.uploadFailed;
 				uploading = false;
 				return;
 			}
@@ -210,7 +205,7 @@
 			uploadError = null;
 			activeEditor.focus();
 		} catch {
-			uploadError = t?.auth?.networkError ?? 'Network error, please try again.';
+			uploadError = t.auth.networkError;
 		} finally {
 			uploading = false;
 		}
@@ -249,17 +244,17 @@
 		<div class="dropdown">
 			<div tabindex="0" role="button" class="btn btn-xs btn-ghost gap-1 font-semibold text-xs">
 				<span>
-					{#if $blockType === 'paragraph'}{t?.editor?.normal ?? 'Normal'}
-					{:else if $blockType === 'h1'}{t?.editor?.heading1 ?? 'H1'}
-					{:else if $blockType === 'h2'}{t?.editor?.heading2 ?? 'H2'}
-					{:else if $blockType === 'h3'}{t?.editor?.heading3 ?? 'H3'}
-					{:else if $blockType === 'h4'}{t?.editor?.heading4 ?? 'H4'}
-					{:else if $blockType === 'quote'}{t?.editor?.quote ?? 'Quote'}
-					{:else if $blockType === 'code'}{t?.editor?.codeBlock ?? 'Code'}
-					{:else if $blockType === 'bullet'}{t?.editor?.bulletList ?? 'Bulleted List'}
-					{:else if $blockType === 'number'}{t?.editor?.numberedList ?? 'Numbered List'}
-					{:else if $blockType === 'check'}{t?.editor?.checkList ?? 'Check List'}
-					{:else}{t?.editor?.normal ?? 'Normal'}
+					{#if $blockType === 'paragraph'}{t.editor.normal}
+					{:else if $blockType === 'h1'}{t.editor.heading1}
+					{:else if $blockType === 'h2'}{t.editor.heading2}
+					{:else if $blockType === 'h3'}{t.editor.heading3}
+					{:else if $blockType === 'h4'}{t.editor.heading4}
+					{:else if $blockType === 'quote'}{t.editor.quote}
+					{:else if $blockType === 'code'}{t.editor.codeBlock}
+					{:else if $blockType === 'bullet'}{t.editor.bulletList}
+					{:else if $blockType === 'number'}{t.editor.numberedList}
+					{:else if $blockType === 'check'}{t.editor.checkList}
+					{:else}{t.editor.normal}
 					{/if}
 				</span>
 				<Icon path={mdiChevronDown} size={14} />
@@ -276,7 +271,7 @@
 						}}
 					>
 						<Icon path={mdiFormatParagraph} size={18} />
-						<span>{t?.editor?.normal ?? 'Normal'}</span>
+						<span>{t.editor.normal}</span>
 					</button>
 				</li>
 				<li>
@@ -289,7 +284,7 @@
 						}}
 					>
 						<Icon path={mdiFormatHeader1} size={18} />
-						<span>{t?.editor?.heading1 ?? 'Heading 1'}</span>
+						<span>{t.editor.heading1}</span>
 					</button>
 				</li>
 				<li>
@@ -302,7 +297,7 @@
 						}}
 					>
 						<Icon path={mdiFormatHeader2} size={18} />
-						<span>{t?.editor?.heading2 ?? 'Heading 2'}</span>
+						<span>{t.editor.heading2}</span>
 					</button>
 				</li>
 				<li>
@@ -315,7 +310,7 @@
 						}}
 					>
 						<Icon path={mdiFormatHeader3} size={18} />
-						<span>{t?.editor?.heading3 ?? 'Heading 3'}</span>
+						<span>{t.editor.heading3}</span>
 					</button>
 				</li>
 				<li>
@@ -328,7 +323,7 @@
 						}}
 					>
 						<Icon path={mdiFormatHeader4} size={18} />
-						<span>{t?.editor?.heading4 ?? 'Heading 4'}</span>
+						<span>{t.editor.heading4}</span>
 					</button>
 				</li>
 				<li>
@@ -341,7 +336,7 @@
 						}}
 					>
 						<Icon path={mdiFormatQuoteClose} size={18} />
-						<span>{t?.editor?.quote ?? 'Quote'}</span>
+						<span>{t.editor.quote}</span>
 					</button>
 				</li>
 				<li>
@@ -354,7 +349,7 @@
 						}}
 					>
 						<Icon path={mdiCodeBraces} size={18} />
-						<span>{t?.editor?.codeBlock ?? 'Code Block'}</span>
+						<span>{t.editor.codeBlock}</span>
 					</button>
 				</li>
 			</ul>
@@ -371,7 +366,7 @@
 			class:btn-active={$isBold}
 			class:btn-ghost={!$isBold}
 			onclick={() => toggleBold(activeEditor)}
-			title="{t?.editor?.bold ?? 'Bold'} (Ctrl+B)"
+			title="{t.editor.bold} (Ctrl+B)"
 		>
 			<Icon path={mdiFormatBold} size={16} />
 		</button>
@@ -381,7 +376,7 @@
 			class:btn-active={$isItalic}
 			class:btn-ghost={!$isItalic}
 			onclick={() => toggleItalic(activeEditor)}
-			title="{t?.editor?.italic ?? 'Italic'} (Ctrl+I)"
+			title="{t.editor.italic} (Ctrl+I)"
 		>
 			<Icon path={mdiFormatItalic} size={16} />
 		</button>
@@ -391,7 +386,7 @@
 			class:btn-active={$isUnderline}
 			class:btn-ghost={!$isUnderline}
 			onclick={() => toggleUnderline(activeEditor)}
-			title="{t?.editor?.underline ?? 'Underline'} (Ctrl+U)"
+			title="{t.editor.underline} (Ctrl+U)"
 		>
 			<Icon path={mdiFormatUnderline} size={16} />
 		</button>
@@ -401,7 +396,7 @@
 			class:btn-active={$isStrikethrough}
 			class:btn-ghost={!$isStrikethrough}
 			onclick={() => toggleStrikethrough(activeEditor)}
-			title={t?.editor?.strikethrough ?? 'Strikethrough'}
+			title={t.editor.strikethrough}
 		>
 			<Icon path={mdiFormatStrikethrough} size={16} />
 		</button>
@@ -411,7 +406,7 @@
 			class:btn-active={isHighlight}
 			class:btn-ghost={!isHighlight}
 			onclick={handleToggleHighlight}
-			title={t?.editor?.highlight ?? 'Marker Highlight'}
+			title={t.editor.highlight}
 		>
 			<Icon path={mdiMarker} size={16} />
 		</button>
@@ -421,7 +416,7 @@
 			class:btn-active={isSpoiler}
 			class:btn-ghost={!isSpoiler}
 			onclick={handleToggleSpoiler}
-			title={t?.editor?.spoiler ?? 'Spoiler'}
+			title={t.editor.spoiler}
 		>
 			<Icon path={mdiEyeOff} size={16} />
 		</button>
@@ -437,7 +432,7 @@
 			class:btn-active={$blockType === 'bullet'}
 			class:btn-ghost={$blockType !== 'bullet'}
 			onclick={() => formatBulletList(activeEditor, $blockType)}
-			title={t?.editor?.bulletList ?? 'Bulleted List'}
+			title={t.editor.bulletList}
 		>
 			<Icon path={mdiFormatListBulleted} size={16} />
 		</button>
@@ -447,7 +442,7 @@
 			class:btn-active={$blockType === 'number'}
 			class:btn-ghost={$blockType !== 'number'}
 			onclick={() => formatNumberedList(activeEditor, $blockType)}
-			title={t?.editor?.numberedList ?? 'Numbered List'}
+			title={t.editor.numberedList}
 		>
 			<Icon path={mdiFormatListNumbered} size={16} />
 		</button>
@@ -457,7 +452,7 @@
 			class:btn-active={$blockType === 'check'}
 			class:btn-ghost={$blockType !== 'check'}
 			onclick={() => formatCheckList(activeEditor, $blockType)}
-			title={t?.editor?.checkList ?? 'Check List'}
+			title={t.editor.checkList}
 		>
 			<Icon path={mdiFormatListChecks} size={16} />
 		</button>
@@ -473,7 +468,7 @@
 			class:btn-active={$isLink}
 			class:btn-ghost={!$isLink}
 			onclick={handleToggleLink}
-			title={t?.editor?.link ?? 'Insert Link'}
+			title={t.editor.link}
 		>
 			<Icon path={mdiLink} size={16} />
 		</button>
@@ -483,7 +478,7 @@
 				type="button"
 				class="btn btn-xs btn-ghost"
 				onclick={openImageModal}
-				title={t?.editor?.image ?? 'Insert Image'}
+				title={t.editor.image}
 			>
 				<Icon path={mdiImage} size={16} />
 			</button>
@@ -501,16 +496,16 @@
 				type="button"
 				class="btn btn-sm btn-circle btn-ghost absolute right-4 top-4 text-error"
 				onclick={() => (showLinkModal = false)}
-				title={t?.editor?.close ?? 'Close'}
+				title={t.editor.close}
 			>
 				<Icon path={mdiClose} size={18} />
 			</button>
 
-			<h3 class="text-lg font-bold mb-4">{t?.editor?.link ?? 'Insert Link'}</h3>
+			<h3 class="text-lg font-bold mb-4">{t.editor.link}</h3>
 
 			<div class="form-control w-full mb-3">
 				<label for="editor-link-url" class="label label-text font-semibold p-1 text-base-content/70"
-					>URL</label
+					>{t.editor.urlLabel}</label
 				>
 				<input
 					id="editor-link-url"
@@ -527,7 +522,7 @@
 
 			<div class="modal-action mt-6 flex justify-end gap-2">
 				<button type="button" class="btn btn-sm btn-ghost" onclick={() => (showLinkModal = false)}>
-					{t?.common?.cancel ?? 'Cancel'}
+					{t.common.cancel}
 				</button>
 				<button
 					type="button"
@@ -535,7 +530,7 @@
 					disabled={!linkUrl.trim()}
 					onclick={handleConfirmLink}
 				>
-					{t?.common?.confirm ?? 'Confirm'}
+					{t.common.confirm}
 				</button>
 			</div>
 		</div>
@@ -552,13 +547,13 @@
 				type="button"
 				class="btn btn-sm btn-circle btn-ghost absolute right-4 top-4 text-error"
 				onclick={() => (showImageModal = false)}
-				title={t?.editor?.close ?? 'Close'}
+				title={t.editor.close}
 				disabled={uploading}
 			>
 				<Icon path={mdiClose} size={18} />
 			</button>
 
-			<h3 class="text-lg font-bold mb-4">{t?.editor?.image ?? 'Insert Image'}</h3>
+			<h3 class="text-lg font-bold mb-4">{t.editor.image}</h3>
 
 			<div class="tabs tabs-boxed mb-4 bg-base-200 p-1 rounded-box">
 				<button
@@ -572,7 +567,7 @@
 					}}
 					disabled={uploading}
 				>
-					{t?.editor?.uploadImage ?? 'Upload Image'}
+					{t.editor.uploadImage}
 				</button>
 				<button
 					type="button"
@@ -585,7 +580,7 @@
 					}}
 					disabled={uploading}
 				>
-					{t?.editor?.imageUrl ?? 'Image URL'}
+					{t.editor.imageUrl}
 				</button>
 			</div>
 
@@ -596,9 +591,7 @@
 							class="flex flex-col items-center justify-center p-8 border border-base-300 rounded-field bg-base-200/30 gap-3 min-h-[160px]"
 						>
 							<span class="loading loading-spinner loading-md text-primary"></span>
-							<span class="text-sm font-medium text-base-content/70"
-								>{t?.editor?.uploading ?? 'Uploading...'}</span
-							>
+							<span class="text-sm font-medium text-base-content/70">{t.editor.uploading}</span>
 						</div>
 					{:else}
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -615,12 +608,10 @@
 						>
 							<Icon path={mdiUpload} size={32} class="opacity-80" />
 							<p class="text-center text-sm font-medium">
-								{t?.editor?.dragDropHint ?? 'Drag & drop image here, or click to upload'}
+								{t.editor.dragDropHint}
 							</p>
 							<span class="text-xs text-base-content/40 text-center">
-								{t?.profile?.avatarRequirements
-									? t.profile.avatarRequirements.replace('1MB', '5MB').replace('1M', '5M')
-									: 'Max 5MB. Supports PNG, JPG, WebP, GIF, AVIF, BMP.'}
+								{t.profile.avatarRequirements.replace('1MB', '5MB').replace('1M', '5M')}
 							</span>
 						</div>
 						<input
@@ -648,7 +639,7 @@
 							onclick={() => (showImageModal = false)}
 							disabled={uploading}
 						>
-							{t?.common?.cancel ?? 'Cancel'}
+							{t.common.cancel}
 						</button>
 					</div>
 				</div>
@@ -658,7 +649,7 @@
 						for="editor-image-url"
 						class="label label-text font-semibold p-1 text-base-content/70"
 					>
-						{t?.editor?.imageUrl ?? 'Image URL'}
+						{t.editor.imageUrl}
 					</label>
 					<input
 						id="editor-image-url"
@@ -677,7 +668,7 @@
 						for="editor-image-alt"
 						class="label label-text font-semibold p-1 text-base-content/70"
 					>
-						{t?.editor?.altText ?? 'Alt Text'}
+						{t.editor.altText}
 					</label>
 					<input
 						id="editor-image-alt"
@@ -697,7 +688,7 @@
 						class="btn btn-sm btn-ghost font-semibold"
 						onclick={() => (showImageModal = false)}
 					>
-						{t?.common?.cancel ?? 'Cancel'}
+						{t.common.cancel}
 					</button>
 					<button
 						type="button"
@@ -705,7 +696,7 @@
 						disabled={!imageUrl.trim()}
 						onclick={handleInsertImage}
 					>
-						{t?.common?.confirm ?? 'Confirm'}
+						{t.common.confirm}
 					</button>
 				</div>
 			{/if}

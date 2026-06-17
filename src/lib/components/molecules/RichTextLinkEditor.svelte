@@ -31,14 +31,14 @@
 
 	interface Props {
 		anchorElem: HTMLElement | undefined;
-		t?: TranslationDict | null;
+		t: TranslationDict;
 	}
 
 	interface UpdateListenerPayload {
 		editorState: EditorState;
 	}
 
-	let { anchorElem, t = null }: Props = $props();
+	let { anchorElem, t }: Props = $props();
 
 	const editor = getEditor();
 	let activeEditor = $state(editor);
@@ -349,7 +349,7 @@
 			<input
 				bind:this={inputRef}
 				class="input input-bordered input-xs max-w-xs link-input text-base-content bg-base-100"
-				placeholder={t?.editor?.enterUrl ?? 'Enter URL...'}
+				placeholder={t.editor.enterUrl}
 				bind:value={editedLinkUrl}
 				onkeydown={monitorInputInteraction}
 			/>
@@ -358,7 +358,7 @@
 				class="btn btn-xs btn-ghost btn-circle text-error"
 				onmousedown={preventDefault}
 				onclick={() => ($isEditMode = false)}
-				title={t?.common?.cancel ?? 'Cancel'}
+				title={t.common.cancel}
 			>
 				<Icon path={mdiClose} size={14} />
 			</button>
@@ -367,7 +367,7 @@
 				class="btn btn-xs btn-ghost btn-circle text-success"
 				onmousedown={preventDefault}
 				onclick={handleLinkSubmission}
-				title={t?.common?.confirm ?? 'Confirm'}
+				title={t.common.confirm}
 			>
 				<Icon path={mdiCheck} size={14} />
 			</button>
@@ -389,7 +389,7 @@
 					editedLinkUrl = linkUrl;
 					$isEditMode = true;
 				}}
-				title={t?.common?.edit ?? 'Edit'}
+				title={t.common.edit}
 			>
 				<Icon path={mdiPencil} size={14} />
 			</button>
@@ -400,7 +400,7 @@
 				onclick={() => {
 					activeEditor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
 				}}
-				title={t?.editor?.remove ?? 'Remove'}
+				title={t.editor.remove}
 			>
 				<Icon path={mdiDelete} size={14} />
 			</button>

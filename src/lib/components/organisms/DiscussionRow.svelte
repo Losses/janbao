@@ -39,7 +39,7 @@
 		lastReplyAuthorId?: number | null;
 		lastReplyAuthorUsername?: string | null;
 		/** Translation dictionary */
-		t?: TranslationDict | null;
+		t: TranslationDict;
 		class?: string;
 	}
 
@@ -51,7 +51,7 @@
 		lastReplyAuthorDisplayName = null,
 		lastReplyAuthorId = null,
 		lastReplyAuthorUsername = null,
-		t = null,
+		t,
 		class: className = ''
 	}: DiscussionRowProps = $props();
 
@@ -73,10 +73,10 @@
 	const authorSlug = $derived(generateSlug(discussion.authorUsername || 'user'));
 	const lastReplyAuthorSlug = $derived(generateSlug(lastReplyAuthorUsername || 'user'));
 
-	// I18n translations with defaults
-	const viewsText = $derived(t?.forum?.views ?? 'views');
-	const repliesText = $derived(t?.forum?.replies ?? 'replies');
-	const pinnedText = $derived(t?.forum?.pinned ?? 'PIN');
+	// I18n translations
+	const viewsText = $derived(t.forum.views);
+	const repliesText = $derived(t.forum.replies);
+	const pinnedText = $derived(t.forum.pinned);
 
 	async function toggleBookmark(e: Event) {
 		e.preventDefault();
@@ -182,7 +182,7 @@
 			class="btn btn-ghost btn-circle btn-sm bookmark-btn {bookmarked
 				? 'text-primary'
 				: 'text-base-content/35 hover:text-primary'}"
-			aria-label="Bookmark"
+			aria-label={t.bookmark.toggleAria}
 			disabled={loadingBookmark}
 		>
 			<Icon path={bookmarked ? mdiStar : mdiStarOutline} size={20} />

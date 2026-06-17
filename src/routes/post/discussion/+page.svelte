@@ -160,6 +160,13 @@
 						isSubmitting = false;
 						if (result.type === 'redirect') {
 							goto(result.location);
+						} else if (
+							result.type === 'success' &&
+							result.data &&
+							'success' in result.data &&
+							result.data.success === false
+						) {
+							alert(result.data.error || t.discussion.publishFailed);
 						} else if (result.type === 'failure') {
 							alert(result.data?.error || t.discussion.publishFailed);
 						}
@@ -254,7 +261,7 @@
 							class="border border-base-300 rounded-box p-5 bg-base-100 min-h-[200px] shadow-inner"
 						>
 							{#if contentJson}
-								<LexicalRenderer {contentJson} deadImageLabel={t.img.deadImage} />
+								<LexicalRenderer {contentJson} {t} />
 							{:else}
 								<p class="text-base-content/40 italic">{t.discussion.previewEmpty}</p>
 							{/if}

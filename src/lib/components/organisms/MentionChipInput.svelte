@@ -9,6 +9,7 @@
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import type { UserSearchResult } from '$lib/types/api';
+	import type { TranslationDict } from '$lib/types/translation';
 
 	type RecipientsChangeHandler = (users: UserSearchResult[]) => void;
 
@@ -21,13 +22,16 @@
 		onRecipientsChange?: RecipientsChangeHandler;
 		/** Disable the input */
 		disabled?: boolean;
+		/** Translation dictionary */
+		t: TranslationDict;
 	}
 
 	let {
 		excludeIds = [],
 		initialRecipients,
 		onRecipientsChange,
-		disabled = false
+		disabled = false,
+		t
 	}: MentionChipInputProps = $props();
 
 	// `initialRecipients` only seeds the chips once on mount; later prop changes
@@ -162,7 +166,7 @@
 					<button
 						type="button"
 						class="-mr-0.5 leading-none hover:opacity-70"
-						aria-label="Remove {r.displayName}"
+						aria-label={t.message.removeRecipientAria.replace('{name}', r.displayName)}
 						onclick={() => removeRecipient(r.id)}
 					>
 						×

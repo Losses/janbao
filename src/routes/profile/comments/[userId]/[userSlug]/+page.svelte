@@ -86,7 +86,7 @@
 							<LexicalRenderer
 								contentJson={view.comment.contentJson}
 								mentionedUsers={data.mentionedUsers}
-								deadImageLabel={t.img.deadImage}
+								{t}
 							/>
 							<div class="flex items-center justify-between gap-2 pt-2">
 								<a href={view.href} class="text-xs text-primary hover:underline truncate">

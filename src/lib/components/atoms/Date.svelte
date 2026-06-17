@@ -1,30 +1,35 @@
 <script lang="ts">
 	/**
 	 * Date Atom - Renders a human-friendly relative date (e.g. "3 minutes ago").
-	 * Hovering displays the exact browser-localized date and time via native `title` attribute.
-	 * Accepts a `t` translation dictionary to support i18n relative time strings.
+	 * Hovering displays the exact date and time via the native `title` attribute,
+	 * formatted in the app locale (read from the 'app:lang' context set by the
+	 * root layout). Accepts a `t` translation dictionary for i18n relative time.
 	 */
-	import type { TranslationDict } from '$lib/types/translation';
+	import { getContext } from 'svelte';
+	import type { TranslationDict, LocaleGetter } from '$lib/types/translation';
 
 	interface DateProps {
 		value: Date | string | number;
-		/** Translation dictionary (from locals.t). Falls back to English if not provided. */
-		t?: TranslationDict | null;
+		/** Translation dictionary (from locals.t). */
+		t: TranslationDict;
 		class?: string;
 		/** Override the default hover title (the absolute timestamp). */
 		title?: string;
 	}
 
-	let { value, t = null, class: className = '', title: customTitle }: DateProps = $props();
+	let { value, t, class: className = '', title: customTitle }: DateProps = $props();
+
+	/** App locale ('en' | 'zh-CN') published by the root layout via context. */
+	const getLang = getContext<LocaleGetter>('app:lang');
 
 	const dateObj = $derived(new Date(value));
 	const isValid = $derived(!isNaN(dateObj.getTime()));
 
-	const tDate = $derived((t as Record<string, Record<string, string>> | null)?.date ?? {});
+	const tDate = $derived(t.date as Record<string, string>);
 
 	const absoluteString = $derived(
 		isValid
-			? dateObj.toLocaleString(undefined, {
+			? dateObj.toLocaleString(getLang?.() ?? undefined, {
 					year: 'numeric',
 					month: '2-digit',
 					day: '2-digit',
@@ -35,38 +40,10 @@
 			: ''
 	);
 
-	// Helper: build relative string using i18n keys, degrading gracefully to English
+	// Build a relative time string from the i18n date templates (e.g. "3 minutes ago").
 	function rel(n: number, singularKey: string, pluralKey: string): string {
 		const template = n === 1 ? tDate[singularKey] : tDate[pluralKey];
-		if (template) {
-			return `${n} ${template}`;
-		}
-		// Fallback to English if translation is missing:
-		const fallbackMap: Record<string, string> = {
-			yearAgo: 'year ago',
-			yearsAgo: 'years ago',
-			monthAgo: 'month ago',
-			monthsAgo: 'months ago',
-			dayAgo: 'day ago',
-			daysAgo: 'days ago',
-			hourAgo: 'hour ago',
-			hoursAgo: 'hours ago',
-			minuteAgo: 'minute ago',
-			minutesAgo: 'minutes ago',
-			yearLater: 'year later',
-			yearsLater: 'years later',
-			monthLater: 'month later',
-			monthsLater: 'months later',
-			dayLater: 'day later',
-			daysLater: 'days later',
-			hourLater: 'hour later',
-			hoursLater: 'hours later',
-			minuteLater: 'minute later',
-			minutesLater: 'minutes later'
-		};
-		const key = n === 1 ? singularKey : pluralKey;
-		const unit = fallbackMap[key] ?? key;
-		return `${n} ${unit}`;
+		return `${n} ${template}`;
 	}
 
 	// Compute relative time string (supports both past and future)
@@ -91,7 +68,7 @@
 			if (days > 0) return rel(days, 'dayAgo', 'daysAgo');
 			if (hours > 0) return rel(hours, 'hourAgo', 'hoursAgo');
 			if (minutes > 0) return rel(minutes, 'minuteAgo', 'minutesAgo');
-			return tDate['justNow'] ?? 'just now';
+			return t.date.justNow;
 		} else {
 			// Future dates
 			const absDiff = Math.abs(diffMs);
@@ -107,7 +84,7 @@
 			if (days > 0) return rel(days, 'dayLater', 'daysLater');
 			if (hours > 0) return rel(hours, 'hourLater', 'hoursLater');
 			if (minutes > 0) return rel(minutes, 'minuteLater', 'minutesLater');
-			return tDate['justNow'] ?? 'just now';
+			return t.date.justNow;
 		}
 	});
 </script>

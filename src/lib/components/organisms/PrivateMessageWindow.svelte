@@ -125,15 +125,26 @@
 							method="POST"
 							action="?/editMessage"
 							bind:this={editForm}
-							use:enhance={() => {
+							use:enhance={({ cancel }) => {
+								if (isSavingEdit) {
+									cancel();
+									return;
+								}
 								isSavingEdit = true;
 								return async ({ result, update }) => {
 									isSavingEdit = false;
-									if (result.type === 'success') {
+									if (
+										result.type === 'success' &&
+										result.data &&
+										'success' in result.data &&
+										result.data.success === false
+									) {
+										alert(result.data.error || t.common.error);
+									} else if (result.type === 'success') {
 										cancelEdit();
 										update();
 									} else if (result.type === 'failure') {
-										update();
+										alert(result.data?.error || t.common.error);
 									}
 								};
 							}}
@@ -156,11 +167,7 @@
 						</form>
 					</div>
 				{:else}
-					<LexicalRenderer
-						contentJson={msg.contentJson}
-						{mentionedUsers}
-						deadImageLabel={t.img.deadImage}
-					/>
+					<LexicalRenderer contentJson={msg.contentJson} {mentionedUsers} {t} />
 
 					{#if msg.authorId === currentUserId}
 						<div class="flex justify-end items-center gap-2 mt-2">
@@ -193,7 +200,14 @@
 					isPosting = true;
 					return async ({ result, update }) => {
 						isPosting = false;
-						if (result.type === 'success') {
+						if (
+							result.type === 'success' &&
+							result.data &&
+							'success' in result.data &&
+							result.data.success === false
+						) {
+							alert(result.data.error || t.common.error);
+						} else if (result.type === 'success') {
 							composeContent = '';
 							editorKey++;
 							const data = result.data as { page?: number } | null;

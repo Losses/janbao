@@ -145,7 +145,7 @@
 										{#if inv.usedByUsername}
 											{inv.usedByUsername}
 										{:else}
-											<span class="text-base-content/40">{invitationT.unused}</span>
+											<span class="text-base-content/40">{invitationT.statusUnused}</span>
 										{/if}
 									</td>
 									<td>

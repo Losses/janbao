@@ -104,7 +104,7 @@
 	 * Poll GET /api/admin/backups every few seconds until the in-memory run
 	 * status reaches a terminal state (or the safety deadline elapses). Because
 	 * the actual upload runs detached server-side, this loop only transfers the
-	 * tiny status object — the 1GB upload never flows through these requests.
+	 * tiny status object - the 1GB upload never flows through these requests.
 	 */
 	async function pollBackupStatus() {
 		const POLL_MS = 3000;
@@ -127,7 +127,7 @@
 				backing = false;
 				return;
 			} catch {
-				// Transient network blip mid-poll — keep going until the deadline.
+				// Transient network blip mid-poll - keep going until the deadline.
 			}
 		}
 		// Deadline exceeded without a terminal state.

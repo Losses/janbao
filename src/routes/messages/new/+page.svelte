@@ -69,8 +69,11 @@
 			if (result.success && result.conversationId) {
 				goto(`/messages/${result.conversationId}`);
 				return;
+			} else if (res.status === 429) {
+				errorMessage = t.common.tooManyRequests;
+			} else {
+				errorMessage = result.error || t.common.error;
 			}
-			errorMessage = result.error || t.common.error;
 		} catch {
 			errorMessage = t.auth.networkError;
 		}
@@ -114,6 +117,7 @@
 						initialRecipients={data.prefillRecipient ? [data.prefillRecipient] : undefined}
 						onRecipientsChange={handleRecipientsChange}
 						disabled={sending}
+						{t}
 					/>
 				</div>
 			</div>

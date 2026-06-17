@@ -117,7 +117,7 @@
 		/** Called on Ctrl/Cmd+Enter so the parent can trigger its submit path */
 		onSubmit?: VoidHandler;
 		/** Translation dictionary for i18n strings */
-		t?: TranslationDict | null;
+		t: TranslationDict;
 		/** Class override for container */
 		class?: string;
 		/** User IDs to exclude from @ mention suggestions */
@@ -134,23 +134,19 @@
 		disableImageUpload = false,
 		onContentChange,
 		onSubmit,
-		t = null,
+		t,
 		class: className = '',
 		excludeIds = []
 	}: LexicalEditorProps = $props();
 
-	const tEditor = $derived((t?.editor ?? {}) as Record<string, string>);
-
 	// Keep the dead-image placeholder label locale-aware (the Lexical node builds
 	// its DOM imperatively and has no access to `t`, so it reads a module value).
 	$effect(() => {
-		setDeadImageLabel(t?.img?.deadImage ?? 'Image no longer available');
+		setDeadImageLabel(t.img.deadImage);
 	});
 
 	// Use i18n placeholder if no override provided
-	const resolvedPlaceholder = $derived(
-		placeholder ?? tEditor['placeholder'] ?? 'Write something...'
-	);
+	const resolvedPlaceholder = $derived(placeholder ?? t.editor.placeholder);
 
 	// Internal state
 	let editorAreaElem: HTMLDivElement | undefined = $state();
@@ -485,8 +481,8 @@
 
 	// Derived save status label - uses i18n keys
 	const saveStatusLabel = $derived.by(() => {
-		if (saveStatus === 'saving') return tEditor['saving'] ?? 'Saving...';
-		if (saveStatus === 'saved') return tEditor['saved'] ?? 'Draft saved';
+		if (saveStatus === 'saving') return t.editor.saving;
+		if (saveStatus === 'saved') return t.editor.saved;
 		return '';
 	});
 
@@ -630,7 +626,7 @@
 			class="janbao-rich-editor-overlay absolute inset-0 z-40 flex items-center justify-center bg-base-100/50 backdrop-blur-[1px]"
 		>
 			<span class="loading loading-spinner loading-sm text-primary"></span>
-			<span class="ml-2 text-sm text-base-content/60">{tEditor['loading'] ?? 'Loading...'}</span>
+			<span class="ml-2 text-sm text-base-content/60">{t.editor.loading}</span>
 		</div>
 	{/if}
 </div>

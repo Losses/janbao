@@ -75,10 +75,7 @@
 							/>
 						</div>
 						<div class="text-sm text-base-content/80 max-h-32 overflow-hidden">
-							<LexicalRenderer
-								contentJson={view.draft.contentJson}
-								deadImageLabel={t.img.deadImage}
-							/>
+							<LexicalRenderer contentJson={view.draft.contentJson} {t} />
 						</div>
 						<div class="flex justify-end">
 							<LinkButton href={view.href} class="text-sm">{draftT.jumpTo} →</LinkButton>

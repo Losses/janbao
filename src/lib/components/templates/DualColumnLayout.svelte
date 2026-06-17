@@ -59,7 +59,7 @@
 	<!-- Drawer Sidebar for Mobile viewports -->
 	{#if sidebar}
 		<div class="drawer-side z-50 md:hidden">
-			<label for="sidebar-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+			<label for="sidebar-drawer" aria-label={t.sidebar.closeAria} class="drawer-overlay"></label>
 			<div class="min-h-full w-[280px] border-l border-base-300 bg-base-100 p-6 shadow-lg">
 				<div class="space-y-3">
 					{@render sidebar()}

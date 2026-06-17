@@ -35,7 +35,7 @@
 	>
 		<div class="flex items-end gap-6">
 			<!-- Left: Logo component -->
-			<Logo class="text-neutral-content" />
+			<Logo {t} class="text-neutral-content" />
 
 			<!-- Desktop Navigation (hidden on mobile) -->
 			<div class="hidden md:flex items-end gap-4">
