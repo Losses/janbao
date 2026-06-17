@@ -59,29 +59,32 @@ export default defineConfig(
 					message: 'Do not use "<unknown>" type assertions.'
 				},
 				{
-					selector: 'TSTypeAnnotation > TSTypeLiteral',
+					// Descendant combinator (not child) so types nested in intersections / unions /
+					// arrays / nested function types are caught too — e.g. `Foo & { a: number }`
+					// would otherwise slip past `TSTypeAnnotation > TSTypeLiteral`.
+					selector: 'TSTypeAnnotation TSTypeLiteral',
 					message: 'Do not use inline object type literals. Extract to a named type or interface.'
 				},
 				{
-					selector: 'TSTypeParameterInstantiation > TSTypeLiteral',
+					selector: 'TSTypeParameterInstantiation TSTypeLiteral',
 					message:
 						'Do not use inline object type literals in type arguments. Extract to a named type or interface.'
 				},
 				{
-					selector: 'TSTypeAnnotation > TSFunctionType',
+					selector: 'TSTypeAnnotation TSFunctionType',
 					message: 'Do not use inline function type literals. Extract to a named type.'
 				},
 				{
-					selector: 'TSTypeParameterInstantiation > TSFunctionType',
+					selector: 'TSTypeParameterInstantiation TSFunctionType',
 					message:
 						'Do not use inline function type literals in type arguments. Extract to a named type.'
 				},
 				{
-					selector: 'TSTypeAnnotation > TSTupleType',
+					selector: 'TSTypeAnnotation TSTupleType',
 					message: 'Do not use inline tuple types. Extract to a named type.'
 				},
 				{
-					selector: 'TSTypeParameterInstantiation > TSTupleType',
+					selector: 'TSTypeParameterInstantiation TSTupleType',
 					message: 'Do not use inline tuple types in type arguments. Extract to a named type.'
 				}
 			]
