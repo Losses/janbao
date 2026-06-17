@@ -1,6 +1,7 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
+	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import LinkButton from '$lib/components/atoms/LinkButton.svelte';
 	import DateComponent from '$lib/components/atoms/Date.svelte';
@@ -60,9 +61,7 @@
 		<h1 class="page-title border-b border-base-300 pb-4">{draftT.myDrafts}</h1>
 
 		{#if views.length === 0}
-			<div class="card bg-base-200/40 border border-base-200 p-10 text-center text-base-content/50">
-				{draftT.noDrafts}
-			</div>
+			<EmptyState message={draftT.noDrafts} />
 		{:else}
 			<div class="space-y-3">
 				{#each views as view (view.draft.id)}

@@ -5,7 +5,7 @@ import { eq, and, isNull, desc, sql, or, inArray } from 'drizzle-orm';
 import { generateSlug } from '$lib/utils/slug';
 import { BOOTSTRAP_ADMIN_ID, SYSTEM_USER_ID } from '$lib/server/constants';
 import { resolveMentions } from '$lib/server/utils/mentions';
-import { getInviter } from '$lib/server/db/dao/invitations';
+import { getProfileHeaderPayload } from '$lib/server/db/dao/profile';
 import { listManageableUserGroups } from '$lib/server/db/dao/admin-permissions';
 import type { JoinedMember, RecipientInfo } from '$lib/types/api';
 
@@ -17,29 +17,14 @@ export const load: PageServerLoad = async (event) => {
 	const db = event.locals.db;
 	const currentUser = event.locals.user;
 
-	// 1. Fetch target user
-	const targetUserRecords = await db
-		.select({
-			id: users.id,
-			username: users.username,
-			displayName: users.displayName,
-			bio: users.bio,
-			avatarFileId: users.avatarFileId,
-			signupTime: users.signupTime,
-			lastActiveTime: users.lastActiveTime,
-			groupSlug: users.groupSlug,
-			viewCount: users.viewCount,
-			isStealth: users.isStealth
-		})
-		.from(users)
-		.where(eq(users.id, userId))
-		.limit(1);
-
-	if (targetUserRecords.length === 0) {
+	// 1. Fetch target user header data (shared across profile pages)
+	const headerPayload = await getProfileHeaderPayload(db, userId);
+	if (!headerPayload) {
 		error(404, event.locals.t.common.notFound);
 	}
 
-	const targetUser = targetUserRecords[0];
+	const targetUser = headerPayload.user;
+	const invitedBy = headerPayload.invitedBy;
 
 	// Validate slug matches (slug is for SEO - accept anyway)
 	const expectedSlug = generateSlug(targetUser.username);
@@ -59,8 +44,9 @@ export const load: PageServerLoad = async (event) => {
 		targetUser.viewCount += 1;
 	}
 
-	// 3. Resolve who invited this user (null if joined without an invitation)
-	const invitedBy = await getInviter(db, userId);
+	// Email shown in the public header only when the target opted into showEmail
+	// AND the viewer is logged in (guests never see it).
+	const headerEmail = targetUser.showEmail && currentUser ? headerPayload.email : null;
 
 	// 4. Fetch profile activities (directed to this user OR authored by this user,
 	//    OR isJoined activities this user is a member of), no parent.
@@ -208,20 +194,13 @@ export const load: PageServerLoad = async (event) => {
 				})
 			: [];
 
-	// Email is needed only for the admin reset-link copy sentence, so it is fetched
-	// separately and only exposed to admins (never reaches the public targetUser payload).
-	let targetUserEmail: string | null = null;
-	if (currentUser?.groupSlug === 'admin') {
-		const emailRecord = await db
-			.select({ email: users.email })
-			.from(users)
-			.where(eq(users.id, userId))
-			.limit(1);
-		targetUserEmail = emailRecord[0]?.email ?? null;
-	}
+	// The sidebar's reset-link copy sentence needs the raw email, exposed only to
+	// admins. Reuse the value already fetched for the header rather than re-querying.
+	const targetUserEmail = currentUser?.groupSlug === 'admin' ? headerPayload.email : null;
 
 	return {
 		targetUser,
+		headerEmail,
 		// Only expose the target user's email to admins (for the reset-link copy sentence).
 		targetUserEmail,
 		invitedBy,

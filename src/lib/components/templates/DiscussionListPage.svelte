@@ -8,6 +8,7 @@
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import ActiveUsersWall from '$lib/components/molecules/ActiveUsersWall.svelte';
 	import CategoryListWidget from '$lib/components/molecules/CategoryListWidget.svelte';
+	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import DiscussionRow from '$lib/components/organisms/DiscussionRow.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
 	import { generateSlug } from '$lib/utils/slug';
@@ -78,9 +79,7 @@
 
 		<!-- Discussions Stream -->
 		{#if discussions.length === 0}
-			<div class="card bg-base-200/40 border border-base-300 p-10 text-center text-base-content/50">
-				{t.common.noResults}
-			</div>
+			<EmptyState message={t.common.noResults} />
 		{:else}
 			<div class="bg-base-100 overflow-hidden">
 				<div class="divide-y divide-base-300">

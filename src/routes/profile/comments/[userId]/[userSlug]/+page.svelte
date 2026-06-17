@@ -1,6 +1,8 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
+	import ProfileHeader from '$lib/components/molecules/ProfileHeader.svelte';
+	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import DateComponent from '$lib/components/atoms/Date.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
@@ -21,11 +23,15 @@
 	const profileT = $derived(t.profile);
 	const user = $derived(data.user);
 	const targetUser = $derived(data.targetUser);
+	const invitedBy = $derived(data.invitedBy);
+	const headerEmail = $derived(data.headerEmail);
 	const comments = $derived(data.comments);
 	const currentPage = $derived(data.page);
 	const totalPages = $derived(data.totalPages);
 
 	const targetSlug = $derived(generateSlug(targetUser.username));
+	const isOwner = $derived(!!user && user.id === targetUser.id);
+	const showLastActive = $derived(!targetUser.isStealth || isOwner || user?.groupSlug === 'admin');
 
 	interface CommentView {
 		comment: UserCommentItem;
@@ -67,20 +73,11 @@
 
 <DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-3">
-		<!-- Title Banner -->
-		<div class="flex items-center justify-between border-b border-base-300 pb-4">
-			<h1 class="page-title">
-				{targetUser.displayName} - {profileT.comments}
-			</h1>
-			{#if totalPages > 1}
-				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
-			{/if}
-		</div>
+		<!-- Profile Header -->
+		<ProfileHeader {targetUser} {invitedBy} email={headerEmail} {showLastActive} {t} />
 
 		{#if views.length === 0}
-			<div class="card bg-base-200/40 py-10 text-center text-base-content/50">
-				{commentT.noComments}
-			</div>
+			<EmptyState message={commentT.noComments} />
 		{:else}
 			<div class="bg-base-100 overflow-hidden">
 				<div class="divide-y divide-base-300">

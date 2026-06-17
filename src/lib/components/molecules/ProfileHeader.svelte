@@ -1,0 +1,101 @@
+<script lang="ts">
+	/**
+	 * ProfileHeader Molecule - The shared user-info header for all profile pages
+	 * (activities, discussions, comments). Shows avatar, display name, bio, and a
+	 * statistics row (group, joined, last-active, views, invited-by, email).
+	 *
+	 * `email` is already server-gated: it is null unless the target opted into
+	 * showEmail AND the viewer is logged in (guests never see it). When null the
+	 * email row is not rendered. `showLastActive` is computed by the caller
+	 * (!isStealth || isOwner || isAdmin) so stealth rules live in one place.
+	 */
+	import Avatar from '$lib/components/atoms/Avatar.svelte';
+	import Icon from '$lib/components/atoms/Icon.svelte';
+	import DateComponent from '$lib/components/atoms/Date.svelte';
+	import { generateSlug } from '$lib/utils/slug';
+	import {
+		mdiAccountGroup,
+		mdiAccountPlusOutline,
+		mdiCalendarClock,
+		mdiClockOutline,
+		mdiEmailOutline,
+		mdiEyeOutline
+	} from '@mdi/js';
+	import type { ProfileHeaderUser, UserInfoSummary } from '$lib/types/api';
+	import type { TranslationDict } from '$lib/types/translation';
+
+	interface ProfileHeaderProps {
+		targetUser: ProfileHeaderUser;
+		invitedBy: UserInfoSummary | null;
+		email: string | null;
+		showLastActive: boolean;
+		t: TranslationDict;
+	}
+
+	let { targetUser, invitedBy, email, showLastActive, t }: ProfileHeaderProps = $props();
+
+	const profileT = $derived(t.profile);
+</script>
+
+<div>
+	<div class="flex items-center gap-4">
+		<Avatar
+			userId={targetUser.id}
+			avatarFileId={targetUser.avatarFileId}
+			displayName={targetUser.displayName}
+			size="lg"
+		/>
+		<div>
+			<h1 class="user-display-name page-title">{targetUser.displayName}</h1>
+			{#if targetUser.bio}
+				<p class="text-base-content/70 mt-1 whitespace-pre-line">{targetUser.bio}</p>
+			{/if}
+		</div>
+	</div>
+
+	<!-- User Statistics -->
+	<div class="flex flex-wrap gap-x-6 gap-y-2 mt-4 text-sm text-base-content/70">
+		<div class="flex items-center gap-1.5">
+			<Icon path={mdiAccountGroup} size={16} class="text-base-content/50" />
+			<span class="font-medium text-base-content">{profileT.group}</span>
+			<span>{targetUser.groupSlug}</span>
+		</div>
+		<div class="flex items-center gap-1.5">
+			<Icon path={mdiCalendarClock} size={16} class="text-base-content/50" />
+			<span class="font-medium text-base-content">{profileT.joined}</span>
+			<span>
+				<DateComponent value={targetUser.signupTime} {t} />
+			</span>
+		</div>
+		{#if showLastActive}
+			<div class="flex items-center gap-1.5">
+				<Icon path={mdiClockOutline} size={16} class="text-base-content/50" />
+				<span class="font-medium text-base-content">{profileT.lastActive}</span>
+				<span>
+					<DateComponent value={targetUser.lastActiveTime} {t} />
+				</span>
+			</div>
+		{/if}
+		<div class="flex items-center gap-1.5">
+			<Icon path={mdiEyeOutline} size={16} class="text-base-content/50" />
+			<span class="font-medium text-base-content">{profileT.views}</span>
+			<span>{targetUser.viewCount}</span>
+		</div>
+		{#if invitedBy}
+			<div class="flex items-center gap-1.5">
+				<Icon path={mdiAccountPlusOutline} size={16} class="text-base-content/50" />
+				<span class="font-medium text-base-content">{profileT.invitedBy}</span>
+				<a href="/profile/{invitedBy.id}/{generateSlug(invitedBy.username)}" class="hover:underline"
+					>{invitedBy.displayName}</a
+				>
+			</div>
+		{/if}
+		{#if email}
+			<div class="flex items-center gap-1.5">
+				<Icon path={mdiEmailOutline} size={16} class="text-base-content/50" />
+				<span class="font-medium text-base-content">{profileT.email}</span>
+				<a href="mailto:{email}" class="hover:underline break-all">{email}</a>
+			</div>
+		{/if}
+	</div>
+</div>

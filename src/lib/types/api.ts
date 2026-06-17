@@ -31,6 +31,25 @@ export interface RecipientInfo {
 	username: string;
 }
 
+/**
+ * The target user's columns needed by the shared profile header (avatar, name,
+ * bio, and the statistics row). Email is deliberately excluded — it is fetched
+ * alongside this but gated by the caller (guests never see it).
+ */
+export interface ProfileHeaderUser {
+	id: number;
+	username: string;
+	displayName: string;
+	bio: string | null;
+	avatarFileId: string | null;
+	signupTime: Date;
+	lastActiveTime: Date;
+	groupSlug: string;
+	viewCount: number;
+	isStealth: boolean;
+	showEmail: boolean;
+}
+
 // --- Auth Types ---
 
 export interface AuthRegisterBody {

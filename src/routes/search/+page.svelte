@@ -5,6 +5,7 @@
 	import DateAtom from '$lib/components/atoms/Date.svelte';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
+	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import { mdiCommentOutline } from '@mdi/js';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
@@ -148,13 +149,9 @@
 		</form>
 
 		{#if query.trim().length === 0}
-			<div class="card bg-base-200/40 border border-base-300 p-10 text-center text-base-content/50">
-				{tSearch.noQuery}
-			</div>
+			<EmptyState message={tSearch.noQuery} />
 		{:else if total === 0}
-			<div class="card bg-base-200/40 border border-base-300 p-10 text-center text-base-content/50">
-				{tSearch.noResults}
-			</div>
+			<EmptyState message={tSearch.noResults} />
 		{:else}
 			<div class="text-sm text-base-content/60">{total} {tSearch.resultsLabel}</div>
 			<div class="bg-base-100 overflow-hidden">

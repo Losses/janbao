@@ -1,6 +1,7 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
+	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import Badge from '$lib/components/atoms/Badge.svelte';
@@ -52,9 +53,7 @@
 		</div>
 
 		{#if conversations.length === 0}
-			<div class="card bg-base-200/40 border border-base-300 p-10 text-center text-base-content/50">
-				{messageT.noConversations}
-			</div>
+			<EmptyState message={messageT.noConversations} />
 		{:else}
 			<!-- Conversation stream  - mirrors the homepage discussion list:
 			avatar left, content right, divide-y rows, no card chrome. -->

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
+	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import ActivityList from '$lib/components/organisms/ActivityList.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
@@ -113,9 +114,7 @@
 
 		<!-- Activities Stream -->
 		{#if activityList.length === 0}
-			<div class="p-10 text-center text-base-content/50">
-				{t.common.noResults}
-			</div>
+			<EmptyState message={t.common.noResults} bordered={false} />
 		{:else}
 			<div class="space-y-0">
 				<ActivityList

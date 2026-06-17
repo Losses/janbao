@@ -4,6 +4,7 @@
 	import ActiveUsersWall from '$lib/components/molecules/ActiveUsersWall.svelte';
 	import CategoryListWidget from '$lib/components/molecules/CategoryListWidget.svelte';
 	import DiscussionMetadata from '$lib/components/molecules/DiscussionMetadata.svelte';
+	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
@@ -379,9 +380,7 @@
 				{/each}
 			</div>
 		{:else if currentPage > 1}
-			<div class="text-center py-10 text-base-content/50">
-				{t.common.noResults}
-			</div>
+			<EmptyState message={t.common.noResults} bordered={false} />
 		{/if}
 
 		<!-- Paginator Bottom -->

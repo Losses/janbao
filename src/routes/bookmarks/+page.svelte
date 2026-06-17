@@ -1,6 +1,7 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
+	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
 	import DateComponent from '$lib/components/atoms/Date.svelte';
 	import { formatTitle } from '$lib/utils/title';
@@ -42,9 +43,7 @@
 		<h1 class="page-title border-b border-base-300 pb-4">{bookmarkT.myBookmarks}</h1>
 
 		{#if bookmarks.length === 0}
-			<div class="card bg-base-200/40 border border-base-300 p-10 text-center text-base-content/50">
-				{bookmarkT.noBookmarks}
-			</div>
+			<EmptyState message={bookmarkT.noBookmarks} />
 		{:else}
 			<div class="divide-y divide-base-300">
 				{#each bookmarks as bookmark (bookmark.discussionId)}

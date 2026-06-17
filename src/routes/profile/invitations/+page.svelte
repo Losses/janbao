@@ -1,6 +1,7 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
+	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import Badge from '$lib/components/atoms/Badge.svelte';
 	import DateComponent from '$lib/components/atoms/Date.svelte';
 	import { formatTitle } from '$lib/utils/title';
@@ -122,9 +123,7 @@
 		</div>
 
 		{#if invitations.length === 0}
-			<div class="card bg-base-200/40 border border-base-300 p-10 text-center text-base-content/50">
-				{invitationT.noInvitations}
-			</div>
+			<EmptyState message={invitationT.noInvitations} />
 		{:else}
 			<div class="overflow-hidden">
 				<div class="overflow-x-auto">

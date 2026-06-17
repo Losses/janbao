@@ -3,6 +3,7 @@
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import ActiveUsersWall from '$lib/components/molecules/ActiveUsersWall.svelte';
 	import CategoryListWidget from '$lib/components/molecules/CategoryListWidget.svelte';
+	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import type { PageData } from './$types';
 
@@ -48,9 +49,7 @@
 		</div>
 
 		{#if categoriesList.length === 0}
-			<div class="text-center py-10 text-base-content/50">
-				{t.common.noResults}
-			</div>
+			<EmptyState message={t.common.noResults} bordered={false} />
 		{:else}
 			<div class="grid gap-4">
 				{#each categoriesList as category (category.slug)}

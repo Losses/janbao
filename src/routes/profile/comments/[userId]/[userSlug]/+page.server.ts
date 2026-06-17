@@ -1,10 +1,9 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { users } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
 import { getUserComments, getUserCommentsCount } from '$lib/server/db/dao/comments';
 import { parseDiscussionPagination, resolveGroupSlug } from '$lib/server/constants';
 import { getProfileAdminSidebarData } from '$lib/server/db/dao/admin-permissions';
+import { getProfileHeaderPayload } from '$lib/server/db/dao/profile';
 import { resolveMentions } from '$lib/server/utils/mentions';
 
 export const load: PageServerLoad = async (event) => {
@@ -16,23 +15,17 @@ export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user;
 	const groupSlug = resolveGroupSlug(user);
 
-	// 1. Fetch target user
-	const targetUserRecords = await db
-		.select({
-			id: users.id,
-			username: users.username,
-			displayName: users.displayName,
-			avatarFileId: users.avatarFileId
-		})
-		.from(users)
-		.where(eq(users.id, userId))
-		.limit(1);
-
-	if (targetUserRecords.length === 0) {
+	// 1. Fetch target user header data (shared across profile pages)
+	const headerPayload = await getProfileHeaderPayload(db, userId);
+	if (!headerPayload) {
 		error(404, event.locals.t.common.notFound);
 	}
 
-	const targetUser = targetUserRecords[0];
+	const targetUser = headerPayload.user;
+	const invitedBy = headerPayload.invitedBy;
+	// Email shown in the public header only when the target opted into showEmail
+	// AND the viewer is logged in (guests never see it).
+	const headerEmail = targetUser.showEmail && user ? headerPayload.email : null;
 
 	// 2. Parse pagination (?page=N, matching profile/discussions)
 	const { page, limit, offset } = parseDiscussionPagination(event.url, event.platform?.env);
@@ -53,6 +46,8 @@ export const load: PageServerLoad = async (event) => {
 
 	return {
 		targetUser,
+		invitedBy,
+		headerEmail,
 		comments,
 		mentionedUsers,
 		page,

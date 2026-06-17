@@ -1,6 +1,7 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
+	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import DateComponent from '$lib/components/atoms/Date.svelte';
 	import Badge from '$lib/components/atoms/Badge.svelte';
@@ -115,9 +116,7 @@
 		</div>
 
 		{#if views.length === 0}
-			<div class="card bg-base-200/40 border border-base-300 p-10 text-center text-base-content/50">
-				{notificationT.allCaughtUp}
-			</div>
+			<EmptyState message={notificationT.allCaughtUp} />
 		{:else}
 			<div>
 				{#each views as view (view.item.id)}
