@@ -81,7 +81,7 @@
 		{#if discussions.length === 0}
 			<EmptyState message={t.common.noResults} />
 		{:else}
-			<div class="bg-base-100 overflow-hidden">
+			<div class="bg-base-100 overflow-hidden border-t border-b border-base-300">
 				<div class="divide-y divide-base-300">
 					{#each discussions as discussion (discussion.id)}
 						<DiscussionRow
