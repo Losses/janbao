@@ -25,6 +25,22 @@ export function isAssignableGroupSlug(slug: string): boolean {
 	return !['system', 'admin', 'guest'].includes(slug);
 }
 
+/**
+ * Groups whose per-category permissions can be edited in the admin panel.
+ * Unlike {@link isAssignableGroupSlug} (which gates *assigning a group to a
+ * user*), this is about *editing what a group may do in each category*.
+ * `guest` is included so admins can configure what anonymous visitors may
+ * read/create — its permissions are read from `categoryPermissions` at request
+ * time (`resolvePermissions`), so they must be editable here. `system` and
+ * `admin` stay excluded: `system` is never assigned, and `admin` always has
+ * full access regardless of rows.
+ */
+const PERMISSION_EDITABLE_BLOCKLIST = ['system', 'admin'];
+
+export function isPermissionEditableGroupSlug(slug: string): boolean {
+	return !PERMISSION_EDITABLE_BLOCKLIST.includes(slug);
+}
+
 export type ReservedUserGroupSlug = (typeof RESERVED_USER_GROUP_SLUGS)[number];
 
 export async function listUserGroupsWithCounts(db: D1Db): Promise<AdminUserGroupItem[]> {
@@ -49,6 +65,12 @@ export interface ManageableUserGroupsOptions {
 	 * than a separate button. Peer admins never see `admin`.
 	 */
 	includeAdmin?: boolean;
+	/**
+	 * When true, the reserved `guest` group is included so per-category guest
+	 * permissions (what anonymous visitors may read/create) become editable in
+	 * the category-permissions panel.
+	 */
+	includeGuest?: boolean;
 }
 
 export async function listManageableUserGroups(
@@ -59,7 +81,9 @@ export async function listManageableUserGroups(
 	return groups
 		.filter(
 			(group) =>
-				isAssignableGroupSlug(group.slug) || (options.includeAdmin && group.slug === 'admin')
+				isAssignableGroupSlug(group.slug) ||
+				(options.includeAdmin && group.slug === 'admin') ||
+				(options.includeGuest && group.slug === 'guest')
 		)
 		.map((group) => ({ slug: group.slug, title: group.title }));
 }
@@ -239,7 +263,7 @@ export async function validateCategoryPermissionTargets(
 	const categorySlugs = [...new Set(permissions.map((permission) => permission.categorySlug))];
 	const groupSlugs = [...new Set(permissions.map((permission) => permission.groupSlug))];
 	if (categorySlugs.length === 0 || groupSlugs.length === 0) return false;
-	if (groupSlugs.some((slug) => !isAssignableGroupSlug(slug))) return false;
+	if (groupSlugs.some((slug) => !isPermissionEditableGroupSlug(slug))) return false;
 
 	const [existingCategories, existingGroups] = await Promise.all([
 		db

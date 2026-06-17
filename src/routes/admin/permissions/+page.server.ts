@@ -7,7 +7,7 @@ import {
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const [groups, categories, categoryPermissions] = await Promise.all([
-		listManageableUserGroups(locals.db),
+		listManageableUserGroups(locals.db, { includeGuest: true }),
 		listAdminCategories(locals.db),
 		listCategoryPermissions(locals.db)
 	]);
