@@ -18,7 +18,7 @@ let _localDb: D1Db | null = null;
 
 /**
  * Type bridge for database driver abstraction boundaries.
- * Both D1 and better-sqlite3 drivers share the same Drizzle query API;
+ * Both D1 and libsql drivers share the same Drizzle query API;
  * all operations are awaited, normalizing sync/async return types.
  */
 function castDb<T>(value: unknown): T {
@@ -32,7 +32,7 @@ function castDb<T>(value: unknown): T {
  *
  * Uses libsql because it provides an async SQLite API compatible with D1's
  * transaction pattern (db.transaction(async (tx) => { ... })).
- * Sync drivers (better-sqlite3, bun:sqlite) do not support async callbacks.
+ * Sync SQLite drivers do not support async transaction callbacks.
  */
 export async function getLocalDb(): Promise<D1Db> {
 	if (!_localDb) {

@@ -19,7 +19,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		// Production: Cloudflare D1 binding
 		db = getDb(d1);
 	} else {
-		// Local development: bun:sqlite fallback
+		// Local development: libsql fallback
 		db = await getLocalDb();
 	}
 
