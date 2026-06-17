@@ -4,6 +4,9 @@ import { verifyJwt } from '$lib/server/auth';
 import { users } from '$lib/server/db/schema';
 import { resolveLang, getTranslation } from '$lib/server/i18n';
 import { getJwtSecret } from '$lib/server/constants';
+import { resolvePcloudConfig, pcloudIsConfigured } from '$lib/server/pcloud';
+import { maybeRunDailyBackup } from '$lib/server/backup';
+import { env } from '$env/dynamic/private';
 import { eq } from 'drizzle-orm';
 import type { Handle } from '@sveltejs/kit';
 
@@ -24,6 +27,19 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	// 2. Perform Core Database Seeding (Atomic check & execute)
 	await seedCore(db, event.platform?.env);
+
+	// 2b. Daily DB backup (local node/bun mode only). Fire-and-forget: the first
+	// request of a new forum day triggers one pCloud snapshot. Non-blocking, and
+	// maybeRunDailyBackup short-circuits on an in-memory same-day flag so the
+	// per-request cost is negligible after the first-of-day request.
+	if (!d1) {
+		const cfg = resolvePcloudConfig({ ...env, ...(event.platform?.env ?? {}) });
+		if (pcloudIsConfigured(cfg)) {
+			void maybeRunDailyBackup(db, cfg, event.platform?.env).catch((err) =>
+				console.error('[backup] daily trigger failed:', err)
+			);
+		}
+	}
 
 	// 3. Retrieve and Verify JWT Cookie
 	const token = event.cookies.get('session_token');

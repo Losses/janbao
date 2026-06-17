@@ -506,5 +506,30 @@
 		"caramellatte": "焦糖拿铁",
 		"abyss": "深渊",
 		"silk": "丝绸"
+	},
+	"backup": {
+		"nav": "备份",
+		"title": "数据库备份",
+		"description": "每天首次访问时把本地数据库自动快照到 pCloud，并支持手动备份、下载和按天留存。",
+		"enableAuto": "每日自动备份（每天首次访问时触发）",
+		"retentionDays": "保留备份天数",
+		"retentionDaysHelp": "超过此天数的备份会被自动删除。手动备份不会挤掉此前各天的备份。",
+		"save": "保存设置",
+		"saved": "备份设置已保存",
+		"backupNow": "立即备份",
+		"backupCreated": "备份已创建",
+		"backupInProgress": "已有备份正在进行，请稍后重试。",
+		"backupFailed": "备份失败，请查看服务器日志。",
+		"deleteFailed": "删除备份失败",
+		"notAvailable": "备份功能仅在本地运行（node/bun）且已配置 pCloud 时可用。",
+		"notFound": "未找到该备份",
+		"download": "下载",
+		"delete": "删除",
+		"deleted": "备份已删除",
+		"confirmDelete": "确定删除该备份？此操作不可撤销。",
+		"name": "文件",
+		"date": "日期",
+		"actions": "操作",
+		"noBackups": "暂无备份。"
 	}
 }

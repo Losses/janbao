@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { jsonError } from '$lib/server/errors';
 import { requireAdmin } from '$lib/server/admin';
 import {
-	isAssignableGroupSlug,
+	isPermissionEditableGroupSlug,
 	upsertCategoryPermissions,
 	validateCategoryPermissionTargets
 } from '$lib/server/db/dao/admin-permissions';
@@ -16,7 +16,7 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	const body: AdminCategoryPermissionsUpdateBody = await request.json();
 	const permissions = body.permissions ?? [];
 	if (permissions.length === 0) return jsonError(locals.t, 'permissions.fieldsRequired', 400);
-	if (permissions.some((permission) => !isAssignableGroupSlug(permission.groupSlug))) {
+	if (permissions.some((permission) => !isPermissionEditableGroupSlug(permission.groupSlug))) {
 		return jsonError(locals.t, 'permissions.reservedGroup', 400);
 	}
 	if (!(await validateCategoryPermissionTargets(locals.db, permissions))) {

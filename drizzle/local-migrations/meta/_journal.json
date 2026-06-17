@@ -64,6 +64,13 @@
       "when": 1781644083849,
       "tag": "0008_mushy_jack_power",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1781665052622,
+      "tag": "0009_giant_terrax",
+      "breakpoints": true
     }
   ]
 }

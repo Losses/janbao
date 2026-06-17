@@ -9,6 +9,7 @@
 import { appSettings } from '../schema';
 import { eq, like } from 'drizzle-orm';
 import type { D1Db } from '../index';
+import type { BackupPolicy } from '$lib/types/backup';
 
 // --- Backup domain keys & defaults ---------------------------------------
 export const BACKUP_ENABLED_KEY = 'backup.enabled';
@@ -18,12 +19,9 @@ export const BACKUP_RETENTION_DAYS_KEY = 'backup.retentionDays';
 // requests), so it gates dedup across process restarts.
 export const BACKUP_LAST_BACKUP_DAY_KEY = 'backup.lastBackupDay';
 
-export interface BackupSettingDefaults {
-	enabled: boolean;
-	retentionDays: number;
-}
-
-export const BACKUP_SETTING_DEFAULTS: BackupSettingDefaults = {
+// The default policy doubles as the BackupPolicy shape (enabled + retentionDays),
+// so the same type backs the code defaults and the read/write API.
+export const BACKUP_SETTING_DEFAULTS: BackupPolicy = {
 	enabled: false,
 	retentionDays: 30
 };

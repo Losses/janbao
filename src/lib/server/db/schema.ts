@@ -456,3 +456,15 @@ export const authThrottle = sqliteTable(
 		pk: primaryKey({ columns: [table.bucket, table.identifier, table.windowEpoch] })
 	})
 );
+
+// Generic key-value application settings store (VS Code-style dotted keys,
+// e.g. "backup.enabled"). Defaults live in code (BACKUP_SETTING_DEFAULTS etc.),
+// so the table starts empty and a missing key resolves to the code default.
+// First consumer: the daily-DB-backup feature's policy (local node/bun only).
+export const appSettings = sqliteTable('app_settings', {
+	key: text('key').primaryKey(),
+	value: text('value').notNull(),
+	updatedAt: integer('updated_at', { mode: 'timestamp' })
+		.notNull()
+		.default(sql`(strftime('%s', 'now'))`)
+});

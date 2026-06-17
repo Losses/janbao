@@ -36,5 +36,10 @@
 				{adminT['categoryPermissions']}
 			</a>
 		</li>
+		<li>
+			<a href="/admin/backups" class={activeItem === 'backups' ? 'active' : ''}>
+				{t.backup.nav}
+			</a>
+		</li>
 	</ul>
 </div>

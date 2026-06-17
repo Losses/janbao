@@ -506,5 +506,30 @@
 		"caramellatte": "Caramel Latte",
 		"abyss": "Abyss",
 		"silk": "Silk"
+	},
+	"backup": {
+		"nav": "Backups",
+		"title": "Database Backups",
+		"description": "Daily automatic snapshots of the local database to pCloud, with on-demand backup, download, and age-based retention.",
+		"enableAuto": "Daily automatic backup (first visit of each day)",
+		"retentionDays": "Keep backups for (days)",
+		"retentionDaysHelp": "Backups older than this are deleted automatically. Manual backups never push out earlier days.",
+		"save": "Save Settings",
+		"saved": "Backup settings saved",
+		"backupNow": "Back Up Now",
+		"backupCreated": "Backup created",
+		"backupInProgress": "A backup is already running. Try again shortly.",
+		"backupFailed": "Backup failed. Check server logs.",
+		"deleteFailed": "Failed to delete backup",
+		"notAvailable": "Backups are only available when running locally (node/bun) with pCloud configured.",
+		"notFound": "Backup not found",
+		"download": "Download",
+		"delete": "Delete",
+		"deleted": "Backup deleted",
+		"confirmDelete": "Delete this backup? This cannot be undone.",
+		"name": "File",
+		"date": "Date",
+		"actions": "Actions",
+		"noBackups": "No backups yet."
 	}
 }
