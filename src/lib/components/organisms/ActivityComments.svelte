@@ -102,6 +102,8 @@
 				editorKey += 1;
 				commentCount += 1;
 				await loadComments();
+			} else if (res.status === 429) {
+				alert(gtc('tooManyRequests'));
 			}
 		} catch {
 			// Silently fail
@@ -161,6 +163,7 @@
 						disableHeadings={true}
 						disableImageUpload={true}
 						onContentChange={handleCommentEditorChange}
+						onSubmit={submitComment}
 					/>
 				{/key}
 				<div class="flex justify-end">

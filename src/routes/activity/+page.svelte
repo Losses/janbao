@@ -54,6 +54,8 @@
 				editorContent = '';
 				editorKey++;
 				await invalidateAll();
+			} else if (res.status === 429) {
+				alert(t.common.tooManyRequests);
 			}
 		} catch {
 			// Silently fail
@@ -88,6 +90,7 @@
 						{t}
 						disableHeadings={true}
 						onContentChange={handleEditorChange}
+						onSubmit={submitActivity}
 					/>
 				{/key}
 				<div class="flex justify-end mt-3">

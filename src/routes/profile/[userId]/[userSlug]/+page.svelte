@@ -103,6 +103,7 @@
 					{t}
 					disableHeadings={true}
 					onContentChange={handleEditorChange}
+					onSubmit={submitDirectedActivity}
 				/>
 				<div class="flex justify-end mt-3">
 					<button

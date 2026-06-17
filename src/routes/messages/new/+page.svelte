@@ -45,6 +45,7 @@
 	}
 
 	async function send() {
+		if (sending) return;
 		if (
 			recipients.length === 0 ||
 			!title.trim() ||
@@ -145,6 +146,7 @@
 							placeholder=""
 							disableImageUpload={true}
 							onContentChange={(json) => (content = json)}
+							onSubmit={send}
 							{t}
 						/>
 					{/key}

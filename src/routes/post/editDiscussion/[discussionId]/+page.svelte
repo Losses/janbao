@@ -29,6 +29,7 @@
 	let isSavingManualDraft = $state(false);
 	let showSaveSuccess = $state(false);
 	let loadedDiscussionId = $state<number | null>(null);
+	let updateForm: HTMLFormElement | undefined = $state();
 
 	const currentTheme = $derived(
 		themeName || categories.find((c) => c.slug === categorySlug)?.themeName || 'huoxin'
@@ -145,6 +146,7 @@
 		<form
 			method="POST"
 			action="?/update"
+			bind:this={updateForm}
 			use:enhance={() => {
 				isSubmitting = true;
 				return async ({ result }) => {
@@ -238,6 +240,9 @@
 							contextId={discussion.id}
 							initialContent={draftContent || opContentJson}
 							onContentChange={(json) => (contentJson = json)}
+							onSubmit={() => {
+								if (!isSubmitting) updateForm?.requestSubmit();
+							}}
 							placeholder={t.editor.placeholder}
 							{t}
 						/>

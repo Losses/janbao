@@ -114,6 +114,8 @@
 		disableImageUpload?: boolean;
 		/** Called when content changes with serialized JSON string */
 		onContentChange?: ContentChangeHandler;
+		/** Called on Ctrl/Cmd+Enter so the parent can trigger its submit path */
+		onSubmit?: VoidHandler;
 		/** Translation dictionary for i18n strings */
 		t?: TranslationDict | null;
 		/** Class override for container */
@@ -131,6 +133,7 @@
 		disableHeadings = false,
 		disableImageUpload = false,
 		onContentChange,
+		onSubmit,
 		t = null,
 		class: className = '',
 		excludeIds = []
@@ -397,6 +400,24 @@
 		const json = JSON.stringify(editorState.toJSON());
 		onContentChange?.(json);
 	}
+
+	// Ctrl/Cmd+Enter signals submit intent to the parent. Plain Enter is left
+	// alone so line breaks, lists, and the mention typeahead keep working.
+	// The parent decides whether to actually submit (empty/over-limit/in-flight).
+	function handleEditorKeydown(event: KeyboardEvent) {
+		if (disabled) return;
+		if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+			event.preventDefault();
+			onSubmit?.();
+		}
+	}
+
+	$effect(() => {
+		const elem = editorAreaElem;
+		if (!elem) return;
+		elem.addEventListener('keydown', handleEditorKeydown);
+		return () => elem.removeEventListener('keydown', handleEditorKeydown);
+	});
 
 	// Autosave: POST to /api/drafts/save every 30 seconds
 	function startAutosave() {

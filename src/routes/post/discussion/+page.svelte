@@ -27,6 +27,7 @@
 	let isPreview = $state(false);
 	let isSavingManualDraft = $state(false);
 	let showSaveSuccess = $state(false);
+	let publishForm: HTMLFormElement | undefined = $state();
 
 	const currentTheme = $derived(
 		themeName || categories.find((c) => c.slug === categorySlug)?.themeName || 'huoxin'
@@ -148,6 +149,7 @@
 			<form
 				method="POST"
 				action="?/publish"
+				bind:this={publishForm}
 				use:enhance={({ cancel }) => {
 					if (isSubmitting) {
 						cancel();
@@ -238,6 +240,9 @@
 								contextId={0}
 								initialContent={draftContent}
 								onContentChange={(json) => (contentJson = json)}
+								onSubmit={() => {
+									if (!isSubmitting) publishForm?.requestSubmit();
+								}}
 								placeholder={t.editor.placeholder}
 								{t}
 							/>

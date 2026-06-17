@@ -59,6 +59,8 @@
 	let editingMessageId = $state<number | null>(null);
 	let editContent = $state('');
 	let isSavingEdit = $state(false);
+	let composeForm: HTMLFormElement | undefined = $state();
+	let editForm: HTMLFormElement | undefined = $state();
 
 	const common = $derived((t.common ?? {}) as Record<string, string>);
 	const messageT = $derived((t.message ?? {}) as Record<string, string>);
@@ -121,12 +123,16 @@
 							placeholder={editorT['placeholderMessage'] ?? ''}
 							disableImageUpload={true}
 							onContentChange={(json) => (editContent = json)}
+							onSubmit={() => {
+								if (!isSavingEdit) editForm?.requestSubmit();
+							}}
 							{t}
 							class="mb-2"
 						/>
 						<form
 							method="POST"
 							action="?/editMessage"
+							bind:this={editForm}
 							use:enhance={() => {
 								isSavingEdit = true;
 								return async ({ result, update }) => {
@@ -186,6 +192,7 @@
 			<form
 				method="POST"
 				action="?/post"
+				bind:this={composeForm}
 				use:enhance={({ cancel }) => {
 					if (isPosting) {
 						cancel();
@@ -222,6 +229,9 @@
 						placeholder={editorT['placeholderMessage'] ?? messageT['content'] ?? ''}
 						disableImageUpload={true}
 						onContentChange={(json) => (composeContent = json)}
+						onSubmit={() => {
+							if (!isPosting) composeForm?.requestSubmit();
+						}}
 						{t}
 					/>
 				{/key}

@@ -50,6 +50,7 @@
 	// Quick Reply & inline editing states
 	let replyEditor: ReturnType<typeof LexicalEditor> | undefined = $state();
 	let replyComposerElem: HTMLElement | undefined = $state();
+	let replyForm: HTMLFormElement | undefined = $state();
 	let editingReplyId = $state<number | null>(null);
 	let editReplyContent = $state('');
 
@@ -403,6 +404,9 @@
 							initialContent={data.replyDraft}
 							placeholder={t.editor.placeholderReply}
 							onContentChange={(json) => (replyContent = json)}
+							onSubmit={() => {
+								if (!isSubmitting) replyForm?.requestSubmit();
+							}}
 							{t}
 							class="mb-3"
 						/>
@@ -411,6 +415,7 @@
 					<form
 						method="POST"
 						action="?/reply"
+						bind:this={replyForm}
 						use:enhance={({ cancel }) => {
 							if (isSubmitting) {
 								cancel();
