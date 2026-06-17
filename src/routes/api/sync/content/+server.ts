@@ -26,8 +26,14 @@ export const GET: RequestHandler = async ({ url, locals, platform }) => {
 
 	const discussionsCursor = url.searchParams.get('discussionsCursor') ?? undefined;
 	const repliesCursor = url.searchParams.get('repliesCursor') ?? undefined;
-	const tombstoneAfterRaw = url.searchParams.get('tombstoneAfter');
-	const tombstoneAfter = tombstoneAfterRaw ? Number.parseInt(tombstoneAfterRaw, 10) : undefined;
+	const discussionTombstoneAfterRaw = url.searchParams.get('discussionTombstoneAfter');
+	const replyTombstoneAfterRaw = url.searchParams.get('replyTombstoneAfter');
+	const discussionTombstoneAfter = discussionTombstoneAfterRaw
+		? Number.parseInt(discussionTombstoneAfterRaw, 10)
+		: undefined;
+	const replyTombstoneAfter = replyTombstoneAfterRaw
+		? Number.parseInt(replyTombstoneAfterRaw, 10)
+		: undefined;
 
 	const body = await buildContentSync({
 		db: locals.db,
@@ -35,7 +41,8 @@ export const GET: RequestHandler = async ({ url, locals, platform }) => {
 		userId: user.id,
 		discussionsCursor,
 		repliesCursor,
-		tombstoneAfter,
+		discussionTombstoneAfter,
+		replyTombstoneAfter,
 		limit,
 		platformEnv: platform?.env
 	});

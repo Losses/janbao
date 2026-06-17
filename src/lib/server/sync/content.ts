@@ -45,7 +45,8 @@ interface ContentSyncInput {
 	userId: number;
 	discussionsCursor?: string;
 	repliesCursor?: string;
-	tombstoneAfter?: number;
+	discussionTombstoneAfter?: number;
+	replyTombstoneAfter?: number;
 	limit: number;
 	platformEnv: App.Platform['env'] | undefined;
 }
@@ -56,7 +57,10 @@ export async function buildContentSync(input: ContentSyncInput): Promise<SyncCon
 
 	const dCur = parseCursor(input.discussionsCursor, lookback);
 	const rCur = parseCursor(input.repliesCursor, lookback);
-	const tAfter = input.tombstoneAfter ?? lookback;
+	// Each tombstone stream has its own cursor so a fast-filling stream can't
+	// advance the watermark past tombstones the slower stream hasn't shipped yet.
+	const tAfterD = input.discussionTombstoneAfter ?? lookback;
+	const tAfterR = input.replyTombstoneAfter ?? lookback;
 
 	const readableSlugs = await getReadableCategorySlugs(input.db, input.groupSlug);
 
@@ -71,10 +75,10 @@ export async function buildContentSync(input: ContentSyncInput): Promise<SyncCon
 			{ sinceTs: rCur.ts, sinceId: rCur.id, limit: input.limit },
 			readableSlugs
 		),
-		getDiscussionTombstones(input.db, tAfter, input.limit),
-		getReplyTombstones(input.db, tAfter, input.limit),
-		getFrontPageDiscussionIds(input.db, getDiscussionsLimit(input.platformEnv)),
-		getBookmarkedDiscussionIds(input.db, input.userId)
+		getDiscussionTombstones(input.db, tAfterD, input.limit, readableSlugs),
+		getReplyTombstones(input.db, tAfterR, input.limit, readableSlugs),
+		getFrontPageDiscussionIds(input.db, getDiscussionsLimit(input.platformEnv), readableSlugs),
+		getBookmarkedDiscussionIds(input.db, input.userId, readableSlugs)
 	]);
 
 	const lastDisc = disc[disc.length - 1];
@@ -83,19 +87,16 @@ export async function buildContentSync(input: ContentSyncInput): Promise<SyncCon
 	const lastRTomb = rTomb[rTomb.length - 1];
 
 	// Advance each cursor only to the last item actually returned; an empty page
-	// leaves the cursor unchanged so the client stops paging that stream.
+	// leaves the cursor unchanged so the client stops paging that stream. Each
+	// tombstone cursor advances only on its own stream's last row.
 	const newDiscCursor = lastDisc
 		? formatCursor(lastDisc.updatedAt, lastDisc.id)
 		: (input.discussionsCursor ?? formatCursor(dCur.ts, dCur.id));
 	const newRepCursor = lastRep
 		? formatCursor(lastRep.updatedAt, lastRep.id)
 		: (input.repliesCursor ?? formatCursor(rCur.ts, rCur.id));
-	const newTombAfter = Math.max(
-		tAfter,
-		lastDTomb ? lastDTomb.deletedAt : 0,
-		lastRTomb ? lastRTomb.deletedAt : 0
-	);
-	const tombstoneHasMore = dTomb.length >= input.limit || rTomb.length >= input.limit;
+	const newDTombAfter = lastDTomb ? Math.max(tAfterD, lastDTomb.deletedAt) : tAfterD;
+	const newRTombAfter = lastRTomb ? Math.max(tAfterR, lastRTomb.deletedAt) : tAfterR;
 
 	return {
 		discussions: disc,
@@ -107,12 +108,13 @@ export async function buildContentSync(input: ContentSyncInput): Promise<SyncCon
 		cursors: {
 			discussions: newDiscCursor,
 			replies: newRepCursor,
-			tombstoneAfter: newTombAfter
+			discussionTombstoneAfter: newDTombAfter,
+			replyTombstoneAfter: newRTombAfter
 		},
 		hasMore: {
 			discussions: disc.length >= input.limit,
 			replies: rep.length >= input.limit,
-			tombstones: tombstoneHasMore
+			tombstones: dTomb.length >= input.limit || rTomb.length >= input.limit
 		},
 		serverTimeSeconds: nowSec,
 		retentionDays: getOfflineRetentionDays(input.platformEnv)

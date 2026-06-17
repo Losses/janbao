@@ -9,6 +9,7 @@
 	// Record this offline read into the local outbox; it syncs back to the server
 	// (last-write-wins) on reconnect without touching the online read mechanism.
 	onMount(() => {
+		if (navigator.onLine) return;
 		const disc = data.discussion;
 		if (!disc) return;
 		const last = data.replies.length > 0 ? data.replies[data.replies.length - 1] : null;

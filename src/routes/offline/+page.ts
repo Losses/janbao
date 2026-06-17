@@ -8,11 +8,10 @@ export const ssr = false;
 export const load: PageLoad = async () => {
 	const db = getOfflineDB();
 	const discussions = await db.discussions.toArray();
-	// Mirror the live front-page order: pinned first, then by last activity.
+	// Mirror the live front-page order: pinned first, then lastReplyAt desc (NULL
+	// last, matching the online home page which orders by bare lastReplyAt).
 	discussions.sort(
-		(a, b) =>
-			Number(b.isPinned) - Number(a.isPinned) ||
-			(b.lastReplyAt ?? b.createdAt) - (a.lastReplyAt ?? a.createdAt)
+		(a, b) => Number(b.isPinned) - Number(a.isPinned) || (b.lastReplyAt ?? 0) - (a.lastReplyAt ?? 0)
 	);
 	return { discussions };
 };

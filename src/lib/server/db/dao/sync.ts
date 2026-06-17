@@ -1,5 +1,5 @@
 import { discussions, replies, bookmarks, categories } from '../schema';
-import { and, desc, eq, gt, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNotNull, isNull, or } from 'drizzle-orm';
 import type { D1Db } from '../index';
 import type { SyncDiscussionDTO, SyncReplyDTO, SyncTombstoneDTO } from '$lib/types/api';
 
@@ -108,16 +108,25 @@ export async function getDeltaReplies(
 	}));
 }
 
+// Tombstones are scoped to the caller's readable categories so the sync stream
+// can't leak the existence/deletion-timing of discussions in private categories.
 export async function getDiscussionTombstones(
 	db: D1Db,
 	afterTs: number,
-	limit: number
+	limit: number,
+	readableSlugs: string[]
 ): Promise<SyncTombstoneDTO[]> {
+	if (readableSlugs.length === 0) return [];
 	const rows = await db
 		.select({ id: discussions.id, deletedAt: discussions.deletedAt })
 		.from(discussions)
+		.innerJoin(categories, eq(discussions.categorySlug, categories.slug))
 		.where(
-			and(isNotNull(discussions.deletedAt), gt(discussions.deletedAt, new Date(afterTs * 1000)))
+			and(
+				isNotNull(discussions.deletedAt),
+				gt(discussions.deletedAt, new Date(afterTs * 1000)),
+				inArray(discussions.categorySlug, readableSlugs)
+			)
 		)
 		.orderBy(discussions.deletedAt)
 		.limit(limit);
@@ -127,35 +136,67 @@ export async function getDiscussionTombstones(
 export async function getReplyTombstones(
 	db: D1Db,
 	afterTs: number,
-	limit: number
+	limit: number,
+	readableSlugs: string[]
 ): Promise<SyncTombstoneDTO[]> {
+	if (readableSlugs.length === 0) return [];
 	const rows = await db
 		.select({ id: replies.id, deletedAt: replies.deletedAt })
 		.from(replies)
-		.where(and(isNotNull(replies.deletedAt), gt(replies.deletedAt, new Date(afterTs * 1000))))
+		.innerJoin(discussions, eq(replies.discussionId, discussions.id))
+		.where(
+			and(
+				isNotNull(replies.deletedAt),
+				gt(replies.deletedAt, new Date(afterTs * 1000)),
+				inArray(discussions.categorySlug, readableSlugs)
+			)
+		)
 		.orderBy(replies.deletedAt)
 		.limit(limit);
 	return rows.map((r) => ({ id: r.id, deletedAt: r.deletedAt ? toSeconds(r.deletedAt) : 0 }));
 }
 
-export async function getFrontPageDiscussionIds(db: D1Db, limit: number): Promise<number[]> {
+// Mirrors the live home-page ordering exactly (pinned first, then lastReplyAt
+// desc) and is scoped to readable categories so eviction protects only what the
+// user can actually see - no private-category id leak.
+export async function getFrontPageDiscussionIds(
+	db: D1Db,
+	limit: number,
+	readableSlugs: string[]
+): Promise<number[]> {
+	if (readableSlugs.length === 0) return [];
 	const rows = await db
 		.select({ id: discussions.id })
 		.from(discussions)
 		.innerJoin(categories, eq(discussions.categorySlug, categories.slug))
-		.where(and(isNull(discussions.deletedAt), isNull(categories.disabledAt)))
-		.orderBy(
-			desc(discussions.isPinned),
-			sql`coalesce(${discussions.lastReplyAt}, ${discussions.createdAt}) desc`
+		.where(
+			and(
+				isNull(discussions.deletedAt),
+				isNull(categories.disabledAt),
+				inArray(discussions.categorySlug, readableSlugs)
+			)
 		)
+		.orderBy(desc(discussions.isPinned), desc(discussions.lastReplyAt))
 		.limit(limit);
 	return rows.map((r) => r.id);
 }
 
-export async function getBookmarkedDiscussionIds(db: D1Db, userId: number): Promise<number[]> {
+export async function getBookmarkedDiscussionIds(
+	db: D1Db,
+	userId: number,
+	readableSlugs: string[]
+): Promise<number[]> {
+	if (readableSlugs.length === 0) return [];
 	const rows = await db
 		.select({ discussionId: bookmarks.discussionId })
 		.from(bookmarks)
-		.where(eq(bookmarks.userId, userId));
+		.innerJoin(discussions, eq(bookmarks.discussionId, discussions.id))
+		.where(
+			and(
+				eq(bookmarks.userId, userId),
+				isNull(discussions.deletedAt),
+				inArray(discussions.categorySlug, readableSlugs)
+			)
+		);
 	return rows.map((r) => r.discussionId);
 }
