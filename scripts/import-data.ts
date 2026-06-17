@@ -1687,6 +1687,11 @@ async function main() {
 							}
 						}
 
+						// showEmail mirrors the source site: on when writing a freshly crawled
+						// real email, else preserved (no email crawled, or a conflict fallback).
+						const willShowEmail =
+							profile.email && emailToSet === profile.email ? true : dbUser.showEmail;
+
 						await db
 							.update(schema.users)
 							.set({
@@ -1694,6 +1699,7 @@ async function main() {
 								displayName: profile.displayName || profile.username || dbUser.displayName,
 								bio: profile.bio ?? dbUser.bio,
 								email: emailToSet,
+								showEmail: willShowEmail,
 								signupTime: profile.signupTime || dbUser.signupTime,
 								lastActiveTime: profile.lastActiveTime || dbUser.lastActiveTime,
 								viewCount: profile.viewCount || dbUser.viewCount
@@ -1719,12 +1725,17 @@ async function main() {
 							}
 						}
 
+						// showEmail mirrors the source site: true only when a real crawled email
+						// is written; never for the @placeholder fallback (missing/conflict).
+						const willShowEmail = !!(profile.email && emailToSet === profile.email);
+
 						await db.insert(schema.users).values({
 							id: userId,
 							username: profile.username || `user_${userId}`,
 							displayName: profile.displayName || profile.username || `User ${userId}`,
 							bio: profile.bio,
 							email: emailToSet,
+							showEmail: willShowEmail,
 							passwordHash: 'NO_PASSWORD',
 							groupSlug: 'member',
 							signupTime: profile.signupTime || new Date(),
