@@ -543,5 +543,10 @@
 		"date": "Date",
 		"actions": "Actions",
 		"noBackups": "No backups yet."
+	},
+	"offline": {
+		"status": "You're offline",
+		"hint": "Some features are unavailable. Cached content is still readable.",
+		"retry": "Retry"
 	}
 }

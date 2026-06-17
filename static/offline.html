@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en" data-theme="huoxin">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title data-i18n="title">Janbao</title>
+		<style>
+			:root {
+				color-scheme: light;
+			}
+			html,
+			body {
+				margin: 0;
+				height: 100%;
+			}
+			body {
+				background: #ffffff;
+				color: #111;
+				font-family: Tahoma, Arial, 'Hiragino Sans GB W3', STHeiti, 'Microsoft YaHei', serif;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				padding: 1.5rem;
+				text-align: center;
+			}
+			.card {
+				max-width: 28rem;
+			}
+			.ring {
+				width: 64px;
+				height: 64px;
+				margin: 0 auto 1rem;
+				border-radius: 50%;
+				border: 6px solid #ffb257;
+			}
+			h1 {
+				font-size: 1.25rem;
+				margin: 0 0 0.5rem;
+			}
+			p {
+				margin: 0 0 1.25rem;
+				color: #555;
+				line-height: 1.5;
+			}
+			button {
+				font: inherit;
+				cursor: pointer;
+				background: #444;
+				color: #fff;
+				border: 1px solid #ccc;
+				padding: 0.5rem 1.25rem;
+			}
+		</style>
+	</head>
+	<body>
+		<main class="card">
+			<div class="ring" aria-hidden="true"></div>
+			<h1 data-i18n="heading"></h1>
+			<p data-i18n="body"></p>
+			<button type="button" data-i18n="retry" onclick="location.reload()"></button>
+		</main>
+		<script>
+			// This page is served by the service worker with no app shell, so it can't
+			// read the app's TranslationDict. It carries its own bilingual strings and
+			// picks the locale from the browser language. Keep wording in sync with the
+			// `offline.*` keys in src/lib/i18n/{en,zh-CN}.json.
+			var STR = {
+				en: {
+					title: 'Janbao',
+					heading: "You're offline",
+					body: "The network is unavailable. Cached discussions remain readable in the offline reader once you're back inside the app.",
+					retry: 'Retry'
+				},
+				'zh-CN': {
+					title: 'Janbao',
+					heading: '你已离线',
+					body: '网络不可用。返回应用后，可在离线阅读器中阅读已缓存的讨论。',
+					retry: '重试'
+				}
+			};
+			var lang = String(navigator.language || 'en').toLowerCase().indexOf('zh') === 0 ? 'zh-CN' : 'en';
+			var s = STR[lang];
+			document.documentElement.lang = lang;
+			Array.prototype.forEach.call(document.querySelectorAll('[data-i18n]'), function (el) {
+				el.textContent = s[el.getAttribute('data-i18n')];
+			});
+			// Auto-recover: reload into the live app the moment connectivity returns.
+			window.addEventListener('online', function () {
+				location.reload();
+			});
+		</script>
+	</body>
+</html>
