@@ -25,6 +25,7 @@
 	import { createMentionNode } from '$lib/components/atoms/MentionNode';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import type { UserSearchResult } from '$lib/types/api';
+	import type { VoidHandler } from '$lib/types/handlers';
 
 	interface MentionTypeaheadPluginProps {
 		/** User IDs to exclude from suggestions */
@@ -51,7 +52,7 @@
 	let lastTargetRect: DOMRect | null = null;
 
 	let debounceTimer: ReturnType<typeof setTimeout> | undefined;
-	let unregisterFns: (() => void)[] = [];
+	let unregisterFns: VoidHandler[] = [];
 
 	// --- Trigger regex ---
 	const MENTION_TRIGGER_REGEX = /(^|\s)(@([\p{L}\p{N}_-]{0,30}))$/u;

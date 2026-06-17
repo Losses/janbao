@@ -58,5 +58,24 @@ unconditional PASS. See [[dv04-audit-loop]]. Plan: DV05-Plan.md.
 - R3 fixes verified (fail-open + `messages/new` 429), no regression. All six
   throttle-hit paths surface a message and preserve input; gates green (check
   0/0, lint exit 0). All carry-overs re-validated, none upgraded.
-- **DV05 C01 COMPLETE 2026-06-17** — closed in 4 rounds (~20 sub-agent audits).
+- **DV05 C01 COMPLETE 2026-06-17** - closed in 4 rounds (~20 sub-agent audits).
   Release-ready subject to applying the 0011 migration on production D1.
+
+## Post-audit cleanup (carry-over fix-up, after the loop closed)
+
+At the user's request the two actionable carry-overs were fixed (the rest are
+architectural/deployment and stay):
+
+- **#1 edit-form cancel locks**: `editDiscussion`, `editReply`, `editMessage`
+  enhances now guard re-entry with `if (isSubmitting/isSavingEdit) { cancel(); return; }`.
+- **#7 business-error silence**: the form enhances (`publish`, PM send,
+  `editMessage`, `editReply`; `editDiscussion` already had it) now check
+  `result.type === 'success' && 'success' in result.data && result.data.success === false`
+  and alert, so validation errors (publishFailed / tooManyRecipients /
+  contentTooLarge / edit failures) surface instead of silently clearing input or
+  dropping the draft. The fetch surfaces (`ActivityComments`, `activity`) gained a
+  generic `else` for non-429 errors.
+- Gates after cleanup: `bun run check` 0/0, `bun run lint` exit 0.
+- Unchanged carry-overs: `isSubmitting` sharing (#2), `enforceRateLimit`/`
+enforceThrottle` duplication (#3), `retryAfter` on action paths (#4),
+  `process.env` fallback (#5), prod D1 manual migration (#6).

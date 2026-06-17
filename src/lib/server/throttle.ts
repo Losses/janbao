@@ -134,30 +134,40 @@ export async function enforceRateLimit(
 	const nowSec = Math.floor(Date.now() / 1000);
 	const epoch = Math.floor(nowSec / windowSec);
 
-	const inserted = await db
-		.insert(rateLimits)
-		.values({ bucket, identifier, windowEpoch: epoch, count: 1 })
-		.onConflictDoUpdate({
-			target: [rateLimits.bucket, rateLimits.identifier, rateLimits.windowEpoch],
-			set: { count: sql`${rateLimits.count} + 1` }
-		})
-		.returning({ count: rateLimits.count });
+	// Fail open: post rate limiting is a best-effort guard against duplicate
+	// submission, not a correctness gate. If the counter store is unavailable
+	// (e.g. the rate_limits migration wasn't applied yet, or a transient DB
+	// error), we must NOT turn every write into a 500 - allow it through and
+	// log. (enforceThrottle stays fail-closed; auth cannot fail open.)
+	try {
+		const inserted = await db
+			.insert(rateLimits)
+			.values({ bucket, identifier, windowEpoch: epoch, count: 1 })
+			.onConflictDoUpdate({
+				target: [rateLimits.bucket, rateLimits.identifier, rateLimits.windowEpoch],
+				set: { count: sql`${rateLimits.count} + 1` }
+			})
+			.returning({ count: rateLimits.count });
 
-	// Best-effort prune of stale windows for THIS bucket only (see enforceThrottle).
-	if (Math.random() < 0.1) {
-		try {
-			await db
-				.delete(rateLimits)
-				.where(and(eq(rateLimits.bucket, bucket), lt(rateLimits.windowEpoch, epoch - 1)));
-		} catch {
-			// ignore - prune is best-effort
+		// Best-effort prune of stale windows for THIS bucket only (see enforceThrottle).
+		if (Math.random() < 0.1) {
+			try {
+				await db
+					.delete(rateLimits)
+					.where(and(eq(rateLimits.bucket, bucket), lt(rateLimits.windowEpoch, epoch - 1)));
+			} catch {
+				// ignore - prune is best-effort
+			}
 		}
-	}
 
-	const count = inserted[0]?.count ?? 1;
-	const blocked = count > limit;
-	const retryAfter = blocked ? (epoch + 1) * windowSec - nowSec : 0;
-	return { blocked, retryAfter };
+		const count = inserted[0]?.count ?? 1;
+		const blocked = count > limit;
+		const retryAfter = blocked ? (epoch + 1) * windowSec - nowSec : 0;
+		return { blocked, retryAfter };
+	} catch (err) {
+		console.error('[rate_limits] throttle counter unavailable; allowing request', err);
+		return { blocked: false, retryAfter: 0 };
+	}
 }
 
 /**

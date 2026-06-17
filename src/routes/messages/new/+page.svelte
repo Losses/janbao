@@ -15,6 +15,10 @@
 		data: PageData;
 	}
 
+	interface MessageComposeResult extends ApiResult {
+		conversationId?: number;
+	}
+
 	let { data }: PageProps = $props();
 
 	const t = $derived(data.t);
@@ -65,7 +69,7 @@
 					contentJson: content
 				})
 			});
-			const result: ApiResult & { conversationId?: number } = await res.json();
+			const result: MessageComposeResult = await res.json();
 			if (result.success && result.conversationId) {
 				goto(`/messages/${result.conversationId}`);
 				return;

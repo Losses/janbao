@@ -193,20 +193,22 @@ type LexicalBlockNode = LexicalParagraphNode | LexicalImageNode | LexicalDeadIma
 
 // Empty SerializedEditor for the svelte-lexical ImageNode caption field
 // (importJSON requires the full shape even though the caption is unused).
+interface EmptyCaptionParagraph {
+	type: 'paragraph';
+	direction: string;
+	format: string;
+	indent: number;
+	version: number;
+	children: never[];
+}
+
 interface EmptyCaptionRoot {
 	type: 'root';
 	direction: string;
 	format: string;
 	indent: number;
 	version: number;
-	children: {
-		type: 'paragraph';
-		direction: string;
-		format: string;
-		indent: number;
-		version: number;
-		children: never[];
-	}[];
+	children: EmptyCaptionParagraph[];
 }
 
 interface EmptyCaption {
@@ -1043,7 +1045,12 @@ function parseActivitiesHtml(html: string): ParsedActivity[] {
 }
 
 // Parse discussion ID and slug from post URL
-function parsePostUrl(postUrl: string): { id: string; slug: string } | null {
+interface ParsedPostUrl {
+	id: string;
+	slug: string;
+}
+
+function parsePostUrl(postUrl: string): ParsedPostUrl | null {
 	const match = postUrl.match(/\/discussion\/(\d+)\/([^/#?]+)/);
 	if (match) {
 		return { id: match[1], slug: match[2] };
