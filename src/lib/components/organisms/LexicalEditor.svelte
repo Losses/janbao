@@ -98,7 +98,7 @@
 		getEditorState?: GetEditorStateFn;
 	}
 
-	interface LexicalEditorProps {
+	export interface LexicalEditorProps {
 		/** Initial Lexical JSON state string to hydrate the editor */
 		initialContent?: string | null;
 		/** Context for draft autosave: 'discussion', 'reply', 'message', 'activity' */

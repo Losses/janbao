@@ -3,7 +3,7 @@
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import ActivityList from '$lib/components/organisms/ActivityList.svelte';
-	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
+	import LexicalEditor from '$lib/components/organisms/LexicalEditorLazy.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';

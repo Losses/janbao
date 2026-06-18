@@ -3,7 +3,7 @@
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import MentionChipInput from '$lib/components/organisms/MentionChipInput.svelte';
-	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
+	import LexicalEditor from '$lib/components/organisms/LexicalEditorLazy.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
 	import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';

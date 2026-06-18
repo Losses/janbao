@@ -5,7 +5,7 @@
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import ActivityList from '$lib/components/organisms/ActivityList.svelte';
-	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
+	import LexicalEditor from '$lib/components/organisms/LexicalEditorLazy.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
 	import { mdiArrowRight } from '@mdi/js';

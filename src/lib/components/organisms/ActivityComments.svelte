@@ -3,7 +3,7 @@
 	import DateComponent from '$lib/components/atoms/Date.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import ConfirmationModal from '$lib/components/organisms/ConfirmationModal.svelte';
-	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
+	import LexicalEditor from '$lib/components/organisms/LexicalEditorLazy.svelte';
 	import { generateSlug } from '$lib/utils/slug';
 	import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 	import type { ApiResult, ActivityCommentItem, ActivityCommentsResponse } from '$lib/types/api';

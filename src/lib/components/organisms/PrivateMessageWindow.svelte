@@ -7,7 +7,7 @@
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import DateComponent from '$lib/components/atoms/Date.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
-	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
+	import LexicalEditor from '$lib/components/organisms/LexicalEditorLazy.svelte';
 	import { generateSlug } from '$lib/utils/slug';
 	import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 	import { enhance } from '$app/forms';

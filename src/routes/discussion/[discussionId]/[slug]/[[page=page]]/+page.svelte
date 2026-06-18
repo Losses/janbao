@@ -6,7 +6,7 @@
 	import DiscussionMetadata from '$lib/components/molecules/DiscussionMetadata.svelte';
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
-	import LexicalEditor from '$lib/components/organisms/LexicalEditor.svelte';
+	import LexicalEditor from '$lib/components/organisms/LexicalEditorLazy.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
 	import ConfirmationModal from '$lib/components/organisms/ConfirmationModal.svelte';
 	import { formatTitle } from '$lib/utils/title';
