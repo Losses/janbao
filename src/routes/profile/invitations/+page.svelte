@@ -14,12 +14,15 @@
 		FeedbackMessage
 	} from '$lib/types/api';
 	import type { PageData } from './$types';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 
 	interface PageProps {
 		data: PageData;
 	}
 
 	let { data }: PageProps = $props();
+
+	const online = getOnlineStore();
 
 	const t = $derived(data.t);
 	const invitationT = $derived(t.invitation);
@@ -54,6 +57,7 @@
 	}
 
 	async function requestCode() {
+		if (!online.online) return;
 		requesting = true;
 		feedback = null;
 		try {
@@ -113,7 +117,7 @@
 			<button
 				class="btn btn-primary btn-sm"
 				onclick={requestCode}
-				disabled={requesting || !data.canRequestMore}
+				disabled={requesting || !data.canRequestMore || !online.online}
 			>
 				{#if requesting}
 					<span class="loading loading-spinner loading-xs"></span>

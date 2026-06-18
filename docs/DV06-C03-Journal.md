@@ -131,3 +131,17 @@ round 2.
   ActivityRow delete; list reconnect; inbox new-message link (nav → disabled page).
 - Gate: check 0/0, lint exit 0, build exit 0. See RV06-C03-Audit-05.md.
 - Advancing to round 6 targeting 5/5 UNCONDITIONAL_PASS.
+
+## Round 6
+
+- 5 agents. Verdict: 2/5 UNCONDITIONAL_PASS (A, C); B PASS (1 MEDIUM); D/E PASS (LOW/carry-over).
+- MEDIUM (B): **`/profile/invitations` requestCode** fired `/api/invitations/request`
+  offline. Fixed: function + button gated.
+- LOW (C/D, non-blocking): `use:enhance` cancel callbacks check only `isSubmitting`, not
+  `online.online` - the submit button (canonical path) is disabled offline + the Ctrl+Enter
+  path is fn-guarded, so no bypass; consistent pattern. Accepted as defense-in-depth-only.
+- Carry-overs reaffirmed (DiscussionListPage, admin/entry/profile-EDIT forms, moderator
+  delete/pin, RichTextToolbar upload, ActivityComments, sidebar/mobile nav, BookmarkTooltip,
+  ActivityRow delete, list reconnect, inbox new-message link, profile ActivityList).
+- Gate: check 0/0, lint exit 0, build exit 0. See RV06-C03-Audit-06.md.
+- Advancing to round 7 targeting 5/5 UNCONDITIONAL_PASS.
