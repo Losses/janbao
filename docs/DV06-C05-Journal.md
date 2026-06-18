@@ -237,3 +237,11 @@ after verification):
 - Carry-overs unchanged.
 - Gate: check 0/0, lint exit 0, build exit 0. See RV06-C05-Audit-03.md.
 - Advancing to round 4 targeting 5/5 UNCONDITIONAL_PASS - the final round of DV06.
+
+## Round 4
+
+- 5 agents. Verdict: **5/5 UNCONDITIONAL_PASS**.
+- Per-subscription try/catch verified. All prior fixes intact. No new findings.
+- Gate: check 0/0, lint exit 0, build exit 0. See RV06-C05-Audit-04.md.
+- **DV06 C05 COMPLETE 2026-06-18** - closed in 4 rounds (~20 sub-agent audits).
+- **DV06 COMPLETE 2026-06-18** - all 5 cycles closed with 5/5 unconditional PASS.
