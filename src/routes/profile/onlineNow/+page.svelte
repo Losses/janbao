@@ -4,6 +4,7 @@
 	import { formatTitle } from '$lib/utils/title';
 	import type { ApiResult, FeedbackMessage } from '$lib/types/api';
 	import type { PageData } from './$types';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 
 	interface PageProps {
 		data: PageData;
@@ -14,6 +15,7 @@
 	const t = $derived(data.t);
 	const user = $derived(data.user);
 	const profileT = $derived(t.profile);
+	const online = getOnlineStore();
 
 	// svelte-ignore state_referenced_locally
 	let isStealth = $state(data.isStealth);
@@ -88,7 +90,7 @@
 				<button
 					class="btn btn-sm {isStealth ? 'btn-warning' : 'btn-primary'}"
 					onclick={toggleStealth}
-					disabled={saving}
+					disabled={saving || !online.online}
 				>
 					{isStealth ? profileT.disableStealth : profileT.enableStealth}
 				</button>

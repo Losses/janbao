@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
@@ -29,6 +30,19 @@
 	function handlePageChange(newPage: number) {
 		goto(`?page=${newPage}`);
 	}
+
+	// Offline fallback: if the cached bookmarks snapshot is non-empty, swap to the
+	// client-only /offline/bookmarks reader so the list is viewable without a
+	// server round-trip.
+	onMount(() => {
+		if (navigator.onLine) return;
+		void (async () => {
+			const { getOfflineDB } = await import('$lib/offline/idb');
+			const row = await getOfflineDB().syncMeta.get('bookmarksSnapshot');
+			const has = Array.isArray(row?.value) && row.value.some((v) => typeof v === 'number');
+			if (has) await goto('/offline/bookmarks');
+		})();
+	});
 </script>
 
 <svelte:head>

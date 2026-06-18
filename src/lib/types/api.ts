@@ -444,6 +444,22 @@ export interface SyncTombstoneDTO {
 	deletedAt: number;
 }
 
+// A root activity (no parent) for the offline activity feed. Only the first
+// page is synced (snapshot semantics, no cursor). joinedMembers / mentions are
+// intentionally not synced - the offline ActivityList degrades (no member
+// roster, no @-chips). commentCount is computed per-row (the activities table
+// has no denormalized count).
+export interface SyncActivityDTO {
+	id: number;
+	authorId: number;
+	recipientId: number | null;
+	contentJson: string;
+	createdAt: number;
+	updatedAt: number | null;
+	isJoined: boolean;
+	commentCount: number;
+}
+
 // Author display info for the offline reader. One row per unique authorId
 // referenced by the returned discussions + replies; the client caches it in
 // IDB so avatars and names render offline without a server round-trip.
@@ -471,6 +487,20 @@ export interface SyncHasMore {
 export interface SyncContentResponse {
 	discussions: SyncDiscussionDTO[];
 	replies: SyncReplyDTO[];
+	// First + last page of replies for front-page + bookmarked discussions,
+	// backfilled past the 30-day lookback so old threads (incl. stale pinned
+	// posts) are openable offline. Merged into the client replies store.
+	backfillReplies: SyncReplyDTO[];
+	// Discussions whose cached replies are endpoint-only (may have a middle
+	// gap). The offline reader inserts an "N more not cached" divider for these
+	// when commentCount exceeds the cached count.
+	partialReplyDiscussionIds: number[];
+	// First page of the activity feed (snapshot, no pagination/cursor).
+	activities: SyncActivityDTO[];
+	// Reply page size the server used when backfilling first/last pages, so the
+	// offline reader can place the "N pages not cached" divider at the exact
+	// first-page / last-page boundary.
+	replyPageSize: number;
 	users: SyncUserDTO[];
 	discussionTombstones: SyncTombstoneDTO[];
 	replyTombstones: SyncTombstoneDTO[];

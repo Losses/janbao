@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import type {
+	CachedActivity,
 	CachedDiscussion,
 	CachedReply,
 	CachedUser,
@@ -18,6 +19,7 @@ export class ForumOfflineDB extends Dexie {
 	discussions!: Table<CachedDiscussion, number>;
 	replies!: Table<CachedReply, number>;
 	users!: Table<CachedUser, number>;
+	activities!: Table<CachedActivity, number>;
 	readStatePending!: Table<OfflineReadState, ReadStateKey>;
 	readStateMerged!: Table<OfflineReadState, number>;
 	syncMeta!: Table<SyncMetaRow, string>;
@@ -39,6 +41,18 @@ export class ForumOfflineDB extends Dexie {
 			discussions: 'id, updatedAt, categorySlug, lastReplyAt',
 			replies: 'id, discussionId, [discussionId+createdAt], updatedAt',
 			users: 'id',
+			readStatePending: '[discussionId+lastReadAt], discussionId',
+			readStateMerged: 'discussionId',
+			syncMeta: 'key'
+		});
+		// v3 adds the `activities` store: first-page activity feed snapshot for
+		// /offline/activity. Existing stores are unchanged so v1/v2 clients
+		// upgrade in place.
+		this.version(3).stores({
+			discussions: 'id, updatedAt, categorySlug, lastReplyAt',
+			replies: 'id, discussionId, [discussionId+createdAt], updatedAt',
+			users: 'id',
+			activities: 'id, createdAt',
 			readStatePending: '[discussionId+lastReadAt], discussionId',
 			readStateMerged: 'discussionId',
 			syncMeta: 'key'

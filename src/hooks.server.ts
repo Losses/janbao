@@ -112,5 +112,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.lang = resolvedLang;
 	event.locals.t = getTranslation(resolvedLang);
 
-	return resolve(event);
+	const response = await resolve(event);
+	// The service worker script must always be revalidated: otherwise Firefox
+	// byte-serves a cached `/service-worker.js`, a freshly built SW never
+	// installs, and users get stuck on a stale app shell / offline layout.
+	// (Cloudflare enforces the same via static/_headers; the node adapter
+	// ignores that file, so the header is set here too.)
+	if (event.url.pathname === '/service-worker.js') {
+		response.headers.set('Cache-Control', 'no-cache, must-revalidate');
+	}
+	return response;
 };

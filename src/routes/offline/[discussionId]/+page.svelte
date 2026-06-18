@@ -4,7 +4,6 @@
 	import DiscussionMetadata from '$lib/components/molecules/DiscussionMetadata.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import BookmarkButton from '$lib/components/atoms/BookmarkButton.svelte';
-	import Badge from '$lib/components/atoms/Badge.svelte';
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import { generateSlug } from '$lib/utils/slug';
 	import { recordOfflineRead } from '$lib/offline/read-state';
@@ -45,7 +44,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.discussion?.title ?? data.t.offline.reader.listTitle} · Janbao</title>
+	<title>{data.discussion?.title ?? 'Janbao'} · Janbao</title>
 </svelte:head>
 
 {#snippet sidebar()}
@@ -53,9 +52,6 @@
 		{#if data.user}
 			<UserInfoBlock user={data.user} t={data.t} />
 			<div class="flex flex-col gap-2">
-				<a class="btn btn-primary btn-sm w-full" href="/offline">
-					{data.t.offline.reader.listTitle}
-				</a>
 				<a
 					class="btn btn-outline btn-sm w-full"
 					href="/profile/discussions/{data.user.id}/{generateSlug(data.user.username)}"
@@ -85,9 +81,6 @@
 					>
 						{data.discussion.title}
 					</h1>
-					<Badge variant="neutral" class="badge-sm shrink-0">
-						{data.t.offline.reader.readerBadge}
-					</Badge>
 				</div>
 				<BookmarkButton
 					discussionId={data.discussionId}
@@ -120,7 +113,15 @@
 			{:else if partitioned.rest.length > 0}
 				<!-- Replies Stream -->
 				<div class="divide-y divide-base-300 border-t border-base-300">
-					{#each partitioned.rest as reply (reply.id)}
+					{#each partitioned.rest as reply, i (reply.id)}
+						{#if data.partialGap && i === data.partialGap.firstPageRestCount}
+							<p class="py-3 text-center text-xs italic text-base-content/50">
+								{data.t.offline.reader.uncachedReplies.replace(
+									'{count}',
+									String(data.partialGap.uncachedPages)
+								)}
+							</p>
+						{/if}
 						<div id="reply-{reply.id}" class="space-y-4 py-4">
 							<DiscussionMetadata
 								userId={reply.authorId}

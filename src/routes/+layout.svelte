@@ -62,14 +62,30 @@
 		window.addEventListener('offline', markOffline);
 		// Keep the offline cache fresh on load when already online.
 		if (navigator.onLine) triggerSync();
-		if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-			navigator.serviceWorker.register('/service-worker.js').catch((err: unknown) => {
-				console.error('[sw] registration failed:', err);
-			});
-		}
+		// `sw` is the service-worker container in production (undefined in dev, or
+		// when the browser lacks SW support). Registration is production-only so
+		// dev assets are never cached.
+		const sw =
+			import.meta.env.PROD && 'serviceWorker' in navigator ? navigator.serviceWorker : undefined;
+		// Reload the page the moment a freshly built service worker takes over, so
+		// the user never sees a stale app shell / offline layout after a rebuild.
+		// `hadController` guards the very first install (controller goes null→set)
+		// so a tab that just loaded fresh content from the network is not reloaded.
+		const hadController = !!sw?.controller;
+		let refreshing = false;
+		const onControllerChange = () => {
+			if (!hadController || refreshing) return;
+			refreshing = true;
+			location.reload();
+		};
+		sw?.addEventListener('controllerchange', onControllerChange);
+		sw?.register('/service-worker.js').catch((err: unknown) => {
+			console.error('[sw] registration failed:', err);
+		});
 		return () => {
 			window.removeEventListener('online', markOnline);
 			window.removeEventListener('offline', markOffline);
+			sw?.removeEventListener('controllerchange', onControllerChange);
 		};
 	});
 </script>

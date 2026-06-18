@@ -5,6 +5,7 @@
 	import type { ApiResult, FeedbackMessage, ProfileEditBody } from '$lib/types/api';
 	import type { PageData } from './$types';
 	import { isValidUsername } from '$lib/utils/validation';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 
 	interface PageProps {
 		data: PageData;
@@ -33,6 +34,7 @@
 
 	const isAdmin = $derived(data.user.groupSlug === 'admin');
 	const allowSlugChange = $derived(data.allowSlugChange);
+	const online = getOnlineStore();
 
 	async function handleSubmit(e: SubmitEvent) {
 		e.preventDefault();
@@ -101,100 +103,104 @@
 			</div>
 		{/if}
 
-		<form onsubmit={handleSubmit} class="space-y-4">
-			<!-- Username -->
-			<div class="form-control">
-				<label class="label" for="username">
-					<span class="label-text font-medium">{t.auth.username}</span>
-				</label>
-				<input
-					id="username"
-					type="text"
-					class="input input-bordered {username && !isValidUsername(username) ? 'input-error' : ''}"
-					bind:value={username}
-					disabled={!allowSlugChange || !isAdmin}
-					aria-describedby={allowSlugChange && !isAdmin ? 'username-hint' : undefined}
-				/>
-				{#if username && !isValidUsername(username)}
-					<p class="text-xs text-error mt-1">
-						{t.auth.invalidUsername}
-					</p>
-				{/if}
-				{#if allowSlugChange && !isAdmin}
-					<label class="label" id="username-hint" for="username">
-						<span class="label-text-alt text-base-content/50">
-							{profileT.usernameAdminOnly}
-						</span>
+		<form onsubmit={handleSubmit}>
+			<fieldset disabled={!online.online} class="space-y-4">
+				<!-- Username -->
+				<div class="form-control">
+					<label class="label" for="username">
+						<span class="label-text font-medium">{t.auth.username}</span>
 					</label>
-				{/if}
-			</div>
-
-			<!-- Display Name -->
-			<div class="form-control">
-				<label class="label" for="displayName">
-					<span class="label-text font-medium">{t.auth.displayName}</span>
-				</label>
-				<input
-					id="displayName"
-					type="text"
-					class="input input-bordered"
-					bind:value={displayName}
-					required
-				/>
-			</div>
-
-			<!-- Bio -->
-			<div class="form-control">
-				<label class="label" for="bio">
-					<span class="label-text font-medium">{t.auth.bio}</span>
-					<span class="label-text-alt text-base-content/50">{bio.length}/100</span>
-				</label>
-				<textarea
-					id="bio"
-					class="textarea textarea-bordered"
-					rows="2"
-					maxlength="100"
-					bind:value={bio}
-				></textarea>
-			</div>
-
-			<!-- Email -->
-			<div class="form-control">
-				<label class="label" for="email">
-					<span class="label-text font-medium">{t.auth.email}</span>
-				</label>
-				<input id="email" type="email" class="input input-bordered" bind:value={email} required />
-			</div>
-
-			<!-- Show Email Toggle -->
-			<div class="form-control">
-				<label class="label cursor-pointer justify-start gap-3" for="showEmail">
 					<input
-						id="showEmail"
-						type="checkbox"
-						class="checkbox checkbox-sm"
-						bind:checked={showEmail}
+						id="username"
+						type="text"
+						class="input input-bordered {username && !isValidUsername(username)
+							? 'input-error'
+							: ''}"
+						bind:value={username}
+						disabled={!allowSlugChange || !isAdmin}
+						aria-describedby={allowSlugChange && !isAdmin ? 'username-hint' : undefined}
 					/>
-					<span class="label-text">{profileT.showEmail}</span>
-				</label>
-			</div>
+					{#if username && !isValidUsername(username)}
+						<p class="text-xs text-error mt-1">
+							{t.auth.invalidUsername}
+						</p>
+					{/if}
+					{#if allowSlugChange && !isAdmin}
+						<label class="label" id="username-hint" for="username">
+							<span class="label-text-alt text-base-content/50">
+								{profileT.usernameAdminOnly}
+							</span>
+						</label>
+					{/if}
+				</div>
 
-			<!-- Language Preference -->
-			<div class="form-control">
-				<label class="label" for="language">
-					<span class="label-text font-medium">{profileT.language}</span>
-				</label>
-				<select id="language" class="select select-bordered" bind:value={languagePreference}>
-					<option value="en">{t.profile.languageEnglish}</option>
-					<option value="zh-CN">{t.profile.languageChinese}</option>
-				</select>
-			</div>
+				<!-- Display Name -->
+				<div class="form-control">
+					<label class="label" for="displayName">
+						<span class="label-text font-medium">{t.auth.displayName}</span>
+					</label>
+					<input
+						id="displayName"
+						type="text"
+						class="input input-bordered"
+						bind:value={displayName}
+						required
+					/>
+				</div>
 
-			<div class="pt-2">
-				<button type="submit" class="btn btn-primary" disabled={saving}>
-					{saving ? t.common.saving : t.common.submit}
-				</button>
-			</div>
+				<!-- Bio -->
+				<div class="form-control">
+					<label class="label" for="bio">
+						<span class="label-text font-medium">{t.auth.bio}</span>
+						<span class="label-text-alt text-base-content/50">{bio.length}/100</span>
+					</label>
+					<textarea
+						id="bio"
+						class="textarea textarea-bordered"
+						rows="2"
+						maxlength="100"
+						bind:value={bio}
+					></textarea>
+				</div>
+
+				<!-- Email -->
+				<div class="form-control">
+					<label class="label" for="email">
+						<span class="label-text font-medium">{t.auth.email}</span>
+					</label>
+					<input id="email" type="email" class="input input-bordered" bind:value={email} required />
+				</div>
+
+				<!-- Show Email Toggle -->
+				<div class="form-control">
+					<label class="label cursor-pointer justify-start gap-3" for="showEmail">
+						<input
+							id="showEmail"
+							type="checkbox"
+							class="checkbox checkbox-sm"
+							bind:checked={showEmail}
+						/>
+						<span class="label-text">{profileT.showEmail}</span>
+					</label>
+				</div>
+
+				<!-- Language Preference -->
+				<div class="form-control">
+					<label class="label" for="language">
+						<span class="label-text font-medium">{profileT.language}</span>
+					</label>
+					<select id="language" class="select select-bordered" bind:value={languagePreference}>
+						<option value="en">{t.profile.languageEnglish}</option>
+						<option value="zh-CN">{t.profile.languageChinese}</option>
+					</select>
+				</div>
+
+				<div class="pt-2">
+					<button type="submit" class="btn btn-primary" disabled={saving}>
+						{saving ? t.common.saving : t.common.submit}
+					</button>
+				</div>
+			</fieldset>
 		</form>
 	</div>
 </DualColumnLayout>

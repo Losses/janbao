@@ -3,6 +3,8 @@
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import AdminSidebar from '$lib/components/molecules/AdminSidebar.svelte';
 	import FormField from '$lib/components/atoms/FormField.svelte';
+	import OfflinePlaceholder from '$lib/components/molecules/OfflinePlaceholder.svelte';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import type { AdminUserGroupItem, ApiResult, FeedbackMessage } from '$lib/types/api';
 	import type { PageData } from './$types';
@@ -12,6 +14,7 @@
 	}
 
 	let { data }: PageProps = $props();
+	const online = getOnlineStore();
 
 	const t = $derived(data.t);
 	const adminT = $derived(t.admin);
@@ -122,9 +125,11 @@
 	<div class="space-y-3">
 		<div class="flex items-center justify-between border-b border-base-300 pb-4">
 			<h1 class="page-title">{adminT.userGroups}</h1>
-			<button class="btn btn-primary btn-sm" onclick={openAdd} disabled={saving}>
-				{adminT.addUserGroup}
-			</button>
+			{#if online.online}
+				<button class="btn btn-primary btn-sm" onclick={openAdd} disabled={saving}>
+					{adminT.addUserGroup}
+				</button>
+			{/if}
 		</div>
 
 		{#if message}
@@ -136,50 +141,54 @@
 			</div>
 		{/if}
 
-		<div class="overflow-x-auto">
-			<table class="table table-sm [&_tr]:border-base-300">
-				<thead>
-					<tr>
-						<th>{permissionsT.slug}</th>
-						<th>{permissionsT.title}</th>
-						<th>{permissionsT.users}</th>
-						<th>{permissionsT.status}</th>
-						<th>{permissionsT.actions}</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each groups as group (group.slug)}
+		{#if online.online}
+			<div class="overflow-x-auto">
+				<table class="table table-sm [&_tr]:border-base-300">
+					<thead>
 						<tr>
-							<td class="font-mono text-xs">{group.slug}</td>
-							<td>
-								<div class="font-medium">{group.title}</div>
-								<div class="text-xs text-base-content/50">{group.description}</div>
-							</td>
-							<td>{group.userCount}</td>
-							<td>{group.reserved ? permissionsT.reserved : permissionsT.custom}</td>
-							<td>
-								<div class="flex gap-1">
-									<button
-										class="btn btn-outline btn-xs"
-										onclick={() => openEdit(group)}
-										disabled={saving}
-									>
-										{t.common.edit}
-									</button>
-									<button
-										class="btn btn-warning btn-xs"
-										onclick={() => (pendingDeleteSlug = group.slug)}
-										disabled={saving || group.reserved || group.userCount > 0}
-									>
-										{t.common.delete}
-									</button>
-								</div>
-							</td>
+							<th>{permissionsT.slug}</th>
+							<th>{permissionsT.title}</th>
+							<th>{permissionsT.users}</th>
+							<th>{permissionsT.status}</th>
+							<th>{permissionsT.actions}</th>
 						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
+					</thead>
+					<tbody>
+						{#each groups as group (group.slug)}
+							<tr>
+								<td class="font-mono text-xs">{group.slug}</td>
+								<td>
+									<div class="font-medium">{group.title}</div>
+									<div class="text-xs text-base-content/50">{group.description}</div>
+								</td>
+								<td>{group.userCount}</td>
+								<td>{group.reserved ? permissionsT.reserved : permissionsT.custom}</td>
+								<td>
+									<div class="flex gap-1">
+										<button
+											class="btn btn-outline btn-xs"
+											onclick={() => openEdit(group)}
+											disabled={saving}
+										>
+											{t.common.edit}
+										</button>
+										<button
+											class="btn btn-warning btn-xs"
+											onclick={() => (pendingDeleteSlug = group.slug)}
+											disabled={saving || group.reserved || group.userCount > 0}
+										>
+											{t.common.delete}
+										</button>
+									</div>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{:else}
+			<OfflinePlaceholder {t} />
+		{/if}
 	</div>
 </DualColumnLayout>
 

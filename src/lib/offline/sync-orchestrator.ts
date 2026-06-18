@@ -51,7 +51,7 @@ async function doSync(): Promise<SyncResult> {
 		const now = Date.now();
 
 		// Apply this page atomically: upsert new/edited, delete tombstones.
-		await db.transaction('rw', db.discussions, db.replies, db.users, async () => {
+		await db.transaction('rw', db.discussions, db.replies, db.users, db.activities, async () => {
 			if (data.discussions.length) {
 				await db.discussions.bulkPut(data.discussions.map((d) => ({ ...d, cachedAt: now })));
 			}
@@ -63,6 +63,15 @@ async function doSync(): Promise<SyncResult> {
 			}
 			for (const t of data.discussionTombstones) await db.discussions.delete(t.id);
 			for (const t of data.replyTombstones) await db.replies.delete(t.id);
+			if (data.backfillReplies.length) {
+				await db.replies.bulkPut(data.backfillReplies.map((r) => ({ ...r, cachedAt: now })));
+			}
+			// Activities are a first-page snapshot: clear + repopulate so rows that
+			// scrolled off the feed don't linger. Idempotent across sync pages.
+			await db.activities.clear();
+			if (data.activities.length) {
+				await db.activities.bulkPut(data.activities.map((a) => ({ ...a, cachedAt: now })));
+			}
 		});
 
 		totalDisc += data.discussions.length;
@@ -82,6 +91,8 @@ async function doSync(): Promise<SyncResult> {
 			{ key: 'serverTimeSkew', value: data.serverTimeSeconds - Math.floor(now / 1000) },
 			{ key: 'frontPageSnapshot', value: data.frontPageDiscussionIds },
 			{ key: 'bookmarksSnapshot', value: data.bookmarkedDiscussionIds },
+			{ key: 'partialReplyDiscussions', value: data.partialReplyDiscussionIds },
+			{ key: 'replyPageSize', value: data.replyPageSize },
 			{ key: 'lastSyncAt', value: now }
 		]);
 

@@ -52,7 +52,11 @@
 	<div class="space-y-3">
 		<div class="flex items-center justify-between border-b border-base-300 pb-4">
 			<h1 class="page-title">{messageT.inbox}</h1>
-			<a href="/messages/new" class="btn btn-primary btn-sm">{messageT.newMessage}</a>
+			{#if online.online}
+				<a href="/messages/new" class="btn btn-primary btn-sm">{messageT.newMessage}</a>
+			{:else}
+				<span class="text-xs text-base-content/50">{t.offline.disabled.title}</span>
+			{/if}
 		</div>
 
 		{#if !online.online || conversations.length === 0}

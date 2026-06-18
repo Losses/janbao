@@ -4,6 +4,8 @@
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import AdminSidebar from '$lib/components/molecules/AdminSidebar.svelte';
 	import DateAtom from '$lib/components/atoms/Date.svelte';
+	import OfflinePlaceholder from '$lib/components/molecules/OfflinePlaceholder.svelte';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import type { ApiResult, FeedbackMessage } from '$lib/types/api';
 	import type { BackupListItem, BackupPolicy, BackupRunStatus } from '$lib/types/backup';
@@ -24,6 +26,7 @@
 	const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 	let { data }: PageProps = $props();
+	const online = getOnlineStore();
 
 	const t = $derived(data.t);
 	const backupT = $derived(t.backup);
@@ -179,7 +182,7 @@
 	<div class="space-y-3">
 		<div class="flex items-center justify-between border-b border-base-300 pb-4">
 			<h1 class="page-title">{backupT.title}</h1>
-			{#if available}
+			{#if available && online.online}
 				<button class="btn btn-primary btn-sm" onclick={backupNow} disabled={backing}>
 					{backing ? backupT.backingUp : backupT.backupNow}
 				</button>
@@ -224,55 +227,65 @@
 								bind:value={retentionDraft}
 							/>
 						</label>
-						<button class="btn btn-primary btn-sm" onclick={savePolicy} disabled={saving || !dirty}>
-							{saving ? t.common.saving : backupT.save}
-						</button>
+						{#if online.online}
+							<button
+								class="btn btn-primary btn-sm"
+								onclick={savePolicy}
+								disabled={saving || !dirty}
+							>
+								{saving ? t.common.saving : backupT.save}
+							</button>
+						{/if}
 					</div>
 					<p class="text-xs text-base-content/60">{backupT.retentionDaysHelp}</p>
 				</div>
 
 				<!-- Backups list -->
-				<div class="overflow-x-auto">
-					<table class="table table-sm [&_tr]:border-base-300">
-						<thead>
-							<tr>
-								<th>{backupT.name}</th>
-								<th>{backupT.date}</th>
-								<th class="text-right">{backupT.actions}</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each backups as backup (backup.name)}
+				{#if online.online}
+					<div class="overflow-x-auto">
+						<table class="table table-sm [&_tr]:border-base-300">
+							<thead>
 								<tr>
-									<td class="font-mono text-xs">{backup.name}</td>
-									<td><DateAtom value={backup.date} {t} /></td>
-									<td class="text-right">
-										<div class="flex justify-end gap-1">
-											<a
-												class="btn btn-ghost btn-xs"
-												href={`/api/admin/backups/${encodeURIComponent(backup.name)}`}
-												download
-											>
-												{backupT.download}
-											</a>
-											<button
-												class="btn btn-ghost btn-xs text-error"
-												onclick={() => deleteBackup(backup.name)}
-												disabled={deletingName === backup.name}
-											>
-												{backupT.delete}
-											</button>
-										</div>
-									</td>
+									<th>{backupT.name}</th>
+									<th>{backupT.date}</th>
+									<th class="text-right">{backupT.actions}</th>
 								</tr>
-							{:else}
-								<tr>
-									<td colspan="3" class="text-base-content/50">{backupT.noBackups}</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
+							</thead>
+							<tbody>
+								{#each backups as backup (backup.name)}
+									<tr>
+										<td class="font-mono text-xs">{backup.name}</td>
+										<td><DateAtom value={backup.date} {t} /></td>
+										<td class="text-right">
+											<div class="flex justify-end gap-1">
+												<a
+													class="btn btn-ghost btn-xs"
+													href={`/api/admin/backups/${encodeURIComponent(backup.name)}`}
+													download
+												>
+													{backupT.download}
+												</a>
+												<button
+													class="btn btn-ghost btn-xs text-error"
+													onclick={() => deleteBackup(backup.name)}
+													disabled={deletingName === backup.name}
+												>
+													{backupT.delete}
+												</button>
+											</div>
+										</td>
+									</tr>
+								{:else}
+									<tr>
+										<td colspan="3" class="text-base-content/50">{backupT.noBackups}</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{:else}
+					<OfflinePlaceholder {t} />
+				{/if}
 			</div>
 		{/if}
 	</div>

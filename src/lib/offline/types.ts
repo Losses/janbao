@@ -1,4 +1,10 @@
-import type { SyncCursors, SyncDiscussionDTO, SyncReplyDTO, SyncUserDTO } from '$lib/types/api';
+import type {
+	SyncActivityDTO,
+	SyncCursors,
+	SyncDiscussionDTO,
+	SyncReplyDTO,
+	SyncUserDTO
+} from '$lib/types/api';
 
 // IndexedDB row shapes. The content rows mirror the server DTOs plus a cachedAt
 // bookkeeping timestamp (ms) used only for diagnostics.
@@ -13,6 +19,12 @@ export interface CachedReply extends SyncReplyDTO {
 // Author display info cached so the offline reader can render avatars and
 // names without a server round-trip. Mirrors SyncUserDTO plus cachedAt.
 export interface CachedUser extends SyncUserDTO {
+	cachedAt: number;
+}
+
+// First-page activity feed row cached for /offline/activity. Mirrors
+// SyncActivityDTO plus a cachedAt bookkeeping timestamp.
+export interface CachedActivity extends SyncActivityDTO {
 	cachedAt: number;
 }
 

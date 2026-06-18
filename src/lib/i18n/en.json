@@ -549,13 +549,11 @@
 			"title": "Unavailable offline"
 		},
 		"reader": {
-			"listTitle": "Offline reading",
-			"listHint": "Cached discussions are available without a connection.",
 			"empty": "No discussions cached yet. Reconnect to sync.",
 			"notCached": "This discussion isn't cached for offline reading.",
 			"backToList": "Back to offline list",
 			"backToForum": "Back to forum",
-			"readerBadge": "Offline",
+			"uncachedReplies": "{count} more pages not cached",
 			"replies": "replies",
 			"unknownUser": "Unknown user"
 		}

@@ -1,7 +1,36 @@
 import { getOfflineDB } from '$lib/offline/idb';
 import { joinReplies } from '$lib/offline/join';
-import type { CachedAuthorProjection } from '$lib/offline/types';
+import type { CachedAuthorProjection, CachedDiscussion } from '$lib/offline/types';
 import type { PageLoad } from './$types';
+
+// When a discussion was backfilled as first/last-page-only (front-page or
+// bookmarked threads whose full reply history exceeds the cached endpoints),
+// the reader shows how many replies/pages sit in the uncached middle, with a
+// divider between the cached first page and last page.
+interface PartialGapInfo {
+	uncachedCount: number;
+	uncachedPages: number;
+	firstPageRestCount: number;
+}
+
+function computePartialGap(
+	discussion: CachedDiscussion | null,
+	cachedReplyCount: number,
+	partialIds: number[],
+	discussionId: number,
+	pageSize: number
+): PartialGapInfo | null {
+	if (!discussion || pageSize <= 0 || !partialIds.includes(discussionId)) return null;
+	const uncachedCount = Math.max(0, discussion.commentCount - cachedReplyCount);
+	if (uncachedCount <= 0 || cachedReplyCount <= pageSize) return null;
+	return {
+		uncachedCount,
+		uncachedPages: Math.ceil(uncachedCount / pageSize),
+		// The OP occupies the first slot of the cached first page, so the rest-list
+		// divider sits after (pageSize - 1) opening replies.
+		firstPageRestCount: Math.max(0, pageSize - 1)
+	};
+}
 
 // Client-only: reads the cached discussion + its replies from IndexedDB. Has no
 // +page.server.ts by design (INV-4) - it cannot trigger the online read mechanism.
@@ -38,5 +67,20 @@ export const load: PageLoad = async ({ params }) => {
 	const bookmarksRow = await db.syncMeta.get('bookmarksSnapshot');
 	const snapshot = bookmarksRow?.value;
 	const isBookmarked = Array.isArray(snapshot) && snapshot.some((v) => v === discussionId);
-	return { discussion, replies: joinedReplies, discussionId, isBookmarked };
+
+	const partialRow = await db.syncMeta.get('partialReplyDiscussions');
+	const partialIds = Array.isArray(partialRow?.value)
+		? (partialRow.value.filter((v) => typeof v === 'number') as number[])
+		: [];
+	const pageSizeRow = await db.syncMeta.get('replyPageSize');
+	const pageSize = typeof pageSizeRow?.value === 'number' ? pageSizeRow.value : 0;
+	const partialGap = computePartialGap(
+		discussion,
+		replies.length,
+		partialIds,
+		discussionId,
+		pageSize
+	);
+
+	return { discussion, replies: joinedReplies, discussionId, isBookmarked, partialGap };
 };

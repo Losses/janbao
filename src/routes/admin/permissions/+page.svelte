@@ -2,6 +2,8 @@
 	import { invalidateAll } from '$app/navigation';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import AdminSidebar from '$lib/components/molecules/AdminSidebar.svelte';
+	import OfflinePlaceholder from '$lib/components/molecules/OfflinePlaceholder.svelte';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import type {
 		AdminCategoryItem,
@@ -24,6 +26,7 @@
 	}
 
 	let { data }: PageProps = $props();
+	const online = getOnlineStore();
 
 	const t = $derived(data.t);
 	const adminT = $derived(t.admin);
@@ -174,73 +177,79 @@
 				{/each}
 			</select>
 
-			<div class="overflow-x-auto">
-				<table class="table table-sm [&_tr]:border-base-300">
-					<thead>
-						<tr>
-							<th>{permissionsT.category}</th>
-							<th>{permissionsT.canRead}</th>
-							<th>{permissionsT.canCreate}</th>
-							<th>{permissionsT.canUpdate}</th>
-							<th>{permissionsT.canDelete}</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each enabledCategories as category (category.slug)}
+			{#if online.online}
+				<div class="overflow-x-auto">
+					<table class="table table-sm [&_tr]:border-base-300">
+						<thead>
 							<tr>
-								<td>
-									<div class="font-medium">{category.title}</div>
-									<div class="font-mono text-xs text-base-content/50">{category.slug}</div>
-								</td>
-								<td>
-									<input
-										type="checkbox"
-										class="checkbox checkbox-sm checkbox-primary"
-										checked={permissionDraft[category.slug]?.canRead}
-										onchange={(e) =>
-											setPermission(category.slug, 'canRead', e.currentTarget.checked)}
-									/>
-								</td>
-								<td>
-									<input
-										type="checkbox"
-										class="checkbox checkbox-sm checkbox-primary"
-										checked={permissionDraft[category.slug]?.canCreate}
-										onchange={(e) =>
-											setPermission(category.slug, 'canCreate', e.currentTarget.checked)}
-									/>
-								</td>
-								<td>
-									<input
-										type="checkbox"
-										class="checkbox checkbox-sm checkbox-primary"
-										checked={permissionDraft[category.slug]?.canUpdate}
-										onchange={(e) =>
-											setPermission(category.slug, 'canUpdate', e.currentTarget.checked)}
-									/>
-								</td>
-								<td>
-									<input
-										type="checkbox"
-										class="checkbox checkbox-sm checkbox-primary"
-										checked={permissionDraft[category.slug]?.canDelete}
-										onchange={(e) =>
-											setPermission(category.slug, 'canDelete', e.currentTarget.checked)}
-									/>
-								</td>
+								<th>{permissionsT.category}</th>
+								<th>{permissionsT.canRead}</th>
+								<th>{permissionsT.canCreate}</th>
+								<th>{permissionsT.canUpdate}</th>
+								<th>{permissionsT.canDelete}</th>
 							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
+						</thead>
+						<tbody>
+							{#each enabledCategories as category (category.slug)}
+								<tr>
+									<td>
+										<div class="font-medium">{category.title}</div>
+										<div class="font-mono text-xs text-base-content/50">{category.slug}</div>
+									</td>
+									<td>
+										<input
+											type="checkbox"
+											class="checkbox checkbox-sm checkbox-primary"
+											checked={permissionDraft[category.slug]?.canRead}
+											onchange={(e) =>
+												setPermission(category.slug, 'canRead', e.currentTarget.checked)}
+										/>
+									</td>
+									<td>
+										<input
+											type="checkbox"
+											class="checkbox checkbox-sm checkbox-primary"
+											checked={permissionDraft[category.slug]?.canCreate}
+											onchange={(e) =>
+												setPermission(category.slug, 'canCreate', e.currentTarget.checked)}
+										/>
+									</td>
+									<td>
+										<input
+											type="checkbox"
+											class="checkbox checkbox-sm checkbox-primary"
+											checked={permissionDraft[category.slug]?.canUpdate}
+											onchange={(e) =>
+												setPermission(category.slug, 'canUpdate', e.currentTarget.checked)}
+										/>
+									</td>
+									<td>
+										<input
+											type="checkbox"
+											class="checkbox checkbox-sm checkbox-primary"
+											checked={permissionDraft[category.slug]?.canDelete}
+											onchange={(e) =>
+												setPermission(category.slug, 'canDelete', e.currentTarget.checked)}
+										/>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{:else}
+				<OfflinePlaceholder {t} />
+			{/if}
 
-			<button
-				class="btn btn-primary btn-sm"
-				onclick={savePermissions}
-				disabled={saving || !activeGroupSlug || !hasDirty}
-			>
-				{saving ? t.common.saving : permissionsT.savePermissions}
-			</button>
+			{#if online.online}
+				<button
+					class="btn btn-primary btn-sm"
+					onclick={savePermissions}
+					disabled={saving || !activeGroupSlug || !hasDirty}
+				>
+					{saving ? t.common.saving : permissionsT.savePermissions}
+				</button>
+			{/if}
 		</div>
 	</div>
 </DualColumnLayout>

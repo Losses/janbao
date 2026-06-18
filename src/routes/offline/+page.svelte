@@ -1,7 +1,6 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
-	import Badge from '$lib/components/atoms/Badge.svelte';
 	import DateAtom from '$lib/components/atoms/Date.svelte';
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import { generateSlug } from '$lib/utils/slug';
@@ -16,7 +15,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.t.offline.reader.listTitle} · Janbao</title>
+	<title>Janbao</title>
 </svelte:head>
 
 {#snippet sidebar()}
@@ -44,14 +43,6 @@
 
 <DualColumnLayout t={data.t} user={data.user} {sidebar}>
 	<div class="space-y-4">
-		<div class="flex items-center gap-2">
-			<h1 class="text-lg font-extrabold tracking-tight text-base-content">
-				{data.t.offline.reader.listTitle}
-			</h1>
-			<Badge variant="neutral" class="badge-sm">{data.t.offline.reader.readerBadge}</Badge>
-		</div>
-		<p class="text-sm text-base-content/60">{data.t.offline.reader.listHint}</p>
-
 		{#if data.discussions.length === 0}
 			<p class="text-sm text-base-content/60">{data.t.offline.reader.empty}</p>
 		{:else}

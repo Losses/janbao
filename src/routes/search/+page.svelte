@@ -6,6 +6,7 @@
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
+	import OfflinePlaceholder from '$lib/components/molecules/OfflinePlaceholder.svelte';
 	import { mdiCommentOutline } from '@mdi/js';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
@@ -135,6 +136,10 @@
 				{/if}
 			</select>
 		</div>
+
+		{#if !online.online}
+			<OfflinePlaceholder {t} bordered={false} />
+		{/if}
 
 		<!-- Search form (GET → /search?q=&scope=) -->
 		<form method="GET" action="/search" class="flex gap-2">

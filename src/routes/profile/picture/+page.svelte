@@ -5,6 +5,7 @@
 	import { formatTitle } from '$lib/utils/title';
 	import type { ApiResult, FeedbackMessage } from '$lib/types/api';
 	import type { PageData } from './$types';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 
 	interface PageProps {
 		data: PageData;
@@ -17,6 +18,7 @@
 	const user = $derived(data.user);
 	// svelte-ignore state_referenced_locally
 	let avatarFileId = $state(data.avatarFileId);
+	const online = getOnlineStore();
 
 	let saving = $state(false);
 	let message = $state<FeedbackMessage | null>(null);
@@ -131,25 +133,27 @@
 			</div>
 
 			<!-- Upload Form -->
-			<form onsubmit={handleSubmit} class="space-y-4">
-				<div class="form-control">
-					<label class="label" for="avatar-file">
-						<span class="label-text font-medium">{profileT.selectFile}</span>
-					</label>
-					<input
-						id="avatar-file"
-						type="file"
-						class="file-input file-input-bordered"
-						accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp"
-						bind:this={fileInput}
-					/>
-				</div>
+			<form onsubmit={handleSubmit}>
+				<fieldset disabled={!online.online} class="space-y-4">
+					<div class="form-control">
+						<label class="label" for="avatar-file">
+							<span class="label-text font-medium">{profileT.selectFile}</span>
+						</label>
+						<input
+							id="avatar-file"
+							type="file"
+							class="file-input file-input-bordered"
+							accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp"
+							bind:this={fileInput}
+						/>
+					</div>
 
-				<div class="pt-2">
-					<button type="submit" class="btn btn-primary" disabled={saving}>
-						{saving ? t.common.saving : profileT.uploadAvatar}
-					</button>
-				</div>
+					<div class="pt-2">
+						<button type="submit" class="btn btn-primary" disabled={saving}>
+							{saving ? t.common.saving : profileT.uploadAvatar}
+						</button>
+					</div>
+				</fieldset>
 			</form>
 		</div>
 	</div>

@@ -1,7 +1,9 @@
 import type { D1Db } from '../db/index';
 import {
+	getActivitiesLimit,
 	getDiscussionsLimit,
 	getOfflineRetentionDays,
+	getPaginationLimit,
 	getReadableCategorySlugs
 } from '../constants';
 import {
@@ -9,8 +11,11 @@ import {
 	getCachedUsers,
 	getDeltaDiscussions,
 	getDeltaReplies,
+	getDiscussionsByIds,
 	getDiscussionTombstones,
+	getFirstPageActivities,
 	getFrontPageDiscussionIds,
+	getReplyEndpointsFor,
 	getReplyTombstones
 } from '../db/dao/sync';
 import type { SyncContentResponse } from '$lib/types/api';
@@ -64,7 +69,7 @@ export async function buildContentSync(input: ContentSyncInput): Promise<SyncCon
 
 	const readableSlugs = await getReadableCategorySlugs(input.db, input.groupSlug);
 
-	const [disc, rep, dTomb, rTomb, front, bkm] = await Promise.all([
+	const [disc, rep, dTomb, rTomb, front, bkm, activities] = await Promise.all([
 		getDeltaDiscussions(
 			input.db,
 			{ sinceTs: dCur.ts, sinceId: dCur.id, limit: input.limit },
@@ -86,7 +91,19 @@ export async function buildContentSync(input: ContentSyncInput): Promise<SyncCon
 			readableSlugs
 		),
 		getFrontPageDiscussionIds(input.db, getDiscussionsLimit(input.platformEnv), readableSlugs),
-		getBookmarkedDiscussionIds(input.db, input.userId, readableSlugs)
+		getBookmarkedDiscussionIds(input.db, input.userId, readableSlugs),
+		getFirstPageActivities(input.db, getActivitiesLimit(input.platformEnv))
+	]);
+
+	// Backfill detail + reply endpoints for front-page ∪ bookmarked discussions,
+	// bypassing the 30-day lookback. Without this a stale pinned post appears in
+	// the cached list (its id rides in frontPageSnapshot) but its detail + replies
+	// never enter the cache, so /offline/[id] reports "not cached".
+	const replyPageSize = getPaginationLimit(input.platformEnv);
+	const endpointIds = Array.from(new Set([...front, ...bkm]));
+	const [backfillDiscussions, backfillReplies] = await Promise.all([
+		getDiscussionsByIds(input.db, endpointIds, readableSlugs),
+		getReplyEndpointsFor(input.db, endpointIds, replyPageSize, readableSlugs)
 	]);
 
 	const lastDisc = disc[disc.length - 1];
@@ -99,8 +116,14 @@ export async function buildContentSync(input: ContentSyncInput): Promise<SyncCon
 	// tombstones carry no author surface so they are excluded.
 	const authorIds = [
 		...disc.map((d) => d.authorId),
+		...backfillDiscussions.map((d) => d.authorId),
 		...rep.map((r) => r.authorId),
-		...rep.flatMap((r) => (r.editedBy != null ? [r.editedBy] : []))
+		...rep.flatMap((r) => (r.editedBy != null ? [r.editedBy] : [])),
+		...backfillReplies.replies.flatMap((r) => [
+			r.authorId,
+			...(r.editedBy != null ? [r.editedBy] : [])
+		]),
+		...activities.flatMap((a) => [a.authorId, ...(a.recipientId != null ? [a.recipientId] : [])])
 	];
 	const cachedUsers = await getCachedUsers(input.db, authorIds);
 
@@ -120,8 +143,12 @@ export async function buildContentSync(input: ContentSyncInput): Promise<SyncCon
 		: (input.replyTombstoneCursor ?? formatCursor(rtCur.ts, rtCur.id));
 
 	return {
-		discussions: disc,
+		discussions: [...disc, ...backfillDiscussions],
 		replies: rep,
+		backfillReplies: backfillReplies.replies,
+		partialReplyDiscussionIds: backfillReplies.partialDiscussionIds,
+		activities,
+		replyPageSize,
 		users: cachedUsers,
 		discussionTombstones: dTomb,
 		replyTombstones: rTomb,

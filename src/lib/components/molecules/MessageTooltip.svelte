@@ -10,6 +10,7 @@
 	import type { VoidHandler } from '$lib/types/handlers';
 	import type { ConversationListItem } from '$lib/types/api';
 	import { getBadgesStore } from '$lib/stores/badges.svelte';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import { formatBadgeCount } from '$lib/utils/count';
 
 	import type { TranslationDict } from '$lib/types/translation';
@@ -27,6 +28,7 @@
 	const tMessage = $derived((t['message'] as Record<string, string> | undefined) ?? {});
 
 	const badges = getBadgesStore();
+	const online = getOnlineStore();
 
 	let conversations = $state<ConversationListItem[]>([]);
 	let loaded = $state(false);
@@ -76,13 +78,15 @@
 			<!-- Header -->
 			<div class="flex items-center justify-between border-b border-base-300 px-4 py-2">
 				<span class="text-sm font-medium">{tSidebar['messages']}</span>
-				<a
-					href="/messages/new"
-					class="text-xs text-primary hover:font-bold"
-					aria-label={tSidebar['sendMessage'] ?? ''}
-				>
-					<Icon path={mdiEmailPlus} size={14} />
-				</a>
+				{#if online.online}
+					<a
+						href="/messages/new"
+						class="text-xs text-primary hover:font-bold"
+						aria-label={tSidebar['sendMessage'] ?? ''}
+					>
+						<Icon path={mdiEmailPlus} size={14} />
+					</a>
+				{/if}
 			</div>
 			<!-- Conversation List -->
 			<ul class="max-h-64 overflow-y-auto">

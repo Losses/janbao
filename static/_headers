@@ -1,0 +1,6 @@
+# Service worker must always be revalidated so browsers (Firefox especially)
+# fetch the rebuilt `/service-worker.js` instead of byte-serving a cached one
+# and never installing the update. Hashed _app/immutable chunks are immutable
+# and stay long-cached; the SW is the only root asset that changes per build.
+/service-worker.js
+  Cache-Control: no-cache, must-revalidate

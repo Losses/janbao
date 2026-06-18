@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
@@ -68,6 +69,20 @@
 		}
 		submitting = false;
 	}
+
+	// Offline fallback mirrors the discussion detail route: if we have a cached
+	// first page, swap to the client-only /offline/activity reader so the feed is
+	// readable without a server round-trip. The online /activity load is a pure
+	// SELECT (no viewCount / read-state / notification writes), so this redirect
+	// is a UX concern only - no INV-4 read-side-effect risk.
+	onMount(() => {
+		if (navigator.onLine) return;
+		void (async () => {
+			const { getOfflineDB } = await import('$lib/offline/idb');
+			const count = await getOfflineDB().activities.count();
+			if (count > 0) await goto('/offline/activity');
+		})();
+	});
 </script>
 
 <svelte:head>

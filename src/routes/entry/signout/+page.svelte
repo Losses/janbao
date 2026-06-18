@@ -53,7 +53,7 @@
 
 <SingleColumnLayout>
 	<div class="text-center space-y-4">
-		<h2 class="text-3xl font-bold tracking-tight text-neutral-content">{t.nav.signout}</h2>
+		<h2 class="text-3xl font-bold tracking-tight">{t.nav.signout}</h2>
 		<p class="text-base-content/75">{t.auth.logoutPrompt}</p>
 	</div>
 
