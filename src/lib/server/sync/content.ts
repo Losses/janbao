@@ -6,6 +6,7 @@ import {
 } from '../constants';
 import {
 	getBookmarkedDiscussionIds,
+	getCachedUsers,
 	getDeltaDiscussions,
 	getDeltaReplies,
 	getDiscussionTombstones,
@@ -93,6 +94,16 @@ export async function buildContentSync(input: ContentSyncInput): Promise<SyncCon
 	const lastDTomb = dTomb[dTomb.length - 1];
 	const lastRTomb = rTomb[rTomb.length - 1];
 
+	// Author display info for every discussion + reply on this page. Fetched
+	// after the content streams so we batch one query over the union of ids;
+	// tombstones carry no author surface so they are excluded.
+	const authorIds = [
+		...disc.map((d) => d.authorId),
+		...rep.map((r) => r.authorId),
+		...rep.flatMap((r) => (r.editedBy != null ? [r.editedBy] : []))
+	];
+	const cachedUsers = await getCachedUsers(input.db, authorIds);
+
 	// Advance each cursor only to the last item actually returned; an empty page
 	// leaves the cursor unchanged so the client stops paging that stream.
 	const newDiscCursor = lastDisc
@@ -111,6 +122,7 @@ export async function buildContentSync(input: ContentSyncInput): Promise<SyncCon
 	return {
 		discussions: disc,
 		replies: rep,
+		users: cachedUsers,
 		discussionTombstones: dTomb,
 		replyTombstones: rTomb,
 		frontPageDiscussionIds: front,

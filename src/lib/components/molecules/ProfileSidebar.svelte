@@ -169,6 +169,14 @@
 	{/if}
 {/snippet}
 
+{#snippet logoutItem()}
+	<li>
+		<a href="/entry/signout" class="text-base-content/70 hover:text-error">
+			{tNav['signout']}
+		</a>
+	</li>
+{/snippet}
+
 <div class="space-y-4">
 	{#if user}
 		<UserInfoBlock {user} {t} />
@@ -215,6 +223,7 @@
 					</a>
 				</li>
 				{@render adminControls()}
+				{@render logoutItem()}
 			</ul>
 		{:else}
 			<!-- Visitor View: Public navigation only -->
@@ -244,6 +253,7 @@
 					</a>
 				</li>
 				{@render adminControls()}
+				{@render logoutItem()}
 			</ul>
 		{/if}
 	{:else}

@@ -29,12 +29,23 @@
 		invitedBy: UserInfoSummary | null;
 		email: string | null;
 		showLastActive: boolean;
+		/** Show the "send message" action. Caller-gated (e.g. viewer is logged in,
+		 *  not the profile owner, and the target is a real user). */
+		canMessage?: boolean;
 		t: TranslationDict;
 	}
 
-	let { targetUser, invitedBy, email, showLastActive, t }: ProfileHeaderProps = $props();
+	let {
+		targetUser,
+		invitedBy,
+		email,
+		showLastActive,
+		canMessage = false,
+		t
+	}: ProfileHeaderProps = $props();
 
 	const profileT = $derived(t.profile);
+	const sendMessageLabel = $derived(t.sidebar.sendMessage);
 </script>
 
 <div>
@@ -51,6 +62,16 @@
 				<p class="text-base-content/70 mt-1 whitespace-pre-line">{targetUser.bio}</p>
 			{/if}
 		</div>
+		{#if canMessage}
+			<a
+				href="/messages/add/{targetUser.id}"
+				class="btn btn-ghost btn-circle ml-auto"
+				aria-label={sendMessageLabel}
+				title={sendMessageLabel}
+			>
+				<Icon path={mdiEmailOutline} size={20} />
+			</a>
+		{/if}
 	</div>
 
 	<!-- User Statistics -->

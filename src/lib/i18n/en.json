@@ -558,8 +558,10 @@
 			"empty": "No discussions cached yet. Reconnect to sync.",
 			"notCached": "This discussion isn't cached for offline reading.",
 			"backToList": "Back to offline list",
+			"backToForum": "Back to forum",
 			"readerBadge": "Offline",
-			"replies": "replies"
+			"replies": "replies",
+			"unknownUser": "Unknown user"
 		}
 	},
 	"push": {

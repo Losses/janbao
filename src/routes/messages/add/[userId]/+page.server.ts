@@ -8,7 +8,9 @@ export const load: PageServerLoad = async (event) => {
 		redirect(302, '/entry/signin');
 	}
 
-	// Optional ?recipient=<userId> prefill (e.g. from the Active Users Wall).
-	const recipientId = Number(event.url.searchParams.get('recipient'));
+	// Prefill the recipient from the route param. URL is preserved on this
+	// route (it is a real page, not a redirect) so /messages/add/<userId> is a
+	// stable, shareable entry point that opens the compose UI pre-addressed.
+	const recipientId = Number(event.params.userId);
 	return resolveMessageComposePrefill(event.locals.db, user.id, recipientId);
 };

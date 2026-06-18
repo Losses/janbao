@@ -7,6 +7,7 @@
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditorLazy.svelte';
+	import BookmarkButton from '$lib/components/atoms/BookmarkButton.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
 	import ConfirmationModal from '$lib/components/organisms/ConfirmationModal.svelte';
 	import { formatTitle } from '$lib/utils/title';
@@ -73,6 +74,7 @@
 	let replyEditor: ReturnType<typeof LexicalEditor> | undefined = $state();
 	let replyComposerElem: HTMLElement | undefined = $state();
 	let replyForm: HTMLFormElement | undefined = $state();
+	let editReplyForm: HTMLFormElement | undefined = $state();
 	let editingReplyId = $state<number | null>(null);
 	let editReplyContent = $state('');
 
@@ -212,10 +214,18 @@
 <DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-3">
 		<!-- Discussion Header -->
-		<div class="border-b border-base-300 pb-4">
+		<div class="border-b border-base-300 flex justify-between items-center pb-3 gap-3">
 			<h1 class="text-lg font-extrabold tracking-tight text-base-content break-words leading-tight">
 				{discussion.title}
 			</h1>
+			{#if user}
+				<BookmarkButton
+					discussionId={discussion.id}
+					bookmarked={!!discussion.isBookmarked}
+					{t}
+					class="flex-shrink-0 mt-0.5"
+				/>
+			{/if}
 		</div>
 
 		<!-- Original Post (OP) - Only visible on Page 1 -->
@@ -311,12 +321,16 @@
 								initialContent={reply.contentJson}
 								placeholder={t.editor.placeholderReply}
 								onContentChange={(json) => (editReplyContent = json)}
+								onSubmit={() => {
+									if (!isSubmitting && online.online) editReplyForm?.requestSubmit();
+								}}
 								{t}
 								class="mb-3"
 							/>
 							<form
 								method="POST"
 								action="?/editReply"
+								bind:this={editReplyForm}
 								use:enhance={({ cancel }) => {
 									if (isSubmitting) {
 										cancel();

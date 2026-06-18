@@ -302,119 +302,124 @@
 					</button>
 				{/if}
 
-				<div class="space-y-2 pt-2">
-					<div class="form-control">
-						<label class="label cursor-pointer justify-start gap-3" for="pref-push-mention">
-							<input
-								id="pref-push-mention"
-								type="checkbox"
-								class="checkbox checkbox-sm checkbox-primary"
-								bind:checked={pushMention}
-							/>
-							<div>
-								<span class="label-text font-medium">{pushT.mention}</span>
-								<p class="text-xs text-base-content/50">{pushT.mentionDesc}</p>
-							</div>
-						</label>
-					</div>
+				{#if pushEnabled || pushPermission === 'granted'}
+					<div class="space-y-2 pt-2">
+						<div class="form-control">
+							<label class="label cursor-pointer justify-start gap-3" for="pref-push-mention">
+								<input
+									id="pref-push-mention"
+									type="checkbox"
+									class="checkbox checkbox-sm checkbox-primary"
+									bind:checked={pushMention}
+								/>
+								<div>
+									<span class="label-text font-medium">{pushT.mention}</span>
+									<p class="text-xs text-base-content/50">{pushT.mentionDesc}</p>
+								</div>
+							</label>
+						</div>
 
-					<div class="form-control">
-						<label class="label cursor-pointer justify-start gap-3" for="pref-push-reply">
-							<input
-								id="pref-push-reply"
-								type="checkbox"
-								class="checkbox checkbox-sm checkbox-primary"
-								bind:checked={pushDiscussionReply}
-							/>
-							<div>
-								<span class="label-text font-medium">{pushT.reply}</span>
-								<p class="text-xs text-base-content/50">{pushT.replyDesc}</p>
-							</div>
-						</label>
-					</div>
+						<div class="form-control">
+							<label class="label cursor-pointer justify-start gap-3" for="pref-push-reply">
+								<input
+									id="pref-push-reply"
+									type="checkbox"
+									class="checkbox checkbox-sm checkbox-primary"
+									bind:checked={pushDiscussionReply}
+								/>
+								<div>
+									<span class="label-text font-medium">{pushT.reply}</span>
+									<p class="text-xs text-base-content/50">{pushT.replyDesc}</p>
+								</div>
+							</label>
+						</div>
 
-					<div class="form-control">
-						<label
-							class="label cursor-pointer justify-start gap-3"
-							for="pref-push-discussion-comment"
-						>
-							<input
-								id="pref-push-discussion-comment"
-								type="checkbox"
-								class="checkbox checkbox-sm checkbox-primary"
-								bind:checked={pushDiscussionComment}
-							/>
-							<div>
-								<span class="label-text font-medium">{pushT.discussionComment}</span>
-								<p class="text-xs text-base-content/50">{pushT.discussionCommentDesc}</p>
-							</div>
-						</label>
-					</div>
+						<div class="form-control">
+							<label
+								class="label cursor-pointer justify-start gap-3"
+								for="pref-push-discussion-comment"
+							>
+								<input
+									id="pref-push-discussion-comment"
+									type="checkbox"
+									class="checkbox checkbox-sm checkbox-primary"
+									bind:checked={pushDiscussionComment}
+								/>
+								<div>
+									<span class="label-text font-medium">{pushT.discussionComment}</span>
+									<p class="text-xs text-base-content/50">{pushT.discussionCommentDesc}</p>
+								</div>
+							</label>
+						</div>
 
-					<div class="form-control">
-						<label class="label cursor-pointer justify-start gap-3" for="pref-push-participated">
-							<input
-								id="pref-push-participated"
-								type="checkbox"
-								class="checkbox checkbox-sm checkbox-primary"
-								bind:checked={pushParticipatedComment}
-							/>
-							<div>
-								<span class="label-text font-medium">{pushT.participatedComment}</span>
-								<p class="text-xs text-base-content/50">
-									{pushT.participatedCommentDesc}
-								</p>
-							</div>
-						</label>
-					</div>
+						<div class="form-control">
+							<label class="label cursor-pointer justify-start gap-3" for="pref-push-participated">
+								<input
+									id="pref-push-participated"
+									type="checkbox"
+									class="checkbox checkbox-sm checkbox-primary"
+									bind:checked={pushParticipatedComment}
+								/>
+								<div>
+									<span class="label-text font-medium">{pushT.participatedComment}</span>
+									<p class="text-xs text-base-content/50">
+										{pushT.participatedCommentDesc}
+									</p>
+								</div>
+							</label>
+						</div>
 
-					<div class="form-control">
-						<label class="label cursor-pointer justify-start gap-3" for="pref-push-bookmarked">
-							<input
-								id="pref-push-bookmarked"
-								type="checkbox"
-								class="checkbox checkbox-sm checkbox-primary"
-								bind:checked={pushBookmarkedDiscussionComment}
-							/>
-							<div>
-								<span class="label-text font-medium">{pushT.bookmarkedDiscussionComment}</span>
-								<p class="text-xs text-base-content/50">
-									{pushT.bookmarkedDiscussionCommentDesc}
-								</p>
-							</div>
-						</label>
-					</div>
+						<div class="form-control">
+							<label class="label cursor-pointer justify-start gap-3" for="pref-push-bookmarked">
+								<input
+									id="pref-push-bookmarked"
+									type="checkbox"
+									class="checkbox checkbox-sm checkbox-primary"
+									bind:checked={pushBookmarkedDiscussionComment}
+								/>
+								<div>
+									<span class="label-text font-medium">{pushT.bookmarkedDiscussionComment}</span>
+									<p class="text-xs text-base-content/50">
+										{pushT.bookmarkedDiscussionCommentDesc}
+									</p>
+								</div>
+							</label>
+						</div>
 
-					<div class="form-control">
-						<label class="label cursor-pointer justify-start gap-3" for="pref-push-profile-comment">
-							<input
-								id="pref-push-profile-comment"
-								type="checkbox"
-								class="checkbox checkbox-sm checkbox-primary"
-								bind:checked={pushProfileComment}
-							/>
-							<div>
-								<span class="label-text font-medium">{pushT.profileComment}</span>
-								<p class="text-xs text-base-content/50">{pushT.profileCommentDesc}</p>
-							</div>
-						</label>
-					</div>
+						<div class="form-control">
+							<label
+								class="label cursor-pointer justify-start gap-3"
+								for="pref-push-profile-comment"
+							>
+								<input
+									id="pref-push-profile-comment"
+									type="checkbox"
+									class="checkbox checkbox-sm checkbox-primary"
+									bind:checked={pushProfileComment}
+								/>
+								<div>
+									<span class="label-text font-medium">{pushT.profileComment}</span>
+									<p class="text-xs text-base-content/50">{pushT.profileCommentDesc}</p>
+								</div>
+							</label>
+						</div>
 
-					<div class="form-control">
-						<label class="label cursor-pointer justify-start gap-3" for="pref-push-message">
-							<input
-								id="pref-push-message"
-								type="checkbox"
-								class="checkbox checkbox-sm checkbox-primary"
-								bind:checked={pushMessage}
-							/>
-							<div>
-								<span class="label-text font-medium">{pushT.message}</span>
-								<p class="text-xs text-base-content/50">{pushT.messageDesc}</p>
-							</div>
-						</label>
+						<div class="form-control">
+							<label class="label cursor-pointer justify-start gap-3" for="pref-push-message">
+								<input
+									id="pref-push-message"
+									type="checkbox"
+									class="checkbox checkbox-sm checkbox-primary"
+									bind:checked={pushMessage}
+								/>
+								<div>
+									<span class="label-text font-medium">{pushT.message}</span>
+									<p class="text-xs text-base-content/50">{pushT.messageDesc}</p>
+								</div>
+							</label>
+						</div>
 					</div>
-				</div>
+				{/if}
 			</div>
 		{:else if !pushSupported}
 			<!-- Push not configured on the server AND/OR unsupported on this client. Hide the section. -->

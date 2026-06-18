@@ -3,6 +3,7 @@ import type { PageServerLoad, Actions } from './$types';
 import {
 	discussions,
 	categories,
+	bookmarks,
 	replies,
 	users,
 	discussionReads,
@@ -33,7 +34,7 @@ export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user;
 
 	// 1. Fetch discussion, category, and author details
-	const discussionRecords = await db
+	const discussionQuery = db
 		.select({
 			id: discussions.id,
 			title: discussions.title,
@@ -51,11 +52,25 @@ export const load: PageServerLoad = async (event) => {
 			categoryTheme: categories.themeName,
 			authorDisplayName: users.displayName,
 			authorUsername: users.username,
-			authorAvatarFileId: users.avatarFileId
+			authorAvatarFileId: users.avatarFileId,
+			// Bookmarks require a session; hard-code 0 for guests so the star
+			// renders without the LEFT JOIN.
+			isBookmarked: user
+				? sql<number>`CASE WHEN ${bookmarks.userId} IS NOT NULL THEN 1 ELSE 0 END`
+				: sql<number>`0`
 		})
 		.from(discussions)
 		.innerJoin(categories, eq(discussions.categorySlug, categories.slug))
-		.innerJoin(users, eq(discussions.authorId, users.id))
+		.innerJoin(users, eq(discussions.authorId, users.id));
+
+	if (user) {
+		discussionQuery.leftJoin(
+			bookmarks,
+			and(eq(bookmarks.discussionId, discussions.id), eq(bookmarks.userId, user.id))
+		);
+	}
+
+	const discussionRecords = await discussionQuery
 		.where(
 			and(
 				eq(discussions.id, discussionId),

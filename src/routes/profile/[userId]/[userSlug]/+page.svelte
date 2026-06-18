@@ -83,7 +83,14 @@
 <DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-3">
 		<!-- Profile Header -->
-		<ProfileHeader {targetUser} {invitedBy} email={headerEmail} {showLastActive} {t} />
+		<ProfileHeader
+			{targetUser}
+			{invitedBy}
+			email={headerEmail}
+			{showLastActive}
+			canMessage={!isOwner && !!user && targetUser.id !== 0}
+			{t}
+		/>
 
 		<!-- Directed/Normal Activity Composer (if logged in) -->
 		{#if user}

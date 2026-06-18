@@ -1,11 +1,9 @@
 <script lang="ts">
-	import Icon from '$lib/components/atoms/Icon.svelte';
-	import { mdiStar, mdiStarOutline } from '@mdi/js';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
-	import DateAtom from '$lib/components/atoms/Date.svelte';
 	import Badge from '$lib/components/atoms/Badge.svelte';
+	import BookmarkButton from '$lib/components/atoms/BookmarkButton.svelte';
+	import DateAtom from '$lib/components/atoms/Date.svelte';
 	import { generateSlug } from '$lib/utils/slug';
-	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import type { TranslationDict } from '$lib/types/translation';
 
 	/**
@@ -56,12 +54,6 @@
 		class: className = ''
 	}: DiscussionRowProps = $props();
 
-	// svelte-ignore state_referenced_locally
-	let bookmarked = $state(isBookmarked);
-	let loadingBookmark = $state(false);
-
-	const online = getOnlineStore();
-
 	// Build exact URL based on reading history
 	const discussionUrl = $derived.by(() => {
 		const base = `/discussion/${discussion.id}/${discussion.slug}`;
@@ -80,37 +72,6 @@
 	const viewsText = $derived(t.forum.views);
 	const repliesText = $derived(t.forum.replies);
 	const pinnedText = $derived(t.forum.pinned);
-
-	async function toggleBookmark(e: Event) {
-		e.preventDefault();
-		e.stopPropagation();
-		if (loadingBookmark) return;
-		if (!online.online) return;
-		loadingBookmark = true;
-		try {
-			if (bookmarked) {
-				const res = await fetch(`/api/bookmarks?discussionId=${discussion.id}`, {
-					method: 'DELETE'
-				});
-				if (res.ok) {
-					bookmarked = false;
-				}
-			} else {
-				const res = await fetch(`/api/bookmarks`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ discussionId: discussion.id })
-				});
-				if (res.ok) {
-					bookmarked = true;
-				}
-			}
-		} catch (err) {
-			console.error('Failed to toggle bookmark:', err);
-		} finally {
-			loadingBookmark = false;
-		}
-	}
 </script>
 
 <div
@@ -180,16 +141,5 @@
 	</div>
 
 	<!-- Right: Star Bookmark Toggle -->
-	<div class="flex-shrink-0">
-		<button
-			onclick={toggleBookmark}
-			class="btn btn-ghost btn-circle btn-sm bookmark-btn {bookmarked
-				? 'text-primary'
-				: 'text-base-content/35 hover:text-primary'}"
-			aria-label={t.bookmark.toggleAria}
-			disabled={loadingBookmark || !online.online}
-		>
-			<Icon path={bookmarked ? mdiStar : mdiStarOutline} size={20} />
-		</button>
-	</div>
+	<BookmarkButton discussionId={discussion.id} bookmarked={isBookmarked} {t} />
 </div>

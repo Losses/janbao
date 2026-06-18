@@ -1,4 +1,6 @@
 import { getOfflineDB } from '$lib/offline/idb';
+import { joinReplies } from '$lib/offline/join';
+import type { CachedAuthorProjection } from '$lib/offline/types';
 import type { PageLoad } from './$types';
 
 // Client-only: reads the cached discussion + its replies from IndexedDB. Has no
@@ -10,5 +12,31 @@ export const load: PageLoad = async ({ params }) => {
 	const db = getOfflineDB();
 	const discussion = (await db.discussions.get(discussionId)) ?? null;
 	const replies = await db.replies.where('discussionId').equals(discussionId).sortBy('createdAt');
-	return { discussion, replies, discussionId };
+
+	// Join author display info from the cached users store so the reader can
+	// render avatars and names. Missing users degrade gracefully (placeholder).
+	const authorIds = new Set<number>();
+	replies.forEach((r) => {
+		authorIds.add(r.authorId);
+		if (r.editedBy != null) authorIds.add(r.editedBy);
+	});
+	const cachedUsers = await db.users.bulkGet(Array.from(authorIds));
+	const usersById = new Map<number, CachedAuthorProjection>();
+	for (const u of cachedUsers) {
+		if (u)
+			usersById.set(u.id, {
+				displayName: u.displayName,
+				username: u.username,
+				avatarFileId: u.avatarFileId
+			});
+	}
+
+	const joinedReplies = joinReplies(replies, usersById);
+
+	// Bookmark state comes from the bookmarks snapshot cached while online. The
+	// star is read-only in the offline reader (no server mutation while offline).
+	const bookmarksRow = await db.syncMeta.get('bookmarksSnapshot');
+	const snapshot = bookmarksRow?.value;
+	const isBookmarked = Array.isArray(snapshot) && snapshot.some((v) => v === discussionId);
+	return { discussion, replies: joinedReplies, discussionId, isBookmarked };
 };

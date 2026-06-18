@@ -1,7 +1,7 @@
 import { getOfflineDB } from './idb';
 import { applyEviction } from './evict';
 import { flushPendingReadState } from './read-state';
-import type { SyncContentResponse, SyncCursors } from '$lib/types/api';
+import type { SyncContentResponse, SyncCursors, SyncUserDTO } from '$lib/types/api';
 import type { SyncResult } from './types';
 
 const PAGE_LIMIT = 100;
@@ -51,12 +51,15 @@ async function doSync(): Promise<SyncResult> {
 		const now = Date.now();
 
 		// Apply this page atomically: upsert new/edited, delete tombstones.
-		await db.transaction('rw', db.discussions, db.replies, async () => {
+		await db.transaction('rw', db.discussions, db.replies, db.users, async () => {
 			if (data.discussions.length) {
 				await db.discussions.bulkPut(data.discussions.map((d) => ({ ...d, cachedAt: now })));
 			}
 			if (data.replies.length) {
 				await db.replies.bulkPut(data.replies.map((r) => ({ ...r, cachedAt: now })));
+			}
+			if (data.users.length) {
+				await db.users.bulkPut(data.users.map((u) => ({ ...u, cachedAt: now })));
 			}
 			for (const t of data.discussionTombstones) await db.discussions.delete(t.id);
 			for (const t of data.replyTombstones) await db.replies.delete(t.id);
@@ -88,6 +91,49 @@ async function doSync(): Promise<SyncResult> {
 
 	await applyEviction();
 	await flushPendingReadState();
+	await backfillMissingUsers();
 
 	return { discussions: totalDisc, replies: totalRep, tombstones: totalTomb };
+}
+
+async function backfillMissingUsers(): Promise<void> {
+	const db = getOfflineDB();
+	const allDisc = await db.discussions.toArray();
+	const allRep = await db.replies.toArray();
+	const authorIds = new Set<number>();
+	for (const d of allDisc) authorIds.add(d.authorId);
+	for (const r of allRep) {
+		authorIds.add(r.authorId);
+		if (r.editedBy) authorIds.add(r.editedBy);
+	}
+	const cachedUserIds = new Set((await db.users.toArray()).map((u) => u.id));
+	const missing = [...authorIds].filter(
+		(id) => !cachedUserIds.has(id) && Number.isFinite(id) && id > 0
+	);
+	if (missing.length === 0) return;
+
+	const BATCH = 500;
+	for (let i = 0; i < missing.length; i += BATCH) {
+		const batch = missing.slice(i, i + BATCH);
+		const res = await fetch(`/api/sync/content?backfillUserIds=${batch.join(',')}`);
+		if (!res.ok) return;
+		const data = (await res.json()) as BackfillUsersResponse;
+		if (data.users?.length) {
+			const now = Date.now();
+			await db.users.bulkPut(
+				data.users.map((u) => ({
+					id: u.id,
+					displayName: u.displayName,
+					username: u.username,
+					avatarFileId: u.avatarFileId,
+					avatarContentType: u.avatarContentType ?? null,
+					cachedAt: now
+				}))
+			);
+		}
+	}
+}
+
+interface BackfillUsersResponse {
+	users?: SyncUserDTO[];
 }

@@ -558,8 +558,10 @@
 			"empty": "暂无缓存讨论，联网后将自动同步。",
 			"notCached": "该讨论未缓存，无法离线阅读。",
 			"backToList": "返回离线列表",
+			"backToForum": "返回论坛",
 			"readerBadge": "离线",
-			"replies": "回复"
+			"replies": "回复",
+			"unknownUser": "未知用户"
 		}
 	},
 	"push": {

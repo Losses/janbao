@@ -1,7 +1,12 @@
-import { discussions, replies, bookmarks, categories } from '../schema';
+import { discussions, replies, bookmarks, categories, users } from '../schema';
 import { and, desc, eq, gt, inArray, isNotNull, isNull, or } from 'drizzle-orm';
 import type { D1Db } from '../index';
-import type { SyncDiscussionDTO, SyncReplyDTO, SyncTombstoneDTO } from '$lib/types/api';
+import type {
+	SyncDiscussionDTO,
+	SyncReplyDTO,
+	SyncTombstoneDTO,
+	SyncUserDTO
+} from '$lib/types/api';
 
 interface DeltaQuery {
 	sinceTs: number;
@@ -162,6 +167,29 @@ export async function getReplyTombstones(
 		.orderBy(replies.deletedAt, replies.id)
 		.limit(query.limit);
 	return rows.map((r) => ({ id: r.id, deletedAt: r.deletedAt ? toSeconds(r.deletedAt) : 0 }));
+}
+
+// Display info for every author referenced by the returned discussions +
+// replies. Lets the offline reader render avatars and names without a second
+// round-trip. An empty input returns [] without hitting the DB (inArray([])
+// is rejected by drizzle), and a hard cap guards against pathological fan-out.
+const MAX_USER_BATCH = 500;
+
+export async function getCachedUsers(db: D1Db, userIds: number[]): Promise<SyncUserDTO[]> {
+	const unique = Array.from(new Set(userIds)).filter((id) => Number.isFinite(id) && id > 0);
+	if (unique.length === 0) return [];
+	const capped = unique.slice(0, MAX_USER_BATCH);
+	const rows = await db
+		.select({
+			id: users.id,
+			displayName: users.displayName,
+			username: users.username,
+			avatarFileId: users.avatarFileId,
+			avatarContentType: users.avatarContentType
+		})
+		.from(users)
+		.where(inArray(users.id, capped));
+	return rows;
 }
 
 // Mirrors the live home-page ordering exactly (pinned first, then lastReplyAt

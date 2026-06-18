@@ -444,6 +444,17 @@ export interface SyncTombstoneDTO {
 	deletedAt: number;
 }
 
+// Author display info for the offline reader. One row per unique authorId
+// referenced by the returned discussions + replies; the client caches it in
+// IDB so avatars and names render offline without a server round-trip.
+export interface SyncUserDTO {
+	id: number;
+	displayName: string;
+	username: string;
+	avatarFileId: string | null;
+	avatarContentType: string | null;
+}
+
 export interface SyncCursors {
 	discussions: string;
 	replies: string;
@@ -460,6 +471,7 @@ export interface SyncHasMore {
 export interface SyncContentResponse {
 	discussions: SyncDiscussionDTO[];
 	replies: SyncReplyDTO[];
+	users: SyncUserDTO[];
 	discussionTombstones: SyncTombstoneDTO[];
 	replyTombstones: SyncTombstoneDTO[];
 	frontPageDiscussionIds: number[];
