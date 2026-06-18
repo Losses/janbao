@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
 	import { formatTitle } from '$lib/utils/title';
@@ -62,6 +63,13 @@
 	let pushEnabled = $state(false);
 	let pushBusy = $state(false);
 	let pushMessageState = $state<FeedbackMessage | null>(null);
+	let pushPermission = $state<NotificationPermission>('default');
+
+	onMount(() => {
+		if (typeof Notification !== 'undefined') {
+			pushPermission = Notification.permission;
+		}
+	});
 
 	$effect(() => {
 		// Re-sync local push toggle state when preferences reload (e.g. after save)
@@ -126,6 +134,9 @@
 		pushMessageState = null;
 		const outcome = await subscribeToPush(vapidPublicKey);
 		pushEnabled = outcome === 'subscribed';
+		if (typeof Notification !== 'undefined') {
+			pushPermission = Notification.permission;
+		}
 		pushMessageState = outcomeFeedback(outcome);
 		pushBusy = false;
 	}
@@ -279,7 +290,9 @@
 
 				{#if !pushSupported}
 					<p class="text-sm text-base-content/50">{pushT.unsupported}</p>
-				{:else if pushEnabled}
+				{:else if pushPermission === 'denied'}
+					<p class="text-sm text-base-content/50">{pushT.permissionDenied}</p>
+				{:else if pushEnabled || pushPermission === 'granted'}
 					<button class="btn btn-outline btn-sm" onclick={handleDisablePush} disabled={pushBusy}>
 						{pushBusy ? t.common.saving : pushT.disable}
 					</button>

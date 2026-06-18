@@ -5,6 +5,27 @@ import { eq, and } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import type { PushSubscribeBody, PushUnsubscribeBody } from '$lib/types/api';
 
+/** Push service hosts permitted as subscription endpoints (SSRF allowlist). */
+const ALLOWED_PUSH_HOSTS = [
+	'fcm.googleapis.com', // Firebase Cloud Messaging (Chrome/Android)
+	'updates.push.services.mozilla.com', // Firefox
+	'web.push.apple.com' // Safari
+];
+
+/** Validate that an endpoint URL targets a known push service over HTTPS. */
+function isAllowedPushEndpoint(endpoint: string): boolean {
+	let parsed: URL;
+	try {
+		parsed = new URL(endpoint);
+	} catch {
+		return false;
+	}
+	if (parsed.protocol !== 'https:') return false;
+	return ALLOWED_PUSH_HOSTS.some(
+		(host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`)
+	);
+}
+
 // POST /api/push/subscribe - register (or refresh) the active user's PushSubscription
 // for the endpoint supplied by the browser PushManager. The endpoint is globally
 // unique per (browser, push service), so we upsert keyed on endpoint: existing
@@ -29,6 +50,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const auth = body.keys && typeof body.keys.auth === 'string' ? body.keys.auth : '';
 
 	if (!endpoint || !p256dh || !auth) {
+		return jsonError(t, 'common.badRequest', 400);
+	}
+
+	if (!isAllowedPushEndpoint(endpoint)) {
 		return jsonError(t, 'common.badRequest', 400);
 	}
 

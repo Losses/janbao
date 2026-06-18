@@ -27,7 +27,7 @@ import { eq, and, isNull, ne, inArray } from 'drizzle-orm';
 import type { D1Db } from './index';
 import { extractMentions } from '$lib/utils/mentions';
 
-type ReplyNotifCategory = 'mention' | 'owner' | 'participant' | 'bookmarker';
+export type ReplyNotifCategory = 'mention' | 'owner' | 'participant' | 'bookmarker';
 
 interface ReplyNotificationContext {
 	discussionId: number;
@@ -39,6 +39,7 @@ interface ReplyNotificationContext {
 export interface NewNotificationRow {
 	userId: number;
 	type: string;
+	category: ReplyNotifCategory;
 	sourceUserId: number;
 	discussionId: number;
 	replyId: number;
@@ -144,6 +145,7 @@ export async function dispatchReplyNotifications(
 		rows.push({
 			userId,
 			type: notificationTypeFor(category),
+			category,
 			sourceUserId: ctx.authorId,
 			discussionId: ctx.discussionId,
 			replyId: ctx.replyId,
@@ -152,7 +154,16 @@ export async function dispatchReplyNotifications(
 	}
 
 	if (rows.length > 0) {
-		await db.insert(notifications).values(rows);
+		// `category` is a runtime-only hint for push delivery; it is not a DB column.
+		const insertRows = rows.map((row) => ({
+			userId: row.userId,
+			type: row.type,
+			sourceUserId: row.sourceUserId,
+			discussionId: row.discussionId,
+			replyId: row.replyId,
+			createdAt: row.createdAt
+		}));
+		await db.insert(notifications).values(insertRows);
 	}
 	return rows;
 }

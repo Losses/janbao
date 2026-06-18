@@ -24,7 +24,7 @@ import {
 	users
 } from '$lib/server/db/schema';
 import type { D1Db } from '$lib/server/db/index';
-import type { NewNotificationRow } from '$lib/server/db/notifications';
+import type { NewNotificationRow, ReplyNotifCategory } from '$lib/server/db/notifications';
 import { encryptJsonPayload } from './encryption';
 import { signVapidJwt } from './vapid';
 import { getVapidKeys, base64UrlToBytes, bytesToBase64Url } from './keys';
@@ -52,23 +52,24 @@ export type CreatedNotificationRow = NewNotificationRow;
 
 const PUSH_TTL_SECONDS = 2419200; // 28 days, the maximum most push services honor.
 
-/** Map an in-app notification `type` to the matching push preference column. */
-function pushPrefColumnForType(
-	type: string
-):
+/** Push preference column names gated by a reply-triggered notification. */
+type ReplyPushPrefColumn =
 	| 'pushMention'
 	| 'pushDiscussionReply'
-	| 'pushDiscussionComment'
 	| 'pushParticipatedComment'
-	| 'pushBookmarkedDiscussionComment'
-	| null {
-	switch (type) {
+	| 'pushBookmarkedDiscussionComment';
+
+/** Map a reply notification category to the matching push preference column. */
+function pushPrefColumnForCategory(category: ReplyNotifCategory): ReplyPushPrefColumn | null {
+	switch (category) {
 		case 'mention':
 			return 'pushMention';
-		case 'reply':
+		case 'owner':
 			return 'pushDiscussionReply';
-		case 'discussion_comment':
-			return 'pushDiscussionComment';
+		case 'participant':
+			return 'pushParticipatedComment';
+		case 'bookmarker':
+			return 'pushBookmarkedDiscussionComment';
 		default:
 			return null;
 	}
@@ -170,7 +171,7 @@ export async function deliverPushForNotifications(
 	const sourceByUser = new Map(sourceUserRows.map((u) => [u.id, u]));
 
 	for (const row of rows) {
-		const prefColumn = pushPrefColumnForType(row.type);
+		const prefColumn = pushPrefColumnForCategory(row.category);
 		if (!prefColumn) continue;
 		const pref = prefByUser.get(row.userId);
 		// No preference row means default-true for every push category.
