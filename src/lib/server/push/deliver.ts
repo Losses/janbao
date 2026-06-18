@@ -275,12 +275,16 @@ async function sendToSubscriptions(
 ): Promise<void> {
 	const goneEndpoints: string[] = [];
 	for (const sub of subs) {
-		const status = await sendWebPush(
-			{ endpoint: sub.endpoint, p256dhKey: sub.p256dhKey, authKey: sub.authKey },
-			payload,
-			platformEnv
-		);
-		if (status === 'gone') goneEndpoints.push(sub.endpoint);
+		try {
+			const status = await sendWebPush(
+				{ endpoint: sub.endpoint, p256dhKey: sub.p256dhKey, authKey: sub.authKey },
+				payload,
+				platformEnv
+			);
+			if (status === 'gone') goneEndpoints.push(sub.endpoint);
+		} catch (err) {
+			console.error('[push] sendWebPush threw for subscription:', sub.id, err);
+		}
 	}
 	if (goneEndpoints.length > 0) {
 		try {

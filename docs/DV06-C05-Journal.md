@@ -212,3 +212,28 @@ after verification):
   multi-record unsupported; notConfigured dead key; scripts not type-checked.
 - Gate: check 0/0, lint exit 0, build exit 0. See RV06-C05-Audit-01.md.
 - Advancing to round 2 targeting 5/5 UNCONDITIONAL_PASS.
+
+## Round 2
+
+- 5 agents. Verdict: 3/5 UNCONDITIONAL_PASS (A, B, D); C CONDITIONAL (LOW); E FAIL (3 findings).
+- CRITICAL (E): fire-and-forget push not wrapped in `waitUntil` - on CF Workers the runtime
+  tears down after Response. Fixed: all three dispatch hooks now use `waitUntil`.
+- HIGH (E): `pushDiscussionComment` toggle dead (owner→pushDiscussionReply only, not OR'd).
+  Fixed: `pushPrefColumnsForCategory` returns array; owner ORs both; delivery uses `.some`.
+- HIGH (E): conversation-reply push missing (only new-conversation pushed). Fixed: the
+  conversation-reply `post` action now fires `deliverPushForMessage`.
+- Carry-overs: async getVapidKeys; subscribe upserts by endpoint; pushProfileComment not
+  dispatched; multi-record unsupported; notConfigured dead key; scripts not type-checked;
+  SW notificationclick same-origin defense-in-depth (browser-enforced).
+- Gate: check 0/0, lint exit 0, build exit 0. See RV06-C05-Audit-02.md.
+- Advancing to round 3 targeting 5/5 UNCONDITIONAL_PASS.
+
+## Round 3
+
+- 5 agents. Verdict: 4/5 UNCONDITIONAL_PASS (A, B, C, D); E CONDITIONAL (MEDIUM).
+- MEDIUM (E): per-subscription send failures abort the batch - no try/catch in the
+  sendToSubscriptions for-loop; a corrupted row kills remaining pushes. Fixed: per-sub
+  try/catch (treat as failed, continue loop).
+- Carry-overs unchanged.
+- Gate: check 0/0, lint exit 0, build exit 0. See RV06-C05-Audit-03.md.
+- Advancing to round 4 targeting 5/5 UNCONDITIONAL_PASS - the final round of DV06.
