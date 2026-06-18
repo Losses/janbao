@@ -40,9 +40,9 @@
 		});
 	});
 
-	// Online/offline status drives the offline banner, the delta-sync trigger, and
-	// (via the shared store) the C03 disable sweep across server-dependent UI. SW
-	// registration is production-only so dev assets are never cached.
+	// Online/offline status drives the delta-sync trigger and (via the shared
+	// store) the C03 disable sweep across server-dependent UI. SW registration
+	// is production-only so dev assets are never cached.
 	const online = getOnlineStore();
 
 	function triggerSync(): void {
@@ -77,20 +77,5 @@
 <svelte:head>
 	<link rel="icon" href={favicon} />
 </svelte:head>
-
-{#if !online.online}
-	<div
-		role="status"
-		aria-live="polite"
-		class="flex w-full items-center gap-3 bg-neutral px-4 py-2 text-sm text-neutral-content"
-	>
-		<span class="font-medium">{data.t.offline.status}</span>
-		<span class="opacity-80">{data.t.offline.hint}</span>
-		<a class="link link-hover ml-auto" href="/offline">{data.t.offline.openReader}</a>
-		<button type="button" class="btn btn-ghost btn-xs" onclick={() => location.reload()}>
-			{data.t.offline.retry}
-		</button>
-	</div>
-{/if}
 
 {@render children()}
