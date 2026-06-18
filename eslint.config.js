@@ -60,8 +60,7 @@ export default defineConfig(
 				},
 				{
 					// Descendant combinator (not child) so types nested in intersections / unions /
-					// arrays / nested function types are caught too — e.g. `Foo & { a: number }`
-					// would otherwise slip past `TSTypeAnnotation > TSTypeLiteral`.
+					// arrays / nested function types are caught too. e.g. `Foo & { a: number }`
 					selector: 'TSTypeAnnotation TSTypeLiteral',
 					message: 'Do not use inline object type literals. Extract to a named type or interface.'
 				},

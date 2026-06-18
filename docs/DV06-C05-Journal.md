@@ -14,28 +14,28 @@ notification prefs and are honored independently at delivery time.
 
 **Push server modules** (`src/lib/server/push/`, all new):
 
-- `keys.ts` — `getVapidKeys(platformEnv)` resolves VAPID keypair from env
+- `keys.ts` - `getVapidKeys(platformEnv)` resolves VAPID keypair from env
   (`VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`, base64url of
   raw bytes: 65-byte uncompressed public, 32-byte raw private `d`). In dev
   with no env vars, generates an ephemeral P-256 keypair cached for the
   process lifetime (subscriptions don't survive restart - acceptable for
   dev). Production builds throw on missing keys (fail-closed). Also
   `getVapidPublicKeyBase64Url(platformEnv)` for the client-side gate.
-- `vapid.ts` — `signVapidJwt(privateKey, publicKey, audience, subject)`.
+- `vapid.ts` - `signVapidJwt(privateKey, publicKey, audience, subject)`.
   ES256 (ECDSA P-256 SHA-256) JWT. Imports the private scalar via JWK
   reconstruction (needs the public X/Y from the 65-byte uncompressed key).
   Detects signature encoding at runtime: WebCrypto spec is ASN.1 DER, but
   Bun's WebCrypto returns raw r||s (64 bytes) directly - both are handled
   (`ecdsaSignatureToRaw`). Output is verified to be 3 base64url parts with
   a 64-byte signature.
-- `encryption.ts` — RFC8291 / RFC8188 `aes128gcm` content encryption.
+- `encryption.ts` - RFC8291 / RFC8188 `aes128gcm` content encryption.
   `encryptPayload(payload, p256dh, authSecret)`: ephemeral P-256 keypair,
   ECDH to derive Z, two-stage HKDF (PRK from auth secret, then CEK/nonce
   from salt+IKM with `Content-Encoding: auth\0` / `aes128gcm\0` / `nonce\0`
   info strings), AES-128-GCM with a single-record `0x02` delimiter pad,
   then assembles salt(16) + rs(uint32 BE=4096) + idlen(1=65) +
   keyid(ephemeral pub 65) + ciphertext.
-- `deliver.ts` — `sendWebPush(subscription, payload, platformEnv)` does
+- `deliver.ts` - `sendWebPush(subscription, payload, platformEnv)` does
   encrypt + sign + POST, bucketing responses into ok / gone (404/410) /
   retryable (429/5xx) / failed. Two fan-out entry points:
   `deliverPushForNotifications(db, rows, env)` (reply-triggered) and
@@ -46,23 +46,23 @@ notification prefs and are honored independently at delivery time.
 
 **Dispatch hooks** (modified):
 
-- `src/lib/server/db/notifications.ts` — `dispatchReplyNotifications` now
+- `src/lib/server/db/notifications.ts` - `dispatchReplyNotifications` now
   returns `NewNotificationRow[]` (was `void`). `NewNotificationRow` is now
   exported. No push logic here - kept focused on in-app.
 - `src/routes/discussion/[discussionId]/[slug]/[[page=page]]/+page.server.ts`
-  — reply action captures the returned rows and fires-and-forgets
-  `deliverPushForNotifications(db, rows, platform?.env)` after the in-app
-  dispatch.
-- `src/routes/api/messages/+server.ts` — after the conversation is
+  - reply action captures the returned rows and fires-and-forgets
+    `deliverPushForNotifications(db, rows, platform?.env)` after the in-app
+    dispatch.
+- `src/routes/api/messages/+server.ts` - after the conversation is
   committed, fires-and-forgets
   `deliverPushForMessage(db, conversationId, user.id, platform?.env)`.
 
 **Endpoints** (new):
 
-- `POST /api/push/subscribe` — upserts a subscription keyed on the
+- `POST /api/push/subscribe` - upserts a subscription keyed on the
   (globally unique) endpoint, refreshing user + keys + UA. Endpoint is
   unique across users so the same browser can switch accounts cleanly.
-- `DELETE /api/push/subscribe` and `POST /api/push/unsubscribe` — both
+- `DELETE /api/push/subscribe` and `POST /api/push/unsubscribe` - both
   remove the active user's subscription for an endpoint, scoped to the
   active user (`and(endpoint, userId)` filter so a user cannot revoke
   another user's subscription by guessing endpoints). The POST form
@@ -70,21 +70,21 @@ notification prefs and are honored independently at delivery time.
 
 **Layout + service worker + client**:
 
-- `+layout.server.ts` exposes `vapidPublicKey` (base64url) — safe to ship
+- `+layout.server.ts` exposes `vapidPublicKey` (base64url) - safe to ship
   to the client (it's the public half, also embedded in every
   subscription). Null when push is not configured and not dev.
-- `service-worker.ts` — `push` listener parses the JSON payload
+- `service-worker.ts` - `push` listener parses the JSON payload
   (`{title, body, url, tag?}`) and `showNotification` with icon, badge,
   data.url, tag. `notificationclick` focuses an existing same-pathname
   client or opens a new one.
-- `src/lib/push.svelte.ts` — `subscribeToPush(vapidPublicKey)`,
+- `src/lib/push.svelte.ts` - `subscribeToPush(vapidPublicKey)`,
   `unsubscribeFromPush()`, `isPushSubscribed()`, `urlBase64ToUint8Array()`.
   All network calls go to the authed `/api/push/*` endpoints.
 
 **Preferences UI** (`src/routes/profile/preferences/`):
 
-- `+page.server.ts` — load now returns push pref columns + `vapidPublicKey`.
-- `+page.svelte` — new "Push notifications" section (only when
+- `+page.server.ts` - load now returns push pref columns + `vapidPublicKey`.
+- `+page.svelte` - new "Push notifications" section (only when
   `vapidPublicKey` is set and the browser supports PushManager). Enable
   button (requests Notification.permission, subscribes via SW
   `pushManager.subscribe({userVisibleOnly:true, applicationServerKey})`,
@@ -99,12 +99,12 @@ notification prefs and are honored independently at delivery time.
   push fields; new `PushSubscribeBody`, `PushUnsubscribeBody`,
   `PushSubscriptionKeys` types.
 
-**Schema + migration** — already in place from prior work:
+**Schema + migration** - already in place from prior work:
 `pushSubscriptions` table + the 7 push columns on `notificationPreferences`
 
 - `drizzle/local-migrations/0013_true_human_robot.sql`.
 
-**i18n** — new top-level `push.*` namespace (22 keys each) in
+**i18n** - new top-level `push.*` namespace (22 keys each) in
 `src/lib/i18n/{en,zh-CN}.json`: sectionTitle, sectionDescription, enable,
 disable, permissionDenied, notConfigured, unsupported, subscribed, and
 per-category label + desc.
@@ -115,7 +115,7 @@ per-category label + desc.
   `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`.
 - `scripts/generate-vapid-keys.ts` generates a P-256 keypair via
   WebCrypto and prints base64url public (65-byte uncompressed) + private
-  (32-byte raw `d`, recovered from the JWK export — slicing PKCS8 by a
+  (32-byte raw `d`, recovered from the JWK export - slicing PKCS8 by a
   fixed offset is fragile and was wrong on first pass).
 
 ### Crypto verification
@@ -141,7 +141,7 @@ after verification):
   internally. `getVapidPublicKeyBase64Url` stays sync (returns the env
   string or the cached dev public key if already generated, else null).
   In dev the UI may briefly show null until the first push subscription
-  attempt triggers `getVapidKeys` to populate the cache — acceptable,
+  attempt triggers `getVapidKeys` to populate the cache - acceptable,
   since the page-level check is the only sync caller.
 - **Subscribe endpoint upserts across users**. The push endpoint is
   globally unique per browser; on subscribe we look up by endpoint alone
@@ -149,18 +149,18 @@ after verification):
   device (otherwise the prior user keeps getting the new user's pushes).
   Unsubscribe is scoped to the active user so one user can't revoke
   another's subscription. The spec said "onConflictDoNothing or update"
-  — we do update (refreshed keys + UA) since browser key rotation is
-  legitimate.
-- **Push prefs use no DB default-false fallback** — schema defaults are
+  - we do update (refreshed keys + UA) since browser key rotation is
+    legitimate.
+- **Push prefs use no DB default-false fallback** - schema defaults are
   `true` and `deliverPushFor*` treats a missing preference row as
   default-true for every push category, mirroring the in-app pref
   semantics in `isEligible`.
 - **`pushProfileComment` toggle exists in the UI but is not currently
-  wired to a dispatch path** — profile-comment notifications go through
+  wired to a dispatch path** - profile-comment notifications go through
   a different code path (activity comments) that wasn't in scope for
   this cycle. The toggle is persisted and ready for a future cycle to
   consume; no incorrect push is sent today.
-- **Multi-record push is not supported** — payloads larger than
+- **Multi-record push is not supported** - payloads larger than
   `rs - 16 - 1 = 4079 bytes` throw. Push payloads are tiny JSON
   (`{title, body, url, tag}`), so this is not a practical limit.
 - **Dev-mode key generation warning** uses `console.warn`, matching the
@@ -178,15 +178,15 @@ after verification):
 ### Invariants honored
 
 - Per-category independent push toggles (7 categories).
-- Pure WebCrypto — verified to run on Bun (builds, signs, encrypts,
+- Pure WebCrypto - verified to run on Bun (builds, signs, encrypts,
   roundtrips); same code path is runtime-portable to Cloudflare Workers
   (the only runtime-detecting branch is signature encoding, which both
   paths handle).
-- Fire-and-forget dispatch — both call sites use
+- Fire-and-forget dispatch - both call sites use
   `void x().catch(console.error)` and the dispatcher catches internally.
-- Authed endpoints — all `/api/push/*` and `/api/profile/preferences`
+- Authed endpoints - all `/api/push/*` and `/api/profile/preferences`
   require `locals.user`.
-- Project type rules — all object shapes are named interfaces; type
+- Project type rules - all object shapes are named interfaces; type
   literals only for unions/function types; no `as unknown` / `as any`
   (only `as BufferSource` / `as BodyInit` which the eslint rule allows,
   matching existing pcloud.ts usage).
@@ -200,4 +200,15 @@ after verification):
 
 ## Round 1
 
-(pending)
+- 5 agents. Verdict: 0/5 unconditional (A FAIL, B PASS, C CONDITIONAL, D/E PASS_WITH_NOTES).
+- CRITICAL/MAJOR consensus (A/B/E): `pushParticipatedComment` / `pushBookmarkedDiscussionComment`
+  toggles unreachable - the notification type collapse lost the category before the push pref check.
+  Fixed: threaded `ReplyNotifCategory` through `NewNotificationRow.category`; `pushPrefColumnForCategory`
+  maps all four categories.
+- MEDIUM (C): SSRF via stored push endpoint (no scheme/host validation). Fixed: `isAllowedPushEndpoint`
+  validates https + host allowlist (FCM/Mozilla/Apple).
+- LOW (D): UI didn't show permission denied state. Fixed: reactive `pushPermission` tracking.
+- Carry-overs: async getVapidKeys; subscribe upserts by endpoint; pushProfileComment not dispatched;
+  multi-record unsupported; notConfigured dead key; scripts not type-checked.
+- Gate: check 0/0, lint exit 0, build exit 0. See RV06-C05-Audit-01.md.
+- Advancing to round 2 targeting 5/5 UNCONDITIONAL_PASS.

@@ -142,9 +142,17 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
 	// Fan out Web Push to the other participants. Best-effort: a push service
 	// hiccup must never turn a successfully-created conversation into an error.
-	void deliverPushForMessage(db, conversationId, user.id, platform?.env).catch((err) => {
-		console.error('Failed to dispatch message push notifications:', err);
-	});
+	// On Cloudflare Workers the promise must be registered with waitUntil so
+	// the runtime does not tear it down after the Response returns; the
+	// local/dev fallback keeps the prior fire-and-forget semantics.
+	const pushPromise = deliverPushForMessage(db, conversationId, user.id, platform?.env);
+	if (platform?.context?.waitUntil) {
+		platform.context.waitUntil(pushPromise);
+	} else {
+		void pushPromise.catch((err) => {
+			console.error('Failed to dispatch message push notifications:', err);
+		});
+	}
 
 	return json({ success: true, conversationId }, { status: 201 });
 };

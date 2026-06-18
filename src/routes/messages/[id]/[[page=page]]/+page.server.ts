@@ -14,6 +14,7 @@ import { resolveMentions } from '$lib/server/utils/mentions';
 import { indexMessage, reindexMessage } from '$lib/server/search/fts';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 import { enforcePostThrottle } from '$lib/server/throttle';
+import { deliverPushForMessage } from '$lib/server/push/deliver';
 
 const MESSAGE_PAGE_FALLBACK = 50;
 const MAX_ADD_PARTICIPANTS = 20;
@@ -332,6 +333,22 @@ export const actions: Actions = {
 		const newTotal = newTotalRes[0]?.value ?? 1;
 		const limit = getPaginationLimit(platform?.env) || MESSAGE_PAGE_FALLBACK;
 		const messagePage = Math.max(1, Math.ceil(newTotal / limit));
+
+		// Fan out Web Push to the other participants. Best-effort: a push
+		// service hiccup must never turn a successfully-posted reply into an
+		// error. On Cloudflare Workers the promise must be registered with
+		// waitUntil so the runtime does not tear it down after the Response
+		// returns; the local/dev fallback keeps fire-and-forget semantics.
+		// deliverPushForMessage filters out the author so the sender never
+		// receives a push for their own message.
+		const pushPromise = deliverPushForMessage(db, conversationId, user.id, platform?.env);
+		if (platform?.context?.waitUntil) {
+			platform.context.waitUntil(pushPromise);
+		} else {
+			void pushPromise.catch((err) => {
+				console.error('Failed to dispatch message push notifications:', err);
+			});
+		}
 
 		return { success: true, messageId, page: messagePage };
 	},

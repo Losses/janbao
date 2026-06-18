@@ -369,11 +369,19 @@ export const actions: Actions = {
 
 		// Fan out Web Push for the freshly-created notifications. Fire-and-forget:
 		// push is a strict best-effort side-channel and must never turn a
-		// successful reply into a server error.
+		// successful reply into a server error. On Cloudflare Workers the
+		// runtime tears down after the Response returns, so the promise must
+		// be registered with waitUntil to be guaranteed a chance to run; the
+		// local/dev fallback keeps the prior fire-and-forget semantics.
 		if (createdNotifRows.length > 0) {
-			void deliverPushForNotifications(db, createdNotifRows, platform?.env).catch((err) => {
-				console.error('Failed to dispatch reply push notifications:', err);
-			});
+			const pushPromise = deliverPushForNotifications(db, createdNotifRows, platform?.env);
+			if (platform?.context?.waitUntil) {
+				platform.context.waitUntil(pushPromise);
+			} else {
+				void pushPromise.catch((err) => {
+					console.error('Failed to dispatch reply push notifications:', err);
+				});
+			}
 		}
 
 		// Calculate which page the new reply lands on (excluding OP)

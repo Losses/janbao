@@ -8,9 +8,9 @@ agents (no roles), per [[dv04-audit-loop]].
 ## Round 1 verdicts
 
 - Agent A: FAIL (C-1 CRITICAL: pushParticipatedComment / pushBookmarkedDiscussionComment
-  toggles unreachable — notification type collapse loses the category)
+  toggles unreachable - notification type collapse loses the category)
 - Agent B: PASS (M-1 MAJOR: same category-collapse issue)
-- Agent C: CONDITIONAL_PASS (S-1 MEDIUM: SSRF — no endpoint scheme/host validation)
+- Agent C: CONDITIONAL_PASS (S-1 MEDIUM: SSRF - no endpoint scheme/host validation)
 - Agent D: PASS_WITH_NOTES (LOW-1: UI permission state; LOW-2: notConfigured dead key)
 - Agent E: PASS_WITH_NOTES (M-1 MAJOR: same category-collapse issue)
 

@@ -56,22 +56,30 @@ const PUSH_TTL_SECONDS = 2419200; // 28 days, the maximum most push services hon
 type ReplyPushPrefColumn =
 	| 'pushMention'
 	| 'pushDiscussionReply'
+	| 'pushDiscussionComment'
 	| 'pushParticipatedComment'
 	| 'pushBookmarkedDiscussionComment';
 
-/** Map a reply notification category to the matching push preference column. */
-function pushPrefColumnForCategory(category: ReplyNotifCategory): ReplyPushPrefColumn | null {
+/**
+ * Map a reply notification category to the matching push preference column(s).
+ *
+ * Returns an array because the 'owner' category mirrors the in-app eligibility
+ * check (discussionReply OR discussionComment) - a user who disables reply
+ * push but leaves comment push on still gets a push for replies to their own
+ * discussion. An empty array signals "skip this category".
+ */
+function pushPrefColumnsForCategory(category: ReplyNotifCategory): ReplyPushPrefColumn[] {
 	switch (category) {
 		case 'mention':
-			return 'pushMention';
+			return ['pushMention'];
 		case 'owner':
-			return 'pushDiscussionReply';
+			return ['pushDiscussionReply', 'pushDiscussionComment'];
 		case 'participant':
-			return 'pushParticipatedComment';
+			return ['pushParticipatedComment'];
 		case 'bookmarker':
-			return 'pushBookmarkedDiscussionComment';
+			return ['pushBookmarkedDiscussionComment'];
 		default:
-			return null;
+			return [];
 	}
 }
 
@@ -131,8 +139,8 @@ export async function sendWebPush(
  * Fan out push notifications for reply-triggered notification rows.
  *
  * For each notification row we:
- *   1. Resolve the push preference column for that notification type.
- *   2. Look up the recipient's preference row and skip if disabled.
+ *   1. Resolve the push preference column(s) for that notification type.
+ *   2. Look up the recipient's preference row and skip if all disabled.
  *   3. Look up the source user for the body line ("X replied to you").
  *   4. Send to every active subscription for the recipient.
  *
@@ -171,11 +179,13 @@ export async function deliverPushForNotifications(
 	const sourceByUser = new Map(sourceUserRows.map((u) => [u.id, u]));
 
 	for (const row of rows) {
-		const prefColumn = pushPrefColumnForCategory(row.category);
-		if (!prefColumn) continue;
+		const prefColumns = pushPrefColumnsForCategory(row.category);
+		if (prefColumns.length === 0) continue;
 		const pref = prefByUser.get(row.userId);
 		// No preference row means default-true for every push category.
-		const enabled = pref ? pref[prefColumn] : true;
+		// A category is push-enabled if ANY of its mapped columns is true,
+		// mirroring the in-app isEligible('owner') check.
+		const enabled = pref ? prefColumns.some((col) => pref[col]) : true;
 		if (!enabled) continue;
 
 		const subscriptions = subsByUser.get(row.userId);
