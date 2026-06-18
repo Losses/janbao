@@ -49,6 +49,44 @@ export class ForumOfflineDB extends Dexie {
 let dbInstance: ForumOfflineDB | null = null;
 
 export function getOfflineDB(): ForumOfflineDB {
-	if (!dbInstance) dbInstance = new ForumOfflineDB();
+	if (!dbInstance) {
+		const instance = new ForumOfflineDB();
+		// Schema upgrades (e.g. the v1 -> v2 bump that added `users`) only run
+		// once no other connection holds the database open. If a stale
+		// connection blocks the upgrade, Dexie's open() promise waits for it
+		// indefinitely — and since the `/offline` routes call getOfflineDB() as
+		// the first line of their load(), that hang surfaces as the page's
+		// loading spinner never resolving. Two hygiene measures prevent that:
+		//
+		// 1. versionchange: when another connection wants to change the DB
+		//    version (a new tab, or a just-deployed schema bump), close ours
+		//    promptly so the upgrade can proceed. This is Dexie's recommended
+		//    pattern; once every live connection follows it, a version bump
+		//    never deadlocks.
+		// 2. blocked: if our own open is blocked by a connection that does not
+		//    step aside, surface it loudly instead of hanging in silence.
+		instance.on('versionchange', () => {
+			instance.close();
+		});
+		instance.on('blocked', () => {
+			console.warn(
+				'[offline] IndexedDB upgrade is blocked by another open connection. ' +
+					'Close other tabs / dev servers targeting this site, or clear the "forum-offline" database in DevTools.'
+			);
+		});
+		dbInstance = instance;
+	}
 	return dbInstance;
+}
+
+// Vite HMR can re-import this module during dev, replacing the singleton while
+// the previous Dexie connection stays open. That orphaned connection then
+// blocks the next schema upgrade. Dispose closes it on hot-reload so dev
+// iterations never leak blocking connections. (import.meta.hot is undefined in
+// the production build and in non-Vite runtimes, so the guard is a no-op there.)
+if (import.meta.hot) {
+	import.meta.hot.dispose(() => {
+		dbInstance?.close();
+		dbInstance = null;
+	});
 }
