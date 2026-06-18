@@ -12,6 +12,7 @@
 	import type { VoidHandler } from '$lib/types/handlers';
 	import type { NotificationItem } from '$lib/types/api';
 	import { getBadgesStore } from '$lib/stores/badges.svelte';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import { formatBadgeCount } from '$lib/utils/count';
 
 	import type { TranslationDict } from '$lib/types/translation';
@@ -116,6 +117,7 @@
 	}
 
 	async function markAllRead() {
+		if (!getOnlineStore().online) return;
 		badges.clearNotifications();
 		allMarkedRead = true;
 		items = markItemsRead(items);

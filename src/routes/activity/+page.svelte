@@ -8,7 +8,10 @@
 	import { formatTitle } from '$lib/utils/title';
 	import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 	import { goto, invalidateAll } from '$app/navigation';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import type { PageData } from './$types';
+
+	const online = getOnlineStore();
 
 	interface PageProps {
 		data: PageData;
@@ -41,6 +44,7 @@
 	}
 
 	async function submitActivity() {
+		if (!online.online) return;
 		if (isLexicalEmpty(editorContent) || editorContent.length > MAX_CONTENT_SIZE || submitting)
 			return;
 		submitting = true;
@@ -101,7 +105,8 @@
 						onclick={submitActivity}
 						disabled={submitting ||
 							isLexicalEmpty(editorContent) ||
-							editorContent.length > MAX_CONTENT_SIZE}
+							editorContent.length > MAX_CONTENT_SIZE ||
+							!online.online}
 					>
 						{submitting ? t.common.saving : t.common.submit}
 					</button>
@@ -118,8 +123,11 @@
 		</div>
 
 		<!-- Activities Stream -->
-		{#if activityList.length === 0}
-			<EmptyState message={t.common.noResults} bordered={false} />
+		{#if !online.online || activityList.length === 0}
+			<EmptyState
+				message={!online.online ? t.offline.disabled.title : t.common.noResults}
+				bordered={false}
+			/>
 		{:else}
 			<div class="space-y-0">
 				<ActivityList

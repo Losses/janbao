@@ -14,6 +14,7 @@
 	import { goto } from '$app/navigation';
 	import type { TranslationDict } from '$lib/types/translation';
 	import type { MentionedUsersMap } from '$lib/types/mentions';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 
 	interface PrivateMessage {
 		id: number;
@@ -45,6 +46,8 @@
 		t
 	}: PrivateMessageWindowProps = $props();
 
+	const online = getOnlineStore();
+
 	let composeContent = $state('');
 	let isPosting = $state(false);
 	let editorKey = $state(0);
@@ -63,6 +66,7 @@
 	let editForm: HTMLFormElement | undefined = $state();
 
 	function startEdit(msg: PrivateMessage) {
+		if (!online.online) return;
 		editingMessageId = msg.id;
 		editContent = msg.contentJson;
 	}
@@ -116,7 +120,7 @@
 							disableImageUpload={true}
 							onContentChange={(json) => (editContent = json)}
 							onSubmit={() => {
-								if (!isSavingEdit) editForm?.requestSubmit();
+								if (!isSavingEdit && online.online) editForm?.requestSubmit();
 							}}
 							{t}
 							class="mb-2"
@@ -157,7 +161,8 @@
 								class="btn btn-primary btn-sm"
 								disabled={isLexicalEmpty(editContent) ||
 									editContent.length > MAX_CONTENT_SIZE ||
-									isSavingEdit}
+									isSavingEdit ||
+									!online.online}
 							>
 								{isSavingEdit ? t.common.saving : t.common.confirm}
 							</button>
@@ -236,7 +241,7 @@
 						disableImageUpload={true}
 						onContentChange={(json) => (composeContent = json)}
 						onSubmit={() => {
-							if (!isPosting) composeForm?.requestSubmit();
+							if (!isPosting && online.online) composeForm?.requestSubmit();
 						}}
 						{t}
 					/>
@@ -248,7 +253,8 @@
 						class="btn btn-primary btn-sm"
 						disabled={isLexicalEmpty(composeContent) ||
 							composeContent.length > MAX_CONTENT_SIZE ||
-							isPosting}
+							isPosting ||
+							!online.online}
 					>
 						{isPosting ? t.common.saving : t.message.send}
 					</button>

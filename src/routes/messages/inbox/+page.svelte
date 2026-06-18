@@ -9,8 +9,11 @@
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
 	import { goto } from '$app/navigation';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import type { ConversationListItem } from '$lib/types/api';
 	import type { PageData } from './$types';
+
+	const online = getOnlineStore();
 
 	interface PageProps {
 		data: PageData;
@@ -52,8 +55,8 @@
 			<a href="/messages/new" class="btn btn-primary btn-sm">{messageT.newMessage}</a>
 		</div>
 
-		{#if conversations.length === 0}
-			<EmptyState message={messageT.noConversations} />
+		{#if !online.online || conversations.length === 0}
+			<EmptyState message={!online.online ? t.offline.disabled.title : messageT.noConversations} />
 		{:else}
 			<!-- Conversation stream  - mirrors the homepage discussion list:
 			avatar left, content right, divide-y rows, no card chrome. -->

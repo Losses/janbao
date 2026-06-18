@@ -7,8 +7,11 @@
 	import Badge from '$lib/components/atoms/Badge.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import type { NotificationItem, ApiResult } from '$lib/types/api';
 	import type { PageData } from './$types';
+
+	const online = getOnlineStore();
 
 	interface PageProps {
 		data: PageData;
@@ -70,6 +73,7 @@
 	const views = $derived(notifications.map(buildView));
 
 	async function markAllRead() {
+		if (!online.online) return;
 		marking = true;
 		try {
 			const res = await fetch('/api/notifications', {
@@ -109,14 +113,18 @@
 		<div class="flex items-center justify-between border-b border-base-300 pb-4">
 			<h1 class="page-title">{notificationT.title}</h1>
 			{#if hasUnread}
-				<button class="btn btn-sm btn-outline" onclick={markAllRead} disabled={marking}>
+				<button
+					class="btn btn-sm btn-outline"
+					onclick={markAllRead}
+					disabled={marking || !online.online}
+				>
 					{notificationT.markAllRead}
 				</button>
 			{/if}
 		</div>
 
-		{#if views.length === 0}
-			<EmptyState message={notificationT.allCaughtUp} />
+		{#if !online.online || views.length === 0}
+			<EmptyState message={!online.online ? t.offline.disabled.title : notificationT.allCaughtUp} />
 		{:else}
 			<div>
 				{#each views as view (view.item.id)}

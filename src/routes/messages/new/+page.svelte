@@ -10,6 +10,7 @@
 	import { goto } from '$app/navigation';
 	import type { UserSearchResult, ApiResult } from '$lib/types/api';
 	import type { PageData } from './$types';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 
 	interface PageProps {
 		data: PageData;
@@ -20,6 +21,8 @@
 	}
 
 	let { data }: PageProps = $props();
+
+	const online = getOnlineStore();
 
 	const t = $derived(data.t);
 	const messageT = $derived(t.message);
@@ -49,6 +52,7 @@
 	}
 
 	async function send() {
+		if (!online.online) return;
 		if (sending) return;
 		if (
 			recipients.length === 0 ||
@@ -120,7 +124,7 @@
 						excludeIds={selectedIds}
 						initialRecipients={data.prefillRecipient ? [data.prefillRecipient] : undefined}
 						onRecipientsChange={handleRecipientsChange}
-						disabled={sending}
+						disabled={sending || !online.online}
 						{t}
 					/>
 				</div>
@@ -136,7 +140,7 @@
 					type="text"
 					class="input input-bordered w-full"
 					bind:value={title}
-					disabled={sending}
+					disabled={sending || !online.online}
 				/>
 			</div>
 

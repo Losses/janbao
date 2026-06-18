@@ -549,6 +549,9 @@
 		"hint": "部分功能不可用，已缓存内容仍可阅读。",
 		"retry": "重试",
 		"openReader": "离线阅读",
+		"disabled": {
+			"title": "离线时不可用"
+		},
 		"reader": {
 			"listTitle": "离线阅读",
 			"listHint": "无需联网即可阅读已缓存的讨论。",

@@ -7,8 +7,11 @@
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
 	import { goto } from '$app/navigation';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import type { BookmarkListItem } from '$lib/types/api';
 	import type { PageData } from './$types';
+
+	const online = getOnlineStore();
 
 	interface PageProps {
 		data: PageData;
@@ -42,8 +45,8 @@
 	<div class="space-y-3">
 		<h1 class="page-title border-b border-base-300 pb-4">{bookmarkT.myBookmarks}</h1>
 
-		{#if bookmarks.length === 0}
-			<EmptyState message={bookmarkT.noBookmarks} />
+		{#if !online.online || bookmarks.length === 0}
+			<EmptyState message={!online.online ? t.offline.disabled.title : bookmarkT.noBookmarks} />
 		{:else}
 			<div class="divide-y divide-base-300">
 				{#each bookmarks as bookmark (bookmark.discussionId)}

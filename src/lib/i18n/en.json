@@ -549,6 +549,9 @@
 		"hint": "Some features are unavailable. Cached content is still readable.",
 		"retry": "Retry",
 		"openReader": "Read offline",
+		"disabled": {
+			"title": "Unavailable offline"
+		},
 		"reader": {
 			"listTitle": "Offline reading",
 			"listHint": "Cached discussions are available without a connection.",

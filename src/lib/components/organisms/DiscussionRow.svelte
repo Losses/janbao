@@ -5,6 +5,7 @@
 	import DateAtom from '$lib/components/atoms/Date.svelte';
 	import Badge from '$lib/components/atoms/Badge.svelte';
 	import { generateSlug } from '$lib/utils/slug';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import type { TranslationDict } from '$lib/types/translation';
 
 	/**
@@ -59,6 +60,8 @@
 	let bookmarked = $state(isBookmarked);
 	let loadingBookmark = $state(false);
 
+	const online = getOnlineStore();
+
 	// Build exact URL based on reading history
 	const discussionUrl = $derived.by(() => {
 		const base = `/discussion/${discussion.id}/${discussion.slug}`;
@@ -82,6 +85,7 @@
 		e.preventDefault();
 		e.stopPropagation();
 		if (loadingBookmark) return;
+		if (!online.online) return;
 		loadingBookmark = true;
 		try {
 			if (bookmarked) {
@@ -183,7 +187,7 @@
 				? 'text-primary'
 				: 'text-base-content/35 hover:text-primary'}"
 			aria-label={t.bookmark.toggleAria}
-			disabled={loadingBookmark}
+			disabled={loadingBookmark || !online.online}
 		>
 			<Icon path={bookmarked ? mdiStar : mdiStarOutline} size={20} />
 		</button>

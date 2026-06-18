@@ -7,12 +7,15 @@
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 
 	interface PageProps {
 		data: PageData;
 	}
 
 	let { data }: PageProps = $props();
+
+	const online = getOnlineStore();
 
 	const t = $derived(data.t);
 	const discussion = $derived(data.discussion);
@@ -103,6 +106,7 @@
 	]);
 
 	async function saveDraftManual() {
+		if (!online.online) return;
 		if (isLexicalEmpty(contentJson) || isSavingManualDraft) return;
 		isSavingManualDraft = true;
 		try {
@@ -184,7 +188,7 @@
 					placeholder={t.discussion.titlePlaceholder}
 					class="input input-bordered w-full text-lg focus:input-primary"
 					required
-					disabled={isSubmitting || isPreview}
+					disabled={isSubmitting || isPreview || !online.online}
 				/>
 			</div>
 
@@ -245,7 +249,7 @@
 							initialContent={draftContent || opContentJson}
 							onContentChange={(json) => (contentJson = json)}
 							onSubmit={() => {
-								if (!isSubmitting) updateForm?.requestSubmit();
+								if (!isSubmitting && online.online) updateForm?.requestSubmit();
 							}}
 							placeholder={t.editor.placeholder}
 							{t}
@@ -287,7 +291,8 @@
 							disabled={isLexicalEmpty(contentJson) ||
 								contentJson.length > MAX_CONTENT_SIZE ||
 								isSubmitting ||
-								isSavingManualDraft}
+								isSavingManualDraft ||
+								!online.online}
 						>
 							{#if isSavingManualDraft}
 								<span class="loading loading-spinner loading-xs"></span>

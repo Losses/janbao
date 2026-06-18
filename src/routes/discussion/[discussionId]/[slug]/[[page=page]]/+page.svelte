@@ -16,6 +16,7 @@
 	import { goto } from '$app/navigation';
 	import { enhance } from '$app/forms';
 	import { onMount } from 'svelte';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -30,6 +31,8 @@
 	}
 
 	let { data }: PageProps = $props();
+
+	const online = getOnlineStore();
 
 	// Offline fallback: when the network drops while viewing a discussion that is
 	// cached locally, switch to the client-only offline reader (IDB, no server
@@ -357,7 +360,8 @@
 									class="btn btn-sm btn-primary"
 									disabled={isLexicalEmpty(editReplyContent) ||
 										editReplyContent.length > MAX_CONTENT_SIZE ||
-										isSubmitting}
+										isSubmitting ||
+										!online.online}
 								>
 									{t.discussion.saveReply}
 								</button>
@@ -379,7 +383,9 @@
 										<button
 											type="button"
 											class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
+											disabled={!online.online}
 											onclick={() => {
+												if (!online.online) return;
 												editingReplyId = reply.id;
 												editReplyContent = reply.contentJson;
 											}}
@@ -427,7 +433,7 @@
 							placeholder={t.editor.placeholderReply}
 							onContentChange={(json) => (replyContent = json)}
 							onSubmit={() => {
-								if (!isSubmitting) replyForm?.requestSubmit();
+								if (!isSubmitting && online.online) replyForm?.requestSubmit();
 							}}
 							{t}
 							class="mb-3"
@@ -477,7 +483,8 @@
 							class="btn btn-primary"
 							disabled={isLexicalEmpty(replyContent) ||
 								replyContent.length > MAX_CONTENT_SIZE ||
-								isSubmitting}
+								isSubmitting ||
+								!online.online}
 						>
 							{#if isSubmitting}
 								<span class="loading loading-spinner loading-xs"></span>

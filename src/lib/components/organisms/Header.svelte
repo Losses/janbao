@@ -8,6 +8,7 @@
 	import Logo from '$lib/components/atoms/Logo.svelte';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import { mdiMenu } from '@mdi/js';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import type { VoidHandler } from '$lib/types/handlers';
 	import type { TranslationDict } from '$lib/types/translation';
 
@@ -18,8 +19,13 @@
 
 	let { t, onToggleDrawer }: HeaderProps = $props();
 
+	const online = getOnlineStore();
 	const tNav = $derived(t.nav);
 	const currentPath = $derived(page.url.pathname);
+	// Server-dependent destinations grey out and stop navigating while offline.
+	const offlineNav = $derived(
+		online.online ? '' : 'opacity-40 pointer-events-none cursor-not-allowed'
+	);
 
 	function isNavActive(href: string): boolean {
 		if (href === '/') return currentPath === '/';
@@ -41,25 +47,31 @@
 			<div class="hidden md:flex items-end gap-4">
 				<a
 					href="/activity"
-					class="text-sm font-medium text-neutral-content/70 hover:text-neutral-content hover:underline"
+					class="text-sm font-medium text-neutral-content/70 hover:text-neutral-content hover:underline {offlineNav}"
 					class:text-accent={isNavActive('/activity')}
 					aria-current={isNavActive('/activity') ? 'page' : undefined}
+					aria-disabled={!online.online}
+					tabindex={!online.online ? -1 : undefined}
 				>
 					{tNav['activity']}
 				</a>
 				<a
 					href="/messages/inbox"
-					class="text-sm font-medium text-neutral-content/70 hover:text-neutral-content hover:underline"
+					class="text-sm font-medium text-neutral-content/70 hover:text-neutral-content hover:underline {offlineNav}"
 					class:text-accent={isNavActive('/messages')}
 					aria-current={isNavActive('/messages') ? 'page' : undefined}
+					aria-disabled={!online.online}
+					tabindex={!online.online ? -1 : undefined}
 				>
 					{tNav['messages']}
 				</a>
 				<a
 					href="/search"
-					class="text-sm font-medium text-neutral-content/70 hover:text-neutral-content hover:underline"
+					class="text-sm font-medium text-neutral-content/70 hover:text-neutral-content hover:underline {offlineNav}"
 					class:text-accent={isNavActive('/search')}
 					aria-current={isNavActive('/search') ? 'page' : undefined}
+					aria-disabled={!online.online}
+					tabindex={!online.online ? -1 : undefined}
 				>
 					{tNav['search']}
 				</a>

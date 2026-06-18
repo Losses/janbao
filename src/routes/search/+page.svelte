@@ -11,6 +11,7 @@
 	import { generateSlug } from '$lib/utils/slug';
 	import { goto } from '$app/navigation';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -34,6 +35,7 @@
 
 	const t = $derived(data.t);
 	const tSearch = $derived(t.search);
+	const online = getOnlineStore();
 	const query = $derived(data.query);
 	const scope = $derived(data.scope);
 	const user = $derived(data.user);
@@ -145,11 +147,13 @@
 				class="input input-bordered input-sm flex-1"
 				autocomplete="off"
 			/>
-			<button type="submit" class="btn btn-sm btn-primary">{tSearch.searchBtn}</button>
+			<button type="submit" class="btn btn-sm btn-primary" disabled={!online.online}>
+				{tSearch.searchBtn}
+			</button>
 		</form>
 
-		{#if query.trim().length === 0}
-			<EmptyState message={tSearch.noQuery} />
+		{#if !online.online || query.trim().length === 0}
+			<EmptyState message={!online.online ? t.offline.disabled.title : tSearch.noQuery} />
 		{:else if total === 0}
 			<EmptyState message={tSearch.noResults} />
 		{:else}

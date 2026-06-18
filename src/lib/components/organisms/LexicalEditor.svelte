@@ -9,6 +9,7 @@
 	 * - Marker Highlight and Spoiler inline text formatting
 	 */
 	import EditorInstanceSync from './EditorInstanceSync.svelte';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import {
 		Composer,
 		ContentEditable,
@@ -422,6 +423,7 @@
 
 		autosaveTimer = setInterval(async () => {
 			if (!editorStateGetter || !contextType || isSaving) return;
+			if (!getOnlineStore().online) return;
 
 			const json = editorStateGetter();
 			if (json === lastSavedContent) return; // No changes

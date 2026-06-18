@@ -6,7 +6,10 @@
 	import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import type { PageData } from './$types';
+
+	const online = getOnlineStore();
 
 	interface PageProps {
 		data: PageData;
@@ -248,7 +251,7 @@
 								initialContent={draftContent}
 								onContentChange={(json) => (contentJson = json)}
 								onSubmit={() => {
-									if (!isSubmitting) publishForm?.requestSubmit();
+									if (!isSubmitting && online.online) publishForm?.requestSubmit();
 								}}
 								placeholder={t.editor.placeholder}
 								{t}
@@ -292,7 +295,8 @@
 								disabled={isLexicalEmpty(contentJson) ||
 									contentJson.length > MAX_CONTENT_SIZE ||
 									isSubmitting ||
-									isSavingManualDraft}
+									isSavingManualDraft ||
+									!online.online}
 							>
 								{#if isSavingManualDraft}
 									<span class="loading loading-spinner loading-xs"></span>
@@ -316,7 +320,8 @@
 								isLexicalEmpty(contentJson) ||
 								contentJson.length > MAX_CONTENT_SIZE ||
 								isSubmitting ||
-								isPreview}
+								isPreview ||
+								!online.online}
 						>
 							{#if isSubmitting}
 								<span class="loading loading-spinner loading-xs"></span>

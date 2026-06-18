@@ -5,6 +5,7 @@
 	import { setContext, onMount } from 'svelte';
 	import type { LayoutData } from './$types';
 	import { getBadgesStore } from '$lib/stores/badges.svelte';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 
 	interface LayoutProps {
 		data: LayoutData;
@@ -39,9 +40,10 @@
 		});
 	});
 
-	// Online/offline status drives the offline banner and the delta-sync trigger.
-	// SW registration is production-only so dev assets are never cached.
-	let isOnline = $state(true);
+	// Online/offline status drives the offline banner, the delta-sync trigger, and
+	// (via the shared store) the C03 disable sweep across server-dependent UI. SW
+	// registration is production-only so dev assets are never cached.
+	const online = getOnlineStore();
 
 	function triggerSync(): void {
 		void import('$lib/offline/sync-orchestrator')
@@ -50,12 +52,12 @@
 	}
 
 	onMount(() => {
-		isOnline = navigator.onLine;
+		online.setOnline(navigator.onLine);
 		const markOnline = () => {
-			isOnline = true;
+			online.setOnline(true);
 			triggerSync();
 		};
-		const markOffline = () => (isOnline = false);
+		const markOffline = () => online.setOnline(false);
 		window.addEventListener('online', markOnline);
 		window.addEventListener('offline', markOffline);
 		// Keep the offline cache fresh on load when already online.
@@ -76,7 +78,7 @@
 	<link rel="icon" href={favicon} />
 </svelte:head>
 
-{#if !isOnline}
+{#if !online.online}
 	<div
 		role="status"
 		aria-live="polite"
