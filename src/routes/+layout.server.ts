@@ -1,8 +1,9 @@
 import type { LayoutServerLoad } from './$types';
 import { countUnreadNotifications } from '$lib/server/db/dao/notifications';
 import { countTotalUnreadMessages } from '$lib/server/db/dao/messages';
+import { getVapidPublicKeyBase64Url } from '$lib/server/push/keys';
 
-export const load: LayoutServerLoad = async ({ locals, depends }) => {
+export const load: LayoutServerLoad = async ({ locals, depends, platform }) => {
 	depends('app:badges');
 	const user = locals.user;
 
@@ -39,6 +40,11 @@ export const load: LayoutServerLoad = async ({ locals, depends }) => {
 		lang: locals.lang,
 		t: locals.t,
 		unreadNotificationCount,
-		unreadMessageCount
+		unreadMessageCount,
+		// VAPID public key (base64url) for the browser PushManager. Safe to expose:
+		// it is the public half of the VAPID ECDSA keypair and is also embedded in
+		// every push subscription. Null when VAPID is not configured and we are not
+		// in a dev build; the client treats null as "push unavailable".
+		vapidPublicKey: getVapidPublicKeyBase64Url(platform?.env)
 	};
 };

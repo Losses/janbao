@@ -143,6 +143,13 @@ export interface ProfilePreferencesBody {
 	participatedComment?: boolean;
 	mention?: boolean;
 	bookmarkedDiscussionComment?: boolean;
+	pushProfileComment?: boolean;
+	pushDiscussionReply?: boolean;
+	pushDiscussionComment?: boolean;
+	pushParticipatedComment?: boolean;
+	pushMention?: boolean;
+	pushBookmarkedDiscussionComment?: boolean;
+	pushMessage?: boolean;
 }
 
 export interface ProfileStealthBody {
@@ -484,4 +491,21 @@ export interface SyncReadStateResponse {
 	applied: number;
 	skipped: number;
 	conflicts: ReadStateConflict[];
+}
+
+/** Subscription keys as posted by the browser PushManager. */
+export interface PushSubscriptionKeys {
+	p256dh: string;
+	auth: string;
+}
+
+/** POST /api/push/subscribe body. */
+export interface PushSubscribeBody {
+	endpoint: string;
+	keys: PushSubscriptionKeys;
+}
+
+/** POST /api/push/unsubscribe body. */
+export interface PushUnsubscribeBody {
+	endpoint: string;
 }

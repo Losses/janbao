@@ -13,6 +13,8 @@ import { eq, and, isNull, count, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { getPaginationLimit, resolvePermissions } from '$lib/server/constants';
 import { dispatchReplyNotifications } from '$lib/server/db/notifications';
+import type { NewNotificationRow } from '$lib/server/db/notifications';
+import { deliverPushForNotifications } from '$lib/server/push/deliver';
 import { resolveMentions } from '$lib/server/utils/mentions';
 import type { DbTransaction } from '$lib/server/db';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
@@ -353,8 +355,9 @@ export const actions: Actions = {
 		// Best-effort: the reply is already committed, so a notification blip must
 		// not turn a successful post into a user-facing failure (which could also
 		// prompt a duplicate reply on resubmit).
+		let createdNotifRows: NewNotificationRow[] = [];
 		try {
-			await dispatchReplyNotifications(db, {
+			createdNotifRows = await dispatchReplyNotifications(db, {
 				discussionId,
 				replyId,
 				authorId: user.id,
@@ -362,6 +365,15 @@ export const actions: Actions = {
 			});
 		} catch (err) {
 			console.error('Failed to dispatch reply notifications:', err);
+		}
+
+		// Fan out Web Push for the freshly-created notifications. Fire-and-forget:
+		// push is a strict best-effort side-channel and must never turn a
+		// successful reply into a server error.
+		if (createdNotifRows.length > 0) {
+			void deliverPushForNotifications(db, createdNotifRows, platform?.env).catch((err) => {
+				console.error('Failed to dispatch reply push notifications:', err);
+			});
 		}
 
 		// Calculate which page the new reply lands on (excluding OP)

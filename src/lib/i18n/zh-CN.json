@@ -561,5 +561,29 @@
 			"readerBadge": "离线",
 			"replies": "回复"
 		}
+	},
+	"push": {
+		"sectionTitle": "推送通知",
+		"sectionDescription": "即使关闭标签页，也能在此设备上收到通知。",
+		"enable": "在此设备上启用推送",
+		"disable": "在此设备上停用推送",
+		"permissionDenied": "通知权限被拒绝。请在浏览器设置中允许本站发送通知。",
+		"notConfigured": "此部署未启用推送通知。",
+		"unsupported": "此浏览器不支持推送通知。",
+		"subscribed": "此设备已启用推送。",
+		"mention": "提及",
+		"mentionDesc": "有人 @ 你时推送",
+		"reply": "讨论回复",
+		"replyDesc": "有人回复你的讨论时推送",
+		"discussionComment": "讨论评论",
+		"discussionCommentDesc": "你发起的讨论收到新评论时推送",
+		"participatedComment": "参与的讨论",
+		"participatedCommentDesc": "你参与过的讨论有新回复时推送",
+		"bookmarkedDiscussionComment": "收藏的讨论",
+		"bookmarkedDiscussionCommentDesc": "你收藏的讨论有新回复时推送",
+		"profileComment": "主页评论",
+		"profileCommentDesc": "有人在你的主页留言时推送",
+		"message": "私信",
+		"messageDesc": "你收到私信时推送"
 	}
 }

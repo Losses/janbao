@@ -561,5 +561,29 @@
 			"readerBadge": "Offline",
 			"replies": "replies"
 		}
+	},
+	"push": {
+		"sectionTitle": "Push notifications",
+		"sectionDescription": "Get notified on this device even when the tab is closed.",
+		"enable": "Enable push on this device",
+		"disable": "Disable push on this device",
+		"permissionDenied": "Notification permission was denied. Update your browser settings to allow notifications from this site.",
+		"notConfigured": "Push notifications are not available on this deployment.",
+		"unsupported": "This browser does not support push notifications.",
+		"subscribed": "Push is enabled on this device.",
+		"mention": "Mentions",
+		"mentionDesc": "Push when someone mentions you",
+		"reply": "Discussion replies",
+		"replyDesc": "Push when someone replies to your discussion",
+		"discussionComment": "Discussion comments",
+		"discussionCommentDesc": "Push when a discussion you started gets a comment",
+		"participatedComment": "Participated threads",
+		"participatedCommentDesc": "Push when a thread you participated in gets a new reply",
+		"bookmarkedDiscussionComment": "Bookmarked discussions",
+		"bookmarkedDiscussionCommentDesc": "Push when a bookmarked discussion gets a new reply",
+		"profileComment": "Profile comments",
+		"profileCommentDesc": "Push when someone posts on your profile",
+		"message": "Private messages",
+		"messageDesc": "Push when you receive a private message"
 	}
 }

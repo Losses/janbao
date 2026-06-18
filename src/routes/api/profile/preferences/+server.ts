@@ -11,7 +11,14 @@ const VALID_PREF_KEYS = [
 	'discussionComment',
 	'participatedComment',
 	'mention',
-	'bookmarkedDiscussionComment'
+	'bookmarkedDiscussionComment',
+	'pushProfileComment',
+	'pushDiscussionReply',
+	'pushDiscussionComment',
+	'pushParticipatedComment',
+	'pushMention',
+	'pushBookmarkedDiscussionComment',
+	'pushMessage'
 ] as const;
 
 export const POST: RequestHandler = async ({ request, locals }) => {

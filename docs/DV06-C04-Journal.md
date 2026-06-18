@@ -49,3 +49,13 @@ async chunk (`Bz-TWo0p.js`), no longer inlined into route bundles.
   pixel-perfect to toolbar button layout (dominant `min-h-[200px]` matches).
 - Gate: check 0/0, lint exit 0, build exit 0. See RV06-C04-Audit-01.md.
 - Advancing to round 2 targeting 5/5 UNCONDITIONAL_PASS.
+
+## Round 2
+
+- 5 agents. Verdict: **5/5 UNCONDITIONAL_PASS**.
+- All round-1 fixes verified (class forwarding, module cache, toolbar match). Lexical
+  confirmed in a separate ~357 KB client async chunk, loaded only via the wrapper's dynamic
+  import. No new findings, no regressions. Carry-overs respected.
+- Gate: check 0/0, lint exit 0, build exit 0. See RV06-C04-Audit-02.md.
+- **DV06 C04 COMPLETE 2026-06-17** - closed in 2 rounds (~10 sub-agent audits). Advances
+  to C05 (Web Push).

@@ -36,7 +36,7 @@ interface ReplyNotificationContext {
 	contentJson: string;
 }
 
-interface NewNotificationRow {
+export interface NewNotificationRow {
 	userId: number;
 	type: string;
 	sourceUserId: number;
@@ -47,11 +47,15 @@ interface NewNotificationRow {
 
 /**
  * Dispatch notifications triggered by a new discussion reply.
+ *
+ * Returns the rows that were inserted (or would have been inserted if the
+ * batch were non-empty), so callers can fan out a parallel best-effort push
+ * pass without re-resolving the recipient set.
  */
 export async function dispatchReplyNotifications(
 	db: D1Db,
 	ctx: ReplyNotificationContext
-): Promise<void> {
+): Promise<NewNotificationRow[]> {
 	// 1. Resolve the discussion owner (skip if the discussion is soft-deleted)
 	const discussionRecords = await db
 		.select({ authorId: discussions.authorId })
@@ -60,7 +64,7 @@ export async function dispatchReplyNotifications(
 		.limit(1);
 
 	if (discussionRecords.length === 0) {
-		return;
+		return [];
 	}
 
 	const ownerId = discussionRecords[0].authorId;
@@ -118,7 +122,7 @@ export async function dispatchReplyNotifications(
 	}
 
 	if (candidates.size === 0) {
-		return;
+		return [];
 	}
 
 	// 6. Batch-fetch preferences for all candidates
@@ -150,6 +154,7 @@ export async function dispatchReplyNotifications(
 	if (rows.length > 0) {
 		await db.insert(notifications).values(rows);
 	}
+	return rows;
 }
 
 interface NotificationPreferenceFields {

@@ -15,6 +15,7 @@ import type { RequestHandler } from './$types';
 import type { MessageCreateBody } from '$lib/types/api';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 import { enforcePostThrottle, tooManyRequests } from '$lib/server/throttle';
+import { deliverPushForMessage } from '$lib/server/push/deliver';
 
 const MAX_RECIPIENTS = 20;
 
@@ -138,6 +139,12 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			target: [conversationReads.userId, conversationReads.conversationId],
 			set: { lastReadAt: now }
 		});
+
+	// Fan out Web Push to the other participants. Best-effort: a push service
+	// hiccup must never turn a successfully-created conversation into an error.
+	void deliverPushForMessage(db, conversationId, user.id, platform?.env).catch((err) => {
+		console.error('Failed to dispatch message push notifications:', err);
+	});
 
 	return json({ success: true, conversationId }, { status: 201 });
 };

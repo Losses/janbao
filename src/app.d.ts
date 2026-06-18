@@ -22,6 +22,9 @@ interface PlatformEnv {
 	POST_THROTTLE_LIMIT?: string;
 	SITE_URL?: string;
 	OFFLINE_RETENTION_DAYS?: string;
+	VAPID_PUBLIC_KEY?: string;
+	VAPID_PRIVATE_KEY?: string;
+	VAPID_SUBJECT?: string;
 }
 
 type WaitUntilFn = (promise: Promise<unknown>) => void;

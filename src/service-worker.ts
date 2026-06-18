@@ -81,6 +81,62 @@ self.addEventListener('fetch', (event: FetchEvent) => {
 	event.respondWith(handleAsset(request));
 });
 
+// Push event: the application server POSTed an encrypted aes128gcm record to
+// the push service; the browser decrypted it and hands us the JSON payload we
+// originally encrypted ({title, body, url, tag}). We surface it as a system
+// notification. `showNotification` requires a visible notification per the
+// `userVisibleOnly:true` contract the subscription was created under.
+interface PushEventPayload {
+	title?: string;
+	body?: string;
+	url?: string;
+	tag?: string;
+}
+
+self.addEventListener('push', (event: PushEvent) => {
+	let payload: PushEventPayload = {};
+	try {
+		payload = event.data ? (event.data.json() as PushEventPayload) : {};
+	} catch (err) {
+		console.error('[sw] malformed push payload:', err);
+	}
+	const title = payload.title || 'Janbao';
+	const options: NotificationOptions = {
+		body: payload.body || '',
+		icon: '/icons/icon-192.png',
+		badge: '/icons/icon-192.png',
+		data: { url: payload.url || '/' },
+		tag: payload.tag
+	};
+	event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// notificationclick: focus an already-open client at the target URL if one
+// exists, otherwise open a new one. Always close the notification so it does
+// not linger in the system tray after the user has acted on it.
+self.addEventListener('notificationclick', (event: NotificationEvent) => {
+	event.notification.close();
+	const targetUrl = (event.notification.data && event.notification.data.url) || '/';
+	event.waitUntil(focusOrOpenClient(targetUrl));
+});
+
+async function focusOrOpenClient(targetUrl: string): Promise<void> {
+	const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+	for (const c of allClients) {
+		// Match on pathname so a different origin/hashes don't trip us up.
+		try {
+			const candidateUrl = new URL(c.url, self.location.origin);
+			if (candidateUrl.pathname === new URL(targetUrl, self.location.origin).pathname) {
+				await c.focus();
+				return;
+			}
+		} catch {
+			// Malformed client URL; skip and try the next.
+		}
+	}
+	await self.clients.openWindow(targetUrl);
+}
+
 async function handleNavigate(request: Request): Promise<Response> {
 	try {
 		const network = await fetchWithTimeout(request, NAV_TIMEOUT_MS);

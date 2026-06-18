@@ -402,7 +402,40 @@ export const notificationPreferences = sqliteTable('notification_preferences', {
 	mention: integer('mention', { mode: 'boolean' }).notNull().default(true),
 	bookmarkedDiscussionComment: integer('bookmarked_discussion_comment', { mode: 'boolean' })
 		.notNull()
-		.default(true)
+		.default(true),
+	// Push notification toggles (per-category, independent of the in-app toggles above).
+	pushProfileComment: integer('push_profile_comment', { mode: 'boolean' }).notNull().default(true),
+	pushDiscussionReply: integer('push_discussion_reply', { mode: 'boolean' })
+		.notNull()
+		.default(true),
+	pushDiscussionComment: integer('push_discussion_comment', { mode: 'boolean' })
+		.notNull()
+		.default(true),
+	pushParticipatedComment: integer('push_participated_comment', { mode: 'boolean' })
+		.notNull()
+		.default(true),
+	pushMention: integer('push_mention', { mode: 'boolean' }).notNull().default(true),
+	pushBookmarkedDiscussionComment: integer('push_bookmarked_discussion_comment', {
+		mode: 'boolean'
+	})
+		.notNull()
+		.default(true),
+	pushMessage: integer('push_message', { mode: 'boolean' }).notNull().default(true)
+});
+
+export const pushSubscriptions = sqliteTable('push_subscriptions', {
+	id: integer('id').primaryKey(),
+	userId: integer('user_id')
+		.notNull()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	endpoint: text('endpoint').notNull().unique(),
+	p256dhKey: text('p256dh_key').notNull(),
+	authKey: text('auth_key').notNull(),
+	userAgent: text('user_agent'),
+	createdAt: integer('created_at', { mode: 'timestamp' })
+		.notNull()
+		.default(sql`(strftime('%s', 'now'))`),
+	lastErrorAt: integer('last_error_at', { mode: 'timestamp' })
 });
 
 export const attachments = sqliteTable(
