@@ -108,6 +108,7 @@
 	]);
 
 	async function saveDraftManual() {
+		if (!online.online) return;
 		if (isLexicalEmpty(contentJson) || isSavingManualDraft) return;
 		isSavingManualDraft = true;
 		try {

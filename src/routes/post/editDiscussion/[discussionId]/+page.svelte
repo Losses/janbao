@@ -188,7 +188,7 @@
 					placeholder={t.discussion.titlePlaceholder}
 					class="input input-bordered w-full text-lg focus:input-primary"
 					required
-					disabled={isSubmitting || isPreview || !online.online}
+					disabled={isSubmitting || isPreview}
 				/>
 			</div>
 
@@ -316,7 +316,8 @@
 							isLexicalEmpty(contentJson) ||
 							contentJson.length > MAX_CONTENT_SIZE ||
 							isSubmitting ||
-							isPreview}
+							isPreview ||
+							!online.online}
 					>
 						{#if isSubmitting}
 							<span class="loading loading-spinner loading-xs"></span>

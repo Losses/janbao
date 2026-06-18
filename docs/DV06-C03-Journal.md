@@ -101,3 +101,33 @@ round 2.
 - Gate: check 0/0, lint exit 0, build exit 0. See RV06-C03-Audit-03.md.
 - Advancing to round 4 targeting 5/5 UNCONDITIONAL_PASS. All primary
   authoring/messaging/list surfaces are now gated.
+
+## Round 4
+
+- 5 agents. Verdict: 0/5 unconditional (A PASS_WITH_NOTES; B/C/D CONDITIONAL; E FAIL).
+- MAJOR consensus (B/C/D/E): the **editDiscussion Update submit button** still lacked the
+  offline gate - the round-3 `isPreview}` regex had landed on a _preview toggle_ button
+  instead. Fixed: reverted that + gated the correct Update button.
+- MAJOR (A/B/C/E): the **`/messages/[id]` add-participant form** (sibling to the gated
+  PrivateMessageWindow) was unguarded. Fixed: gated the submit button offline.
+- MINOR (A/E): `messages/new` send-button disabled predicate gained `!online.online`.
+- Carry-over reaffirmed: DiscussionListPage (home/discussions/category read-only lists,
+  SW-covered; compose CTA → disabled /post/discussion) - single-agent (E) finding,
+  accepted as read-only/no-write-dead-end. Other prior carry-overs unchanged.
+- Gate: check 0/0, lint exit 0, build exit 0. See RV06-C03-Audit-04.md.
+- Advancing to round 5 targeting 5/5 UNCONDITIONAL_PASS.
+
+## Round 5
+
+- 5 agents. Verdict: 2/5 UNCONDITIONAL_PASS (A, B); C/D PASS (LOW polish); E CONDITIONAL.
+- CRITICAL (E): the **profile main page's directed-activity composer** (`profile/[userId]/[userSlug]`)
+  fired `/api/activities` offline - a primary viewing page, not the profile-EDIT forms in
+  the carry-over set. Fixed: function + submit button gated offline.
+- MINOR: post/discussion `saveDraftManual` fn-guard (parity); PrivateMessageWindow Edit
+  button visual `disabled` (startEdit already guarded).
+- Carry-overs reaffirmed: DiscussionListPage (read-only, SW-covered); admin/entry/
+  profile-EDIT forms (distinct from the now-fixed profile composer); moderator delete/pin;
+  RichTextToolbar upload; ActivityComments; sidebar/mobile nav; BookmarkTooltip;
+  ActivityRow delete; list reconnect; inbox new-message link (nav → disabled page).
+- Gate: check 0/0, lint exit 0, build exit 0. See RV06-C03-Audit-05.md.
+- Advancing to round 6 targeting 5/5 UNCONDITIONAL_PASS.

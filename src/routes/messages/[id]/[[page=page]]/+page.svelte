@@ -10,12 +10,15 @@
 	import { enhance } from '$app/forms';
 	import type { UserSearchResult, ParticipantItem } from '$lib/types/api';
 	import type { PageData } from './$types';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 
 	interface PageProps {
 		data: PageData;
 	}
 
 	let { data }: PageProps = $props();
+
+	const online = getOnlineStore();
 
 	const t = $derived(data.t);
 	const messageT = $derived(t.message);
@@ -137,7 +140,7 @@
 				<button
 					type="submit"
 					class="btn btn-primary btn-sm w-full"
-					disabled={pendingParticipants.length === 0}
+					disabled={pendingParticipants.length === 0 || !online.online}
 				>
 					{messageT.addParticipant}
 				</button>

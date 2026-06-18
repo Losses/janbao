@@ -173,7 +173,8 @@
 						recipients.length === 0 ||
 						!title.trim() ||
 						isLexicalEmpty(content) ||
-						content.length > MAX_CONTENT_SIZE}
+						content.length > MAX_CONTENT_SIZE ||
+						!online.online}
 				>
 					{#if sending}
 						<span class="loading loading-spinner loading-xs"></span>

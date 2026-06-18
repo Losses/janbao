@@ -179,6 +179,7 @@
 							<button
 								type="button"
 								class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
+								disabled={!online.online}
 								onclick={() => startEdit(msg)}
 							>
 								{t.common.edit}

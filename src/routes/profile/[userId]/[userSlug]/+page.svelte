@@ -10,12 +10,15 @@
 	import { generateSlug } from '$lib/utils/slug';
 	import { mdiArrowRight } from '@mdi/js';
 	import type { PageData } from './$types';
+	import { getOnlineStore } from '$lib/stores/online.svelte';
 
 	interface PageProps {
 		data: PageData;
 	}
 
 	let { data }: PageProps = $props();
+
+	const online = getOnlineStore();
 
 	const t = $derived(data.t);
 	const profileT = $derived(t.profile);
@@ -37,6 +40,7 @@
 	}
 
 	async function submitDirectedActivity() {
+		if (!online.online) return;
 		if (!editorContent.trim()) return;
 		submitting = true;
 		try {
@@ -109,7 +113,7 @@
 					<button
 						class="btn btn-primary btn-sm"
 						onclick={submitDirectedActivity}
-						disabled={submitting || !editorContent.trim()}
+						disabled={submitting || !editorContent.trim() || !online.online}
 					>
 						{submitting ? t.common.saving : t.common.submit}
 					</button>
