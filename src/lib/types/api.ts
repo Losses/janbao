@@ -440,8 +440,8 @@ export interface SyncTombstoneDTO {
 export interface SyncCursors {
 	discussions: string;
 	replies: string;
-	discussionTombstoneAfter: number;
-	replyTombstoneAfter: number;
+	discussionTombstoneCursor: string;
+	replyTombstoneCursor: string;
 }
 
 export interface SyncHasMore {

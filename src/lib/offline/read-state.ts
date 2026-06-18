@@ -57,14 +57,18 @@ export async function flushPendingReadState(): Promise<void> {
 		const body = (await res.json()) as SyncReadStateResponse;
 
 		// Reconcile merged display state with server winners BEFORE clearing the
-		// outbox, so a failure here doesn't lose the outbox rows we still need.
+		// outbox. Apply last-write-wins here too: a local read recorded after this
+		// batch was sent may be newer than the server's conflicting position.
 		for (const c of body.conflicts) {
-			await db.readStateMerged.put({
-				discussionId: c.discussionId,
-				lastReadReplyId: c.serverLastReadReplyId,
-				lastReadPage: 1,
-				lastReadAt: c.serverLastReadAt
-			});
+			const existing = await db.readStateMerged.get(c.discussionId);
+			if (!existing || existing.lastReadAt <= c.serverLastReadAt) {
+				await db.readStateMerged.put({
+					discussionId: c.discussionId,
+					lastReadReplyId: c.serverLastReadReplyId,
+					lastReadPage: 1,
+					lastReadAt: c.serverLastReadAt
+				});
+			}
 		}
 		// Drain the outbox per discussion up to and including the sent read.
 		// The compound range preserves any newer read recorded during the flush

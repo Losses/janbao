@@ -108,15 +108,17 @@ export async function getDeltaReplies(
 	}));
 }
 
-// Tombstones are scoped to the caller's readable categories so the sync stream
-// can't leak the existence/deletion-timing of discussions in private categories.
+// Tombstones use the same (deletedAt, id) compound cursor as the delta streams so
+// a same-second delete tie group can't be dropped at a page boundary. Scoped to
+// readable categories so the stream can't leak the existence/deletion-timing of
+// discussions in private categories.
 export async function getDiscussionTombstones(
 	db: D1Db,
-	afterTs: number,
-	limit: number,
+	query: DeltaQuery,
 	readableSlugs: string[]
 ): Promise<SyncTombstoneDTO[]> {
 	if (readableSlugs.length === 0) return [];
+	const since = new Date(query.sinceTs * 1000);
 	const rows = await db
 		.select({ id: discussions.id, deletedAt: discussions.deletedAt })
 		.from(discussions)
@@ -124,22 +126,25 @@ export async function getDiscussionTombstones(
 		.where(
 			and(
 				isNotNull(discussions.deletedAt),
-				gt(discussions.deletedAt, new Date(afterTs * 1000)),
-				inArray(discussions.categorySlug, readableSlugs)
+				inArray(discussions.categorySlug, readableSlugs),
+				or(
+					gt(discussions.deletedAt, since),
+					and(eq(discussions.deletedAt, since), gt(discussions.id, query.sinceId))
+				)
 			)
 		)
-		.orderBy(discussions.deletedAt)
-		.limit(limit);
+		.orderBy(discussions.deletedAt, discussions.id)
+		.limit(query.limit);
 	return rows.map((r) => ({ id: r.id, deletedAt: r.deletedAt ? toSeconds(r.deletedAt) : 0 }));
 }
 
 export async function getReplyTombstones(
 	db: D1Db,
-	afterTs: number,
-	limit: number,
+	query: DeltaQuery,
 	readableSlugs: string[]
 ): Promise<SyncTombstoneDTO[]> {
 	if (readableSlugs.length === 0) return [];
+	const since = new Date(query.sinceTs * 1000);
 	const rows = await db
 		.select({ id: replies.id, deletedAt: replies.deletedAt })
 		.from(replies)
@@ -147,12 +152,15 @@ export async function getReplyTombstones(
 		.where(
 			and(
 				isNotNull(replies.deletedAt),
-				gt(replies.deletedAt, new Date(afterTs * 1000)),
-				inArray(discussions.categorySlug, readableSlugs)
+				inArray(discussions.categorySlug, readableSlugs),
+				or(
+					gt(replies.deletedAt, since),
+					and(eq(replies.deletedAt, since), gt(replies.id, query.sinceId))
+				)
 			)
 		)
-		.orderBy(replies.deletedAt)
-		.limit(limit);
+		.orderBy(replies.deletedAt, replies.id)
+		.limit(query.limit);
 	return rows.map((r) => ({ id: r.id, deletedAt: r.deletedAt ? toSeconds(r.deletedAt) : 0 }));
 }
 

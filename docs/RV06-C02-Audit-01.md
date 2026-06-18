@@ -61,7 +61,7 @@ Agent C surfaced two additional scope/ordering MAJORs that were real.
 - `applyReadStateDeltas` issues N sequential SELECT + UPSERT per call (up to
   `MAX_DELTAS=200`); a batched CTE upsert would reduce latency. Performance, not
   correctness; the pre-check is also belt-and-suspenders with the `ON CONFLICT …
-  WHERE` clause. (Several agents.)
+WHERE` clause. (Several agents.)
 - Offline reader is single-page (`lastReadPage=1`, renders all cached replies) -
   acceptable for an offline reader; the online route paginates. (Several.)
 - `applied` counter may over-count on a no-op upsert (concurrent read won between

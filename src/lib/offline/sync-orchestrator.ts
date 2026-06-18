@@ -30,8 +30,8 @@ async function doSync(): Promise<SyncResult> {
 	const stored = meta?.value as SyncCursors | null;
 	let discussionsCursor = stored?.discussions;
 	let repliesCursor = stored?.replies;
-	let discussionTombstoneAfter = stored?.discussionTombstoneAfter ?? 0;
-	let replyTombstoneAfter = stored?.replyTombstoneAfter ?? 0;
+	let discussionTombstoneCursor = stored?.discussionTombstoneCursor;
+	let replyTombstoneCursor = stored?.replyTombstoneCursor;
 
 	let totalDisc = 0;
 	let totalRep = 0;
@@ -41,8 +41,9 @@ async function doSync(): Promise<SyncResult> {
 		const params = new URLSearchParams({ limit: String(PAGE_LIMIT) });
 		if (discussionsCursor) params.set('discussionsCursor', discussionsCursor);
 		if (repliesCursor) params.set('repliesCursor', repliesCursor);
-		params.set('discussionTombstoneAfter', String(discussionTombstoneAfter));
-		params.set('replyTombstoneAfter', String(replyTombstoneAfter));
+		if (discussionTombstoneCursor)
+			params.set('discussionTombstoneCursor', discussionTombstoneCursor);
+		if (replyTombstoneCursor) params.set('replyTombstoneCursor', replyTombstoneCursor);
 
 		const res = await fetch(`/api/sync/content?${params.toString()}`);
 		if (!res.ok) throw new Error(`content sync failed: ${res.status}`);
@@ -70,8 +71,8 @@ async function doSync(): Promise<SyncResult> {
 		const cursors: SyncCursors = data.cursors;
 		discussionsCursor = cursors.discussions;
 		repliesCursor = cursors.replies;
-		discussionTombstoneAfter = cursors.discussionTombstoneAfter;
-		replyTombstoneAfter = cursors.replyTombstoneAfter;
+		discussionTombstoneCursor = cursors.discussionTombstoneCursor;
+		replyTombstoneCursor = cursors.replyTombstoneCursor;
 		await db.syncMeta.bulkPut([
 			{ key: 'cursors', value: cursors },
 			{ key: 'retentionDays', value: data.retentionDays },

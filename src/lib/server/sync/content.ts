@@ -19,9 +19,10 @@ interface CursorParts {
 	id: number;
 }
 
-// Cursors are "<updatedAtSeconds>:<id>" high-water-marks. On the first sync (no
-// cursor) we look back INITIAL_LOOKBACK_DAYS so the initial population isn't a full
-// table scan of all history - subsequent syncs are strict deltas from the cursor.
+// All four streams use the same compound "<seconds>:<id>" high-water-mark cursor
+// so a same-second tie group at a page boundary can't drop rows (the id
+// tiebreaker is monotonic). On the first sync (no cursor) every stream looks back
+// INITIAL_LOOKBACK_DAYS so initial population isn't a full history scan.
 const INITIAL_LOOKBACK_DAYS = 30;
 
 const DAY_SECONDS = 86400;
@@ -45,8 +46,8 @@ interface ContentSyncInput {
 	userId: number;
 	discussionsCursor?: string;
 	repliesCursor?: string;
-	discussionTombstoneAfter?: number;
-	replyTombstoneAfter?: number;
+	discussionTombstoneCursor?: string;
+	replyTombstoneCursor?: string;
 	limit: number;
 	platformEnv: App.Platform['env'] | undefined;
 }
@@ -57,10 +58,8 @@ export async function buildContentSync(input: ContentSyncInput): Promise<SyncCon
 
 	const dCur = parseCursor(input.discussionsCursor, lookback);
 	const rCur = parseCursor(input.repliesCursor, lookback);
-	// Each tombstone stream has its own cursor so a fast-filling stream can't
-	// advance the watermark past tombstones the slower stream hasn't shipped yet.
-	const tAfterD = input.discussionTombstoneAfter ?? lookback;
-	const tAfterR = input.replyTombstoneAfter ?? lookback;
+	const dtCur = parseCursor(input.discussionTombstoneCursor, lookback);
+	const rtCur = parseCursor(input.replyTombstoneCursor, lookback);
 
 	const readableSlugs = await getReadableCategorySlugs(input.db, input.groupSlug);
 
@@ -75,8 +74,16 @@ export async function buildContentSync(input: ContentSyncInput): Promise<SyncCon
 			{ sinceTs: rCur.ts, sinceId: rCur.id, limit: input.limit },
 			readableSlugs
 		),
-		getDiscussionTombstones(input.db, tAfterD, input.limit, readableSlugs),
-		getReplyTombstones(input.db, tAfterR, input.limit, readableSlugs),
+		getDiscussionTombstones(
+			input.db,
+			{ sinceTs: dtCur.ts, sinceId: dtCur.id, limit: input.limit },
+			readableSlugs
+		),
+		getReplyTombstones(
+			input.db,
+			{ sinceTs: rtCur.ts, sinceId: rtCur.id, limit: input.limit },
+			readableSlugs
+		),
 		getFrontPageDiscussionIds(input.db, getDiscussionsLimit(input.platformEnv), readableSlugs),
 		getBookmarkedDiscussionIds(input.db, input.userId, readableSlugs)
 	]);
@@ -87,16 +94,19 @@ export async function buildContentSync(input: ContentSyncInput): Promise<SyncCon
 	const lastRTomb = rTomb[rTomb.length - 1];
 
 	// Advance each cursor only to the last item actually returned; an empty page
-	// leaves the cursor unchanged so the client stops paging that stream. Each
-	// tombstone cursor advances only on its own stream's last row.
+	// leaves the cursor unchanged so the client stops paging that stream.
 	const newDiscCursor = lastDisc
 		? formatCursor(lastDisc.updatedAt, lastDisc.id)
 		: (input.discussionsCursor ?? formatCursor(dCur.ts, dCur.id));
 	const newRepCursor = lastRep
 		? formatCursor(lastRep.updatedAt, lastRep.id)
 		: (input.repliesCursor ?? formatCursor(rCur.ts, rCur.id));
-	const newDTombAfter = lastDTomb ? Math.max(tAfterD, lastDTomb.deletedAt) : tAfterD;
-	const newRTombAfter = lastRTomb ? Math.max(tAfterR, lastRTomb.deletedAt) : tAfterR;
+	const newDTombCursor = lastDTomb
+		? formatCursor(lastDTomb.deletedAt, lastDTomb.id)
+		: (input.discussionTombstoneCursor ?? formatCursor(dtCur.ts, dtCur.id));
+	const newRTombCursor = lastRTomb
+		? formatCursor(lastRTomb.deletedAt, lastRTomb.id)
+		: (input.replyTombstoneCursor ?? formatCursor(rtCur.ts, rtCur.id));
 
 	return {
 		discussions: disc,
@@ -108,8 +118,8 @@ export async function buildContentSync(input: ContentSyncInput): Promise<SyncCon
 		cursors: {
 			discussions: newDiscCursor,
 			replies: newRepCursor,
-			discussionTombstoneAfter: newDTombAfter,
-			replyTombstoneAfter: newRTombAfter
+			discussionTombstoneCursor: newDTombCursor,
+			replyTombstoneCursor: newRTombCursor
 		},
 		hasMore: {
 			discussions: disc.length >= input.limit,
