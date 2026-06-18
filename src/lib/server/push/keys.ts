@@ -20,6 +20,8 @@
  * impersonate the server.
  */
 
+import { env } from '$env/dynamic/private';
+
 export interface VapidKeyMaterial {
 	/** 65-byte uncompressed P-256 public key (0x04 || X || Y). */
 	publicKey: Uint8Array;
@@ -60,9 +62,9 @@ async function loadOrGenerateDevKeypair(): Promise<VapidKeyMaterial> {
 export async function getVapidKeys(
 	platformEnv: App.Platform['env'] | undefined
 ): Promise<VapidKeyMaterial> {
-	const publicKeyB64Url = platformEnv?.VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY;
-	const privateKeyB64Url = platformEnv?.VAPID_PRIVATE_KEY || process.env.VAPID_PRIVATE_KEY;
-	const subject = platformEnv?.VAPID_SUBJECT || process.env.VAPID_SUBJECT;
+	const publicKeyB64Url = platformEnv?.VAPID_PUBLIC_KEY || env.VAPID_PUBLIC_KEY;
+	const privateKeyB64Url = platformEnv?.VAPID_PRIVATE_KEY || env.VAPID_PRIVATE_KEY;
+	const subject = platformEnv?.VAPID_SUBJECT || env.VAPID_SUBJECT;
 
 	if (publicKeyB64Url && privateKeyB64Url && subject) {
 		return {
@@ -94,7 +96,7 @@ export async function getVapidKeys(
 export function getVapidPublicKeyBase64Url(
 	platformEnv: App.Platform['env'] | undefined
 ): string | null {
-	const publicKeyB64Url = platformEnv?.VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY;
+	const publicKeyB64Url = platformEnv?.VAPID_PUBLIC_KEY || env.VAPID_PUBLIC_KEY;
 	if (publicKeyB64Url) return publicKeyB64Url;
 	// In dev, expose the cached dev public key if one has been generated.
 	if (import.meta.env.DEV && cachedDevKeypair) {
