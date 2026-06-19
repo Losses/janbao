@@ -1,5 +1,5 @@
 import { discussions, users, bookmarks, discussionReads, replies, categories } from '../schema';
-import { eq, and, isNull, desc, sql, count, inArray } from 'drizzle-orm';
+import { eq, and, or, gt, isNull, desc, sql, count, inArray } from 'drizzle-orm';
 import type { D1Db } from '../index';
 import { getReadableCategorySlugs } from '$lib/server/constants';
 
@@ -38,10 +38,9 @@ interface LastReplyAuthor {
 	displayName: string;
 }
 
-interface RecentReplyRow {
-	id: number;
+interface UnreadCountRow {
 	discussionId: number;
-	createdAt: Date;
+	count: number;
 }
 
 // Curated category sort modes. `latest` mirrors the live homepage
@@ -193,51 +192,59 @@ export async function getDiscussionsList(
 		userId !== null && userId !== undefined ? rows.filter((r) => r.lastReadAt !== null) : [];
 	const readIds = readDiscussions.map((r) => r.id);
 
-	const latestReplySubq = db
-		.select({
-			discussionId: replies.discussionId,
-			maxCreatedAt: sql<Date>`MAX(${replies.createdAt})`.as('max_created_at')
-		})
-		.from(replies)
-		.where(and(inArray(replies.discussionId, discussionIds), isNull(replies.deletedAt)))
-		.groupBy(replies.discussionId)
-		.as('latest_reply');
-
 	const lastReplyAuthorsPromise = db
 		.select({
-			discussionId: latestReplySubq.discussionId,
+			discussionId: replies.discussionId,
 			authorId: users.id,
 			authorUsername: users.username,
 			authorDisplayName: users.displayName
 		})
-		.from(latestReplySubq)
-		.innerJoin(
-			replies,
+		.from(replies)
+		.innerJoin(users, eq(replies.authorId, users.id))
+		.where(
 			and(
-				eq(replies.discussionId, latestReplySubq.discussionId),
-				eq(replies.createdAt, latestReplySubq.maxCreatedAt),
+				or(
+					...rows.map((r) =>
+						and(eq(replies.discussionId, r.id), eq(replies.createdAt, r.lastReplyAt ?? r.createdAt))
+					)
+				),
 				isNull(replies.deletedAt)
 			)
-		)
-		.innerJoin(users, eq(replies.authorId, users.id));
+		);
 
-	// Only opened discussions need a fresh reply fetch; never-opened ones reuse
+	// Only opened discussions need a fresh reply count; never-opened ones reuse
 	// commentCount. Resolve to an empty array so the parallel await stays uniform.
-	const recentRepliesPromise: Promise<RecentReplyRow[]> =
+	const unreadCountsPromise: Promise<UnreadCountRow[]> =
 		readIds.length > 0
 			? db
 					.select({
-						id: replies.id,
 						discussionId: replies.discussionId,
-						createdAt: replies.createdAt
+						count: count()
 					})
 					.from(replies)
-					.where(and(inArray(replies.discussionId, readIds), isNull(replies.deletedAt)))
+					.where(
+						and(
+							or(
+								...readDiscussions.map((d) => {
+									if (d.lastReadReplyId !== null && d.lastReadReplyId !== undefined) {
+										return and(eq(replies.discussionId, d.id), gt(replies.id, d.lastReadReplyId));
+									} else {
+										return and(
+											eq(replies.discussionId, d.id),
+											gt(replies.createdAt, d.lastReadAt!)
+										);
+									}
+								})
+							),
+							isNull(replies.deletedAt)
+						)
+					)
+					.groupBy(replies.discussionId)
 			: Promise.resolve([]);
 
-	const [lastReplyAuthors, allRecentReplies] = await Promise.all([
+	const [lastReplyAuthors, unreadCounts] = await Promise.all([
 		lastReplyAuthorsPromise,
-		recentRepliesPromise
+		unreadCountsPromise
 	]);
 
 	const lastReplyMap = new Map<number, LastReplyAuthor>();
@@ -256,29 +263,12 @@ export async function getDiscussionsList(
 			unreadMap.set(row.id, row.commentCount);
 		}
 
-		// Opened discussions: count fetched replies past each one's lastReadReplyId
-		// (preferred) or lastReadAt threshold. Filtered in-memory because every
-		// discussion has its own threshold; a single IN(...) fetch keeps lookups indexed.
-		if (readIds.length > 0) {
-			const readAtMap = new Map<number, Date>();
-			const readReplyIdMap = new Map<number, number | null>();
-			for (const row of readDiscussions) {
-				readAtMap.set(row.id, row.lastReadAt!);
-				readReplyIdMap.set(row.id, row.lastReadReplyId);
-			}
-
-			for (const did of readIds) {
-				const threshold = readAtMap.get(did)!;
-				const lastReadReplyId = readReplyIdMap.get(did);
-				const cnt = allRecentReplies.filter((r) => {
-					if (r.discussionId !== did) return false;
-					if (lastReadReplyId !== null && lastReadReplyId !== undefined) {
-						return r.id > lastReadReplyId;
-					}
-					return r.createdAt > threshold;
-				}).length;
-				unreadMap.set(did, cnt);
-			}
+		// Opened discussions: initialize to 0, then update with counts from database.
+		for (const did of readIds) {
+			unreadMap.set(did, 0);
+		}
+		for (const row of unreadCounts) {
+			unreadMap.set(row.discussionId, row.count);
 		}
 	}
 
