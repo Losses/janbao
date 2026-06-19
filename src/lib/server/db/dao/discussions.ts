@@ -180,8 +180,6 @@ export async function getDiscussionsList(
 		return [];
 	}
 
-	const discussionIds = rows.map((r) => r.id);
-
 	// Two batch queries follow the main fetch, and neither depends on the other:
 	//   1. latest-reply author per discussion (self-join on MAX(replies.createdAt))
 	//   2. recent replies for read discussions, to derive per-discussion unread counts.
@@ -202,13 +200,14 @@ export async function getDiscussionsList(
 		.from(replies)
 		.innerJoin(users, eq(replies.authorId, users.id))
 		.where(
-			and(
-				or(
-					...rows.map((r) =>
-						and(eq(replies.discussionId, r.id), eq(replies.createdAt, r.lastReplyAt ?? r.createdAt))
+			or(
+				...rows.map((r) =>
+					and(
+						eq(replies.discussionId, r.id),
+						eq(replies.createdAt, r.lastReplyAt ?? r.createdAt),
+						isNull(replies.deletedAt)
 					)
-				),
-				isNull(replies.deletedAt)
+				)
 			)
 		);
 
@@ -223,20 +222,22 @@ export async function getDiscussionsList(
 					})
 					.from(replies)
 					.where(
-						and(
-							or(
-								...readDiscussions.map((d) => {
-									if (d.lastReadReplyId !== null && d.lastReadReplyId !== undefined) {
-										return and(eq(replies.discussionId, d.id), gt(replies.id, d.lastReadReplyId));
-									} else {
-										return and(
-											eq(replies.discussionId, d.id),
-											gt(replies.createdAt, d.lastReadAt!)
-										);
-									}
-								})
-							),
-							isNull(replies.deletedAt)
+						or(
+							...readDiscussions.map((d) => {
+								if (d.lastReadReplyId !== null && d.lastReadReplyId !== undefined) {
+									return and(
+										eq(replies.discussionId, d.id),
+										gt(replies.id, d.lastReadReplyId),
+										isNull(replies.deletedAt)
+									);
+								} else {
+									return and(
+										eq(replies.discussionId, d.id),
+										gt(replies.createdAt, d.lastReadAt!),
+										isNull(replies.deletedAt)
+									);
+								}
+							})
 						)
 					)
 					.groupBy(replies.discussionId)
