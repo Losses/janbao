@@ -38,6 +38,12 @@ interface LastReplyAuthor {
 	displayName: string;
 }
 
+interface RecentReplyRow {
+	id: number;
+	discussionId: number;
+	createdAt: Date;
+}
+
 // Curated category sort modes. `latest` mirrors the live homepage
 // (isPinned DESC, lastReplyAt DESC); the two metric sorts order by the raw
 // counter with no pinned promotion, matching the DV07 spec for the offline
@@ -53,12 +59,21 @@ export interface GetDiscussionsListOptions {
 	groupSlug?: string;
 	// Defaults to 'latest' so every existing caller keeps current behavior.
 	sort?: DiscussionSort;
+	// Optional pre-resolved readable-category slug set. When provided, the list's
+	// read-access post-filter reuses it instead of re-querying. Pass-through from
+	// {@link loadDiscussionsPage} so the shared helper fetches slugs once for both
+	// list and count. Omit to let the filter fetch it internally.
+	readableSlugs?: string[];
 }
 
 interface GetDiscussionsCountOptions {
 	categorySlug?: string | null;
 	authorId?: number | null;
 	groupSlug?: string;
+	// Optional pre-resolved readable-category slug set; mirrors
+	// {@link GetDiscussionsListOptions.readableSlugs} so the count can skip its
+	// own getReadableCategorySlugs fetch when a caller already has the set.
+	readableSlugs?: string[];
 }
 
 /**
@@ -76,7 +91,7 @@ export async function getDiscussionsList(
 	db: D1Db,
 	options: GetDiscussionsListOptions
 ): Promise<DiscussionListItem[]> {
-	const { userId, categorySlug, authorId, limit, offset, groupSlug } = options;
+	const { userId, categorySlug, authorId, limit, offset, groupSlug, readableSlugs } = options;
 	const sort: DiscussionSort = options.sort ?? 'latest';
 
 	// Build the select query
@@ -159,7 +174,7 @@ export async function getDiscussionsList(
 
 	// Security: Filter out discussions from categories the user/guest cannot read
 	if (groupSlug) {
-		rows = await filterByCategoryReadAccess(db, rows, groupSlug);
+		rows = await filterByCategoryReadAccess(db, rows, groupSlug, readableSlugs);
 	}
 
 	if (rows.length === 0) {
@@ -168,9 +183,16 @@ export async function getDiscussionsList(
 
 	const discussionIds = rows.map((r) => r.id);
 
-	// Batch query 1: For each discussion, find the latest reply's id via MAX(createdAt),
-	// then join back to get the author's displayName.
-	// This uses a self-join pattern on the replies table.
+	// Two batch queries follow the main fetch, and neither depends on the other:
+	//   1. latest-reply author per discussion (self-join on MAX(replies.createdAt))
+	//   2. recent replies for read discussions, to derive per-discussion unread counts.
+	// Kick both off together and await once, instead of two sequential round-trips.
+	// Pre-compute the read/unread split so we know whether batch 2 is needed before
+	// awaiting anything; unread-by-default discussions reuse commentCount below.
+	const readDiscussions =
+		userId !== null && userId !== undefined ? rows.filter((r) => r.lastReadAt !== null) : [];
+	const readIds = readDiscussions.map((r) => r.id);
+
 	const latestReplySubq = db
 		.select({
 			discussionId: replies.discussionId,
@@ -181,7 +203,7 @@ export async function getDiscussionsList(
 		.groupBy(replies.discussionId)
 		.as('latest_reply');
 
-	const lastReplyAuthors = await db
+	const lastReplyAuthorsPromise = db
 		.select({
 			discussionId: latestReplySubq.discussionId,
 			authorId: users.id,
@@ -199,6 +221,25 @@ export async function getDiscussionsList(
 		)
 		.innerJoin(users, eq(replies.authorId, users.id));
 
+	// Only opened discussions need a fresh reply fetch; never-opened ones reuse
+	// commentCount. Resolve to an empty array so the parallel await stays uniform.
+	const recentRepliesPromise: Promise<RecentReplyRow[]> =
+		readIds.length > 0
+			? db
+					.select({
+						id: replies.id,
+						discussionId: replies.discussionId,
+						createdAt: replies.createdAt
+					})
+					.from(replies)
+					.where(and(inArray(replies.discussionId, readIds), isNull(replies.deletedAt)))
+			: Promise.resolve([]);
+
+	const [lastReplyAuthors, allRecentReplies] = await Promise.all([
+		lastReplyAuthorsPromise,
+		recentRepliesPromise
+	]);
+
 	const lastReplyMap = new Map<number, LastReplyAuthor>();
 	for (const row of lastReplyAuthors) {
 		lastReplyMap.set(row.discussionId, {
@@ -208,25 +249,16 @@ export async function getDiscussionsList(
 		});
 	}
 
-	// Batch query 2: Unread counts per discussion (only when userId present)
-	// For discussions the user has read, count replies newer than lastReadAt.
-	// For discussions the user has never read, use commentCount directly.
 	const unreadMap = new Map<number, number>();
 	if (userId !== null && userId !== undefined) {
-		// Separate into "read" and "unread" discussion sets
-		const readDiscussions = rows.filter((r) => r.lastReadAt !== null);
-		const unreadDiscussions = rows.filter((r) => r.lastReadAt === null);
-
-		// Unread discussions: all replies are unread
-		for (const row of unreadDiscussions) {
+		// Discussions the user has never opened: every reply counts as unread.
+		for (const row of rows.filter((r) => r.lastReadAt === null)) {
 			unreadMap.set(row.id, row.commentCount);
 		}
 
-		// Read discussions: batch count replies newer than each discussion's lastReadAt or lastReadReplyId
-		// Since each discussion has a different lastReadAt timestamp or lastReadReplyId, we run one query per
-		// discussion but use IN(...) for the discussionIds to keep index lookups efficient.
-		// This is a controlled pattern: max 20 queries, each hitting the composite index.
-		const readIds = readDiscussions.map((r) => r.id);
+		// Opened discussions: count fetched replies past each one's lastReadReplyId
+		// (preferred) or lastReadAt threshold. Filtered in-memory because every
+		// discussion has its own threshold; a single IN(...) fetch keeps lookups indexed.
 		if (readIds.length > 0) {
 			const readAtMap = new Map<number, Date>();
 			const readReplyIdMap = new Map<number, number | null>();
@@ -234,18 +266,6 @@ export async function getDiscussionsList(
 				readAtMap.set(row.id, row.lastReadAt!);
 				readReplyIdMap.set(row.id, row.lastReadReplyId);
 			}
-
-			// Fetch all non-deleted replies for these discussions created after their respective
-			// lastReadAt or lastReadReplyId. We use a union-like approach: fetch all replies for these discussions
-			// and filter in-memory since each discussion has a different threshold.
-			const allRecentReplies = await db
-				.select({
-					id: replies.id,
-					discussionId: replies.discussionId,
-					createdAt: replies.createdAt
-				})
-				.from(replies)
-				.where(and(inArray(replies.discussionId, readIds), isNull(replies.deletedAt)));
 
 			for (const did of readIds) {
 				const threshold = readAtMap.get(did)!;
@@ -302,7 +322,7 @@ export async function getDiscussionsCount(
 	db: D1Db,
 	options: GetDiscussionsCountOptions = {}
 ): Promise<number> {
-	const { categorySlug, authorId, groupSlug } = options;
+	const { categorySlug, authorId, groupSlug, readableSlugs } = options;
 
 	const whereClauses = [isNull(discussions.deletedAt), isNull(categories.disabledAt)];
 	if (categorySlug) {
@@ -313,9 +333,9 @@ export async function getDiscussionsCount(
 	}
 
 	if (groupSlug && !categorySlug) {
-		const readableSlugs = await getReadableCategorySlugs(db, groupSlug);
+		const resolvedSlugs = readableSlugs ?? (await getReadableCategorySlugs(db, groupSlug));
 		whereClauses.push(
-			readableSlugs.length > 0 ? inArray(discussions.categorySlug, readableSlugs) : sql`1 = 0`
+			resolvedSlugs.length > 0 ? inArray(discussions.categorySlug, resolvedSlugs) : sql`1 = 0`
 		);
 	}
 
@@ -346,8 +366,17 @@ export async function loadDiscussionsPage(
 ): Promise<DiscussionsPageResult> {
 	const { categorySlug, authorId, groupSlug, limit } = options;
 
-	const discussions = await getDiscussionsList(db, options);
-	const totalCount = await getDiscussionsCount(db, { categorySlug, authorId, groupSlug });
+	// Resolve the readable-category slug set once and share it between the list's
+	// post-filter and the count query. getReadableCategorySlugs is two sequential
+	// queries; computing it here avoids running that pair twice per page load.
+	const readableSlugs = groupSlug ? await getReadableCategorySlugs(db, groupSlug) : undefined;
+
+	// The list and the total count have no data dependency on each other, so run
+	// them concurrently rather than awaiting one before starting the other.
+	const [discussions, totalCount] = await Promise.all([
+		getDiscussionsList(db, { ...options, readableSlugs }),
+		getDiscussionsCount(db, { categorySlug, authorId, groupSlug, readableSlugs })
+	]);
 	const totalPages = Math.ceil(totalCount / limit);
 
 	return { discussions, totalPages, totalCount };
@@ -360,9 +389,10 @@ export async function loadDiscussionsPage(
 async function filterByCategoryReadAccess<T extends { categorySlug: string }>(
 	db: D1Db,
 	rows: T[],
-	groupSlug: string
+	groupSlug: string,
+	readableSlugs?: string[]
 ): Promise<T[]> {
-	const readableSlugs = await getReadableCategorySlugs(db, groupSlug);
-	const readableSet = new Set(readableSlugs);
+	const resolvedSlugs = readableSlugs ?? (await getReadableCategorySlugs(db, groupSlug));
+	const readableSet = new Set(resolvedSlugs);
 	return rows.filter((row) => readableSet.has(row.categorySlug));
 }

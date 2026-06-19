@@ -3,6 +3,7 @@
 	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
 	import PageTitle from '$lib/components/molecules/PageTitle.svelte';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
+	import Field from '$lib/components/atoms/Field.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import type { ApiResult, FeedbackMessage } from '$lib/types/api';
 	import type { PageData } from './$types';
@@ -134,18 +135,15 @@
 			<!-- Upload Form -->
 			<form onsubmit={handleSubmit}>
 				<fieldset disabled={!online.online} class="space-y-4">
-					<div class="form-control">
-						<label class="label" for="avatar-file">
-							<span class="label-text font-medium">{profileT.selectFile}</span>
-						</label>
+					<Field id="avatar-file" label={profileT.selectFile}>
 						<input
 							id="avatar-file"
 							type="file"
-							class="file-input file-input-bordered"
+							class="file-input file-input-bordered w-full"
 							accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp"
 							bind:this={fileInput}
 						/>
-					</div>
+					</Field>
 
 					<div class="pt-2">
 						<button type="submit" class="btn btn-primary" disabled={saving}>

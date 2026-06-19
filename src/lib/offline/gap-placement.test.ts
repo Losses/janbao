@@ -28,6 +28,7 @@ test('firstLast [{1,1},{10,10}]: one divider at the page-1/page-10 boundary', ()
 		cachedReplyCount: 2 * PAGE_SIZE // page 1 + page 10 = 100 replies
 	});
 	expect(res.restNotCached).toBeNull();
+	expect(res.trailingPlacement).toBeNull();
 	expect(res.placements).toEqual([
 		{ gap: gap(2, 9), beforeIndex: PAGE_SIZE, approxReplies: 8 * PAGE_SIZE }
 	]);
@@ -42,6 +43,7 @@ test('all under-cap (single complete range): no dividers, no rest hint', () => {
 		cachedReplyCount: 5 * PAGE_SIZE
 	});
 	expect(res.placements).toEqual([]);
+	expect(res.trailingPlacement).toBeNull();
 	expect(res.restNotCached).toBeNull();
 });
 
@@ -56,15 +58,18 @@ test('all over-cap [{1,5},{17,21}]: divider after the page-1..5 block', () => {
 		cachedReplyCount: 10 * PAGE_SIZE
 	});
 	expect(res.restNotCached).toBeNull();
+	expect(res.trailingPlacement).toBeNull();
 	expect(res.placements).toEqual([
 		{ gap: gap(6, 16), beforeIndex: 5 * PAGE_SIZE, approxReplies: 11 * PAGE_SIZE }
 	]);
 });
 
-test('single visited page [{3,3}]: two dividers, before and after page 3', () => {
+test('single visited page [{3,3}]: leading inline divider + trailing divider', () => {
 	// 5 pages, only page 3 cached. Gaps: [1,2] (before) and [4,5] (after).
-	// No cached replies precede the first gap → beforeIndex=0. The second gap
-	// follows all 1 cached page → beforeIndex = 1*pageSize = 50.
+	// The leading gap precedes all cached replies → inline divider at index 0.
+	// The trailing gap follows all cached replies → its slot index (50) equals
+	// cachedReplyCount, so it cannot anchor inline and is returned as
+	// trailingPlacement (the each loop only covers [0, rest.length)).
 	const res = computeGapPlacements({
 		cachedRanges: [range(3, 3)],
 		gaps: [gap(1, 2), gap(4, 5)],
@@ -74,9 +79,13 @@ test('single visited page [{3,3}]: two dividers, before and after page 3', () =>
 	});
 	expect(res.restNotCached).toBeNull();
 	expect(res.placements).toEqual([
-		{ gap: gap(1, 2), beforeIndex: 0, approxReplies: 2 * PAGE_SIZE },
-		{ gap: gap(4, 5), beforeIndex: PAGE_SIZE, approxReplies: 2 * PAGE_SIZE }
+		{ gap: gap(1, 2), beforeIndex: 0, approxReplies: 2 * PAGE_SIZE }
 	]);
+	expect(res.trailingPlacement).toEqual({
+		gap: gap(4, 5),
+		beforeIndex: PAGE_SIZE,
+		approxReplies: 2 * PAGE_SIZE
+	});
 });
 
 test('OP-only (no cached ranges): single trailing restNotCached hint', () => {
@@ -90,6 +99,7 @@ test('OP-only (no cached ranges): single trailing restNotCached hint', () => {
 		cachedReplyCount: 0
 	});
 	expect(res.placements).toEqual([]);
+	expect(res.trailingPlacement).toBeNull();
 	expect(res.restNotCached).toEqual({
 		approxReplies: 5 * PAGE_SIZE,
 		uncachedPages: 5
@@ -107,13 +117,14 @@ test('OP-only with no gaps (degenerate 0-page thread): no hint', () => {
 		cachedReplyCount: 0
 	});
 	expect(res.placements).toEqual([]);
+	expect(res.trailingPlacement).toBeNull();
 	expect(res.restNotCached).toBeNull();
 });
 
 test('manifest slots exist but all replies evicted: fall back to restNotCached', () => {
 	// Defense: a range claims slots but cachedReplyCount=0 (every reply was
-	// evicted). Suppress inline dividers (nothing to anchor to) and surface a
-	// trailing hint instead.
+	// evicted). Suppress inline/trailing dividers (nothing to anchor to) and
+	// surface a trailing hint instead.
 	const res = computeGapPlacements({
 		cachedRanges: [range(1, 5)],
 		gaps: [gap(6, 10)],
@@ -122,15 +133,19 @@ test('manifest slots exist but all replies evicted: fall back to restNotCached',
 		cachedReplyCount: 0
 	});
 	expect(res.placements).toEqual([]);
+	expect(res.trailingPlacement).toBeNull();
 	expect(res.restNotCached).toEqual({
 		approxReplies: 5 * PAGE_SIZE,
 		uncachedPages: 5
 	});
 });
 
-test('divider clamps beforeIndex to cachedReplyCount', () => {
-	// Stale manifest: claims page 1 (50 slots) but only 10 cached replies
-	// survive. The divider must clamp to 10, not 50.
+test('stale manifest (sparse replies): oversized slot index falls to trailing divider', () => {
+	// Stale manifest claims page 1 + page 10 (100 slots) but only 10 replies
+	// survive. The sole gap's slot index (50) lands past cachedReplyCount (10),
+	// so it cannot anchor inline — instead of silently vanishing (the original
+	// clamp-to-rest.length bug) it becomes the trailing divider so the reader
+	// still sees the gap.
 	const res = computeGapPlacements({
 		cachedRanges: [range(1, 1), range(10, 10)],
 		gaps: [gap(2, 9)],
@@ -138,8 +153,12 @@ test('divider clamps beforeIndex to cachedReplyCount', () => {
 		totalPages: 10,
 		cachedReplyCount: 10
 	});
-	expect(res.placements.length).toBe(1);
-	expect(res.placements[0].beforeIndex).toBe(10);
+	expect(res.placements).toEqual([]);
+	expect(res.trailingPlacement).toEqual({
+		gap: gap(2, 9),
+		beforeIndex: 10,
+		approxReplies: 8 * PAGE_SIZE
+	});
 });
 
 test('three-range manifest: two dividers at each interior gap', () => {
@@ -152,6 +171,7 @@ test('three-range manifest: two dividers at each interior gap', () => {
 		cachedReplyCount: 3 * PAGE_SIZE
 	});
 	expect(res.restNotCached).toBeNull();
+	expect(res.trailingPlacement).toBeNull();
 	expect(res.placements).toEqual([
 		{ gap: gap(2, 4), beforeIndex: PAGE_SIZE, approxReplies: 3 * PAGE_SIZE },
 		{ gap: gap(6, 9), beforeIndex: 2 * PAGE_SIZE, approxReplies: 4 * PAGE_SIZE }

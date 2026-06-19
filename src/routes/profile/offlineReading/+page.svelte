@@ -3,8 +3,8 @@
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
 	import SettingsToggle from '$lib/components/molecules/SettingsToggle.svelte';
+	import SettingGroup from '$lib/components/molecules/SettingGroup.svelte';
 	import PageTitle from '$lib/components/molecules/PageTitle.svelte';
-	import SectionTitle from '$lib/components/molecules/SectionTitle.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import type { PageData } from './$types';
 	import { getOfflinePrefsStore } from '$lib/stores/offline-prefs.svelte';
@@ -124,7 +124,7 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-3">
+	<div class="space-y-6">
 		<PageTitle title={offlineT.title} />
 
 		{#if message}
@@ -136,31 +136,28 @@
 			</div>
 		{/if}
 
-		<div class="space-y-4">
-			<p class="text-sm text-base-content/70">
-				{offlineT.description}
-			</p>
+		<p class="text-sm text-base-content/70">
+			{offlineT.description}
+		</p>
 
-			{#if pwa.isInstalled}
-				<div class="alert alert-primary" role="status">
-					{offlineT.installedHint}
-				</div>
-			{/if}
+		{#if pwa.isInstalled}
+			<div class="alert alert-primary" role="status">
+				{offlineT.installedHint}
+			</div>
+		{/if}
 
-			<!-- Master enable toggle. When off, the sub-options below are not
-			     rendered at all (not greyed out). -->
-			<SettingsToggle
-				label={offlineT.enable}
-				description={enabled ? offlineT.enableActive : offlineT.enableInactive}
-				checked={enabled}
-				onchange={setEnabled}
-			>
-				<div class="space-y-2">
-					<SectionTitle
-						title={offlineT.categoriesTitle}
-						description={offlineT.categoriesDescription}
-					/>
+		<!-- Master enable toggle. When off, the curated-cache groups and the
+		     passthrough toggle below are not rendered at all (not greyed out). -->
+		<SettingsToggle
+			label={offlineT.enable}
+			description={enabled ? offlineT.enableActive : offlineT.enableInactive}
+			checked={enabled}
+			onchange={setEnabled}
+		/>
 
+		{#if enabled}
+			<div class="space-y-6">
+				<SettingGroup title={offlineT.categoriesTitle} description={offlineT.categoriesDescription}>
 					<div class="form-control">
 						<label class="label cursor-pointer justify-start gap-3" for="offline-cat-latest">
 							<input
@@ -208,11 +205,9 @@
 							</div>
 						</label>
 					</div>
-				</div>
+				</SettingGroup>
 
-				<div class="space-y-2">
-					<SectionTitle title={offlineT.depthTitle} description={offlineT.depthDescription} />
-
+				<SettingGroup title={offlineT.depthTitle} description={offlineT.depthDescription}>
 					<div class="flex flex-col gap-2">
 						{#each DEPTHS as option (option)}
 							<label class="label cursor-pointer justify-start gap-3" for="offline-depth-{option}">
@@ -230,12 +225,12 @@
 							</label>
 						{/each}
 					</div>
-				</div>
+				</SettingGroup>
 
-				<div class="space-y-2">
-					<SectionTitle title={offlineT.refreshTitle} description={offlineT.refreshDescription} />
+				<SettingGroup title={offlineT.refreshTitle} description={offlineT.refreshDescription}>
 					<select
 						class="select select-bordered select-sm w-full max-w-xs"
+						aria-label={offlineT.refreshTitle}
 						value={refreshIntervalDays}
 						onchange={(e) => {
 							const parsed = Number(e.currentTarget.value);
@@ -248,15 +243,18 @@
 							<option value={days}>{offlineT[`refresh_${days}`]}</option>
 						{/each}
 					</select>
-				</div>
+				</SettingGroup>
 
+				<!-- Passthrough is a browse-time caching behaviour, conceptually
+				     separate from the curated/scheduled cache above, so it lives
+				     in its own self-describing toggle rather than inside any group. -->
 				<SettingsToggle
 					label={offlineT.passthrough}
 					description={offlineT.passthroughDesc}
 					checked={passthrough}
 					onchange={setPassthrough}
 				/>
-			</SettingsToggle>
-		</div>
+			</div>
+		{/if}
 	</div>
 </DualColumnLayout>

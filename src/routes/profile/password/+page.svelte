@@ -2,6 +2,8 @@
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
 	import PageTitle from '$lib/components/molecules/PageTitle.svelte';
+	import FormField from '$lib/components/atoms/FormField.svelte';
+	import PasswordStrength from '$lib/components/atoms/PasswordStrength.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { MIN_PASSWORD_LENGTH } from '$lib/utils/validation';
 	import type { ApiResult, FeedbackMessage } from '$lib/types/api';
@@ -87,50 +89,41 @@
 		{/if}
 
 		<form onsubmit={handleSubmit} class="space-y-4">
-			<div class="form-control">
-				<label class="label" for="currentPassword">
-					<span class="label-text font-medium">{profileT.currentPassword}</span>
-				</label>
-				<input
-					id="currentPassword"
-					type="password"
-					class="input input-bordered"
-					bind:value={currentPassword}
-					required
-					autocomplete="current-password"
-				/>
-			</div>
+			<FormField
+				id="currentPassword"
+				type="password"
+				label={profileT.currentPassword}
+				bind:value={currentPassword}
+				required
+				autocomplete="current-password"
+			/>
 
-			<div class="form-control">
-				<label class="label" for="newPassword">
-					<span class="label-text font-medium">{profileT.newPassword}</span>
-				</label>
-				<input
-					id="newPassword"
-					type="password"
-					class="input input-bordered"
-					bind:value={newPassword}
-					required
-					autocomplete="new-password"
-				/>
-				<label class="label" for="newPassword">
-					<span class="label-text-alt text-base-content/50">{t.auth.passwordTooShort}</span>
-				</label>
-			</div>
+			<FormField
+				id="newPassword"
+				type="password"
+				label={profileT.newPassword}
+				bind:value={newPassword}
+				required
+				autocomplete="new-password"
+			>
+				{#snippet hint()}
+					<PasswordStrength
+						password={newPassword}
+						minLength={MIN_PASSWORD_LENGTH}
+						labelTooShort={t.auth.passwordTooShort}
+						labelOk={t.auth.passwordStrengthOk}
+					/>
+				{/snippet}
+			</FormField>
 
-			<div class="form-control">
-				<label class="label" for="confirmPassword">
-					<span class="label-text font-medium">{t.auth.confirmPassword}</span>
-				</label>
-				<input
-					id="confirmPassword"
-					type="password"
-					class="input input-bordered"
-					bind:value={confirmPassword}
-					required
-					autocomplete="new-password"
-				/>
-			</div>
+			<FormField
+				id="confirmPassword"
+				type="password"
+				label={t.auth.confirmPassword}
+				bind:value={confirmPassword}
+				required
+				autocomplete="new-password"
+			/>
 
 			<div class="pt-2">
 				<button type="submit" class="btn btn-primary" disabled={saving}>

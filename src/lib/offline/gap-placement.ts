@@ -22,8 +22,11 @@
 //      ranges (or before the first, or after the last).
 //   2. For each gap, compute how many cached replies precede it (= sum of
 //      reply-counts of all ranges that come before the gap).
-//   3. Emit a `GapPlacement` with `beforeIndex` = that cumulative count,
-//      clamped to `cachedReplyCount`.
+//   3. If that cumulative count lands at or past `cachedReplyCount`, the gap
+//      follows every cached reply → emit it as `trailingPlacement` (rendered
+//      after the stream; the each loop only covers reply indices
+//      [0, rest.length), so beforeIndex === rest.length would never match).
+//      Otherwise emit an inline `placement` with `beforeIndex` = that count.
 //
 // `replyCountForRange` derives each range's reply count from the pageSize and
 // the page count (end - start + 1). The OP is NOT subtracted from any range
@@ -69,10 +72,17 @@ export interface RestNotCachedHint {
 }
 
 export interface GapPlacementResult {
-	// Inline dividers to render before specific reply indices.
+	// Inline dividers to render before specific reply indices in [0, rest.length).
 	placements: GapPlacement[];
+	// When non-null, render a divider AFTER the reply stream — the gap that
+	// follows the last cached range. Its slot index lands at rest.length, which
+	// the each loop (indices [0, rest.length)) cannot reach, so it is split out
+	// for the renderer to emit separately. Previously this case silently
+	// vanished (beforeIndex was clamped to rest.length and never matched any
+	// reply index in the loop).
+	trailingPlacement: GapPlacement | null;
 	// When non-null, render a single "rest not cached" hint at the end (used
-	// when no inline divider can be anchored — the OP-only case).
+	// when no inline divider can be anchored — the OP-only or all-evicted case).
 	restNotCached: RestNotCachedHint | null;
 }
 
@@ -102,11 +112,34 @@ export function computeGapPlacements(input: GapPlacementInput): GapPlacementResu
 	// Emit a single trailing hint (CO-C04-3).
 	if (cachedRanges.length === 0) {
 		if (gaps.length === 0 || totalPages <= 0) {
-			return { placements: [], restNotCached: null };
+			return { placements: [], trailingPlacement: null, restNotCached: null };
 		}
 		const uncachedPages = gaps.reduce((acc, g) => acc + g.pageCount, 0);
 		return {
 			placements: [],
+			trailingPlacement: null,
+			restNotCached: {
+				approxReplies: uncachedPages * pageSize,
+				uncachedPages
+			}
+		};
+	}
+
+	// All replies evicted between manifest write and read (manifest claims
+	// slots but cachedReplyCount is 0): nothing to anchor any divider to. Fall
+	// back to a single aggregate hint. Checked before the main loop so the loop
+	// can assume cachedReplyCount > 0 — which means a gap whose slot index lands
+	// at or past cachedReplyCount is the trailing gap (rendered after the
+	// stream), not a clamp edge case.
+	const totalSlots = totalCachedSlots(cachedRanges, pageSize);
+	if (totalSlots > 0 && cachedReplyCount === 0) {
+		if (gaps.length === 0) {
+			return { placements: [], trailingPlacement: null, restNotCached: null };
+		}
+		const uncachedPages = gaps.reduce((acc, g) => acc + g.pageCount, 0);
+		return {
+			placements: [],
+			trailingPlacement: null,
 			restNotCached: {
 				approxReplies: uncachedPages * pageSize,
 				uncachedPages
@@ -115,18 +148,22 @@ export function computeGapPlacements(input: GapPlacementInput): GapPlacementResu
 	}
 
 	if (gaps.length === 0) {
-		return { placements: [], restNotCached: null };
+		return { placements: [], trailingPlacement: null, restNotCached: null };
 	}
 
-	// Build a map from page number -> index of the cached range that contains
-	// it. This lets us figure out, for each gap, the cumulative count of cached
-	// replies that precede it (= sum of pages-before-the-gap × pageSize).
-	//
-	// Because `gaps` and `cachedRanges` together fully partition [1, totalPages]
-	// (the manifest-recompute coalescer guarantees this for valid manifests),
-	// we can scan them in page order: replies-before-gap-N = sum of pages in
-	// all ranges whose end < gap.start.
+	// Walk gaps in ascending page order. Each gap's inline offset is the count
+	// of cached replies that precede it (= sum of pages-before-the-gap ×
+	// pageSize). Because `gaps` and `cachedRanges` together fully partition
+	// [1, totalPages] (the manifest-recompute coalescer guarantees this for
+	// valid manifests) and cachedRanges is sorted ascending, only the LAST gap
+	// can have its offset land at or past cachedReplyCount — that gap follows
+	// every cached reply and is a TRAILING divider the renderer emits after the
+	// each loop. The loop only covers reply indices [0, rest.length), so
+	// beforeIndex === rest.length would never match and the divider would
+	// vanish (the original bug). All earlier gaps are inline, rendered before
+	// rest[beforeIndex].
 	const placements: GapPlacement[] = [];
+	let trailingPlacement: GapPlacement | null = null;
 	for (const gap of gaps) {
 		let pagesBefore = 0;
 		for (const r of cachedRanges) {
@@ -134,31 +171,21 @@ export function computeGapPlacements(input: GapPlacementInput): GapPlacementResu
 				pagesBefore += Math.max(0, r.end - r.start + 1);
 			}
 		}
-		const beforeIndex = Math.min(pagesBefore * pageSize, Math.max(0, cachedReplyCount));
-		// Skip a divider that would land at index 0 with no cached replies
-		// before it AND no replies to render after it (avoids a leading divider
-		// in an empty stream — the OP-only path already covers that case).
-		placements.push({
-			gap,
-			beforeIndex,
-			approxReplies: gap.pageCount * pageSize
-		});
+		const slotIndex = pagesBefore * pageSize;
+		if (slotIndex >= cachedReplyCount) {
+			trailingPlacement = {
+				gap,
+				beforeIndex: cachedReplyCount,
+				approxReplies: gap.pageCount * pageSize
+			};
+		} else {
+			placements.push({
+				gap,
+				beforeIndex: slotIndex,
+				approxReplies: gap.pageCount * pageSize
+			});
+		}
 	}
 
-	// Sanity: if cachedRanges has slots but cachedReplyCount is 0 (replies
-	// evicted between manifest write and this read), suppress placements —
-	// there is nothing to anchor dividers to, fall back to restNotCached.
-	const totalSlots = totalCachedSlots(cachedRanges, pageSize);
-	if (totalSlots > 0 && cachedReplyCount === 0 && placements.length > 0) {
-		const uncachedPages = gaps.reduce((acc, g) => acc + g.pageCount, 0);
-		return {
-			placements: [],
-			restNotCached: {
-				approxReplies: uncachedPages * pageSize,
-				uncachedPages
-			}
-		};
-	}
-
-	return { placements, restNotCached: null };
+	return { placements, trailingPlacement, restNotCached: null };
 }

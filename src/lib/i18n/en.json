@@ -318,8 +318,8 @@
 			"refresh_3": "Every 3 days",
 			"refresh_5": "Every 5 days",
 			"refresh_7": "Every 7 days",
-			"passthrough": "Read passthrough",
-			"passthroughDesc": "Discussions you open while online are written to the offline cache.",
+			"passthrough": "Auto-cache browsed content",
+			"passthroughDesc": "Automatically cache discussions as you browse.",
 			"synced": "Cache synced"
 		}
 	},

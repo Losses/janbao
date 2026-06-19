@@ -318,8 +318,8 @@
 			"refresh_3": "每 3 天",
 			"refresh_5": "每 5 天",
 			"refresh_7": "每 7 天",
-			"passthrough": "阅读透传",
-			"passthroughDesc": "在线浏览的讨论会被写入离线缓存。",
+			"passthrough": "自动缓存浏览内容",
+			"passthroughDesc": "浏览帖子时自动写入离线缓存。",
 			"synced": "已同步缓存"
 		}
 	},

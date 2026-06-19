@@ -1,6 +1,7 @@
 <script lang="ts">
 	import SingleColumnLayout from '$lib/components/templates/SingleColumnLayout.svelte';
 	import AlertMessage from '$lib/components/AlertMessage.svelte';
+	import FormField from '$lib/components/atoms/FormField.svelte';
 	import { goto } from '$app/navigation';
 	import { formatTitle } from '$lib/utils/title';
 	import type { PageData } from './$types';
@@ -63,33 +64,22 @@
 		<AlertMessage message={errorMessage} />
 
 		<div class="space-y-4 rounded-field shadow-sm">
-			<div class="form-control">
-				<label class="label text-sm font-semibold" for="usernameOrEmail">
-					<span class="label-text">{t.auth.usernameOrEmail}</span>
-				</label>
-				<input
-					id="usernameOrEmail"
-					type="text"
-					required
-					bind:value={usernameOrEmail}
-					class="input input-bordered w-full"
-					placeholder="name@example.com"
-				/>
-			</div>
+			<FormField
+				id="usernameOrEmail"
+				label={t.auth.usernameOrEmail}
+				bind:value={usernameOrEmail}
+				placeholder="name@example.com"
+				required
+			/>
 
-			<div class="form-control">
-				<label class="label text-sm font-semibold" for="password">
-					<span class="label-text">{t.auth.password}</span>
-				</label>
-				<input
-					id="password"
-					type="password"
-					required
-					bind:value={password}
-					class="input input-bordered w-full"
-					placeholder="••••••••"
-				/>
-			</div>
+			<FormField
+				id="password"
+				type="password"
+				label={t.auth.password}
+				bind:value={password}
+				placeholder="••••••••"
+				required
+			/>
 		</div>
 
 		<div class="flex items-center justify-between">

@@ -2,10 +2,12 @@
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
 	import PageTitle from '$lib/components/molecules/PageTitle.svelte';
+	import FormField from '$lib/components/atoms/FormField.svelte';
+	import Field from '$lib/components/atoms/Field.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import type { ApiResult, FeedbackMessage, ProfileEditBody } from '$lib/types/api';
 	import type { PageData } from './$types';
-	import { isValidUsername } from '$lib/utils/validation';
+	import { isValidUsername, MAX_BIO_LENGTH } from '$lib/utils/validation';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
 
 	interface PageProps {
@@ -104,73 +106,37 @@
 
 		<form onsubmit={handleSubmit}>
 			<fieldset disabled={!online.online} class="space-y-4">
-				<!-- Username -->
-				<div class="form-control">
-					<label class="label" for="username">
-						<span class="label-text font-medium">{t.auth.username}</span>
-					</label>
-					<input
-						id="username"
-						type="text"
-						class="input input-bordered {username && !isValidUsername(username)
-							? 'input-error'
-							: ''}"
-						bind:value={username}
-						disabled={!allowSlugChange || !isAdmin}
-						aria-describedby={allowSlugChange && !isAdmin ? 'username-hint' : undefined}
-					/>
-					{#if username && !isValidUsername(username)}
-						<p class="text-xs text-error mt-1">
-							{t.auth.invalidUsername}
-						</p>
-					{/if}
-					{#if allowSlugChange && !isAdmin}
-						<label class="label" id="username-hint" for="username">
-							<span class="label-text-alt text-base-content/50">
-								{profileT.usernameAdminOnly}
-							</span>
-						</label>
-					{/if}
-				</div>
+				<FormField
+					id="username"
+					label={t.auth.username}
+					bind:value={username}
+					disabled={!allowSlugChange || !isAdmin}
+					error={username && !isValidUsername(username) ? t.auth.invalidUsername : ''}
+				>
+					{#snippet hint()}
+						{#if allowSlugChange && !isAdmin}
+							<span class="text-xs text-base-content/50">{profileT.usernameAdminOnly}</span>
+						{/if}
+					{/snippet}
+				</FormField>
 
-				<!-- Display Name -->
-				<div class="form-control">
-					<label class="label" for="displayName">
-						<span class="label-text font-medium">{t.auth.displayName}</span>
-					</label>
-					<input
-						id="displayName"
-						type="text"
-						class="input input-bordered"
-						bind:value={displayName}
-						required
-					/>
-				</div>
+				<FormField id="displayName" label={t.auth.displayName} bind:value={displayName} required />
 
-				<!-- Bio -->
-				<div class="form-control">
-					<label class="label" for="bio">
-						<span class="label-text font-medium">{t.auth.bio}</span>
-						<span class="label-text-alt text-base-content/50">{bio.length}/100</span>
-					</label>
-					<textarea
-						id="bio"
-						class="textarea textarea-bordered"
-						rows="2"
-						maxlength="100"
-						bind:value={bio}
-					></textarea>
-				</div>
+				<FormField
+					id="bio"
+					label={t.auth.bio}
+					bind:value={bio}
+					as="textarea"
+					rows={2}
+					maxlength={MAX_BIO_LENGTH}
+				>
+					{#snippet hint()}
+						<span class="text-xs text-base-content/50">{bio.length}/{MAX_BIO_LENGTH}</span>
+					{/snippet}
+				</FormField>
 
-				<!-- Email -->
-				<div class="form-control">
-					<label class="label" for="email">
-						<span class="label-text font-medium">{t.auth.email}</span>
-					</label>
-					<input id="email" type="email" class="input input-bordered" bind:value={email} required />
-				</div>
+				<FormField id="email" type="email" label={t.auth.email} bind:value={email} required />
 
-				<!-- Show Email Toggle -->
 				<div class="form-control">
 					<label class="label cursor-pointer justify-start gap-3" for="showEmail">
 						<input
@@ -183,16 +149,16 @@
 					</label>
 				</div>
 
-				<!-- Language Preference -->
-				<div class="form-control">
-					<label class="label" for="language">
-						<span class="label-text font-medium">{profileT.language}</span>
-					</label>
-					<select id="language" class="select select-bordered" bind:value={languagePreference}>
+				<Field id="language" label={profileT.language}>
+					<select
+						id="language"
+						class="select select-bordered w-full"
+						bind:value={languagePreference}
+					>
 						<option value="en">{t.profile.languageEnglish}</option>
 						<option value="zh-CN">{t.profile.languageChinese}</option>
 					</select>
-				</div>
+				</Field>
 
 				<div class="pt-2">
 					<button type="submit" class="btn btn-primary" disabled={saving}>

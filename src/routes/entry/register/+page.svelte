@@ -2,11 +2,12 @@
 	import SingleColumnLayout from '$lib/components/templates/SingleColumnLayout.svelte';
 	import AlertMessage from '$lib/components/AlertMessage.svelte';
 	import FormField from '$lib/components/atoms/FormField.svelte';
+	import PasswordStrength from '$lib/components/atoms/PasswordStrength.svelte';
 	import { goto } from '$app/navigation';
 	import { formatTitle } from '$lib/utils/title';
 	import type { PageData } from './$types';
 	import type { ApiResponse } from '$lib/types/api';
-	import { isValidUsername } from '$lib/utils/validation';
+	import { isValidUsername, MIN_PASSWORD_LENGTH } from '$lib/utils/validation';
 
 	interface PageProps {
 		data: PageData;
@@ -24,7 +25,7 @@
 	let errorMessage = $state('');
 	let loading = $state(false);
 
-	const isPasswordStrong = $derived(password.length >= 8);
+	const isPasswordStrong = $derived(password.length >= MIN_PASSWORD_LENGTH);
 
 	async function handleSubmit(e: SubmitEvent) {
 		e.preventDefault();
@@ -136,11 +137,12 @@
 				required
 			>
 				{#snippet hint()}
-					{#if password.length > 0}
-						<span class="text-xs mt-1 {isPasswordStrong ? 'text-primary' : 'text-warning'}">
-							{isPasswordStrong ? t.auth.passwordStrengthOk : t.auth.passwordTooShort}
-						</span>
-					{/if}
+					<PasswordStrength
+						{password}
+						minLength={MIN_PASSWORD_LENGTH}
+						labelTooShort={t.auth.passwordTooShort}
+						labelOk={t.auth.passwordStrengthOk}
+					/>
 				{/snippet}
 			</FormField>
 

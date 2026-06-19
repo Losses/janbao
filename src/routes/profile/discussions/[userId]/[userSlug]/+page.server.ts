@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { getDiscussionsCount, getDiscussionsList } from '$lib/server/db/dao/discussions';
+import { loadDiscussionsPage } from '$lib/server/db/dao/discussions';
 import { loadProfileSubPageContext } from '$lib/server/profile-context';
 
 export const load: PageServerLoad = async (event) => {
@@ -13,8 +13,10 @@ export const load: PageServerLoad = async (event) => {
 		notFoundText: t.common.notFound
 	});
 
-	// Fetch discussions by this user (filtered by category read permissions)
-	const discussionsList = await getDiscussionsList(db, {
+	// Fetch discussions by this user (filtered by category read permissions).
+	// loadDiscussionsPage runs the list and total count concurrently and resolves
+	// the readable-category slugs once for both, instead of two sequential calls.
+	const { discussions, totalPages, totalCount } = await loadDiscussionsPage(db, {
 		userId: user?.id ?? null,
 		authorId: ctx.userId,
 		limit: ctx.limit,
@@ -22,17 +24,11 @@ export const load: PageServerLoad = async (event) => {
 		groupSlug: ctx.groupSlug
 	});
 
-	const totalCount = await getDiscussionsCount(db, {
-		authorId: ctx.userId,
-		groupSlug: ctx.groupSlug
-	});
-	const totalPages = Math.ceil(totalCount / ctx.limit);
-
 	return {
 		targetUser: ctx.targetUser,
 		invitedBy: ctx.invitedBy,
 		headerEmail: ctx.headerEmail,
-		discussions: discussionsList,
+		discussions,
 		page: ctx.page,
 		totalPages,
 		totalCount,

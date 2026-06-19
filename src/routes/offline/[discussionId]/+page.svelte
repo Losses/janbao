@@ -191,6 +191,15 @@
 							</article>
 						</div>
 					{/each}
+					{#if gapView.trailingPlacement}
+						<!-- DV07 trailing gap divider: the uncached page range that
+						     follows the last cached block. Its slot index lands at
+						     rest.length, past the each loop's [0, rest.length) range,
+						     so it is rendered separately after the reply stream. -->
+						<p class="py-3 text-center text-xs italic text-base-content/50">
+							{gapLabel(gapView.trailingPlacement)}
+						</p>
+					{/if}
 				</div>
 			{:else if gapView.restNotCached}
 				<!-- CO-C04-3: OP is cached but no paginated replies to anchor a

@@ -1,12 +1,16 @@
 <script lang="ts">
 	/**
-	 * FormField Atom - Label-on-top form control matching the register-page
-	 * pattern: a `label text-sm font-semibold` above an `input input-bordered w-full`
-	 * (or textarea). Label and control are separate elements so they can be styled
-	 * and themed independently. Optional `hint` snippet renders below the control
-	 * for per-field validation/strength hints.
+	 * FormField Atom — a `Field` (label-on-top chrome) wrapping a bound
+	 * input/textarea. The public API is unchanged (label/id/type/value/
+	 * placeholder/required/disabled/error/as/rows/maxlength/class/hint) so the
+	 * register + admin consumers keep working untouched; only the chrome is now
+	 * delegated to `Field` so label/description/hint spacing has one source of
+	 * truth. The `error` both tints the control (input-error/textarea-error) and,
+	 * via `Field`, renders the message below it.
 	 */
 	import type { Snippet } from 'svelte';
+	import type { FullAutoFill } from 'svelte/elements';
+	import Field from './Field.svelte';
 
 	type FieldElement = 'input' | 'textarea';
 
@@ -18,6 +22,7 @@
 		placeholder?: string;
 		required?: boolean;
 		disabled?: boolean;
+		autocomplete?: FullAutoFill;
 		error?: string;
 		as?: FieldElement;
 		rows?: number;
@@ -34,6 +39,7 @@
 		placeholder = '',
 		required = false,
 		disabled = false,
+		autocomplete,
 		error = '',
 		as = 'input',
 		rows = 2,
@@ -43,10 +49,7 @@
 	}: FormFieldProps = $props();
 </script>
 
-<div class="form-control {className}">
-	<label class="label text-sm font-semibold" for={id}>
-		<span class="label-text">{label}</span>
-	</label>
+<Field {label} {id} {error} class={className} {hint}>
 	{#if as === 'textarea'}
 		<textarea
 			{id}
@@ -55,6 +58,7 @@
 			{placeholder}
 			{rows}
 			{maxlength}
+			{autocomplete}
 			bind:value
 			class="textarea textarea-bordered w-full {error ? 'textarea-error' : ''}"
 		></textarea>
@@ -66,13 +70,9 @@
 			{disabled}
 			{placeholder}
 			{maxlength}
+			{autocomplete}
 			bind:value
 			class="input input-bordered w-full {error ? 'input-error' : ''}"
 		/>
 	{/if}
-	{#if hint}
-		{@render hint()}
-	{:else if error}
-		<p class="text-xs text-error mt-1">{error}</p>
-	{/if}
-</div>
+</Field>
