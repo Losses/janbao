@@ -7,9 +7,14 @@
  *
  * Responsibilities:
  * - Precache the app shell: SvelteKit hashed build chunks (`build`) plus static
- *   files (`files`: manifest, icons, offline.html, ...), keyed by deploy version.
+ *   files (`files`: manifest, icons, offline-fallback.html, ...), keyed by deploy version.
  * - Navigations: network-first with a short timeout, falling back to the cached
- *   document for that URL, then the cached app shell, then `/offline.html`.
+ *   document for that URL, then the cached app shell, then `/offline-fallback.html`.
+ *   The fallback file is named `offline-fallback.html` (not `offline.html`)
+ *   deliberately: SvelteKit serves static files extensionless, so
+ *   `static/offline.html` would also be served at `/offline` and shadow the
+ *   offline-reader route (static files win over routes). The `-fallback` suffix
+ *   keeps it out of the `/offline` namespace.
  *   This is what lets the offline reader route (C02) boot with no network.
  * - Static assets: cache-first.
  * - API (`/api/*`): never cached - sync cursors especially must not read stale.
@@ -26,7 +31,7 @@ import { build, files, version } from '$service-worker';
 declare const self: ServiceWorkerGlobalScope;
 
 const CACHE = `janbao-${version}`;
-const OFFLINE_URL = '/offline.html';
+const OFFLINE_URL = '/offline-fallback.html';
 const SHELL_URL = '/';
 const NAV_TIMEOUT_MS = 3000;
 
