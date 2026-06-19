@@ -176,3 +176,33 @@ test('computeReplyGaps clamps missing replies to commentCount', () => {
 	expect(res.totalMissingPages).toBe(15);
 	expect(res.totalMissingReplies).toBe(200);
 });
+
+test('computeReplyGaps returns pageSize from manifest (C04 renderer placement)', () => {
+	const manifest: ReplyCacheManifestRow = {
+		discussionId: 1,
+		totalPages: 10,
+		pageSize: PAGE_SIZE,
+		cachedRanges: [
+			{ start: 1, end: 1 },
+			{ start: 5, end: 5 },
+			{ start: 10, end: 10 }
+		],
+		complete: false
+	};
+	const res = computeReplyGaps(manifest, 10 * PAGE_SIZE);
+	// Two gaps: pages 2-4 and 6-9.
+	expect(res.gaps).toEqual([
+		{ start: 2, end: 4, pageCount: 3 },
+		{ start: 6, end: 9, pageCount: 4 }
+	]);
+	expect(res.pageSize).toBe(PAGE_SIZE);
+	expect(res.totalMissingPages).toBe(7);
+});
+
+test('computeReplyGaps: no manifest returns pageSize=0', () => {
+	const res = computeReplyGaps(undefined, 100);
+	expect(res.gaps).toEqual([]);
+	expect(res.totalMissingPages).toBe(0);
+	expect(res.totalMissingReplies).toBe(0);
+	expect(res.pageSize).toBe(0);
+});

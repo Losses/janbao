@@ -119,6 +119,11 @@ export const load: PageServerLoad = async (event) => {
 			createdAt: replies.createdAt,
 			updatedAt: replies.updatedAt,
 			editedAt: replies.editedAt,
+			// editedBy id is consumed by the offline pass-through writer (DV07 C04)
+			// so the editor's CachedUser row can be cached alongside the reply.
+			// The display-name joins below remain the source for the online
+			// renderer; this id is purely additive.
+			editedBy: replies.editedBy,
 			editedByDisplayName: editors.displayName,
 			editedByUsername: editors.username,
 			authorId: replies.authorId,
@@ -162,6 +167,7 @@ export const load: PageServerLoad = async (event) => {
 				createdAt: replies.createdAt,
 				updatedAt: replies.updatedAt,
 				editedAt: replies.editedAt,
+				editedBy: replies.editedBy,
 				editedByDisplayName: editors.displayName,
 				editedByUsername: editors.username,
 				authorId: replies.authorId,
@@ -263,6 +269,10 @@ export const load: PageServerLoad = async (event) => {
 		page,
 		totalPages,
 		totalRepliesCount,
+		// Reply page size used by the offline pass-through writer (DV07 C04) to
+		// derive the replyCacheManifest ranges. Equals getPaginationLimit() so
+		// the offline reader's gap math lines up with the online pagination.
+		replyPageSize: limit,
 		theme: resolvedTheme,
 		replyDraft,
 		canDelete,

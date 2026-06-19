@@ -590,7 +590,9 @@
 			"backToForum": "返回论坛",
 			"uncachedReplies": "还有 {count} 页未同步",
 			"replies": "回复",
-			"unknownUser": "未知用户"
+			"unknownUser": "未知用户",
+			"gapRange": "第 {start}-{end} 页未缓存（约 {count} 条回复）",
+			"gapSingle": "第 {page} 页未缓存（约 {count} 条回复）"
 		}
 	},
 	"push": {

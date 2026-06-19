@@ -590,7 +590,9 @@
 			"backToForum": "Back to forum",
 			"uncachedReplies": "{count} more pages not cached",
 			"replies": "replies",
-			"unknownUser": "Unknown user"
+			"unknownUser": "Unknown user",
+			"gapRange": "Pages {start}-{end} not cached (about {count} replies)",
+			"gapSingle": "Page {page} not cached (about {count} replies)"
 		}
 	},
 	"push": {

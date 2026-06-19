@@ -41,6 +41,18 @@ export interface ReplyGapSummary {
 	// Missing replies (approx): sum of gap page counts * pageSize, capped at
 	// commentCount so a stale totalPages never reports more than the thread has.
 	totalMissingReplies: number;
+	// Echoed from the manifest so the renderer can map each cached reply's
+	// position to a page number when placing gap dividers. 0 when there is no
+	// manifest (the no-gaps early return).
+	pageSize: number;
+	// Total pages in the thread (ceil(commentCount / pageSize), clamped >=1).
+	// Lets the renderer compute proportional divider positions without
+	// re-deriving from commentCount. 0 when there is no manifest.
+	totalPages: number;
+	// The cached ranges the manifest holds (normalized copy). Lets the
+	// renderer allocate visible replies to blocks and place dividers at exact
+	// block boundaries. Empty when there is no manifest.
+	cachedRanges: CachedRange[];
 }
 
 /**
@@ -115,7 +127,14 @@ export function computeReplyGaps(
 	commentCount: number
 ): ReplyGapSummary {
 	if (!manifest || manifest.totalPages <= 0 || manifest.pageSize <= 0) {
-		return { gaps: [], totalMissingPages: 0, totalMissingReplies: 0 };
+		return {
+			gaps: [],
+			totalMissingPages: 0,
+			totalMissingReplies: 0,
+			pageSize: 0,
+			totalPages: 0,
+			cachedRanges: []
+		};
 	}
 	const ranges = normalizeRanges(manifest.cachedRanges);
 	const gaps: ReplyGap[] = [];
@@ -136,5 +155,12 @@ export function computeReplyGaps(
 	const totalMissingPages = gaps.reduce((acc, g) => acc + g.pageCount, 0);
 	const rawMissingReplies = totalMissingPages * manifest.pageSize;
 	const totalMissingReplies = Math.min(rawMissingReplies, Math.max(0, commentCount));
-	return { gaps, totalMissingPages, totalMissingReplies };
+	return {
+		gaps,
+		totalMissingPages,
+		totalMissingReplies,
+		pageSize: manifest.pageSize,
+		totalPages: manifest.totalPages,
+		cachedRanges: ranges
+	};
 }

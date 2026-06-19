@@ -1,7 +1,8 @@
 import { getOfflineDB } from './idb';
 import { applyEviction } from './evict';
 import { flushPendingReadState } from './read-state';
-import { computeCachedRanges, isComplete } from './manifest';
+import { computeCachedRanges } from './manifest';
+import { recomputeManifestForDiscussion } from './manifest-recompute';
 import { readOfflinePrefs, type OfflinePrefs, type OfflineReplyDepth } from './prefs';
 import type {
 	CachedDiscussion,
@@ -9,7 +10,6 @@ import type {
 	CuratedSyncMetaMap,
 	CuratedSyncMetaRecord,
 	Reason,
-	ReplyCacheManifestRow,
 	SyncMetaValue,
 	SyncResult
 } from './types';
@@ -234,7 +234,13 @@ async function doSync(): Promise<SyncResult> {
 		enabledCats.enabled,
 		priorFrontBookmark
 	);
-	await populateReplyManifests(
+	// DV07 C04: merge the depth-policy page ranges into each curated/front/
+	// bookmark discussion's manifest. This is the AUTHORITATIVE manifest update
+	// path for sync — it unions the depth-derived ranges into whatever the
+	// manifest already holds (which may include passthrough-cached pages from
+	// C04), so no lost updates. The replies-store read inside the helper drops
+	// ranges whose backing replies were since evicted.
+	await mergeDepthRangesIntoManifests(
 		latestCurated,
 		latestFront,
 		latestBookmarks,
@@ -412,11 +418,14 @@ async function persistCuratedMeta(map: CuratedSyncMetaMap): Promise<void> {
 	await db.syncMeta.bulkPut(rows);
 }
 
-// One manifest row per discussion that received depth-aware backfill, derived
-// from the depth policy + the row's commentCount / pageSize. Overwritten on
-// every sync so a thread that grew past the cap flips from complete to
-// first/last split on the next refresh.
-async function populateReplyManifests(
+// For each curated + front + bookmark discussion, merge the depth-policy page
+// ranges into the manifest. This is the AUTHORITATIVE manifest update path for
+// sync: it unions the depth-derived ranges (e.g. firstLast = [1,1] + [last,last])
+// into whatever the manifest already holds (which may include passthrough-cached
+// pages from C04). The replies-store read inside the helper drops ranges whose
+// backing replies were since evicted, so the manifest can never claim a page
+// that isn't actually cached.
+async function mergeDepthRangesIntoManifests(
 	curated: CuratedDiscussionIdSets,
 	front: number[],
 	bookmarks: number[],
@@ -431,25 +440,19 @@ async function populateReplyManifests(
 	}
 	if (ids.size === 0) return;
 	const rows = await db.discussions.bulkGet([...ids]);
-	const manifests: ReplyCacheManifestRow[] = [];
 	for (const row of rows) {
 		if (!row) continue;
 		const totalPages = Math.max(1, Math.ceil(row.commentCount / pageSize));
-		const cachedRanges: CachedRange[] = computeCachedRanges(
+		const ranges: CachedRange[] = computeCachedRanges(
 			depth,
 			totalPages,
 			pageSize,
 			row.commentCount
 		);
-		manifests.push({
-			discussionId: row.id,
-			totalPages,
-			pageSize,
-			cachedRanges,
-			complete: isComplete(cachedRanges, totalPages)
-		});
+		for (const range of ranges) {
+			await recomputeManifestForDiscussion(db, row.id, row.commentCount, pageSize, range);
+		}
 	}
-	if (manifests.length) await db.replyCacheManifest.bulkPut(manifests);
 }
 
 async function backfillMissingUsers(): Promise<void> {

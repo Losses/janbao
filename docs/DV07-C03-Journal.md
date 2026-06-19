@@ -34,10 +34,10 @@ NavigatorStandalone` - NOT `as any`, which is banned). Listeners
     so a non-Chromium browser simply leaves `canPrompt` false.
 - **Settings route** `src/routes/profile/offlineReading/`:
   - `+page.server.ts`: auth-gated load (decision #5). Guests are redirected to
-    `/entry/signin?redirectTo=/profile/offlineReading`. Returns a minimal
-    `{ section: 'offlineReading' }` marker - the prefs themselves are
-    client-side (decision #1), and `t` / `user` / `lang` flow in from the root
-    layout server load like every other `/profile/*` route.
+    `/entry/signin?redirectTo=/profile/offlineReading`. Returns `{}` - the prefs
+    are client-side (decision #1), and `t` / `user` / `lang` flow in from the
+    root layout server load like every other `/profile/*` route. (Round 2
+    removed a dead `{ section }` marker that nothing read.)
   - `+page.svelte`: flat-design form (`space-y-*`, `bg-base-200/50
 rounded-box`, DaisyUI checkboxes/toggles/radios/select). Master **enable**
     toggle wraps the rest in `<fieldset disabled={!enabled}>`. Three category
@@ -112,4 +112,33 @@ true })` and set the guard.
 - `bun test`: 34/34 pass (no behavior change; manifest pure-function tests
   unaffected).
 
-Round 1 pending.
+## Round 1
+
+- 5 agents. Verdict: **4/5 UNCONDITIONAL_PASS, 1/5 PASS_WITH_NOTES**.
+- All functional deliverables correct; notes were minor cleanups: (a) `pwa-install`
+  listeners had no HMR cleanup; (b) dead `{ section }` marker return; (c) dead
+  `'synced'` union member. Plus CO-C03-1 (live `$state` ref) and the by-design
+  guest auto-enable no-op.
+- Cleanups shipped in `e5faa25`: HMR `import.meta.hot?.dispose` (handler refs
+  captured in `BoundListeners`, matching `idb.ts`); marker removed (returns `{}`);
+  `'synced'` wired into `triggerSyncIfOnline` success path + new `synced` i18n key.
+- Gate: check 0/0, lint exit 0, `bun test` 34/34. See `RV07-C03-Audit-01.md`.
+
+## Round 2
+
+- 5 agents. Verdict: **5/5 UNCONDITIONAL_PASS**.
+- All three cleanups verified: HMR dispose uses identical handler refs (no no-op);
+  no false "synced" (success-only, `.catch` surfaces errors); marker gone, page
+  reads inherited layout data. Regression intact (guest gate, SSR-safety,
+  auto-enable idempotency, no `$effect`, types). Working tree clean.
+- Gates: check 0/0, lint exit 0, `bun test` 34/34. See `RV07-C03-Audit-02.md`.
+
+**C03 COMPLETE 5/5.** Advancing to C04 (read passthrough + gap rendering).
+
+## Carry-overs
+
+- **CO-C03-1** `prefs` getter returns the live `$state` ref (readonly at property
+  level only). Page reads via `$derived` → safe; a `readonly()` wrapper could
+  enforce it later.
+- **CO-C03-2** `beforeinstallprompt` dismissed-without-prompt stays stashed until
+  consumed. No install button rendered yet; revisit when an affordance surfaces.

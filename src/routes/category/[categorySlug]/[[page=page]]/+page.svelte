@@ -10,7 +10,10 @@
 	import { mdiRss } from '@mdi/js';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
-	import { goto } from '$app/navigation';
+	import { goto, afterNavigate } from '$app/navigation';
+	import { onMount } from 'svelte';
+	import { writeList } from '$lib/offline/passthrough';
+	import type { DiscussionListItem } from '$lib/server/db/dao/discussions';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -29,6 +32,17 @@
 	function handlePageChange(newPage: number) {
 		goto(newPage === 1 ? `/category/${category.slug}` : `/category/${category.slug}/p${newPage}`);
 	}
+
+	// DV07 C04 read passthrough: writes this category page's discussions to IDB
+	// when the user has the feature on and is online. Best-effort, no `$effect`.
+	function runPassthrough(items: DiscussionListItem[]): void {
+		if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+		void writeList(items).catch((err) => {
+			console.error('[offline passthrough] writeList failed', err);
+		});
+	}
+	onMount(() => runPassthrough(data.discussions));
+	afterNavigate(() => runPassthrough(data.discussions));
 </script>
 
 <svelte:head>

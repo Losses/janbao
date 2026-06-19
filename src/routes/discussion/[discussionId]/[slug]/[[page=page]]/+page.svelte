@@ -17,7 +17,10 @@
 	import { goto } from '$app/navigation';
 	import { enhance } from '$app/forms';
 	import { onMount } from 'svelte';
+	import { afterNavigate } from '$app/navigation';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
+	import { writeThread } from '$lib/offline/passthrough';
+	import type { ThreadPassthroughInput } from '$lib/offline/passthrough';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -38,6 +41,12 @@
 	// Offline fallback: when the network drops while viewing a discussion that is
 	// cached locally, switch to the client-only offline reader (IDB, no server
 	// round-trip). The online read-mutation has already run for this view.
+	//
+	// Read passthrough (DV07 C04): when online and the user has the feature on,
+	// also write this page's SSR data (discussion + opReply + replies + manifest
+	// reconcile) to IDB. Issues no server request of its own (INV-4) — it only
+	// consumes the data already in `data`. Re-entry re-runs this so revisits
+	// refresh the cache. No bare `$effect` (per [[svelte-effect-fetch-loop]]).
 	onMount(() => {
 		const discussionId = Number(page.params.discussionId);
 		const redirectIfCached = () => {
@@ -52,6 +61,49 @@
 		window.addEventListener('offline', redirectIfCached);
 		return () => window.removeEventListener('offline', redirectIfCached);
 	});
+
+	onMount(() => {
+		runThreadPassthrough(data);
+	});
+
+	// Re-run on every in-app navigation (e.g. flipping between thread pages).
+	// afterNavigate fires after the new data has loaded; onMount does NOT fire
+	// for these (the component stays mounted). Reads the latest `data` snapshot
+	// each time. No bare `$effect` per [[svelte-effect-fetch-loop]].
+	afterNavigate(() => {
+		runThreadPassthrough(data);
+	});
+
+	function runThreadPassthrough(current: PageData): void {
+		const d = current.discussion;
+		if (!d) return;
+		if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+		const input: ThreadPassthroughInput = {
+			discussion: {
+				id: d.id,
+				title: d.title,
+				slug: d.slug,
+				categorySlug: d.categorySlug,
+				authorId: d.authorId,
+				commentCount: d.commentCount,
+				isPinned: d.isPinned,
+				viewCount: d.viewCount,
+				// Drizzle timestamp-mode values arrive as Date instances on the
+				// client; passthrough converts them to epoch seconds.
+				createdAt: d.createdAt,
+				updatedAt: d.updatedAt,
+				lastReplyAt: null
+			},
+			opReply: current.opReply,
+			replies: current.replies,
+			page: current.page,
+			totalPages: current.totalPages,
+			pageSize: current.replyPageSize
+		};
+		void writeThread(input).catch((err) => {
+			console.error('[offline passthrough] writeThread failed', err);
+		});
+	}
 
 	const t = $derived(data.t);
 	const user = $derived(data.user);
