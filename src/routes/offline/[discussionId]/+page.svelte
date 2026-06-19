@@ -7,21 +7,9 @@
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import { generateSlug } from '$lib/utils/slug';
 	import { recordOfflineRead } from '$lib/offline/read-state';
-	import type { ReplyGap } from '$lib/offline/manifest';
+	import { computeGapPlacements, type GapPlacement } from '$lib/offline/gap-placement';
 	import type { PageProps } from './$types';
 	import type { OfflineReplyView } from '$lib/offline/types';
-
-	// Page size used to map each cached reply's position to a page number, so a
-	// gap divider can be rendered at the right boundary in the visible stream.
-	// Comes from the manifest row (same pageSize the writers used to bucket).
-	interface RenderedGap {
-		gap: ReplyGap;
-		// Render the divider BEFORE the reply at this index in `rest`.
-		beforeIndex: number;
-		// Approximate reply count covered by this gap (page count * pageSize,
-		// already clamped to commentCount in manifest-recompute).
-		approxReplies: number;
-	}
 
 	let { data }: PageProps = $props();
 
@@ -45,77 +33,35 @@
 		return { op, rest };
 	});
 
-	// Derive where to render each gap divider in the visible reply stream.
+	// Derive where to render each gap divider in the visible reply stream using
+	// the pure helper. Dividers are placed at manifest RANGE BOUNDARIES (the
+	// page where a cached block ends and an uncached gap begins), not by pre-
+	// allocated per-range reply counts. See gap-placement.ts for the model.
 	//
-	// The cached replies (sorted by id, OP split off) are a SUBSET of the full
-	// thread — they may represent non-contiguous absolute pages (e.g. sync
-	// depth 'firstLast' caches page 1 + the last page; passthrough caches a
-	// single visited page). To place a gap divider correctly we must know
-	// where one cached block ends and the next begins IN THE VISIBLE STREAM.
-	//
-	// Approach: walk the manifest's cachedRanges in order. Each range covers
-	// (end - start + 1) pages × pageSize reply slots. The first slot of page 1
-	// is the OP (already split off), so the first cached range contributes
-	// (pages × pageSize - 1) replies to `rest`. Subsequent ranges contribute
-	// (pages × pageSize) replies each. We consume `rest` replies into each
-	// range in order; a gap exists between consecutive ranges, and we render
-	// its divider at the boundary index in `rest`.
-	const gapPlacements = $derived.by<RenderedGap[]>(() => {
+	// The OP-excluding `rest` array is the visible stream; `cachedReplyCount`
+	// tells the helper where the last cached block ends so it can clamp the
+	// trailing-divider index.
+	const gapView = $derived.by(() => {
 		const summary = data.replyGaps;
-		const gaps = summary?.gaps ?? [];
-		if (gaps.length === 0) return [];
-		const pageSize = summary?.pageSize ?? 0;
-		if (pageSize <= 0) return [];
-		const cachedRanges = summary?.cachedRanges ?? [];
-		if (cachedRanges.length === 0) return [];
 		const rest = partitioned.rest;
-		if (rest.length === 0) return [];
-
-		// Allocate rest replies to cached ranges in order. repliesPerRange[i]
-		// is how many `rest` replies belong to cachedRanges[i]. The first range
-		// that includes page 1 has the OP subtracted (1 fewer rest reply).
-		const repliesPerRange: number[] = cachedRanges.map((r, i) => {
-			const pages = r.end - r.start + 1;
-			const includesPage1 = r.start === 1;
-			const base = pages * pageSize;
-			return includesPage1 && i === 0 ? Math.max(0, base - 1) : base;
+		return computeGapPlacements({
+			cachedRanges: summary?.cachedRanges ?? [],
+			gaps: summary?.gaps ?? [],
+			pageSize: summary?.pageSize ?? 0,
+			totalPages: summary?.totalPages ?? 0,
+			cachedReplyCount: rest.length
 		});
-
-		// Walk ranges, consuming rest replies. A gap exists between range[i]
-		// and range[i+1]; find the matching gap and place its divider at the
-		// boundary (the cumulative consumed count).
-		const placements: RenderedGap[] = [];
-		let consumed = 0;
-		for (let i = 0; i < cachedRanges.length; i++) {
-			consumed += repliesPerRange[i];
-			// Clamp to rest.length so a divider never lands past the end.
-			const boundary = Math.min(consumed, rest.length);
-			if (i + 1 >= cachedRanges.length) break; // no gap after the last range
-			const nextRange = cachedRanges[i + 1];
-			// Find the gap that sits between this range and the next.
-			const gap = gaps.find(
-				(g) => g.start === cachedRanges[i].end + 1 && g.end === nextRange.start - 1
-			);
-			if (gap && boundary > 0 && boundary <= rest.length) {
-				placements.push({
-					gap,
-					beforeIndex: boundary,
-					approxReplies: gap.pageCount * pageSize
-				});
-			}
-		}
-		return placements;
 	});
 
 	// Look up which gap (if any) should render before the i-th rest reply.
-	function gapBeforeIndex(i: number): RenderedGap | null {
-		for (const p of gapPlacements) {
+	function placementBeforeIndex(i: number): GapPlacement | null {
+		for (const p of gapView.placements) {
 			if (p.beforeIndex === i) return p;
 		}
 		return null;
 	}
 
-	function gapLabel(g: RenderedGap): string {
+	function gapLabel(g: GapPlacement): string {
 		const reader = data.t.offline.reader;
 		const approx = String(g.approxReplies);
 		if (g.gap.start === g.gap.end) {
@@ -125,6 +71,12 @@
 			.replace('{start}', String(g.gap.start))
 			.replace('{end}', String(g.gap.end))
 			.replace('{count}', approx);
+	}
+
+	function restNotCachedLabel(): string {
+		const hint = gapView.restNotCached;
+		if (!hint) return '';
+		return data.t.offline.reader.restNotCached.replace('{count}', String(hint.approxReplies));
 	}
 
 	// Fallback display for replies whose author isn't cached yet (e.g. editedBy
@@ -209,12 +161,13 @@
 				<!-- Replies Stream -->
 				<div class="divide-y divide-base-300 border-t border-base-300">
 					{#each partitioned.rest as reply, i (reply.id)}
-						{@const gap = gapBeforeIndex(i)}
-						{#if gap}
-							<!-- DV07 multi-range gap divider: rendered before the first
-							     cached reply that follows an uncached page range. -->
+						{@const placement = placementBeforeIndex(i)}
+						{#if placement}
+							<!-- DV07 multi-range gap divider: rendered at the boundary
+							     between a cached block and the uncached page range that
+							     follows it (or precedes it, for a leading divider). -->
 							<p class="py-3 text-center text-xs italic text-base-content/50">
-								{gapLabel(gap)}
+								{gapLabel(placement)}
 							</p>
 						{/if}
 						<div id="reply-{reply.id}" class="space-y-4 py-4">
@@ -233,6 +186,12 @@
 						</div>
 					{/each}
 				</div>
+			{:else if gapView.restNotCached}
+				<!-- CO-C04-3: OP is cached but no paginated replies to anchor a
+				     divider — show a single "rest not cached" hint after the OP. -->
+				<p class="py-3 text-center text-xs italic text-base-content/50">
+					{restNotCachedLabel()}
+				</p>
 			{/if}
 		{:else}
 			<p class="text-sm opacity-70">{data.t.offline.reader.notCached}</p>

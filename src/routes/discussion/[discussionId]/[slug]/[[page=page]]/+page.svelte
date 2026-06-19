@@ -92,7 +92,7 @@
 				// client; passthrough converts them to epoch seconds.
 				createdAt: d.createdAt,
 				updatedAt: d.updatedAt,
-				lastReplyAt: null
+				lastReplyAt: d.lastReplyAt
 			},
 			opReply: current.opReply,
 			replies: current.replies,

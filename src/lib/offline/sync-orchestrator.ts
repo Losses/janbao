@@ -1,7 +1,7 @@
 import { getOfflineDB } from './idb';
 import { applyEviction } from './evict';
 import { flushPendingReadState } from './read-state';
-import { computeCachedRanges } from './manifest';
+import { computeCachedRanges, computeTotalPages } from './manifest';
 import { recomputeManifestForDiscussion } from './manifest-recompute';
 import { readOfflinePrefs, type OfflinePrefs, type OfflineReplyDepth } from './prefs';
 import type {
@@ -214,8 +214,6 @@ async function doSync(): Promise<SyncResult> {
 			{ key: 'serverTimeSkew', value: data.serverTimeSeconds - Math.floor(now / 1000) },
 			{ key: 'frontPageSnapshot', value: data.frontPageDiscussionIds },
 			{ key: 'bookmarksSnapshot', value: data.bookmarkedDiscussionIds },
-			{ key: 'partialReplyDiscussions', value: data.partialReplyDiscussionIds },
-			{ key: 'replyPageSize', value: data.replyPageSize },
 			{ key: 'lastSyncAt', value: now }
 		]);
 
@@ -442,7 +440,10 @@ async function mergeDepthRangesIntoManifests(
 	const rows = await db.discussions.bulkGet([...ids]);
 	for (const row of rows) {
 		if (!row) continue;
-		const totalPages = Math.max(1, Math.ceil(row.commentCount / pageSize));
+		// commentCount includes the OP; the paginated reply stream excludes it
+		// (thread route derives totalPages the same way). Shared helper keeps the
+		// orchestrator honest vs recomputeManifestForDiscussion + the renderer.
+		const totalPages = computeTotalPages(row.commentCount, pageSize);
 		const ranges: CachedRange[] = computeCachedRanges(
 			depth,
 			totalPages,

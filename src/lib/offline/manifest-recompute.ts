@@ -24,6 +24,7 @@
 // ends up with [1,1],[5,5]. The pre-C04 depth-only manifest is replaced by
 // the merged union on every write.
 
+import { computeTotalPages } from './manifest';
 import type { CachedRange, ReplyCacheManifestRow } from './types';
 
 // Public input for the pure merge: a page range to union into the manifest,
@@ -71,14 +72,6 @@ function coalesceRanges(ranges: CachedRange[], totalPages: number): CachedRange[
 		}
 	}
 	return out;
-}
-
-function computeTotalPages(commentCount: number, pageSize: number): number {
-	if (pageSize <= 0) return 1;
-	// commentCount includes the OP (schema increments on every insert). The
-	// thread route derives totalPages from replies-excluding-OP, so mirror that.
-	const nonOpCount = Math.max(0, commentCount - 1);
-	return Math.max(1, Math.ceil(nonOpCount / pageSize));
 }
 
 /**

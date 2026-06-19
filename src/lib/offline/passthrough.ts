@@ -383,12 +383,16 @@ export async function writeThread(input: ThreadPassthroughInput): Promise<void> 
 		await upsertUsers(authors, now);
 	});
 
-	// Reconcile the manifest AFTER the txn commits. We merge the page the user
-	// actually visited (input.page) into the manifest's existing ranges. If the
-	// OP was also cached (opReply present) and we're on page > 1, page 1 is now
-	// also covered — record both ranges so the manifest reflects reality. The
-	// helper reads prior ranges from IDB and unions, so no lost updates vs a
-	// concurrent sync write.
+	// Reconcile the manifest AFTER the txn commits. We claim ONLY the page the
+	// user actually visited (input.page) — the cached OP does NOT, by itself,
+	// claim any page (RV07 C04 r2 audit A4-1). The OP renders as a special
+	// top-of-thread block and is not part of the paginated reply stream, so
+	// caching it while visiting page 5 caches only [5,5], not [1,1]. When the
+	// visited page IS page 1, the full paginated page-1 reply set is present,
+	// so the claim [1,1] is correct (and is just the visited range).
+	//
+	// The helper reads prior ranges from IDB and unions them, so there are no
+	// lost updates vs a concurrent sync write.
 	if (pageSize > 0 && input.page >= 1) {
 		const visitedRange: CachedRange = {
 			start: input.page,
@@ -401,15 +405,6 @@ export async function writeThread(input: ThreadPassthroughInput): Promise<void> 
 			pageSize,
 			visitedRange
 		);
-		// OP backfill: if the OP reply was cached and the visited page wasn't
-		// page 1, page 1 now has at least its first reply (the OP). Record that
-		// range too so the manifest doesn't show page 1 as missing.
-		if (opReply && input.page > 1) {
-			await recomputeManifestForDiscussion(db, discussion.id, discussion.commentCount, pageSize, {
-				start: 1,
-				end: 1
-			});
-		}
 	}
 }
 

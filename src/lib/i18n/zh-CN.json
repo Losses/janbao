@@ -592,7 +592,8 @@
 			"replies": "回复",
 			"unknownUser": "未知用户",
 			"gapRange": "第 {start}-{end} 页未缓存（约 {count} 条回复）",
-			"gapSingle": "第 {page} 页未缓存（约 {count} 条回复）"
+			"gapSingle": "第 {page} 页未缓存（约 {count} 条回复）",
+			"restNotCached": "约 {count} 条后续回复未缓存"
 		}
 	},
 	"push": {

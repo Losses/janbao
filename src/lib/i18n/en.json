@@ -592,7 +592,8 @@
 			"replies": "replies",
 			"unknownUser": "Unknown user",
 			"gapRange": "Pages {start}-{end} not cached (about {count} replies)",
-			"gapSingle": "Page {page} not cached (about {count} replies)"
+			"gapSingle": "Page {page} not cached (about {count} replies)",
+			"restNotCached": "About {count} more replies not cached"
 		}
 	},
 	"push": {

@@ -29,6 +29,22 @@ import type { OfflineReplyDepth } from './prefs';
 const REPLY_CAP = 1000;
 const REPLY_CAP_HALF = 250;
 
+/**
+ * Shared totalPages derivation. The OP (earliest reply) renders as a special
+ * top-of-thread block and is NOT part of the paginated reply stream, so a
+ * thread with `commentCount` rows has only `max(0, commentCount-1)` paginated
+ * replies. Every consumer that derives totalPages from commentCount must route
+ * through this helper to avoid off-by-ones (RV07 C04 r2 audit A3-1).
+ *
+ * `Math.ceil(1)` for the degenerate 0/1-row case so a thread with only an OP
+ * still reports 1 page (the orchestrator's depth 'first' writes [1,1]).
+ */
+export function computeTotalPages(commentCount: number, pageSize: number): number {
+	if (pageSize <= 0) return 1;
+	const nonOpCount = Math.max(0, Math.floor(commentCount) - 1);
+	return Math.max(1, Math.ceil(nonOpCount / pageSize));
+}
+
 export interface ReplyGap {
 	start: number;
 	end: number;

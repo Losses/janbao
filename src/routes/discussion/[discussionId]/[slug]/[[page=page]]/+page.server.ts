@@ -47,6 +47,7 @@ export const load: PageServerLoad = async (event) => {
 			themeName: discussions.themeName,
 			createdAt: discussions.createdAt,
 			updatedAt: discussions.updatedAt,
+			lastReplyAt: discussions.lastReplyAt,
 			categoryTitle: categories.title,
 			categoryDescription: categories.description,
 			categoryTheme: categories.themeName,
