@@ -1,6 +1,7 @@
 import { activities, bookmarks, categories, discussions, replies, users } from '../schema';
 import { and, desc, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
 import type { D1Db } from '../index';
+import type { DiscussionSort } from './discussions';
 import type {
 	SyncActivityDTO,
 	SyncDiscussionDTO,
@@ -228,15 +229,25 @@ export async function getCachedUsers(db: D1Db, userIds: number[]): Promise<SyncU
 	return rows;
 }
 
-// Mirrors the live home-page ordering exactly (pinned first, then lastReplyAt
-// desc) and is scoped to readable categories so eviction protects only what the
-// user can actually see - no private-category id leak.
-export async function getFrontPageDiscussionIds(
+// Page-1 discussion ids for a curated category (DV07). Mirrors the live homepage
+// for `latest` (isPinned DESC, lastReplyAt DESC) and orders by the raw metric
+// for the two curated sorts - no pinned promotion on metric sorts. Scoped to
+// readable categories so eviction protects only what the user can see; no
+// private-category id leak. Excludes soft-deleted discussions + disabled
+// categories.
+export async function getCuratedDiscussionIds(
 	db: D1Db,
+	sort: DiscussionSort,
 	limit: number,
 	readableSlugs: string[]
 ): Promise<number[]> {
 	if (readableSlugs.length === 0) return [];
+	const orderBy =
+		sort === 'mostViewed'
+			? [desc(discussions.viewCount)]
+			: sort === 'mostReplied'
+				? [desc(discussions.commentCount)]
+				: [desc(discussions.isPinned), desc(discussions.lastReplyAt)];
 	const rows = await db
 		.select({ id: discussions.id })
 		.from(discussions)
@@ -248,9 +259,20 @@ export async function getFrontPageDiscussionIds(
 				inArray(discussions.categorySlug, readableSlugs)
 			)
 		)
-		.orderBy(desc(discussions.isPinned), desc(discussions.lastReplyAt))
+		.orderBy(...orderBy)
 		.limit(limit);
 	return rows.map((r) => r.id);
+}
+
+// Mirrors the live home-page ordering exactly (pinned first, then lastReplyAt
+// desc) and is scoped to readable categories so eviction protects only what the
+// user can actually see - no private-category id leak.
+export async function getFrontPageDiscussionIds(
+	db: D1Db,
+	limit: number,
+	readableSlugs: string[]
+): Promise<number[]> {
+	return getCuratedDiscussionIds(db, 'latest', limit, readableSlugs);
 }
 
 export async function getBookmarkedDiscussionIds(
@@ -311,9 +333,7 @@ export async function getDiscussionsByIds(
 interface ReplyEndpoints {
 	replies: SyncReplyDTO[];
 	partialDiscussionIds: number[];
-}
-
-// First + last page of replies per discussion, so the offline reader can render
+} // First + last page of replies per discussion, so the offline reader can render
 // the OP + opening replies + the most recent replies even for old threads whose
 // replies predate the 30-day lookback. A window-function subquery ranks rows
 // within each discussion both ways; the outer filter keeps each head/tail page.
@@ -364,6 +384,140 @@ export async function getReplyEndpointsFor(
 		.select()
 		.from(ranked)
 		.where(or(lte(ranked.rnAsc, pageSize), lte(ranked.rnDesc, pageSize)));
+
+	const partialDiscussionIds = Array.from(new Set(rows.map((r) => r.discussionId)));
+	return { replies: rows.map(toReplyDTO), partialDiscussionIds };
+}
+
+// DV07 reply-cache depth policy (decision #3):
+//   first     → page 1 only.
+//   firstLast → page 1 + last page (same shape as getReplyEndpointsFor).
+//   all       → if total replies ≤ REPLY_CAP (1000), every page; otherwise the
+//               first CAP_HALF (250) + last CAP_HALF (250) replies (pages 1–5
+//               and the last 5 at pageSize 50), leaving the middle as a gap the
+//               client renders but does not fetch this cycle.
+// The cap is on cached ROWS, not pages, so pageSize changes don't silently
+// re-define the policy. Returns the actual reply rows (SyncReplyDTO shape) plus
+// the union of discussion ids that were backfilled, so callers can mirror
+// getReplyEndpointsFor's partial-discussion signal.
+const REPLY_CAP = 1000;
+const REPLY_CAP_HALF = 250;
+
+export type ReplyBackfillDepth = 'first' | 'firstLast' | 'all';
+
+interface DepthBackfill {
+	replies: SyncReplyDTO[];
+	partialDiscussionIds: number[];
+}
+
+export async function getRepliesForDepth(
+	db: D1Db,
+	discussionIds: number[],
+	depth: ReplyBackfillDepth,
+	pageSize: number,
+	readableSlugs: string[]
+): Promise<DepthBackfill> {
+	if (discussionIds.length === 0 || readableSlugs.length === 0) {
+		return { replies: [], partialDiscussionIds: [] };
+	}
+
+	// firstLast is the existing endpoint behavior; reuse it directly so the
+	// offline cache stays byte-identical to DV06 for that depth.
+	if (depth === 'firstLast') {
+		const endpoints = await getReplyEndpointsFor(db, discussionIds, pageSize, readableSlugs);
+		return {
+			replies: endpoints.replies,
+			partialDiscussionIds: endpoints.partialDiscussionIds
+		};
+	}
+
+	// Per-discussion live counts gate the cap on the `all` branch. We read the
+	// denormalized commentCount rather than counting replies: it tracks
+	// non-deleted replies and is already maintained on reply create/delete.
+	const countRows = await db
+		.select({ id: discussions.id, commentCount: discussions.commentCount })
+		.from(discussions)
+		.where(
+			and(
+				isNull(discussions.deletedAt),
+				inArray(discussions.id, discussionIds),
+				inArray(discussions.categorySlug, readableSlugs)
+			)
+		);
+	const countById = new Map(countRows.map((r) => [r.id, r.commentCount] as const));
+	const targetIds = countById.size === 0 ? [] : Array.from(countById.keys());
+
+	if (targetIds.length === 0) {
+		return { replies: [], partialDiscussionIds: [] };
+	}
+
+	// Cap policy (decision #3) applies per-thread via the PARTITION BY in the
+	// window function: for `all`, a thread with ≤ REPLY_CAP replies has every
+	// row kept (both rnAsc and rnDesc stay ≤ REPLY_CAP ≤ REPLY_CAP_HALF is
+	// false, so we still need a small-vs-large guard). We fetch per-thread
+	// counts only to short-circuit threads under the cap into a single "all"
+	// bucket - large threads additionally keep the first/last REPLY_CAP_HALF.
+	const underCapIds = targetIds.filter((id) => (countById.get(id) ?? 0) <= REPLY_CAP);
+	const overCapIds = targetIds.filter((id) => (countById.get(id) ?? 0) > REPLY_CAP);
+
+	const ranked = db
+		.select({
+			id: replies.id,
+			discussionId: replies.discussionId,
+			authorId: replies.authorId,
+			contentJson: replies.contentJson,
+			createdAt: replies.createdAt,
+			updatedAt: replies.updatedAt,
+			editedAt: replies.editedAt,
+			editedBy: replies.editedBy,
+			rnAsc:
+				sql<number>`ROW_NUMBER() OVER (PARTITION BY ${replies.discussionId} ORDER BY ${replies.createdAt}, ${replies.id})`.as(
+					'rn_asc'
+				),
+			rnDesc:
+				sql<number>`ROW_NUMBER() OVER (PARTITION BY ${replies.discussionId} ORDER BY ${replies.createdAt} DESC, ${replies.id} DESC)`.as(
+					'rn_desc'
+				)
+		})
+		.from(replies)
+		.innerJoin(discussions, eq(replies.discussionId, discussions.id))
+		.where(
+			and(
+				isNull(replies.deletedAt),
+				isNull(discussions.deletedAt),
+				inArray(replies.discussionId, targetIds),
+				inArray(discussions.categorySlug, readableSlugs)
+			)
+		)
+		.as('ranked_replies');
+
+	// `first` keeps only page 1. `all` uses one unified filter: a thread with
+	// ≤ REPLY_CAP replies has every row kept because both rnAsc and rnDesc stay
+	// ≤ REPLY_CAP, but REPLY_CAP_HALF < REPLY_CAP would drop the middle - so
+	// large threads are split out and UNIONed with the small-thread "all rows"
+	// bucket. rnAsc / rnDesc are PARTITION BY discussionId, so each side counts
+	// within its own thread.
+	let rows: ReplySyncRow[];
+	if (depth === 'first') {
+		rows = await db.select().from(ranked).where(lte(ranked.rnAsc, pageSize));
+	} else if (overCapIds.length === 0) {
+		// No thread exceeds the cap - take every ranked row.
+		rows = await db.select().from(ranked);
+	} else {
+		// Small threads: every row (rnAsc ≤ REPLY_CAP holds for all). Large
+		// threads: first REPLY_CAP_HALF (rnAsc ≤ half) or last REPLY_CAP_HALF
+		// (rnDesc ≤ half). Combine with OR; small threads' rows already satisfy
+		// rnAsc ≤ REPLY_CAP, but we still need the half-clause for the large
+		// threads, so the filter is the disjunction.
+		void underCapIds;
+		const inSmall = inArray(ranked.discussionId, underCapIds);
+		const inLarge = inArray(ranked.discussionId, overCapIds);
+		const keepLarge = and(
+			inLarge,
+			or(lte(ranked.rnAsc, REPLY_CAP_HALF), lte(ranked.rnDesc, REPLY_CAP_HALF))
+		);
+		rows = await db.select().from(ranked).where(or(inSmall, keepLarge));
+	}
 
 	const partialDiscussionIds = Array.from(new Set(rows.map((r) => r.discussionId)));
 	return { replies: rows.map(toReplyDTO), partialDiscussionIds };

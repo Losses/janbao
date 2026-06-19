@@ -9,16 +9,19 @@ import {
 import {
 	getBookmarkedDiscussionIds,
 	getCachedUsers,
+	getCuratedDiscussionIds,
 	getDeltaDiscussions,
 	getDeltaReplies,
 	getDiscussionsByIds,
 	getDiscussionTombstones,
 	getFirstPageActivities,
 	getFrontPageDiscussionIds,
-	getReplyEndpointsFor,
+	getRepliesForDepth,
 	getReplyTombstones
 } from '../db/dao/sync';
-import type { SyncContentResponse } from '$lib/types/api';
+import type { DiscussionSort } from '../db/dao/discussions';
+import type { ReplyBackfillDepth } from '../db/dao/sync';
+import type { CuratedDiscussionIdSets, SyncContentResponse } from '$lib/types/api';
 
 interface CursorParts {
 	ts: number;
@@ -55,7 +58,37 @@ interface ContentSyncInput {
 	discussionTombstoneCursor?: string;
 	replyTombstoneCursor?: string;
 	limit: number;
+	// DV07: curated categories to fetch page-1 id sets for (subset of the
+	// DiscussionSort union). Empty = no curated sets returned (DV06 shape).
+	curatedCategories: CuratedCategorySet[];
+	// DV07: reply backfill depth for the curated + front/bookmark union.
+	depth: ReplyDepth;
 	platformEnv: App.Platform['env'] | undefined;
+}
+
+// Parameter types the route handler validates against. Kept here (not in
+// $lib/types/api) because they are request-shape concerns, not response DTOs;
+// the route re-exports them so callers share one canonical source.
+export type CuratedCategorySet = DiscussionSort;
+export type ReplyDepth = ReplyBackfillDepth;
+
+// Parse `?categories=latest,mostViewed` into a de-duplicated subset of the
+// allowlist. Unknown tokens are silently dropped (the spec only names three
+// valid categories); the empty string yields [] which preserves the DV06 wire
+// shape (no curatedDiscussionIds keys beyond what was requested).
+export function parseCuratedCategories(
+	raw: string,
+	allowlist: readonly CuratedCategorySet[]
+): CuratedCategorySet[] {
+	const seen = new Set<CuratedCategorySet>();
+	for (const token of raw.split(',')) {
+		const trimmed = token.trim();
+		if (!trimmed) continue;
+		if ((allowlist as readonly string[]).includes(trimmed)) {
+			seen.add(trimmed as CuratedCategorySet);
+		}
+	}
+	return Array.from(seen);
 }
 
 export async function buildContentSync(input: ContentSyncInput): Promise<SyncContentResponse> {
@@ -69,7 +102,17 @@ export async function buildContentSync(input: ContentSyncInput): Promise<SyncCon
 
 	const readableSlugs = await getReadableCategorySlugs(input.db, input.groupSlug);
 
-	const [disc, rep, dTomb, rTomb, front, bkm, activities] = await Promise.all([
+	// Fetch curated page-1 id sets in parallel with the existing streams. The
+	// curated queries use the same pageSize as the homepage (DISCUSSIONS_LIMIT)
+	// so a curated category page mirrors what an online user would see.
+	const discussionsListLimit = getDiscussionsLimit(input.platformEnv);
+	const curatedFetches = input.curatedCategories.map((sort) =>
+		getCuratedDiscussionIds(input.db, sort, discussionsListLimit, readableSlugs).then(
+			(ids) => [sort, ids] as const
+		)
+	);
+
+	const [disc, rep, dTomb, rTomb, front, bkm, activities, curatedResults] = await Promise.all([
 		getDeltaDiscussions(
 			input.db,
 			{ sinceTs: dCur.ts, sinceId: dCur.id, limit: input.limit },
@@ -90,20 +133,27 @@ export async function buildContentSync(input: ContentSyncInput): Promise<SyncCon
 			{ sinceTs: rtCur.ts, sinceId: rtCur.id, limit: input.limit },
 			readableSlugs
 		),
-		getFrontPageDiscussionIds(input.db, getDiscussionsLimit(input.platformEnv), readableSlugs),
+		getFrontPageDiscussionIds(input.db, discussionsListLimit, readableSlugs),
 		getBookmarkedDiscussionIds(input.db, input.userId, readableSlugs),
-		getFirstPageActivities(input.db, getActivitiesLimit(input.platformEnv))
+		getFirstPageActivities(input.db, getActivitiesLimit(input.platformEnv)),
+		Promise.all(curatedFetches)
 	]);
 
-	// Backfill detail + reply endpoints for front-page ∪ bookmarked discussions,
-	// bypassing the 30-day lookback. Without this a stale pinned post appears in
-	// the cached list (its id rides in frontPageSnapshot) but its detail + replies
-	// never enter the cache, so /offline/[id] reports "not cached".
+	const curatedDiscussionIds: CuratedDiscussionIdSets = {};
+	for (const [sort, ids] of curatedResults) {
+		curatedDiscussionIds[sort] = ids;
+	}
+
+	// Backfill detail + depth-aware replies for the UNION of curated + front +
+	// bookmark discussion ids, bypassing the 30-day lookback. The depth policy
+	// (decision #3) is applied once across the whole union so a thread cached
+	// under multiple reasons isn't fetched twice.
 	const replyPageSize = getPaginationLimit(input.platformEnv);
-	const endpointIds = Array.from(new Set([...front, ...bkm]));
+	const curatedFlat = Object.values(curatedDiscussionIds).flat();
+	const endpointIds = Array.from(new Set([...curatedFlat, ...front, ...bkm]));
 	const [backfillDiscussions, backfillReplies] = await Promise.all([
 		getDiscussionsByIds(input.db, endpointIds, readableSlugs),
-		getReplyEndpointsFor(input.db, endpointIds, replyPageSize, readableSlugs)
+		getRepliesForDepth(input.db, endpointIds, input.depth, replyPageSize, readableSlugs)
 	]);
 
 	const lastDisc = disc[disc.length - 1];
@@ -154,6 +204,7 @@ export async function buildContentSync(input: ContentSyncInput): Promise<SyncCon
 		replyTombstones: rTomb,
 		frontPageDiscussionIds: front,
 		bookmarkedDiscussionIds: bkm,
+		curatedDiscussionIds,
 		cursors: {
 			discussions: newDiscCursor,
 			replies: newRepCursor,

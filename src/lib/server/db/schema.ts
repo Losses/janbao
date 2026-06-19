@@ -134,7 +134,13 @@ export const discussions = sqliteTable(
 			table.lastReplyAt
 		),
 		updatedIdIdx: index('discussions_updated_id_idx').on(table.updatedAt, table.id),
-		deletedIdx: index('discussions_deleted_idx').on(table.deletedAt)
+		deletedIdx: index('discussions_deleted_idx').on(table.deletedAt),
+		// DV07 curated-category sorts: most-viewed / most-replied ORDER BY these
+		// counters without a pinned-promotion prefix. Single-column indexes let
+		// the planner satisfy the ORDER BY from the index directly instead of a
+		// full scan + sort.
+		viewCountIdx: index('discussions_view_count_idx').on(table.viewCount),
+		commentCountIdx: index('discussions_comment_count_idx').on(table.commentCount)
 	})
 );
 

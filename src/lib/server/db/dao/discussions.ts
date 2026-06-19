@@ -38,6 +38,12 @@ interface LastReplyAuthor {
 	displayName: string;
 }
 
+// Curated category sort modes. `latest` mirrors the live homepage
+// (isPinned DESC, lastReplyAt DESC); the two metric sorts order by the raw
+// counter with no pinned promotion, matching the DV07 spec for the offline
+// cache's curated category pages.
+export type DiscussionSort = 'latest' | 'mostViewed' | 'mostReplied';
+
 export interface GetDiscussionsListOptions {
 	userId?: number | null;
 	categorySlug?: string | null;
@@ -45,6 +51,8 @@ export interface GetDiscussionsListOptions {
 	limit: number;
 	offset: number;
 	groupSlug?: string;
+	// Defaults to 'latest' so every existing caller keeps current behavior.
+	sort?: DiscussionSort;
 }
 
 interface GetDiscussionsCountOptions {
@@ -69,6 +77,7 @@ export async function getDiscussionsList(
 	options: GetDiscussionsListOptions
 ): Promise<DiscussionListItem[]> {
 	const { userId, categorySlug, authorId, limit, offset, groupSlug } = options;
+	const sort: DiscussionSort = options.sort ?? 'latest';
 
 	// Build the select query
 	const baseQuery = db
@@ -127,9 +136,18 @@ export async function getDiscussionsList(
 
 	baseQuery.where(and(...whereClauses));
 
-	// Order: Pinned discussions first, then lastReplyAt descending (real time of
-	// the latest reply - not updatedAt, which pin/edit/delete also bump).
-	baseQuery.orderBy(desc(discussions.isPinned), desc(discussions.lastReplyAt));
+	// Order: `latest` (default) mirrors the live homepage - pinned first, then
+	// lastReplyAt descending (real time of the latest reply, not updatedAt which
+	// pin/edit/delete also bump). The metric sorts order by the raw counter with
+	// NO pinned promotion, matching the DV07 curated-category spec. Existing
+	// callers omit `sort` and land on `latest`, preserving current behavior.
+	if (sort === 'mostViewed') {
+		baseQuery.orderBy(desc(discussions.viewCount));
+	} else if (sort === 'mostReplied') {
+		baseQuery.orderBy(desc(discussions.commentCount));
+	} else {
+		baseQuery.orderBy(desc(discussions.isPinned), desc(discussions.lastReplyAt));
+	}
 
 	baseQuery.limit(limit).offset(offset);
 

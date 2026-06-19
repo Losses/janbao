@@ -478,6 +478,16 @@ export interface SyncCursors {
 	replyTombstoneCursor: string;
 }
 
+// Curated category page-1 id sets returned by /api/sync/content. Each key is
+// present only when the client requested it via ?categories= - the server never
+// infers prefs (INV-7). Mirrors the three DiscussionSort values; consumers key
+// directly into this to drive the client reason-tagging + refresh diff.
+export interface CuratedDiscussionIdSets {
+	latest?: number[];
+	mostViewed?: number[];
+	mostReplied?: number[];
+}
+
 export interface SyncHasMore {
 	discussions: boolean;
 	replies: boolean;
@@ -506,6 +516,11 @@ export interface SyncContentResponse {
 	replyTombstones: SyncTombstoneDTO[];
 	frontPageDiscussionIds: number[];
 	bookmarkedDiscussionIds: number[];
+	// DV07: page-1 discussion ids for each curated category the client asked
+	// for via ?categories=. Omitted keys = category not requested (server is
+	// stateless re: prefs, INV-7). The client mirrors these into syncMeta and
+	// uses them as the refresh-diff source for the curated cache.
+	curatedDiscussionIds: CuratedDiscussionIdSets;
 	cursors: SyncCursors;
 	hasMore: SyncHasMore;
 	serverTimeSeconds: number;
