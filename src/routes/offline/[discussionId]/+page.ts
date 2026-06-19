@@ -1,5 +1,6 @@
 import { getOfflineDB } from '$lib/offline/idb';
 import { joinReplies } from '$lib/offline/join';
+import { computeReplyGaps, type ReplyGapSummary } from '$lib/offline/manifest';
 import type { CachedAuthorProjection, CachedDiscussion } from '$lib/offline/types';
 import type { PageLoad } from './$types';
 
@@ -7,6 +8,11 @@ import type { PageLoad } from './$types';
 // bookmarked threads whose full reply history exceeds the cached endpoints),
 // the reader shows how many replies/pages sit in the uncached middle, with a
 // divider between the cached first page and last page.
+//
+// DV07 C02 also exposes `replyGaps` derived from the replyCacheManifest row,
+// which is the generalized multi-range view. The current renderer still
+// consumes `partialGap` (single-divider); C04 will switch it to render each
+// gap in `replyGaps.gaps` and this legacy field will be removed.
 interface PartialGapInfo {
 	uncachedCount: number;
 	uncachedPages: number;
@@ -31,6 +37,10 @@ function computePartialGap(
 		firstPageRestCount: Math.max(0, pageSize - 1)
 	};
 }
+
+// Sentinel returned when there is no manifest yet (e.g. an old DV06 row that
+// predates the v4 schema). The renderer treats this as "no gaps to draw".
+const EMPTY_GAPS: ReplyGapSummary = { gaps: [], totalMissingPages: 0, totalMissingReplies: 0 };
 
 // Client-only: reads the cached discussion + its replies from IndexedDB. Has no
 // +page.server.ts by design (INV-4) - it cannot trigger the online read mechanism.
@@ -82,5 +92,14 @@ export const load: PageLoad = async ({ params }) => {
 		pageSize
 	);
 
-	return { discussion, replies: joinedReplies, discussionId, isBookmarked, partialGap };
+	// DV07 generalized gap view: derive the uncached page-ranges from the
+	// manifest row (if present). Falls back to EMPTY_GAPS when the discussion
+	// was cached by DV06 (no manifest yet) so the renderer still works. C04
+	// will switch the renderer from `partialGap` to `replyGaps.gaps`.
+	const manifestRow = await db.replyCacheManifest.get(discussionId);
+	const replyGaps = discussion
+		? computeReplyGaps(manifestRow, discussion.commentCount)
+		: EMPTY_GAPS;
+
+	return { discussion, replies: joinedReplies, discussionId, isBookmarked, partialGap, replyGaps };
 };

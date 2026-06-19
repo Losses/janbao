@@ -6,10 +6,26 @@ import type {
 	SyncUserDTO
 } from '$lib/types/api';
 
+// DV07 reason enum (Plan decision #4): every cached discussion carries the
+// union of reasons it is currently cached under. A row is deleted only when
+// this set is fully empty (reason-set eviction). 'read' is owned by the
+// passthrough layer (C04); the orchestrator never adds/removes it.
+//   'latest' | 'mostViewed' | 'mostReplied' - curated category membership.
+//   'read'                                   - user browsed the thread online.
+//   'front'                                  - on the cached front-page snapshot.
+//   'bookmark'                               - in the cached bookmark snapshot.
+export type Reason = 'latest' | 'mostViewed' | 'mostReplied' | 'read' | 'front' | 'bookmark';
+
 // IndexedDB row shapes. The content rows mirror the server DTOs plus a cachedAt
 // bookkeeping timestamp (ms) used only for diagnostics.
 export interface CachedDiscussion extends SyncDiscussionDTO {
 	cachedAt: number;
+	// DV07: reasons this row is kept in the cache (eviction source of truth) +
+	// the timestamp of its last 'read' passthrough write (TTL target for C05).
+	// Optional so a v3 row upgrades in place without a migration (the next sync
+	// backfills them); newly written rows always carry both fields.
+	reasons?: Reason[];
+	readUpdatedAt?: number;
 }
 
 export interface CachedReply extends SyncReplyDTO {
@@ -41,8 +57,18 @@ export interface OfflineReadState {
 // Compound primary key of the readStatePending store: [discussionId, lastReadAt].
 export type ReadStateKey = [number, number];
 
-// syncMeta is a grab-bag keyed store; value is one of these shapes.
-export type SyncMetaValue = number | string | number[] | SyncCursors | null;
+// syncMeta is a grab-bag keyed store; value is one of these shapes. Includes
+// the DV07 curated-mirror records (per-category { ids, fetchedAt }) used by
+// the refresh-diff in C05 - they are objects, so SyncMetaValue accepts them
+// via the CuratedSyncMetaRecord union.
+export type SyncMetaValue =
+	| number
+	| string
+	| number[]
+	| SyncCursors
+	| CuratedSyncMetaRecord
+	| CuratedSyncMetaMap
+	| null;
 
 export interface SyncMetaRow {
 	key: string;
@@ -102,4 +128,37 @@ export interface OfflineDiscussionView {
 	updatedAt: number;
 	lastReplyAt: number | null;
 	author: OfflineAuthorInfo;
+}
+
+// DV07 replyCacheManifest store row. One per cached discussion that received
+// depth-aware reply backfill. cachedRanges is a list of inclusive [start,end]
+// page-number intervals the cache holds for this discussion; `complete` is
+// true iff every page [1,totalPages] is cached (so the gap-renderer can skip
+// the divider entirely).
+export interface CachedRange {
+	start: number;
+	end: number;
+}
+
+export interface ReplyCacheManifestRow {
+	discussionId: number;
+	totalPages: number;
+	pageSize: number;
+	cachedRanges: CachedRange[];
+	complete: boolean;
+}
+
+// DV07 curated-mirror record persisted in syncMeta so C05 can diff the prior
+// sync's curated id set against the current one (drop reasons for ids no
+// longer in a category, append reasons for new entrants). One record per
+// category; bundled under syncMeta key 'curated' as a CuratedSyncMetaMap.
+export interface CuratedSyncMetaRecord {
+	ids: number[];
+	fetchedAt: number;
+}
+
+export interface CuratedSyncMetaMap {
+	latest?: CuratedSyncMetaRecord;
+	mostViewed?: CuratedSyncMetaRecord;
+	mostReplied?: CuratedSyncMetaRecord;
 }

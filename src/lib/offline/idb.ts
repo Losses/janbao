@@ -6,6 +6,7 @@ import type {
 	CachedUser,
 	OfflineReadState,
 	ReadStateKey,
+	ReplyCacheManifestRow,
 	SyncMetaRow
 } from './types';
 
@@ -23,6 +24,7 @@ export class ForumOfflineDB extends Dexie {
 	readStatePending!: Table<OfflineReadState, ReadStateKey>;
 	readStateMerged!: Table<OfflineReadState, number>;
 	syncMeta!: Table<SyncMetaRow, string>;
+	replyCacheManifest!: Table<ReplyCacheManifestRow, number>;
 
 	constructor() {
 		super('forum-offline');
@@ -56,6 +58,23 @@ export class ForumOfflineDB extends Dexie {
 			readStatePending: '[discussionId+lastReadAt], discussionId',
 			readStateMerged: 'discussionId',
 			syncMeta: 'key'
+		});
+		// v4 adds the `replyCacheManifest` store (DV07): one row per cached
+		// discussion that received depth-aware reply backfill, recording the
+		// page ranges the cache holds. Existing discussions rows upgrade in
+		// place without a data migration; the new optional fields
+		// (CachedDiscussion.reasons / readUpdatedAt) default to undefined on
+		// pre-v4 rows and are populated by the next sync. The pre-existing
+		// versionchange / blocked handlers in getOfflineDB cover the upgrade.
+		this.version(4).stores({
+			discussions: 'id, updatedAt, categorySlug, lastReplyAt',
+			replies: 'id, discussionId, [discussionId+createdAt], updatedAt',
+			users: 'id',
+			activities: 'id, createdAt',
+			readStatePending: '[discussionId+lastReadAt], discussionId',
+			readStateMerged: 'discussionId',
+			syncMeta: 'key',
+			replyCacheManifest: 'discussionId'
 		});
 	}
 }
