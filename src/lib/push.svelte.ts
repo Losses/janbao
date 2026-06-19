@@ -13,6 +13,21 @@
 export type PushSubscribeOutcome = 'subscribed' | 'denied' | 'unsupported' | 'error';
 
 /**
+ * Resolve to the active service-worker registration, or null when none is
+ * registered on this origin. `navigator.serviceWorker.ready` NEVER resolves if
+ * no SW exists (dev never registers one — registration is PROD-gated — or it
+ * was just unregistered), which would hang every push call and freeze the
+ * toggle. `getRegistrations()` resolves immediately, so check it first and
+ * no-op cleanly when there's nothing to talk to.
+ */
+async function activeRegistration(): Promise<ServiceWorkerRegistration | null> {
+	if (!('serviceWorker' in navigator)) return null;
+	const registrations = await navigator.serviceWorker.getRegistrations();
+	if (registrations.length === 0) return null;
+	return await navigator.serviceWorker.ready;
+}
+
+/**
  * Request notification permission and, on grant, subscribe the active service
  * worker registration for push using the supplied VAPID public key. Persists
  * the subscription server-side via POST /api/push/subscribe.
@@ -34,7 +49,8 @@ export async function subscribeToPush(vapidPublicKey: string): Promise<PushSubsc
 	if (permission !== 'granted') return 'denied';
 
 	try {
-		const registration = await navigator.serviceWorker.ready;
+		const registration = await activeRegistration();
+		if (!registration) return 'unsupported';
 		const subscription = await registration.pushManager.subscribe({
 			userVisibleOnly: true,
 			applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource
@@ -70,7 +86,8 @@ export async function subscribeToPush(vapidPublicKey: string): Promise<PushSubsc
 export async function unsubscribeFromPush(): Promise<boolean> {
 	if (!('serviceWorker' in navigator)) return true;
 	try {
-		const registration = await navigator.serviceWorker.ready;
+		const registration = await activeRegistration();
+		if (!registration) return true;
 		const subscription = await registration.pushManager.getSubscription();
 		if (!subscription) return true;
 		const endpoint = subscription.endpoint;
@@ -95,7 +112,8 @@ export async function unsubscribeFromPush(): Promise<boolean> {
 export async function isPushSubscribed(): Promise<boolean> {
 	if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
 	try {
-		const registration = await navigator.serviceWorker.ready;
+		const registration = await activeRegistration();
+		if (!registration) return false;
 		const subscription = await registration.pushManager.getSubscription();
 		return subscription !== null;
 	} catch {

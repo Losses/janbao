@@ -165,6 +165,10 @@
 		if (!vapidPublicKey) return;
 		pushBusy = true;
 		pushMessageState = null;
+		// Optimistically reflect the click; the re-probe below corrects it. A
+		// failed enable then goes true→false, which is what makes Svelte revert
+		// the toggle (a false→false no-op would leave the checkbox stuck on).
+		pushEnabled = true;
 		const outcome = await subscribeToPush(vapidPublicKey);
 		// Re-probe the browser: pushEnabled must reflect the actual
 		// subscription state, not just the subscribe() outcome, so the toggle
@@ -181,6 +185,7 @@
 	async function handleDisablePush() {
 		pushBusy = true;
 		pushMessageState = null;
+		pushEnabled = false;
 		const ok = await unsubscribeFromPush();
 		// Re-probe the browser so pushEnabled reflects the actual subscription
 		// state. The browser subscription is gone once `unsubscribe()` ran
