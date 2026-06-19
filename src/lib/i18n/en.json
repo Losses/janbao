@@ -601,6 +601,7 @@
 		"permissionDenied": "Notification permission was denied. Update your browser settings to allow notifications from this site.",
 		"notConfigured": "Push notifications are not available on this deployment.",
 		"unsupported": "This browser does not support push notifications.",
+		"noServiceWorker": "Push isn't available: the service worker isn't active. Reload the page or open the installed app.",
 		"subscribed": "Push is enabled on this device.",
 		"mention": "Mentions",
 		"mentionDesc": "Push when someone mentions you",

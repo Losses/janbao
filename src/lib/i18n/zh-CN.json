@@ -601,6 +601,7 @@
 		"permissionDenied": "通知权限被拒绝。请在浏览器设置中允许本站发送通知。",
 		"notConfigured": "此部署未启用推送通知。",
 		"unsupported": "此浏览器不支持推送通知。",
+		"noServiceWorker": "推送通知暂不可用：service worker 未激活。请刷新页面或打开已安装的应用。",
 		"subscribed": "此设备已启用推送。",
 		"mention": "提及",
 		"mentionDesc": "有人 @ 你时推送",

@@ -10,7 +10,12 @@
  * is implied by the session cookie.
  */
 
-export type PushSubscribeOutcome = 'subscribed' | 'denied' | 'unsupported' | 'error';
+export type PushSubscribeOutcome =
+	| 'subscribed'
+	| 'denied'
+	| 'unsupported'
+	| 'no-service-worker'
+	| 'error';
 
 /**
  * Resolve to the active service-worker registration, or null when none is
@@ -34,8 +39,9 @@ async function activeRegistration(): Promise<ServiceWorkerRegistration | null> {
  *
  * @param vapidPublicKey  base64url-encoded VAPID public key from layout data
  * @returns 'subscribed' on success, 'denied' if the user dismissed the prompt,
- *          'unsupported' if PushManager/ServiceWorker is unavailable, 'error'
- *          for any other failure (caller may display a generic message).
+ *          'unsupported' if PushManager/ServiceWorker is unavailable,
+ *          'no-service-worker' if no SW is registered (dev, or not built),
+ *          'error' for any other failure.
  */
 export async function subscribeToPush(vapidPublicKey: string): Promise<PushSubscribeOutcome> {
 	if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -50,7 +56,7 @@ export async function subscribeToPush(vapidPublicKey: string): Promise<PushSubsc
 
 	try {
 		const registration = await activeRegistration();
-		if (!registration) return 'unsupported';
+		if (!registration) return 'no-service-worker';
 		const subscription = await registration.pushManager.subscribe({
 			userVisibleOnly: true,
 			applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource

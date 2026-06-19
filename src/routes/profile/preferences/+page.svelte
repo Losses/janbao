@@ -158,6 +158,7 @@
 		if (outcome === 'subscribed') return { type: 'success', text: pushT.subscribed };
 		if (outcome === 'denied') return { type: 'error', text: pushT.permissionDenied };
 		if (outcome === 'unsupported') return { type: 'error', text: pushT.unsupported };
+		if (outcome === 'no-service-worker') return { type: 'error', text: pushT.noServiceWorker };
 		return { type: 'error', text: t.common.error };
 	}
 
@@ -350,7 +351,7 @@
 						onchange={(v) => (v ? handleEnablePush() : handleDisablePush())}
 					/>
 
-					{#if pushEnabled}
+					{#if pushEnabled && !pushBusy}
 						<div class="space-y-2">
 							<div class="form-control">
 								<label class="label cursor-pointer justify-start gap-3" for="pref-push-mention">
