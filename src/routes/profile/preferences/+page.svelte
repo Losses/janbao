@@ -88,32 +88,11 @@
 		// or when the user navigates back. Also probe the browser for an existing
 		// subscription so the enable/disable button reflects reality.
 		void prefs;
-		console.log(
-			'[push] probe effect: pushSupported=',
-			pushSupported,
-			'hasVapid=',
-			!!vapidPublicKey
-		);
 		if (pushSupported && vapidPublicKey) {
 			void isPushSubscribed().then((v) => {
-				console.log('[push] isPushSubscribed() =>', v);
 				pushEnabled = v;
 			});
 		}
-	});
-
-	// TEMP diagnostic: log the full push state whenever any tracked piece changes.
-	$effect(() => {
-		console.log(
-			'[push] state: pushEnabled=',
-			pushEnabled,
-			'permission=',
-			pushPermission,
-			'pushSupported=',
-			pushSupported,
-			'hasVapid=',
-			!!vapidPublicKey
-		);
 	});
 
 	async function handleSave() {
@@ -175,7 +154,6 @@
 		// subscription state, not just the subscribe() outcome, so the toggle
 		// + tickboxes stay in sync with reality.
 		pushEnabled = await isPushSubscribed();
-		console.log('[push] enable: outcome=', outcome, '=> pushEnabled=', pushEnabled);
 		if (typeof Notification !== 'undefined') {
 			pushPermission = Notification.permission;
 		}
@@ -194,7 +172,6 @@
 		// so trusting the server call's `ok` would leave the toggle/tickboxes
 		// stuck on. isPushSubscribed is the source of truth here.
 		pushEnabled = await isPushSubscribed();
-		console.log('[push] disable: ok=', ok, '=> pushEnabled=', pushEnabled);
 		if (!ok) {
 			pushMessageState = { type: 'error', text: t.common.error };
 		}
