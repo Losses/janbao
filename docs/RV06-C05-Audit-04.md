@@ -43,5 +43,5 @@ dep), fire-and-forget delivery via `waitUntil` (CF Workers-safe), SSRF allowlist
 subscribe/unsubscribe, per-category independent toggles, preferences UI with permission
 state, SW push/notificationclick with deep-linking.
 
-**DV06 COMPLETE 2026-06-18** — all 5 cycles closed with 5/5 unconditional PASS:
+**DV06 COMPLETE 2026-06-18** - all 5 cycles closed with 5/5 unconditional PASS:
 C01 (2 rounds), C02 (3), C03 (7), C04 (2), C05 (4). ~18 rounds, ~90 sub-agent audits.

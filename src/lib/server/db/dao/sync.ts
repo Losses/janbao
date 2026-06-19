@@ -242,12 +242,15 @@ export async function getCuratedDiscussionIds(
 	readableSlugs: string[]
 ): Promise<number[]> {
 	if (readableSlugs.length === 0) return [];
+	// `latest` ends in lastReplyAt which can tie when two threads share a most
+	// recent reply second → also add desc(id) so every sort is fully
+	// deterministic and the curated page-1 ID set can't flap between syncs.
 	const orderBy =
 		sort === 'mostViewed'
-			? [desc(discussions.viewCount)]
+			? [desc(discussions.viewCount), desc(discussions.id)]
 			: sort === 'mostReplied'
-				? [desc(discussions.commentCount)]
-				: [desc(discussions.isPinned), desc(discussions.lastReplyAt)];
+				? [desc(discussions.commentCount), desc(discussions.id)]
+				: [desc(discussions.isPinned), desc(discussions.lastReplyAt), desc(discussions.id)];
 	const rows = await db
 		.select({ id: discussions.id })
 		.from(discussions)
@@ -333,13 +336,16 @@ export async function getDiscussionsByIds(
 interface ReplyEndpoints {
 	replies: SyncReplyDTO[];
 	partialDiscussionIds: number[];
-} // First + last page of replies per discussion, so the offline reader can render
+}
+
+// First + last page of replies per discussion, so the offline reader can render
 // the OP + opening replies + the most recent replies even for old threads whose
 // replies predate the 30-day lookback. A window-function subquery ranks rows
 // within each discussion both ways; the outer filter keeps each head/tail page.
-// partialDiscussionIds are the discussions actually backfilled - the client marks
-// them and inserts an "N more not cached" divider when commentCount exceeds the
-// cached count.
+// partialDiscussionIds = discussions whose shipped reply set is genuinely
+// incomplete vs the thread total - i.e. totalPages > 2 (first + last overlap or
+// are adjacent ⇒ no middle gap ⇒ fully cached). Uses the stored commentCount to
+// decide so it matches the reader's data-driven divider exactly.
 export async function getReplyEndpointsFor(
 	db: D1Db,
 	discussionIds: number[],
@@ -385,8 +391,38 @@ export async function getReplyEndpointsFor(
 		.from(ranked)
 		.where(or(lte(ranked.rnAsc, pageSize), lte(ranked.rnDesc, pageSize)));
 
-	const partialDiscussionIds = Array.from(new Set(rows.map((r) => r.discussionId)));
+	const shippedIds = new Set(rows.map((r) => r.discussionId));
+	const countById = await getCountsById(db, [...shippedIds], readableSlugs);
+	const partialDiscussionIds = [...shippedIds].filter((id) => {
+		const total = countById.get(id) ?? 0;
+		const totalPages = Math.ceil(total / pageSize);
+		return totalPages > 2;
+	});
 	return { replies: rows.map(toReplyDTO), partialDiscussionIds };
+}
+
+// Reads the stored commentCount for the given discussion ids (scoped to readable
+// categories), returning a Map keyed by discussion id. commentCount is the
+// denormalized non-deleted reply count maintained on reply create/delete; it is
+// the same number the reader uses to render its "N more not cached" divider, so
+// the partial-discussion signal stays consistent with what the client displays.
+async function getCountsById(
+	db: D1Db,
+	discussionIds: number[],
+	readableSlugs: string[]
+): Promise<Map<number, number>> {
+	if (discussionIds.length === 0 || readableSlugs.length === 0) return new Map();
+	const rows = await db
+		.select({ id: discussions.id, commentCount: discussions.commentCount })
+		.from(discussions)
+		.where(
+			and(
+				isNull(discussions.deletedAt),
+				inArray(discussions.id, discussionIds),
+				inArray(discussions.categorySlug, readableSlugs)
+			)
+		);
+	return new Map(rows.map((r) => [r.id, r.commentCount] as const));
 }
 
 // DV07 reply-cache depth policy (decision #3):
@@ -398,8 +434,11 @@ export async function getReplyEndpointsFor(
 //               client renders but does not fetch this cycle.
 // The cap is on cached ROWS, not pages, so pageSize changes don't silently
 // re-define the policy. Returns the actual reply rows (SyncReplyDTO shape) plus
-// the union of discussion ids that were backfilled, so callers can mirror
-// getReplyEndpointsFor's partial-discussion signal.
+// the discussions whose shipped reply set is genuinely incomplete vs total:
+//   first     → total replies > pageSize (more than page 1 exists).
+//   firstLast → handled by getReplyEndpointsFor (totalPages > 2).
+//   all       → over-cap (> 1000 replies ⇒ first 250 + last 250, middle is a gap).
+// Under-cap `all` threads are fully cached and NOT marked partial.
 const REPLY_CAP = 1000;
 const REPLY_CAP_HALF = 250;
 
@@ -431,32 +470,16 @@ export async function getRepliesForDepth(
 		};
 	}
 
-	// Per-discussion live counts gate the cap on the `all` branch. We read the
-	// denormalized commentCount rather than counting replies: it tracks
-	// non-deleted replies and is already maintained on reply create/delete.
-	const countRows = await db
-		.select({ id: discussions.id, commentCount: discussions.commentCount })
-		.from(discussions)
-		.where(
-			and(
-				isNull(discussions.deletedAt),
-				inArray(discussions.id, discussionIds),
-				inArray(discussions.categorySlug, readableSlugs)
-			)
-		);
-	const countById = new Map(countRows.map((r) => [r.id, r.commentCount] as const));
+	const countById = await getCountsById(db, discussionIds, readableSlugs);
 	const targetIds = countById.size === 0 ? [] : Array.from(countById.keys());
 
 	if (targetIds.length === 0) {
 		return { replies: [], partialDiscussionIds: [] };
 	}
 
-	// Cap policy (decision #3) applies per-thread via the PARTITION BY in the
-	// window function: for `all`, a thread with ≤ REPLY_CAP replies has every
-	// row kept (both rnAsc and rnDesc stay ≤ REPLY_CAP ≤ REPLY_CAP_HALF is
-	// false, so we still need a small-vs-large guard). We fetch per-thread
-	// counts only to short-circuit threads under the cap into a single "all"
-	// bucket - large threads additionally keep the first/last REPLY_CAP_HALF.
+	// Cap policy (decision #3) applies per-thread via PARTITION BY in the window
+	// function. For `all`, threads with ≤ REPLY_CAP replies keep every row;
+	// threads with > REPLY_CAP additionally keep the first/last REPLY_CAP_HALF.
 	const underCapIds = targetIds.filter((id) => (countById.get(id) ?? 0) <= REPLY_CAP);
 	const overCapIds = targetIds.filter((id) => (countById.get(id) ?? 0) > REPLY_CAP);
 
@@ -509,7 +532,6 @@ export async function getRepliesForDepth(
 		// (rnDesc ≤ half). Combine with OR; small threads' rows already satisfy
 		// rnAsc ≤ REPLY_CAP, but we still need the half-clause for the large
 		// threads, so the filter is the disjunction.
-		void underCapIds;
 		const inSmall = inArray(ranked.discussionId, underCapIds);
 		const inLarge = inArray(ranked.discussionId, overCapIds);
 		const keepLarge = and(
@@ -519,8 +541,29 @@ export async function getRepliesForDepth(
 		rows = await db.select().from(ranked).where(or(inSmall, keepLarge));
 	}
 
-	const partialDiscussionIds = Array.from(new Set(rows.map((r) => r.discussionId)));
+	const partialDiscussionIds = partialForDepth(rows, depth, countById, pageSize);
 	return { replies: rows.map(toReplyDTO), partialDiscussionIds };
+}
+
+// Computes the partial-discussion id set per depth, from the shipped rows + the
+// stored commentCount map. An id appears only when the shipped reply set is
+// genuinely incomplete vs the thread total (so `all` under-cap threads never
+// appear, even though they went through the backfill path).
+function partialForDepth(
+	rows: ReplySyncRow[],
+	depth: ReplyBackfillDepth,
+	countById: Map<number, number>,
+	pageSize: number
+): number[] {
+	if (depth === 'firstLast') return [];
+	const shipped = new Set(rows.map((r) => r.discussionId));
+	const result: number[] = [];
+	for (const id of shipped) {
+		const total = countById.get(id) ?? 0;
+		const isPartial = depth === 'first' ? total > pageSize : depth === 'all' && total > REPLY_CAP;
+		if (isPartial) result.push(id);
+	}
+	return result;
 }
 
 // First page of root activities (no parent) for the offline activity feed,

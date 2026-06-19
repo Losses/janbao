@@ -68,7 +68,7 @@ export function getOfflineDB(): ForumOfflineDB {
 		// Schema upgrades (e.g. the v1 -> v2 bump that added `users`) only run
 		// once no other connection holds the database open. If a stale
 		// connection blocks the upgrade, Dexie's open() promise waits for it
-		// indefinitely — and since the `/offline` routes call getOfflineDB() as
+		// indefinitely - and since the `/offline` routes call getOfflineDB() as
 		// the first line of their load(), that hang surfaces as the page's
 		// loading spinner never resolving. Two hygiene measures prevent that:
 		//

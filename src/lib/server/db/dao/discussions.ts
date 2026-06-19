@@ -142,11 +142,15 @@ export async function getDiscussionsList(
 	// NO pinned promotion, matching the DV07 curated-category spec. Existing
 	// callers omit `sort` and land on `latest`, preserving current behavior.
 	if (sort === 'mostViewed') {
-		baseQuery.orderBy(desc(discussions.viewCount));
+		baseQuery.orderBy(desc(discussions.viewCount), desc(discussions.id));
 	} else if (sort === 'mostReplied') {
-		baseQuery.orderBy(desc(discussions.commentCount));
+		baseQuery.orderBy(desc(discussions.commentCount), desc(discussions.id));
 	} else {
-		baseQuery.orderBy(desc(discussions.isPinned), desc(discussions.lastReplyAt));
+		baseQuery.orderBy(
+			desc(discussions.isPinned),
+			desc(discussions.lastReplyAt),
+			desc(discussions.id)
+		);
 	}
 
 	baseQuery.limit(limit).offset(offset);
