@@ -16,6 +16,23 @@ import type {
 //   'bookmark'                               - in the cached bookmark snapshot.
 export type Reason = 'latest' | 'mostViewed' | 'mostReplied' | 'read' | 'front' | 'bookmark';
 
+// Deterministic reason ordering shared by every layer that builds or filters a
+// reasons array (passthrough writer, sync orchestrator's recompute, evict's
+// withoutRead). Hoisted here so the 6-entry order lives in exactly one place
+// (RV07 C05 r2 audit A5: previously duplicated as REASON_ORDER in evict.ts +
+// passthrough.ts and ORDER in sync-orchestrator.ts). The order is load-bearing:
+// passthrough's withReadReason filters existing arrays against this and must
+// match the orchestrator's recompute output, or every passthrough write would
+// churn the array identity of an already-cached row (spurious diff noise).
+export const REASON_ORDER: readonly Reason[] = [
+	'latest',
+	'mostViewed',
+	'mostReplied',
+	'read',
+	'front',
+	'bookmark'
+];
+
 // IndexedDB row shapes. The content rows mirror the server DTOs plus a cachedAt
 // bookkeeping timestamp (ms) used only for diagnostics.
 export interface CachedDiscussion extends SyncDiscussionDTO {

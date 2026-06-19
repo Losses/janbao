@@ -1,5 +1,6 @@
 import { getOfflineDB } from './idb';
 import { isReadStale, READ_RETENTION_DAYS } from './refresh-policy';
+import { REASON_ORDER } from './types';
 import type { CachedDiscussion, Reason, SyncMetaValue } from './types';
 
 // Offline cache retention fallback. DV06 used this as the primary eviction
@@ -12,18 +13,6 @@ import type { CachedDiscussion, Reason, SyncMetaValue } from './types';
 export const OFFLINE_RETENTION_DAYS = 14;
 const DAY_SECONDS = 86400;
 const DEFAULT_RETENTION_DAYS = 14;
-
-// Deterministic reason ordering shared with the orchestrator's recompute so
-// dropping 'read' from a multi-reason row doesn't churn the array identity
-// of the surviving reasons (mirrors passthrough.ts's REASON_ORDER too).
-const REASON_ORDER: readonly Reason[] = [
-	'latest',
-	'mostViewed',
-	'mostReplied',
-	'read',
-	'front',
-	'bookmark'
-];
 
 // Pure: returns the reason array with 'read' removed and the survivors
 // re-ordered canonically (REASON_ORDER). Exported so the C05 read-TTL trim

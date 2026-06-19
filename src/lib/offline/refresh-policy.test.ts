@@ -142,3 +142,42 @@ test('isReadStale: undefined readUpdatedAt => not stale (legacy row, leave to ap
 test('isReadStale: far-future readUpdatedAt => not stale', () => {
 	expect(isReadStale(NOW + DAY, NOW, READ_RETENTION_DAYS)).toBe(false);
 });
+
+// Unit-contract regression (RV07 C05 r2 audit A4 - CRITICAL): readUpdatedAt
+// must be EPOCH SECONDS, matching what passthrough writes via
+// Math.floor(Date.now()/1000). A prior version wrote epoch MILLISECONDS
+// (~1.78e12), which made nowSec - readUpdatedAtMs hugely negative so 'read'
+// never expired and the 30-day TTL silently never fired. These cases use
+// realistic-magnitude epoch-seconds anchors (~1.8e9, today-ish) so a unit
+// regression (writing ms) would itself push the value far above ~2e9.
+const NOW_SEC_REALISTIC = 1_800_000_000; // epoch seconds, mid-2026-ish
+
+test('isReadStale (unit contract): fresh read at now-seconds => not stale', () => {
+	expect(isReadStale(NOW_SEC_REALISTIC, NOW_SEC_REALISTIC, READ_RETENTION_DAYS)).toBe(false);
+});
+
+test('isReadStale (unit contract): read 31 days older => stale', () => {
+	const readUpdatedAt = NOW_SEC_REALISTIC - 31 * DAY;
+	expect(isReadStale(readUpdatedAt, NOW_SEC_REALISTIC, READ_RETENTION_DAYS)).toBe(true);
+});
+
+test('isReadStale (unit contract): read exactly 30 days older => stale (boundary, >=)', () => {
+	const readUpdatedAt = NOW_SEC_REALISTIC - 30 * DAY;
+	expect(isReadStale(readUpdatedAt, NOW_SEC_REALISTIC, READ_RETENTION_DAYS)).toBe(true);
+});
+
+test('isReadStale (unit contract): read 29 days older => not stale', () => {
+	const readUpdatedAt = NOW_SEC_REALISTIC - 29 * DAY;
+	expect(isReadStale(readUpdatedAt, NOW_SEC_REALISTIC, READ_RETENTION_DAYS)).toBe(false);
+});
+
+test('isReadStale (unit contract): epoch-ms magnitude (~1.78e12) does not parse as seconds', () => {
+	// If passthrough regressed to writing Date.now() (ms), the stored value
+	// would be ~1.78e12 - far in the future when read as seconds, so
+	// nowSec - readUpdatedAt is hugely negative => "not stale" forever. This
+	// pins the contract: any value > ~2e9 is out-of-band for a seconds field,
+	// and isReadStale MUST return false on it (so a regression is visible as
+	// a permanently-fresh read rather than silently corrupting the TTL).
+	const msValue = 1_780_000_000_000; // epoch ms for mid-2026
+	expect(isReadStale(msValue, NOW_SEC_REALISTIC, READ_RETENTION_DAYS)).toBe(false);
+});

@@ -5,6 +5,7 @@ import { computeCachedRanges, computeTotalPages } from './manifest';
 import { recomputeManifestForDiscussion } from './manifest-recompute';
 import { readOfflinePrefs, type OfflinePrefs, type OfflineReplyDepth } from './prefs';
 import { prefsSignatureOf, shouldRefreshCurated, type PrefsSignature } from './refresh-policy';
+import { REASON_ORDER } from './types';
 import type {
 	CachedDiscussion,
 	CachedRange,
@@ -472,15 +473,7 @@ function recomputeReasons(
 	}
 	// Deterministic order so the row's reasons array is stable across syncs
 	// (avoids spurious diff noise in C05 / displays).
-	const ORDER: readonly Reason[] = [
-		'latest',
-		'mostViewed',
-		'mostReplied',
-		'read',
-		'front',
-		'bookmark'
-	];
-	return ORDER.filter((r) => set.has(r));
+	return REASON_ORDER.filter((r) => set.has(r));
 }
 
 async function persistCuratedMeta(map: CuratedSyncMetaMap): Promise<void> {

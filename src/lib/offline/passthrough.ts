@@ -11,29 +11,23 @@
 //                                   for the thread page.
 //
 // Each call tags the touched rows with reason 'read' (UNION onto any existing
-// reasons; never removes other reasons), sets readUpdatedAt = Date.now(), and
-// (for writeThread) reconciles the replyCacheManifest from the live replies
-// store so the manifest reflects what is ACTUALLY cached regardless of which
-// writer put it there (sync depth-backfill OR passthrough).
+// reasons; never removes other reasons), sets readUpdatedAt to epoch SECONDS
+// (Math.floor(Date.now()/1000)) — matching the cached-timestamp convention
+// every other writer normalizes to via toEpochSeconds, and the unit
+// isReadStale/expireReadReasons expect (RV07 C05 r2 audit A4: writing epoch
+// ms here made nowSec - readUpdatedAt hugely negative, so 'read' never
+// expired). cachedAt stays in ms (bookkeeping only, never TTL-math).
+// For writeThread, also reconciles the replyCacheManifest from the live
+// replies store so the manifest reflects what is ACTUALLY cached regardless
+// of which writer put it there (sync depth-backfill OR passthrough).
 
 import { getOfflineDB } from './idb';
 import { recomputeManifestForDiscussion } from './manifest-recompute';
 import { readOfflinePrefs } from './prefs';
+import { REASON_ORDER } from './types';
 import type { CachedDiscussion, CachedRange, CachedReply, CachedUser, Reason } from './types';
 import type { SyncDiscussionDTO, SyncReplyDTO } from '$lib/types/api';
 import type { DiscussionListItem } from '$lib/server/db/dao/discussions';
-
-// Deterministic reason ordering, mirroring sync-orchestrator's recomputeReasons
-// so a passthrough write never re-shuffles the order of an existing reasons
-// array (keeps C05 diff noise zero).
-const REASON_ORDER: readonly Reason[] = [
-	'latest',
-	'mostViewed',
-	'mostReplied',
-	'read',
-	'front',
-	'bookmark'
-];
 
 // Pre-computed singleton so we never allocate a new array per row when the row
 // already carries 'read'. The merge always returns a fresh array (so a missing
@@ -249,7 +243,7 @@ async function upsertDiscussionWithRead(
 		...toStoredDiscussion(discussion),
 		cachedAt: existing?.cachedAt ?? now,
 		reasons: withReadReason(existing?.reasons),
-		readUpdatedAt: now
+		readUpdatedAt: Math.floor(now / 1000)
 	};
 	await db.discussions.put(merged);
 }
@@ -320,7 +314,7 @@ export async function writeList(items: DiscussionListItem[]): Promise<void> {
 			...stored,
 			cachedAt: existing?.cachedAt ?? now,
 			reasons: withReadReason(existing?.reasons),
-			readUpdatedAt: now
+			readUpdatedAt: Math.floor(now / 1000)
 		};
 	});
 
