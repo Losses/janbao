@@ -106,15 +106,18 @@
 
 	onMount(() => {
 		online.setOnline(navigator.onLine);
+		// Decision #5: guests have no power to enable caching and the curated
+		// sync API 401s for them, so skip the sync fetch entirely when there
+		// is no authed user. Avoids firing a guaranteed-401 on every reconnect.
 		const markOnline = () => {
 			online.setOnline(true);
-			triggerSync();
+			if (data.user) triggerSync();
 		};
 		const markOffline = () => online.setOnline(false);
 		window.addEventListener('online', markOnline);
 		window.addEventListener('offline', markOffline);
 		// Keep the offline cache fresh on load when already online.
-		if (navigator.onLine) triggerSync();
+		if (navigator.onLine && data.user) triggerSync();
 		// DV07 C03 - auto-enable offline caching once on the first launch as an
 		// installed PWA, but ONLY when the prefs are still exactly the defaults
 		// (the user has not manually configured) AND a one-time guard flag is

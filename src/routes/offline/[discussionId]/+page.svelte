@@ -156,7 +156,13 @@
 			{/if}
 
 			{#if partitioned.rest.length === 0 && !partitioned.op}
-				<p class="text-sm opacity-70">{data.t.offline.reader.empty}</p>
+				<p class="text-sm opacity-70">
+					{#if data.listingOnly}
+						{data.t.offline.reader.listingOnly}
+					{:else}
+						{data.t.offline.reader.empty}
+					{/if}
+				</p>
 			{:else if partitioned.rest.length > 0}
 				<!-- Replies Stream -->
 				<div class="divide-y divide-base-300 border-t border-base-300">

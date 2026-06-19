@@ -169,3 +169,32 @@ exercised via the integration audit (RV07-C05-\*).
   on/off across two syncs will trigger two refreshes back-to-back. The
   second refresh sees an empty curated set for that category and sheds
   its reason — correct behavior, no throttling needed.
+
+## Round 1
+
+- 5 agents. Verdict: **4/5 UNCONDITIONAL_PASS, 1/5 FAIL**.
+- **[CRITICAL, A4]** `readUpdatedAt` unit mismatch: passthrough wrote ms,
+  `isReadStale` read seconds → `nowSec - readUpdatedAtMs` always negative →
+  `'read'` never expired → 30-day TTL dead, cache leaked. Pure TTL tests
+  masked it (seconds-scale fixture). Plus MINOR: `REASON_ORDER` duplicated
+  across evict/orchestrator/passthrough.
+- Fixes shipped in `663127d`: both passthrough write sites now
+  `Math.floor(Date.now()/1000)`; realistic-magnitude regression test +
+  epoch-ms sentinel; `REASON_ORDER` hoisted to `types.ts`.
+- Gate: check 0/0, lint exit 0, `bun test` 82/82. See `RV07-C05-Audit-01.md`.
+
+## Round 2
+
+- 5 agents. Verdict: **5/5 UNCONDITIONAL_PASS**.
+- CRITICAL fix verified end-to-end: 31-day-stale read → `'read'` dropped
+  (cascade if read-only, trimmed if other reasons); re-entering online
+  refreshes → not stale. No remaining unit drift (audited every cached
+  timestamp). `REASON_ORDER` dedup preserves array identity across all
+  three reorder sites. Regression test would have caught the r1 bug.
+- Carry-over **CO-C05-1 (audit, perf)** — `decideRefreshCurated` 2×
+  `syncMeta.get`; sequential `discussions.toArray()` in expire+evict;
+  `backfillMissingUsers` full-scans (pre-existing DV06). See
+  `RV07-C05-Audit-02.md`.
+- Gates: check 0/0, lint exit 0, `bun test` 82/82.
+
+**C05 COMPLETE 5/5.** Advancing to C06 (full-system integration audit).

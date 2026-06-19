@@ -4,6 +4,7 @@
 	import DiscussionListPage from '$lib/components/templates/DiscussionListPage.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { writeList } from '$lib/offline/passthrough';
+	import { passthroughEnabledFor } from '$lib/offline/passthrough';
 	import type { DiscussionListItem } from '$lib/server/db/dao/discussions';
 	import type { PageData } from './$types';
 
@@ -17,11 +18,14 @@
 
 	// DV07 C04 read passthrough: writes this list page's discussions to IDB
 	// tagged with reason 'read' when the user has the feature on and is online.
-	// No bare `$effect` (per [[svelte-effect-fetch-loop]]); onMount + afterNavigate
-	// read the snapshot at the right lifecycle points. Best-effort: an IDB
-	// hiccup is swallowed so it never breaks the online list view.
+	// Decision #5: gated on `data.user` so guests on an installed PWA never
+	// populate a cache (passthroughEnabledFor centralizes that check). No bare
+	// `$effect` (per [[svelte-effect-fetch-loop]]); onMount + afterNavigate read
+	// the snapshot at the right lifecycle points. Best-effort: an IDB hiccup is
+	// swallowed so it never breaks the online list view.
 	function runPassthrough(items: DiscussionListItem[]): void {
 		if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+		if (!passthroughEnabledFor(data.user)) return;
 		void writeList(items).catch((err) => {
 			console.error('[offline passthrough] writeList failed', err);
 		});

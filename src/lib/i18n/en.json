@@ -586,6 +586,7 @@
 		"reader": {
 			"empty": "No discussions cached yet. Reconnect to sync.",
 			"notCached": "This discussion isn't cached for offline reading.",
+			"listingOnly": "This thread's content isn't cached — only its listing was. Reconnect and open it to cache.",
 			"backToList": "Back to offline list",
 			"backToForum": "Back to forum",
 			"uncachedReplies": "{count} more pages not cached",

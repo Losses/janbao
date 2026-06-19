@@ -98,11 +98,31 @@ interface AuthorInput {
 	avatarFileId: string | null;
 }
 
-// Prefs gate (INV-4 stays intact by gating the entire entry point; guests never
-// reach authed routes anyway, decision #5). Early-returns when disabled or
-// passthrough off so the online path is byte-identical to before DV07.
+// Prefs gate (INV-4 stays intact by gating the entire entry point). Early-
+// returns when disabled or passthrough off so the online path is byte-
+// identical to before DV07.
 function passthroughEnabled(): boolean {
 	return readOfflinePrefs().enabled && readOfflinePrefs().passthrough;
+}
+
+// Minimal presence shape for the Decision #5 gate. We avoid importing the
+// ambient global `UserData` (declared in src/app.d.ts, which is not in scope
+// for this plain .ts module) and avoid coupling the offline layer to the full
+// server-side user shape. Any non-null object with an `id` satisfies it; the
+// layout's `data.user` (and the thread/profile routes' `data.user`) all conform.
+interface AuthedUserRef {
+	id: number;
+}
+
+// Decision #5 gate: guests must never populate a cache. Even on a PUBLIC route
+// (`/`, `/discussions`, `/category/…`, profile-discussions, and the thread
+// page) — where `data.user` is null for guests — a guest on an installed PWA
+// (auto-enabled) would otherwise cache public list data via `writeList` /
+// `writeThread`. This is the ONE place enforcing decision #5 on the
+// passthrough path; every route's `runPassthrough` calls this with its `data.user`.
+// Authed users browsing public routes still cache (correct).
+export function passthroughEnabledFor(user: AuthedUserRef | null): boolean {
+	return !!user && passthroughEnabled();
 }
 
 // Return the row's new reasons array after ensuring 'read' is present. Never

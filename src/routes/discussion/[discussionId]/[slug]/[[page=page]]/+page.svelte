@@ -19,7 +19,7 @@
 	import { onMount } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
-	import { writeThread } from '$lib/offline/passthrough';
+	import { writeThread, passthroughEnabledFor } from '$lib/offline/passthrough';
 	import type { ThreadPassthroughInput } from '$lib/offline/passthrough';
 	import type { PageData } from './$types';
 
@@ -78,6 +78,10 @@
 		const d = current.discussion;
 		if (!d) return;
 		if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+		// Decision #5: guests must never populate a cache. The thread page is a
+		// public route (data.user is null for guests), so gate on the authed
+		// session in addition to the prefs gate inside writeThread.
+		if (!passthroughEnabledFor(current.user)) return;
 		const input: ThreadPassthroughInput = {
 			discussion: {
 				id: d.id,

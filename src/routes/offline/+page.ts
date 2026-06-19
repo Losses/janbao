@@ -27,9 +27,14 @@ export const load: PageLoad = async () => {
 
 	const joined = joinDiscussions(discussions, usersById);
 	// Mirror the live front-page order: pinned first, then lastReplyAt desc (NULL
-	// last, matching the online home page which orders by bare lastReplyAt).
+	// last, matching the online home page which orders by bare lastReplyAt), then
+	// `id` desc as the final tiebreaker so same-`lastReplyAt` threads stay stable
+	// vs the server's `desc(discussions.id)` ordering (C06 r2 A1).
 	joined.sort(
-		(a, b) => Number(b.isPinned) - Number(a.isPinned) || (b.lastReplyAt ?? 0) - (a.lastReplyAt ?? 0)
+		(a, b) =>
+			Number(b.isPinned) - Number(a.isPinned) ||
+			(b.lastReplyAt ?? 0) - (a.lastReplyAt ?? 0) ||
+			b.id - a.id
 	);
 	return { discussions: joined };
 };
