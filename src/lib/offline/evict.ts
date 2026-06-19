@@ -61,15 +61,27 @@ export async function applyEviction(): Promise<void> {
 	});
 	if (toEvict.length === 0) return;
 
-	await db.transaction('rw', db.discussions, db.replies, db.readStateMerged, async () => {
-		for (const d of toEvict) {
-			await db.discussions.delete(d.id);
-			const replyKeys = await db.replies.where('discussionId').equals(d.id).primaryKeys();
-			if (replyKeys.length) await db.replies.bulkDelete(replyKeys);
-			await db.readStateMerged.delete(d.id);
-			// Manifest rows are scoped to discussions that no longer exist; clear
-			// them so the gap-renderer never reads a dangling manifest.
-			await db.replyCacheManifest.delete(d.id);
+	// Every store touched inside the body MUST be listed: replyCacheManifest
+	// is deleted below, so omitting it makes Dexie raise "Table not part of
+	// transaction" and roll the whole txn back (nothing is ever evicted).
+	// readStatePending is deliberately NOT here - the outbox must survive even
+	// when its discussion scrolls out of cache.
+	await db.transaction(
+		'rw',
+		db.discussions,
+		db.replies,
+		db.readStateMerged,
+		db.replyCacheManifest,
+		async () => {
+			for (const d of toEvict) {
+				await db.discussions.delete(d.id);
+				const replyKeys = await db.replies.where('discussionId').equals(d.id).primaryKeys();
+				if (replyKeys.length) await db.replies.bulkDelete(replyKeys);
+				await db.readStateMerged.delete(d.id);
+				// Manifest rows are scoped to discussions that no longer exist; clear
+				// them so the gap-renderer never reads a dangling manifest.
+				await db.replyCacheManifest.delete(d.id);
+			}
 		}
-	});
+	);
 }

@@ -1,5 +1,6 @@
 // DV07 reply-cache manifest helpers. Pure functions over (depth, totalPages,
-// pageSize) so they are unit-testable without a Dexie harness. Two layers:
+// pageSize, commentCount) so they are unit-testable without a Dexie harness.
+// Two layers:
 //
 //  - computeCachedRanges / isComplete: derived from the depth policy. Used by
 //    the orchestrator to (re)write a ReplyCacheManifestRow on every sync.
@@ -16,8 +17,9 @@
 //                          so each side is ~REPLY_CAP_HALF rows at the manifest
 //                          pageSize.
 //
-// The cap is on rows, not pages (matches the DAO REPLY_CAP in sync.ts), so a
-// different pageSize doesn't silently change the policy.
+// The cap is on actual reply count (matches the DAO REPLY_CAP in sync.ts, which
+// also gates on the real count), so a thread near the 1000 boundary does not
+// split early just because totalPages*pageSize over-estimates the count.
 import type { CachedRange, ReplyCacheManifestRow } from './types';
 import type { OfflineReplyDepth } from './prefs';
 
@@ -41,11 +43,18 @@ export interface ReplyGapSummary {
 	totalMissingReplies: number;
 }
 
-/** Derive the inclusive page ranges the cache should hold for a depth policy. */
+/**
+ * Derive the inclusive page ranges the cache should hold for a depth policy.
+ *
+ * For depth 'all' the over-cap decision is gated on the REAL commentCount
+ * (not totalPages*pageSize), so a thread that fits within REPLY_CAP stays
+ * complete even when totalPages*pageSize over-estimates near the boundary.
+ */
 export function computeCachedRanges(
 	depth: OfflineReplyDepth,
 	totalPages: number,
-	pageSize: number
+	pageSize: number,
+	commentCount: number
 ): CachedRange[] {
 	if (totalPages <= 0 || pageSize <= 0) return [];
 	if (totalPages === 1) return [{ start: 1, end: 1 }];
@@ -56,14 +65,13 @@ export function computeCachedRanges(
 			{ start: totalPages, end: totalPages }
 		];
 	}
-	// depth === 'all'. Cap on rows ⇒ each side holds at most REPLY_CAP_HALF
-	// replies ⇒ ceil / floor pages at the manifest pageSize. The cap is on
-	// actual reply count; without commentCount we approximate with
-	// totalPages*pageSize (an over-estimate, so a thread near the boundary
-	// may split early rather than miss the cap - the next sync rewrites the
-	// manifest with the true commentCount via the orchestrator).
-	const approxReplies = totalPages * pageSize;
-	if (approxReplies <= REPLY_CAP) return [{ start: 1, end: totalPages }];
+	// depth === 'all'. Cap on actual rows (matches the DAO REPLY_CAP in
+	// sync.ts): each side holds at most REPLY_CAP_HALF replies ⇒ ceil / floor
+	// pages at the manifest pageSize. Using commentCount (not the
+	// totalPages*pageSize over-estimate) avoids phantom splits just below the
+	// boundary — e.g. a 951-reply thread on pageSize 50 rounds up to 20 pages
+	// (=1000 with the over-estimate) but really fits under the cap.
+	if (commentCount <= REPLY_CAP) return [{ start: 1, end: totalPages }];
 	const capPages = Math.max(1, Math.ceil(REPLY_CAP_HALF / pageSize));
 	const firstEnd = Math.min(capPages, totalPages);
 	const lastStart = Math.max(firstEnd + 1, totalPages - capPages + 1);

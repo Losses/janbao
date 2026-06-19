@@ -68,9 +68,14 @@ totalPages)`, `computeReplyGaps(manifest, commentCount)` implementing
   `GET /api/sync/content` (+ the read-state outbox flush on reconnect). No new
   server write paths.
 - **DV06 behavior gate**: the `!enabled` path sends `categories=` +
-  `depth=firstLast`, so the server returns no curated sets and backfills the
-  front/bookmark union with firstLast depth — identical to DV06. Verified by
-  inspection against `buildContentSync` defaults.
+  `depth=firstLast`, so the server request and response are byte-identical to
+  DV06 (no curated sets returned; front/bookmark union backfilled with
+  firstLast depth). The client DOES still make additive IDB writes on this
+  path: it persists the echoed front/bookmark snapshots to syncMeta, mirrors
+  `curated:*` records, and applies `front`/`bookmark` reasons to the affected
+  rows. These writes are additive and observable only via the new
+  `replyGaps`/reason-set paths (which fall back to empty/DV06 behavior), so
+  they do not alter observable DV06 read behavior.
 - **No `$effect` loops** ([[svelte-effect-fetch-loop]]): C02 touches only
   `.ts` files; the orchestrator is invoked from existing client hooks (no new
   reactive surface).

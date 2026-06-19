@@ -10,6 +10,7 @@ import type {
 	CuratedSyncMetaRecord,
 	Reason,
 	ReplyCacheManifestRow,
+	SyncMetaValue,
 	SyncResult
 } from './types';
 import type {
@@ -32,6 +33,21 @@ let inflight: Promise<SyncResult> | null = null;
 interface CategoryReasonBinding {
 	category: keyof CuratedDiscussionIdSets;
 	reason: Reason;
+}
+
+// Prior front/bookmark id snapshots read ONCE at doSync start, before the
+// page loop overwrites syncMeta.{frontPageSnapshot,bookmarksSnapshot}. The
+// remove-delta for these two reasons must diff against the value that was
+// present BEFORE this sync ran; reading inside the loop would always see the
+// current sync's value (prior === current → empty remove-delta → stale
+// reasons never cleared). Mirrors the curated:* prior-mirror pattern.
+interface PriorFrontBookmark {
+	front: number[];
+	bookmarks: number[];
+}
+
+function asNumberArray(value: SyncMetaValue | undefined): number[] {
+	return Array.isArray(value) ? (value.filter((v) => typeof v === 'number') as number[]) : [];
 }
 
 // Map each curated category toggle to its reason enum. Order is fixed so the
@@ -93,6 +109,17 @@ async function doSync(): Promise<SyncResult> {
 	let repliesCursor = stored?.replies;
 	let discussionTombstoneCursor = stored?.discussionTombstoneCursor;
 	let replyTombstoneCursor = stored?.replyTombstoneCursor;
+
+	// Capture the prior front/bookmark id snapshots ONCE before the page loop
+	// writes them. applyReasonSets needs the pre-sync value to compute the
+	// remove-delta; reading inside the loop would observe the freshly-written
+	// current value (prior === current → empty remove-delta → stale reasons).
+	const priorFrontRow = await db.syncMeta.get('frontPageSnapshot');
+	const priorBookmarksRow = await db.syncMeta.get('bookmarksSnapshot');
+	const priorFrontBookmark: PriorFrontBookmark = {
+		front: asNumberArray(priorFrontRow?.value),
+		bookmarks: asNumberArray(priorBookmarksRow?.value)
+	};
 
 	let totalDisc = 0;
 	let totalRep = 0;
@@ -200,7 +227,13 @@ async function doSync(): Promise<SyncResult> {
 	// server snapshot is known. Reads back the upserted discussions so reasons
 	// reflect their actual content (a backfilled curated entrant has
 	// commentCount populated; the manifest needs it for totalPages).
-	await applyReasonSets(latestCurated, latestFront, latestBookmarks, enabledCats.enabled);
+	await applyReasonSets(
+		latestCurated,
+		latestFront,
+		latestBookmarks,
+		enabledCats.enabled,
+		priorFrontBookmark
+	);
 	await populateReplyManifests(
 		latestCurated,
 		latestFront,
@@ -253,7 +286,8 @@ async function applyReasonSets(
 	curated: CuratedDiscussionIdSets,
 	front: number[],
 	bookmarks: number[],
-	enabledCats: CategoryReasonBinding[]
+	enabledCats: CategoryReasonBinding[],
+	priorFrontBookmark: PriorFrontBookmark
 ): Promise<void> {
 	const db = getOfflineDB();
 	const fetchedAt = Date.now();
@@ -303,24 +337,19 @@ async function applyReasonSets(
 	}
 
 	// Front + bookmark reasons. The server echoes the full snapshot on every
-	// page, so the latest one is authoritative.
+	// page, so the latest one is authoritative. The remove-delta uses the PRIOR
+	// snapshot captured at doSync start (before the loop overwrote the syncMeta
+	// row); reading syncMeta here would return the current sync's value and
+	// produce an empty remove-delta (the round-1 bug).
 	const frontDelta = ensure('front');
 	for (const id of front) frontDelta.add.add(id);
-	const frontRow = await db.syncMeta.get('frontPageSnapshot');
-	const priorFront = Array.isArray(frontRow?.value)
-		? (frontRow.value.filter((v) => typeof v === 'number') as number[])
-		: [];
-	for (const id of priorFront) {
+	for (const id of priorFrontBookmark.front) {
 		if (!front.includes(id)) frontDelta.remove.add(id);
 	}
 
 	const bookmarkDelta = ensure('bookmark');
 	for (const id of bookmarks) bookmarkDelta.add.add(id);
-	const bookmarkRow = await db.syncMeta.get('bookmarksSnapshot');
-	const priorBookmarks = Array.isArray(bookmarkRow?.value)
-		? (bookmarkRow.value.filter((v) => typeof v === 'number') as number[])
-		: [];
-	for (const id of priorBookmarks) {
+	for (const id of priorFrontBookmark.bookmarks) {
 		if (!bookmarks.includes(id)) bookmarkDelta.remove.add(id);
 	}
 
@@ -406,7 +435,12 @@ async function populateReplyManifests(
 	for (const row of rows) {
 		if (!row) continue;
 		const totalPages = Math.max(1, Math.ceil(row.commentCount / pageSize));
-		const cachedRanges: CachedRange[] = computeCachedRanges(depth, totalPages, pageSize);
+		const cachedRanges: CachedRange[] = computeCachedRanges(
+			depth,
+			totalPages,
+			pageSize,
+			row.commentCount
+		);
 		manifests.push({
 			discussionId: row.id,
 			totalPages,

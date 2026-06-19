@@ -15,56 +15,70 @@ import type { ReplyCacheManifestRow } from './types';
 const PAGE_SIZE = 50;
 
 test('computeCachedRanges first = page 1 only', () => {
-	expect(computeCachedRanges('first', 1, PAGE_SIZE)).toEqual([{ start: 1, end: 1 }]);
-	expect(computeCachedRanges('first', 10, PAGE_SIZE)).toEqual([{ start: 1, end: 1 }]);
+	expect(computeCachedRanges('first', 1, PAGE_SIZE, 0)).toEqual([{ start: 1, end: 1 }]);
+	expect(computeCachedRanges('first', 10, PAGE_SIZE, 500)).toEqual([{ start: 1, end: 1 }]);
 });
 
 test('computeCachedRanges firstLast = first + last page', () => {
-	expect(computeCachedRanges('firstLast', 1, PAGE_SIZE)).toEqual([{ start: 1, end: 1 }]);
-	expect(computeCachedRanges('firstLast', 2, PAGE_SIZE)).toEqual([
+	expect(computeCachedRanges('firstLast', 1, PAGE_SIZE, 0)).toEqual([{ start: 1, end: 1 }]);
+	expect(computeCachedRanges('firstLast', 2, PAGE_SIZE, 100)).toEqual([
 		{ start: 1, end: 1 },
 		{ start: 2, end: 2 }
 	]);
-	expect(computeCachedRanges('firstLast', 10, PAGE_SIZE)).toEqual([
+	expect(computeCachedRanges('firstLast', 10, PAGE_SIZE, 500)).toEqual([
 		{ start: 1, end: 1 },
 		{ start: 10, end: 10 }
 	]);
 });
 
-test('computeCachedRanges all under-cap (<=1000) = every page, complete', () => {
-	expect(computeCachedRanges('all', 1, PAGE_SIZE)).toEqual([{ start: 1, end: 1 }]);
-	// 20 pages * 50 = 1000 rows exactly at the cap boundary.
-	expect(computeCachedRanges('all', 20, PAGE_SIZE)).toEqual([{ start: 1, end: 20 }]);
+test('computeCachedRanges all under-cap (commentCount<=1000) = every page, complete', () => {
+	expect(computeCachedRanges('all', 1, PAGE_SIZE, 0)).toEqual([{ start: 1, end: 1 }]);
+	// Exactly at the cap boundary: 1000 replies, 20 pages of 50. Complete.
+	expect(computeCachedRanges('all', 20, PAGE_SIZE, 1000)).toEqual([{ start: 1, end: 20 }]);
 });
 
-test('computeCachedRanges all over-cap (>1000) = first 5 + last 5 pages', () => {
-	// 25 pages * 50 = 1250 rows > 1000 ⇒ cap kicks in. Each side = 250 rows
-	// = 5 pages at PAGE_SIZE 50.
-	expect(computeCachedRanges('all', 25, PAGE_SIZE)).toEqual([
+test('computeCachedRanges all over-cap (commentCount>1000) = first 5 + last 5 pages', () => {
+	// 1250 replies, 25 pages of 50. capPages = ceil(250/50) = 5.
+	expect(computeCachedRanges('all', 25, PAGE_SIZE, 1250)).toEqual([
 		{ start: 1, end: 5 },
 		{ start: 21, end: 25 }
 	]);
 });
 
+test('computeCachedRanges all gates on commentCount, not totalPages*pageSize', () => {
+	// 951 replies on pageSize 50 ⇒ totalPages=ceil(951/50)=20 pages.
+	// totalPages*pageSize=1000 (==cap) would have split under the old gate;
+	// the real commentCount (951) is under the cap, so the thread stays
+	// complete. This is the round-2 boundary regression test.
+	expect(computeCachedRanges('all', 20, PAGE_SIZE, 951)).toEqual([{ start: 1, end: 20 }]);
+	// 999 replies, 20 pages: still complete.
+	expect(computeCachedRanges('all', 20, PAGE_SIZE, 999)).toEqual([{ start: 1, end: 20 }]);
+	// 1001 replies, 21 pages: just over the cap → splits.
+	expect(computeCachedRanges('all', 21, PAGE_SIZE, 1001)).toEqual([
+		{ start: 1, end: 5 },
+		{ start: 17, end: 21 }
+	]);
+});
+
 test('computeCachedRanges all over-cap merges when windows meet', () => {
-	// 21 pages * 50 = 1050 rows > 1000. capPages = ceil(250/50) = 5. firstEnd
+	// 1050 replies, 21 pages of 50. capPages = ceil(250/50) = 5. firstEnd
 	// = min(5, 21) = 5, lastStart = max(6, 21-5+1=17) = 17. No merge here.
-	expect(computeCachedRanges('all', 21, PAGE_SIZE)).toEqual([
+	expect(computeCachedRanges('all', 21, PAGE_SIZE, 1050)).toEqual([
 		{ start: 1, end: 5 },
 		{ start: 17, end: 21 }
 	]);
 	// Force a merge: tiny pageSize so each window covers most of the thread.
-	// pageSize 1000, 3 pages = 2000 rows > cap. capPages = ceil(250/1000) = 1.
+	// pageSize 1000, 3 pages = up to 3000 replies. capPages = ceil(250/1000)=1.
 	// firstEnd = min(1,3) = 1, lastStart = max(2, 3-1+1=3) = 3 ⇒ windows [1,1]
 	// and [3,3]; gap at page 2 remains.
-	expect(computeCachedRanges('all', 3, 1000)).toEqual([
+	expect(computeCachedRanges('all', 3, 1000, 3000)).toEqual([
 		{ start: 1, end: 1 },
 		{ start: 3, end: 3 }
 	]);
 	// And a real merge: pageSize 2000, 1 page is handled by the totalPages===1
-	// guard; 2 pages = 2000 rows > cap, capPages=1, firstEnd=1, lastStart=
+	// guard; 2 pages = up to 4000 replies, capPages=1, firstEnd=1, lastStart=
 	// max(2, 2-1+1=2)=2 ⇒ lastStart <= firstEnd+1 ⇒ merge to [{1,2}].
-	expect(computeCachedRanges('all', 2, 2000)).toEqual([{ start: 1, end: 2 }]);
+	expect(computeCachedRanges('all', 2, 2000, 4000)).toEqual([{ start: 1, end: 2 }]);
 });
 
 test('isComplete true iff every page covered', () => {
