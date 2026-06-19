@@ -2,6 +2,7 @@
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
+	import PageTitle from '$lib/components/molecules/PageTitle.svelte';
 	import Badge from '$lib/components/atoms/Badge.svelte';
 	import DateComponent from '$lib/components/atoms/Date.svelte';
 	import { formatTitle } from '$lib/utils/title';
@@ -101,7 +102,7 @@
 
 <DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-3">
-		<h1 class="page-title border-b border-base-300 pb-4">{profileT.invitations}</h1>
+		<PageTitle title={profileT.invitations} />
 
 		{#if feedback}
 			<div

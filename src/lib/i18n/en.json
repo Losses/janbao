@@ -251,6 +251,7 @@
 		"currentPassword": "Current Password",
 		"newPassword": "New Password",
 		"preferencesDescription": "Choose which notifications you want to receive",
+		"notificationsSection": "In-app notifications",
 		"prefProfileComment": "Profile Comments",
 		"prefProfileCommentDesc": "When someone posts on your profile",
 		"prefDiscussionReply": "Discussion Replies",
@@ -275,8 +276,6 @@
 		"stealthMode": "Stealth Mode",
 		"stealthActive": "You are currently hidden from the Active Users Wall",
 		"stealthInactive": "You are visible on the Active Users Wall",
-		"enableStealth": "Enable Stealth",
-		"disableStealth": "Disable Stealth",
 		"displayNameEmpty": "Display name cannot be empty",
 		"bioTooLong": "Bio must be 100 characters or fewer",
 		"emailEmpty": "Email cannot be empty",
@@ -295,7 +294,6 @@
 		"offlineReading": {
 			"title": "Offline Reading",
 			"description": "Choose which discussions to cache on this device for offline reading. Cached content is stored locally and refreshed on a schedule.",
-			"perDeviceNote": "Offline cache is stored per-device in this browser. Caching auto-enables when Janbao is installed as an app.",
 			"installedHint": "Janbao is installed as an app on this device - caching is available.",
 			"enable": "Enable offline caching",
 			"enableActive": "Caching is enabled. Curated categories will be cached and refreshed.",
@@ -322,8 +320,6 @@
 			"refresh_7": "Every 7 days",
 			"passthrough": "Read passthrough",
 			"passthroughDesc": "Discussions you open while online are written to the offline cache.",
-			"reset": "Reset to defaults",
-			"resetDone": "Offline reading settings reset to defaults.",
 			"synced": "Cache synced"
 		}
 	},

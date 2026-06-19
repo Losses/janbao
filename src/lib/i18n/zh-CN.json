@@ -251,6 +251,7 @@
 		"currentPassword": "当前密码",
 		"newPassword": "新密码",
 		"preferencesDescription": "选择你想要接收的通知类型",
+		"notificationsSection": "站内通知",
 		"prefProfileComment": "主页评论",
 		"prefProfileCommentDesc": "当有人在你主页留言时",
 		"prefDiscussionReply": "讨论回复",
@@ -275,8 +276,6 @@
 		"stealthMode": "隐身模式",
 		"stealthActive": "你当前对其他用户隐藏了在线状态",
 		"stealthInactive": "你当前对其他用户可见",
-		"enableStealth": "启用隐身",
-		"disableStealth": "关闭隐身",
 		"displayNameEmpty": "显示名称不能为空",
 		"bioTooLong": "个人介绍不能超过 100 字",
 		"emailEmpty": "邮箱不能为空",
@@ -295,7 +294,6 @@
 		"offlineReading": {
 			"title": "离线阅读",
 			"description": "选择要缓存到此设备以供离线阅读的讨论。缓存内容存储在本地并按计划刷新。",
-			"perDeviceNote": "离线缓存按设备存储在当前浏览器中。当简报作为应用安装后会自动启用缓存。",
 			"installedHint": "简报已作为应用安装在此设备上 - 缓存可用。",
 			"enable": "启用离线缓存",
 			"enableActive": "缓存已启用。所选分类将被缓存并定期刷新。",
@@ -322,8 +320,6 @@
 			"refresh_7": "每 7 天",
 			"passthrough": "阅读透传",
 			"passthroughDesc": "在线浏览的讨论会被写入离线缓存。",
-			"reset": "恢复默认",
-			"resetDone": "离线阅读设置已恢复默认。",
 			"synced": "已同步缓存"
 		}
 	},

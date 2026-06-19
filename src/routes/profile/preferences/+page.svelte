@@ -2,6 +2,9 @@
 	import { onMount } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
+	import SettingsToggle from '$lib/components/molecules/SettingsToggle.svelte';
+	import PageTitle from '$lib/components/molecules/PageTitle.svelte';
+	import SectionTitle from '$lib/components/molecules/SectionTitle.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import type { ApiResult, FeedbackMessage } from '$lib/types/api';
 	import type { PageData } from './$types';
@@ -167,9 +170,7 @@
 
 <DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-3">
-		<h1 class="page-title border-b border-base-300 pb-4">
-			{profileT.preferences}
-		</h1>
+		<PageTitle title={profileT.preferences} />
 
 		{#if message}
 			<div
@@ -182,9 +183,10 @@
 
 		<fieldset disabled={!online.online}>
 			<div class="space-y-4">
-				<p class="text-sm text-base-content/70 mb-2">
-					{profileT.preferencesDescription}
-				</p>
+				<SectionTitle
+					title={profileT.notificationsSection}
+					description={profileT.preferencesDescription}
+				/>
 
 				<div class="form-control">
 					<label class="label cursor-pointer justify-start gap-3" for="pref-profile-comment">
@@ -278,9 +280,8 @@
 			</div>
 
 			{#if vapidPublicKey}
-				<div class="pt-4 border-t border-base-300 space-y-3">
-					<h2 class="text-lg font-semibold">{pushT.sectionTitle}</h2>
-					<p class="text-sm text-base-content/70">{pushT.sectionDescription}</p>
+				<div class="space-y-3">
+					<SectionTitle title={pushT.sectionTitle} description={pushT.sectionDescription} />
 
 					{#if pushMessageState}
 						<div
@@ -297,18 +298,17 @@
 						<p class="text-sm text-base-content/50">{pushT.unsupported}</p>
 					{:else if pushPermission === 'denied'}
 						<p class="text-sm text-base-content/50">{pushT.permissionDenied}</p>
-					{:else if pushEnabled || pushPermission === 'granted'}
-						<button class="btn btn-outline btn-sm" onclick={handleDisablePush} disabled={pushBusy}>
-							{pushBusy ? t.common.saving : pushT.disable}
-						</button>
-					{:else}
-						<button class="btn btn-primary btn-sm" onclick={handleEnablePush} disabled={pushBusy}>
-							{pushBusy ? t.common.saving : pushT.enable}
-						</button>
 					{/if}
 
-					{#if pushEnabled || pushPermission === 'granted'}
-						<div class="space-y-2 pt-2">
+					<SettingsToggle
+						label={pushT.enable}
+						checked={pushEnabled}
+						disabled={pushBusy || !pushSupported || pushPermission === 'denied'}
+						onchange={(v) => (v ? handleEnablePush() : handleDisablePush())}
+					/>
+
+					{#if pushEnabled}
+						<div class="space-y-2">
 							<div class="form-control">
 								<label class="label cursor-pointer justify-start gap-3" for="pref-push-mention">
 									<input

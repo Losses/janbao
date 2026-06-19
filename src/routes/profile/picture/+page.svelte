@@ -1,6 +1,7 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
+	import PageTitle from '$lib/components/molecules/PageTitle.svelte';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import type { ApiResult, FeedbackMessage } from '$lib/types/api';
@@ -102,9 +103,7 @@
 
 <DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-3">
-		<h1 class="page-title border-b border-base-300 pb-4">
-			{profileT.avatar}
-		</h1>
+		<PageTitle title={profileT.avatar} />
 
 		{#if message}
 			<div

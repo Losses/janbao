@@ -144,6 +144,13 @@ header nav {
 	font-family: var(--font-sans);
 }
 
+.section-title {
+	font-size: 1rem;
+	font-weight: 600;
+	line-height: 1.5;
+	font-family: var(--font-sans);
+}
+
 /*
  * Spoiler text styling - used in both LexicalRenderer (read-only) and
  * LexicalEditor (editable) contexts. Text is hidden by default and revealed

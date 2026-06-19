@@ -1,6 +1,7 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
+	import PageTitle from '$lib/components/molecules/PageTitle.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import type { ApiResult, FeedbackMessage, ProfileEditBody } from '$lib/types/api';
 	import type { PageData } from './$types';
@@ -90,9 +91,7 @@
 
 <DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-3">
-		<h1 class="page-title border-b border-base-300 pb-4">
-			{profileT.editAccount}
-		</h1>
+		<PageTitle title={profileT.editAccount} />
 
 		{#if message}
 			<div

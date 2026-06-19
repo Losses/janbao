@@ -2,6 +2,9 @@
 	import { onMount } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
+	import SettingsToggle from '$lib/components/molecules/SettingsToggle.svelte';
+	import PageTitle from '$lib/components/molecules/PageTitle.svelte';
+	import SectionTitle from '$lib/components/molecules/SectionTitle.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import type { PageData } from './$types';
 	import { getOfflinePrefsStore } from '$lib/stores/offline-prefs.svelte';
@@ -37,7 +40,7 @@
 	const REFRESH_OPTIONS: readonly OfflineRefreshIntervalDays[] = [1, 2, 3, 5, 7];
 	const DEPTHS: readonly OfflineReplyDepth[] = ['first', 'firstLast', 'all'];
 
-	type OfflineFormMessageKind = 'saved' | 'synced' | 'error';
+	type OfflineFormMessageKind = 'synced' | 'error';
 	interface OfflineFormMessage {
 		kind: OfflineFormMessageKind;
 		text: string;
@@ -108,11 +111,6 @@
 				message = { kind: 'error', text: t.common.error };
 			});
 	}
-
-	function handleReset(): void {
-		prefsStore.reset();
-		message = { kind: 'saved', text: offlineT.resetDone };
-	}
 </script>
 
 <svelte:head>
@@ -127,9 +125,7 @@
 
 <DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-3">
-		<h1 class="page-title border-b border-base-300 pb-4">
-			{offlineT.title}
-		</h1>
+		<PageTitle title={offlineT.title} />
 
 		{#if message}
 			<div
@@ -149,160 +145,118 @@
 				<div class="alert alert-primary" role="status">
 					{offlineT.installedHint}
 				</div>
-			{:else}
-				<p class="text-xs text-base-content/50">
-					{offlineT.perDeviceNote}
-				</p>
 			{/if}
 
-			<!-- Master enable toggle (always interactive; rest of the form is
-			     disabled when off). -->
-			<div class="flex items-center justify-between p-4 bg-base-200/50 rounded-box">
-				<div>
-					<p class="font-medium text-base-content">
-						{offlineT.enable}
-					</p>
-					<p class="text-sm text-base-content/60">
-						{enabled ? offlineT.enableActive : offlineT.enableInactive}
-					</p>
+			<!-- Master enable toggle. When off, the sub-options below are not
+			     rendered at all (not greyed out). -->
+			<SettingsToggle
+				label={offlineT.enable}
+				description={enabled ? offlineT.enableActive : offlineT.enableInactive}
+				checked={enabled}
+				onchange={setEnabled}
+			>
+				<div class="space-y-2">
+					<SectionTitle
+						title={offlineT.categoriesTitle}
+						description={offlineT.categoriesDescription}
+					/>
+
+					<div class="form-control">
+						<label class="label cursor-pointer justify-start gap-3" for="offline-cat-latest">
+							<input
+								id="offline-cat-latest"
+								type="checkbox"
+								class="checkbox checkbox-sm checkbox-primary"
+								checked={categories.latest}
+								onchange={() => toggleCategory('latest')}
+							/>
+							<div>
+								<span class="label-text font-medium">{offlineT.catLatest}</span>
+								<p class="text-xs text-base-content/50">{offlineT.catLatestDesc}</p>
+							</div>
+						</label>
+					</div>
+
+					<div class="form-control">
+						<label class="label cursor-pointer justify-start gap-3" for="offline-cat-most-viewed">
+							<input
+								id="offline-cat-most-viewed"
+								type="checkbox"
+								class="checkbox checkbox-sm checkbox-primary"
+								checked={categories.mostViewed}
+								onchange={() => toggleCategory('mostViewed')}
+							/>
+							<div>
+								<span class="label-text font-medium">{offlineT.catMostViewed}</span>
+								<p class="text-xs text-base-content/50">{offlineT.catMostViewedDesc}</p>
+							</div>
+						</label>
+					</div>
+
+					<div class="form-control">
+						<label class="label cursor-pointer justify-start gap-3" for="offline-cat-most-replied">
+							<input
+								id="offline-cat-most-replied"
+								type="checkbox"
+								class="checkbox checkbox-sm checkbox-primary"
+								checked={categories.mostReplied}
+								onchange={() => toggleCategory('mostReplied')}
+							/>
+							<div>
+								<span class="label-text font-medium">{offlineT.catMostReplied}</span>
+								<p class="text-xs text-base-content/50">{offlineT.catMostRepliedDesc}</p>
+							</div>
+						</label>
+					</div>
 				</div>
-				<input
-					type="checkbox"
-					class="toggle toggle-primary"
-					checked={enabled}
-					onchange={(e) => setEnabled(e.currentTarget.checked)}
-				/>
-			</div>
 
-			<fieldset disabled={!enabled}>
-				<div class="space-y-4">
-					<div class="space-y-2">
-						<h2 class="text-lg font-semibold">{offlineT.categoriesTitle}</h2>
-						<p class="text-sm text-base-content/70">{offlineT.categoriesDescription}</p>
+				<div class="space-y-2">
+					<SectionTitle title={offlineT.depthTitle} description={offlineT.depthDescription} />
 
-						<div class="form-control">
-							<label class="label cursor-pointer justify-start gap-3" for="offline-cat-latest">
+					<div class="flex flex-col gap-2">
+						{#each DEPTHS as option (option)}
+							<label class="label cursor-pointer justify-start gap-3" for="offline-depth-{option}">
 								<input
-									id="offline-cat-latest"
-									type="checkbox"
-									class="checkbox checkbox-sm checkbox-primary"
-									checked={categories.latest}
-									onchange={() => toggleCategory('latest')}
+									id="offline-depth-{option}"
+									type="radio"
+									name="offline-depth"
+									class="radio radio-sm radio-primary"
+									checked={depth === option}
+									onchange={() => setDepth(option)}
 								/>
-								<div>
-									<span class="label-text font-medium">{offlineT.catLatest}</span>
-									<p class="text-xs text-base-content/50">{offlineT.catLatestDesc}</p>
-								</div>
+								<span class="label-text font-medium">
+									{offlineT[`depth_${option}`]}
+								</span>
 							</label>
-						</div>
-
-						<div class="form-control">
-							<label class="label cursor-pointer justify-start gap-3" for="offline-cat-most-viewed">
-								<input
-									id="offline-cat-most-viewed"
-									type="checkbox"
-									class="checkbox checkbox-sm checkbox-primary"
-									checked={categories.mostViewed}
-									onchange={() => toggleCategory('mostViewed')}
-								/>
-								<div>
-									<span class="label-text font-medium">{offlineT.catMostViewed}</span>
-									<p class="text-xs text-base-content/50">{offlineT.catMostViewedDesc}</p>
-								</div>
-							</label>
-						</div>
-
-						<div class="form-control">
-							<label
-								class="label cursor-pointer justify-start gap-3"
-								for="offline-cat-most-replied"
-							>
-								<input
-									id="offline-cat-most-replied"
-									type="checkbox"
-									class="checkbox checkbox-sm checkbox-primary"
-									checked={categories.mostReplied}
-									onchange={() => toggleCategory('mostReplied')}
-								/>
-								<div>
-									<span class="label-text font-medium">{offlineT.catMostReplied}</span>
-									<p class="text-xs text-base-content/50">{offlineT.catMostRepliedDesc}</p>
-								</div>
-							</label>
-						</div>
+						{/each}
 					</div>
+				</div>
 
-					<div class="space-y-2 pt-4 border-t border-base-300">
-						<h2 class="text-lg font-semibold">{offlineT.depthTitle}</h2>
-						<p class="text-sm text-base-content/70">{offlineT.depthDescription}</p>
-
-						<div class="flex flex-col gap-2">
-							{#each DEPTHS as option (option)}
-								<label
-									class="label cursor-pointer justify-start gap-3"
-									for="offline-depth-{option}"
-								>
-									<input
-										id="offline-depth-{option}"
-										type="radio"
-										name="offline-depth"
-										class="radio radio-sm radio-primary"
-										checked={depth === option}
-										onchange={() => setDepth(option)}
-									/>
-									<span class="label-text font-medium">
-										{offlineT[`depth_${option}`]}
-									</span>
-								</label>
-							{/each}
-						</div>
-					</div>
-
-					<div class="space-y-2 pt-4 border-t border-base-300">
-						<h2 class="text-lg font-semibold">{offlineT.refreshTitle}</h2>
-						<p class="text-sm text-base-content/70">{offlineT.refreshDescription}</p>
-						<select
-							class="select select-bordered select-sm w-full max-w-xs"
-							value={refreshIntervalDays}
-							onchange={(e) => {
-								const parsed = Number(e.currentTarget.value);
-								if (parsed === 1 || parsed === 2 || parsed === 3 || parsed === 5 || parsed === 7) {
-									setRefreshInterval(parsed);
-								}
-							}}
-						>
-							{#each REFRESH_OPTIONS as days (days)}
-								<option value={days}>{offlineT[`refresh_${days}`]}</option>
-							{/each}
-						</select>
-					</div>
-
-					<div
-						class="flex items-center justify-between p-4 bg-base-200/50 rounded-box pt-4 border-t border-base-300"
+				<div class="space-y-2">
+					<SectionTitle title={offlineT.refreshTitle} description={offlineT.refreshDescription} />
+					<select
+						class="select select-bordered select-sm w-full max-w-xs"
+						value={refreshIntervalDays}
+						onchange={(e) => {
+							const parsed = Number(e.currentTarget.value);
+							if (parsed === 1 || parsed === 2 || parsed === 3 || parsed === 5 || parsed === 7) {
+								setRefreshInterval(parsed);
+							}
+						}}
 					>
-						<div>
-							<p class="font-medium text-base-content">
-								{offlineT.passthrough}
-							</p>
-							<p class="text-sm text-base-content/60">
-								{offlineT.passthroughDesc}
-							</p>
-						</div>
-						<input
-							type="checkbox"
-							class="toggle toggle-primary"
-							checked={passthrough}
-							onchange={(e) => setPassthrough(e.currentTarget.checked)}
-						/>
-					</div>
-
-					<div class="pt-2">
-						<button class="btn btn-outline btn-sm" onclick={handleReset}>
-							{offlineT.reset}
-						</button>
-					</div>
+						{#each REFRESH_OPTIONS as days (days)}
+							<option value={days}>{offlineT[`refresh_${days}`]}</option>
+						{/each}
+					</select>
 				</div>
-			</fieldset>
+
+				<SettingsToggle
+					label={offlineT.passthrough}
+					description={offlineT.passthroughDesc}
+					checked={passthrough}
+					onchange={setPassthrough}
+				/>
+			</SettingsToggle>
 		</div>
 	</div>
 </DualColumnLayout>

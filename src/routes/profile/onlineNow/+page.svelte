@@ -1,6 +1,8 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
+	import PageTitle from '$lib/components/molecules/PageTitle.svelte';
+	import SettingsToggle from '$lib/components/molecules/SettingsToggle.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import type { ApiResult, FeedbackMessage } from '$lib/types/api';
 	import type { PageData } from './$types';
@@ -22,7 +24,7 @@
 	let saving = $state(false);
 	let message = $state<FeedbackMessage | null>(null);
 
-	async function toggleStealth() {
+	async function setStealth(next: boolean) {
 		saving = true;
 		message = null;
 
@@ -30,12 +32,12 @@
 			const res = await fetch('/api/profile/stealth', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ isStealth: !isStealth })
+				body: JSON.stringify({ isStealth: next })
 			});
 
 			const result: ApiResult = await res.json();
 			if (result.success) {
-				isStealth = !isStealth;
+				isStealth = next;
 				message = { type: 'success', text: t.common.success };
 			} else {
 				message = { type: 'error', text: result.error || t.common.error };
@@ -60,9 +62,7 @@
 
 <DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-3">
-		<h1 class="page-title border-b border-base-300 pb-4">
-			{profileT.stealthSettings}
-		</h1>
+		<PageTitle title={profileT.stealthSettings} />
 
 		{#if message}
 			<div
@@ -78,23 +78,13 @@
 				{profileT.stealthDescription}
 			</p>
 
-			<div class="flex items-center justify-between p-4 bg-base-200/50 rounded-box">
-				<div>
-					<p class="font-medium text-base-content">
-						{profileT.stealthMode}
-					</p>
-					<p class="text-sm text-base-content/60">
-						{isStealth ? profileT.stealthActive : profileT.stealthInactive}
-					</p>
-				</div>
-				<button
-					class="btn btn-sm {isStealth ? 'btn-warning' : 'btn-primary'}"
-					onclick={toggleStealth}
-					disabled={saving || !online.online}
-				>
-					{isStealth ? profileT.disableStealth : profileT.enableStealth}
-				</button>
-			</div>
+			<SettingsToggle
+				label={profileT.stealthMode}
+				description={isStealth ? profileT.stealthActive : profileT.stealthInactive}
+				checked={isStealth}
+				disabled={saving || !online.online}
+				onchange={setStealth}
+			/>
 		</div>
 	</div>
 </DualColumnLayout>
