@@ -147,6 +147,19 @@ export interface OfflineDiscussionView {
 	author: OfflineAuthorInfo;
 }
 
+// Reduced projection of a cached discussion for the offline bookmarks list.
+// categoryTitle / bookmarkedAt are not synced, so the bookmark view shows the
+// category as its slug and no bookmark-date column.
+export interface OfflineBookmarkView {
+	discussionId: number;
+	title: string;
+	slug: string;
+	categorySlug: string;
+	authorId: number;
+	authorDisplayName: string;
+	authorUsername: string;
+}
+
 // DV07 replyCacheManifest store row. One per cached discussion that received
 // depth-aware reply backfill. cachedRanges is a list of inclusive [start,end]
 // page-number intervals the cache holds for this discussion; `complete` is

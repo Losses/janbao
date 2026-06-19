@@ -83,6 +83,16 @@ self.addEventListener('fetch', (event: FetchEvent) => {
 		event.respondWith(handleNavigate(request));
 		return;
 	}
+	// SvelteKit data fetches (…/__data.json) carry the session cookie and are
+	// user-specific, so they must NEVER be served cache-first: a response
+	// captured during a logged-out visit would otherwise be replayed on every
+	// subsequent visit, making the user appear logged out (e.g. on /offline).
+	// Network-first keeps them fresh online; the cache fallback preserves the
+	// last good response when offline.
+	if (url.pathname.endsWith('/__data.json')) {
+		event.respondWith(handleData(request));
+		return;
+	}
 	event.respondWith(handleAsset(request));
 });
 
@@ -160,6 +170,23 @@ async function handleNavigate(request: Request): Promise<Response> {
 			(await cache.match(OFFLINE_URL)) ??
 			new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } })
 		);
+	}
+}
+
+// SvelteKit data endpoint (…/__data.json): network-first so user-specific
+// responses (auth state) are never served stale. Falls back to the last cached
+// response when offline.
+async function handleData(request: Request): Promise<Response> {
+	try {
+		const network = await fetch(request);
+		const cache = await caches.open(CACHE);
+		if (network.ok && network.type === 'basic') {
+			await cache.put(request, network.clone());
+		}
+		return network;
+	} catch {
+		const cache = await caches.open(CACHE);
+		return (await cache.match(request)) ?? new Response('', { status: 504 });
 	}
 }
 

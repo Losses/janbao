@@ -18,6 +18,14 @@ const EMPTY_GAPS: ReplyGapSummary = {
 
 // Client-only: reads the cached discussion + its replies from IndexedDB. Has no
 // +page.server.ts by design (INV-4) - it cannot trigger the online read mechanism.
+//
+// Unlike the offline LIST pages (/, bookmarks, activity), the reader stays
+// `ssr = false`: its entire body is client-only IDB content, so server-rendering
+// it would emit an empty shell anyway. The reader's logged-in state (the
+// sidebar's user/t, provided by the root layout load) is preserved by the
+// service worker treating __data.json as network-first (service-worker.ts), so
+// a stale logged-out data response is never replayed. The list pages are SSR'd
+// because their login state is worth embedding; the reader is not, by design.
 export const ssr = false;
 
 export const load: PageLoad = async ({ params }) => {

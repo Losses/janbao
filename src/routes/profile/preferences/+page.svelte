@@ -28,8 +28,14 @@
 	const user = $derived(data.user);
 	const prefs = $derived(data.preferences);
 	const vapidPublicKey = $derived(data.vapidPublicKey);
+	// Browser-only capability check. Gated on `mounted` so it stays false during
+	// SSR and the client's hydration pass — the first client render must match the
+	// server HTML, otherwise the {#if !pushSupported} branches below diverge and
+	// throw on hydration. Flips to the real value in onMount.
+	let mounted = $state(false);
 	const pushSupported = $derived(
-		typeof window !== 'undefined' &&
+		mounted &&
+			typeof window !== 'undefined' &&
 			'serviceWorker' in navigator &&
 			'PushManager' in window &&
 			typeof Notification !== 'undefined'
@@ -71,6 +77,7 @@
 	let pushPermission = $state<NotificationPermission>('default');
 
 	onMount(() => {
+		mounted = true;
 		if (typeof Notification !== 'undefined') {
 			pushPermission = Notification.permission;
 		}
@@ -81,11 +88,32 @@
 		// or when the user navigates back. Also probe the browser for an existing
 		// subscription so the enable/disable button reflects reality.
 		void prefs;
+		console.log(
+			'[push] probe effect: pushSupported=',
+			pushSupported,
+			'hasVapid=',
+			!!vapidPublicKey
+		);
 		if (pushSupported && vapidPublicKey) {
 			void isPushSubscribed().then((v) => {
+				console.log('[push] isPushSubscribed() =>', v);
 				pushEnabled = v;
 			});
 		}
+	});
+
+	// TEMP diagnostic: log the full push state whenever any tracked piece changes.
+	$effect(() => {
+		console.log(
+			'[push] state: pushEnabled=',
+			pushEnabled,
+			'permission=',
+			pushPermission,
+			'pushSupported=',
+			pushSupported,
+			'hasVapid=',
+			!!vapidPublicKey
+		);
 	});
 
 	async function handleSave() {
@@ -138,7 +166,11 @@
 		pushBusy = true;
 		pushMessageState = null;
 		const outcome = await subscribeToPush(vapidPublicKey);
-		pushEnabled = outcome === 'subscribed';
+		// Re-probe the browser: pushEnabled must reflect the actual
+		// subscription state, not just the subscribe() outcome, so the toggle
+		// + tickboxes stay in sync with reality.
+		pushEnabled = await isPushSubscribed();
+		console.log('[push] enable: outcome=', outcome, '=> pushEnabled=', pushEnabled);
 		if (typeof Notification !== 'undefined') {
 			pushPermission = Notification.permission;
 		}
@@ -150,7 +182,13 @@
 		pushBusy = true;
 		pushMessageState = null;
 		const ok = await unsubscribeFromPush();
-		pushEnabled = !ok ? pushEnabled : false;
+		// Re-probe the browser so pushEnabled reflects the actual subscription
+		// state. The browser subscription is gone once `unsubscribe()` ran
+		// (inside unsubscribeFromPush) even if the server-record delete fails,
+		// so trusting the server call's `ok` would leave the toggle/tickboxes
+		// stuck on. isPushSubscribed is the source of truth here.
+		pushEnabled = await isPushSubscribed();
+		console.log('[push] disable: ok=', ok, '=> pushEnabled=', pushEnabled);
 		if (!ok) {
 			pushMessageState = { type: 'error', text: t.common.error };
 		}

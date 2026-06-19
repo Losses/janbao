@@ -5,30 +5,11 @@
 	import DateAtom from '$lib/components/atoms/Date.svelte';
 	import { generateSlug } from '$lib/utils/slug';
 	import type { TranslationDict } from '$lib/types/translation';
+	import type { DiscussionRowItem, DiscussionReadHistory } from '$lib/types/discussion-row';
 
 	/**
 	 * DiscussionRow Organism - Renders a discussion title, badges, bookmark star, and metadata.
 	 */
-	interface DiscussionRowItem {
-		id: number;
-		title: string;
-		slug: string;
-		authorId: number;
-		authorDisplayName: string;
-		authorUsername: string;
-		authorAvatarFileId: string | null;
-		viewCount: number;
-		commentCount: number;
-		isPinned: boolean;
-		lastReplyAt: Date | string | number;
-	}
-
-	interface DiscussionReadHistory {
-		lastReadAt: Date | string | number | null;
-		lastReadPage: number;
-		lastReadReplyId: number | null;
-	}
-
 	interface DiscussionRowProps {
 		discussion: DiscussionRowItem;
 		readHistory?: DiscussionReadHistory | null;
@@ -37,6 +18,17 @@
 		lastReplyAuthorDisplayName?: string | null;
 		lastReplyAuthorId?: number | null;
 		lastReplyAuthorUsername?: string | null;
+		/**
+		 * Override the row's link target. Defaults to the online discussion URL
+		 * (with a read-history deep link). The offline reader passes `/offline/{id}`
+		 * so rows open the cached thread instead of hitting the network.
+		 */
+		discussionHref?: string;
+		/**
+		 * Whether to render the bookmark toggle. The offline reader has no server
+		 * mutation path, so it hides the star; defaults to visible everywhere else.
+		 */
+		showBookmark?: boolean;
 		/** Translation dictionary */
 		t: TranslationDict;
 		class?: string;
@@ -50,12 +42,16 @@
 		lastReplyAuthorDisplayName = null,
 		lastReplyAuthorId = null,
 		lastReplyAuthorUsername = null,
+		discussionHref,
+		showBookmark = true,
 		t,
 		class: className = ''
 	}: DiscussionRowProps = $props();
 
-	// Build exact URL based on reading history
+	// Build exact URL based on reading history. A caller-supplied discussionHref
+	// (e.g. the offline reader) wins over the computed online URL.
 	const discussionUrl = $derived.by(() => {
+		if (discussionHref) return discussionHref;
 		const base = `/discussion/${discussion.id}/${discussion.slug}`;
 		if (readHistory && readHistory.lastReadPage) {
 			const pagePart = `p${readHistory.lastReadPage}`;
@@ -126,7 +122,9 @@
 				{discussion.authorDisplayName}
 			</a>
 
-			<span>{discussion.viewCount} {viewsText}</span>
+			{#if discussion.viewCount !== undefined}
+				<span>{discussion.viewCount} {viewsText}</span>
+			{/if}
 			<span>{discussion.commentCount} {repliesText}</span>
 
 			{#if lastReplyAuthorDisplayName}
@@ -140,6 +138,8 @@
 		</div>
 	</div>
 
-	<!-- Right: Star Bookmark Toggle -->
-	<BookmarkButton discussionId={discussion.id} bookmarked={isBookmarked} {t} />
+	<!-- Right: Star Bookmark Toggle (hidden where bookmarks can't be toggled, e.g. offline) -->
+	{#if showBookmark}
+		<BookmarkButton discussionId={discussion.id} bookmarked={isBookmarked} {t} />
+	{/if}
 </div>

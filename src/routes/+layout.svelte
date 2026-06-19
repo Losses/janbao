@@ -104,7 +104,26 @@
 		}
 	}
 
+	// DEV ONLY: wipe any zombie service worker left on this origin by a prior
+	// `vite build && preview` / prod run. Dev never uses the SW (registration
+	// below is PROD-only), but a zombie SW intercepts fetches and serves the
+	// stale built app, so source edits silently don't take effect until the SW
+	// is manually unregistered (notoriously aggressive in Firefox). Clearing it
+	// here lets HMR win. (This code itself only runs once the zombie is already
+	// gone — chicken-and-egg — so the very first clear is manual; after that
+	// it self-maintains.) See [[offline-debugging-heuristics]].
+	function unregisterDevServiceWorker(): void {
+		if (!import.meta.env.DEV || !('serviceWorker' in navigator)) return;
+		navigator.serviceWorker
+			.getRegistrations()
+			.then((regs) => {
+				for (const reg of regs) void reg.unregister();
+			})
+			.catch((err: unknown) => console.error('[sw] dev unregister failed:', err));
+	}
+
 	onMount(() => {
+		unregisterDevServiceWorker();
 		online.setOnline(navigator.onLine);
 		// Decision #5: guests have no power to enable caching and the curated
 		// sync API 401s for them, so skip the sync fetch entirely when there
