@@ -323,7 +323,8 @@
 			"passthrough": "阅读透传",
 			"passthroughDesc": "在线浏览的讨论会被写入离线缓存。",
 			"reset": "恢复默认",
-			"resetDone": "离线阅读设置已恢复默认。"
+			"resetDone": "离线阅读设置已恢复默认。",
+			"synced": "已同步缓存"
 		}
 	},
 	"discussion": {

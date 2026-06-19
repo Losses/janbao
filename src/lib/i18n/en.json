@@ -323,7 +323,8 @@
 			"passthrough": "Read passthrough",
 			"passthroughDesc": "Discussions you open while online are written to the offline cache.",
 			"reset": "Reset to defaults",
-			"resetDone": "Offline reading settings reset to defaults."
+			"resetDone": "Offline reading settings reset to defaults.",
+			"synced": "Cache synced"
 		}
 	},
 	"discussion": {

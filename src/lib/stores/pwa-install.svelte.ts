@@ -48,6 +48,22 @@ let isInstalled = $state(false);
 let deferred: DeferredPrompt | undefined = $state(undefined);
 let listenersBound = false;
 
+// Track the listeners bound by `bindListenersOnce` so an HMR dispose hook
+// can remove them. Without this, a stale module replaced on hot-reload
+// leaves its `appinstalled` / `beforeinstallprompt` / media-query listeners
+// attached to `window`, and the next module instance binds a second set
+// (`listenersBound` resets to false in the fresh module) - the stale
+// handlers then keep firing and double-write `isInstalled`/`deferred`.
+type MediaQueryListener = (e: MediaQueryListEvent) => void;
+type EventListenerFn = (e: Event) => void;
+interface BoundListeners {
+	mediaQuery: MediaQueryList | null;
+	mediaListener: MediaQueryListener;
+	appinstalled: EventListenerFn;
+	beforeinstallprompt: EventListenerFn;
+}
+let bound: BoundListeners | undefined;
+
 function readNavigatorStandalone(): boolean {
 	// iOS Safari exposes `navigator.standalone` (boolean) outside the DOM lib
 	// typings. Read via a structural cast on the navigator itself - not `as
@@ -75,17 +91,19 @@ function bindListenersOnce(): void {
 
 	// `display-mode` changes when the user installs / uninstalls the PWA while
 	// the tab is open. Query the media list inside the listener so a missing
-	// matchMedia (very old browser) is tolerated.
-	const mq = window.matchMedia?.('(display-mode: standalone)');
-	mq?.addEventListener('change', () => {
+	// matchMedia (very old browser) is tolerated. Keep references to the list
+	// + handler so the HMR dispose hook below can remove them on hot-reload.
+	const mediaQuery = window.matchMedia?.('(display-mode: standalone)');
+	const mediaListener: MediaQueryListener = () => {
 		isInstalled = computeIsInstalled();
-	});
+	};
+	mediaQuery?.addEventListener('change', mediaListener);
 
-	window.addEventListener('appinstalled', () => {
+	const appinstalled: EventListenerFn = () => {
 		isInstalled = true;
-	});
+	};
 
-	window.addEventListener('beforeinstallprompt', (raw: Event) => {
+	const beforeinstallprompt: EventListenerFn = (raw: Event) => {
 		// The event only fires on Chromium; on other browsers `canPrompt` stays
 		// false and the install affordance is simply never offered.
 		const evt = raw as BeforeInstallPromptEvent;
@@ -97,6 +115,34 @@ function bindListenersOnce(): void {
 				deferred = undefined;
 			});
 		}
+	};
+
+	window.addEventListener('appinstalled', appinstalled);
+	window.addEventListener('beforeinstallprompt', beforeinstallprompt);
+
+	bound = {
+		mediaQuery: mediaQuery ?? null,
+		mediaListener,
+		appinstalled,
+		beforeinstallprompt
+	};
+}
+
+// Vite HMR replaces this module on hot-reload; the previous module's
+// `listenersBound` flag resets to false in the fresh copy, so without
+// cleanup the re-imported `bindListenersOnce` attaches a second set of
+// listeners while the stale ones keep firing. Dispose removes the prior
+// set so dev iterations never leak handlers. (import.meta.hot is undefined
+// in the production build and in non-Vite runtimes, so the guard is a
+// no-op there - same pattern as `$lib/offline/idb.ts`.)
+if (import.meta.hot) {
+	import.meta.hot.dispose(() => {
+		if (!bound || typeof window === 'undefined') return;
+		bound.mediaQuery?.removeEventListener('change', bound.mediaListener);
+		window.removeEventListener('appinstalled', bound.appinstalled);
+		window.removeEventListener('beforeinstallprompt', bound.beforeinstallprompt);
+		bound = undefined;
+		listenersBound = false;
 	});
 }
 

@@ -92,12 +92,17 @@
 	function triggerSyncIfOnline(): void {
 		// Nicety (deliverable #6): after a pref change that could add cache
 		// content, run a sync so the user sees it populate without waiting for
-		// the next scheduled tick. Guarded SSR/offline.
+		// the next scheduled tick. Guarded SSR/offline. A skipped sync (offline
+		// or disabled) is a no-op - not an error - so we deliberately do not
+		// set a message in that path.
 		if (!prefsStore.prefs.enabled || typeof navigator === 'undefined' || !navigator.onLine) {
 			return;
 		}
 		void import('$lib/offline/sync-orchestrator')
 			.then(({ runSync }) => runSync())
+			.then(() => {
+				message = { kind: 'synced', text: offlineT.synced };
+			})
 			.catch((err: unknown) => {
 				console.error('[offline] sync failed:', err);
 				message = { kind: 'error', text: t.common.error };
