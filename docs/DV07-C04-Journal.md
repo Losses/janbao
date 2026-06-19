@@ -23,9 +23,10 @@ on C03 (`docs/DV07-C03-Journal.md`, settings UI + install gating COMPLETE
     `replies` as `CachedReply` rows (deduped by id), upserts every distinct
     author AND editor (from `editedBy` + `editedByDisplayName`/`editedByUsername`
     join fields) as `CachedUser` rows, then merges the visited page range
-    into the manifest (deliverable 3). If `opReply` is present and the
-    visited page > 1, also merges page-1 range (OP backfill: the OP alone
-    occupies page 1's first slot).
+    into the manifest (deliverable 3). Round 2 corrected the page-1 claim:
+    only the visited page `[page, page]` is merged; the OP being cached no
+    longer auto-claims page 1 (page 1 is claimed only when `page === 1`,
+    i.e. its full reply set is present).
   - **Gating**: every call early-returns unless
     `readOfflinePrefs().enabled && readOfflinePrefs().passthrough`. The
     route hooks also check `navigator.onLine`. Guests never reach the authed
@@ -97,12 +98,13 @@ totalPages, pageSize, commentCount)` per curated/front/bookmark
     `cachedRanges` (echoed from the manifest) so the renderer can place
     dividers at exact block boundaries without re-deriving from
     commentCount.
-  - The renderer walks `cachedRanges` in order, allocates `rest` replies
-    to each range (first range including page 1 has the OP subtracted),
-    and places a divider at each range boundary paired with the matching
-    gap from `computeReplyGaps`. Falls back to no dividers when there are
-    no gaps or no manifest (no regression vs DV06 for fully-cached
-    threads).
+  - Round 2 rewrote the renderer around a pure `computeGapPlacements`
+    helper (`src/lib/offline/gap-placement.ts`): for each gap it sets
+    `beforeIndex = pagesBefore * pageSize` (cumulative pages of ranges with
+    `end < gap.start`), clamped to `cachedReplyCount`; the renderer inserts a
+    divider at each such index. OP-only-cached + uncached pages emit a
+    trailing `restNotCached` hint. 9 pinned-shape tests. No dividers when
+    no gaps / no manifest (no regression vs DV06 for fully-cached threads).
   - i18n keys added under `offline.reader.*` in BOTH `en.json` +
     `zh-CN.json` ([[i18n-duplicate-key-check]] — grepped first, no
     collision): `gapRange` ("Pages {start}-{end} not cached (about {count}
@@ -166,4 +168,25 @@ totalPages, pageSize, commentCount)` per curated/front/bookmark
 
 ## Round 1
 
-- Pending audit dispatch. See `RV07-C04-Audit-01.md`.
+- 5 agents. Verdict: **3/5 UNCONDITIONAL_PASS, 1/5 PASS_WITH_NOTES, 1/5 FAIL**.
+- The integration skeptic caught writer/consumer bugs the per-file audits missed:
+  **[MAJOR A4-1]** passthrough over-reported page 1 (merged `[1,1]` whenever OP
+  present + page>1); **[MAJOR A4-2]** renderer `repliesPerRange` pre-allocation
+  mis-placed dividers for multi-range manifests; **[MED A4-4]** thread passthrough
+  hardcoded `lastReplyAt: null`; **[MINOR]** `totalPages` off-by-one (orchestrator
+  used `ceil(commentCount/pageSize)` but commentCount includes the OP).
+- Fixes shipped in `a7df7e1`. See `RV07-C04-Audit-01.md`.
+
+## Round 2
+
+- 5 agents. Verdict: **5/5 UNCONDITIONAL_PASS**.
+- All four findings fixed + verified: honest page-1 claim (only `[page,page]`);
+  renderer rewritten via pure `computeGapPlacements` (9 pinned-shape tests, OP-only
+  `restNotCached` hint); `lastReplyAt` selected + passed; shared `computeTotalPages`
+  (OP-excluding) everywhere; dead syncMeta writes removed.
+- Carry-overs: CO-C04-1 (tombstoned reply within a cached page — renderer should
+  tolerate a missing row), CO-C04-4 (`computeGapPlacements` assumes normalized
+  ranges, mitigated upstream by `normalizeRanges`). See `RV07-C04-Audit-02.md`.
+- Gates: check 0/0, lint exit 0, `bun test` 57/57.
+
+**C04 COMPLETE 5/5.** Advancing to C05 (schedule + TTL).

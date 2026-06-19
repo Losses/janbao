@@ -1,9 +1,10 @@
 import { getOfflineDB } from './idb';
-import { applyEviction } from './evict';
+import { applyEviction, expireReadReasons } from './evict';
 import { flushPendingReadState } from './read-state';
 import { computeCachedRanges, computeTotalPages } from './manifest';
 import { recomputeManifestForDiscussion } from './manifest-recompute';
 import { readOfflinePrefs, type OfflinePrefs, type OfflineReplyDepth } from './prefs';
+import { prefsSignatureOf, shouldRefreshCurated, type PrefsSignature } from './refresh-policy';
 import type {
 	CachedDiscussion,
 	CachedRange,
@@ -103,6 +104,25 @@ async function doSync(): Promise<SyncResult> {
 	const enabledCats = resolveEnabledCategories(prefs);
 	const depth = resolveDepth(prefs);
 
+	// DV07 C05 trigger-line split: decide whether the CURATED refresh path runs
+	// this sync. The delta path (cursors + front/bookmark + read-state outbox
+	// flush) always runs below unthrottled - that preserves the DV06 reconnect
+	// contract. The curated path (categories= + depth= + curated reason-set
+	// recompute + curated manifest merge) is throttled by the refresh interval,
+	// forced when the prefs signature (enabled + categories + depth) changed
+	// since the last refresh, and NEVER run when the feature is off or no
+	// category is toggled on (DV06 wire shape). 'read' passthrough is owned by
+	// C04 and runs on every browse regardless of this decision.
+	const refreshNow = await decideRefreshCurated(prefs);
+
+	// What the server sees this run: when NOT refreshing curated, send the
+	// DV06 wire shape (categories=, depth=firstLast) so the response is
+	// byte-identical to DV06 (no curatedDiscussionIds keys beyond what was
+	// requested = none; firstLast backfill for the front/bookmark union). When
+	// refreshing, send the user's chosen categories + depth.
+	const requestCategoriesCsv = refreshNow ? enabledCats.csv : '';
+	const requestDepth: OfflineReplyDepth = refreshNow ? depth : 'firstLast';
+
 	const meta = await db.syncMeta.get('cursors');
 	const stored = meta?.value as SyncCursors | null;
 	let discussionsCursor = stored?.discussions;
@@ -143,8 +163,8 @@ async function doSync(): Promise<SyncResult> {
 		if (replyTombstoneCursor) params.set('replyTombstoneCursor', replyTombstoneCursor);
 		// DV07 prefs surface as query params. The empty-categories path matches
 		// DV06 exactly (no curated sets returned, firstLast depth).
-		params.set('categories', enabledCats.csv);
-		params.set('depth', depth);
+		params.set('categories', requestCategoriesCsv);
+		params.set('depth', requestDepth);
 
 		const res = await fetch(`/api/sync/content?${params.toString()}`);
 		if (!res.ok) throw new Error(`content sync failed: ${res.status}`);
@@ -222,35 +242,81 @@ async function doSync(): Promise<SyncResult> {
 	}
 
 	// DV07: apply reason sets + populate reply-cache manifest now that the final
-	// server snapshot is known. Reads back the upserted discussions so reasons
-	// reflect their actual content (a backfilled curated entrant has
-	// commentCount populated; the manifest needs it for totalPages).
+	// server snapshot is known. The curated branch runs ONLY when refreshNow is
+	// true (C05 throttle); the front/bookmark branch always runs (delta path).
+	// Reads back the upserted discussions so reasons reflect their actual
+	// content (a backfilled curated entrant has commentCount populated; the
+	// manifest needs it for totalPages).
 	await applyReasonSets(
 		latestCurated,
 		latestFront,
 		latestBookmarks,
 		enabledCats.enabled,
-		priorFrontBookmark
+		priorFrontBookmark,
+		refreshNow
 	);
 	// DV07 C04: merge the depth-policy page ranges into each curated/front/
 	// bookmark discussion's manifest. This is the AUTHORITATIVE manifest update
 	// path for sync — it unions the depth-derived ranges into whatever the
 	// manifest already holds (which may include passthrough-cached pages from
 	// C04), so no lost updates. The replies-store read inside the helper drops
-	// ranges whose backing replies were since evicted.
+	// ranges whose backing replies were since evicted. Curated ids are only
+	// included when refreshNow is true (otherwise their manifest is left as the
+	// last refresh left it; front/bookmark always update).
 	await mergeDepthRangesIntoManifests(
-		latestCurated,
+		refreshNow ? latestCurated : {},
 		latestFront,
 		latestBookmarks,
 		depth,
 		latestReplyPageSize
 	);
 
+	// C05: persist the curated-refresh watermark + prefs signature only when
+	// we actually refreshed. When skipped, the prior values stay so the next
+	// sync's throttle comparison remains monotone against the LAST refresh.
+	if (refreshNow) {
+		const signature = prefsSignatureOf(prefs);
+		await db.syncMeta.bulkPut([
+			{ key: 'lastCuratedRefreshAt', value: Math.floor(Date.now() / 1000) },
+			{ key: 'lastCuratedPrefsSignature', value: signature }
+		]);
+	}
+
+	// C05: read-reason 30-day TTL step. Drops 'read' from discussions whose
+	// readUpdatedAt is older than READ_RETENTION_DAYS; cascade-deletes the row
+	// if no other reason survives. NEVER touches readStatePending. Runs before
+	// applyEviction so the two phases don't fight over the same row.
+	await expireReadReasons();
 	await applyEviction();
 	await flushPendingReadState();
 	await backfillMissingUsers();
 
 	return { discussions: totalDisc, replies: totalRep, tombstones: totalTomb };
+}
+
+// DV07 C05 throttle decision wrapper. Reads the persisted refresh watermark +
+// prefs signature from syncMeta once, then delegates to the pure
+// shouldRefreshCurated helper. Kept as a named function (not inlined) so the
+// I/O boundary is testable separately from the pure decision.
+async function decideRefreshCurated(prefs: OfflinePrefs): Promise<boolean> {
+	const db = getOfflineDB();
+	const hasAnyCategory =
+		prefs.categories.latest || prefs.categories.mostViewed || prefs.categories.mostReplied;
+	const lastRefreshRow = await db.syncMeta.get('lastCuratedRefreshAt');
+	const lastSignatureRow = await db.syncMeta.get('lastCuratedPrefsSignature');
+	const lastRefreshAt =
+		typeof lastRefreshRow?.value === 'number' ? lastRefreshRow.value : undefined;
+	const lastSignature =
+		typeof lastSignatureRow?.value === 'string' ? lastSignatureRow.value : undefined;
+	return shouldRefreshCurated({
+		nowSec: Math.floor(Date.now() / 1000),
+		lastCuratedRefreshAtSec: lastRefreshAt,
+		intervalDays: prefs.refreshIntervalDays,
+		prefsSignature: prefsSignatureOf(prefs),
+		storedSignature: lastSignature as PrefsSignature | undefined,
+		enabled: prefs.enabled,
+		hasAnyCategory
+	});
 }
 
 // Merge incoming discussion content with the row's existing DV07 bookkeeping
@@ -291,7 +357,8 @@ async function applyReasonSets(
 	front: number[],
 	bookmarks: number[],
 	enabledCats: CategoryReasonBinding[],
-	priorFrontBookmark: PriorFrontBookmark
+	priorFrontBookmark: PriorFrontBookmark,
+	curatedRefresh: boolean
 ): Promise<void> {
 	const db = getOfflineDB();
 	const fetchedAt = Date.now();
@@ -314,30 +381,40 @@ async function applyReasonSets(
 		return { add, remove };
 	}
 
-	// Curated reasons only apply to enabled categories. A category the user
-	// toggled off mid-session must shed its reason so the row drops out on the
-	// next empty-reasons eviction - hence we always compute remove from the
-	// ids that USED to carry it.
+	// Curated reasons only apply to enabled categories AND only when the C05
+	// throttle allowed a curated refresh this run. When curatedRefresh is false,
+	// the curated branch is skipped entirely: the server was asked
+	// categories=empty so `curated` is empty, AND we must NOT re-derive the
+	// curated reasons from the prior syncMeta mirror — the last refresh's
+	// curated reasons must persist untouched until the next refresh window.
+	// (Re-deriving here against an empty `curated` set would shed every
+	// curated reason, the exact failure the throttle is meant to prevent.)
+	//
+	// A category the user toggled off mid-session must shed its reason so the
+	// row drops out on the next empty-reasons eviction - hence on a refresh we
+	// always compute remove from the ids that USED to carry it.
 	const curatedMap: CuratedSyncMetaMap = {};
-	for (const b of CATEGORY_BINDINGS) {
-		const priorRow = await db.syncMeta.get(`curated:${b.category}`);
-		const prior =
-			typeof priorRow?.value === 'object' && priorRow?.value !== null
-				? (priorRow.value as CuratedSyncMetaRecord)
-				: undefined;
-		const priorIds = prior?.ids ?? [];
-		const isActive = enabledCats.some((e) => e.category === b.category);
-		const nextIds = isActive ? (curated[b.category] ?? []) : [];
+	if (curatedRefresh) {
+		for (const b of CATEGORY_BINDINGS) {
+			const priorRow = await db.syncMeta.get(`curated:${b.category}`);
+			const prior =
+				typeof priorRow?.value === 'object' && priorRow?.value !== null
+					? (priorRow.value as CuratedSyncMetaRecord)
+					: undefined;
+			const priorIds = prior?.ids ?? [];
+			const isActive = enabledCats.some((e) => e.category === b.category);
+			const nextIds = isActive ? (curated[b.category] ?? []) : [];
 
-		const delta = ensure(b.reason);
-		for (const id of nextIds) delta.add.add(id);
-		for (const id of priorIds) {
-			if (!nextIds.includes(id)) delta.remove.add(id);
+			const delta = ensure(b.reason);
+			for (const id of nextIds) delta.add.add(id);
+			for (const id of priorIds) {
+				if (!nextIds.includes(id)) delta.remove.add(id);
+			}
+
+			// Mirror for C05 diffing. Always written (even when inactive) so the
+			// next sync sees an empty set rather than a stale prior snapshot.
+			curatedMap[b.category] = { ids: nextIds, fetchedAt };
 		}
-
-		// Mirror for C05 diffing. Always written (even when inactive) so the
-		// next sync sees an empty set rather than a stale prior snapshot.
-		curatedMap[b.category] = { ids: nextIds, fetchedAt };
 	}
 
 	// Front + bookmark reasons. The server echoes the full snapshot on every
@@ -364,7 +441,7 @@ async function applyReasonSets(
 		for (const id of set) affectedIds.add(id);
 	}
 	if (affectedIds.size === 0) {
-		await persistCuratedMeta(curatedMap);
+		if (curatedRefresh) await persistCuratedMeta(curatedMap);
 		return;
 	}
 
@@ -378,7 +455,7 @@ async function applyReasonSets(
 		updates.push({ ...row, reasons: nextReasons });
 	}
 	if (updates.length) await db.discussions.bulkPut(updates);
-	await persistCuratedMeta(curatedMap);
+	if (curatedRefresh) await persistCuratedMeta(curatedMap);
 }
 
 function recomputeReasons(

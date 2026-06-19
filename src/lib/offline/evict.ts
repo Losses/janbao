@@ -1,5 +1,6 @@
 import { getOfflineDB } from './idb';
-import type { Reason, SyncMetaValue } from './types';
+import { isReadStale, READ_RETENTION_DAYS } from './refresh-policy';
+import type { CachedDiscussion, Reason, SyncMetaValue } from './types';
 
 // Offline cache retention fallback. DV06 used this as the primary eviction
 // signal (drop cached rows whose lastReplyAt is older than retentionDays AND
@@ -7,11 +8,30 @@ import type { Reason, SyncMetaValue } from './types';
 // a row is dropped only when its `reasons` array is empty after the sync
 // recompute. The retention window stays as a safety net for legacy v3 rows
 // that have no reasons field yet (the next sync repopulates reasons; this
-// gate just keeps the cache bounded in the meantime). C05 reuses the constant
-// for the 'read' reason TTL.
+// gate just keeps the cache bounded in the meantime).
 export const OFFLINE_RETENTION_DAYS = 14;
 const DAY_SECONDS = 86400;
 const DEFAULT_RETENTION_DAYS = 14;
+
+// Deterministic reason ordering shared with the orchestrator's recompute so
+// dropping 'read' from a multi-reason row doesn't churn the array identity
+// of the surviving reasons (mirrors passthrough.ts's REASON_ORDER too).
+const REASON_ORDER: readonly Reason[] = [
+	'latest',
+	'mostViewed',
+	'mostReplied',
+	'read',
+	'front',
+	'bookmark'
+];
+
+// Pure: returns the reason array with 'read' removed and the survivors
+// re-ordered canonically (REASON_ORDER). Exported so the C05 read-TTL trim
+// step's decision is unit-testable without a Dexie harness.
+export function withoutRead(reasons: Reason[]): Reason[] {
+	const filtered: Reason[] = reasons.filter((r): r is Exclude<Reason, 'read'> => r !== 'read');
+	return REASON_ORDER.filter((r) => filtered.includes(r));
+}
 
 function asNumberArray(value: SyncMetaValue | undefined): number[] {
 	return Array.isArray(value) ? (value.filter((v) => typeof v === 'number') as number[]) : [];
@@ -80,6 +100,76 @@ export async function applyEviction(): Promise<void> {
 				await db.readStateMerged.delete(d.id);
 				// Manifest rows are scoped to discussions that no longer exist; clear
 				// them so the gap-renderer never reads a dangling manifest.
+				await db.replyCacheManifest.delete(d.id);
+			}
+		}
+	);
+}
+
+/**
+ * DV07 C05 read-reason TTL step. Runs on every sync (alongside, but logically
+ * before, applyEviction). For each cached discussion whose `readUpdatedAt` is
+ * older than READ_RETENTION_DAYS AND that currently carries the `'read'`
+ * reason, the `'read'` reason is dropped. If the resulting reason set is
+ * empty, the row is cascade-deleted exactly like applyEviction would
+ * (replies + readStateMerged + manifest; readStatePending is NEVER touched).
+ *
+ * A row whose other reasons survive (latest / mostViewed / mostReplied /
+ * front / bookmark) keeps the row but loses only `'read'` - those reasons own
+ * the row's lifecycle independently. Re-entering the thread online refreshes
+ * readUpdatedAt (passthrough C04) so active reads never expire.
+ *
+ * readUpdatedAt is read-only here - this step never writes it. The passthrough
+ * layer is the sole writer.
+ */
+export async function expireReadReasons(): Promise<void> {
+	const db = getOfflineDB();
+	const nowSec = Math.floor(Date.now() / 1000);
+	const all = await db.discussions.toArray();
+	const stale: CachedDiscussion[] = [];
+	for (const d of all) {
+		if (!Array.isArray(d.reasons) || !d.reasons.includes('read')) continue;
+		// readUpdatedAt is in epoch SECONDS (passthrough normalizes Date→s).
+		// A row that carries 'read' but has no readUpdatedAt is treated as
+		// stale-by-default only if it has no other reason to remain (the
+		// pre-v4 / legacy case): isReadStale returns false on undefined so
+		// such a row is left intact here and applyEviction's legacy fallback
+		// handles it.
+		if (!isReadStale(d.readUpdatedAt, nowSec, READ_RETENTION_DAYS)) continue;
+		stale.push(d);
+	}
+	if (stale.length === 0) return;
+
+	// Partition rows into "drop just 'read'" vs "cascade-delete". Surviving
+	// rows get a bulkPut with the trimmed reason array; cascade-deleted rows
+	// go through the same store list as applyEviction (readStatePending is
+	// never in it - the outbox must survive).
+	const trimmed: CachedDiscussion[] = [];
+	const cascadeEvict: CachedDiscussion[] = [];
+	for (const d of stale) {
+		const nextReasons = withoutRead(d.reasons ?? []);
+		if (nextReasons.length > 0) {
+			trimmed.push({ ...d, reasons: nextReasons });
+		} else {
+			cascadeEvict.push(d);
+		}
+	}
+
+	if (trimmed.length > 0) await db.discussions.bulkPut(trimmed);
+
+	if (cascadeEvict.length === 0) return;
+	await db.transaction(
+		'rw',
+		db.discussions,
+		db.replies,
+		db.readStateMerged,
+		db.replyCacheManifest,
+		async () => {
+			for (const d of cascadeEvict) {
+				await db.discussions.delete(d.id);
+				const replyKeys = await db.replies.where('discussionId').equals(d.id).primaryKeys();
+				if (replyKeys.length) await db.replies.bulkDelete(replyKeys);
+				await db.readStateMerged.delete(d.id);
 				await db.replyCacheManifest.delete(d.id);
 			}
 		}
