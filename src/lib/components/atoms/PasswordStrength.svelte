@@ -24,7 +24,7 @@
 </script>
 
 {#if password.length > 0}
-	<div class="w-full">
+	<div class="mt-1.5 w-full">
 		<div class="h-1.5 w-full overflow-hidden rounded-full bg-base-content/10">
 			<div
 				class="h-full rounded-full transition-all {meetsMin ? 'bg-success' : 'bg-error'}"

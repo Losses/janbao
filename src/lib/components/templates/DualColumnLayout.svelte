@@ -1,6 +1,9 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { onMount } from 'svelte';
 	import Header from '$lib/components/organisms/Header.svelte';
+	import BottomNav from '$lib/components/organisms/BottomNav.svelte';
+	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import type { UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 
@@ -20,13 +23,20 @@
 		t
 	}: DualColumnLayoutProps = $props();
 
+	// Attach the (idempotent, mobile-gated) scroll listener that drives the
+	// hide-on-scroll App Bar + bottom nav. start() is guarded so re-mounting this
+	// layout on each navigation never double-attaches.
+	onMount(() => {
+		getScrollChromeStore().start();
+	});
+
 	function openDrawer() {
 		isDrawerOpen = true;
 		void user;
 	}
 </script>
 
-<div class="drawer drawer-end">
+<div class="drawer">
 	<!-- Drawer Toggle checkbox bound to isDrawerOpen state -->
 	<input id="sidebar-drawer" type="checkbox" class="drawer-toggle" bind:checked={isDrawerOpen} />
 
@@ -35,7 +45,7 @@
 		<Header {t} onToggleDrawer={openDrawer} />
 
 		<!-- Main Content Container -->
-		<div class="mx-auto w-full max-w-[960px] flex-1 px-0 pb-6 md:px-6">
+		<div class="mx-auto w-full max-w-[960px] flex-1 px-0 pb-20 md:px-6 md:pb-6">
 			<div
 				class="bg-base-100 border-b md:border-x border-base-300 p-3 flex flex-col gap-4 md:flex-row"
 			>
@@ -54,13 +64,16 @@
 				{/if}
 			</div>
 		</div>
+
+		<!-- Mobile-only bottom navigation (hidden on scroll via the shared store) -->
+		<BottomNav {t} />
 	</div>
 
-	<!-- Drawer Sidebar for Mobile viewports -->
+	<!-- Drawer Sidebar for Mobile viewports (opens from the left) -->
 	{#if sidebar}
 		<div class="drawer-side z-50 md:hidden">
 			<label for="sidebar-drawer" aria-label={t.sidebar.closeAria} class="drawer-overlay"></label>
-			<div class="min-h-full w-[280px] border-l border-base-300 bg-base-100 p-6 shadow-lg">
+			<div class="min-h-full w-[280px] border-r border-base-300 bg-base-100 p-6 shadow-lg">
 				<div class="space-y-3">
 					{@render sidebar()}
 				</div>

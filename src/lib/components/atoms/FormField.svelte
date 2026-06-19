@@ -24,6 +24,7 @@
 		disabled?: boolean;
 		autocomplete?: FullAutoFill;
 		error?: string;
+		hintId?: string;
 		as?: FieldElement;
 		rows?: number;
 		maxlength?: number;
@@ -41,6 +42,7 @@
 		disabled = false,
 		autocomplete,
 		error = '',
+		hintId,
 		as = 'input',
 		rows = 2,
 		maxlength,
@@ -49,7 +51,7 @@
 	}: FormFieldProps = $props();
 </script>
 
-<Field {label} {id} {error} class={className} {hint}>
+<Field {label} {id} {error} {hintId} class={className} {hint}>
 	{#if as === 'textarea'}
 		<textarea
 			{id}
@@ -59,6 +61,7 @@
 			{rows}
 			{maxlength}
 			{autocomplete}
+			aria-describedby={hintId}
 			bind:value
 			class="textarea textarea-bordered w-full {error ? 'textarea-error' : ''}"
 		></textarea>
@@ -71,6 +74,7 @@
 			{placeholder}
 			{maxlength}
 			{autocomplete}
+			aria-describedby={hintId}
 			bind:value
 			class="input input-bordered w-full {error ? 'input-error' : ''}"
 		/>

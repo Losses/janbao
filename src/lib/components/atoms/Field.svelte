@@ -8,9 +8,13 @@
 	 *
 	 * Renders a label with an optional `description` hugging it, then the
 	 * caller-supplied control via `children`, then an optional `hint` snippet
-	 * and/or `error` message. Owns label/description/hint spacing only — it never
+	 * and/or `error` message. Owns label/description spacing only — it never
 	 * renders the control itself, so any input/select/textarea/file/custom markup
 	 * composes cleanly.
+	 *
+	 * The optional `hintId` is applied to the hint wrapper so a control can point
+	 * at it via `aria-describedby` (see FormField). The hint snippet owns its own
+	 * top margin so a conditionally-empty hint leaves no phantom gap.
 	 *
 	 * `FormField` composes this for input/textarea; pages compose it directly for
 	 * select/file controls where a bindable value isn't the whole story.
@@ -21,6 +25,7 @@
 		description?: string;
 		error?: string;
 		class?: string;
+		hintId?: string;
 		hint?: Snippet;
 		children: Snippet;
 	}
@@ -31,6 +36,7 @@
 		description,
 		error = '',
 		class: className = '',
+		hintId,
 		hint,
 		children
 	}: FieldProps = $props();
@@ -47,7 +53,7 @@
 	{@render children()}
 
 	{#if hint}
-		<div class="mt-1.5">
+		<div id={hintId}>
 			{@render hint()}
 		</div>
 	{/if}

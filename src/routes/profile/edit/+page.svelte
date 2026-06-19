@@ -112,10 +112,13 @@
 					bind:value={username}
 					disabled={!allowSlugChange || !isAdmin}
 					error={username && !isValidUsername(username) ? t.auth.invalidUsername : ''}
+					hintId={allowSlugChange && !isAdmin ? 'username-hint' : undefined}
 				>
 					{#snippet hint()}
 						{#if allowSlugChange && !isAdmin}
-							<span class="text-xs text-base-content/50">{profileT.usernameAdminOnly}</span>
+							<span class="block mt-1.5 text-xs text-base-content/50">
+								{profileT.usernameAdminOnly}
+							</span>
 						{/if}
 					{/snippet}
 				</FormField>
@@ -131,7 +134,9 @@
 					maxlength={MAX_BIO_LENGTH}
 				>
 					{#snippet hint()}
-						<span class="text-xs text-base-content/50">{bio.length}/{MAX_BIO_LENGTH}</span>
+						<span class="block mt-1.5 text-xs text-base-content/50">
+							{bio.length}/{MAX_BIO_LENGTH}
+						</span>
 					{/snippet}
 				</FormField>
 
