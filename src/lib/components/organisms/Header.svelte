@@ -35,7 +35,7 @@
 		: ''}"
 >
 	<nav
-		class="flex items-center justify-between bg-neutral px-2 py-2 text-neutral-content shadow-sm md:items-end md:px-6 md:pt-3 md:pb-2.5"
+		class="flex items-center justify-between bg-neutral px-2 py-2 text-neutral-content shadow-md md:shadow-none md:items-end md:px-6 md:pt-3 md:pb-2.5"
 	>
 		<div class="flex items-center gap-2 md:items-end md:gap-6">
 			<!-- Mobile: square hamburger button (opens the left drawer) -->
