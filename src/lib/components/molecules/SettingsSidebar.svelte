@@ -46,5 +46,10 @@
 				{profileT['stealthSettings']}
 			</a>
 		</li>
+		<li>
+			<a href="/profile/offlineReading" class={activeItem === 'offlineReading' ? 'active' : ''}>
+				{profileT['offlineReadingNav']}
+			</a>
+		</li>
 	</ul>
 </div>

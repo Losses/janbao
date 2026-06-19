@@ -22,12 +22,12 @@ C01 (`docs/DV07-C01-Journal.md`, server curated pipeline COMPLETE 5/5).
   plus `CachedRange` / `ReplyCacheManifestRow` / `CuratedSyncMetaRecord` /
   `CuratedSyncMetaMap` (syncMeta now accepts the curated-mirror records).
 - **Manifest helpers** `src/lib/offline/manifest.ts`: pure functions
-  `computeCachedRanges(depth, totalPages, pageSize)`, `isComplete(ranges,
-totalPages)`, `computeReplyGaps(manifest, commentCount)` implementing
-  decision #3 (first / firstLast / all under-cap / all over-cap = first 250 +
-  last 250 = 5 pages each side at pageSize 50). Cap is on rows; uses
-  `totalPages * pageSize` as the over-estimate so the cap never silently misses
-  at the boundary.
+  `computeCachedRanges(depth, totalPages, pageSize, commentCount)`,
+  `isComplete(ranges, totalPages)`, `computeReplyGaps(manifest, commentCount)`
+  implementing decision #3 (first / firstLast / all under-cap / all over-cap =
+  first 250 + last 250 = 5 pages each side at pageSize 50). The `all`-depth cap
+  gate uses the real `commentCount` vs `REPLY_CAP` (round 2 fix: was
+  `totalPages*pageSize`, an over-estimate that split early near the 1000 boundary).
 - **Sync orchestrator** `src/lib/offline/sync-orchestrator.ts`:
   - Reads prefs. `!enabled` OR no categories ⇒ `categories=` + `depth=firstLast`
     (DV06 wire shape, byte-identical).
@@ -85,9 +85,36 @@ totalPages)`, `computeReplyGaps(manifest, commentCount)` implementing
 
 ## Round 1
 
-Pending. Will run 5 parallel full-audit agents against this commit; loop to
-5/5 UNCONDITIONAL_PASS before advancing to C03.
+- 5 agents. Verdict: **2/5 UNCONDITIONAL_PASS, 3/5 PASS_WITH_NOTES**.
+- **[CRITICAL, A4]** Eviction `db.transaction('rw', …)` omitted `replyCacheManifest`
+  → Dexie _Table not part of transaction_ rolled the whole txn back → eviction
+  never committed. Fixed: added `db.replyCacheManifest` to the store array.
+- **[MAJOR, A2/A3]** front/bookmark remove-delta always empty — `applyReasonSets`
+  read the snapshots as "prior" after the page loop had already overwritten them.
+  Fixed: capture `PriorFrontBookmark` once at `doSync` start, thread into the diff.
+- **[MINOR]** `computeCachedRanges` cap used `totalPages*pageSize` → phantom split
+  near 1000. Fixed: gate on real `commentCount`; boundary test (951/999/1001) added.
+- Journal wording corrected re: `!enabled` additive writes. Fixes in `340fa13`.
+- Gate: check 0/0, lint exit 0, `bun test` 34/34. See `RV07-C02-Audit-01.md`.
+
+## Round 2
+
+- 5 agents. Verdict: **5/5 UNCONDITIONAL_PASS**.
+- All three fixes verified end-to-end: eviction cascade commits atomically
+  (readStatePending survives); front/bookmark reason lifecycle correct across
+  two-sync scroll-off (loses reason, keeps others); commentCount cap eliminates
+  the phantom split. First-ever sync (no prior) and exact-1000 boundary handled.
+- Gates: check 0/0, lint exit 0, `bun test` 34/34 (manifest 12 + carry-over 22).
+  See `RV07-C02-Audit-02.md`.
+
+**C02 COMPLETE 5/5.** Advancing to C03 (settings UI + install gating).
 
 ## Carry-overs
 
-(to be filled post-audit)
+- **CO-C02-1** `populateReplyManifests` covers curated∪front∪bookmark only; a
+  `'read'`-only row (C04 passthrough) lacks a manifest until it re-enters a
+  curated set. **C04** must write the manifest on passthrough write.
+- **CO-C02-2** `REPLY_CAP`/`REPLY_CAP_HALF` duplicated client (`manifest.ts`) vs
+  server (`db/dao/sync.ts`). Dedupe into a shared `$lib` module when convenient.
+- **CO-C02-3** `applyEviction` reads 4 syncMeta keys outside the txn (read-only
+  pre-pass; txn only writes the 4 listed stores) — acceptable; flagged.

@@ -6,6 +6,9 @@
 	import type { LayoutData } from './$types';
 	import { getBadgesStore } from '$lib/stores/badges.svelte';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
+	import { getPwaInstallStore } from '$lib/stores/pwa-install.svelte';
+	import { getOfflinePrefsStore } from '$lib/stores/offline-prefs.svelte';
+	import { DEFAULT_OFFLINE_PREFS } from '$lib/offline/prefs';
 
 	interface LayoutProps {
 		data: LayoutData;
@@ -51,6 +54,56 @@
 			.catch((err: unknown) => console.error('[offline] sync failed:', err));
 	}
 
+	// One-time guard flag in localStorage. Once set, the auto-enable path never
+	// re-evaluates the prefs comparison, so a user who later turns caching back
+	// off is never silently re-enabled by a future installed-PWA launch.
+	const AUTO_ENABLE_GUARD_KEY = 'janbao:offline-autoenabled';
+
+	function prefsAreDefaults(): boolean {
+		const current = getOfflinePrefsStore().prefs;
+		const defaults = DEFAULT_OFFLINE_PREFS;
+		return (
+			current.enabled === defaults.enabled &&
+			current.depth === defaults.depth &&
+			current.refreshIntervalDays === defaults.refreshIntervalDays &&
+			current.passthrough === defaults.passthrough &&
+			current.categories.latest === defaults.categories.latest &&
+			current.categories.mostViewed === defaults.categories.mostViewed &&
+			current.categories.mostReplied === defaults.categories.mostReplied
+		);
+	}
+
+	function maybeAutoEnableOnInstall(): void {
+		const pwa = getPwaInstallStore();
+		if (!pwa.isInstalled) return;
+		try {
+			if (localStorage.getItem(AUTO_ENABLE_GUARD_KEY) === '1') return;
+		} catch {
+			// localStorage unavailable / blocked: bail without enabling so we
+			// don't flip a pref we can't durably mark as auto-set.
+			return;
+		}
+		// Only enable when prefs are byte-for-byte the defaults - this is what
+		// makes the hook respect a user's explicit prior choice. A user who
+		// has ever toggled any field will have a non-default prefs object and
+		// is skipped permanently (the guard then sticks on the first launch
+		// that DID match, sealing the window).
+		if (!prefsAreDefaults()) {
+			try {
+				localStorage.setItem(AUTO_ENABLE_GUARD_KEY, '1');
+			} catch {
+				/* ignore - best-effort */
+			}
+			return;
+		}
+		getOfflinePrefsStore().update({ enabled: true });
+		try {
+			localStorage.setItem(AUTO_ENABLE_GUARD_KEY, '1');
+		} catch {
+			/* ignore - best-effort */
+		}
+	}
+
 	onMount(() => {
 		online.setOnline(navigator.onLine);
 		const markOnline = () => {
@@ -62,6 +115,14 @@
 		window.addEventListener('offline', markOffline);
 		// Keep the offline cache fresh on load when already online.
 		if (navigator.onLine) triggerSync();
+		// DV07 C03 - auto-enable offline caching once on the first launch as an
+		// installed PWA, but ONLY when the prefs are still exactly the defaults
+		// (the user has not manually configured) AND a one-time guard flag is
+		// not set. Idempotent: setting the guard + persisting the pref on the
+		// same pass means subsequent launches short-circuit on the guard before
+		// the prefs comparison ever runs. Runs in onMount, not a bare `$effect`,
+		// so it never re-fires on tracked-state changes ([[svelte-effect-fetch-loop]]).
+		maybeAutoEnableOnInstall();
 		// `sw` is the service-worker container in production (undefined in dev, or
 		// when the browser lacks SW support). Registration is production-only so
 		// dev assets are never cached.
