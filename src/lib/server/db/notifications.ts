@@ -197,5 +197,7 @@ function isEligible(
 function notificationTypeFor(category: ReplyNotifCategory): string {
 	if (category === 'mention') return 'mention';
 	if (category === 'owner') return 'reply';
+	if (category === 'participant') return 'participated_comment';
+	if (category === 'bookmarker') return 'bookmarked_comment';
 	return 'discussion_comment';
 }

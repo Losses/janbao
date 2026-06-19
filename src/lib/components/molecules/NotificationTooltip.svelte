@@ -48,15 +48,37 @@
 	function buildView(item: NotificationItem): NotificationView {
 		const source = item.sourceDisplayName ?? '';
 		if (
-			(item.type === 'mention' || item.type === 'reply' || item.type === 'discussion_comment') &&
+			(item.type === 'mention' ||
+				item.type === 'reply' ||
+				item.type === 'discussion_comment' ||
+				item.type === 'participated_comment' ||
+				item.type === 'bookmarked_comment') &&
 			item.discussionId
 		) {
-			const verb =
-				item.type === 'mention'
+			let verbPattern: string;
+			if (item.type === 'mention') {
+				verbPattern = item.discussionTitle
 					? (tNotification['mention'] ?? '')
-					: item.type === 'reply'
-						? (tNotification['reply'] ?? '')
-						: (tNotification['discussionComment'] ?? '');
+					: (tNotification['mentionFallback'] ?? '');
+			} else if (item.type === 'reply') {
+				verbPattern = item.discussionTitle
+					? (tNotification['reply'] ?? '')
+					: (tNotification['replyFallback'] ?? '');
+			} else if (item.type === 'participated_comment') {
+				verbPattern = item.discussionTitle
+					? (tNotification['participatedComment'] ?? '')
+					: (tNotification['participatedCommentFallback'] ?? '');
+			} else if (item.type === 'bookmarked_comment') {
+				verbPattern = item.discussionTitle
+					? (tNotification['bookmarkedComment'] ?? '')
+					: (tNotification['bookmarkedCommentFallback'] ?? '');
+			} else {
+				verbPattern = item.discussionTitle
+					? (tNotification['discussionComment'] ?? '')
+					: (tNotification['discussionCommentFallback'] ?? '');
+			}
+
+			const verb = verbPattern.replace('{title}', item.discussionTitle ?? '');
 			return {
 				item,
 				label: `${source} ${verb}`,

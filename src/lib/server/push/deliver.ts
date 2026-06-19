@@ -21,13 +21,15 @@ import {
 	pushSubscriptions,
 	notificationPreferences,
 	conversationParticipants,
-	users
+	users,
+	discussions
 } from '$lib/server/db/schema';
 import type { D1Db } from '$lib/server/db/index';
 import type { NewNotificationRow, ReplyNotifCategory } from '$lib/server/db/notifications';
 import { encryptJsonPayload } from './encryption';
 import { signVapidJwt } from './vapid';
 import { getVapidKeys, base64UrlToBytes, bytesToBase64Url } from './keys';
+import { getTranslation } from '../i18n';
 
 /** Discrete outcome of a single push POST. */
 type PushDeliveryStatus = 'ok' | 'gone' | 'retryable' | 'failed';
@@ -156,18 +158,33 @@ export async function deliverPushForNotifications(
 
 	const userIds = [...new Set(rows.map((r) => r.userId))];
 	const sourceUserIds = [...new Set(rows.map((r) => r.sourceUserId))];
+	const discussionIds = [
+		...new Set(rows.map((r) => r.discussionId).filter((id): id is number => id !== null))
+	];
 
-	const [subsRows, prefRows, sourceUserRows] = await Promise.all([
-		db.select().from(pushSubscriptions).where(inArray(pushSubscriptions.userId, userIds)),
-		db
-			.select()
-			.from(notificationPreferences)
-			.where(inArray(notificationPreferences.userId, userIds)),
-		db
-			.select({ id: users.id, username: users.username, displayName: users.displayName })
-			.from(users)
-			.where(inArray(users.id, sourceUserIds))
-	]);
+	const [subsRows, prefRows, sourceUserRows, recipientUserRows, discussionRows] = await Promise.all(
+		[
+			db.select().from(pushSubscriptions).where(inArray(pushSubscriptions.userId, userIds)),
+			db
+				.select()
+				.from(notificationPreferences)
+				.where(inArray(notificationPreferences.userId, userIds)),
+			db
+				.select({ id: users.id, username: users.username, displayName: users.displayName })
+				.from(users)
+				.where(inArray(users.id, sourceUserIds)),
+			db
+				.select({ id: users.id, languagePreference: users.languagePreference })
+				.from(users)
+				.where(inArray(users.id, userIds)),
+			discussionIds.length > 0
+				? db
+						.select({ id: discussions.id, title: discussions.title })
+						.from(discussions)
+						.where(inArray(discussions.id, discussionIds))
+				: []
+		]
+	);
 
 	const prefByUser = new Map(prefRows.map((p) => [p.userId, p]));
 	const subsByUser = new Map<number, typeof subsRows>();
@@ -177,6 +194,8 @@ export async function deliverPushForNotifications(
 		subsByUser.set(s.userId, list);
 	}
 	const sourceByUser = new Map(sourceUserRows.map((u) => [u.id, u]));
+	const recipientLang = new Map(recipientUserRows.map((u) => [u.id, u.languagePreference]));
+	const discussionMap = new Map(discussionRows.map((d) => [d.id, d.title]));
 
 	for (const row of rows) {
 		const prefColumns = pushPrefColumnsForCategory(row.category);
@@ -194,7 +213,9 @@ export async function deliverPushForNotifications(
 		const source = sourceByUser.get(row.sourceUserId);
 		const sourceName = source?.displayName || source?.username || '';
 		const url = `/discussion/${row.discussionId}`;
-		const payload = buildNotificationPayload(row.type, sourceName, url);
+		const lang = recipientLang.get(row.userId) || 'en';
+		const discussionTitle = row.discussionId ? (discussionMap.get(row.discussionId) ?? null) : null;
+		const payload = buildNotificationPayload(row.type, sourceName, url, lang, discussionTitle);
 
 		await sendToSubscriptions(db, subscriptions, payload, platformEnv);
 	}
@@ -298,32 +319,85 @@ async function sendToSubscriptions(
 }
 
 /** Compose a human-readable payload from a notification row. */
-function buildNotificationPayload(type: string, sourceName: string, url: string): PushPayload {
+function buildNotificationPayload(
+	type: string,
+	sourceName: string,
+	url: string,
+	lang: string,
+	discussionTitle: string | null
+): PushPayload {
 	const actor = sourceName || 'Someone';
+	const t = getTranslation(lang);
+	const notificationT = (t.notification as Record<string, string> | undefined) ?? {};
+
+	let titlePattern: string;
+	if (type === 'mention') {
+		titlePattern = discussionTitle
+			? (notificationT.mention ?? '')
+			: (notificationT.mentionFallback ?? '');
+	} else if (type === 'reply') {
+		titlePattern = discussionTitle
+			? (notificationT.reply ?? '')
+			: (notificationT.replyFallback ?? '');
+	} else if (type === 'participated_comment') {
+		titlePattern = discussionTitle
+			? (notificationT.participatedComment ?? '')
+			: (notificationT.participatedCommentFallback ?? '');
+	} else if (type === 'bookmarked_comment') {
+		titlePattern = discussionTitle
+			? (notificationT.bookmarkedComment ?? '')
+			: (notificationT.bookmarkedCommentFallback ?? '');
+	} else if (type === 'discussion_comment') {
+		titlePattern = discussionTitle
+			? (notificationT.discussionComment ?? '')
+			: (notificationT.discussionCommentFallback ?? '');
+	} else {
+		titlePattern = discussionTitle
+			? (notificationT.discussionComment ?? '')
+			: (notificationT.discussionCommentFallback ?? '');
+	}
+
+	const verb = titlePattern.replace('{title}', discussionTitle ?? '');
+	const title = `${actor} ${verb}`;
+
 	switch (type) {
 		case 'mention':
 			return {
-				title: `${actor} mentioned you`,
+				title,
 				body: '',
 				url,
 				tag: `mention-${url}`
 			};
 		case 'reply':
 			return {
-				title: `${actor} replied to your discussion`,
+				title,
 				body: '',
 				url,
 				tag: `reply-${url}`
 			};
+		case 'participated_comment':
+			return {
+				title,
+				body: '',
+				url,
+				tag: `participated-${url}`
+			};
+		case 'bookmarked_comment':
+			return {
+				title,
+				body: '',
+				url,
+				tag: `bookmarked-${url}`
+			};
 		case 'discussion_comment':
 			return {
-				title: `${actor} posted in a discussion you follow`,
+				title,
 				body: '',
 				url,
 				tag: `comment-${url}`
 			};
 		default:
-			return { title: actor, body: '', url, tag: url };
+			return { title, body: '', url, tag: url };
 	}
 }
 

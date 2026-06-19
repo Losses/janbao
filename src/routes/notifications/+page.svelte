@@ -48,17 +48,38 @@
 		let target: string | null = null;
 
 		if (
-			(item.type === 'mention' || item.type === 'reply' || item.type === 'discussion_comment') &&
+			(item.type === 'mention' ||
+				item.type === 'reply' ||
+				item.type === 'discussion_comment' ||
+				item.type === 'participated_comment' ||
+				item.type === 'bookmarked_comment') &&
 			item.discussionId
 		) {
-			const verb =
-				item.type === 'mention'
-					? notificationT.mention
-					: item.type === 'reply'
-						? notificationT.reply
-						: notificationT.discussionComment;
+			let verbPattern: string;
+			if (item.type === 'mention') {
+				verbPattern = item.discussionTitle
+					? (notificationT.mention ?? '')
+					: (notificationT.mentionFallback ?? '');
+			} else if (item.type === 'reply') {
+				verbPattern = item.discussionTitle
+					? (notificationT.reply ?? '')
+					: (notificationT.replyFallback ?? '');
+			} else if (item.type === 'participated_comment') {
+				verbPattern = item.discussionTitle
+					? (notificationT.participatedComment ?? '')
+					: (notificationT.participatedCommentFallback ?? '');
+			} else if (item.type === 'bookmarked_comment') {
+				verbPattern = item.discussionTitle
+					? (notificationT.bookmarkedComment ?? '')
+					: (notificationT.bookmarkedCommentFallback ?? '');
+			} else {
+				verbPattern = item.discussionTitle
+					? (notificationT.discussionComment ?? '')
+					: (notificationT.discussionCommentFallback ?? '');
+			}
+
+			const verb = verbPattern.replace('{title}', item.discussionTitle ?? '');
 			label = `${sourceName} ${verb}`;
-			target = item.discussionTitle;
 			href = `/discussion/${item.discussionId}/${item.discussionSlug ?? 'discussion'}`;
 		} else if (item.type === 'profile_comment' && item.activityId) {
 			label = `${sourceName} ${notificationT.profileComment}`;
