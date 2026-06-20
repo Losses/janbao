@@ -9,7 +9,8 @@ import {
 	drafts
 } from '$lib/server/db/schema';
 import { eq, and, isNull, count } from 'drizzle-orm';
-import { getPaginationLimit } from '$lib/server/constants';
+import { getPaginationLimit, getDiscussionsLimit } from '$lib/server/constants';
+import { getConversations } from '$lib/server/db/dao/messages';
 import { resolveMentions } from '$lib/server/utils/mentions';
 import { indexMessage, reindexMessage } from '$lib/server/search/fts';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
@@ -152,6 +153,10 @@ export const load: PageServerLoad = async (event) => {
 		db
 	);
 
+	// Eager-fetch the inbox (page 1) for the ThreadPager's left panel.
+	const inboxLimit = getDiscussionsLimit(event.platform?.env);
+	const inboxResult = await getConversations(db, user.id, { limit: inboxLimit, offset: 0 });
+
 	return {
 		conversation,
 		participants,
@@ -160,7 +165,13 @@ export const load: PageServerLoad = async (event) => {
 		totalPages,
 		totalCount,
 		messageDraft,
-		mentionedUsers
+		mentionedUsers,
+		inbox: {
+			conversations: inboxResult.items,
+			page: 1,
+			totalPages: Math.max(1, Math.ceil(inboxResult.total / inboxLimit)),
+			totalCount: inboxResult.total
+		}
 	};
 };
 

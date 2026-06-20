@@ -1,5 +1,7 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
+	import ThreadPager from '$lib/components/templates/ThreadPager.svelte';
+	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
 	import PrivateMessageWindow from '$lib/components/organisms/PrivateMessageWindow.svelte';
 	import ParticipantAdder from '$lib/components/molecules/ParticipantAdder.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
@@ -149,31 +151,42 @@
 	</div>
 {/snippet}
 
-<DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-3">
-		<div class="flex items-center justify-between border-b border-base-300 pb-4">
-			<h1 class="page-title truncate">{conversation.title}</h1>
+<DualColumnLayout {sidebar} {user} {t} flush>
+	<ThreadPager centerTab={2} leftHref="/messages/inbox">
+		{#snippet left()}
+			<MessagesPanel
+				conversations={data.inbox.conversations}
+				currentPage={data.inbox.page}
+				totalPages={data.inbox.totalPages}
+				{t}
+				paginate={false}
+			/>
+		{/snippet}
+		<div class="space-y-3">
+			<div class="flex items-center justify-between border-b border-base-300 pb-4">
+				<h1 class="page-title truncate">{conversation.title}</h1>
+			</div>
+
+			{#if totalPages > 1}
+				<div class="flex justify-end">
+					<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+				</div>
+			{/if}
+
+			<PrivateMessageWindow
+				messages={data.messages}
+				conversationId={conversation.id}
+				currentUserId={user?.id ?? null}
+				messageDraft={data.messageDraft}
+				mentionedUsers={data.mentionedUsers}
+				{t}
+			/>
+
+			{#if totalPages > 1}
+				<div class="flex justify-end pt-2">
+					<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+				</div>
+			{/if}
 		</div>
-
-		{#if totalPages > 1}
-			<div class="flex justify-end">
-				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
-			</div>
-		{/if}
-
-		<PrivateMessageWindow
-			messages={data.messages}
-			conversationId={conversation.id}
-			currentUserId={user?.id ?? null}
-			messageDraft={data.messageDraft}
-			mentionedUsers={data.mentionedUsers}
-			{t}
-		/>
-
-		{#if totalPages > 1}
-			<div class="flex justify-end pt-2">
-				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
-			</div>
-		{/if}
-	</div>
+	</ThreadPager>
 </DualColumnLayout>

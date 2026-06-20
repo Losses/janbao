@@ -1,6 +1,9 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ThreadPager from '$lib/components/templates/ThreadPager.svelte';
+	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
+	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
+	import type { PageUrlBuilder } from '$lib/types/tabs';
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import ActiveUsersWall from '$lib/components/molecules/ActiveUsersWall.svelte';
 	import CategoryListWidget from '$lib/components/molecules/CategoryListWidget.svelte';
@@ -109,6 +112,8 @@
 			console.error('[offline passthrough] writeThread failed', err);
 		});
 	}
+
+	const buildPageUrl: PageUrlBuilder = (p) => (p === 1 ? '/' : `/discussions/p${p}`);
 
 	const t = $derived(data.t);
 	const user = $derived(data.user);
@@ -269,7 +274,29 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t} flush>
-	<ThreadPager list={data.list} activity={data.activity} {t} {user}>
+	<ThreadPager centerTab={0} rightTab={1} leftHref="/" rightHref="/activity">
+		{#snippet left()}
+			<DiscussionsPanel
+				discussions={data.list.discussions}
+				currentPage={data.list.page}
+				totalPages={data.list.totalPages}
+				{t}
+				{buildPageUrl}
+				paginate={false}
+			/>
+		{/snippet}
+		{#snippet right()}
+			<ActivityPanel
+				activities={data.activity.activities}
+				currentPage={data.activity.page}
+				totalPages={data.activity.totalPages}
+				activityDraft={data.activity.activityDraft}
+				mentionedUsers={data.activity.mentionedUsers}
+				{t}
+				{user}
+				paginate={false}
+			/>
+		{/snippet}
 		<div class="space-y-3">
 			<!-- Discussion Header -->
 			<div class="border-b border-base-300 flex justify-between items-center pb-3 gap-3">

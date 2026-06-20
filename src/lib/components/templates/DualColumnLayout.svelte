@@ -117,6 +117,7 @@
 	const swipeDisabled = $derived(
 		isPagerRoute(page.url.pathname) ||
 			page.url.pathname.startsWith('/discussion') ||
+			/^\/messages\/\d+/.test(page.url.pathname) ||
 			swipeBaseline < 0 ||
 			!isMobile
 	);
