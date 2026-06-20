@@ -681,7 +681,9 @@
 </script>
 
 <div
-	class="janbao-rich-editor relative border border-base-300 bg-base-100 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all duration-200 {className}"
+	class="janbao-rich-editor relative border border-base-300 bg-base-100 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all duration-200 {features.plainMode
+		? 'janbao-rich-editor--plain'
+		: ''} {className}"
 >
 	<Composer {initialConfig}>
 		{#if !features.plainMode}
@@ -702,7 +704,7 @@
 		>
 			<ContentEditable
 				ariaLabel={resolvedPlaceholder}
-				className="ContentEditable__root prose prose-sm max-w-none min-h-[200px] px-3 py-2 text-base-content bg-base-100 focus:outline-none"
+				className="ContentEditable__root prose prose-sm max-w-none break-words min-h-[200px] px-3 py-2 text-base-content bg-base-100 focus:outline-none"
 			/>
 			<RichTextPlugin />
 			<HistoryPlugin />
@@ -772,6 +774,15 @@
 	.janbao-rich-editor :global(.ContentEditable__root) {
 		border-bottom-left-radius: max(0px, calc(var(--radius-field, 0.5rem) - 1px));
 		border-bottom-right-radius: max(0px, calc(var(--radius-field, 0.5rem) - 1px));
+	}
+
+	/* Plain-text mode: the toolbar (which carries the top corner radii via
+	   .rounded-t-field) is unmounted, so the content area is now the topmost
+	   child and must carry the top corners too - otherwise its square top
+	   corners are clipped by the outer container's rounded border. */
+	.janbao-rich-editor--plain :global(.ContentEditable__root) {
+		border-top-left-radius: max(0px, calc(var(--radius-field, 0.5rem) - 1px));
+		border-top-right-radius: max(0px, calc(var(--radius-field, 0.5rem) - 1px));
 	}
 
 	.janbao-rich-editor-overlay {

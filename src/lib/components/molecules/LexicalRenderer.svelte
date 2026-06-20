@@ -325,7 +325,12 @@
 	{/if}
 {/snippet}
 
-<div class="prose prose-sm max-w-none {className}">
+<!-- break-words (overflow-wrap: break-word) is inherited by every descendant,
+     so long unbreakable runs - URLs, autolink text, inline code tokens, long
+     words - wrap at the container edge instead of forcing the box to grow and
+     producing a page-level horizontal scrollbar. max-w-none lifts the prose
+     65ch cap; break-words is what actually keeps the content inside the parent. -->
+<div class="prose prose-sm max-w-none break-words {className}">
 	{#if rootNode && rootNode.children}
 		{#each rootNode.children as child, i (i)}
 			{@render renderNode(child)}
