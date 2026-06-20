@@ -11,6 +11,16 @@ import { env } from '$env/dynamic/private';
 import { eq } from 'drizzle-orm';
 import type { Handle } from '@sveltejs/kit';
 
+// Copy SvelteKit dynamic private env variables to process.env for local development
+// and node/bun runtime compatibility in server helpers (e.g. constants.ts).
+if (typeof process !== 'undefined') {
+	for (const [key, value] of Object.entries(env)) {
+		if (value && !process.env[key]) {
+			process.env[key] = value;
+		}
+	}
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
 	// 1. Initialize Database Client
 	const d1 = event.platform?.env?.D1_DB;

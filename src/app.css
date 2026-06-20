@@ -95,6 +95,15 @@ header nav {
 		'Noto Color Emoji';
 }
 
+/* The mobile tab-swipe surface sets `touch-action: pan-y` so the browser yields
+   horizontal drags to us (see DualColumnLayout). Reclaim horizontal touch
+   panning on actual horizontal scrollers so tables / carousels still scroll
+   horizontally even while nested inside that pan-y surface. */
+.overflow-x-auto,
+.overflow-x-scroll {
+	touch-action: pan-x pan-y;
+}
+
 /* User display names (profile header + sidebar UserInfoBlock widget) use the
    sans (hei) stack instead of the Songti/serif body font, rendered bold. */
 .user-display-name {

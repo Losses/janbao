@@ -120,6 +120,27 @@ export interface JoinedMember {
 	avatarFileId: string | null;
 }
 
+/**
+ * A feed item as produced by the activity loaders. The union of what
+ * ActivityRow and JoinedActivityRow consume. Shared between the server DAO
+ * (`loadActivityPage`), the activity panel, and the mobile tab pager.
+ */
+export interface ActivityListItem {
+	id: number;
+	authorId: number;
+	authorDisplayName: string;
+	authorUsername: string;
+	authorAvatarFileId: string | null;
+	recipientId?: number | null;
+	recipientDisplayName?: string | null;
+	recipientUsername?: string | null;
+	contentJson: string;
+	createdAt: Date;
+	commentCount: number;
+	isJoined: boolean;
+	joinedMembers: JoinedMember[];
+}
+
 // --- Profile Edit API Types ---
 
 export interface ProfileEditBody {

@@ -6,7 +6,7 @@
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { loadOfflineActivity } from '$lib/offline/queries';
-	import type { ActivityListItem } from '$lib/components/organisms/ActivityList.svelte';
+	import type { ActivityListItem } from '$lib/types/api';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();

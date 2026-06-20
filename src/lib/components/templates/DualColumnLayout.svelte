@@ -1,12 +1,9 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { onMount } from 'svelte';
-	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
 	import Header from '$lib/components/organisms/Header.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
-	import { captureSwipe, detectSwipe } from '$lib/actions/swipe';
-	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
+	import { captureSwipe } from '$lib/actions/swipe';
 	import type { UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 
@@ -33,10 +30,10 @@
 		getScrollChromeStore().start();
 	});
 
-	// Gestures are mobile-only. Match the scroll-chrome breakpoint so the chrome
-	// and the gestures agree on what "mobile" means. Default false for SSR safety
-	// ([[browser-gated-derived-hydration-mismatch]]): the flag only flips in the
-	// browser, and gestures are runtime pointer events that never fire during SSR.
+	// Drawer gestures are mobile-only. Match the scroll-chrome breakpoint so the
+	// chrome and the gestures agree on what "mobile" means. Default false for SSR
+	// safety ([[browser-gated-derived-hydration-mismatch]]): the flag only flips
+	// in the browser, and gestures are runtime pointer events that never fire SSR.
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	let isMobile = $state(false);
 	onMount(() => {
@@ -56,9 +53,9 @@
 	}
 
 	// ---- Drawer drag (edge-open + overlay-close, finger-follow) ----
-	// `drawerOffset` is null while at rest (the CSS class + transition snaps the
-	// panel open/closed); a live px offset while a pointer is dragging is applied
-	// as an inline transform so the panel tracks the finger 1:1.
+	// `drawerOffset` is null while at rest (the CSS transition snaps the panel
+	// open/closed); a live px offset while a pointer is dragging is applied as an
+	// inline transform so the panel tracks the finger 1:1.
 	const DRAWER_WIDTH = 280;
 	const DRAWER_COMMIT = 80;
 	let drawerOffset = $state<number | null>(null);
@@ -100,37 +97,6 @@
 		isDrawerOpen = deltaX > -DRAWER_COMMIT;
 		drawerOffset = null;
 	}
-
-	// ---- Page-content swipe to switch the primary tab (finger-follow) ----
-	const SWIPE_MAX = 100; // px of finger-follow feedback
-	const SWIPE_COMMIT = 60; // px past which a release commits the switch
-	let contentOffset = $state(0);
-	const contentStyle = $derived(
-		contentOffset === 0 ? '' : `transform: translateX(${contentOffset}px); transition: none`
-	);
-	const currentPath = $derived(page.url.pathname);
-	const currentIndex = $derived(getCurrentTabIndex(currentPath));
-
-	/** Translate the content by the drag delta, with rubber-band resistance at the tab boundaries. */
-	function followTab(deltaX: number): number {
-		const lastIndex = MOBILE_TABS.length - 1;
-		let delta = deltaX;
-		if (currentIndex <= 0 && delta > 0) delta *= 0.4; // leftmost: swiping toward a previous tab that does not exist
-		if (currentIndex >= lastIndex && delta < 0) delta *= 0.4; // rightmost: swiping toward a next tab that does not exist
-		return Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, delta));
-	}
-	function swipeMove(deltaX: number): void {
-		contentOffset = followTab(deltaX);
-	}
-	function swipeEnd(deltaX: number): void {
-		const lastIndex = MOBILE_TABS.length - 1;
-		if (deltaX <= -SWIPE_COMMIT && currentIndex < lastIndex) {
-			void goto(MOBILE_TABS[currentIndex + 1].href);
-		} else if (deltaX >= SWIPE_COMMIT && currentIndex > 0) {
-			void goto(MOBILE_TABS[currentIndex - 1].href);
-		}
-		contentOffset = 0;
-	}
 </script>
 
 <div class="relative flex min-h-screen flex-col bg-base-200 text-base-content">
@@ -141,13 +107,8 @@
 		<div
 			class="flex flex-col gap-4 border-b border-base-300 bg-base-100 p-3 md:border-x md:flex-row"
 		>
-			<!-- Left Column (Main Page Content). detectSwipe adds left/right tab
-			     switching with finger-follow; vertical scroll stays native. -->
-			<main
-				class="w-full min-w-0 flex-1 transition-transform duration-200"
-				style={contentStyle}
-				use:detectSwipe={{ onMove: swipeMove, onEnd: swipeEnd, disabled: () => !isMobile }}
-			>
+			<!-- Left Column (Main Page Content) -->
+			<main class="w-full min-w-0 flex-1">
 				{@render children()}
 			</main>
 
@@ -168,7 +129,7 @@
 	     the finger. captureSwipe sets touch-action:none + preventDefault so the
 	     browser's built-in edge-back / pan never fires. -->
 	<div
-		class="fixed inset-y-0 left-0 z-30 w-5 md:hidden"
+		class="fixed inset-y-0 left-0 z-30 w-8 md:hidden"
 		use:captureSwipe={{
 			onMove: edgeMove,
 			onEnd: edgeEnd,

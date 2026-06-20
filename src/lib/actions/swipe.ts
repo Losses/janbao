@@ -1,18 +1,18 @@
 /**
  * Swipe actions - low-level horizontal pointer-drag primitives shared by the
- * mobile drawer (edge-open + overlay-close) and the page-content tab switch.
+ * mobile drawer (edge-open + overlay-close) and the tab pager.
  *
  * `captureSwipe` claims the entire gesture: touch-action:none on the node so
  * the browser yields its built-in pan / zoom / edge-back to us, pointer capture
  * from pointerdown, and preventDefault on move. Used on surfaces with no
  * competing native behaviour to preserve (the left edge zone + drawer overlay).
  *
- * `detectSwipe` runs on the vertically-scrolling page body: it leaves native
- * vertical scroll untouched and only takes over once a clearly-horizontal drag
- * is recognised (intent detection), ignoring drags that start on interactive
- * elements or inside a horizontally-scrollable container. Used for left/right
- * tab switching. Both actions swallow the synthetic click that follows a real
- * drag so a swipe never double-fires as a tap on whatever sits under the finger.
+ * `detectSwipe` runs on a surface that scrolls vertically (the pager viewport):
+ * it leaves native vertical scroll untouched and only takes over once a
+ * clearly-horizontal drag is recognised (intent detection), ignoring drags that
+ * start on editing controls or inside a horizontally-scrollable container. Used
+ * for left/right tab switching. Both actions swallow the synthetic click that
+ * follows a real drag so a swipe never double-fires as a tap.
  */
 import type { Action } from 'svelte/action';
 

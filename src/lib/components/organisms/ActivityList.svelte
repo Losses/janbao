@@ -1,27 +1,9 @@
 <script lang="ts">
 	import ActivityRow from '$lib/components/organisms/ActivityRow.svelte';
 	import JoinedActivityRow from '$lib/components/organisms/JoinedActivityRow.svelte';
-	import type { JoinedMember } from '$lib/types/api';
+	import type { ActivityListItem } from '$lib/types/api';
 	import type { MentionedUsersMap } from '$lib/types/mentions';
 	import type { TranslationDict } from '$lib/types/translation';
-
-	// A feed item as produced by the /activity and profile loaders. The fields
-	// are the union of what ActivityRow and JoinedActivityRow consume.
-	export interface ActivityListItem {
-		id: number;
-		authorId: number;
-		authorDisplayName: string;
-		authorUsername: string;
-		authorAvatarFileId: string | null;
-		recipientId?: number | null;
-		recipientDisplayName?: string | null;
-		recipientUsername?: string | null;
-		contentJson: string;
-		createdAt: Date;
-		commentCount: number;
-		isJoined: boolean;
-		joinedMembers: JoinedMember[];
-	}
 
 	interface ActivityListProps {
 		items: ActivityListItem[];

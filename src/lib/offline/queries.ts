@@ -1,6 +1,6 @@
 import { getOfflineDB } from '$lib/offline/idb';
 import { joinDiscussions, lookupAuthor } from '$lib/offline/join';
-import type { ActivityListItem } from '$lib/components/organisms/ActivityList.svelte';
+import type { ActivityListItem } from '$lib/types/api';
 import type {
 	CachedAuthorProjection,
 	OfflineBookmarkView,

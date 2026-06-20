@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
-	import DiscussionListPage from '$lib/components/templates/DiscussionListPage.svelte';
+	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
+	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
+	import DiscussionsSidebar from '$lib/components/panels/DiscussionsSidebar.svelte';
 	import { formatTitle } from '$lib/utils/title';
-	import { writeList } from '$lib/offline/passthrough';
-	import { passthroughEnabledFor } from '$lib/offline/passthrough';
+	import { writeList, passthroughEnabledFor } from '$lib/offline/passthrough';
 	import type { DiscussionListItem } from '$lib/server/db/dao/discussions';
+	import type { PageUrlBuilder } from '$lib/types/tabs';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -14,7 +16,7 @@
 
 	let { data }: PageProps = $props();
 
-	const buildPageUrl = (page: number) => (page === 1 ? '/' : `/discussions/p${page}`);
+	const buildPageUrl: PageUrlBuilder = (page) => (page === 1 ? '/' : `/discussions/p${page}`);
 
 	// DV07 C04 read passthrough: writes this list page's discussions to IDB
 	// tagged with reason 'read' when the user has the feature on and is online.
@@ -38,11 +40,16 @@
 	<title>{formatTitle(data.t.nav.home)}</title>
 </svelte:head>
 
-<DiscussionListPage
-	discussions={data.discussions}
-	currentPage={data.page}
-	totalPages={data.totalPages}
-	t={data.t}
-	user={data.user}
-	{buildPageUrl}
-/>
+<DualColumnLayout t={data.t} user={data.user}>
+	{#snippet sidebar()}
+		<DiscussionsSidebar t={data.t} user={data.user} />
+	{/snippet}
+
+	<DiscussionsPanel
+		discussions={data.discussions}
+		currentPage={data.page}
+		totalPages={data.totalPages}
+		t={data.t}
+		{buildPageUrl}
+	/>
+</DualColumnLayout>
