@@ -13,6 +13,9 @@ import {
 import { eq, and, isNull, count, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { getPaginationLimit, resolvePermissions } from '$lib/server/constants';
+import { parseDiscussionPageFromPath, resolveGroupSlug } from '$lib/server/constants';
+import { loadDiscussionsPage } from '$lib/server/db/dao/discussions';
+import { loadActivityPage } from '$lib/server/db/dao/activities';
 import { dispatchReplyNotifications } from '$lib/server/db/notifications';
 import type { NewNotificationRow } from '$lib/server/db/notifications';
 import { deliverPushForNotifications } from '$lib/server/push/deliver';
@@ -32,6 +35,7 @@ export const load: PageServerLoad = async (event) => {
 	}
 	const db = event.locals.db;
 	const user = event.locals.user;
+	const platformEnv = event.platform?.env;
 
 	// 1. Fetch discussion, category, and author details
 	const discussionQuery = db
@@ -263,6 +267,26 @@ export const load: PageServerLoad = async (event) => {
 	const allContentJsons = [opReply?.contentJson, ...repliesStream.map((r) => r.contentJson)];
 	const mentionedUsers = await resolveMentions(allContentJsons, db);
 
+	// 12. Eager-fetch the discussions list (page 1) + Activity (page 1) so the
+	// mobile ThreadPager can mount the live neighbor panels ([list | thread |
+	// Activity]) for a real swipe reveal - not just a translated current page.
+	const groupSlug = resolveGroupSlug(user);
+	const { limit: listLimit } = parseDiscussionPageFromPath(undefined, platformEnv);
+	const [list, activity] = await Promise.all([
+		loadDiscussionsPage(db, {
+			userId: user?.id ?? null,
+			limit: listLimit,
+			offset: 0,
+			groupSlug
+		}).then((r) => ({
+			discussions: r.discussions,
+			page: 1,
+			totalPages: r.totalPages,
+			totalCount: r.totalCount
+		})),
+		loadActivityPage(db, { userId: user?.id ?? null, page: 1, platformEnv })
+	]);
+
 	return {
 		discussion,
 		opReply,
@@ -280,7 +304,10 @@ export const load: PageServerLoad = async (event) => {
 		canUpdate: perms.canUpdate,
 		canCreate: perms.canCreate,
 		user,
-		mentionedUsers
+		mentionedUsers,
+		// ThreadPager neighbor panels (mobile swipe reveal).
+		list,
+		activity
 	};
 };
 

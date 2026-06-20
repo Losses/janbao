@@ -86,13 +86,38 @@
 
 	// ---- Swipe to switch tab on inner (non-pager) pages ----
 	// On the pager routes the MobileTabPager owns the swipe (1:1 drag + live
-	// reveal); everywhere else a committed horizontal swipe jumps to the next/prev
-	// tab, relative to the tab the current page belongs to. touch-action: pan-y
-	// lets vertical scroll stay native while yielding horizontal to us (without
-	// it the browser claims the gesture and fires pointercancel).
+	// reveal); everywhere else a horizontal drag slides the page content with the
+	// finger (clamped + rubber-banded at the tab boundaries) and a committed
+	// release jumps to the next/prev tab, relative to the tab the current page
+	// belongs to. touch-action: pan-y lets vertical scroll stay native while
+	// yielding horizontal to us (without it the browser claims the gesture and
+	// fires pointercancel).
 	const TAB_SWIPE_COMMIT = 60;
+	const TAB_SWIPE_MAX = 100; // px of finger-follow feedback on inner pages
 	const swipeBaseline = $derived(getSwipeBaseline(page.url.pathname));
-	const swipeDisabled = $derived(isPagerRoute(page.url.pathname) || swipeBaseline < 0 || !isMobile);
+	// ThreadPager owns the gesture on discussion threads; the MobileTabPager owns
+	// it on the tab roots. Disabled elsewhere when there's no tab association.
+	const swipeDisabled = $derived(
+		isPagerRoute(page.url.pathname) ||
+			page.url.pathname.startsWith('/discussion') ||
+			swipeBaseline < 0 ||
+			!isMobile
+	);
+	let swipeOffset = $state(0);
+	/** 1:1 toward a neighbour (clamped); 0.4x rubber-band past the first/last tab. */
+	function swipeFollow(deltaX: number): number {
+		const last = MOBILE_TABS.length - 1;
+		let d = deltaX;
+		if (swipeBaseline <= 0 && d > 0) d *= 0.4;
+		if (swipeBaseline >= last && d < 0) d *= 0.4;
+		return Math.max(-TAB_SWIPE_MAX, Math.min(TAB_SWIPE_MAX, d));
+	}
+	const contentSwipeStyle = $derived(
+		swipeOffset === 0 ? '' : `transform: translateX(${swipeOffset}px); transition: none`
+	);
+	function tabSwipeMove(deltaX: number): void {
+		swipeOffset = swipeFollow(deltaX);
+	}
 	function tabSwipeEnd(deltaX: number): void {
 		const last = MOBILE_TABS.length - 1;
 		if (deltaX <= -TAB_SWIPE_COMMIT && swipeBaseline < last) {
@@ -100,24 +125,32 @@
 		} else if (deltaX >= TAB_SWIPE_COMMIT && swipeBaseline > 0) {
 			void goto(MOBILE_TABS[swipeBaseline - 1].href);
 		}
+		swipeOffset = 0;
 	}
 </script>
 
 <div class="relative flex min-h-screen flex-col bg-base-200 text-base-content">
 	<!-- Main Content Container -->
-	<div class="mx-auto w-full max-w-[960px] flex-1 px-0 pb-6 md:px-6">
+	<div class="mx-auto flex w-full max-w-[960px] flex-1 flex-col px-0 pb-6 md:px-6">
 		<div
-			class="flex h-full flex-col gap-4 border-b border-base-300 bg-base-100 p-3 md:h-auto md:border-x md:flex-row"
+			class="flex flex-1 flex-col gap-4 border-b border-base-300 bg-base-100 p-3 md:flex-initial md:border-x md:flex-row"
 		>
 			<!-- Left Column (Main Page Content). On non-pager pages a horizontal
-			     swipe switches to the next/prev tab (disabled on the pager routes,
-			     where MobileTabPager owns the gesture). -->
+			     drag slides the content with the finger and a committed swipe
+			     switches to the next/prev tab (disabled on the pager routes, where
+			     MobileTabPager owns the gesture). -->
 			<main
 				class="w-full min-w-0 flex-1"
 				style="touch-action: pan-y pinch-zoom"
-				use:detectSwipe={{ onMove: () => {}, onEnd: tabSwipeEnd, disabled: () => swipeDisabled }}
+				use:detectSwipe={{
+					onMove: tabSwipeMove,
+					onEnd: tabSwipeEnd,
+					disabled: () => swipeDisabled
+				}}
 			>
-				{@render children()}
+				<div class="h-full transition-transform duration-200 ease-out" style={contentSwipeStyle}>
+					{@render children()}
+				</div>
 			</main>
 
 			<!-- Right Column (Desktop Sidebar) -->
