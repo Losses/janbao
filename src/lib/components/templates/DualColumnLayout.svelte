@@ -1,8 +1,11 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
 	import { getDrawerStore } from '$lib/stores/drawer.svelte';
-	import { captureSwipe } from '$lib/actions/swipe';
+	import { captureSwipe, detectSwipe } from '$lib/actions/swipe';
+	import { MOBILE_TABS, getSwipeBaseline, isPagerRoute } from '$lib/utils/mobile-tabs';
 	import type { UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 
@@ -80,6 +83,24 @@
 		else drawer.close();
 		drawerOffset = null;
 	}
+
+	// ---- Swipe to switch tab on inner (non-pager) pages ----
+	// On the pager routes the MobileTabPager owns the swipe (1:1 drag + live
+	// reveal); everywhere else a committed horizontal swipe jumps to the next/prev
+	// tab, relative to the tab the current page belongs to. touch-action: pan-y
+	// lets vertical scroll stay native while yielding horizontal to us (without
+	// it the browser claims the gesture and fires pointercancel).
+	const TAB_SWIPE_COMMIT = 60;
+	const swipeBaseline = $derived(getSwipeBaseline(page.url.pathname));
+	const swipeDisabled = $derived(isPagerRoute(page.url.pathname) || swipeBaseline < 0 || !isMobile);
+	function tabSwipeEnd(deltaX: number): void {
+		const last = MOBILE_TABS.length - 1;
+		if (deltaX <= -TAB_SWIPE_COMMIT && swipeBaseline < last) {
+			void goto(MOBILE_TABS[swipeBaseline + 1].href);
+		} else if (deltaX >= TAB_SWIPE_COMMIT && swipeBaseline > 0) {
+			void goto(MOBILE_TABS[swipeBaseline - 1].href);
+		}
+	}
 </script>
 
 <div class="relative flex min-h-screen flex-col bg-base-200 text-base-content">
@@ -88,8 +109,14 @@
 		<div
 			class="flex h-full flex-col gap-4 border-b border-base-300 bg-base-100 p-3 md:h-auto md:border-x md:flex-row"
 		>
-			<!-- Left Column (Main Page Content) -->
-			<main class="w-full min-w-0 flex-1">
+			<!-- Left Column (Main Page Content). On non-pager pages a horizontal
+			     swipe switches to the next/prev tab (disabled on the pager routes,
+			     where MobileTabPager owns the gesture). -->
+			<main
+				class="w-full min-w-0 flex-1"
+				style="touch-action: pan-y pinch-zoom"
+				use:detectSwipe={{ onMove: () => {}, onEnd: tabSwipeEnd, disabled: () => swipeDisabled }}
+			>
 				{@render children()}
 			</main>
 

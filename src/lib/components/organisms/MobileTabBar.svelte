@@ -36,14 +36,12 @@
 		(env.PUBLIC_BRANDED_FIRST_TAB ?? '').trim().toLowerCase()
 	);
 
-	function clampTab(pathname: string): number {
-		const idx = getCurrentTabIndex(pathname);
-		return idx < 0 ? 0 : idx;
-	}
-
 	// fractionalIndex tracks the pager's drag once it is mounted; before that (or
-	// where the bar renders without a pager) fall back to the URL's tab.
-	const urlIndex = $derived(clampTab(currentPath));
+	// where the bar renders without a pager) fall back to the URL's tab. -1 means
+	// the page is no tab at all (search, settings, ...): then NO pill is active
+	// (every closeness is 0, round(-1) matches no pill) - do NOT clamp to 0 or
+	// every non-tab page would highlight Discussions.
+	const urlIndex = $derived(getCurrentTabIndex(currentPath));
 	const fractionalIndex = $derived(pager.active ? pager.fractionalIndex : urlIndex);
 	const dragging = $derived(pager.dragging);
 	const labelTransition = 'max-width 200ms ease-out, margin-left 200ms ease-out';

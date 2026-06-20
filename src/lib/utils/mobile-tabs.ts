@@ -34,3 +34,23 @@ export const MOBILE_TABS: readonly MobileTab[] = [
 export function getCurrentTabIndex(pathname: string): number {
 	return MOBILE_TABS.findIndex((tab) => tab.isActive(pathname));
 }
+
+/**
+ * The tab a reading/list page "belongs to", so a left/right swipe on an inner
+ * page can switch to the next/prev tab. Reuses the tab matchers (so
+ * /discussion/* -> Discussions, /messages/* -> Messages), then maps the offline
+ * readers (which are not tab routes) to their online counterpart. -1 when the
+ * page has no tab association (no swipe there).
+ */
+export function getSwipeBaseline(pathname: string): number {
+	const idx = getCurrentTabIndex(pathname);
+	if (idx >= 0) return idx;
+	if (pathname.startsWith('/offline/activity')) return 1;
+	if (pathname.startsWith('/offline')) return 0;
+	return -1;
+}
+
+/** True for the exact pager routes (where the MobileTabPager owns the swipe). */
+export function isPagerRoute(pathname: string): boolean {
+	return MOBILE_TABS.some((tab) => tab.href === pathname);
+}
