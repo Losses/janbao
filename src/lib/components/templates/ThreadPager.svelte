@@ -56,9 +56,10 @@
 
 	const trackStyle = $derived(
 		dragOffset !== null
-			? `transform: translateX(calc(-${ACTIVE * STEP_PERCENT}% + ${dragOffset}px)); transition: none`
-			: `transform: translateX(-${snapIndex * STEP_PERCENT}%)`
+			? `width: ${panelCount * 100}%; transform: translateX(calc(-${ACTIVE * STEP_PERCENT}% + ${dragOffset}px)); transition: none`
+			: `width: ${panelCount * 100}%; transform: translateX(-${snapIndex * STEP_PERCENT}%)`
 	);
+	const sectionWidth = $derived(`${100 / panelCount}%`);
 
 	function swipeMove(deltaX: number): void {
 		if (navTimer) {
@@ -137,17 +138,17 @@
 		use:detectSwipe={{ onMove: swipeMove, onEnd: swipeEnd }}
 		use:measureViewportWidth
 	>
-		<div class="flex w-[300%] items-start transition-transform duration-200" style={trackStyle}>
+		<div class="flex items-start transition-transform duration-200" style={trackStyle}>
 			{#if left}
-				<section class="w-1/3 shrink-0 p-3">
+				<section class="shrink-0 p-3" style={`width: ${sectionWidth}`}>
 					{@render left()}
 				</section>
 			{/if}
-			<section class="w-1/3 shrink-0 p-3" use:measureThread>
+			<section class="shrink-0 p-3" style={`width: ${sectionWidth}`} use:measureThread>
 				{@render children()}
 			</section>
 			{#if right}
-				<section class="w-1/3 shrink-0 p-3">
+				<section class="shrink-0 p-3" style={`width: ${sectionWidth}`}>
 					{@render right()}
 				</section>
 			{/if}
