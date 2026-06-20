@@ -80,7 +80,7 @@ self.addEventListener('fetch', (event: FetchEvent) => {
 	if (url.pathname.startsWith('/api/')) return;
 
 	if (request.mode === 'navigate') {
-		event.respondWith(handleNavigate(request));
+		event.respondWith(handleNavigate(event));
 		return;
 	}
 	// SvelteKit data fetches (…/__data.json) carry the session cookie and are
@@ -90,10 +90,10 @@ self.addEventListener('fetch', (event: FetchEvent) => {
 	// Network-first keeps them fresh online; the cache fallback preserves the
 	// last good response when offline.
 	if (url.pathname.endsWith('/__data.json')) {
-		event.respondWith(handleData(request));
+		event.respondWith(handleData(event));
 		return;
 	}
-	event.respondWith(handleAsset(request));
+	event.respondWith(handleAsset(event));
 });
 
 // Push event: the application server POSTed an encrypted aes128gcm record to
@@ -152,15 +152,24 @@ async function focusOrOpenClient(targetUrl: string): Promise<void> {
 	await self.clients.openWindow(targetUrl);
 }
 
-async function handleNavigate(request: Request): Promise<Response> {
+// Write a successful same-origin response into the precache. Guards the
+// offline copy against being poisoned by a transient 4xx/5xx or an
+// opaque/cross-origin response. Intended to run inside event.waitUntil so the
+// SW stays alive until the write finishes without blocking the response.
+async function cacheResponse(request: Request, response: Response): Promise<void> {
+	if (!response.ok || response.type !== 'basic') return;
+	const cache = await caches.open(CACHE);
+	await cache.put(request, response);
+}
+
+async function handleNavigate(event: FetchEvent): Promise<Response> {
+	const { request } = event;
 	try {
 		const network = await fetchWithTimeout(request, NAV_TIMEOUT_MS);
-		const cache = await caches.open(CACHE);
-		// Only cache successful same-origin documents so a transient 4xx/5xx
-		// can't poison the offline cache.
-		if (network.ok && network.type === 'basic') {
-			await cache.put(request, network.clone());
-		}
+		// Update the cached document in the background so the response is
+		// returned as soon as the network resolves; waitUntil extends the SW
+		// lifetime until the write finishes so the offline fallback stays current.
+		event.waitUntil(cacheResponse(request, network.clone()));
 		return network;
 	} catch {
 		const cache = await caches.open(CACHE);
@@ -176,13 +185,14 @@ async function handleNavigate(request: Request): Promise<Response> {
 // SvelteKit data endpoint (…/__data.json): network-first so user-specific
 // responses (auth state) are never served stale. Falls back to the last cached
 // response when offline.
-async function handleData(request: Request): Promise<Response> {
+async function handleData(event: FetchEvent): Promise<Response> {
+	const { request } = event;
 	try {
 		const network = await fetch(request);
-		const cache = await caches.open(CACHE);
-		if (network.ok && network.type === 'basic') {
-			await cache.put(request, network.clone());
-		}
+		// Background write-through (see handleNavigate): keeps the user-specific
+		// __data.json fresh online without holding the response open until the
+		// cache write completes.
+		event.waitUntil(cacheResponse(request, network.clone()));
 		return network;
 	} catch {
 		const cache = await caches.open(CACHE);
@@ -190,13 +200,16 @@ async function handleData(request: Request): Promise<Response> {
 	}
 }
 
-async function handleAsset(request: Request): Promise<Response> {
+async function handleAsset(event: FetchEvent): Promise<Response> {
+	const { request } = event;
 	const cache = await caches.open(CACHE);
 	const cached = await cache.match(request);
 	if (cached) return cached;
 	try {
 		const network = await fetch(request);
-		if (network.ok && network.type === 'basic') cache.put(request, network.clone());
+		// Fill the cache in the background; waitUntil keeps the SW alive until
+		// the write finishes.
+		event.waitUntil(cacheResponse(request, network.clone()));
 		return network;
 	} catch {
 		return new Response('', { status: 504 });
