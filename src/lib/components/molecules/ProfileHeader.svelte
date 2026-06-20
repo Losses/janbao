@@ -35,6 +35,8 @@
 		t: TranslationDict;
 	}
 
+	import { formatDisplayName } from '$lib/utils/user';
+
 	let {
 		targetUser,
 		invitedBy,
@@ -44,6 +46,7 @@
 		t
 	}: ProfileHeaderProps = $props();
 
+	const displayUser = $derived(formatDisplayName(targetUser.displayName, targetUser.id, t));
 	const profileT = $derived(t.profile);
 	const sendMessageLabel = $derived(t.sidebar.sendMessage);
 </script>
@@ -53,11 +56,11 @@
 		<Avatar
 			userId={targetUser.id}
 			avatarFileId={targetUser.avatarFileId}
-			displayName={targetUser.displayName}
+			displayName={displayUser}
 			size="lg"
 		/>
 		<div>
-			<h1 class="user-display-name page-title">{targetUser.displayName}</h1>
+			<h1 class="user-display-name page-title">{displayUser}</h1>
 			{#if targetUser.bio}
 				<p class="text-base-content/70 mt-1 whitespace-pre-line">{targetUser.bio}</p>
 			{/if}

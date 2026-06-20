@@ -295,6 +295,7 @@
 					createdAt={opReply.createdAt}
 					editedAt={opReply.editedAt}
 					editedByDisplayName={opReply.editedByDisplayName}
+					editedById={opReply.editedBy}
 					{t}
 				/>
 				<LexicalRenderer contentJson={opReply.contentJson} {mentionedUsers} {t} />
@@ -370,6 +371,7 @@
 							createdAt={reply.createdAt}
 							editedAt={reply.editedAt}
 							editedByDisplayName={reply.editedByDisplayName}
+							editedById={reply.editedBy}
 							{t}
 						/>
 						{#if editingReplyId === reply.id}

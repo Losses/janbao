@@ -23,7 +23,10 @@
 	const t = $derived(data.t);
 	const profileT = $derived(t.profile);
 	const user = $derived(data.user);
+	import { formatDisplayName } from '$lib/utils/user';
+
 	const targetUser = $derived(data.targetUser);
+	const displayTargetUser = $derived(formatDisplayName(targetUser.displayName, targetUser.id, t));
 	const invitedBy = $derived(data.invitedBy);
 	const isOwner = $derived(data.isOwner);
 	const activityList = $derived(data.activities);
@@ -64,7 +67,7 @@
 </script>
 
 <svelte:head>
-	<title>{formatTitle(targetUser.displayName)}</title>
+	<title>{formatTitle(displayTargetUser)}</title>
 </svelte:head>
 
 {#snippet sidebar()}
@@ -102,7 +105,7 @@
 						<span class="inline-flex items-center gap-1 flex-wrap">
 							{profileT.postToProfile}
 							<Icon path={mdiArrowRight} size={16} class="text-base-content/60" />
-							{targetUser.displayName}
+							{displayTargetUser}
 						</span>
 					{/if}
 				</p>

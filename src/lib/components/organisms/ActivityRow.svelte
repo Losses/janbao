@@ -49,6 +49,13 @@
 		isTopLevel = true
 	}: ActivityRowProps = $props();
 
+	import { formatDisplayName } from '$lib/utils/user';
+
+	const formattedAuthorDisplayName = $derived(formatDisplayName(authorDisplayName, authorId, t));
+	const formattedRecipientDisplayName = $derived(
+		recipientDisplayName ? formatDisplayName(recipientDisplayName, recipientId, t) : null
+	);
+
 	let showEditor = $state(false);
 	// svelte-ignore state_referenced_locally
 	let commentCountState = $state(commentCount);
@@ -95,7 +102,7 @@
 				<Avatar
 					userId={authorId}
 					avatarFileId={authorAvatarFileId}
-					displayName={authorDisplayName}
+					displayName={formattedAuthorDisplayName}
 					size="md"
 				/>
 			</a>
@@ -107,16 +114,16 @@
 					href="/profile/{authorId}/{generateSlug(authorUsername)}"
 					class="font-semibold text-base-content hover:text-primary transition-colors"
 				>
-					{authorDisplayName}
+					{formattedAuthorDisplayName}
 				</a>
-				{#if recipientId && recipientDisplayName}
+				{#if recipientId && formattedRecipientDisplayName}
 					<span class="flex items-center gap-1 text-base-content/60">
 						<Icon path={mdiArrowRight} size={16} />
 						<a
 							href="/profile/{recipientId}/{generateSlug(recipientUsername || '')}"
 							class="font-semibold text-base-content hover:text-primary transition-colors"
 						>
-							{recipientDisplayName}
+							{formattedRecipientDisplayName}
 						</a>
 					</span>
 				{/if}

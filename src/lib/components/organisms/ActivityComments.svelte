@@ -6,6 +6,7 @@
 	import LexicalEditor from '$lib/components/organisms/LexicalEditorLazy.svelte';
 	import { generateSlug } from '$lib/utils/slug';
 	import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
+	import { formatDisplayName } from '$lib/utils/user';
 	import type { ApiResult, ActivityCommentItem, ActivityCommentsResponse } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 
@@ -185,7 +186,7 @@
 								<Avatar
 									userId={comment.authorId}
 									avatarFileId={comment.authorAvatarFileId}
-									displayName={comment.authorDisplayName}
+									displayName={formatDisplayName(comment.authorDisplayName, comment.authorId, t)}
 									size="xs"
 								/>
 							</a>
@@ -196,7 +197,7 @@
 									href="/profile/{comment.authorId}/{generateSlug(comment.authorUsername)}"
 									class="font-medium text-sm text-base-content hover:text-primary transition-colors"
 								>
-									{comment.authorDisplayName}
+									{formatDisplayName(comment.authorDisplayName, comment.authorId, t)}
 								</a>
 							</div>
 							<div class="mt-0.5">

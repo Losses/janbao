@@ -14,6 +14,7 @@
 	import { goto } from '$app/navigation';
 	import type { TranslationDict } from '$lib/types/translation';
 	import type { MentionedUsersMap } from '$lib/types/mentions';
+	import { formatDisplayName } from '$lib/utils/user';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
 
 	interface PrivateMessage {
@@ -91,7 +92,7 @@
 						<Avatar
 							userId={msg.authorId}
 							avatarFileId={msg.authorAvatarFileId}
-							displayName={msg.authorDisplayName}
+							displayName={formatDisplayName(msg.authorDisplayName, msg.authorId, t)}
 							size="sm"
 						/>
 					</a>
@@ -100,7 +101,7 @@
 							href="/profile/{msg.authorId}/{generateSlug(msg.authorUsername)}"
 							class="font-semibold text-sm text-base-content hover:text-primary transition-colors"
 						>
-							{msg.authorDisplayName}
+							{formatDisplayName(msg.authorDisplayName, msg.authorId, t)}
 						</a>
 						<DateComponent value={msg.createdAt} {t} class="text-xs text-base-content/40" />
 						{#if msg.updatedAt.getTime() !== msg.createdAt.getTime()}

@@ -61,8 +61,19 @@
 		return base;
 	});
 
+	import { formatDisplayName } from '$lib/utils/user';
+
 	const authorSlug = $derived(generateSlug(discussion.authorUsername || 'user'));
 	const lastReplyAuthorSlug = $derived(generateSlug(lastReplyAuthorUsername || 'user'));
+
+	const authorDisplayName = $derived(
+		formatDisplayName(discussion.authorDisplayName, discussion.authorId, t)
+	);
+	const formattedLastReplyAuthorDisplayName = $derived(
+		lastReplyAuthorDisplayName
+			? formatDisplayName(lastReplyAuthorDisplayName, lastReplyAuthorId, t)
+			: null
+	);
 
 	// I18n translations
 	const viewsText = $derived(t.forum.views);
@@ -81,7 +92,7 @@
 		<Avatar
 			userId={discussion.authorId}
 			avatarFileId={discussion.authorAvatarFileId}
-			displayName={discussion.authorDisplayName}
+			displayName={authorDisplayName}
 			size="md"
 		/>
 	</a>
@@ -119,7 +130,7 @@
 				href="/profile/{discussion.authorId}/{authorSlug}"
 				class="hover:underline font-medium text-base-content/60"
 			>
-				{discussion.authorDisplayName}
+				{authorDisplayName}
 			</a>
 
 			{#if discussion.viewCount !== undefined}
@@ -127,10 +138,11 @@
 			{/if}
 			<span>{discussion.commentCount} {repliesText}</span>
 
-			{#if lastReplyAuthorDisplayName}
+			{#if formattedLastReplyAuthorDisplayName}
 				<a
 					href="/profile/{lastReplyAuthorId}/{lastReplyAuthorSlug}"
-					class="hover:underline font-medium text-base-content/60">{lastReplyAuthorDisplayName}</a
+					class="hover:underline font-medium text-base-content/60"
+					>{formattedLastReplyAuthorDisplayName}</a
 				>
 			{/if}
 

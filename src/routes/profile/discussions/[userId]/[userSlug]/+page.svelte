@@ -22,7 +22,10 @@
 	const t = $derived(data.t);
 	const profileT = $derived(t.profile);
 	const user = $derived(data.user);
+	import { formatDisplayName } from '$lib/utils/user';
+
 	const targetUser = $derived(data.targetUser);
+	const displayTargetUser = $derived(formatDisplayName(targetUser.displayName, targetUser.id, t));
 	const invitedBy = $derived(data.invitedBy);
 	const headerEmail = $derived(data.headerEmail);
 	const discussionsList = $derived(data.discussions);
@@ -53,7 +56,7 @@
 </script>
 
 <svelte:head>
-	<title>{formatTitle(`${targetUser.displayName} - ${profileT.discussions}`)}</title>
+	<title>{formatTitle(`${displayTargetUser} - ${profileT.discussions}`)}</title>
 </svelte:head>
 
 {#snippet sidebar()}

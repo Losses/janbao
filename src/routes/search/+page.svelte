@@ -13,6 +13,7 @@
 	import { goto } from '$app/navigation';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
+	import { formatDisplayName } from '$lib/utils/user';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -172,13 +173,14 @@
 								d.matchKind === 'reply' && d.bestReplyId !== null && d.replyPage !== null
 									? `/discussion/${d.id}/${d.slug}/p${d.replyPage}#reply-${d.bestReplyId}`
 									: `/discussion/${d.id}/${d.slug}`}
+							{@const authorDisplayName = formatDisplayName(d.authorDisplayName, d.authorId, t)}
 							<div class="flex items-start gap-4 pl-3 pr-2 py-4 hover:bg-base-200/20">
 								<div class="relative flex-shrink-0">
 									<a href="/profile/{d.authorId}/{authorSlug}">
 										<Avatar
 											userId={d.authorId}
 											avatarFileId={d.authorAvatarFileId}
-											displayName={d.authorDisplayName}
+											displayName={authorDisplayName}
 											size="md"
 										/>
 									</a>
@@ -211,7 +213,7 @@
 										<a
 											href="/profile/{d.authorId}/{authorSlug}"
 											class="hover:underline font-medium text-base-content/85"
-											>{d.authorDisplayName}</a
+											>{authorDisplayName}</a
 										>
 										<span class="text-base-content/30">•</span>
 										<span>{d.categoryTitle}</span>
@@ -226,12 +228,13 @@
 					{:else if scope === 'activities' && data.activities}
 						{#each data.activities as a (a.id)}
 							{@const authorSlug = generateSlug(a.authorUsername || 'user')}
+							{@const authorDisplayName = formatDisplayName(a.authorDisplayName, a.authorId, t)}
 							<div class="flex items-start gap-4 pl-3 pr-2 py-4 hover:bg-base-200/20">
 								<a href="/profile/{a.authorId}/{authorSlug}" class="flex-shrink-0">
 									<Avatar
 										userId={a.authorId}
 										avatarFileId={a.authorAvatarFileId}
-										displayName={a.authorDisplayName}
+										displayName={authorDisplayName}
 										size="md"
 									/>
 								</a>
@@ -240,7 +243,7 @@
 										href="/profile/{a.authorId}/{authorSlug}"
 										class="block text-sm font-medium text-base-content/85 hover:underline"
 									>
-										{a.authorDisplayName}
+										{authorDisplayName}
 									</a>
 									<div class="mt-1 text-sm text-base-content/80 line-clamp-3">
 										{#each highlightSegments(contextPreview(a.previewText, query), query) as seg, i (i)}{#if seg.match}<mark

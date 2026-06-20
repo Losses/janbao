@@ -22,10 +22,14 @@
 		editedAt?: string | number | Date | null;
 		/** Display name of the user who last edited (may differ from the author). */
 		editedByDisplayName?: string | null;
+		/** ID of the user who last edited. */
+		editedById?: number | null;
 		/** Translation dictionary */
 		t: TranslationDict;
 		class?: string;
 	}
+
+	import { formatDisplayName } from '$lib/utils/user';
 
 	let {
 		userId,
@@ -35,6 +39,7 @@
 		createdAt,
 		editedAt = null,
 		editedByDisplayName = null,
+		editedById = null,
 		t,
 		class: className = ''
 	}: DiscussionMetadataProps = $props();
@@ -42,7 +47,12 @@
 	/** App locale ('en' | 'zh-CN') published by the root layout via context. */
 	const getLang = getContext<LocaleGetter>('app:lang');
 
-	const userSlug = $derived(generateSlug(username || displayName || 'user'));
+	const displayUser = $derived(formatDisplayName(displayName, userId, t));
+	const displayEditedBy = $derived(
+		editedByDisplayName ? formatDisplayName(editedByDisplayName, editedById, t) : null
+	);
+
+	const userSlug = $derived(generateSlug(username || displayUser || 'user'));
 
 	// "Last edited" label shown before the edit timestamp.
 	const lastEditedLabel = $derived(t.common.lastEdited);
@@ -63,8 +73,8 @@
 			minute: '2-digit',
 			second: '2-digit'
 		});
-		if (editedByDisplayName) {
-			return t.common.editedFull.replace('{name}', editedByDisplayName).replace('{time}', abs);
+		if (displayEditedBy) {
+			return t.common.editedFull.replace('{name}', displayEditedBy).replace('{time}', abs);
 		}
 		return abs;
 	});
@@ -72,7 +82,7 @@
 
 <div class="flex items-center gap-3 {className}">
 	<a href="/profile/{userId}/{userSlug}" class="flex-shrink-0">
-		<Avatar {userId} {avatarFileId} {displayName} size="sm" />
+		<Avatar {userId} {avatarFileId} displayName={displayUser} size="sm" />
 	</a>
 	<div class="flex flex-col min-w-0">
 		<div class="flex items-center gap-1.5 flex-wrap">
@@ -80,7 +90,7 @@
 				href="/profile/{userId}/{userSlug}"
 				class="font-semibold text-sm hover:underline truncate text-base-content"
 			>
-				{displayName}
+				{displayUser}
 			</a>
 		</div>
 		<div class="flex items-center gap-2 text-xs text-base-content/50 flex-wrap">

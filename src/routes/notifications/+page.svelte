@@ -8,6 +8,7 @@
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
+	import { formatDisplayName } from '$lib/utils/user';
 	import type { NotificationItem, ApiResult } from '$lib/types/api';
 	import type { PageData } from './$types';
 
@@ -41,7 +42,7 @@
 	}
 
 	function buildView(item: NotificationItem): NotificationView {
-		const sourceName = item.sourceDisplayName ?? '';
+		const sourceName = formatDisplayName(item.sourceDisplayName, item.sourceUserId, t);
 		const isRead = item.isRead || markedReadIds.has(item.id);
 		let label: string;
 		let href: string | null = null;
@@ -161,7 +162,7 @@
 									<Avatar
 										userId={item.sourceUserId}
 										avatarFileId={item.sourceAvatarFileId}
-										displayName={item.sourceDisplayName ?? '?'}
+										displayName={formatDisplayName(item.sourceDisplayName, item.sourceUserId, t)}
 										size="sm"
 									/>
 								</a>
