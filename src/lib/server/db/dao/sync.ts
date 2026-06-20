@@ -1,5 +1,5 @@
 import { activities, bookmarks, categories, discussions, replies, users } from '../schema';
-import { and, desc, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
 import type { D1Db } from '../index';
 import type { DiscussionSort } from './discussions';
 import type {
@@ -81,10 +81,10 @@ export async function getDeltaDiscussions(
 	readableSlugs: string[]
 ): Promise<SyncDiscussionDTO[]> {
 	if (readableSlugs.length === 0) return [];
-	// Cursor comparison: (updatedAt, id) strictly greater than (sinceTs, sinceId).
-	// mode:'timestamp' columns store seconds, so a Date built from sinceTs*1000
-	// encodes back to the same seconds for the comparison.
-	const since = new Date(query.sinceTs * 1000);
+	// Cursor comparison: (updatedAt, id) strictly greater than (sinceTs, sinceId),
+	// written as a row-value comparison so the planner range-seeks the
+	// (updated_at, id) index. mode:'timestamp' stores seconds, so sinceTs binds
+	// directly as the raw integer the index keys on.
 	const rows = await db
 		.select({
 			id: discussions.id,
@@ -103,10 +103,7 @@ export async function getDeltaDiscussions(
 			and(
 				isNull(discussions.deletedAt),
 				inArray(discussions.categorySlug, readableSlugs),
-				or(
-					gt(discussions.updatedAt, since),
-					and(eq(discussions.updatedAt, since), gt(discussions.id, query.sinceId))
-				)
+				sql`(${discussions.updatedAt}, ${discussions.id}) > (${query.sinceTs}, ${query.sinceId})`
 			)
 		)
 		.orderBy(discussions.updatedAt, discussions.id)
@@ -120,7 +117,6 @@ export async function getDeltaReplies(
 	readableSlugs: string[]
 ): Promise<SyncReplyDTO[]> {
 	if (readableSlugs.length === 0) return [];
-	const since = new Date(query.sinceTs * 1000);
 	const rows = await db
 		.select({
 			id: replies.id,
@@ -139,10 +135,7 @@ export async function getDeltaReplies(
 				isNull(replies.deletedAt),
 				isNull(discussions.deletedAt),
 				inArray(discussions.categorySlug, readableSlugs),
-				or(
-					gt(replies.updatedAt, since),
-					and(eq(replies.updatedAt, since), gt(replies.id, query.sinceId))
-				)
+				sql`(${replies.updatedAt}, ${replies.id}) > (${query.sinceTs}, ${query.sinceId})`
 			)
 		)
 		.orderBy(replies.updatedAt, replies.id)
@@ -160,7 +153,6 @@ export async function getDiscussionTombstones(
 	readableSlugs: string[]
 ): Promise<SyncTombstoneDTO[]> {
 	if (readableSlugs.length === 0) return [];
-	const since = new Date(query.sinceTs * 1000);
 	const rows = await db
 		.select({ id: discussions.id, deletedAt: discussions.deletedAt })
 		.from(discussions)
@@ -169,10 +161,7 @@ export async function getDiscussionTombstones(
 			and(
 				isNotNull(discussions.deletedAt),
 				inArray(discussions.categorySlug, readableSlugs),
-				or(
-					gt(discussions.deletedAt, since),
-					and(eq(discussions.deletedAt, since), gt(discussions.id, query.sinceId))
-				)
+				sql`(${discussions.deletedAt}, ${discussions.id}) > (${query.sinceTs}, ${query.sinceId})`
 			)
 		)
 		.orderBy(discussions.deletedAt, discussions.id)
@@ -186,7 +175,6 @@ export async function getReplyTombstones(
 	readableSlugs: string[]
 ): Promise<SyncTombstoneDTO[]> {
 	if (readableSlugs.length === 0) return [];
-	const since = new Date(query.sinceTs * 1000);
 	const rows = await db
 		.select({ id: replies.id, deletedAt: replies.deletedAt })
 		.from(replies)
@@ -195,10 +183,7 @@ export async function getReplyTombstones(
 			and(
 				isNotNull(replies.deletedAt),
 				inArray(discussions.categorySlug, readableSlugs),
-				or(
-					gt(replies.deletedAt, since),
-					and(eq(replies.deletedAt, since), gt(replies.id, query.sinceId))
-				)
+				sql`(${replies.deletedAt}, ${replies.id}) > (${query.sinceTs}, ${query.sinceId})`
 			)
 		)
 		.orderBy(replies.deletedAt, replies.id)
