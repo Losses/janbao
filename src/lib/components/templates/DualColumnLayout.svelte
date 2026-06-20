@@ -159,7 +159,7 @@
 			     switches to the next/prev tab (disabled on the pager routes, where
 			     MobileTabPager owns the gesture). -->
 			<main
-				class="w-full min-w-0 flex-1"
+				class="flex w-full min-w-0 flex-1 flex-col"
 				style="touch-action: pan-y pinch-zoom"
 				use:detectSwipe={{
 					onMove: tabSwipeMove,
@@ -167,7 +167,10 @@
 					disabled: () => swipeDisabled
 				}}
 			>
-				<div class="h-full transition-transform duration-200 ease-out" style={contentSwipeStyle}>
+				<div
+					class="flex min-h-0 flex-1 flex-col transition-transform duration-200 ease-out"
+					style={contentSwipeStyle}
+				>
 					{@render children()}
 				</div>
 			</main>

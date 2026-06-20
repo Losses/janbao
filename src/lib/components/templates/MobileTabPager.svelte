@@ -165,7 +165,7 @@
 	let panelHeights = $state<number[]>([0, 0, 0]);
 	const viewportHeight = $derived(panelHeights[activeIndex]);
 	const viewportStyle = $derived(
-		`touch-action: pan-y pinch-zoom; min-height: 100%${viewportHeight ? `; height: ${viewportHeight}px` : ''}`
+		`touch-action: pan-y pinch-zoom; flex: 1 0 auto${viewportHeight ? `; height: ${viewportHeight}px` : ''}`
 	);
 	const measureTab: Action<HTMLElement, number> = (node, index) => {
 		const update = () => {
