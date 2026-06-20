@@ -47,12 +47,13 @@
 	const ACTIVE = $derived(left ? 1 : 0); // center is at index 1 (if left) or 0
 	const STEP_PERCENT = $derived(100 / panelCount);
 	const SWIPE_COMMIT = 60;
-	const SNAP_MS = 200;
 
 	let dragOffset = $state<number | null>(null);
 	// svelte-ignore state_referenced_locally
 	let snapIndex = $state(ACTIVE);
-	let navTimer: ReturnType<typeof setTimeout> | null = null;
+	// Set on swipeEnd commit; the track's transitionend handler navigates when
+	// the snap animation finishes. Cleared by cancelPendingNav on any new touch.
+	let pendingNav = $state<string | null>(null);
 
 	const trackStyle = $derived(
 		dragOffset !== null
@@ -62,34 +63,34 @@
 	const sectionWidth = $derived(`${100 / panelCount}%`);
 
 	function swipeMove(deltaX: number): void {
-		if (navTimer) {
-			clearTimeout(navTimer);
-			navTimer = null;
-		}
 		dragOffset = deltaX;
 	}
-	/** Any new touch cancels a pending snap-navigate — a tap during the snap
-	 * animation is the user's intent, not the swipe's. */
+	/** Any new touch cancels a pending snap-navigate. */
 	function cancelPendingNav(): void {
-		if (navTimer) {
-			clearTimeout(navTimer);
-			navTimer = null;
-			snapIndex = ACTIVE;
-		}
+		pendingNav = null;
+		snapIndex = ACTIVE;
 	}
 	function swipeEnd(deltaX: number): void {
 		const leftIdx = left ? 0 : -1;
 		const rightIdx = right ? panelCount - 1 : -1;
 		if (deltaX >= SWIPE_COMMIT && leftIdx >= 0 && leftHref) {
 			snapIndex = leftIdx;
-			navTimer = setTimeout(() => void goto(leftHref), SNAP_MS);
+			pendingNav = leftHref;
 		} else if (deltaX <= -SWIPE_COMMIT && rightIdx >= 0 && rightHref) {
 			snapIndex = rightIdx;
-			navTimer = setTimeout(() => void goto(rightHref), SNAP_MS);
+			pendingNav = rightHref;
 		} else {
 			snapIndex = ACTIVE;
 		}
 		dragOffset = null;
+	}
+	/** When the snap transition finishes, navigate. Event-driven — no timer. */
+	function onTrackTransitionEnd(event: TransitionEvent): void {
+		if (event.target !== event.currentTarget) return;
+		if (event.propertyName !== 'transform' || !pendingNav) return;
+		const href = pendingNav;
+		pendingNav = null;
+		void goto(href);
 	}
 
 	// Publish drag progress to the shared store so the tab bar indicator tracks.
@@ -111,7 +112,7 @@
 	onMount(() => {
 		pager.set({ fractionalIndex: centerTab, dragging: false, active: true });
 		return () => {
-			if (navTimer) clearTimeout(navTimer);
+			pendingNav = null;
 			pager.set({ fractionalIndex: 0, dragging: false, active: false });
 		};
 	});
@@ -149,7 +150,11 @@
 		use:detectSwipe={{ onMove: swipeMove, onEnd: swipeEnd }}
 		use:measureViewportWidth
 	>
-		<div class="flex items-start transition-transform duration-200" style={trackStyle}>
+		<div
+			class="flex items-start transition-transform duration-200"
+			style={trackStyle}
+			ontransitionend={onTrackTransitionEnd}
+		>
 			{#if left}
 				<section class="shrink-0 p-3" style={`width: ${sectionWidth}`}>
 					{@render left()}
