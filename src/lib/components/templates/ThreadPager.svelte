@@ -68,6 +68,15 @@
 		}
 		dragOffset = deltaX;
 	}
+	/** Any new touch cancels a pending snap-navigate — a tap during the snap
+	 * animation is the user's intent, not the swipe's. */
+	function cancelPendingNav(): void {
+		if (navTimer) {
+			clearTimeout(navTimer);
+			navTimer = null;
+			snapIndex = ACTIVE;
+		}
+	}
 	function swipeEnd(deltaX: number): void {
 		const leftIdx = left ? 0 : -1;
 		const rightIdx = right ? panelCount - 1 : -1;
@@ -132,9 +141,11 @@
 </script>
 
 {#if isMobile}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="overflow-hidden"
 		style={viewportStyle}
+		onpointerdown={cancelPendingNav}
 		use:detectSwipe={{ onMove: swipeMove, onEnd: swipeEnd }}
 		use:measureViewportWidth
 	>
