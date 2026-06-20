@@ -1,13 +1,12 @@
 <script lang="ts">
 	/**
 	 * Header Organism - Global sticky header (the App Bar) rendered inside
-	 * DualColumnLayout. Contains the logo, desktop navigation links (Activity /
-	 * Messages / Search), and on mobile a square hamburger (left, opens the left
-	 * drawer) plus a square search icon (right). The mobile tab strip
-	 * (MobileTabBar - Discussions / Activity / Messages, merged in from the old
-	 * bottom nav) sits in a second row under the nav so it hides together with
-	 * the header on scroll-down (and returns on scroll-up) via the shared
-	 * scroll-chrome store; desktop is in-flow and unaffected.
+	 * DualColumnLayout. Desktop: logo + navigation links (Activity / Messages /
+	 * Search). Mobile: a single row with a square hamburger (left, opens the
+	 * drawer), the centered MobileTabBar (which replaces the logo), and a square
+	 * search icon (right) - one row, no second "forehead". The whole bar hides on
+	 * scroll-down (and returns on scroll-up) via the shared scroll-chrome store;
+	 * desktop is in-flow and unaffected.
 	 */
 	import { page } from '$app/state';
 	import Logo from '$lib/components/atoms/Logo.svelte';
@@ -38,23 +37,22 @@
 		: ''}"
 >
 	<div class="bg-neutral text-neutral-content shadow-md md:shadow-none">
-		<nav class="flex items-center justify-between px-2 py-2 md:items-end md:px-6 md:pt-3 md:pb-2.5">
-			<div class="flex items-center gap-2 md:items-end md:gap-6">
-				<!-- Mobile: square hamburger button (opens the left drawer) -->
-				<button
-					type="button"
-					class="flex size-10 items-center justify-center text-neutral-content/80 hover:bg-neutral-content/10 hover:text-neutral-content md:hidden"
-					onclick={onToggleDrawer}
-					aria-label={tNav['menu']}
-				>
-					<Icon path={mdiMenu} size={24} />
-				</button>
+		<nav class="flex items-center px-2 py-2 md:items-end md:px-6 md:pt-3 md:pb-2.5">
+			<!-- Mobile: square hamburger button (opens the left drawer) -->
+			<button
+				type="button"
+				class="flex size-10 items-center justify-center text-neutral-content/80 hover:bg-neutral-content/10 hover:text-neutral-content md:hidden"
+				onclick={onToggleDrawer}
+				aria-label={tNav['menu']}
+			>
+				<Icon path={mdiMenu} size={24} />
+			</button>
 
-				<!-- Left: Logo component -->
+			<!-- Desktop: Logo + navigation links (hidden on mobile, where the
+			     centered tab bar replaces the logo) -->
+			<div class="hidden items-end gap-6 md:flex">
 				<Logo {t} class="text-neutral-content" />
-
-				<!-- Desktop Navigation (hidden on mobile) -->
-				<div class="hidden items-end gap-4 md:flex">
+				<div class="flex items-end gap-4">
 					<a
 						href="/activity"
 						class="text-sm font-medium text-neutral-content/70 hover:text-neutral-content hover:underline"
@@ -82,7 +80,12 @@
 				</div>
 			</div>
 
-			<!-- Right: Mobile square search icon (desktop keeps its text nav links) -->
+			<!-- Mobile: centered tab bar (replaces the logo in the App Bar, single row) -->
+			<div class="flex flex-1 justify-center md:hidden">
+				<MobileTabBar {t} />
+			</div>
+
+			<!-- Mobile: square search icon -->
 			<a
 				href="/search"
 				class="flex size-10 items-center justify-center text-neutral-content/80 hover:bg-neutral-content/10 hover:text-neutral-content md:hidden"
@@ -92,11 +95,5 @@
 				<Icon path={mdiMagnify} size={22} />
 			</a>
 		</nav>
-
-		<!-- Mobile tab strip (merged from the old bottom nav). Lives inside the
-		     App Bar so it hides together with the header on scroll-down. -->
-		<div class="md:hidden">
-			<MobileTabBar {t} />
-		</div>
 	</div>
 </header>

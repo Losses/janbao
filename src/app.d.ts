@@ -9,6 +9,7 @@ interface PlatformEnv {
 	PUBLIC_SITE_NAME?: string;
 	PUBLIC_SITE_SHORT_NAME?: string;
 	PUBLIC_SITE_DESCRIPTION?: string;
+	PUBLIC_BRANDED_FIRST_TAB?: string;
 	ADMIN_EMAIL?: string;
 	ADMIN_PASSWORD?: string;
 	MONTHLY_INVITATION_LIMIT?: string;
