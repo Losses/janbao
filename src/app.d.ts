@@ -5,6 +5,9 @@ import type { TranslationDict } from '$lib/types/translation';
 interface PlatformEnv {
 	D1_DB?: D1Database;
 	JWT_SECRET: string;
+	PUBLIC_SITE_NAME?: string;
+	PUBLIC_SITE_SHORT_NAME?: string;
+	PUBLIC_SITE_DESCRIPTION?: string;
 	ADMIN_EMAIL?: string;
 	ADMIN_PASSWORD?: string;
 	MONTHLY_INVITATION_LIMIT?: string;

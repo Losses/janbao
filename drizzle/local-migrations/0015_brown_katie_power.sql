@@ -1,0 +1,1 @@
+CREATE INDEX `discussions_pinned_last_reply_idx` ON `discussions` (`is_pinned`,`last_reply_at`,`id`) WHERE "discussions"."deleted_at" is null;

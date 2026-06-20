@@ -258,24 +258,31 @@ export function resolveGroupSlug(user: UserData | null | undefined): string {
 
 /**
  * Get the enabled category slugs the given group can read.
+ *
+ * The category list and the per-group permission rows are independent reads, so
+ * they are fired together and awaited once. This halves the wall-clock latency
+ * of the previous sequential form (two awaited queries back-to-back), which
+ * matters because every discussion-list page load resolves this set before the
+ * main list/count queries can start.
  */
 export async function getReadableCategorySlugs(db: D1Db, groupSlug: string): Promise<string[]> {
-	const allCats = await db
-		.select({ slug: categories.slug })
-		.from(categories)
-		.where(isNull(categories.disabledAt));
+	const isFullAccess = groupSlug === 'admin' || groupSlug === 'moderator';
+	const [allCats, permRows] = await Promise.all([
+		db.select({ slug: categories.slug }).from(categories).where(isNull(categories.disabledAt)),
+		isFullAccess
+			? Promise.resolve([])
+			: db
+					.select({
+						categorySlug: categoryPermissions.categorySlug,
+						canRead: categoryPermissions.canRead
+					})
+					.from(categoryPermissions)
+					.where(eq(categoryPermissions.groupSlug, groupSlug))
+	]);
 	const allSlugs = allCats.map((c) => c.slug);
 
 	if (allSlugs.length === 0) return [];
-	if (groupSlug === 'admin' || groupSlug === 'moderator') return allSlugs;
-
-	const permRows = await db
-		.select({
-			categorySlug: categoryPermissions.categorySlug,
-			canRead: categoryPermissions.canRead
-		})
-		.from(categoryPermissions)
-		.where(eq(categoryPermissions.groupSlug, groupSlug));
+	if (isFullAccess) return allSlugs;
 
 	const permMap = new Map(permRows.map((p) => [p.categorySlug, p.canRead]));
 

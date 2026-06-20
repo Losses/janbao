@@ -147,6 +147,18 @@ export async function getDiscussionsList(
 	if (authorId != null) {
 		whereClauses.push(eq(discussions.authorId, authorId));
 	}
+	// Scope to categories the caller's group can read, server-side. This mirrors
+	// getDiscussionsCount and replaces an older post-query JS filter that fetched
+	// `limit` rows across ALL categories then discarded the unreadable ones - which
+	// both over-fetched and caused pagination drift (list returned short pages
+	// whenever the readable set was restricted). Resolving the slug set here when a
+	// caller didn't pre-pass it keeps the direct-call path correct too.
+	if (groupSlug) {
+		const resolvedSlugs = readableSlugs ?? (await getReadableCategorySlugs(db, groupSlug));
+		whereClauses.push(
+			resolvedSlugs.length > 0 ? inArray(discussions.categorySlug, resolvedSlugs) : sql`1 = 0`
+		);
+	}
 
 	baseQuery.where(and(...whereClauses));
 
@@ -169,12 +181,7 @@ export async function getDiscussionsList(
 
 	baseQuery.limit(limit).offset(offset);
 
-	let rows = await baseQuery;
-
-	// Security: Filter out discussions from categories the user/guest cannot read
-	if (groupSlug) {
-		rows = await filterByCategoryReadAccess(db, rows, groupSlug, readableSlugs);
-	}
+	const rows = await baseQuery;
 
 	if (rows.length === 0) {
 		return [];
@@ -371,19 +378,4 @@ export async function loadDiscussionsPage(
 	const totalPages = Math.ceil(totalCount / limit);
 
 	return { discussions, totalPages, totalCount };
-}
-
-/**
- * Post-query filter: remove rows from categories the user/guest cannot read.
- * Used when the main query can't easily JOIN on categoryPermissions.
- */
-async function filterByCategoryReadAccess<T extends { categorySlug: string }>(
-	db: D1Db,
-	rows: T[],
-	groupSlug: string,
-	readableSlugs?: string[]
-): Promise<T[]> {
-	const resolvedSlugs = readableSlugs ?? (await getReadableCategorySlugs(db, groupSlug));
-	const readableSet = new Set(resolvedSlugs);
-	return rows.filter((row) => readableSet.has(row.categorySlug));
 }

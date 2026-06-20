@@ -140,7 +140,18 @@ export const discussions = sqliteTable(
 		// the planner satisfy the ORDER BY from the index directly instead of a
 		// full scan + sort.
 		viewCountIdx: index('discussions_view_count_idx').on(table.viewCount),
-		commentCountIdx: index('discussions_comment_count_idx').on(table.commentCount)
+		commentCountIdx: index('discussions_comment_count_idx').on(table.commentCount),
+		// Homepage "latest" sort: ORDER BY is_pinned DESC, last_reply_at DESC, id
+		// DESC. Without a matching index the planner seeks the non-selective
+		// deleted_at index (deleted_at IS NULL matches almost every row) and
+		// TEMP-B-TREE-sorts the entire non-deleted set on every page load. This
+		// partial index covers only non-deleted rows in that exact key order, so
+		// the top-N page falls out by an ordered walk (no sort) once the planner
+		// sees the LIMIT. category read-access / category filters are applied as
+		// in-pass row filters, which is cheap because the readable set is large.
+		pinnedLastReplyIdx: index('discussions_pinned_last_reply_idx')
+			.on(table.isPinned, table.lastReplyAt, table.id)
+			.where(sql`${table.deletedAt} is null`)
 	})
 );
 
