@@ -8,9 +8,14 @@
 	 * The track is 3x the viewport wide; each `<section>` is 1/3 of it (= one
 	 * viewport). Position is driven by an inline `transform` (Tailwind v4's
 	 * translate-x-* uses the native `translate` property and would compose with,
-	 * not override, an inline `transform`). `overflow-x-clip` hides the neighbour
-	 * panels without turning the viewport into a scroll container, so the window
-	 * still scrolls vertically and the hide-on-scroll chrome keeps working.
+	 * not override, an inline `transform`). `overflow-hidden` hides the neighbour
+	 * panels (horizontal) AND clips the taller track's vertical overflow - without
+	 * it, a taller off-screen panel would extend the document and leave scrollable
+	 * blank under a shorter active tab. The viewport is at least the content-area
+	 * height (min-height: 100%), so a short panel still fills the screen and its
+	 * swipe surface reaches the bottom - the space below short content stays
+	 * inside the viewport and stays gesture-interactive; for a tall panel the
+	 * measured height takes over and the window (not the viewport) scrolls.
 	 *
 	 * Data: the layout load (input-free, reused across swipes) supplies page 1 of
 	 * every tab so a drag is instant and never refetches. The ACTIVE tab's current
@@ -160,7 +165,7 @@
 	let panelHeights = $state<number[]>([0, 0, 0]);
 	const viewportHeight = $derived(panelHeights[activeIndex]);
 	const viewportStyle = $derived(
-		`touch-action: pan-y pinch-zoom${viewportHeight ? `; height: ${viewportHeight}px` : ''}`
+		`touch-action: pan-y pinch-zoom; min-height: 100%${viewportHeight ? `; height: ${viewportHeight}px` : ''}`
 	);
 	const measureTab: Action<HTMLElement, number> = (node, index) => {
 		const update = () => {
@@ -185,7 +190,7 @@
 </script>
 
 <div
-	class="overflow-x-clip"
+	class="overflow-hidden"
 	style={viewportStyle}
 	use:detectSwipe={{ onMove: swipeMove, onEnd: swipeEnd }}
 	use:measureViewportWidth

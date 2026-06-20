@@ -105,7 +105,7 @@
 	<!-- Main Content Container -->
 	<div class="mx-auto w-full max-w-[960px] flex-1 px-0 pb-6 md:px-6">
 		<div
-			class="flex flex-col gap-4 border-b border-base-300 bg-base-100 p-3 md:border-x md:flex-row"
+			class="flex h-full flex-col gap-4 border-b border-base-300 bg-base-100 p-3 md:h-auto md:border-x md:flex-row"
 		>
 			<!-- Left Column (Main Page Content) -->
 			<main class="w-full min-w-0 flex-1">
