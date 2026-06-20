@@ -219,8 +219,8 @@ export const load: PageServerLoad = async (event) => {
 				target: [discussionReads.userId, discussionReads.discussionId],
 				set: {
 					lastReadAt: new Date(),
-					lastReadPage: page,
-					lastReadReplyId: lastReplyId
+					lastReadPage: sql`CASE WHEN ${discussionReads.lastReadPage} < ${page} THEN ${page} ELSE ${discussionReads.lastReadPage} END`,
+					lastReadReplyId: sql`CASE WHEN ${discussionReads.lastReadReplyId} IS NULL OR (${lastReplyId} IS NOT NULL AND ${discussionReads.lastReadReplyId} < ${lastReplyId}) THEN ${lastReplyId} ELSE ${discussionReads.lastReadReplyId} END`
 				}
 			});
 

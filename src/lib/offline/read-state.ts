@@ -23,10 +23,27 @@ export async function recordOfflineRead(
 	const skew = typeof skewRow?.value === 'number' ? skewRow.value : 0;
 	const lastReadAt = Math.floor(Date.now() / 1000) + skew;
 	await db.transaction('rw', db.readStatePending, db.readStateMerged, async () => {
-		await db.readStatePending.put({ discussionId, lastReadReplyId, lastReadPage, lastReadAt });
 		const existing = await db.readStateMerged.get(discussionId);
+		const newPage = existing ? Math.max(existing.lastReadPage, lastReadPage) : lastReadPage;
+		let newReplyId = lastReadReplyId;
+		if (existing && existing.lastReadReplyId !== null) {
+			if (lastReadReplyId === null || existing.lastReadReplyId > lastReadReplyId) {
+				newReplyId = existing.lastReadReplyId;
+			}
+		}
+		await db.readStatePending.put({
+			discussionId,
+			lastReadReplyId: newReplyId,
+			lastReadPage: newPage,
+			lastReadAt
+		});
 		if (!existing || existing.lastReadAt <= lastReadAt) {
-			await db.readStateMerged.put({ discussionId, lastReadReplyId, lastReadPage, lastReadAt });
+			await db.readStateMerged.put({
+				discussionId,
+				lastReadReplyId: newReplyId,
+				lastReadPage: newPage,
+				lastReadAt
+			});
 		}
 	});
 }
@@ -65,7 +82,7 @@ export async function flushPendingReadState(): Promise<void> {
 				await db.readStateMerged.put({
 					discussionId: c.discussionId,
 					lastReadReplyId: c.serverLastReadReplyId,
-					lastReadPage: 1,
+					lastReadPage: c.serverLastReadPage,
 					lastReadAt: c.serverLastReadAt
 				});
 			}

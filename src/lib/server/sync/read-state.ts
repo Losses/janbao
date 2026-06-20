@@ -43,7 +43,8 @@ export async function applyReadStateDeltas(
 		const existing = await input.db
 			.select({
 				lastReadAt: discussionReads.lastReadAt,
-				lastReadReplyId: discussionReads.lastReadReplyId
+				lastReadReplyId: discussionReads.lastReadReplyId,
+				lastReadPage: discussionReads.lastReadPage
 			})
 			.from(discussionReads)
 			.where(
@@ -64,7 +65,8 @@ export async function applyReadStateDeltas(
 			conflicts.push({
 				discussionId: delta.discussionId,
 				serverLastReadAt,
-				serverLastReadReplyId: existing[0]?.lastReadReplyId ?? null
+				serverLastReadReplyId: existing[0]?.lastReadReplyId ?? null,
+				serverLastReadPage: existing[0]?.lastReadPage ?? 1
 			});
 			continue;
 		}
@@ -83,8 +85,8 @@ export async function applyReadStateDeltas(
 				target: [discussionReads.userId, discussionReads.discussionId],
 				set: {
 					lastReadAt: stamped,
-					lastReadPage: delta.lastReadPage,
-					lastReadReplyId: delta.lastReadReplyId
+					lastReadPage: sql`CASE WHEN ${discussionReads.lastReadPage} < ${delta.lastReadPage} THEN ${delta.lastReadPage} ELSE ${discussionReads.lastReadPage} END`,
+					lastReadReplyId: sql`CASE WHEN ${discussionReads.lastReadReplyId} IS NULL OR (${delta.lastReadReplyId} IS NOT NULL AND ${discussionReads.lastReadReplyId} < ${delta.lastReadReplyId}) THEN ${delta.lastReadReplyId} ELSE ${discussionReads.lastReadReplyId} END`
 				},
 				// Close the SELECT-to-UPSERT race: only advance when the server row is
 				// not newer. The column stores seconds; delta.lastReadAt is seconds.

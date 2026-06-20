@@ -542,6 +542,7 @@ export interface ReadStateConflict {
 	discussionId: number;
 	serverLastReadAt: number;
 	serverLastReadReplyId: number | null;
+	serverLastReadPage: number;
 }
 
 export interface SyncReadStateResponse {
