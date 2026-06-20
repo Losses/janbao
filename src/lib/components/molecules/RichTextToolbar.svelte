@@ -51,15 +51,35 @@
 		mdiAlertCircle
 	} from '@mdi/js';
 	import type { TranslationDict } from '$lib/types/translation';
+	import type { EditorPreferences } from '$lib/editor/prefs';
 
 	interface Props {
 		activeEditor: LexicalEditor;
 		disableHeadings?: boolean;
-		disableImageUpload?: boolean;
+		features: EditorPreferences;
 		t: TranslationDict;
 	}
 
-	let { activeEditor, disableHeadings = false, disableImageUpload = false, t }: Props = $props();
+	let { activeEditor, disableHeadings = false, features, t }: Props = $props();
+
+	// A toolbar group renders only when at least one of its buttons is enabled,
+	// and a divider renders only when both adjacent groups are visible - so a
+	// fully-disabled group leaves no orphan separator.
+	const showBlockGroup = $derived(
+		!disableHeadings && (features.headings || features.quote || features.codeBlock)
+	);
+	const showInlineGroup = $derived(
+		features.bold ||
+			features.italic ||
+			features.underline ||
+			features.strikethrough ||
+			features.highlight ||
+			features.spoiler
+	);
+	const showListGroup = $derived(
+		features.bulletList || features.numberedList || features.checklist
+	);
+	const showMediaGroup = $derived(features.link || features.autolink || features.image);
 
 	// Retrieve stores from svelte-lexical's context
 	const isBold = getContext<Writable<boolean>>('isBold');
@@ -240,7 +260,7 @@
 	class="flex flex-wrap items-center gap-1.5 p-1.5 bg-base-200 border-b border-base-300 rounded-t-field"
 >
 	<!-- Block Formatting Dropdown -->
-	{#if !disableHeadings}
+	{#if showBlockGroup}
 		<div class="dropdown">
 			<div tabindex="0" role="button" class="btn btn-xs btn-ghost gap-1 font-semibold text-xs">
 				<span>
@@ -274,206 +294,235 @@
 						<span>{t.editor.normal}</span>
 					</button>
 				</li>
-				<li>
-					<button
-						type="button"
-						class:active={$blockType === 'h1'}
-						onclick={(e) => {
-							formatHeading(activeEditor, $blockType, 'h1');
-							(e.currentTarget as HTMLElement).blur();
-						}}
-					>
-						<Icon path={mdiFormatHeader1} size={18} />
-						<span>{t.editor.heading1}</span>
-					</button>
-				</li>
-				<li>
-					<button
-						type="button"
-						class:active={$blockType === 'h2'}
-						onclick={(e) => {
-							formatHeading(activeEditor, $blockType, 'h2');
-							(e.currentTarget as HTMLElement).blur();
-						}}
-					>
-						<Icon path={mdiFormatHeader2} size={18} />
-						<span>{t.editor.heading2}</span>
-					</button>
-				</li>
-				<li>
-					<button
-						type="button"
-						class:active={$blockType === 'h3'}
-						onclick={(e) => {
-							formatHeading(activeEditor, $blockType, 'h3');
-							(e.currentTarget as HTMLElement).blur();
-						}}
-					>
-						<Icon path={mdiFormatHeader3} size={18} />
-						<span>{t.editor.heading3}</span>
-					</button>
-				</li>
-				<li>
-					<button
-						type="button"
-						class:active={$blockType === 'h4'}
-						onclick={(e) => {
-							formatHeading(activeEditor, $blockType, 'h4');
-							(e.currentTarget as HTMLElement).blur();
-						}}
-					>
-						<Icon path={mdiFormatHeader4} size={18} />
-						<span>{t.editor.heading4}</span>
-					</button>
-				</li>
-				<li>
-					<button
-						type="button"
-						class:active={$blockType === 'quote'}
-						onclick={(e) => {
-							formatQuote(activeEditor, $blockType);
-							(e.currentTarget as HTMLElement).blur();
-						}}
-					>
-						<Icon path={mdiFormatQuoteClose} size={18} />
-						<span>{t.editor.quote}</span>
-					</button>
-				</li>
-				<li>
-					<button
-						type="button"
-						class:active={$blockType === 'code'}
-						onclick={(e) => {
-							formatCode(activeEditor, $blockType);
-							(e.currentTarget as HTMLElement).blur();
-						}}
-					>
-						<Icon path={mdiCodeBraces} size={18} />
-						<span>{t.editor.codeBlock}</span>
-					</button>
-				</li>
+				{#if features.headings}
+					<li>
+						<button
+							type="button"
+							class:active={$blockType === 'h1'}
+							onclick={(e) => {
+								formatHeading(activeEditor, $blockType, 'h1');
+								(e.currentTarget as HTMLElement).blur();
+							}}
+						>
+							<Icon path={mdiFormatHeader1} size={18} />
+							<span>{t.editor.heading1}</span>
+						</button>
+					</li>
+					<li>
+						<button
+							type="button"
+							class:active={$blockType === 'h2'}
+							onclick={(e) => {
+								formatHeading(activeEditor, $blockType, 'h2');
+								(e.currentTarget as HTMLElement).blur();
+							}}
+						>
+							<Icon path={mdiFormatHeader2} size={18} />
+							<span>{t.editor.heading2}</span>
+						</button>
+					</li>
+					<li>
+						<button
+							type="button"
+							class:active={$blockType === 'h3'}
+							onclick={(e) => {
+								formatHeading(activeEditor, $blockType, 'h3');
+								(e.currentTarget as HTMLElement).blur();
+							}}
+						>
+							<Icon path={mdiFormatHeader3} size={18} />
+							<span>{t.editor.heading3}</span>
+						</button>
+					</li>
+					<li>
+						<button
+							type="button"
+							class:active={$blockType === 'h4'}
+							onclick={(e) => {
+								formatHeading(activeEditor, $blockType, 'h4');
+								(e.currentTarget as HTMLElement).blur();
+							}}
+						>
+							<Icon path={mdiFormatHeader4} size={18} />
+							<span>{t.editor.heading4}</span>
+						</button>
+					</li>
+				{/if}
+				{#if features.quote}
+					<li>
+						<button
+							type="button"
+							class:active={$blockType === 'quote'}
+							onclick={(e) => {
+								formatQuote(activeEditor, $blockType);
+								(e.currentTarget as HTMLElement).blur();
+							}}
+						>
+							<Icon path={mdiFormatQuoteClose} size={18} />
+							<span>{t.editor.quote}</span>
+						</button>
+					</li>
+				{/if}
+				{#if features.codeBlock}
+					<li>
+						<button
+							type="button"
+							class:active={$blockType === 'code'}
+							onclick={(e) => {
+								formatCode(activeEditor, $blockType);
+								(e.currentTarget as HTMLElement).blur();
+							}}
+						>
+							<Icon path={mdiCodeBraces} size={18} />
+							<span>{t.editor.codeBlock}</span>
+						</button>
+					</li>
+				{/if}
 			</ul>
 		</div>
-
+	{/if}
+	{#if showBlockGroup && (showInlineGroup || showListGroup || showMediaGroup)}
 		<div class="divider divider-horizontal m-0 h-6"></div>
 	{/if}
 
 	<!-- Inline Styles (Bold, Italic, Underline, Strikethrough, Highlight, Spoiler) -->
 	<div class="join">
-		<button
-			type="button"
-			class="btn btn-xs join-item"
-			class:btn-active={$isBold}
-			class:btn-ghost={!$isBold}
-			onclick={() => toggleBold(activeEditor)}
-			title="{t.editor.bold} (Ctrl+B)"
-		>
-			<Icon path={mdiFormatBold} size={16} />
-		</button>
-		<button
-			type="button"
-			class="btn btn-xs join-item"
-			class:btn-active={$isItalic}
-			class:btn-ghost={!$isItalic}
-			onclick={() => toggleItalic(activeEditor)}
-			title="{t.editor.italic} (Ctrl+I)"
-		>
-			<Icon path={mdiFormatItalic} size={16} />
-		</button>
-		<button
-			type="button"
-			class="btn btn-xs join-item"
-			class:btn-active={$isUnderline}
-			class:btn-ghost={!$isUnderline}
-			onclick={() => toggleUnderline(activeEditor)}
-			title="{t.editor.underline} (Ctrl+U)"
-		>
-			<Icon path={mdiFormatUnderline} size={16} />
-		</button>
-		<button
-			type="button"
-			class="btn btn-xs join-item"
-			class:btn-active={$isStrikethrough}
-			class:btn-ghost={!$isStrikethrough}
-			onclick={() => toggleStrikethrough(activeEditor)}
-			title={t.editor.strikethrough}
-		>
-			<Icon path={mdiFormatStrikethrough} size={16} />
-		</button>
-		<button
-			type="button"
-			class="btn btn-xs join-item"
-			class:btn-active={isHighlight}
-			class:btn-ghost={!isHighlight}
-			onclick={handleToggleHighlight}
-			title={t.editor.highlight}
-		>
-			<Icon path={mdiMarker} size={16} />
-		</button>
-		<button
-			type="button"
-			class="btn btn-xs join-item"
-			class:btn-active={isSpoiler}
-			class:btn-ghost={!isSpoiler}
-			onclick={handleToggleSpoiler}
-			title={t.editor.spoiler}
-		>
-			<Icon path={mdiEyeOff} size={16} />
-		</button>
+		{#if features.bold}
+			<button
+				type="button"
+				class="btn btn-xs join-item"
+				class:btn-active={$isBold}
+				class:btn-ghost={!$isBold}
+				onclick={() => toggleBold(activeEditor)}
+				title="{t.editor.bold} (Ctrl+B)"
+			>
+				<Icon path={mdiFormatBold} size={16} />
+			</button>
+		{/if}
+		{#if features.italic}
+			<button
+				type="button"
+				class="btn btn-xs join-item"
+				class:btn-active={$isItalic}
+				class:btn-ghost={!$isItalic}
+				onclick={() => toggleItalic(activeEditor)}
+				title="{t.editor.italic} (Ctrl+I)"
+			>
+				<Icon path={mdiFormatItalic} size={16} />
+			</button>
+		{/if}
+		{#if features.underline}
+			<button
+				type="button"
+				class="btn btn-xs join-item"
+				class:btn-active={$isUnderline}
+				class:btn-ghost={!$isUnderline}
+				onclick={() => toggleUnderline(activeEditor)}
+				title="{t.editor.underline} (Ctrl+U)"
+			>
+				<Icon path={mdiFormatUnderline} size={16} />
+			</button>
+		{/if}
+		{#if features.strikethrough}
+			<button
+				type="button"
+				class="btn btn-xs join-item"
+				class:btn-active={$isStrikethrough}
+				class:btn-ghost={!$isStrikethrough}
+				onclick={() => toggleStrikethrough(activeEditor)}
+				title={t.editor.strikethrough}
+			>
+				<Icon path={mdiFormatStrikethrough} size={16} />
+			</button>
+		{/if}
+		{#if features.highlight}
+			<button
+				type="button"
+				class="btn btn-xs join-item"
+				class:btn-active={isHighlight}
+				class:btn-ghost={!isHighlight}
+				onclick={handleToggleHighlight}
+				title={t.editor.highlight}
+			>
+				<Icon path={mdiMarker} size={16} />
+			</button>
+		{/if}
+		{#if features.spoiler}
+			<button
+				type="button"
+				class="btn btn-xs join-item"
+				class:btn-active={isSpoiler}
+				class:btn-ghost={!isSpoiler}
+				onclick={handleToggleSpoiler}
+				title={t.editor.spoiler}
+			>
+				<Icon path={mdiEyeOff} size={16} />
+			</button>
+		{/if}
 	</div>
-
-	<div class="divider divider-horizontal m-0 h-6"></div>
+	{#if showInlineGroup && (showListGroup || showMediaGroup)}
+		<div class="divider divider-horizontal m-0 h-6"></div>
+	{/if}
 
 	<!-- Lists -->
 	<div class="join">
-		<button
-			type="button"
-			class="btn btn-xs join-item"
-			class:btn-active={$blockType === 'bullet'}
-			class:btn-ghost={$blockType !== 'bullet'}
-			onclick={() => formatBulletList(activeEditor, $blockType)}
-			title={t.editor.bulletList}
-		>
-			<Icon path={mdiFormatListBulleted} size={16} />
-		</button>
-		<button
-			type="button"
-			class="btn btn-xs join-item"
-			class:btn-active={$blockType === 'number'}
-			class:btn-ghost={$blockType !== 'number'}
-			onclick={() => formatNumberedList(activeEditor, $blockType)}
-			title={t.editor.numberedList}
-		>
-			<Icon path={mdiFormatListNumbered} size={16} />
-		</button>
-		<button
-			type="button"
-			class="btn btn-xs join-item"
-			class:btn-active={$blockType === 'check'}
-			class:btn-ghost={$blockType !== 'check'}
-			onclick={() => formatCheckList(activeEditor, $blockType)}
-			title={t.editor.checkList}
-		>
-			<Icon path={mdiFormatListChecks} size={16} />
-		</button>
+		{#if features.bulletList}
+			<button
+				type="button"
+				class="btn btn-xs join-item"
+				class:btn-active={$blockType === 'bullet'}
+				class:btn-ghost={$blockType !== 'bullet'}
+				onclick={() => formatBulletList(activeEditor, $blockType)}
+				title={t.editor.bulletList}
+			>
+				<Icon path={mdiFormatListBulleted} size={16} />
+			</button>
+		{/if}
+		{#if features.numberedList}
+			<button
+				type="button"
+				class="btn btn-xs join-item"
+				class:btn-active={$blockType === 'number'}
+				class:btn-ghost={$blockType !== 'number'}
+				onclick={() => formatNumberedList(activeEditor, $blockType)}
+				title={t.editor.numberedList}
+			>
+				<Icon path={mdiFormatListNumbered} size={16} />
+			</button>
+		{/if}
+		{#if features.checklist}
+			<button
+				type="button"
+				class="btn btn-xs join-item"
+				class:btn-active={$blockType === 'check'}
+				class:btn-ghost={$blockType !== 'check'}
+				onclick={() => formatCheckList(activeEditor, $blockType)}
+				title={t.editor.checkList}
+			>
+				<Icon path={mdiFormatListChecks} size={16} />
+			</button>
+		{/if}
 	</div>
-
-	<div class="divider divider-horizontal m-0 h-6"></div>
+	{#if showListGroup && showMediaGroup}
+		<div class="divider divider-horizontal m-0 h-6"></div>
+	{/if}
 
 	<!-- Links & Images -->
 	<div class="flex items-center gap-1">
-		<button
-			type="button"
-			class="btn btn-xs"
-			class:btn-active={$isLink}
-			class:btn-ghost={!$isLink}
-			onclick={handleToggleLink}
-			title={t.editor.link}
-		>
-			<Icon path={mdiLink} size={16} />
-		</button>
+		{#if features.link}
+			<button
+				type="button"
+				class="btn btn-xs"
+				class:btn-active={$isLink}
+				class:btn-ghost={!$isLink}
+				onclick={handleToggleLink}
+				title={t.editor.link}
+			>
+				<Icon path={mdiLink} size={16} />
+			</button>
+		{/if}
 
-		{#if !disableImageUpload}
+		{#if features.image}
 			<button
 				type="button"
 				class="btn btn-xs btn-ghost"

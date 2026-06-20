@@ -1,0 +1,21 @@
+CREATE TABLE `editor_preferences` (
+	`user_id` integer PRIMARY KEY NOT NULL,
+	`plain_mode` integer DEFAULT false NOT NULL,
+	`bold` integer DEFAULT true NOT NULL,
+	`italic` integer DEFAULT true NOT NULL,
+	`underline` integer DEFAULT true NOT NULL,
+	`strikethrough` integer DEFAULT true NOT NULL,
+	`highlight` integer DEFAULT true NOT NULL,
+	`spoiler` integer DEFAULT true NOT NULL,
+	`headings` integer DEFAULT true NOT NULL,
+	`quote` integer DEFAULT true NOT NULL,
+	`code_block` integer DEFAULT true NOT NULL,
+	`bullet_list` integer DEFAULT true NOT NULL,
+	`numbered_list` integer DEFAULT true NOT NULL,
+	`checklist` integer DEFAULT true NOT NULL,
+	`link` integer DEFAULT true NOT NULL,
+	`autolink` integer DEFAULT true NOT NULL,
+	`image` integer DEFAULT true NOT NULL,
+	`markdown` integer DEFAULT true NOT NULL,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
+);

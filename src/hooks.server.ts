@@ -2,6 +2,7 @@ import { getDb, getLocalDb } from '$lib/server/db';
 import { seedCore } from '$lib/server/db/seed';
 import { verifyJwt } from '$lib/server/auth';
 import { users } from '$lib/server/db/schema';
+import { getEditorPreferences } from '$lib/server/db/dao/editor-preferences';
 import { resolveLang, getTranslation } from '$lib/server/i18n';
 import { getJwtSecret } from '$lib/server/constants';
 import { resolvePcloudConfig, pcloudIsConfigured } from '$lib/server/pcloud';
@@ -56,6 +57,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 			const usersList = await db.select().from(users).where(eq(users.id, userId)).limit(1);
 			if (usersList.length > 0) {
 				const userRecord = usersList[0];
+				// Editor feature prefs are needed app-wide (every LexicalEditor
+				// instance reads them via the client store), so they ride along on
+				// the session. A PK lookup on a 1:1 row; sub-ms.
+				const editorPreferences = await getEditorPreferences(db, userRecord.id);
 				// Redact password hash before exposing to locals
 				const safeUser = {
 					id: userRecord.id,
@@ -71,7 +76,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 					languagePreference: userRecord.languagePreference,
 					isStealth: userRecord.isStealth,
 					rssToken: userRecord.rssToken,
-					viewCount: userRecord.viewCount
+					viewCount: userRecord.viewCount,
+					editorPreferences
 				};
 				event.locals.user = safeUser;
 

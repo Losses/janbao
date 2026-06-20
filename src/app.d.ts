@@ -1,6 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 import type { D1Db } from '$lib/server/db';
 import type { TranslationDict } from '$lib/types/translation';
+import type { EditorPreferences } from '$lib/editor/prefs';
 
 interface PlatformEnv {
 	D1_DB?: D1Database;
@@ -51,6 +52,7 @@ interface UserData {
 	isStealth: boolean;
 	rssToken: string;
 	viewCount: number;
+	editorPreferences: EditorPreferences;
 }
 
 declare global {

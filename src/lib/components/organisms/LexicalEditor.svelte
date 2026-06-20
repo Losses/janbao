@@ -10,6 +10,7 @@
 	 */
 	import EditorInstanceSync from './EditorInstanceSync.svelte';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
+	import { getEditorPrefsStore } from '$lib/stores/editor-prefs.svelte';
 	import {
 		Composer,
 		ContentEditable,
@@ -49,6 +50,9 @@
 	import MentionTypeaheadPlugin from '$lib/components/molecules/MentionTypeaheadPlugin.svelte';
 	import {
 		COMMAND_PRIORITY_EDITOR,
+		COMMAND_PRIORITY_HIGH,
+		FORMAT_TEXT_COMMAND,
+		PASTE_COMMAND,
 		$getSelection as getSelection,
 		$isRangeSelection as isRangeSelection,
 		$isTextNode as isTextNodeFn,
@@ -140,6 +144,39 @@
 		excludeIds = []
 	}: LexicalEditorProps = $props();
 
+	// Editor feature prefs come from the client store (hydrated from the session by
+	// the root layout). `features` resolves the user's prefs against the plainMode
+	// master and the instance-level restrictions passed as props (disableHeadings
+	// on the activity editor, disableImageUpload in PMs): instance restrictions
+	// always win (AND), and plainMode forces every feature off. Mentions are not a
+	// preference (they drive notifications) and stay on in every mode: the typeahead
+	// + chip are functional rather than formatting, so plain-text mode keeps them
+	// (typing @ still surfaces suggestions and inserts a mention chip).
+	const editorPrefs = getEditorPrefsStore();
+	const features = $derived.by(() => {
+		const p = editorPrefs.prefs;
+		const off = p.plainMode;
+		return {
+			plainMode: p.plainMode,
+			bold: !off && p.bold,
+			italic: !off && p.italic,
+			underline: !off && p.underline,
+			strikethrough: !off && p.strikethrough,
+			highlight: !off && p.highlight,
+			spoiler: !off && p.spoiler,
+			headings: !off && p.headings && !disableHeadings,
+			quote: !off && p.quote,
+			codeBlock: !off && p.codeBlock,
+			bulletList: !off && p.bulletList,
+			numberedList: !off && p.numberedList,
+			checklist: !off && p.checklist,
+			link: !off && p.link,
+			autolink: !off && p.autolink,
+			image: !off && p.image && !disableImageUpload,
+			markdown: !off && p.markdown
+		};
+	});
+
 	// Keep the dead-image placeholder label locale-aware (the Lexical node builds
 	// its DOM imperatively and has no access to `t`, so it reads a module value).
 	$effect(() => {
@@ -168,6 +205,19 @@
 	interface EditorWithTransform {
 		registerNodeTransform?: RegisterNodeTransformFn;
 		registerCommand?: RegisterCommandFn;
+		update?: UpdateFn;
+	}
+
+	// registerCommand overload for commands that carry a payload (FORMAT_TEXT_COMMAND,
+	// PASTE_COMMAND). The void-only RegisterCommandFn above cannot describe them.
+	type AnyCommandHandler = (payload: unknown) => boolean;
+	type RegisterAnyCommandFn = (
+		command: unknown,
+		handler: AnyCommandHandler,
+		priority: number
+	) => VoidHandler;
+	interface EditorWithAnyCommands {
+		registerCommand?: RegisterAnyCommandFn;
 		update?: UpdateFn;
 	}
 
@@ -253,6 +303,10 @@
 	// Register spoiler toggle command on the editor instance
 	$effect(() => {
 		if (!editorInstance) return;
+		// Spoiler is feature-gated: when off, don't register the command at all
+		// (the toolbar button is hidden too). Reading features.spoiler re-runs
+		// this effect if the user toggles it in settings.
+		if (!features.spoiler) return;
 		const castEditor = editorInstance as EditorWithTransform;
 		if (!castEditor.registerCommand || !castEditor.update) return;
 
@@ -341,6 +395,58 @@
 		return () => unregister();
 	});
 
+	// Defense-in-depth for feature toggles + plain-text paste. High-priority
+	// command handlers swallow formatting the user has disabled so it cannot be
+	// applied even via keyboard (the toolbar button is already hidden):
+	//  - FORMAT_TEXT_COMMAND: block bold/italic/underline/strikethrough/highlight
+	//    from Ctrl+B/I/U etc. (allowed formats pass through to the default handler).
+	//  - PASTE_COMMAND: in plain-text mode, strip clipboard content to text/plain
+	//    and insert as raw text, preempting Lexical's rich-HTML paste; otherwise
+	//    fall through to the default. Re-registers when `features` changes.
+	$effect(() => {
+		const f = features;
+		if (!editorInstance) return;
+		const castEditor = editorInstance as EditorWithAnyCommands;
+		if (!castEditor.registerCommand || !castEditor.update) return;
+
+		const allowedFormats = new Set<string>([
+			...(f.bold ? ['bold'] : []),
+			...(f.italic ? ['italic'] : []),
+			...(f.underline ? ['underline'] : []),
+			...(f.strikethrough ? ['strikethrough'] : []),
+			...(f.highlight ? ['highlight'] : [])
+		]);
+		const unregisterFormat = castEditor.registerCommand(
+			FORMAT_TEXT_COMMAND,
+			(payload: unknown) =>
+				typeof payload === 'string' && allowedFormats.has(payload) ? false : true,
+			COMMAND_PRIORITY_HIGH
+		);
+
+		const unregisterPaste = castEditor.registerCommand(
+			PASTE_COMMAND,
+			(event: unknown) => {
+				if (!f.plainMode) return false;
+				const clipboardEvent = event as ClipboardEvent;
+				clipboardEvent.preventDefault();
+				const text = clipboardEvent.clipboardData?.getData('text/plain') ?? '';
+				castEditor.update!(() => {
+					const selection = getSelection();
+					if (isRangeSelection(selection)) {
+						selection.insertRawText(text);
+					}
+				});
+				return true;
+			},
+			COMMAND_PRIORITY_HIGH
+		);
+
+		return () => {
+			unregisterFormat();
+			unregisterPaste();
+		};
+	});
+
 	// Nodes required by the editor
 	const editorNodes = [
 		HeadingNode,
@@ -356,19 +462,24 @@
 		DeadImageNode
 	];
 
-	// Markdown transformers we support
-	const markdownTransformers = $derived([
-		BOLD_STAR,
-		BOLD_UNDERSCORE,
-		ITALIC_STAR,
-		ITALIC_UNDERSCORE,
-		STRIKETHROUGH,
-		...(!disableHeadings ? [HEADING] : []),
-		LINK,
-		UNORDERED_LIST,
-		ORDERED_LIST,
-		CHECK_LIST
-	]);
+	// Markdown transformers, filtered to only the enabled features. The master
+	// `markdown` toggle empties the list entirely (MarkdownShortcutPlugin is also
+	// unmounted in the template when it is off); per-feature toggles then drop
+	// their own transformer so e.g. `**bold**` cannot render when bold is off.
+	const markdownTransformers = $derived(
+		features.markdown
+			? [
+					...(features.bold ? [BOLD_STAR, BOLD_UNDERSCORE] : []),
+					...(features.italic ? [ITALIC_STAR, ITALIC_UNDERSCORE] : []),
+					...(features.strikethrough ? [STRIKETHROUGH] : []),
+					...(features.headings ? [HEADING] : []),
+					...(features.link ? [LINK] : []),
+					...(features.bulletList ? [UNORDERED_LIST] : []),
+					...(features.numberedList ? [ORDERED_LIST] : []),
+					...(features.checklist ? [CHECK_LIST] : [])
+				]
+			: []
+	);
 
 	// Protocol-level URL validation - only http://, https://, and relative paths (starting with /, ., #) allowed
 	function validateUrl(src: string): boolean {
@@ -573,14 +684,16 @@
 	class="janbao-rich-editor relative border border-base-300 bg-base-100 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all duration-200 {className}"
 >
 	<Composer {initialConfig}>
-		<div class={disabled ? 'opacity-60 pointer-events-none' : ''}>
-			<Toolbar>
-				{#snippet children({ activeEditor })}
-					<EditorInstanceSync {activeEditor} update={(e: unknown) => (editorInstance = e)} />
-					<RichTextToolbar {activeEditor} {disableHeadings} {disableImageUpload} {t} />
-				{/snippet}
-			</Toolbar>
-		</div>
+		{#if !features.plainMode}
+			<div class={disabled ? 'opacity-60 pointer-events-none' : ''}>
+				<Toolbar>
+					{#snippet children({ activeEditor })}
+						<EditorInstanceSync {activeEditor} update={(e: unknown) => (editorInstance = e)} />
+						<RichTextToolbar {activeEditor} {features} {disableHeadings} {t} />
+					{/snippet}
+				</Toolbar>
+			</div>
+		{/if}
 
 		<!-- Editor Area -->
 		<div
@@ -593,13 +706,25 @@
 			/>
 			<RichTextPlugin />
 			<HistoryPlugin />
-			<ListPlugin />
-			<ImagePlugin />
-			<LinkPlugin {validateUrl} />
-			<AutoLinkPlugin />
-			<RichTextLinkEditor anchorElem={editorAreaElem} {t} />
+			{#if features.bulletList || features.numberedList || features.checklist}
+				<ListPlugin />
+			{/if}
+			{#if features.image}
+				<ImagePlugin />
+			{/if}
+			{#if features.link}
+				<LinkPlugin {validateUrl} />
+			{/if}
+			{#if features.autolink}
+				<AutoLinkPlugin />
+			{/if}
+			{#if features.link}
+				<RichTextLinkEditor anchorElem={editorAreaElem} {t} />
+			{/if}
 			<MentionTypeaheadPlugin {excludeIds} />
-			<MarkdownShortcutPlugin transformers={markdownTransformers} />
+			{#if features.markdown}
+				<MarkdownShortcutPlugin transformers={markdownTransformers} />
+			{/if}
 			<OnChangePlugin
 				ignoreHistoryMergeTagChange={true}
 				ignoreSelectionChange={false}

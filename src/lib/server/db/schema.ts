@@ -440,6 +440,40 @@ export const notificationPreferences = sqliteTable('notification_preferences', {
 	pushMessage: integer('push_message', { mode: 'boolean' }).notNull().default(true)
 });
 
+// Per-user rich-text editor feature toggles plus a plain-text master switch.
+// 1:1 with users (cascade delete). A missing row resolves to all-features-on /
+// plain-mode-off in the DAO + client store, so the table stays empty until a
+// user actually customizes their editor. Read on every authed request
+// (hooks.server.ts) so the editor can honor prefs app-wide via the client store.
+export const editorPreferences = sqliteTable('editor_preferences', {
+	userId: integer('user_id')
+		.primaryKey()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	// Master switch: when on, the editor runs as a pure plain-text surface
+	// (toolbar hidden, formatting commands no-op, paste stripped to text) while
+	// still using the Lexical engine. Existing rich content is preserved but inert.
+	plainMode: integer('plain_mode', { mode: 'boolean' }).notNull().default(false),
+	bold: integer('bold', { mode: 'boolean' }).notNull().default(true),
+	italic: integer('italic', { mode: 'boolean' }).notNull().default(true),
+	underline: integer('underline', { mode: 'boolean' }).notNull().default(true),
+	strikethrough: integer('strikethrough', { mode: 'boolean' }).notNull().default(true),
+	highlight: integer('highlight', { mode: 'boolean' }).notNull().default(true),
+	spoiler: integer('spoiler', { mode: 'boolean' }).notNull().default(true),
+	headings: integer('headings', { mode: 'boolean' }).notNull().default(true),
+	quote: integer('quote', { mode: 'boolean' }).notNull().default(true),
+	codeBlock: integer('code_block', { mode: 'boolean' }).notNull().default(true),
+	bulletList: integer('bullet_list', { mode: 'boolean' }).notNull().default(true),
+	numberedList: integer('numbered_list', { mode: 'boolean' }).notNull().default(true),
+	checklist: integer('checklist', { mode: 'boolean' }).notNull().default(true),
+	link: integer('link', { mode: 'boolean' }).notNull().default(true),
+	autolink: integer('autolink', { mode: 'boolean' }).notNull().default(true),
+	image: integer('image', { mode: 'boolean' }).notNull().default(true),
+	// `mention` is intentionally NOT a preference: @mentions drive notifications
+	// and user linkage, so disabling them would break forum functionality. The
+	// MentionTypeaheadPlugin is therefore always registered.
+	markdown: integer('markdown', { mode: 'boolean' }).notNull().default(true)
+});
+
 export const pushSubscriptions = sqliteTable('push_subscriptions', {
 	id: integer('id').primaryKey(),
 	userId: integer('user_id')

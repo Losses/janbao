@@ -51,5 +51,10 @@
 				{profileT['offlineReadingNav']}
 			</a>
 		</li>
+		<li>
+			<a href="/profile/editor" class={activeItem === 'editorSettings' ? 'active' : ''}>
+				{profileT['editorSettingsNav']}
+			</a>
+		</li>
 	</ul>
 </div>

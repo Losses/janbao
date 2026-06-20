@@ -41,5 +41,10 @@
 				{t.backup.nav}
 			</a>
 		</li>
+		<li>
+			<a href="/admin/maintenance" class={activeItem === 'maintenance' ? 'active' : ''}>
+				{t.maintenance.nav}
+			</a>
+		</li>
 	</ul>
 </div>

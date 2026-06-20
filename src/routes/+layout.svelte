@@ -9,6 +9,7 @@
 	import { getPwaInstallStore } from '$lib/stores/pwa-install.svelte';
 	import { getOfflinePrefsStore } from '$lib/stores/offline-prefs.svelte';
 	import { DEFAULT_OFFLINE_PREFS } from '$lib/offline/prefs';
+	import { getEditorPrefsStore } from '$lib/stores/editor-prefs.svelte';
 
 	interface LayoutProps {
 		data: LayoutData;
@@ -18,6 +19,7 @@
 	let { data, children }: LayoutProps = $props();
 
 	const badges = getBadgesStore();
+	const editorPrefs = getEditorPrefsStore();
 
 	// Publish the resolved app locale ('en' | 'zh-CN') so locale-aware atoms
 	// (e.g. <Date>'s absolute-timestamp tooltip) can format in the user's
@@ -41,6 +43,17 @@
 			unreadNotifications: data.unreadNotificationCount,
 			unreadMessages: data.unreadMessageCount
 		});
+	});
+
+	// Seed editor feature prefs from the session. The lazy editor chunk loads
+	// after this effect runs, so live editors always render with the real prefs
+	// on first paint. Re-runs only if the session user changes (the layout load
+	// is param-free, so that is effectively once per full page load); the
+	// settings page additionally calls update() on save to refresh live editors.
+	$effect(() => {
+		if (data.user) {
+			editorPrefs.hydrate(data.user.editorPreferences);
+		}
 	});
 
 	// Online/offline status drives the delta-sync trigger and (via the shared
