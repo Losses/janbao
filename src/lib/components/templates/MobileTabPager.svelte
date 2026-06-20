@@ -135,7 +135,8 @@
 	// every section to the tallest panel (Activity, with its composer), leaving a
 	// large blank gap under shorter tabs. `items-start` keeps each section at its
 	// natural height; each reports it via ResizeObserver and the viewport follows
-	// the active one (transitioned on switch).
+	// the active one (height changes instantly - no transition, to avoid
+	// animating the surrounding content container on every tab switch).
 	let panelHeights = $state<number[]>([0, 0, 0]);
 	const viewportHeight = $derived(panelHeights[activeIndex]);
 	const viewportStyle = $derived(
@@ -153,7 +154,7 @@
 </script>
 
 <div
-	class="overflow-x-clip transition-[height] duration-200"
+	class="overflow-x-clip"
 	style={viewportStyle}
 	use:detectSwipe={{ onMove: swipeMove, onEnd: swipeEnd }}
 >
