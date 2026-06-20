@@ -43,6 +43,7 @@
 	});
 </script>
 
-<Header {t} onToggleDrawer={drawer.toggle} />
-
-{@render children()}
+<div class="flex min-h-screen flex-col">
+	<Header {t} onToggleDrawer={drawer.toggle} />
+	<div class="min-w-0 flex-1">{@render children()}</div>
+</div>

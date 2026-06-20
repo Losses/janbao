@@ -132,7 +132,7 @@
 	}
 </script>
 
-<div class="relative flex min-h-screen flex-col bg-base-200 text-base-content">
+<div class="relative flex min-h-0 flex-col bg-base-200 text-base-content">
 	<!-- Main Content Container -->
 	<div class="mx-auto flex w-full max-w-[960px] flex-1 flex-col px-0 pb-6 md:px-6">
 		<div
