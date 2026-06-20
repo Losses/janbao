@@ -56,14 +56,28 @@ function insideHorizontalScroll(target: EventTarget | null, boundary: HTMLElemen
 	return false;
 }
 
-/** Kill the next click (capture phase) so a drag does not double-fire as a tap. */
+/**
+ * Suppress the next click so a drag does not double-fire as a tap. If the
+ * browser generates a click after the drag, `swallow` catches it and cleans
+ * up. If it does NOT (pointer-capture drags skip click generation), the next
+ * `pointerdown` — the start of the user's next tap — cleans up the lingering
+ * listener so that tap's click goes through. Fully event-driven, no timer.
+ */
 function suppressNextClick(node: HTMLElement): void {
 	const swallow = (event: Event) => {
 		event.preventDefault();
 		event.stopPropagation();
+		cleanup();
+	};
+	const onNextDown = () => {
+		cleanup();
+	};
+	const cleanup = () => {
 		node.removeEventListener('click', swallow, true);
+		node.removeEventListener('pointerdown', onNextDown);
 	};
 	node.addEventListener('click', swallow, true);
+	node.addEventListener('pointerdown', onNextDown, { once: true });
 }
 
 export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => {
