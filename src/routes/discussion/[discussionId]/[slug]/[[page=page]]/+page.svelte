@@ -268,7 +268,7 @@
 	</div>
 {/snippet}
 
-<DualColumnLayout {sidebar} {user} {t}>
+<DualColumnLayout {sidebar} {user} {t} flush>
 	<ThreadPager list={data.list} activity={data.activity} {t} {user}>
 		<div class="space-y-3">
 			<!-- Discussion Header -->

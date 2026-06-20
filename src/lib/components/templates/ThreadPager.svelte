@@ -144,7 +144,7 @@
 		use:measureViewportWidth
 	>
 		<div class="flex w-[300%] items-start transition-transform duration-200" style={trackStyle}>
-			<section class="w-1/3 shrink-0">
+			<section class="w-1/3 shrink-0 p-3">
 				<DiscussionsPanel
 					discussions={list.discussions}
 					currentPage={list.page}
@@ -154,10 +154,10 @@
 					paginate={false}
 				/>
 			</section>
-			<section class="w-1/3 shrink-0" use:measureThread>
+			<section class="w-1/3 shrink-0 p-3" use:measureThread>
 				{@render children()}
 			</section>
-			<section class="w-1/3 shrink-0">
+			<section class="w-1/3 shrink-0 p-3">
 				<ActivityPanel
 					activities={activity.activities}
 					currentPage={activity.page}

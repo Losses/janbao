@@ -69,7 +69,7 @@
 </script>
 
 {#if isMobile}
-	<DualColumnLayout {t} {user}>
+	<DualColumnLayout {t} {user} flush>
 		{#snippet sidebar()}
 			{#if activeIndex === 0}
 				<DiscussionsSidebar {t} {user} />

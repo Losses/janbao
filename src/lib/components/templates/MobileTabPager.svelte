@@ -196,7 +196,7 @@
 	use:measureViewportWidth
 >
 	<div class="flex w-[300%] items-start transition-transform duration-200" style={trackStyle}>
-		<section class="w-1/3 shrink-0" use:measureTab={0}>
+		<section class="w-1/3 shrink-0 p-3" use:measureTab={0}>
 			<DiscussionsPanel
 				discussions={home.discussions}
 				currentPage={home.page}
@@ -206,7 +206,7 @@
 				paginate={activeIndex === 0}
 			/>
 		</section>
-		<section class="w-1/3 shrink-0" use:measureTab={1}>
+		<section class="w-1/3 shrink-0 p-3" use:measureTab={1}>
 			<ActivityPanel
 				activities={activity.activities}
 				currentPage={activity.page}
@@ -218,7 +218,7 @@
 				paginate={activeIndex === 1}
 			/>
 		</section>
-		<section class="w-1/3 shrink-0" use:measureTab={2}>
+		<section class="w-1/3 shrink-0 p-3" use:measureTab={2}>
 			<MessagesPanel
 				conversations={messages.conversations}
 				currentPage={messages.page}
