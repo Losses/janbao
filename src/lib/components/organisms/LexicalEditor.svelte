@@ -686,11 +686,12 @@
 		: ''} {className}"
 >
 	<Composer {initialConfig}>
+		<EditorInstanceSync update={(e: unknown) => (editorInstance = e)} />
+
 		{#if !features.plainMode}
 			<div class={disabled ? 'opacity-60 pointer-events-none' : ''}>
 				<Toolbar>
 					{#snippet children({ activeEditor })}
-						<EditorInstanceSync {activeEditor} update={(e: unknown) => (editorInstance = e)} />
 						<RichTextToolbar {activeEditor} {features} {disableHeadings} {t} />
 					{/snippet}
 				</Toolbar>

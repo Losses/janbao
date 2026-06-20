@@ -1,14 +1,17 @@
 <script lang="ts">
+	import { getEditor } from 'svelte-lexical';
+
 	type UpdateCallback = (editor: unknown) => void;
 
 	interface Props {
-		activeEditor: unknown;
 		update: UpdateCallback;
 	}
 
-	let { activeEditor, update }: Props = $props();
+	let { update }: Props = $props();
+
+	const editor = getEditor();
 
 	$effect(() => {
-		update(activeEditor);
+		update(editor);
 	});
 </script>
