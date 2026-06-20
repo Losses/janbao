@@ -6,9 +6,9 @@
 	 * an in-progress post survives switching to another tab and back. Has no
 	 * chrome of its own.
 	 *
-	 * NOTE: the offline → /offline/activity redirect lived on the route page; it is
-	 * kept on the desktop activity route. The mobile pager does not auto-redirect
-	 * (the offline reader remains reachable directly).
+	 * Offline: reads cached activity from IndexedDB and renders it (no composer,
+	 * no paginator) - so the Activity tab is the offline feed when offline. The
+	 * desktop activity route additionally redirects to `/offline/activity`.
 	 */
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import ActivityList from '$lib/components/organisms/ActivityList.svelte';
@@ -17,6 +17,7 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
+	import { loadOfflineActivity } from '$lib/offline/queries';
 	import type { ActivityListItem, UserInfoSummary } from '$lib/types/api';
 	import type { MentionedUsersMap } from '$lib/types/mentions';
 	import type { TranslationDict } from '$lib/types/translation';
@@ -56,6 +57,23 @@
 		}
 	});
 
+	// Cached activity is read from IDB when offline. The effect only reads
+	// `online.online`, so flipping it re-runs without looping.
+	let offlineActivities = $state<ActivityListItem[]>([]);
+	let offlineLoading = $state(true);
+	$effect(() => {
+		if (online.online) {
+			offlineActivities = [];
+			offlineLoading = false;
+			return;
+		}
+		offlineLoading = true;
+		void loadOfflineActivity().then((items) => {
+			offlineActivities = items;
+			offlineLoading = false;
+		});
+	});
+
 	function handlePageChange(newPage: number) {
 		goto(`?page=${newPage}`);
 	}
@@ -92,8 +110,8 @@
 </script>
 
 <div class="space-y-3">
-	<!-- Activity Composer -->
-	{#if user}
+	<!-- Activity Composer (online only - can't post offline) -->
+	{#if user && online.online}
 		<div class="space-y-3">
 			{#key editorKey}
 				<LexicalEditor
@@ -125,17 +143,27 @@
 	<!-- Title Banner -->
 	<div class="flex items-center justify-between border-b border-base-300 pb-4">
 		<h1 class="page-title">{t.nav.activity}</h1>
-		{#if paginate && totalPages > 1}
+		{#if online.online && paginate && totalPages > 1}
 			<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
 		{/if}
 	</div>
 
 	<!-- Activities Stream -->
-	{#if !online.online || activities.length === 0}
-		<EmptyState
-			message={!online.online ? t.offline.disabled.title : t.common.noResults}
-			bordered={false}
-		/>
+	{#if !online.online}
+		{#if offlineLoading}
+			<div class="flex items-center justify-center gap-2 py-10 text-sm text-base-content/50">
+				<span class="loading loading-spinner loading-sm"></span>
+				{t.common.loading}
+			</div>
+		{:else if offlineActivities.length === 0}
+			<EmptyState message={t.common.noResults} bordered={false} />
+		{:else}
+			<div class="space-y-0">
+				<ActivityList items={offlineActivities} currentUserId={user?.id} {t} />
+			</div>
+		{/if}
+	{:else if activities.length === 0}
+		<EmptyState message={t.common.noResults} bordered={false} />
 	{:else}
 		<div class="space-y-0">
 			<ActivityList

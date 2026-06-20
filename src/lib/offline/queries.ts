@@ -1,11 +1,38 @@
 import { getOfflineDB } from '$lib/offline/idb';
 import { joinDiscussions, lookupAuthor } from '$lib/offline/join';
 import type { ActivityListItem } from '$lib/types/api';
+import type { DiscussionRowItem } from '$lib/types/discussion-row';
 import type {
 	CachedAuthorProjection,
 	OfflineBookmarkView,
 	OfflineDiscussionView
 } from '$lib/offline/types';
+
+/**
+ * Project a cached discussion into the shape `DiscussionRow` renders, shared by
+ * the `/offline` route and the DiscussionsPanel's offline mode. viewCount is
+ * omitted (not cached) so the views label is hidden; lastReplyAt falls back to
+ * createdAt (the online DAO coalesces the same way) so reply-less threads still
+ * show a timestamp instead of 1970. `unknownUser` substitutes for a missing
+ * author display name.
+ */
+export function mapOfflineDiscussionRow(
+	d: OfflineDiscussionView,
+	unknownUser: string
+): DiscussionRowItem {
+	return {
+		id: d.id,
+		title: d.title,
+		slug: d.slug,
+		authorId: d.authorId,
+		authorDisplayName: d.author.displayName ?? unknownUser,
+		authorUsername: d.author.username ?? 'user',
+		authorAvatarFileId: d.author.avatarFileId,
+		commentCount: d.commentCount,
+		isPinned: d.isPinned,
+		lastReplyAt: (d.lastReplyAt ?? d.createdAt) * 1000
+	};
+}
 
 /**
  * Client-only IDB read helpers for the offline list pages. Each route's page

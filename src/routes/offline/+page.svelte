@@ -5,9 +5,8 @@
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import DiscussionRow from '$lib/components/organisms/DiscussionRow.svelte';
 	import { generateSlug } from '$lib/utils/slug';
-	import { loadOfflineDiscussions } from '$lib/offline/queries';
+	import { loadOfflineDiscussions, mapOfflineDiscussionRow } from '$lib/offline/queries';
 	import type { OfflineDiscussionView } from '$lib/offline/types';
-	import type { DiscussionRowItem } from '$lib/types/discussion-row';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -24,29 +23,7 @@
 		loading = false;
 	});
 
-	function displayName(d: OfflineDiscussionView): string {
-		return d.author.displayName ?? data.t.offline.reader.unknownUser;
-	}
-
-	// Project a cached discussion into the shape DiscussionRow renders. viewCount
-	// is omitted (not cached offline) so the views label is hidden; the row links
-	// to the offline reader instead of the online thread. lastReplyAt falls back
-	// to createdAt (the online DAO coalesces the same way) so threads with no
-	// replies still show a timestamp instead of 1970.
-	function toRow(d: OfflineDiscussionView): DiscussionRowItem {
-		return {
-			id: d.id,
-			title: d.title,
-			slug: d.slug,
-			authorId: d.authorId,
-			authorDisplayName: displayName(d),
-			authorUsername: d.author.username ?? 'user',
-			authorAvatarFileId: d.author.avatarFileId,
-			commentCount: d.commentCount,
-			isPinned: d.isPinned,
-			lastReplyAt: (d.lastReplyAt ?? d.createdAt) * 1000
-		};
-	}
+	const unknownUser = $derived(data.t.offline.reader.unknownUser);
 </script>
 
 <svelte:head>
@@ -93,7 +70,7 @@
 				<div class="divide-y divide-base-300">
 					{#each discussions as d (d.id)}
 						<DiscussionRow
-							discussion={toRow(d)}
+							discussion={mapOfflineDiscussionRow(d, unknownUser)}
 							discussionHref={`/offline/${d.id}`}
 							showBookmark={false}
 							t={data.t}
