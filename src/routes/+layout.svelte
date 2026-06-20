@@ -3,6 +3,8 @@
 	import '../app.css';
 	import type { Snippet } from 'svelte';
 	import { setContext, onMount } from 'svelte';
+	import { page } from '$app/state';
+	import AppShell from '$lib/components/templates/AppShell.svelte';
 	import type { LayoutData } from './$types';
 	import { getBadgesStore } from '$lib/stores/badges.svelte';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
@@ -20,6 +22,17 @@
 
 	const badges = getBadgesStore();
 	const editorPrefs = getEditorPrefsStore();
+
+	// Routes that render their own standalone layout (auth, the compose-message
+	// flows) and must NOT get the persistent app shell (Header / tab bar).
+	function isShellRoute(pathname: string): boolean {
+		return (
+			!pathname.startsWith('/entry') &&
+			pathname !== '/messages/new' &&
+			!pathname.startsWith('/messages/add')
+		);
+	}
+	const showShell = $derived(isShellRoute(page.url.pathname));
 
 	// Publish the resolved app locale ('en' | 'zh-CN') so locale-aware atoms
 	// (e.g. <Date>'s absolute-timestamp tooltip) can format in the user's
@@ -190,4 +203,10 @@
 	<link rel="icon" href={favicon} />
 </svelte:head>
 
-{@render children()}
+{#if showShell}
+	<AppShell t={data.t}>
+		{@render children()}
+	</AppShell>
+{:else}
+	{@render children()}
+{/if}
