@@ -121,7 +121,7 @@
 	// stretch the page and leave blank under a short thread.
 	let threadHeight = $state(0);
 	const viewportStyle = $derived(
-		`touch-action: pan-y pinch-zoom${threadHeight ? `; height: ${threadHeight}px` : ''}`
+		`touch-action: pan-y pinch-zoom; min-height: 100%${threadHeight ? `; height: ${threadHeight}px` : ''}`
 	);
 	const measureThread: Action<HTMLElement> = (node) => {
 		const update = () => {

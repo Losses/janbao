@@ -133,6 +133,21 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 	}
 
 	function onDown(event: PointerEvent): void {
+		// TEMP DIAGNOSTICS: log the touch position vs the detectSwipe node's
+		// bounding rect so we can see WHY the bottom blank doesn't respond.
+		const rect = node.getBoundingClientRect();
+		const t = event.target as Element | null;
+		console.log('[detectSwipe] down', {
+			disabled: params.disabled?.(),
+			clientY: Math.round(event.clientY),
+			nodeTop: Math.round(rect.top),
+			nodeBottom: Math.round(rect.bottom),
+			nodeH: Math.round(rect.height),
+			winH: window.innerHeight,
+			docH: document.documentElement.scrollHeight,
+			tag: t?.tagName,
+			cls: t?.className?.toString().slice(0, 80)
+		});
 		if (event.pointerType === 'mouse' || params.disabled?.()) return;
 		pointerId = event.pointerId;
 		startX = event.clientX;

@@ -38,6 +38,16 @@
 		const sync = () => (isMobile = mq.matches);
 		sync();
 		mq.addEventListener('change', sync);
+		// TEMP DIAGNOSTICS: log the height chain so we can see what's
+		// happening with the bottom blank area + gesture coverage.
+		const main = document.querySelector('main');
+		const viewport = main?.querySelector('.overflow-hidden');
+		console.log('[layout] mount', {
+			mainRect: main?.getBoundingClientRect(),
+			viewportRect: viewport?.getBoundingClientRect(),
+			winH: window.innerHeight,
+			docH: document.documentElement.scrollHeight
+		});
 		return () => mq.removeEventListener('change', sync);
 	});
 
@@ -98,8 +108,12 @@
 	const TAB_SWIPE_COMMIT = 60;
 	const TAB_SWIPE_MAX = 100; // px of finger-follow feedback on inner pages
 	const swipeBaseline = $derived(getSwipeBaseline(page.url.pathname));
-	// ThreadPager owns the gesture on discussion threads; the MobileTabPager owns
-	// it on the tab roots. Disabled elsewhere when there's no tab association.
+	// Disabled on pager/thread routes (the MobileTabPager / ThreadPager viewports
+	// own the gesture there — their `min-height: 100%` fills main so there's no
+	// dead zone). If this were enabled too, both detectSwipe nodes would race to
+	// setPointerCapture on the same bubbled touch, and main (higher in the DOM)
+	// would win → the old translate-content behaviour would override the pager's
+	// 1:1 + reveal. Enabled elsewhere for inner pages with a tab baseline.
 	const swipeDisabled = $derived(
 		isPagerRoute(page.url.pathname) ||
 			page.url.pathname.startsWith('/discussion') ||
@@ -132,7 +146,7 @@
 	}
 </script>
 
-<div class="relative flex min-h-0 flex-col bg-base-200 text-base-content">
+<div class="relative flex min-h-0 flex-1 flex-col bg-base-200 text-base-content">
 	<!-- Main Content Container -->
 	<div class="mx-auto flex w-full max-w-[960px] flex-1 flex-col px-0 pb-6 md:px-6">
 		<div
