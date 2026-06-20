@@ -19,10 +19,12 @@
 	 * the URL) so there is no race mid-transition. The paginator is shown only on
 	 * the active panel.
 	 */
+	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import type { Action } from 'svelte/action';
 	import { detectSwipe } from '$lib/actions/swipe';
+	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
@@ -51,6 +53,24 @@
 	// null at rest (CSS transition snaps to activeIndex); a live px offset while a
 	// pointer is dragging, applied in the transform so the track tracks 1:1.
 	let dragOffset = $state<number | null>(null);
+
+	// Publish drag progress to the shared store so MobileTabBar's indicator
+	// tracks the finger. fractionalIndex = active tab + fractional drag offset
+	// (in panel widths); dragging drops the bar's CSS transition for 1:1 follow.
+	const pager = getMobilePagerStore();
+	let viewportWidth = $state(0);
+	$effect(() => {
+		pager.set({
+			fractionalIndex: activeIndex - (dragOffset ?? 0) / (viewportWidth || 1),
+			dragging: dragOffset !== null,
+			active: true
+		});
+	});
+	onMount(() => {
+		// Mark the pager as the driver; the tab bar falls back to the URL until then.
+		pager.set({ fractionalIndex: activeIndex, dragging: false, active: true });
+		return () => pager.set({ fractionalIndex: 0, dragging: false, active: false });
+	});
 
 	// Sync from the URL for deep links + browser back/forward. Writes activeIndex
 	// only (which this effect does not read), so no loop. A programmatic swipe
@@ -151,12 +171,24 @@
 		ro.observe(node);
 		return { destroy: () => ro.disconnect() };
 	};
+	// The viewport's width = one panel width, used to normalise dragOffset into a
+	// fractional tab offset for the indicator.
+	const measureViewportWidth: Action<HTMLElement> = (node) => {
+		const update = () => {
+			viewportWidth = node.clientWidth;
+		};
+		update();
+		const ro = new ResizeObserver(update);
+		ro.observe(node);
+		return { destroy: () => ro.disconnect() };
+	};
 </script>
 
 <div
 	class="overflow-x-clip"
 	style={viewportStyle}
 	use:detectSwipe={{ onMove: swipeMove, onEnd: swipeEnd }}
+	use:measureViewportWidth
 >
 	<div class="flex w-[300%] items-start transition-transform duration-200" style={trackStyle}>
 		<section class="w-1/3 shrink-0" use:measureTab={0}>
