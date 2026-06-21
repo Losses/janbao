@@ -162,28 +162,6 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 	}
 
 	function onDown(event: PointerEvent): void {
-		// TEMP DIAGNOSTICS
-		const rect = node.getBoundingClientRect();
-		const t = event.target as Element | null;
-		const child = node.firstElementChild as Element | null;
-		const childRect = child?.getBoundingClientRect();
-		const viewport = node.querySelector('.overflow-hidden');
-		const viewportRect = viewport?.getBoundingClientRect();
-		console.log('[detectSwipe] down', {
-			disabled: params.disabled?.(),
-			clientY: Math.round(event.clientY),
-			nodeTag: node.tagName,
-			nodeH: Math.round(rect.height),
-			nodeBottom: Math.round(rect.bottom),
-			childTag: child?.tagName,
-			childH: childRect ? Math.round(childRect.height) : null,
-			childBottom: childRect ? Math.round(childRect.bottom) : null,
-			viewportExists: !!viewport,
-			viewportH: viewportRect ? Math.round(viewportRect.height) : null,
-			viewportBottom: viewportRect ? Math.round(viewportRect.bottom) : null,
-			winH: window.innerHeight,
-			targetTag: t?.tagName
-		});
 		if (event.pointerType === 'mouse' || params.disabled?.()) return;
 		pointerId = event.pointerId;
 		startX = event.clientX;
