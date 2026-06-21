@@ -25,19 +25,30 @@
 	const badges = getBadgesStore();
 	const editorPrefs = getEditorPrefsStore();
 
-	// Freeze the scroll-chrome header for navigations where SvelteKit's scroll
-	// would otherwise make it twitch: entering a hash-anchored thread (top→hash)
-	// and swiping back from a thread to the list (top→restored scroll). The
-	// destination unfreezes once its scroll is set (thread page for enter,
-	// (tabs) layout for swipe-back); a fallback timer covers the rest.
+	// Freeze (and on mobile hash-enter, pin visible) the scroll-chrome header for
+	// navigations where SvelteKit's scroll would otherwise make it twitch:
+	// entering a hash-anchored thread (top→hash) and swiping back from a thread
+	// to the list (top→restored scroll). The destination unfreezes once its scroll
+	// is set (thread page for enter, (tabs) layout for swipe-back); a fallback
+	// timer covers the rest.
+	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	let navFreezeTimer = 0;
 	beforeNavigate(({ to, from }) => {
 		const threadEnter = to?.url.hash && to.url.pathname.startsWith('/discussion');
 		const swipeBack = from?.url.pathname.startsWith('/discussion') && to?.url.pathname === '/';
 		if (threadEnter || swipeBack) {
-			getScrollChromeStore().freeze();
+			const store = getScrollChromeStore();
+			// Mobile hash-enter lands at the anchor via an instant programmatic
+			// scroll (see discussion +page.svelte); pin the header visible first so
+			// it stays on screen instead of hide-on-scroll reacting to that scroll.
+			// Desktop's header is in-flow and not driven by the store's translateY,
+			// so it is left untouched.
+			if (threadEnter && window.matchMedia(MOBILE_BREAKPOINT).matches) {
+				store.show();
+			}
+			store.freeze();
 			window.clearTimeout(navFreezeTimer);
-			navFreezeTimer = window.setTimeout(() => getScrollChromeStore().unfreeze(), 1200);
+			navFreezeTimer = window.setTimeout(() => store.unfreeze(), 1200);
 		}
 	});
 

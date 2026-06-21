@@ -4,6 +4,7 @@
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
 	import type { PageUrlBuilder } from '$lib/types/tabs';
+	import type { VoidHandler } from '$lib/types/handlers';
 	import ActiveUsersWall from '$lib/components/molecules/ActiveUsersWall.svelte';
 	import CategoryListWidget from '$lib/components/molecules/CategoryListWidget.svelte';
 	import DiscussionMetadata from '$lib/components/molecules/DiscussionMetadata.svelte';
@@ -170,6 +171,8 @@
 		goto(`/discussion/${discussion.id}/${discussion.slug}/p${newPage}`);
 	}
 
+	const MOBILE_BREAKPOINT = '(max-width: 767px)';
+
 	/**
 	 * Bring an element to the top of the viewport by scrolling the WINDOW only -
 	 * never via Element.scrollIntoView. The thread lives inside the ThreadPager
@@ -179,14 +182,14 @@
 	 * target with everything above clipped. Offset by the sticky header height so
 	 * the target lands just below the app bar.
 	 */
-	function scrollToElement(el: HTMLElement): void {
+	function scrollToElement(el: HTMLElement, behavior: ScrollBehavior = 'smooth'): void {
 		if (typeof window === 'undefined') return;
 		const headerOffset =
 			parseInt(getComputedStyle(document.documentElement).getPropertyValue('--header-height')) || 0;
 		const absoluteTop = el.getBoundingClientRect().top + window.scrollY;
 		window.scrollTo({
 			top: Math.max(0, absoluteTop - headerOffset),
-			behavior: 'smooth'
+			behavior
 		});
 	}
 
@@ -225,6 +228,69 @@
 			};
 			requestAnimationFrame(tick);
 		});
+	}
+
+	/**
+	 * Mobile-only anchor landing. Jumps to the anchor INSTANTLY (never smoothly)
+	 * the moment it is measurable and re-jumps each rAF while the layout settles
+	 * (images/fonts reflow), so the page shows the anchor from the first frame
+	 * instead of flashing the thread top, and never animates a scroll. The header
+	 * is frozen + pinned visible for the whole navigation (see root +layout.svelte),
+	 * so these programmatic scrolls cause no hide-on-scroll twitch. Returns a
+	 * cancel cleanup so a hash change mid-flight aborts the loop without
+	 * unfreezing - the next landing owns the freeze.
+	 */
+	function landAtAnchor(targetId: string): VoidHandler {
+		const headerOffset =
+			parseInt(getComputedStyle(document.documentElement).getPropertyValue('--header-height')) || 0;
+		let frame = 0;
+		let prevTargetY = 0;
+		let hasScrolled = false;
+		let stableFrames = 0;
+		let rafId = 0;
+		let done = false;
+
+		function finish(): void {
+			if (done) return;
+			done = true;
+			if (rafId) cancelAnimationFrame(rafId);
+			const store = getScrollChromeStore();
+			store.unfreeze();
+			store.show();
+		}
+
+		function tick(): void {
+			frame += 1;
+			const el = document.getElementById(targetId) || document.getElementById(`reply-${targetId}`);
+			if (el) {
+				const targetY = Math.max(0, el.getBoundingClientRect().top + window.scrollY - headerOffset);
+				if (!hasScrolled || Math.abs(targetY - prevTargetY) > 1) {
+					window.scrollTo({ top: targetY, behavior: 'auto' });
+					hasScrolled = true;
+					stableFrames = 0;
+				} else {
+					stableFrames += 1;
+				}
+				prevTargetY = targetY;
+				if (stableFrames >= 3) {
+					finish();
+					return;
+				}
+			}
+			if (frame >= 40) {
+				finish();
+				return;
+			}
+			rafId = requestAnimationFrame(tick);
+		}
+
+		rafId = requestAnimationFrame(tick);
+
+		return () => {
+			if (done) return;
+			done = true;
+			if (rafId) cancelAnimationFrame(rafId);
+		};
 	}
 
 	function quickReply(username: string, displayName: string) {
@@ -273,38 +339,40 @@
 		}
 	});
 
-	// 2. Navigation Anchor Smooth Scroll. Uses scrollToElement (window-only), not
-	// scrollIntoView: the ThreadPager viewport is overflow:hidden, so
-	// scrollIntoView would scroll it internally and lock the page on the anchor.
-	// Deferred until the layout is stable (waitForStableLayout) so it does not
-	// chase a moving target mid-enter and twitch the header.
+	// 2. Navigation Anchor Scroll. Uses scrollToElement / landAtAnchor (both
+	// window-only), never scrollIntoView: the ThreadPager viewport is
+	// overflow:hidden, so scrollIntoView would scroll it internally and lock the
+	// page on the anchor. Mobile jumps to the anchor instantly and tracks reflow
+	// (landAtAnchor); desktop waits for a stable layout then smooth-scrolls.
 	let lastScrolledHash: string | null = null;
 	$effect(() => {
 		const hash = page.url.hash;
-		if (hash) {
-			if (hash !== lastScrolledHash) {
-				const targetId = hash.startsWith('#') ? hash.substring(1) : hash;
-				// Match either exactly targetId or reply-targetId
-				const element =
-					document.getElementById(targetId) || document.getElementById(`reply-${targetId}`);
-				if (element) {
-					lastScrolledHash = hash;
-					let cancelled = false;
-					void waitForStableLayout().then(() => {
-						if (cancelled) return;
-						// Resume header reaction (frozen on nav) right before the clean
-						// scroll so it hides smoothly instead of twitching on the nav scroll.
-						getScrollChromeStore().unfreeze();
-						scrollToElement(element);
-					});
-					return () => {
-						cancelled = true;
-					};
-				}
-			}
-		} else {
+		if (!hash) {
 			lastScrolledHash = null;
+			return;
 		}
+		if (hash === lastScrolledHash) return;
+		const targetId = hash.startsWith('#') ? hash.substring(1) : hash;
+		// Match either exactly targetId or reply-targetId
+		if (window.matchMedia(MOBILE_BREAKPOINT).matches) {
+			lastScrolledHash = hash;
+			return landAtAnchor(targetId);
+		}
+		const element =
+			document.getElementById(targetId) || document.getElementById(`reply-${targetId}`);
+		if (!element) return;
+		lastScrolledHash = hash;
+		let cancelled = false;
+		void waitForStableLayout().then(() => {
+			if (cancelled) return;
+			// Resume header reaction (frozen on nav) right before the clean
+			// scroll so it hides smoothly instead of twitching on the nav scroll.
+			getScrollChromeStore().unfreeze();
+			scrollToElement(element);
+		});
+		return () => {
+			cancelled = true;
+		};
 	});
 </script>
 
@@ -636,7 +704,14 @@
 												page <= 1
 													? `/discussion/${discussion.id}/${discussion.slug}#reply-${replyId}`
 													: `/discussion/${discussion.id}/${discussion.slug}/p${page}#reply-${replyId}`;
-											goto(url);
+											// Mobile: let landAtAnchor own the scroll (no SvelteKit top-scroll
+											// competing during the reply render window). Desktop unchanged.
+											goto(
+												url,
+												window.matchMedia(MOBILE_BREAKPOINT).matches
+													? { noScroll: true }
+													: undefined
+											);
 										}
 									} else if (result.type === 'failure') {
 										alert(result.data?.error || t.discussion.createReplyFailed);
