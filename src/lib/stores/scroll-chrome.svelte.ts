@@ -13,11 +13,13 @@
  */
 import type { VoidHandler } from '$lib/types/handlers';
 
+type SetHeaderHeightHandler = (height: number) => void;
+
 interface ScrollChromeStore {
 	readonly hidden: boolean;
 	readonly translateY: number;
 	readonly scrolling: boolean;
-	setHeaderHeight: (height: number) => void;
+	setHeaderHeight: SetHeaderHeightHandler;
 	start: VoidHandler;
 	show: VoidHandler;
 }
