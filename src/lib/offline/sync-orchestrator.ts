@@ -21,6 +21,7 @@ import type {
 	SyncCursors,
 	SyncUserDTO
 } from '$lib/types/api';
+import { isRealUserId } from '$lib/utils/user';
 
 const PAGE_LIMIT = 100;
 // Cap pages per run so a single reconnect never loops unboundedly through a huge
@@ -538,7 +539,7 @@ async function backfillMissingUsers(): Promise<void> {
 	}
 	const cachedUserIds = new Set((await db.users.toArray()).map((u) => u.id));
 	const missing = [...authorIds].filter(
-		(id) => !cachedUserIds.has(id) && Number.isFinite(id) && id > 0
+		(id) => !cachedUserIds.has(id) && isRealUserId(id)
 	);
 	if (missing.length === 0) return;
 

@@ -14,6 +14,7 @@ import { indexMessage } from '$lib/server/search/fts';
 import type { RequestHandler } from './$types';
 import type { MessageCreateBody } from '$lib/types/api';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
+import { isRealUserId } from '$lib/utils/user';
 import { enforcePostThrottle, tooManyRequests } from '$lib/server/throttle';
 import { deliverPushForMessage } from '$lib/server/push/deliver';
 
@@ -40,7 +41,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	const recipientIds = Array.isArray(body.recipientIds)
 		? [
 				...new Set(
-					body.recipientIds.filter((id) => typeof id === 'number' && id > 0 && id !== user.id)
+					body.recipientIds.filter((id) => isRealUserId(id) && id !== user.id)
 				)
 			]
 		: [];

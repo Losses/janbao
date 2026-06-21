@@ -9,6 +9,7 @@ import type {
 	SyncTombstoneDTO,
 	SyncUserDTO
 } from '$lib/types/api';
+import { isRealUserId } from '$lib/utils/user';
 
 interface DeltaQuery {
 	sinceTs: number;
@@ -198,7 +199,7 @@ export async function getReplyTombstones(
 const MAX_USER_BATCH = 500;
 
 export async function getCachedUsers(db: D1Db, userIds: number[]): Promise<SyncUserDTO[]> {
-	const unique = Array.from(new Set(userIds)).filter((id) => Number.isFinite(id) && id > 0);
+	const unique = Array.from(new Set(userIds)).filter((id) => isRealUserId(id));
 	if (unique.length === 0) return [];
 	const capped = unique.slice(0, MAX_USER_BATCH);
 	const rows = await db
