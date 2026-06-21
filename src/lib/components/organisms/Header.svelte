@@ -34,9 +34,18 @@
 	let headerEl: HTMLElement | null = $state(null);
 
 	$effect(() => {
-		if (headerEl) {
-			scrollChrome.setHeaderHeight(headerEl.offsetHeight);
-		}
+		if (!headerEl) return;
+
+		const observer = new ResizeObserver((entries) => {
+			for (const entry of entries) {
+				const height = entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height;
+				scrollChrome.setHeaderHeight(height);
+				document.documentElement.style.setProperty('--header-height', `${height}px`);
+			}
+		});
+
+		observer.observe(headerEl);
+		return () => observer.disconnect();
 	});
 </script>
 
