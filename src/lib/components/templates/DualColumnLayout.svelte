@@ -355,7 +355,7 @@
 <style>
 	@media (min-width: 768px) {
 		.slogan {
-			opacity: 0.05;
+			opacity: 0.02;
 			filter: grayscale(90%);
 			transition:
 				opacity 300ms,
