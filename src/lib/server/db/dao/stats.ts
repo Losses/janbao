@@ -45,6 +45,37 @@ export interface Contributor {
 	timeline: ContributorTimelinePoint[];
 }
 
+export interface IntervalBounds {
+	start: number;
+	end: number;
+}
+
+export interface StatsOverview {
+	timeline: TimelineDataPoint[];
+	contributors: Contributor[];
+	startSec: number;
+	endSec: number;
+}
+
+interface UserLookupRow {
+	id: number;
+	username: string;
+	displayName: string;
+	avatarFileId: string | null;
+}
+
+interface AuthorAggregate {
+	discussionsCount: number;
+	repliesCount: number;
+	monthly: Map<string, number>;
+}
+
+interface RankedAuthor {
+	id: number;
+	aggregate: AuthorAggregate;
+	total: number;
+}
+
 export async function getTimelineStats(
 	db: D1Db,
 	interval: 'year' | 'month' | 'day',
@@ -211,6 +242,174 @@ export async function getContributorsStats(
 			timeline
 		};
 	});
+}
+
+/**
+ * Convert a stats range selector into a unix-seconds lower bound.
+ * 'all' (and any unrecognized value) returns undefined = unbounded.
+ */
+export function rangeToStartSec(range: string): number | undefined {
+	const now = new Date();
+	const y = now.getUTCFullYear();
+	const m = now.getUTCMonth();
+	const d = now.getUTCDate();
+	switch (range) {
+		case '2y':
+			return Math.floor(Date.UTC(y - 2, m, d) / 1000);
+		case '1y':
+			return Math.floor(Date.UTC(y - 1, m, d) / 1000);
+		case '6m':
+			return Math.floor(Date.UTC(y, m - 6, d) / 1000);
+		case '3m':
+			return Math.floor(Date.UTC(y, m - 3, d) / 1000);
+		case 'current_month':
+			return Math.floor(Date.UTC(y, m, 1) / 1000);
+		case 'all':
+		default:
+			return undefined;
+	}
+}
+
+/** Inclusive unix-second bounds of the interval bucket containing dateStr. */
+export function getIntervalBounds(dateStr: string, interval: string): IntervalBounds {
+	if (interval === 'day') {
+		const start = Math.floor(Date.parse(dateStr + 'T00:00:00Z') / 1000);
+		const end = Math.floor(Date.parse(dateStr + 'T23:59:59Z') / 1000);
+		return { start, end };
+	} else if (interval === 'month') {
+		const [y, m] = dateStr.split('-').map(Number);
+		const start = Math.floor(Date.UTC(y, m - 1, 1) / 1000);
+		const end = Math.floor(Date.UTC(y, m, 1) / 1000) - 1;
+		return { start, end };
+	} else {
+		const y = Number(dateStr);
+		const start = Math.floor(Date.UTC(y, 0, 1) / 1000);
+		const end = Math.floor(Date.UTC(y + 1, 0, 1) / 1000) - 1;
+		return { start, end };
+	}
+}
+
+function mapToStatRows(counts: Map<string, number>): DBStatRow[] {
+	return [...counts.entries()].map(([dateStr, count]) => ({ dateStr, count }));
+}
+
+/**
+ * Single-pass admin overview: timeline + top-20 contributors and their
+ * per-interval timelines, derived from one grouped scan per table.
+ *
+ * Replaces the previous 3-round flow (timeline -> top -> contributor timeline)
+ * which scanned the replies table three times for the default range=all view.
+ * rangeStartSec ?? 0 keeps a single query shape; created_at >= 0 matches every
+ * row while still letting the planner use the created_at index.
+ */
+export async function getStatsOverview(
+	db: D1Db,
+	interval: 'year' | 'month' | 'day',
+	rangeStartSec?: number
+): Promise<StatsOverview> {
+	const format = interval === 'year' ? '%Y' : interval === 'month' ? '%Y-%m' : '%Y-%m-%d';
+	const lowerBound = rangeStartSec ?? 0;
+
+	const discussionsQuery = sql`
+		SELECT
+			author_id AS authorId,
+			strftime(${format}, datetime(created_at, 'unixepoch')) AS dateStr,
+			COUNT(*) AS count
+		FROM ${discussions}
+		WHERE deleted_at IS NULL AND created_at >= ${lowerBound}
+		GROUP BY author_id, dateStr
+	`;
+
+	const repliesQuery = sql`
+		SELECT
+			author_id AS authorId,
+			strftime(${format}, datetime(created_at, 'unixepoch')) AS dateStr,
+			COUNT(*) AS count
+		FROM ${replies}
+		WHERE deleted_at IS NULL AND created_at >= ${lowerBound}
+		GROUP BY author_id, dateStr
+	`;
+
+	const [dRows, rRows] = await Promise.all([
+		db.all<DBAuthorTimelineRow>(discussionsQuery),
+		db.all<DBAuthorTimelineRow>(repliesQuery)
+	]);
+
+	const discussionsByDate = new Map<string, number>();
+	const repliesByDate = new Map<string, number>();
+	const authors = new Map<number, AuthorAggregate>();
+	const ensureAuthor = (id: number): AuthorAggregate => {
+		let aggregate = authors.get(id);
+		if (!aggregate) {
+			aggregate = { discussionsCount: 0, repliesCount: 0, monthly: new Map() };
+			authors.set(id, aggregate);
+		}
+		return aggregate;
+	};
+
+	for (const row of dRows) {
+		const count = Number(row.count);
+		discussionsByDate.set(row.dateStr, (discussionsByDate.get(row.dateStr) ?? 0) + count);
+		const aggregate = ensureAuthor(Number(row.authorId));
+		aggregate.discussionsCount += count;
+		aggregate.monthly.set(row.dateStr, (aggregate.monthly.get(row.dateStr) ?? 0) + count);
+	}
+	for (const row of rRows) {
+		const count = Number(row.count);
+		repliesByDate.set(row.dateStr, (repliesByDate.get(row.dateStr) ?? 0) + count);
+		const aggregate = ensureAuthor(Number(row.authorId));
+		aggregate.repliesCount += count;
+		aggregate.monthly.set(row.dateStr, (aggregate.monthly.get(row.dateStr) ?? 0) + count);
+	}
+
+	const timeline = fillTimeline(
+		mapToStatRows(discussionsByDate),
+		mapToStatRows(repliesByDate),
+		interval
+	);
+
+	if (timeline.length === 0) {
+		return { timeline: [], contributors: [], startSec: 0, endSec: 0 };
+	}
+
+	const startSec = getIntervalBounds(timeline[0].date, interval).start;
+	const endSec = getIntervalBounds(timeline[timeline.length - 1].date, interval).end;
+	const dateKeys = generateDateKeys(startSec, endSec, interval);
+
+	const ranked: RankedAuthor[] = [...authors.entries()]
+		.map(([id, aggregate]) => ({
+			id,
+			aggregate,
+			total: aggregate.discussionsCount + aggregate.repliesCount
+		}))
+		.sort((a, b) => b.total - a.total)
+		.slice(0, 20);
+
+	const userRows =
+		ranked.length > 0
+			? await db.all<UserLookupRow>(sql`
+					SELECT id, username, display_name AS displayName, avatar_file_id AS avatarFileId
+					FROM ${users}
+					WHERE id IN (${sql.raw(ranked.map((r) => r.id).join(','))})
+				`)
+			: [];
+	const userById = new Map<number, UserLookupRow>(userRows.map((u) => [Number(u.id), u]));
+
+	const contributors: Contributor[] = ranked.map(({ id, aggregate, total }) => {
+		const user = userById.get(id);
+		return {
+			id,
+			username: String(user?.username ?? ''),
+			displayName: String(user?.displayName ?? ''),
+			avatarFileId: user?.avatarFileId ? String(user.avatarFileId) : null,
+			discussionsCount: aggregate.discussionsCount,
+			repliesCount: aggregate.repliesCount,
+			totalCount: total,
+			timeline: dateKeys.map((key) => ({ date: key, count: aggregate.monthly.get(key) ?? 0 }))
+		};
+	});
+
+	return { timeline, contributors, startSec, endSec };
 }
 
 function fillTimeline(
