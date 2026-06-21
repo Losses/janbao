@@ -354,12 +354,12 @@
 
 <style>
 	.slogan {
-		opacity: 0;
-		filter: grayscale(80%);
+		opacity: 0.15;
+		filter: grayscale(90%);
 		transition: opacity 300ms, filter 300ms;
 	}
 
-	.sidebar:hover .slogan {
+	.slogan:hover {
 		opacity: 1;
 		filter: grayscale(0%);
 	}
