@@ -30,6 +30,7 @@
 	import type { Action } from 'svelte/action';
 	import { detectSwipe } from '$lib/actions/swipe';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
+	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
@@ -72,26 +73,8 @@
 		});
 	});
 	onMount(() => {
-		// Mark the pager as the driver; the tab bar falls back to the URL until then.
 		pager.set({ fractionalIndex: activeIndex, dragging: false, active: true });
-
-		// Track scroll for neighbor vertical alignment.
-		const onScroll = () => {
-			scrollY = window.scrollY;
-			console.log('[MobileTabPager] scroll', {
-				scrollY: Math.round(scrollY),
-				viewportDocTop: Math.round(viewportDocTop),
-				offset: Math.round(Math.max(0, scrollY - viewportDocTop))
-			});
-		};
-		window.addEventListener('scroll', onScroll, { passive: true });
-		scrollY = window.scrollY;
-		console.log('[MobileTabPager] onMount', { scrollY, viewportDocTop, activeIndex });
-
-		return () => {
-			window.removeEventListener('scroll', onScroll);
-			pager.set({ fractionalIndex: 0, dragging: false, active: false });
-		};
+		return () => pager.set({ fractionalIndex: 0, dragging: false, active: false });
 	});
 
 	// Sync from the URL for deep links + browser back/forward. Writes activeIndex
@@ -117,9 +100,14 @@
 	}
 	function swipeMove(deltaX: number): void {
 		dragOffset = follow(deltaX);
+		getScrollChromeStore().show();
 	}
 	function switchTo(index: number): void {
 		activeIndex = index;
+		// Show the header so it animates down in sync with the snap — the
+		// neighbor's translateY goes from scrollY→0 while the header fills
+		// the gap, giving a coordinated slide instead of a content jump.
+		getScrollChromeStore().show();
 		void goto(MOBILE_TABS[index].href);
 	}
 	function swipeEnd(deltaX: number): void {
@@ -202,19 +190,33 @@
 	// The viewport's width = one panel width, used to normalise dragOffset into a
 	// fractional tab offset for the indicator.
 	const measureViewportWidth: Action<HTMLElement> = (node) => {
-		const update = () => {
+		let scrollRaf = 0;
+		const updateAll = () => {
+			scrollRaf = 0;
 			viewportWidth = node.clientWidth;
-			viewportDocTop = node.getBoundingClientRect().top + window.scrollY;
-			console.log('[MobileTabPager] measureViewportWidth', {
-				viewportDocTop: Math.round(viewportDocTop),
+			neighborOffset = window.scrollY;
+			console.log('[MobileTabPager] scroll update', {
 				scrollY: Math.round(window.scrollY),
-				neighborOffset: Math.round(Math.max(0, window.scrollY - viewportDocTop))
+				neighborOffset: Math.round(neighborOffset),
+				activeIndex
 			});
 		};
-		update();
-		const ro = new ResizeObserver(update);
+		const onScroll = () => {
+			if (!scrollRaf) scrollRaf = requestAnimationFrame(updateAll);
+		};
+		updateAll();
+		window.addEventListener('scroll', onScroll, { passive: true });
+		const ro = new ResizeObserver(() => {
+			viewportWidth = node.clientWidth;
+		});
 		ro.observe(node);
-		return { destroy: () => ro.disconnect() };
+		return {
+			destroy: () => {
+				ro.disconnect();
+				window.removeEventListener('scroll', onScroll);
+				if (scrollRaf) cancelAnimationFrame(scrollRaf);
+			}
+		};
 	};
 </script>
 

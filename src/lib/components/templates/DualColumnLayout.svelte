@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { getDrawerStore } from '$lib/stores/drawer.svelte';
+	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { captureSwipe, detectSwipe } from '$lib/actions/swipe';
 	import { MOBILE_TABS, getSwipeBaseline, isPagerRoute } from '$lib/utils/mobile-tabs';
 	import type { UserInfoSummary } from '$lib/types/api';
@@ -135,6 +136,7 @@
 	);
 	function tabSwipeMove(deltaX: number): void {
 		swipeOffset = swipeFollow(deltaX);
+		getScrollChromeStore().show();
 	}
 	function tabSwipeEnd(deltaX: number): void {
 		const last = MOBILE_TABS.length - 1;

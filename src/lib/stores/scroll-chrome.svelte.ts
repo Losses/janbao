@@ -16,6 +16,7 @@ import type { VoidHandler } from '$lib/types/handlers';
 interface ScrollChromeStore {
 	readonly hidden: boolean;
 	start: VoidHandler;
+	show: VoidHandler;
 }
 
 const MOBILE_BREAKPOINT = '(max-width: 767px)';
@@ -72,11 +73,16 @@ function start(): void {
 	mobileMq.addEventListener('change', onBreakpoint);
 }
 
+function show(): void {
+	hidden = false;
+}
+
 export function getScrollChromeStore(): ScrollChromeStore {
 	return {
 		get hidden() {
 			return hidden;
 		},
-		start
+		start,
+		show
 	};
 }

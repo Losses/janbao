@@ -9,6 +9,7 @@
 	import type { Action } from 'svelte/action';
 	import { detectSwipe } from '$lib/actions/swipe';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
+	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 
 	interface ThreadPagerProps {
 		left?: Snippet;
@@ -43,10 +44,12 @@
 	let viewportWidth = $state(0);
 	let threadHeight = $state(0);
 
-	// neighborOffset = how far the page is scrolled past the viewport's top.
-	// Applied as translateY on neighbor panels so their Y=0 aligns with the
-	// visible area top — matching the new page at scrollY=0 after navigation.
-	const neighborOffset = $derived(Math.max(0, scrollY - viewportDocTop));
+	// neighborOffset = scrollY (accounts for header height automatically).
+	// After navigation (scrollY=0, header visible) content is at screen-Y =
+	// headerHeight + sectionPadding. During the swipe (scrolled, header hidden)
+	// scrollY includes the header offset, so the neighbor content lands at the
+	// same screen-Y. Using scrollY directly (not scrollY - viewportDocTop).
+	const neighborOffset = $derived(scrollY);
 
 	const trackStyle = $derived(
 		dragOffset !== null
@@ -64,6 +67,7 @@
 
 	function swipeMove(deltaX: number): void {
 		dragOffset = deltaX;
+		getScrollChromeStore().show();
 	}
 	function cancelPendingNav(): void {
 		pendingNav = null;
@@ -72,6 +76,12 @@
 	function swipeEnd(deltaX: number): void {
 		const leftIdx = left ? 0 : -1;
 		const rightIdx = right ? panelCount - 1 : -1;
+		const committed =
+			(deltaX >= SWIPE_COMMIT && leftIdx >= 0 && leftHref) ||
+			(deltaX <= -SWIPE_COMMIT && rightIdx >= 0 && rightHref);
+		if (committed) {
+			getScrollChromeStore().show();
+		}
 		if (deltaX >= SWIPE_COMMIT && leftIdx >= 0 && leftHref) {
 			snapIndex = leftIdx;
 			pendingNav = leftHref;
