@@ -93,7 +93,7 @@
 		<!-- Online: server data -->
 		<!-- Top Paginator -->
 		{#if paginate && totalPages > 1}
-			<div class="flex justify-end test-top-paginator">
+			<div class="flex justify-end">
 				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
 			</div>
 		{/if}

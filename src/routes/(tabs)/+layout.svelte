@@ -39,11 +39,6 @@
 	let isMobile = $state(data.isMobile ?? false);
 	onMount(() => {
 		const mq = window.matchMedia(MOBILE_BREAKPOINT);
-		console.log('[+layout] mount', {
-			'data.isMobile': data.isMobile,
-			'isMobile (initial)': isMobile,
-			'mediaQuery matches': mq.matches
-		});
 		const sync = () => (isMobile = mq.matches);
 		sync();
 		mq.addEventListener('change', sync);

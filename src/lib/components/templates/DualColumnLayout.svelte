@@ -39,16 +39,6 @@
 		const sync = () => (isMobile = mq.matches);
 		sync();
 		mq.addEventListener('change', sync);
-		// TEMP DIAGNOSTICS: log the height chain so we can see what's
-		// happening with the bottom blank area + gesture coverage.
-		const main = document.querySelector('main');
-		const viewport = main?.querySelector('.overflow-hidden');
-		console.log('[layout] mount', {
-			mainRect: main?.getBoundingClientRect(),
-			viewportRect: viewport?.getBoundingClientRect(),
-			winH: window.innerHeight,
-			docH: document.documentElement.scrollHeight
-		});
 		return () => mq.removeEventListener('change', sync);
 	});
 
