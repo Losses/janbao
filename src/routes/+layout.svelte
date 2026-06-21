@@ -23,14 +23,10 @@
 	const badges = getBadgesStore();
 	const editorPrefs = getEditorPrefsStore();
 
-	// Routes that render their own standalone layout (auth, the compose-message
-	// flows) and must NOT get the persistent app shell (Header / tab bar).
+	// Auth routes render their own standalone layout and must NOT get the
+	// persistent app shell (Header / tab bar).
 	function isShellRoute(pathname: string): boolean {
-		return (
-			!pathname.startsWith('/entry') &&
-			pathname !== '/messages/new' &&
-			!pathname.startsWith('/messages/add')
-		);
+		return !pathname.startsWith('/entry');
 	}
 	const showShell = $derived(isShellRoute(page.url.pathname));
 
