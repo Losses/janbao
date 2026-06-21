@@ -27,14 +27,16 @@
 	const xTicks = $derived.by(() => {
 		const rawData = $data;
 		if (rawData.length === 0) return [];
-		const count = Math.min(rawData.length, 6);
-		const step = Math.max(1, Math.floor(rawData.length / count));
-		const ticks = [];
-		for (let i = 0; i < rawData.length; i += step) {
-			ticks.push(rawData[i].date);
+
+		const targetCount = 6;
+		if (rawData.length <= targetCount) {
+			return rawData.map((d) => d.date);
 		}
-		if (ticks[ticks.length - 1] !== rawData[rawData.length - 1].date) {
-			ticks.push(rawData[rawData.length - 1].date);
+
+		const ticks = [];
+		for (let i = 0; i < targetCount; i++) {
+			const idx = Math.round((i / (targetCount - 1)) * (rawData.length - 1));
+			ticks.push(rawData[idx].date);
 		}
 		return ticks;
 	});
@@ -77,14 +79,22 @@
 
 	<!-- X Axis Tick Marks & Labels -->
 	<g class="x-axis">
-		{#each xTicks as tick (tick)}
+		{#each xTicks as tick, idx (tick)}
 			{@const x = $xScale(tick)}
 			{#if !Number.isNaN(x)}
-				<line x1={x} y1={$height} x2={x} y2={$height + 4} class="stroke-base-content/20" />
+				{@const xCenter = x + $xScale.bandwidth() / 2}
+				{@const textAnchor = idx === 0 ? 'start' : idx === xTicks.length - 1 ? 'end' : 'middle'}
+				<line
+					x1={xCenter}
+					y1={$height}
+					x2={xCenter}
+					y2={$height + 4}
+					class="stroke-base-content/20"
+				/>
 				<text
-					{x}
+					x={xCenter}
 					y={$height + 16}
-					text-anchor="middle"
+					text-anchor={textAnchor}
 					class="text-[10px] fill-base-content/60 font-mono select-none"
 				>
 					{tick}

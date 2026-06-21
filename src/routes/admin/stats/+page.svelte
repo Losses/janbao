@@ -4,14 +4,11 @@
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import AdminSidebar from '$lib/components/molecules/AdminSidebar.svelte';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
+	import ContributorLineChart from './ContributorLineChart.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
 	import type { PageData } from './$types';
-	import type {
-		Contributor,
-		TimelineDataPoint,
-		ContributorTimelinePoint
-	} from '$lib/server/db/dao/stats';
+	import type { Contributor, TimelineDataPoint } from '$lib/server/db/dao/stats';
 	import type { IntervalBounds } from './+page.server';
 
 	interface PageProps {
@@ -277,34 +274,6 @@
 		window.removeEventListener('touchend', handleTouchEnd);
 	}
 
-	function downsampleTimeline(
-		points: ContributorTimelinePoint[],
-		maxPoints = 50
-	): ContributorTimelinePoint[] {
-		if (!points || points.length <= maxPoints) return points || [];
-
-		const result: ContributorTimelinePoint[] = [];
-		const bucketSize = points.length / maxPoints;
-
-		for (let i = 0; i < maxPoints; i++) {
-			const startIdx = Math.floor(i * bucketSize);
-			const endIdx = Math.min(points.length, Math.floor((i + 1) * bucketSize));
-			if (startIdx >= endIdx) continue;
-
-			let sum = 0;
-			for (let j = startIdx; j < endIdx; j++) {
-				sum += points[j].count;
-			}
-
-			const midIdx = Math.floor((startIdx + endIdx) / 2);
-			result.push({
-				date: points[midIdx].date,
-				count: sum
-			});
-		}
-		return result;
-	}
-
 	function downsampleTimelinePoints(
 		points: TimelineDataPoint[],
 		maxPoints = 120
@@ -334,40 +303,6 @@
 			});
 		}
 		return result;
-	}
-
-	function getContributorPath(c: Contributor): string {
-		if (!c.timeline || c.timeline.length === 0) return '';
-		const sampled = downsampleTimeline(c.timeline, 50);
-		const maxVal = Math.max(...sampled.map((item) => item.count), 1);
-		const timelineCount = sampled.length;
-		if (timelineCount === 1) {
-			const y = 100 - (sampled[0].count / maxVal) * 85;
-			return `M0,100 L0,${y} L1000,${y} L1000,100 Z`;
-		}
-		const points = sampled.map((pt, idx) => {
-			const x = (idx / (timelineCount - 1)) * 1000;
-			const y = 100 - (pt.count / maxVal) * 85;
-			return `${x.toFixed(1)},${y.toFixed(1)}`;
-		});
-		return `M0,100 L${points.join(' L')} L1000,100 Z`;
-	}
-
-	function getContributorLinePath(c: Contributor): string {
-		if (!c.timeline || c.timeline.length === 0) return '';
-		const sampled = downsampleTimeline(c.timeline, 50);
-		const maxVal = Math.max(...sampled.map((item) => item.count), 1);
-		const timelineCount = sampled.length;
-		if (timelineCount === 1) {
-			const y = 100 - (sampled[0].count / maxVal) * 85;
-			return `M0,${y} L1000,${y}`;
-		}
-		const points = sampled.map((pt, idx) => {
-			const x = (idx / (timelineCount - 1)) * 1000;
-			const y = 100 - (pt.count / maxVal) * 85;
-			return `${x.toFixed(1)},${y.toFixed(1)}`;
-		});
-		return `M0,${(100 - (sampled[0].count / maxVal) * 85).toFixed(1)} L${points.join(' L')}`;
 	}
 
 	const displayTimeline = $derived.by(() => {
@@ -441,12 +376,12 @@
 					{adminT['dateRange'] || 'Drag handles or selection area to select time window'}
 				</div>
 				<div
-					class="relative h-14 w-full bg-base-200 border border-base-300 rounded overflow-hidden select-none touch-none"
+					class="relative h-14 w-full bg-base-200 border border-base-300 rounded-box select-none touch-none"
 					bind:this={sliderEl}
 				>
 					<!-- Sparkline timeline background of total activities -->
 					<svg
-						class="absolute inset-0 w-full h-full pointer-events-none opacity-20"
+						class="absolute inset-0 w-full h-full pointer-events-none opacity-20 rounded-box overflow-hidden"
 						preserveAspectRatio="none"
 					>
 						{#if mounted && data.timeline && data.timeline.length > 0}
@@ -483,7 +418,7 @@
 					>
 						<!-- Left handle inside the block (GitHub style) -->
 						<div
-							class="absolute left-0 top-0 bottom-0 w-2.5 -ml-1.5 bg-neutral border border-neutral-content/20 rounded cursor-ew-resize flex items-center justify-center z-10"
+							class="absolute left-0 top-0 bottom-0 w-2.5 -ml-1.5 bg-neutral border border-neutral-content/20 rounded-btn cursor-ew-resize flex items-center justify-center z-10"
 							onmousedown={handleLeftMouseDown}
 							ontouchstart={handleLeftTouchStart}
 							role="button"
@@ -491,11 +426,12 @@
 							tabindex="0"
 						>
 							<div class="w-[1px] h-3 bg-neutral-content/40"></div>
+							<div class="absolute -inset-y-2 -inset-x-4"></div>
 						</div>
 
 						<!-- Right handle inside the block (GitHub style) -->
 						<div
-							class="absolute right-0 top-0 bottom-0 w-2.5 -mr-1.5 bg-neutral border border-neutral-content/20 rounded cursor-ew-resize flex items-center justify-center z-10"
+							class="absolute right-0 top-0 bottom-0 w-2.5 -mr-1.5 bg-neutral border border-neutral-content/20 rounded-btn cursor-ew-resize flex items-center justify-center z-10"
 							onmousedown={handleRightMouseDown}
 							ontouchstart={handleRightTouchStart}
 							role="button"
@@ -503,6 +439,7 @@
 							tabindex="0"
 						>
 							<div class="w-[1px] h-3 bg-neutral-content/40"></div>
+							<div class="absolute -inset-y-2 -inset-x-4"></div>
 						</div>
 					</div>
 				</div>
@@ -537,7 +474,7 @@
 							class="card card-bordered border-base-300 bg-base-100 hover:bg-base-200/20 transition-colors rounded-none"
 						>
 							<div class="card-body p-4 gap-3">
-								<!-- Contributor header detail -->
+								<!-- Contributor header detail: Left Avatar, Right Info -->
 								<div class="flex items-center gap-3">
 									<a href="/profile/{c.id}/{profileSlug}">
 										<Avatar
@@ -548,49 +485,23 @@
 										/>
 									</a>
 									<div class="min-w-0 flex-1">
+										<!-- Top: Nickname -->
 										<h3 class="font-bold text-sm text-base-content hover:text-primary truncate">
 											<a href="/profile/{c.id}/{profileSlug}">{c.displayName}</a>
 										</h3>
-										<p class="text-xs text-base-content/50 font-mono truncate">
-											@{c.username}
-										</p>
-									</div>
-									<div class="text-right">
-										<div class="text-sm font-semibold text-base-content font-mono">
-											{c.totalCount}
-											{adminT['contributions'] || 'Contributions'}
-										</div>
-										<div class="text-[10px] text-base-content/65 font-mono">
+										<!-- Bottom: P & R Contributions -->
+										<p class="text-xs text-base-content/60 font-mono">
 											{c.discussionsCount} P / {c.repliesCount} R
-										</div>
+										</p>
 									</div>
 								</div>
 
-								<!-- Mini SVG Timeline Chart representing their contributions over the selected range -->
+								<!-- Bottom: Line Chart -->
 								<div class="h-10 w-full mt-1 border-t border-base-200/50 pt-2 flex items-end">
 									{#if mounted}
-										{#if c.timeline && c.timeline.length > 0}
-											{@const areaPath = getContributorPath(c)}
-											{@const linePath = getContributorLinePath(c)}
-											<svg
-												class="w-full h-8 overflow-visible"
-												viewBox="0 0 1000 100"
-												preserveAspectRatio="none"
-											>
-												<!-- Area path -->
-												<path d={areaPath} class="fill-primary/10" />
-												<!-- Line path -->
-												<path d={linePath} class="stroke-primary/60 stroke-2 fill-none" />
-											</svg>
-										{:else}
-											<div
-												class="flex h-full w-full items-center justify-center text-[10px] text-base-content/40"
-											>
-												No contributions
-											</div>
-										{/if}
+										<ContributorLineChart timeline={c.timeline} />
 									{:else}
-										<div class="w-full h-8 bg-base-200/50 animate-pulse rounded"></div>
+										<div class="w-full h-8 bg-base-200/50 animate-pulse rounded-box"></div>
 									{/if}
 								</div>
 							</div>
