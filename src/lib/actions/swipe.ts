@@ -84,48 +84,87 @@ function suppressNextClick(node: HTMLElement): void {
 	};
 	node.addEventListener('click', swallow, true);
 	window.addEventListener('pointerdown', onNextDown, { capture: true });
-	timerId = window.setTimeout(cleanup, 400);
+	timerId = window.setTimeout(() => {
+		cleanup();
+	}, 400);
 }
 
 export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => {
 	let params = initial;
-	let pointerId = NO_POINTER;
+	const capturedPointers = new Set<number>();
 	let startX = 0;
 	let moved = false;
 	let active = false;
+	let primaryPointerId = NO_POINTER;
 
 	function onDown(event: PointerEvent): void {
-		if (event.pointerType === 'mouse' || params.disabled?.()) return;
-		pointerId = event.pointerId;
-		startX = event.clientX;
-		moved = false;
-		active = true;
+		if (event.pointerType === 'mouse' || params.disabled?.()) {
+			return;
+		}
+
+		const id = event.pointerId;
+		if (primaryPointerId === NO_POINTER) {
+			primaryPointerId = id;
+			startX = event.clientX;
+			moved = false;
+			active = true;
+		}
+
 		try {
-			node.setPointerCapture(pointerId);
-		} catch (e) {
-			console.warn('[captureSwipe] setPointerCapture failed:', e);
+			node.setPointerCapture(id);
+			capturedPointers.add(id);
+		} catch {
+			// Ignore capture failure
 		}
 	}
 
 	function onMove(event: PointerEvent): void {
-		if (!active || event.pointerId !== pointerId) return;
+		if (event.pointerId !== primaryPointerId || !active) return;
 		event.preventDefault();
-		if (!moved && Math.abs(event.clientX - startX) > CLICK_THRESHOLD) moved = true;
+		if (!moved && Math.abs(event.clientX - startX) > CLICK_THRESHOLD) {
+			moved = true;
+		}
 		params.onMove(event.clientX - startX);
 	}
 
 	function onUp(event: PointerEvent): void {
-		if (!active || event.pointerId !== pointerId) return;
-		active = false;
-		const delta = event.clientX - startX;
-		try {
-			node.releasePointerCapture(pointerId);
-		} catch (e) {
-			console.warn('[captureSwipe] releasePointerCapture failed:', e);
+		const id = event.pointerId;
+		const isPrimary = id === primaryPointerId;
+
+		if (capturedPointers.has(id)) {
+			try {
+				if (node.hasPointerCapture(id)) {
+					node.releasePointerCapture(id);
+				}
+			} catch {
+				// Ignore release failure
+			}
+			capturedPointers.delete(id);
+
+			if (isPrimary && active) {
+				active = false;
+				const delta = event.clientX - startX;
+				params.onEnd(delta);
+				if (moved) {
+					suppressNextClick(node);
+				}
+			}
 		}
-		pointerId = NO_POINTER;
-		params.onEnd(delta);
-		if (moved) suppressNextClick(node);
+
+		if (isPrimary) {
+			primaryPointerId = NO_POINTER;
+			active = false;
+		}
+	}
+
+	function onLostCapture(event: PointerEvent): void {
+		if (capturedPointers.has(event.pointerId)) {
+			capturedPointers.delete(event.pointerId);
+		}
+		if (event.pointerId === primaryPointerId) {
+			primaryPointerId = NO_POINTER;
+			active = false;
+		}
 	}
 
 	node.style.touchAction = 'none';
@@ -133,46 +172,65 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 	node.addEventListener('pointermove', onMove);
 	node.addEventListener('pointerup', onUp);
 	node.addEventListener('pointercancel', onUp);
+	node.addEventListener('lostpointercapture', onLostCapture);
 
 	return {
 		update(next: SwipeParams): void {
 			params = next;
 		},
 		destroy(): void {
+			for (const id of capturedPointers) {
+				try {
+					if (node.hasPointerCapture(id)) {
+						node.releasePointerCapture(id);
+					}
+				} catch {
+					// Ignore if already released or disconnected
+				}
+			}
+			capturedPointers.clear();
 			node.removeEventListener('pointerdown', onDown);
 			node.removeEventListener('pointermove', onMove);
 			node.removeEventListener('pointerup', onUp);
 			node.removeEventListener('pointercancel', onUp);
+			node.removeEventListener('lostpointercapture', onLostCapture);
 		}
 	};
 };
 
 export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => {
 	let params = initial;
-	let pointerId = NO_POINTER;
+	const capturedPointers = new Set<number>();
 	let startX = 0;
 	let startY = 0;
 	let startTime = 0;
 	let target: EventTarget | null = null;
 	let phase: SwipePhase = 'idle';
+	let primaryPointerId = NO_POINTER;
 
 	function reset(): void {
 		phase = 'idle';
-		pointerId = NO_POINTER;
+		primaryPointerId = NO_POINTER;
 	}
 
 	function onDown(event: PointerEvent): void {
-		if (event.pointerType === 'mouse' || params.disabled?.()) return;
-		pointerId = event.pointerId;
-		startX = event.clientX;
-		startY = event.clientY;
-		startTime = event.timeStamp;
-		target = event.target;
-		phase = 'deciding';
+		if (event.pointerType === 'mouse' || params.disabled?.()) {
+			return;
+		}
+
+		if (phase === 'idle') {
+			primaryPointerId = event.pointerId;
+			startX = event.clientX;
+			startY = event.clientY;
+			startTime = event.timeStamp;
+			target = event.target;
+			phase = 'deciding';
+		}
 	}
 
 	function onMove(event: PointerEvent): void {
-		if (phase === 'idle' || phase === 'ignore' || event.pointerId !== pointerId) return;
+		if (event.pointerId !== primaryPointerId) return;
+		if (phase === 'idle' || phase === 'ignore') return;
 		const dx = event.clientX - startX;
 		const dy = event.clientY - startY;
 		if (phase === 'deciding') {
@@ -189,8 +247,9 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 				phase = 'swipe';
 				try {
 					node.setPointerCapture(event.pointerId);
-				} catch (e) {
-					console.warn('[detectSwipe] setPointerCapture failed:', e);
+					capturedPointers.add(event.pointerId);
+				} catch {
+					// Ignore capture failure
 				}
 			} else {
 				phase = 'ignore';
@@ -202,33 +261,65 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 	}
 
 	function onUp(event: PointerEvent): void {
-		if (event.pointerId !== pointerId) return;
-		if (phase === 'swipe') {
+		const id = event.pointerId;
+		const isPrimary = id === primaryPointerId;
+
+		if (capturedPointers.has(id)) {
 			try {
-				node.releasePointerCapture(event.pointerId);
-			} catch (e) {
-				console.warn('[detectSwipe] releasePointerCapture failed:', e);
+				if (node.hasPointerCapture(id)) {
+					node.releasePointerCapture(id);
+				}
+			} catch {
+				// Ignore release failure
 			}
-			params.onEnd(event.clientX - startX);
-			suppressNextClick(node);
+			capturedPointers.delete(id);
+
+			if (isPrimary && phase === 'swipe') {
+				params.onEnd(event.clientX - startX);
+				suppressNextClick(node);
+			}
 		}
-		reset();
+
+		if (isPrimary) {
+			reset();
+		}
+	}
+
+	function onLostCapture(event: PointerEvent): void {
+		if (capturedPointers.has(event.pointerId)) {
+			capturedPointers.delete(event.pointerId);
+		}
+		if (event.pointerId === primaryPointerId) {
+			reset();
+		}
 	}
 
 	node.addEventListener('pointerdown', onDown);
 	node.addEventListener('pointermove', onMove);
 	node.addEventListener('pointerup', onUp);
 	node.addEventListener('pointercancel', onUp);
+	node.addEventListener('lostpointercapture', onLostCapture);
 
 	return {
 		update(next: SwipeParams): void {
 			params = next;
 		},
 		destroy(): void {
+			for (const id of capturedPointers) {
+				try {
+					if (node.hasPointerCapture(id)) {
+						node.releasePointerCapture(id);
+					}
+				} catch {
+					// Ignore if already released or disconnected
+				}
+			}
+			capturedPointers.clear();
 			node.removeEventListener('pointerdown', onDown);
 			node.removeEventListener('pointermove', onMove);
 			node.removeEventListener('pointerup', onUp);
 			node.removeEventListener('pointercancel', onUp);
+			node.removeEventListener('lostpointercapture', onLostCapture);
 		}
 	};
 };
