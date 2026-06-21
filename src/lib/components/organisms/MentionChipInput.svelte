@@ -7,6 +7,7 @@
 	 * and focus highlight exactly.
 	 */
 	import { onMount, onDestroy, untrack } from 'svelte';
+	import { browser } from '$app/environment';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import type { UserSearchResult } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
@@ -144,7 +145,12 @@
 		notify();
 	});
 
+	// onDestroy callbacks DO run during SSR (Svelte drains them in the render
+	// close phase), unlike onMount/$effect which are no-ops server-side. The
+	// mousedown listener is only ever attached client-side via onMount, so bail
+	// before touching `document` where it is undefined.
 	onDestroy(() => {
+		if (!browser) return;
 		document.removeEventListener('mousedown', closeIfOutside);
 		if (debounceTimer) clearTimeout(debounceTimer);
 	});
