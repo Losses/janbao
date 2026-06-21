@@ -39,7 +39,12 @@
 	let isMobile = $state(page.data.isMobile ?? false);
 	onMount(() => {
 		const mq = window.matchMedia(MOBILE_BREAKPOINT);
-		const sync = () => (isMobile = mq.matches);
+		const sync = () => {
+			isMobile = mq.matches;
+			if (!isMobile && drawer.isOpen) {
+				drawer.close();
+			}
+		};
 		sync();
 		mq.addEventListener('change', sync);
 		return () => mq.removeEventListener('change', sync);
@@ -142,7 +147,7 @@
 	}
 </script>
 
-<div class="relative flex min-h-0 flex-1 flex-col bg-base-200 text-base-content">
+<div class="relative flex min-h-0 flex-1 flex-col text-base-content">
 	<!-- Main Content Container -->
 	<div class="mx-auto flex w-full max-w-[960px] flex-1 flex-col px-0 pb-6 md:px-6">
 		<div

@@ -61,9 +61,11 @@ function insideHorizontalScroll(target: EventTarget | null, boundary: HTMLElemen
  * browser generates a click after the drag, `swallow` catches it and cleans
  * up. If it does NOT (pointer-capture drags skip click generation), the next
  * `pointerdown` — the start of the user's next tap — cleans up the lingering
- * listener so that tap's click goes through. Fully event-driven, no timer.
+ * listener so that tap's click goes through. A 400ms safety timer acts as a
+ * fallback cleanup in case pointerdown or click event flow is interrupted or bypassed.
  */
 function suppressNextClick(node: HTMLElement): void {
+	let timerId: number | null = null;
 	const swallow = (event: Event) => {
 		event.preventDefault();
 		event.stopPropagation();
@@ -73,11 +75,16 @@ function suppressNextClick(node: HTMLElement): void {
 		cleanup();
 	};
 	const cleanup = () => {
+		if (timerId !== null) {
+			clearTimeout(timerId);
+			timerId = null;
+		}
 		node.removeEventListener('click', swallow, true);
-		node.removeEventListener('pointerdown', onNextDown);
+		window.removeEventListener('pointerdown', onNextDown, { capture: true });
 	};
 	node.addEventListener('click', swallow, true);
-	node.addEventListener('pointerdown', onNextDown, { once: true });
+	window.addEventListener('pointerdown', onNextDown, { capture: true });
+	timerId = window.setTimeout(cleanup, 400);
 }
 
 export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => {
@@ -93,7 +100,11 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 		startX = event.clientX;
 		moved = false;
 		active = true;
-		node.setPointerCapture(pointerId);
+		try {
+			node.setPointerCapture(pointerId);
+		} catch (e) {
+			console.warn('[captureSwipe] setPointerCapture failed:', e);
+		}
 	}
 
 	function onMove(event: PointerEvent): void {
@@ -107,7 +118,11 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 		if (!active || event.pointerId !== pointerId) return;
 		active = false;
 		const delta = event.clientX - startX;
-		node.releasePointerCapture(pointerId);
+		try {
+			node.releasePointerCapture(pointerId);
+		} catch (e) {
+			console.warn('[captureSwipe] releasePointerCapture failed:', e);
+		}
 		pointerId = NO_POINTER;
 		params.onEnd(delta);
 		if (moved) suppressNextClick(node);
@@ -194,7 +209,11 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 			const ignorable = isInteractive(target) || insideHorizontalScroll(target, node);
 			if (horizontal && !ignorable) {
 				phase = 'swipe';
-				node.setPointerCapture(event.pointerId);
+				try {
+					node.setPointerCapture(event.pointerId);
+				} catch (e) {
+					console.warn('[detectSwipe] setPointerCapture failed:', e);
+				}
 			} else {
 				phase = 'ignore';
 				return;
@@ -207,7 +226,11 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 	function onUp(event: PointerEvent): void {
 		if (event.pointerId !== pointerId) return;
 		if (phase === 'swipe') {
-			node.releasePointerCapture(event.pointerId);
+			try {
+				node.releasePointerCapture(event.pointerId);
+			} catch (e) {
+				console.warn('[detectSwipe] releasePointerCapture failed:', e);
+			}
 			params.onEnd(event.clientX - startX);
 			suppressNextClick(node);
 		}

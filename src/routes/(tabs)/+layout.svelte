@@ -25,6 +25,7 @@
 	import MessagesSidebar from '$lib/components/panels/MessagesSidebar.svelte';
 	import { getCurrentTabIndex } from '$lib/utils/mobile-tabs';
 	import { getListScrollStore } from '$lib/stores/list-scroll.svelte';
+	import { getDrawerStore } from '$lib/stores/drawer.svelte';
 	import type { LayoutData } from './$types';
 
 	interface TabsLayoutProps {
@@ -39,7 +40,15 @@
 	let isMobile = $state(data.isMobile ?? false);
 	onMount(() => {
 		const mq = window.matchMedia(MOBILE_BREAKPOINT);
-		const sync = () => (isMobile = mq.matches);
+		const sync = () => {
+			isMobile = mq.matches;
+			if (!isMobile) {
+				const drawer = getDrawerStore();
+				if (drawer.isOpen) {
+					drawer.close();
+				}
+			}
+		};
 		sync();
 		mq.addEventListener('change', sync);
 		return () => mq.removeEventListener('change', sync);
