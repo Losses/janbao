@@ -258,7 +258,7 @@ async function doSync(): Promise<SyncResult> {
 	);
 	// DV07 C04: merge the depth-policy page ranges into each curated/front/
 	// bookmark discussion's manifest. This is the AUTHORITATIVE manifest update
-	// path for sync — it unions the depth-derived ranges into whatever the
+	// path for sync - it unions the depth-derived ranges into whatever the
 	// manifest already holds (which may include passthrough-cached pages from
 	// C04), so no lost updates. The replies-store read inside the helper drops
 	// ranges whose backing replies were since evicted. Curated ids are only
@@ -386,7 +386,7 @@ async function applyReasonSets(
 	// throttle allowed a curated refresh this run. When curatedRefresh is false,
 	// the curated branch is skipped entirely: the server was asked
 	// categories=empty so `curated` is empty, AND we must NOT re-derive the
-	// curated reasons from the prior syncMeta mirror — the last refresh's
+	// curated reasons from the prior syncMeta mirror - the last refresh's
 	// curated reasons must persist untouched until the next refresh window.
 	// (Re-deriving here against an empty `curated` set would shed every
 	// curated reason, the exact failure the throttle is meant to prevent.)

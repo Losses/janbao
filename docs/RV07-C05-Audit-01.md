@@ -28,7 +28,7 @@ Gates: `bun run check` 0/0; `bun run lint` exit 0 (0 type-dupes); `bun test` 77/
   never expires → read-cached threads leak indefinitely (the "30-day auto-clean"
   requirement silently never fires). The pure TTL tests masked this (used a
   seconds-scale `NOW` fixture). **Fix:** write `Math.floor(Date.now()/1000)` in
-  passthrough (seconds — consistent with every other cached timestamp, which the
+  passthrough (seconds - consistent with every other cached timestamp, which the
   C04 `toEpochSeconds` normalization already produces for createdAt/updatedAt/
   lastReplyAt; readUpdatedAt was the outlier). Add a regression test using
   realistic-magnitude (seconds) timestamps so the unit contract is pinned.
@@ -37,11 +37,11 @@ Gates: `bun run check` 0/0; `bun run lint` exit 0 (0 type-dupes); `bun test` 77/
 
 - **[A5] `REASON_ORDER` duplicated** as literals in `evict.ts` + `sync-orchestrator.ts`
   (the same 6-entry ordering). Hoist to one shared constant in `types.ts` (or a
-  shared module) — same class as CO-C02-2 (REPLY_CAP dedup).
+  shared module) - same class as CO-C02-2 (REPLY_CAP dedup).
 - **[A2, informational]** `decideRefreshCurated` does 2 `syncMeta.get` (could
   `bulkGet`); `expireReadReasons` + `applyEviction` each `db.discussions.toArray()`;
   `backfillMissingUsers` full-scans discussions+replies every sync (pre-existing
-  DV06). Non-blocking perf notes — log as **CO-C05-1**.
+  DV06). Non-blocking perf notes - log as **CO-C05-1**.
 
 ## Confirmed correct (all 5)
 
@@ -51,14 +51,14 @@ Gates: `bun run check` 0/0; `bun run lint` exit 0 (0 type-dupes); `bun test` 77/
   curated reason-set diff, curated manifest merge, `persistCuratedMeta`) is
   THROTTLED; when skipped sends `categories=` + `depth=firstLast` (DV06 wire) and
   bypasses curated branches (curated reasons untouched). Passthrough separate (C04).
-- **Throttle + signature-force:** `shouldRefreshCurated` — `!enabled`/no-categories
+- **Throttle + signature-force:** `shouldRefreshCurated` - `!enabled`/no-categories
   → never; signature mismatch → force; first-run → force; else `now-last >=
 interval*86400` (boundary-inclusive). Signature = enabled+3 categories+depth
   (excludes interval/passthrough). Watermark + signature persisted only on a
   successful curated refresh.
 - **DV06 preservation:** `!enabled` byte-identical (no curated reasons ever set).
 - **`readStatePending` never deleted** (absent from both `applyEviction` +
-  `expireReadReasons` txn store lists; every store written inside is listed — no
+  `expireReadReasons` txn store lists; every store written inside is listed - no
   C02-style rollback). Reason-set eviction intact (`withoutRead`; cascade only on
   empty).
 - **`read` reason:** orchestrator never adds/removes it; `expireReadReasons` is the

@@ -11,7 +11,7 @@ Built the server-side curated-category pipeline (no client/UI change):
   gains `sort?: 'latest' | 'mostViewed' | 'mostReplied'` (default `latest`).
   `latest` = `desc(isPinned), desc(lastReplyAt), desc(id)` (prior behavior + id
   tiebreaker); `mostViewed` = `desc(viewCount), desc(id)`; `mostReplied` =
-  `desc(commentCount), desc(id)` — raw-metric DESC, no pinned promotion. All 4
+  `desc(commentCount), desc(id)` - raw-metric DESC, no pinned promotion. All 4
   existing callers omit `sort` → default `latest` → online UI byte-identical.
 - **Curated ID DAO.** `getCuratedDiscussionIds(db, sort, limit, readableSlugs)` in
   `db/dao/sync.ts`; `getFrontPageDiscussionIds` is now a thin `'latest'` delegate
@@ -26,10 +26,10 @@ readableSlugs)` implementing decision #3: `first` → page 1; `firstLast` → pa
   `curatedDiscussionIds: { latest?, mostViewed?, mostReplied? }` + depth backfill
   for the union of curated + front/bookmark ids. Auth-gated, scoped by
   `getReadableCategorySlugs` everywhere (INV-4 pure reads preserved).
-- **Migration** `0014_white_storm.sql` — additive indexes on `view_count`,
+- **Migration** `0014_white_storm.sql` - additive indexes on `view_count`,
   `comment_count` (prod D1 manual).
 - **Test** `src/lib/server/db/dao/sync.test.ts` (mirrors `fts.test.ts` in-memory
-  libsql harness) — pins the 1000 / 250+250 boundary + per-depth partial contract.
+  libsql harness) - pins the 1000 / 250+250 boundary + per-depth partial contract.
 
 ## Round 1
 

@@ -29,7 +29,7 @@
 	const prefs = $derived(data.preferences);
 	const vapidPublicKey = $derived(data.vapidPublicKey);
 	// Browser-only capability check. Gated on `mounted` so it stays false during
-	// SSR and the client's hydration pass — the first client render must match the
+	// SSR and the client's hydration pass - the first client render must match the
 	// server HTML, otherwise the {#if !pushSupported} branches below diverge and
 	// throw on hydration. Flips to the real value in onMount.
 	let mounted = $state(false);

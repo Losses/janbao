@@ -136,7 +136,7 @@
 	// stale built app, so source edits silently don't take effect until the SW
 	// is manually unregistered (notoriously aggressive in Firefox). Clearing it
 	// here lets HMR win. (This code itself only runs once the zombie is already
-	// gone — chicken-and-egg — so the very first clear is manual; after that
+	// gone - chicken-and-egg - so the very first clear is manual; after that
 	// it self-maintains.) See [[offline-debugging-heuristics]].
 	function unregisterDevServiceWorker(): void {
 		if (!import.meta.env.DEV || !('serviceWorker' in navigator)) return;

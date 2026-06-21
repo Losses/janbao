@@ -19,7 +19,7 @@ See [[dv04-audit-loop]].
 Gates: `bun run check` 0/0; `bun run lint` exit 0 (0 type-dupes); `bun test` 48/48.
 
 The integration skeptic caught writer/consumer bugs the per-file/pure-helper
-audits missed — exactly the multi-angle value. The pure `mergePageRange` logic
+audits missed - exactly the multi-angle value. The pure `mergePageRange` logic
 (A2) is correct; the defects are in how writers FEED it and how the renderer
 CONSUMES it.
 
@@ -30,7 +30,7 @@ CONSUMES it.
   returns `opReply` on every page, visiting page 5 caches only the OP + page-5
   replies yet claims page 1 fully cached. Page 1 holds OP + up to `pageSize-1`
   other replies; claiming it with only the OP violates the "honestly represent
-  gaps" requirement. **Fix:** only claim the page actually visited — merge
+  gaps" requirement. **Fix:** only claim the page actually visited - merge
   `[page, page]`; claim `[1,1]` only when `page === 1` (full page-1 set present).
   The OP being cached does not, by itself, claim any page.
 - **[MAJOR, A4-2] Renderer divider placement.** `offline/[id]/+page.svelte`
@@ -38,7 +38,7 @@ CONSUMES it.
   replies by those counts; for multi-range manifests (e.g. `firstLast`
   `[{1,1},{10,10}]`) the divider lands at the wrong offset (or not at all) and
   replies get attributed to the wrong block. **Fix:** rewrite the placement to
-  not assume each range holds exactly `pages*pageSize` replies — group cached
+  not assume each range holds exactly `pages*pageSize` replies - group cached
   replies by manifest range and insert dividers at range boundaries. Extract the
   placement into a pure, testable helper and pin multi-range shapes.
 
@@ -60,14 +60,14 @@ pageSize)` across orchestrator + recompute + renderer + C02 `computeCachedRanges
 
 - **CO-C04-1** A reply tombstoned within an otherwise-cached page leaves the
   manifest claiming that page cached (passthrough-only discussions are never
-  reconciled against tombstones — orchestrator only re-merges curated/front/
+  reconciled against tombstones - orchestrator only re-merges curated/front/
   bookmark). Rare; the **offline reply renderer should tolerate a missing reply
   row** (show a deletion placeholder). Log for a follow-up.
 - **CO-C04-2** `recomputeManifestForDiscussion`'s replies-presence defense uses
-  `.toArray()` (O(N)) vs `.count()` — marginal (Dexie count on a non-unique index
+  `.toArray()` (O(N)) vs `.count()` - marginal (Dexie count on a non-unique index
   is itself a scan). No action.
 - **CO-C04-3** OP-only-cached + multi-page thread renders no divider (no reply
-  anchor) — the renderer rewrite should show a "rest not cached" hint after the OP.
+  anchor) - the renderer rewrite should show a "rest not cached" hint after the OP.
 - **[A4-integration] Dead syncMeta writes:** `partialReplyDiscussions` +
   `replyPageSize` are still written but no longer read after `partialGap` removal.
   Remove the dead writes.

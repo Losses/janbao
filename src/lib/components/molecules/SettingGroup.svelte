@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * SettingGroup — the settings sub-area abstraction: a `SectionTitle` header
+	 * SettingGroup - the settings sub-area abstraction: a `SectionTitle` header
 	 * (title + description) followed by a body of related controls with uniform
 	 * internal rhythm (`space-y-2`). Sibling groups are spaced by the page's
 	 * outer `space-y-*` so grouping is expressed through spacing rather than

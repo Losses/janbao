@@ -11,8 +11,8 @@
 	let { data }: PageProps = $props();
 
 	// Cached content is read from IndexedDB after hydration (client-only). The
-	// route itself is server-rendered, so the layout's user/t — and therefore the
-	// sidebar's logged-in state — are embedded in the document and survive a
+	// route itself is server-rendered, so the layout's user/t - and therefore the
+	// sidebar's logged-in state - are embedded in the document and survive a
 	// direct load / offline navigation. See $lib/offline/queries.ts.
 	let discussions = $state<OfflineDiscussionView[]>([]);
 	let loading = $state(true);

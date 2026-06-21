@@ -12,7 +12,7 @@
 //
 // Each call tags the touched rows with reason 'read' (UNION onto any existing
 // reasons; never removes other reasons), sets readUpdatedAt to epoch SECONDS
-// (Math.floor(Date.now()/1000)) — matching the cached-timestamp convention
+// (Math.floor(Date.now()/1000)) - matching the cached-timestamp convention
 // every other writer normalizes to via toEpochSeconds, and the unit
 // isReadStale/expireReadReasons expect (RV07 C05 r2 audit A4: writing epoch
 // ms here made nowSec - readUpdatedAt hugely negative, so 'read' never
@@ -36,7 +36,7 @@ import type { DiscussionListItem } from '$lib/server/db/dao/discussions';
 const READ_ONLY_REASONS: readonly Reason[] = ['read'];
 
 // Time-ish value accepted from either SSR (Drizzle Date instances) or local
-// DAOs (Date) — converted to epoch seconds inside the writer. Keeping it loose
+// DAOs (Date) - converted to epoch seconds inside the writer. Keeping it loose
 // here lets the caller pass either shape without a manual conversion pass.
 type Epochish = Date | number;
 
@@ -116,7 +116,7 @@ interface AuthedUserRef {
 
 // Decision #5 gate: guests must never populate a cache. Even on a PUBLIC route
 // (`/`, `/discussions`, `/category/…`, profile-discussions, and the thread
-// page) — where `data.user` is null for guests — a guest on an installed PWA
+// page) - where `data.user` is null for guests - a guest on an installed PWA
 // (auto-enabled) would otherwise cache public list data via `writeList` /
 // `writeThread`. This is the ONE place enforcing decision #5 on the
 // passthrough path; every route's `runPassthrough` calls this with its `data.user`.
@@ -398,7 +398,7 @@ export async function writeThread(input: ThreadPassthroughInput): Promise<void> 
 	});
 
 	// Reconcile the manifest AFTER the txn commits. We claim ONLY the page the
-	// user actually visited (input.page) — the cached OP does NOT, by itself,
+	// user actually visited (input.page) - the cached OP does NOT, by itself,
 	// claim any page (RV07 C04 r2 audit A4-1). The OP renders as a special
 	// top-of-thread block and is not part of the paginated reply stream, so
 	// caching it while visiting page 5 caches only [5,5], not [1,1]. When the

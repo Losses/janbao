@@ -28,7 +28,7 @@ Gates: `bun run check` 0 errors/0 warnings; `bun run lint` exit 0 (0 type-dupes)
   (cascade-evict if read-only, trimmed if it has other reasons); re-entering online
   refreshes `readUpdatedAt` → not stale. The 30-day TTL now actually fires.
   `cachedAt`/`fetchedAt`/`lastSyncAt` stay ms but are bookkeeping-only (never fed
-  to TTL math) — no latent dead-check.
+  to TTL math) - no latent dead-check.
 - **[regression test]** realistic-magnitude cases (`NOW_SEC_REALISTIC ≈ 1.8e9`;
   fresh/29d not stale; 30d boundary stale; 31d stale) + an epoch-ms sentinel
   (`1.78e12` must NOT parse as seconds). Would have failed on the pre-fix code.
@@ -52,7 +52,7 @@ Gates: `bun run check` 0 errors/0 warnings; `bun run lint` exit 0 (0 type-dupes)
   and bypasses curated branches. Passthrough separate (C04).
 - **DV06 preservation:** `!enabled` byte-identical (no curated reasons ever set).
 - **`readStatePending` never deleted** (absent from both `applyEviction` +
-  `expireReadReasons` txn store lists; every written store listed — no rollback).
+  `expireReadReasons` txn store lists; every written store listed - no rollback).
 - **`read` reason:** orchestrator never adds/removes; `expireReadReasons` sole
   remover; `readUpdatedAt` read-only in evict.
 - INV-4 (no server writes); no `$effect` loops; types (named interfaces).

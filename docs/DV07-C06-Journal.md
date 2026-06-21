@@ -31,7 +31,7 @@ C06 is audit-only (no dev): it gates DV07 completion on a full-system 5/5.
 - Fixes shipped in `de6d1bc`:
   - **Guest gate** centralized: `passthroughEnabledFor(user)` (the ONE enforcement
     point) gates all 5 passthrough callers + `triggerSync`; guest end-state fully
-    inert (stale `enabled:true` in localStorage does nothing — writers skip, sync
+    inert (stale `enabled:true` in localStorage does nothing - writers skip, sync
     API 401s). Authed passthrough preserved.
   - **Honest list-only state:** `listingOnly` reader branch + `offline.reader.
 listingOnly` i18n (en + zh-CN); no-row case keeps `notCached`.
@@ -41,7 +41,7 @@ listingOnly` i18n (en + zh-CN); no-row case keeps `notCached`.
   readUpdatedAt-units consistency; no ghost rows; permissions scoped; eviction
   txn integrity; readStatePending safe). See `RV07-C06-Audit-02.md`.
 
-**C06 COMPLETE 5/5. DV07 COMPLETE — all six cycles 5/5.**
+**C06 COMPLETE 5/5. DV07 COMPLETE - all six cycles 5/5.**
 
 ## Post-complete notes
 
@@ -52,5 +52,5 @@ listingOnly` i18n (en + zh-CN); no-row case keeps `notCached`.
   placement), C05 (`readUpdatedAt` ms/seconds unit → dead TTL), C06 (Decision #5
   guest-cache leak). The unit-mismatch + guest-leak classes in particular would
   have shipped silently without the integration audit.
-- 14 carry-overs logged across cycles — all perf/hygiene follow-ups with
+- 14 carry-overs logged across cycles - all perf/hygiene follow-ups with
   mitigations; none blocks DV07.

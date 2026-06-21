@@ -1,4 +1,4 @@
-// DV07 C04 r2 — pure helper for placing multi-range gap dividers in the
+// DV07 C04 r2 - pure helper for placing multi-range gap dividers in the
 // offline reply stream (RV07-C04-Audit-01 A4-2). Lifted out of the
 // /offline/[discussionId] renderer so the boundary math is unit-testable
 // independent of the Svelte component.
@@ -15,7 +15,7 @@
 //     renderer does not know individual page numbers, but the manifest's
 //     `cachedRanges` come back in ascending order, and a writer always cached
 //     a CONTIGUOUS run for each range, so the cached replies partition across
-//     ranges in order — count per range is derived from the gaps + total.
+//     ranges in order - count per range is derived from the gaps + total.
 //
 // The divider placement is computed as follows:
 //   1. Walk each gap in ascending order. Each gap sits between two cached
@@ -30,7 +30,7 @@
 //
 // `replyCountForRange` derives each range's reply count from the pageSize and
 // the page count (end - start + 1). The OP is NOT subtracted from any range
-// here — the caller already excluded the OP from the cached reply stream and
+// here - the caller already excluded the OP from the cached reply stream and
 // from the cached ranges (the manifest model treats the OP as outside all
 // pages).
 //
@@ -74,7 +74,7 @@ export interface RestNotCachedHint {
 export interface GapPlacementResult {
 	// Inline dividers to render before specific reply indices in [0, rest.length).
 	placements: GapPlacement[];
-	// When non-null, render a divider AFTER the reply stream — the gap that
+	// When non-null, render a divider AFTER the reply stream - the gap that
 	// follows the last cached range. Its slot index lands at rest.length, which
 	// the each loop (indices [0, rest.length)) cannot reach, so it is split out
 	// for the renderer to emit separately. Previously this case silently
@@ -82,13 +82,13 @@ export interface GapPlacementResult {
 	// reply index in the loop).
 	trailingPlacement: GapPlacement | null;
 	// When non-null, render a single "rest not cached" hint at the end (used
-	// when no inline divider can be anchored — the OP-only or all-evicted case).
+	// when no inline divider can be anchored - the OP-only or all-evicted case).
 	restNotCached: RestNotCachedHint | null;
 }
 
 // Sum of reply counts across all cached ranges, derived purely from the
 // ranges' page counts × pageSize. The renderer does NOT need to know which
-// specific replies belong to which range — only how many precede each gap.
+// specific replies belong to which range - only how many precede each gap.
 function totalCachedSlots(cachedRanges: CachedRange[], pageSize: number): number {
 	let total = 0;
 	for (const r of cachedRanges) {
@@ -128,7 +128,7 @@ export function computeGapPlacements(input: GapPlacementInput): GapPlacementResu
 	// All replies evicted between manifest write and read (manifest claims
 	// slots but cachedReplyCount is 0): nothing to anchor any divider to. Fall
 	// back to a single aggregate hint. Checked before the main loop so the loop
-	// can assume cachedReplyCount > 0 — which means a gap whose slot index lands
+	// can assume cachedReplyCount > 0 - which means a gap whose slot index lands
 	// at or past cachedReplyCount is the trailing gap (rendered after the
 	// stream), not a clamp edge case.
 	const totalSlots = totalCachedSlots(cachedRanges, pageSize);
@@ -156,7 +156,7 @@ export function computeGapPlacements(input: GapPlacementInput): GapPlacementResu
 	// pageSize). Because `gaps` and `cachedRanges` together fully partition
 	// [1, totalPages] (the manifest-recompute coalescer guarantees this for
 	// valid manifests) and cachedRanges is sorted ascending, only the LAST gap
-	// can have its offset land at or past cachedReplyCount — that gap follows
+	// can have its offset land at or past cachedReplyCount - that gap follows
 	// every cached reply and is a TRAILING divider the renderer emits after the
 	// each loop. The loop only covers reply indices [0, rest.length), so
 	// beforeIndex === rest.length would never match and the divider would

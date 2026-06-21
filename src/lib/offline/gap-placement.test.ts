@@ -107,7 +107,7 @@ test('OP-only (no cached ranges): single trailing restNotCached hint', () => {
 });
 
 test('OP-only with no gaps (degenerate 0-page thread): no hint', () => {
-	// Thread with only an OP — totalPages=1, but the manifest's [1,1] would
+	// Thread with only an OP - totalPages=1, but the manifest's [1,1] would
 	// not exist (no paginated stream). Defensive: no placements, no hint.
 	const res = computeGapPlacements({
 		cachedRanges: [],
@@ -143,7 +143,7 @@ test('manifest slots exist but all replies evicted: fall back to restNotCached',
 test('stale manifest (sparse replies): oversized slot index falls to trailing divider', () => {
 	// Stale manifest claims page 1 + page 10 (100 slots) but only 10 replies
 	// survive. The sole gap's slot index (50) lands past cachedReplyCount (10),
-	// so it cannot anchor inline — instead of silently vanishing (the original
+	// so it cannot anchor inline - instead of silently vanishing (the original
 	// clamp-to-rest.length bug) it becomes the trailing divider so the reader
 	// still sees the gap.
 	const res = computeGapPlacements({

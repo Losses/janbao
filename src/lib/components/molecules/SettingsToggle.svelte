@@ -1,6 +1,6 @@
 <script lang="ts">
 	// A flat settings toggle row: label (+ optional description) on the left, a
-	// daisyUI toggle on the right. This is a *pure* toggle — sub-options are no
+	// daisyUI toggle on the right. This is a *pure* toggle - sub-options are no
 	// longer nested as children; pages render them as siblings inside a
 	// `SettingGroup` gated by their own `{#if checked}`. Follows the settings
 	// flat-design convention (plain spacing, no card bg/rounded/padding).

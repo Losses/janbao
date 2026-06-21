@@ -42,7 +42,7 @@ Gates: `bun run check` 0 errors/0 warnings; `bun run lint` exit 0 (0 type-dupes)
   ordering drives reason-set stability.
 - **CO-C01-3** `getRepliesForDepth` computes the cap split even for `depth='first'`
   (wasted filter work, ~20 ids). Lazify inside the `else` block if perf matters.
-- Minor: `getCountsById` is called with the full `discussionIds` set (benign —
+- Minor: `getCountsById` is called with the full `discussionIds` set (benign -
   absent ids default to 0); delegation test is trivial but the boundary is covered
   elsewhere.
 

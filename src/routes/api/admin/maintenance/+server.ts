@@ -22,7 +22,7 @@ function parseOp(raw: unknown): MaintenanceOp | null {
 	return (MAINTENANCE_OPS as readonly string[]).includes(raw) ? (raw as MaintenanceOp) : null;
 }
 
-// GET /api/admin/maintenance — per-op availability + last-run timestamps (from
+// GET /api/admin/maintenance - per-op availability + last-run timestamps (from
 // the app_settings KV store) and the in-flight detached-run status for polling.
 export const GET: RequestHandler = async ({ locals, platform }) => {
 	const authError = requireAdmin(locals.user, locals.t);
@@ -32,7 +32,7 @@ export const GET: RequestHandler = async ({ locals, platform }) => {
 	return json(overview);
 };
 
-// POST /api/admin/maintenance { op } — run one op. ANALYZE is fast and runs
+// POST /api/admin/maintenance { op } - run one op. ANALYZE is fast and runs
 // synchronously (available on local + D1); integrity_check / fts_rebuild launch
 // detached and are polled via GET (local only). 409 if a detached run is busy.
 export const POST: RequestHandler = async ({ request, locals, platform }) => {

@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * SectionTitle — a group header: title with an optional description hugging
+	 * SectionTitle - a group header: title with an optional description hugging
 	 * it (tight `space-y-0.5`, muted caption) so the description reads as
 	 * belonging to the title, not the content beneath. The block carries a small
 	 * bottom margin (`mb-1`) so a group's body sits closer to its own header than

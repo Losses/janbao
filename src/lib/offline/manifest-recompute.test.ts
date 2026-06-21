@@ -55,7 +55,7 @@ test('mergePageRange: two non-contiguous ranges (firstLast depth)', () => {
 
 test('mergePageRange: union of curated depth=all + passthrough page 5 (no lost update)', () => {
 	// Sync depth 'all' under-cap cached pages 1..10 (single range). Passthrough
-	// then visits page 5 — already in the range. Result unchanged. This is the
+	// then visits page 5 - already in the range. Result unchanged. This is the
 	// CO-C02-1 + lost-update guard.
 	const afterSync = merge(1, 500, 1, 10, []);
 	const afterPassthrough = merge(1, 500, 5, 5, afterSync.cachedRanges);

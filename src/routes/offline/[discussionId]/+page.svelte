@@ -197,7 +197,7 @@
 				</div>
 			{:else if gapView.restNotCached}
 				<!-- CO-C04-3: OP is cached but no paginated replies to anchor a
-				     divider — show a single "rest not cached" hint after the OP. -->
+				     divider - show a single "rest not cached" hint after the OP. -->
 				<p class="py-3 text-center text-xs italic text-base-content/50">
 					{restNotCachedLabel()}
 				</p>

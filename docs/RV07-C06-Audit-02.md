@@ -25,7 +25,7 @@ Gates: `bun run check` 0 errors/0 warnings (1277 files, incl. `tsconfig.sw.json`
 
 - **[MAJOR → fixed] Decision #5 guest-cache leak.** Centralized
   `passthroughEnabledFor(user: AuthedUserRef | null)` in `passthrough.ts` =
-  `!!user && enabled && passthrough` — the ONE enforcement point. All 5 passthrough
+  `!!user && enabled && passthrough` - the ONE enforcement point. All 5 passthrough
   callers (home, /discussions, /category, /profile/discussions, thread page) gate
   on `data.user`; `+layout.svelte` gates `triggerSync` on `data.user`. A guest on
   an installed PWA may have `enabled:true` in localStorage (auto-enable) but every
@@ -54,9 +54,9 @@ replies.length === 0 && manifestRow == null`; reader shows distinct
 - **Cross-cycle consistency:** `computeTotalPages` / `REASON_ORDER` /
   `readUpdatedAt`-seconds consistent everywhere (prior round-1 bug classes closed).
 
-## Final carry-overs (all ACCEPT — none hide a defect)
+## Final carry-overs (all ACCEPT - none hide a defect)
 
-CO-C01-1..3, CO-C02-1..3, CO-C03-1..2, CO-C04-1..4, CO-C05-1, CO-C06-1 — perf &
+CO-C01-1..3, CO-C02-1..3, CO-C03-1..2, CO-C04-1..4, CO-C05-1, CO-C06-1 - perf &
 hygiene follow-ups with documented mitigations (e.g. `partialReplyDiscussions`
 plumbed server→wire but unread client-side since the manifest is authoritative;
 `backfillMissingUsers` O(N) scan pre-existing DV06; `computeGapPlacements`

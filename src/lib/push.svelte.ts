@@ -20,7 +20,7 @@ export type PushSubscribeOutcome =
 /**
  * Resolve to the active service-worker registration, or null when none is
  * registered on this origin. `navigator.serviceWorker.ready` NEVER resolves if
- * no SW exists (dev never registers one — registration is PROD-gated — or it
+ * no SW exists (dev never registers one - registration is PROD-gated - or it
  * was just unregistered), which would hang every push call and freeze the
  * toggle. `getRegistrations()` resolves immediately, so check it first and
  * no-op cleanly when there's nothing to talk to.

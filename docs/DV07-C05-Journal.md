@@ -24,7 +24,7 @@ collapse:
    returns true. When skipped, the page loop sends `categories=` empty +
    `depth=firstLast` (DV06 wire shape) and the orchestrator's curated
    branch in `applyReasonSets` + `mergeDepthRangesIntoManifests` is
-   bypassed entirely — curated reasons from the last refresh persist
+   bypassed entirely - curated reasons from the last refresh persist
    untouched this run.
 3. **Read passthrough** (C04): untouched. Owned by the route-layer writers,
    fires on every browse regardless of the throttle decision.
@@ -42,11 +42,11 @@ enters the manifest step.
 
 Pure helpers extracted into `src/lib/offline/refresh-policy.ts`:
 
-- `READ_RETENTION_DAYS = 30` — client-side TTL for the `'read'` reason
+- `READ_RETENTION_DAYS = 30` - client-side TTL for the `'read'` reason
   (distinct from the server `OFFLINE_RETENTION_DAYS = 14` legacy fallback
   in `evict.ts`, which still applies to pre-v4 rows lacking a reasons
   array).
-- `prefsSignatureOf(prefs)` — normalized string form of the prefs fields
+- `prefsSignatureOf(prefs)` - normalized string form of the prefs fields
   that govern cached content: `enabled + categories.{latest,mostViewed,
 mostReplied} + depth`. `refreshIntervalDays` and `passthrough` are
   intentionally NOT part of the signature (they affect cadence / read
@@ -75,7 +75,7 @@ Confirmed: the existing C02 reason-set diff logic (per-category
 `curated:<cat>` mirror → add new entrants, remove lapsed members) runs
 ONLY on the curated-refresh path. When `curatedRefresh` is false the
 entire `for (const b of CATEGORY_BINDINGS)` block is skipped AND
-`persistCuratedMeta` is not called — so a throttled-out pass cannot
+`persistCuratedMeta` is not called - so a throttled-out pass cannot
 shed curated reasons against an empty `curated` set. Edits/deletes
 still flow through the delta cursors on every pass (unchanged).
 
@@ -93,7 +93,7 @@ sync, BEFORE `applyEviction`. For each cached discussion:
 4. If the trimmed array is empty → cascade-delete via the same store
    list as `applyEviction` (discussions + replies + readStateMerged +
    replyCacheManifest). `readStatePending` is deliberately NOT in the
-   store list — the outbox must survive even when its discussion
+   store list - the outbox must survive even when its discussion
    scrolls out of cache.
 
 `readUpdatedAt` is read-only here; passthrough (C04) is the sole writer.
@@ -109,7 +109,7 @@ never expire.
   returns false → request sends `categories= + depth=firstLast` →
   server response is byte-identical to DV06. The orchestrator's curated
   reason/manifest branches are bypassed (so curated reasons are NEVER
-  touched on this path — they were never set). Delta + front/bookmark
+  touched on this path - they were never set). Delta + front/bookmark
   - eviction + outbox flush run exactly as DV06.
 - **No `$effect` loops** ([[svelte-effect-fetch-loop]]): C05 touches
   only `.ts` files; the orchestrator is still invoked from existing
@@ -141,7 +141,7 @@ never expire.
   stability across `refreshIntervalDays` / `passthrough` changes,
   deterministic shape.
 - `src/lib/offline/evict.test.ts` (6 cases): `withoutRead` pure
-  decision — read-only → empty, read + others → others kept canonically,
+  decision - read-only → empty, read + others → others kept canonically,
   all-curated + read, no read present, empty, defensive dedupe.
 
 Pure-logic only (no Dexie harness in the repo); the IDB-touching half
@@ -152,7 +152,7 @@ exercised via the integration audit (RV07-C05-\*).
 
 - `bun run check`: 0 errors / 0 warnings / 1277 files.
 - `bun run lint`: exit 0 (prettier clean, eslint clean, similarity-ts
-  type-dupes 0 — 27 informational pairs, all pre-existing).
+  type-dupes 0 - 27 informational pairs, all pre-existing).
 - `bun test`: 77/77 pass (refresh-policy 14 + evict 6 + carry-over 57).
 
 ## Carry-overs
@@ -161,14 +161,14 @@ exercised via the integration audit (RV07-C05-\*).
   Clock skew across reconnects could in principle cause a double-
   refresh within a second; harmless (idempotent). The server-time-skew
   correction stored in `serverTimeSkew` syncMeta is intentionally NOT
-  applied to this comparison — the refresh cadence is a client policy,
+  applied to this comparison - the refresh cadence is a client policy,
   not a server-coherency check.
 - **CO-C05-2** A prefs signature mismatch forces refresh even when the
   throttle window has barely elapsed. This is by design (decision #2's
   "force on pref change"), but means a user rapidly toggling a category
   on/off across two syncs will trigger two refreshes back-to-back. The
   second refresh sees an empty curated set for that category and sheds
-  its reason — correct behavior, no throttling needed.
+  its reason - correct behavior, no throttling needed.
 
 ## Round 1
 
@@ -191,7 +191,7 @@ exercised via the integration audit (RV07-C05-\*).
   refreshes → not stale. No remaining unit drift (audited every cached
   timestamp). `REASON_ORDER` dedup preserves array identity across all
   three reorder sites. Regression test would have caught the r1 bug.
-- Carry-over **CO-C05-1 (audit, perf)** — `decideRefreshCurated` 2×
+- Carry-over **CO-C05-1 (audit, perf)** - `decideRefreshCurated` 2×
   `syncMeta.get`; sequential `discussions.toArray()` in expire+evict;
   `backfillMissingUsers` full-scans (pre-existing DV06). See
   `RV07-C05-Audit-02.md`.

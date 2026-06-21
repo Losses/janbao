@@ -47,7 +47,7 @@
 	//
 	// Read passthrough (DV07 C04): when online and the user has the feature on,
 	// also write this page's SSR data (discussion + opReply + replies + manifest
-	// reconcile) to IDB. Issues no server request of its own (INV-4) — it only
+	// reconcile) to IDB. Issues no server request of its own (INV-4) - it only
 	// consumes the data already in `data`. Re-entry re-runs this so revisits
 	// refresh the cache. No bare `$effect` (per [[svelte-effect-fetch-loop]]).
 	onMount(() => {

@@ -80,7 +80,7 @@ C01 (`docs/DV07-C01-Journal.md`, server curated pipeline COMPLETE 5/5).
   `.ts` files; the orchestrator is invoked from existing client hooks (no new
   reactive surface).
 - **Reason-set eviction**: front/bookmark discussions carry those reasons now,
-  so they remain exempt — same observable behavior as DV06's hard-coded
+  so they remain exempt - same observable behavior as DV06's hard-coded
   exemption.
 
 ## Round 1
@@ -89,7 +89,7 @@ C01 (`docs/DV07-C01-Journal.md`, server curated pipeline COMPLETE 5/5).
 - **[CRITICAL, A4]** Eviction `db.transaction('rw', …)` omitted `replyCacheManifest`
   → Dexie _Table not part of transaction_ rolled the whole txn back → eviction
   never committed. Fixed: added `db.replyCacheManifest` to the store array.
-- **[MAJOR, A2/A3]** front/bookmark remove-delta always empty — `applyReasonSets`
+- **[MAJOR, A2/A3]** front/bookmark remove-delta always empty - `applyReasonSets`
   read the snapshots as "prior" after the page loop had already overwritten them.
   Fixed: capture `PriorFrontBookmark` once at `doSync` start, thread into the diff.
 - **[MINOR]** `computeCachedRanges` cap used `totalPages*pageSize` → phantom split
@@ -117,4 +117,4 @@ C01 (`docs/DV07-C01-Journal.md`, server curated pipeline COMPLETE 5/5).
 - **CO-C02-2** `REPLY_CAP`/`REPLY_CAP_HALF` duplicated client (`manifest.ts`) vs
   server (`db/dao/sync.ts`). Dedupe into a shared `$lib` module when convenient.
 - **CO-C02-3** `applyEviction` reads 4 syncMeta keys outside the txn (read-only
-  pre-pass; txn only writes the 4 listed stores) — acceptable; flagged.
+  pre-pass; txn only writes the 4 listed stores) - acceptable; flagged.

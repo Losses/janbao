@@ -2,13 +2,13 @@
 	import type { Snippet } from 'svelte';
 
 	/**
-	 * Field Atom — the chrome-only "label on top, control below" wrapper. This is
+	 * Field Atom - the chrome-only "label on top, control below" wrapper. This is
 	 * the single source of truth for the stacked-field spacing used across auth
 	 * and settings (the login/register layout the rest of the app adopts).
 	 *
 	 * Renders a label with an optional `description` hugging it, then the
 	 * caller-supplied control via `children`, then an optional `hint` snippet
-	 * and/or `error` message. Owns label/description spacing only — it never
+	 * and/or `error` message. Owns label/description spacing only - it never
 	 * renders the control itself, so any input/select/textarea/file/custom markup
 	 * composes cleanly.
 	 *

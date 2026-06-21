@@ -7,8 +7,8 @@ on C03 (`docs/DV07-C03-Journal.md`, settings UI + install gating COMPLETE
 
 ## Pre-audit dev notes
 
-- **`src/lib/offline/passthrough.ts`** — pure client-side writer (INV-4: zero
-  server requests; verified by grep — the only "fetcher" in the module is
+- **`src/lib/offline/passthrough.ts`** - pure client-side writer (INV-4: zero
+  server requests; verified by grep - the only "fetcher" in the module is
   `getOfflineDB()`, an IDB open). Two entry points:
   - `writeList(items: DiscussionListItem[])`: maps each list item to a lean
     `CachedDiscussion` (id/title/slug/categorySlug/authorId/commentCount/
@@ -34,10 +34,10 @@ on C03 (`docs/DV07-C03-Journal.md`, settings UI + install gating COMPLETE
   - **Epochish time tolerance**: `Date | number` accepted everywhere; a
     heuristic (`> 1e12` ⇒ ms) normalizes to seconds. Drizzle timestamp-mode
     Dates on the client and already-converted epoch numbers both work.
-- **OP backfill** — verified the thread `+page.server.ts` already fetches the
+- **OP backfill** - verified the thread `+page.server.ts` already fetches the
   OP unconditionally (line 115, before the page-specific `repliesStream`),
   so `opReply` is returned on ALL pages. No server change needed for the
-  "ensure OP is cached when entry page > 1" requirement — the load already
+  "ensure OP is cached when entry page > 1" requirement - the load already
   provides it. The two additive changes to `+page.server.ts` are
   read-only/no-behavior-change: exposing `replyPageSize: limit` (the value
   the route already computes for its own pagination) and adding
@@ -45,7 +45,7 @@ on C03 (`docs/DV07-C03-Journal.md`, settings UI + install gating COMPLETE
   (the `editors` alias is already joined; this id was simply not selected
   before, and the online renderer ignores it). The offline renderer is
   untouched by these.
-- **Manifest reconciliation (resolves CO-C02-1 + lost updates)** —
+- **Manifest reconciliation (resolves CO-C02-1 + lost updates)** -
   `src/lib/offline/manifest-recompute.ts`:
   - **Key design decision**: page numbers are WRITER-SUPPLIED, not derived
     from cached reply contents. A reply's row carries `createdAt` and `id`
@@ -64,7 +64,7 @@ pageSize)` (commentCount includes the OP; the thread route derives
 pageSize, cachedRange)`: reads the prior manifest row, checks whether
     ANY reply for the discussion is still cached (defense-in-depth: if all
     replies were evicted, deletes the manifest row), then merges the range
-    and persists. This is the "derived from the replies store" part — the
+    and persists. This is the "derived from the replies store" part - the
     replies-store read drops ranges whose backing replies have been evicted
     (the manifest can never claim a page that isn't actually cached).
   - Called from BOTH writers: the C02 sync orchestrator's new
@@ -74,11 +74,11 @@ totalPages, pageSize, commentCount)` per curated/front/bookmark
     passthrough `writeThread` calls it with the visited page (and page 1
     when opReply backfills). Idempotent: re-merging the same range is a
     no-op. The pre-C04 `populateReplyManifests` (depth-only, overwriting)
-    is removed — its lost-update failure mode is what this unifies.
+    is removed - its lost-update failure mode is what this unifies.
   - Structural `ManifestRecomputeDb` interface (named, not inline per type
     rules) accepts a ForumOfflineDB-compatible subset so the helper is
     testable without Dexie. The pure `mergePageRange` is unit-tested.
-- **Route wiring** — `onMount` + `afterNavigate` in every relevant
+- **Route wiring** - `onMount` + `afterNavigate` in every relevant
   `+page.svelte` (no bare `$effect` per [[svelte-effect-fetch-loop]]):
   - Thread page (`discussion/[discussionId]/[slug]/[[page=page]]`):
     `writeThread` with the page data snapshot. `afterNavigate` re-runs on
@@ -106,7 +106,7 @@ totalPages, pageSize, commentCount)` per curated/front/bookmark
     trailing `restNotCached` hint. 9 pinned-shape tests. No dividers when
     no gaps / no manifest (no regression vs DV06 for fully-cached threads).
   - i18n keys added under `offline.reader.*` in BOTH `en.json` +
-    `zh-CN.json` ([[i18n-duplicate-key-check]] — grepped first, no
+    `zh-CN.json` ([[i18n-duplicate-key-check]] - grepped first, no
     collision): `gapRange` ("Pages {start}-{end} not cached (about {count}
     replies)" / "第 {start}-{end} 页未缓存（约 {count} 条回复）") and
     `gapSingle` ("Page {page} not cached (about {count} replies)" /
@@ -117,7 +117,7 @@ totalPages, pageSize, commentCount)` per curated/front/bookmark
 ## Invariants preserved
 
 - **INV-4 (no false read)**: passthrough issues ZERO server requests
-  (verified by grep — only `getOfflineDB()` is called). The two
+  (verified by grep - only `getOfflineDB()` is called). The two
   `+page.server.ts` changes (exposing `replyPageSize`, selecting
   `editedBy`) are read-only additive fields; the online read-mutation
   sequence (viewCount+1, discussionReads upsert, notifications.isRead) is
@@ -143,7 +143,7 @@ totalPages, pageSize, commentCount)` per curated/front/bookmark
 
 - `bun run check`: 0 errors / 0 warnings / 1272 files.
 - `bun run lint`: exit 0 (prettier clean, eslint clean, similarity-ts
-  type-dupes 0 — 27 informational pairs, all pre-existing).
+  type-dupes 0 - 27 informational pairs, all pre-existing).
 - `bun test`: 48/48 pass (manifest 14 + manifest-recompute 12 + carry-over
   22). New pure-function tests pin `mergePageRange`'s union/coalesce/
   clamp behavior + the multi-range `computeReplyGaps` output shape.
@@ -184,7 +184,7 @@ totalPages, pageSize, commentCount)` per curated/front/bookmark
   renderer rewritten via pure `computeGapPlacements` (9 pinned-shape tests, OP-only
   `restNotCached` hint); `lastReplyAt` selected + passed; shared `computeTotalPages`
   (OP-excluding) everywhere; dead syncMeta writes removed.
-- Carry-overs: CO-C04-1 (tombstoned reply within a cached page — renderer should
+- Carry-overs: CO-C04-1 (tombstoned reply within a cached page - renderer should
   tolerate a missing row), CO-C04-4 (`computeGapPlacements` assumes normalized
   ranges, mitigated upstream by `normalizeRanges`). See `RV07-C04-Audit-02.md`.
 - Gates: check 0/0, lint exit 0, `bun test` 57/57.

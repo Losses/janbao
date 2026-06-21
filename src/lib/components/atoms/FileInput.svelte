@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * FileInput Atom — an i18n-friendly replacement for DaisyUI's native
+	 * FileInput Atom - an i18n-friendly replacement for DaisyUI's native
 	 * `.file-input`. The stock `<input type="file">` draws its "Choose file"
 	 * button through the browser-controlled `::file-selector-button`, so the
 	 * text follows the OS locale, not the app locale (e.g. the button keeps
@@ -11,7 +11,7 @@
 	 *
 	 * The underlying `<input type="file">` is forwarded via the bindable
 	 * `inputEl` so a parent form can still read `.files` and validate at submit
-	 * time — the same surface the raw input exposed.
+	 * time - the same surface the raw input exposed.
 	 */
 	interface FileInputProps {
 		id: string;

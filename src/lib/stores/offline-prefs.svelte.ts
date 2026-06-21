@@ -6,7 +6,7 @@
 // Initialization is EAGER, gated on `browser` ($app/environment): on the client
 // the store reads localStorage once at module-import time, BEFORE any component
 // or `$derived` runs. This matters because the settings page reads `prefs`
-// inside `$derived(...)` blocks — a lazy "hydrate on first read" getter would
+// inside `$derived(...)` blocks - a lazy "hydrate on first read" getter would
 // mutate `$state` during a `$derived` evaluation, which Svelte 5 rejects
 // (state_unsafe_mutation). Eager init means a `prefs` read never mutates.
 // During SSR `browser` is false, so we use defaults without touching localStorage.

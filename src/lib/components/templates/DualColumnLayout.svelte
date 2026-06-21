@@ -108,7 +108,7 @@
 	const TAB_SWIPE_MAX = 100; // px of finger-follow feedback on inner pages
 	const swipeBaseline = $derived(getSwipeBaseline(page.url.pathname));
 	// Disabled on pager/thread routes (the MobileTabPager / ThreadPager viewports
-	// own the gesture there — their `min-height: 100%` fills main so there's no
+	// own the gesture there - their `min-height: 100%` fills main so there's no
 	// dead zone). If this were enabled too, both detectSwipe nodes would race to
 	// setPointerCapture on the same bubbled touch, and main (higher in the DOM)
 	// would win → the old translate-content behaviour would override the pager's

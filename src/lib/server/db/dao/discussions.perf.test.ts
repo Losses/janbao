@@ -307,7 +307,7 @@ function summarize(label: string, statements: CapturedStatement[]): string {
 }
 
 describe('discussion list performance baseline', () => {
-	test('loadDiscussionsPage (logged-in reader) — round-trips, timing, plan', async () => {
+	test('loadDiscussionsPage (logged-in reader) - round-trips, timing, plan', async () => {
 		const { db, harness, pageOneIds } = await setupPerf();
 
 		harness.reset();
@@ -379,7 +379,7 @@ describe('discussion list performance baseline', () => {
 		expect(roundTrips).toBeLessThanOrEqual(7);
 	});
 
-	test('loadDiscussionsPage (guest) — round-trips', async () => {
+	test('loadDiscussionsPage (guest) - round-trips', async () => {
 		const { db, harness } = await setupPerf();
 
 		harness.reset();

@@ -2,7 +2,7 @@
  * Database maintenance feature wire types (shared between server and client).
  * Server-internal details (DB handles, raw-SQL row shapes) live in
  * src/lib/server/maintenance.ts; the client only ever sees these serializable
- * shapes — mirroring how src/lib/types/backup.ts splits from backup.ts.
+ * shapes - mirroring how src/lib/types/backup.ts splits from backup.ts.
  */
 
 export type MaintenanceOp = 'analyze' | 'integrityCheck' | 'ftsRebuild';

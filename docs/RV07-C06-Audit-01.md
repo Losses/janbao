@@ -22,17 +22,17 @@ type-dupes; 27 informational, none DV07-introduced); `bun test` 82/82 (647 exp);
 
 ## MAJOR finding (must fix)
 
-- **[MAJOR, A3] Decision #5 violation — guests can populate a cache via
+- **[MAJOR, A3] Decision #5 violation - guests can populate a cache via
   passthrough.** `/` and `/discussions/…` are PUBLIC routes (`userId: user?.id ??
 null`). `runPassthrough` gates only on `prefs.enabled && prefs.passthrough`
   (`passthroughEnabled()`), with NO `data.user` check. A guest on an installed PWA
   (whose localStorage auto-enable wrote `enabled:true`) browsing the public home
-  populates `db.discussions`/`db.users` from public list pages — exactly what
+  populates `db.discussions`/`db.users` from public list pages - exactly what
   decision #5 forbids. INV-4 itself holds (no server write; the curated sync API
   still 401s for guests), but the Decision #5 contract is broken on the
   passthrough path. **Fix:** gate every passthrough hook on the authed session
   (`if (!data.user) return;` before `writeList`/`writeThread` in home, /discussions,
-  /category, /profile/discussions, and the thread page) — or centralize an
+  /category, /profile/discussions, and the thread page) - or centralize an
   auth-aware `passthroughEnabledFor(user)`. Also gate `triggerSync` in
   `+layout.svelte` on `data.user` so guests don't fire a guaranteed-401 sync fetch
   on reconnect.
@@ -42,7 +42,7 @@ null`). `runPassthrough` gates only on `prefs.enabled && prefs.passthrough`
 - **[A1] List-only ghost row.** `writeList` caches a discussion's metadata (reason
   `'read'`) but no replies + no manifest. `/offline` lists it (with "N replies"),
   but `/offline/[id]` shows a generic "empty" body. Honest-gap fix: the reader
-  should distinguish "content not cached — only the listing was" (distinct empty
+  should distinguish "content not cached - only the listing was" (distinct empty
   state) from "never cached" / fully cached. (The list metadata WAS downloaded, so
   caching it is correct; the fix is honest UX, not removing the row.)
 - **[A1] `/offline` list sort** lacks the `id` tiebreaker the server applies
@@ -50,7 +50,7 @@ null`). `runPassthrough` gates only on `prefs.enabled && prefs.passthrough`
   homepage. Cosmetic; one-liner.
 - **[A4, accepted carry-over]** `backfillMissingUsers` runs unconditionally every
   sync (pre-existing DV06; O(N) scan) and `passthroughEnabled()` double-reads
-  prefs. Non-blocking perf notes — log as **CO-C06-1**.
+  prefs. Non-blocking perf notes - log as **CO-C06-1**.
 
 ## Confirmed correct (integration, all lenses)
 

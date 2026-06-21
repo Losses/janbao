@@ -117,7 +117,7 @@
 		if (typeof window !== 'undefined') {
 			window.scrollTo(0, 0);
 		}
-		// Show the header so it animates down in sync with the snap — the
+		// Show the header so it animates down in sync with the snap - the
 		// neighbor's translateY goes from scrollY→0 while the header fills
 		// the gap, giving a coordinated slide instead of a content jump.
 		getScrollChromeStore().show();
@@ -185,7 +185,7 @@
 
 	// Neighbor vertical alignment: updated in the measureViewportWidth action
 	// (direct DOM access via `node`). Uses getBoundingClientRect().top for the
-	// exact screen position on every scroll — no stale cached values.
+	// exact screen position on every scroll - no stale cached values.
 	let neighborOffset = $state(0);
 
 	const viewportStyle = $derived(

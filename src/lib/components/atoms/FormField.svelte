@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * FormField Atom — a `Field` (label-on-top chrome) wrapping a bound
+	 * FormField Atom - a `Field` (label-on-top chrome) wrapping a bound
 	 * input/textarea. The public API is unchanged (label/id/type/value/
 	 * placeholder/required/disabled/error/as/rows/maxlength/class/hint) so the
 	 * register + admin consumers keep working untouched; only the chrome is now

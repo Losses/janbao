@@ -97,7 +97,7 @@ export function computeCachedRanges(
 	// sync.ts): each side holds at most REPLY_CAP_HALF replies ⇒ ceil / floor
 	// pages at the manifest pageSize. Using commentCount (not the
 	// totalPages*pageSize over-estimate) avoids phantom splits just below the
-	// boundary — e.g. a 951-reply thread on pageSize 50 rounds up to 20 pages
+	// boundary - e.g. a 951-reply thread on pageSize 50 rounds up to 20 pages
 	// (=1000 with the over-estimate) but really fits under the cap.
 	if (commentCount <= REPLY_CAP) return [{ start: 1, end: totalPages }];
 	const capPages = Math.max(1, Math.ceil(REPLY_CAP_HALF / pageSize));

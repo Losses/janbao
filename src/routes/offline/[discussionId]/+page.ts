@@ -74,7 +74,7 @@ export const load: PageLoad = async ({ params }) => {
 	// Honest list-only empty state (C06 r2 A1): when a discussion row exists in
 	// IDB but has NO manifest AND NO cached replies, the only writer that
 	// touched it was `writeList` (list-page passthrough). The row's metadata
-	// was downloaded — so listing it on /offline is correct — but its thread
+	// was downloaded - so listing it on /offline is correct - but its thread
 	// content is not. Surface this so the reader can render a distinct "listing
 	// only" message instead of the generic "not cached" one. The `manifestRow`
 	// null check excludes partially-evicted rows that still carry a manifest.

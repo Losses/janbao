@@ -115,7 +115,7 @@
 				detachedBusy = false;
 				return;
 			} catch {
-				// transient network blip mid-poll — keep going until the deadline
+				// transient network blip mid-poll - keep going until the deadline
 			}
 		}
 		await invalidateAll();

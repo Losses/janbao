@@ -1,10 +1,10 @@
 <script lang="ts">
 	/**
-	 * PasswordStrength Atom — a real-time, length-only strength indicator that
+	 * PasswordStrength Atom - a real-time, length-only strength indicator that
 	 * sits below a password input. A fill bar grows with the input (capped at
 	 * `minLength`) and turns from red to green once the minimum is met; the
 	 * reason text (`labelTooShort`) shows only while the requirement is unmet,
-	 * and a quiet `labelOk` confirms once it passes. Length-only by design — the
+	 * and a quiet `labelOk` confirms once it passes. Length-only by design - the
 	 * server enforces only `MIN_PASSWORD_LENGTH`, so this stays in lockstep with
 	 * real validation rather than inventing stricter rules in the UI.
 	 *

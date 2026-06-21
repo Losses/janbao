@@ -22,7 +22,7 @@ Gates: `bun run check` 0 errors/0 warnings; `bun run lint` exit 0 (0 type-dupes)
 ## Round-1 fixes confirmed correct (all 5 agents)
 
 - **[CRITICAL→fixed] Eviction transaction** (`evict.ts:69-86`) now lists every
-  store the body touches — `discussions, replies, readStateMerged,
+  store the body touches - `discussions, replies, readStateMerged,
 replyCacheManifest`. The cascade (discussion → replies → readStateMerged →
   manifest) commits atomically; the Dexie _Table not part of transaction_
   rollback is gone. `readStatePending` deliberately omitted (outbox survives).
@@ -38,7 +38,7 @@ replyCacheManifest`. The cascade (discussion → replies → readStateMerged →
   1001 → split. All callers updated.
 - Journal wording corrected: `!enabled` SERVER REQUEST is DV06 byte-identical, but
   the client does make additive IDB writes (manifest rows, curated/front/bookmark
-  reasons) — these don't alter observable DV06 read behavior (new store read only
+  reasons) - these don't alter observable DV06 read behavior (new store read only
   by the new `replyGaps` path, which falls back to `EMPTY_GAPS`).
 
 ## Carry-overs (informational, non-blocking)
@@ -49,7 +49,7 @@ replyCacheManifest`. The cascade (discussion → replies → readStateMerged →
 - **CO-C02-2** `REPLY_CAP`/`REPLY_CAP_HALF` duplicated client (`manifest.ts`) vs
   server (`db/dao/sync.ts`). Dedupe into a shared `$lib` module when convenient.
 - **CO-C02-3** `applyEviction` reads 4 syncMeta keys outside the txn (read-only
-  pre-pass; txn only writes the 4 listed stores) — acceptable; flagged for
+  pre-pass; txn only writes the 4 listed stores) - acceptable; flagged for
   awareness.
 
 ## Confirmed correct (all 5)

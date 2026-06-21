@@ -33,7 +33,7 @@ db.readStateMerged, …)` but the body calls `db.replyCacheManifest.delete(id)`.
   `prior === current` → the remove-delta is permanently empty. A discussion that
   scrolls off the front page or is un-bookmarked keeps its `front`/`bookmark`
   reason forever and is never evicted (defeats reason-set eviction for those two
-  reasons). The `curated:*` diff is correct (it mirrors prior separately) — apply
+  reasons). The `curated:*` diff is correct (it mirrors prior separately) - apply
   the same pattern to front/bookmark: capture the prior snapshot BEFORE the page
   loop writes, and diff against that.
 
@@ -44,14 +44,14 @@ db.readStateMerged, …)` but the body calls `db.replyCacheManifest.delete(id)`.
   split early (phantom gap) with non-default `PAGINATION_LIMIT`. Fix: pass
   `commentCount` into `computeCachedRanges` and gate the split on the real count.
   Update `manifest.test.ts`.
-- **[A1/A4] `populateReplyManifests` only covers curated∪front∪bookmark** — a
+- **[A1/A4] `populateReplyManifests` only covers curated∪front∪bookmark** - a
   `'read'`-only row (C04) won't get a manifest until it re-enters a curated set.
   Acceptable for C02 (passthrough is C04); log as **CO-C02-1** for C04 to write
   the manifest on passthrough.
 - **[A5] `REPLY_CAP`/`REPLY_CAP_HALF` duplicated** client (`manifest.ts`) vs
-  server (`db/dao/sync.ts`) — log as **CO-C02-2**; dedupe into a shared `$lib`
+  server (`db/dao/sync.ts`) - log as **CO-C02-2**; dedupe into a shared `$lib`
   module if trivial, else carry to a later cycle.
-- **[A4] journal overstatement** — `!enabled` path DOES write additive manifest
+- **[A4] journal overstatement** - `!enabled` path DOES write additive manifest
   rows / populate front-bookmark reasons (server request shape is byte-identical
   to DV06, but "no writes" overstates). Correct the journal wording.
 

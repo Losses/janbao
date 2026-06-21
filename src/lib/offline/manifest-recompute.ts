@@ -6,7 +6,7 @@
 // the manifest's `cachedRanges` are ABSOLUTE page numbers in the online
 // thread's pagination (page N = replies at offset [(N-1)*pageSize,
 // N*pageSize) excluding the OP). A reply's row in IDB carries its createdAt
-// and id but NOT its absolute position in the thread — and a subset of
+// and id but NOT its absolute position in the thread - and a subset of
 // replies (e.g. page 1 + page 10) cannot be bucketed back to their original
 // page numbers from createdAt alone, because the cached stream is contiguous
 // even when the underlying pages are not.
@@ -147,7 +147,7 @@ export interface ManifestRecomputeDb {
  *
  *   1. Read the existing manifest row (if any) to get its prior ranges.
  *   2. Drop any prior range whose replies are no longer in the cache (the
- *      range was evicted between writes — don't claim pages we don't have).
+ *      range was evicted between writes - don't claim pages we don't have).
  *   3. Union the newly-cached range into the surviving ranges.
  *   4. Persist the result.
  *
@@ -171,7 +171,7 @@ export async function recomputeManifestForDiscussion(
 	const priorRanges = existing?.cachedRanges ?? [];
 
 	// Defense-in-depth: if every reply for this discussion has been evicted,
-	// the manifest is fully stale — delete it so the reader's gap view doesn't
+	// the manifest is fully stale - delete it so the reader's gap view doesn't
 	// claim pages that aren't actually cached.
 	const surviving = await db.replies.where('discussionId').equals(discussionId).toArray();
 	if (surviving.length === 0) {
