@@ -16,6 +16,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { afterNavigate, beforeNavigate } from '$app/navigation';
 	import type { Snippet } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import MobileTabPager from '$lib/components/templates/MobileTabPager.svelte';
@@ -24,6 +25,8 @@
 	import MessagesSidebar from '$lib/components/panels/MessagesSidebar.svelte';
 	import { getCurrentTabIndex } from '$lib/utils/mobile-tabs';
 	import { getDrawerStore } from '$lib/stores/drawer.svelte';
+	import { getListScrollStore } from '$lib/stores/list-scroll.svelte';
+	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import type { LayoutData } from './$types';
 
 	interface TabsLayoutProps {
@@ -59,6 +62,24 @@
 	const activeIndex = $derived(clampTab(page.url.pathname));
 	const t = $derived(data.t);
 	const user = $derived(data.user);
+
+	// Remember the discussions-list scroll when leaving `/` for a thread, and
+	// restore it when returning (covers the programmatic swipe-back goto). The
+	// header is frozen for the swipe-back nav (see root +layout.svelte) so it does
+	// not react to the restore scroll; unfreeze here once the position is set.
+	const listScroll = getListScrollStore();
+	beforeNavigate(({ to }) => {
+		if (to?.url.pathname.startsWith('/discussion')) {
+			listScroll.capture(window.scrollY);
+		}
+	});
+	afterNavigate(({ to }) => {
+		if (to?.url.pathname === '/' && typeof window !== 'undefined') {
+			const y = listScroll.consume();
+			if (y > 0) window.scrollTo(0, y);
+			getScrollChromeStore().unfreeze();
+		}
+	});
 </script>
 
 {#if isMobile}

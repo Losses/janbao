@@ -25,14 +25,16 @@
 	const badges = getBadgesStore();
 	const editorPrefs = getEditorPrefsStore();
 
-	// Entering a hash-anchored thread: SvelteKit scrolls top→hash, and the
-	// scroll-chrome header would react to the intermediate top-scroll (show) then
-	// the hash-scroll (hide) = a visible twitch. Freeze the header for the enter;
-	// the thread page unfreezes once its anchor scroll runs, and a fallback timer
-	// covers the no-hash / no-scroll case.
+	// Freeze the scroll-chrome header for navigations where SvelteKit's scroll
+	// would otherwise make it twitch: entering a hash-anchored thread (top→hash)
+	// and swiping back from a thread to the list (top→restored scroll). The
+	// destination unfreezes once its scroll is set (thread page for enter,
+	// (tabs) layout for swipe-back); a fallback timer covers the rest.
 	let navFreezeTimer = 0;
-	beforeNavigate(({ to }) => {
-		if (to?.url.hash && to.url.pathname.startsWith('/discussion')) {
+	beforeNavigate(({ to, from }) => {
+		const threadEnter = to?.url.hash && to.url.pathname.startsWith('/discussion');
+		const swipeBack = from?.url.pathname.startsWith('/discussion') && to?.url.pathname === '/';
+		if (threadEnter || swipeBack) {
 			getScrollChromeStore().freeze();
 			window.clearTimeout(navFreezeTimer);
 			navFreezeTimer = window.setTimeout(() => getScrollChromeStore().unfreeze(), 1200);

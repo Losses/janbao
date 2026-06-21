@@ -20,11 +20,24 @@
 		rightHref?: string;
 		centerTab: number;
 		rightTab?: number;
+		/** Scroll the left neighbour should preview at, so its reveal matches the
+		 * position the committed navigation restores to. Pass the captured value when
+		 * the destination restores scroll (the discussions list via list-scroll);
+		 * leave 0 when it lands at the top (the messages list). */
+		leftPreviewScroll?: number;
 		children: Snippet;
 	}
 
-	let { left, right, leftHref, rightHref, centerTab, rightTab, children }: ThreadPagerProps =
-		$props();
+	let {
+		left,
+		right,
+		leftHref,
+		rightHref,
+		centerTab,
+		rightTab,
+		leftPreviewScroll = 0,
+		children
+	}: ThreadPagerProps = $props();
 
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	let isMobile = $state(page.data.isMobile ?? false);
@@ -62,6 +75,15 @@
 	const sectionWidth = $derived(`${100 / panelCount}%`);
 	const neighborStyle = $derived(
 		`width: ${sectionWidth}; transform: translateY(${neighborOffset}px)`
+	);
+	// The left neighbour previews at leftPreviewScroll (the scroll the committed
+	// navigation restores to), so the reveal matches the landing position and the
+	// list does not jump on commit. NOT clamped: when the list was scrolled deeper
+	// than the thread (capturedY > scrollY) the offset goes negative, which is
+	// correct (it just shows the neighbour scrolled up) - clamping it broke that
+	// case. The right neighbour commits to scroll 0, so it stays at neighborOffset.
+	const leftNeighborStyle = $derived(
+		`width: ${sectionWidth}; transform: translateY(${neighborOffset - leftPreviewScroll}px)`
 	);
 	const centerStyle = $derived(`width: ${sectionWidth}`);
 	const viewportStyle = $derived(
@@ -212,7 +234,7 @@
 			ontransitionend={onTrackTransitionEnd}
 		>
 			{#if left}
-				<section class="shrink-0 p-3" style={neighborStyle}>
+				<section class="shrink-0 p-3" style={leftNeighborStyle}>
 					{@render left()}
 				</section>
 			{/if}

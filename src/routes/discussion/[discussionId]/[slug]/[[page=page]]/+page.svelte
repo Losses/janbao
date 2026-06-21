@@ -23,6 +23,7 @@
 	import { afterNavigate } from '$app/navigation';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
+	import { getListScrollStore } from '$lib/stores/list-scroll.svelte';
 	import { writeThread, passthroughEnabledFor } from '$lib/offline/passthrough';
 	import type { ThreadPassthroughInput } from '$lib/offline/passthrough';
 	import type { PageData } from './$types';
@@ -41,6 +42,11 @@
 	let { data }: PageProps = $props();
 
 	const online = getOnlineStore();
+	// The discussions list restores its scroll on swipe-back; the ThreadPager's
+	// list neighbour previews at that same captured scroll so the reveal matches
+	// the landing position (no commit jump).
+	const listScroll = getListScrollStore();
+	const leftPreviewScroll = $derived(listScroll.captured);
 
 	// Offline fallback: when the network drops while viewing a discussion that is
 	// cached locally, switch to the client-only offline reader (IDB, no server
@@ -333,7 +339,7 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t} flush>
-	<ThreadPager centerTab={0} rightTab={1} leftHref="/" rightHref="/activity">
+	<ThreadPager centerTab={0} rightTab={1} leftHref="/" rightHref="/activity" {leftPreviewScroll}>
 		{#snippet left()}
 			<DiscussionsPanel
 				discussions={data.list.discussions}
