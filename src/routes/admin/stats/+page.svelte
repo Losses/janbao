@@ -370,6 +370,10 @@
 		return `M0,${(100 - (sampled[0].count / maxVal) * 85).toFixed(1)} L${points.join(' L')}`;
 	}
 
+	const displayTimeline = $derived.by(() => {
+		return downsampleTimelinePoints(data.timeline, 200);
+	});
+
 	const yAccessor = (d: TimelineDataPoint) => d.discussions + d.replies;
 </script>
 
@@ -416,7 +420,7 @@
 			<div class="h-60 w-full relative">
 				{#if mounted && ClientChart}
 					{#if data.timeline && data.timeline.length > 0}
-						<ClientChart timeline={data.timeline} {yAccessor} />
+						<ClientChart timeline={displayTimeline} {yAccessor} />
 					{:else}
 						<div
 							class="flex h-full w-full items-center justify-center text-sm text-base-content/50"

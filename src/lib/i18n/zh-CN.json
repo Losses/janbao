@@ -30,8 +30,7 @@
 		"byDay": "按天",
 		"discussions": "主题数",
 		"replies": "回复数",
-		"contributions": "贡献数",
-		"topContributors": "Top 20 贡献者",
+		"contributions": "贡献",
 		"dateRange": "时间范围",
 		"overallActivity": "整体活跃度"
 	},
