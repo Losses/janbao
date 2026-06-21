@@ -11,10 +11,7 @@ export const SYSTEM_USER_ID = -1;
  */
 export function isRealUserId(id: unknown): id is number {
 	return (
-		typeof id === 'number' &&
-		Number.isFinite(id) &&
-		id !== SYSTEM_USER_ID &&
-		id !== GHOST_USER_ID
+		typeof id === 'number' && Number.isFinite(id) && id !== SYSTEM_USER_ID && id !== GHOST_USER_ID
 	);
 }
 

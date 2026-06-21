@@ -538,9 +538,7 @@ async function backfillMissingUsers(): Promise<void> {
 		if (r.editedBy) authorIds.add(r.editedBy);
 	}
 	const cachedUserIds = new Set((await db.users.toArray()).map((u) => u.id));
-	const missing = [...authorIds].filter(
-		(id) => !cachedUserIds.has(id) && isRealUserId(id)
-	);
+	const missing = [...authorIds].filter((id) => !cachedUserIds.has(id) && isRealUserId(id));
 	if (missing.length === 0) return;
 
 	const BATCH = 500;

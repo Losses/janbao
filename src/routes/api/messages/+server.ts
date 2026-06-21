@@ -39,11 +39,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	const title = (body.title || '').trim();
 	const contentJson = body.contentJson || '';
 	const recipientIds = Array.isArray(body.recipientIds)
-		? [
-				...new Set(
-					body.recipientIds.filter((id) => isRealUserId(id) && id !== user.id)
-				)
-			]
+		? [...new Set(body.recipientIds.filter((id) => isRealUserId(id) && id !== user.id))]
 		: [];
 
 	if (!title) {
