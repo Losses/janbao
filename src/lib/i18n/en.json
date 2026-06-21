@@ -661,7 +661,11 @@
 		"integrityLabel": "Integrity check",
 		"integrityDesc": "Validates the SQLite database file structure",
 		"ftsLabel": "Rebuild search index",
-		"ftsDesc": "Rebuilds the full-text search index for all content, may take a while on large databases"
+		"ftsDesc": "Rebuilds the full-text search index for all content, may take a while on large databases",
+		"statsRebuildLabel": "Rebuild stats summary",
+		"statsRebuildDesc": "Recomputes the per-author-per-month counts table backing /admin/stats from replies and discussions",
+		"statsFreezeLabel": "Freeze recent month stats",
+		"statsFreezeDesc": "Closes any newly completed months into the stats table; normally happens lazily when stats are viewed"
 	},
 	"offline": {
 		"disabled": {

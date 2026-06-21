@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
-import { discussions, replies, users } from '../schema';
-import type { D1Db } from '../index';
+import { contributionBucketStats, discussions, replies, users } from '../schema';
+import type { D1Db, DbTransaction } from '../index';
 
 export interface TimelineDataPoint {
 	date: string;
@@ -293,90 +293,268 @@ function mapToStatRows(counts: Map<string, number>): DBStatRow[] {
 	return [...counts.entries()].map(([dateStr, count]) => ({ dateStr, count }));
 }
 
+// --- Materialized contribution_bucket_stats -------------------------------
+// Frozen per-author-per-month counts. Past months are immutable (created_at
+// never moves a row across buckets), so each is computed once and only the
+// current month is read live from replies/discussions. bucket_type leads the
+// PK so reads filter `WHERE bucket_type='month'` as a prefix scan; only 'month'
+// is populated today (week/quarter can be added later without a schema change).
+
+const CONTRIBUTION_BUCKET_DDL =
+	'CREATE TABLE IF NOT EXISTS contribution_bucket_stats (' +
+	"bucket_type TEXT NOT NULL DEFAULT 'month', " +
+	'author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, ' +
+	'bucket TEXT NOT NULL, ' +
+	'reply_count INTEGER NOT NULL DEFAULT 0, ' +
+	'discussion_count INTEGER NOT NULL DEFAULT 0, ' +
+	'PRIMARY KEY (bucket_type, author_id, bucket))';
+
+/** Create contribution_bucket_stats if missing (idempotent). Mirrors ensureFtsSchema. */
+export async function ensureContributionStatsSchema(db: D1Db): Promise<void> {
+	await db.run(sql.raw(CONTRIBUTION_BUCKET_DDL));
+}
+
+interface RebuildCounts {
+	replies: number;
+	discussions: number;
+	buckets: number;
+}
+
+interface CountRow {
+	total: number | null;
+}
+
+interface BucketCountRow {
+	n: number;
+}
+
+interface FrozenBoundRow {
+	lastBucket: string | null;
+}
+
+interface BucketContributionRow {
+	authorId: number;
+	bucket: string;
+	replyCount: number;
+	discussionCount: number;
+}
+
 /**
- * Single-pass admin overview: timeline + top-20 contributors and their
- * per-interval timelines, derived from one grouped scan per table.
- *
- * Replaces the previous 3-round flow (timeline -> top -> contributor timeline)
- * which scanned the replies table three times for the default range=all view.
- * rangeStartSec ?? 0 keeps a single query shape; created_at >= 0 matches every
- * row while still letting the planner use the created_at index.
+ * Wipe and recompute every frozen (past) month from base tables. Returns
+ * counts for the maintenance result message. Excludes the current month so
+ * the live read owns it (no double-count).
  */
-export async function getStatsOverview(
-	db: D1Db,
-	interval: 'year' | 'month' | 'day',
-	rangeStartSec?: number
-): Promise<StatsOverview> {
-	const format = interval === 'year' ? '%Y' : interval === 'month' ? '%Y-%m' : '%Y-%m-%d';
-	const lowerBound = rangeStartSec ?? 0;
-
-	const discussionsQuery = sql`
-		SELECT
-			author_id AS authorId,
-			strftime(${format}, datetime(created_at, 'unixepoch')) AS dateStr,
-			COUNT(*) AS count
-		FROM ${discussions}
-		WHERE deleted_at IS NULL AND created_at >= ${lowerBound}
-		GROUP BY author_id, dateStr
-	`;
-
-	const repliesQuery = sql`
-		SELECT
-			author_id AS authorId,
-			strftime(${format}, datetime(created_at, 'unixepoch')) AS dateStr,
-			COUNT(*) AS count
+export async function rebuildContributionStats(db: D1Db): Promise<RebuildCounts> {
+	const curMonthStart = currentMonthStartSec();
+	await db.run(sql`DELETE FROM ${contributionBucketStats} WHERE bucket_type = 'month'`);
+	await db.run(sql`
+		INSERT INTO ${contributionBucketStats} (bucket_type, author_id, bucket, reply_count, discussion_count)
+		SELECT 'month', author_id,
+			strftime('%Y-%m', datetime(created_at, 'unixepoch')) AS bucket,
+			COUNT(*) AS reply_count, 0 AS discussion_count
 		FROM ${replies}
-		WHERE deleted_at IS NULL AND created_at >= ${lowerBound}
-		GROUP BY author_id, dateStr
-	`;
-
-	const [dRows, rRows] = await Promise.all([
-		db.all<DBAuthorTimelineRow>(discussionsQuery),
-		db.all<DBAuthorTimelineRow>(repliesQuery)
-	]);
-
-	const discussionsByDate = new Map<string, number>();
-	const repliesByDate = new Map<string, number>();
-	const authors = new Map<number, AuthorAggregate>();
-	const ensureAuthor = (id: number): AuthorAggregate => {
-		let aggregate = authors.get(id);
-		if (!aggregate) {
-			aggregate = { discussionsCount: 0, repliesCount: 0, monthly: new Map() };
-			authors.set(id, aggregate);
-		}
-		return aggregate;
+		WHERE deleted_at IS NULL AND created_at < ${curMonthStart}
+		GROUP BY author_id, bucket
+		ON CONFLICT(bucket_type, author_id, bucket) DO UPDATE SET reply_count = excluded.reply_count
+	`);
+	await db.run(sql`
+		INSERT INTO ${contributionBucketStats} (bucket_type, author_id, bucket, reply_count, discussion_count)
+		SELECT 'month', author_id,
+			strftime('%Y-%m', datetime(created_at, 'unixepoch')) AS bucket,
+			0 AS reply_count, COUNT(*) AS discussion_count
+		FROM ${discussions}
+		WHERE deleted_at IS NULL AND created_at < ${curMonthStart}
+		GROUP BY author_id, bucket
+		ON CONFLICT(bucket_type, author_id, bucket) DO UPDATE SET discussion_count = excluded.discussion_count
+	`);
+	const rRows = await db.all<CountRow>(
+		sql`SELECT SUM(reply_count) AS total FROM ${contributionBucketStats} WHERE bucket_type = 'month'`
+	);
+	const dRows = await db.all<CountRow>(
+		sql`SELECT SUM(discussion_count) AS total FROM ${contributionBucketStats} WHERE bucket_type = 'month'`
+	);
+	const nRows = await db.all<BucketCountRow>(
+		sql`SELECT COUNT(*) AS n FROM ${contributionBucketStats} WHERE bucket_type = 'month'`
+	);
+	return {
+		replies: Number(rRows[0]?.total ?? 0),
+		discussions: Number(dRows[0]?.total ?? 0),
+		buckets: Number(nRows[0]?.n ?? 0)
 	};
+}
 
-	for (const row of dRows) {
-		const count = Number(row.count);
-		discussionsByDate.set(row.dateStr, (discussionsByDate.get(row.dateStr) ?? 0) + count);
-		const aggregate = ensureAuthor(Number(row.authorId));
-		aggregate.discussionsCount += count;
-		aggregate.monthly.set(row.dateStr, (aggregate.monthly.get(row.dateStr) ?? 0) + count);
-	}
-	for (const row of rRows) {
-		const count = Number(row.count);
-		repliesByDate.set(row.dateStr, (repliesByDate.get(row.dateStr) ?? 0) + count);
-		const aggregate = ensureAuthor(Number(row.authorId));
-		aggregate.repliesCount += count;
-		aggregate.monthly.set(row.dateStr, (aggregate.monthly.get(row.dateStr) ?? 0) + count);
-	}
+async function getFrozenMonthBound(db: D1Db): Promise<string | null> {
+	const rows = await db.all<FrozenBoundRow>(sql`
+		SELECT MAX(bucket) AS lastBucket FROM ${contributionBucketStats} WHERE bucket_type = 'month'
+	`);
+	return rows[0]?.lastBucket ?? null;
+}
 
+/**
+ * Freeze months between MAX(bucket)+1 and the previous calendar month.
+ * Idempotent (ON CONFLICT). Returns false if the table is empty (don't
+ * lazy-backfill on a read) or already up to date.
+ */
+export async function freezeRecentContributionStats(db: D1Db): Promise<boolean> {
+	const lastFrozen = await getFrozenMonthBound(db);
+	if (lastFrozen === null) return false;
+	const curMonth = currentMonthKey();
+	if (lastFrozen >= prevMonthKey(curMonth)) return false;
+	const gapStartSec = monthStartSec(nextMonthKey(lastFrozen));
+	const curMonthStartSec = monthStartSec(curMonth);
+	await db.run(sql`
+		INSERT INTO ${contributionBucketStats} (bucket_type, author_id, bucket, reply_count, discussion_count)
+		SELECT 'month', author_id,
+			strftime('%Y-%m', datetime(created_at, 'unixepoch')), COUNT(*), 0
+		FROM ${replies}
+		WHERE deleted_at IS NULL AND created_at >= ${gapStartSec} AND created_at < ${curMonthStartSec}
+		GROUP BY author_id, strftime('%Y-%m', datetime(created_at, 'unixepoch'))
+		ON CONFLICT(bucket_type, author_id, bucket) DO NOTHING
+	`);
+	await db.run(sql`
+		INSERT INTO ${contributionBucketStats} (bucket_type, author_id, bucket, reply_count, discussion_count)
+		SELECT 'month', author_id,
+			strftime('%Y-%m', datetime(created_at, 'unixepoch')), 0, COUNT(*)
+		FROM ${discussions}
+		WHERE deleted_at IS NULL AND created_at >= ${gapStartSec} AND created_at < ${curMonthStartSec}
+		GROUP BY author_id, strftime('%Y-%m', datetime(created_at, 'unixepoch'))
+		ON CONFLICT(bucket_type, author_id, bucket) DO UPDATE SET discussion_count = excluded.discussion_count
+	`);
+	return true;
+}
+
+/**
+ * Decrement the frozen bucket for one author+month on soft-delete. Only past
+ * months have rows (the current month is live), so this naturally no-ops for
+ * content deleted in the current month. Accepts both the db handle and a
+ * transaction so it can sit inside the reply-delete transaction.
+ */
+export async function decrementContributionStats(
+	db: D1Db | DbTransaction,
+	authorId: number,
+	createdAtUnix: number,
+	kind: 'reply' | 'discussion'
+): Promise<void> {
+	const bucket = monthKeyFromSec(createdAtUnix);
+	// sql.raw for the column name: a drizzle Column ref in SET renders
+	// table-qualified ("tbl"."col"), which SQLite UPDATE SET rejects. The column
+	// name is a fixed literal, so inline it unqualified.
+	const column = kind === 'reply' ? 'reply_count' : 'discussion_count';
+	await db.run(sql`
+		UPDATE ${contributionBucketStats}
+		SET ${sql.raw(column)} = MAX(${sql.raw(column)} - 1, 0)
+		WHERE bucket_type = 'month' AND author_id = ${authorId} AND bucket = ${bucket}
+	`);
+}
+
+// --- 'YYYY-MM' helpers (no Date round-trip across the driver boundary) -----
+
+function monthKeyFromSec(unixSec: number): string {
+	const d = new Date(unixSec * 1000);
+	return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+function monthStartSec(yyyyMm: string): number {
+	const [y, m] = yyyyMm.split('-').map(Number);
+	return Math.floor(Date.UTC(y, m - 1, 1) / 1000);
+}
+function nextMonthKey(yyyyMm: string): string {
+	const [y, m] = yyyyMm.split('-').map(Number);
+	const year = m === 12 ? y + 1 : y;
+	const month = m === 12 ? 1 : m + 1;
+	return `${year}-${String(month).padStart(2, '0')}`;
+}
+function prevMonthKey(yyyyMm: string): string {
+	const [y, m] = yyyyMm.split('-').map(Number);
+	const year = m === 1 ? y - 1 : y;
+	const month = m === 1 ? 12 : m - 1;
+	return `${year}-${String(month).padStart(2, '0')}`;
+}
+function currentMonthStartSec(): number {
+	const now = new Date();
+	return Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) / 1000);
+}
+function currentMonthKey(): string {
+	const now = new Date();
+	return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+// --- Overview assembly (shared by the live and materialized paths) ---------
+
+interface OverviewAccumulator {
+	discussionsByDate: Map<string, number>;
+	repliesByDate: Map<string, number>;
+	authors: Map<number, AuthorAggregate>;
+}
+
+function createOverviewAccumulator(): OverviewAccumulator {
+	return { discussionsByDate: new Map(), repliesByDate: new Map(), authors: new Map() };
+}
+
+function accumulateContribution(
+	acc: OverviewAccumulator,
+	authorId: number,
+	dateStr: string,
+	discussionCount: number,
+	replyCount: number
+): void {
+	if (discussionCount > 0) {
+		acc.discussionsByDate.set(dateStr, (acc.discussionsByDate.get(dateStr) ?? 0) + discussionCount);
+	}
+	if (replyCount > 0) {
+		acc.repliesByDate.set(dateStr, (acc.repliesByDate.get(dateStr) ?? 0) + replyCount);
+	}
+	let aggregate = acc.authors.get(authorId);
+	if (!aggregate) {
+		aggregate = { discussionsCount: 0, repliesCount: 0, monthly: new Map() };
+		acc.authors.set(authorId, aggregate);
+	}
+	aggregate.discussionsCount += discussionCount;
+	aggregate.repliesCount += replyCount;
+	const total = discussionCount + replyCount;
+	if (total > 0) {
+		aggregate.monthly.set(dateStr, (aggregate.monthly.get(dateStr) ?? 0) + total);
+	}
+}
+
+function rollMapToYear(map: Map<string, number>): Map<string, number> {
+	const rolled = new Map<string, number>();
+	for (const [key, value] of map) {
+		const year = key.substring(0, 4);
+		rolled.set(year, (rolled.get(year) ?? 0) + value);
+	}
+	return rolled;
+}
+
+/** Roll month-keyed ('YYYY-MM') structures up to year ('YYYY') for interval=year. */
+function rollAccumulatorToYear(acc: OverviewAccumulator): void {
+	acc.discussionsByDate = rollMapToYear(acc.discussionsByDate);
+	acc.repliesByDate = rollMapToYear(acc.repliesByDate);
+	for (const aggregate of acc.authors.values()) {
+		aggregate.monthly = rollMapToYear(aggregate.monthly);
+	}
+}
+
+async function finalizeOverview(
+	db: D1Db,
+	acc: OverviewAccumulator,
+	interval: 'year' | 'month' | 'day'
+): Promise<StatsOverview> {
+	if (interval === 'year') {
+		rollAccumulatorToYear(acc);
+	}
 	const timeline = fillTimeline(
-		mapToStatRows(discussionsByDate),
-		mapToStatRows(repliesByDate),
+		mapToStatRows(acc.discussionsByDate),
+		mapToStatRows(acc.repliesByDate),
 		interval
 	);
-
 	if (timeline.length === 0) {
 		return { timeline: [], contributors: [], startSec: 0, endSec: 0 };
 	}
-
 	const startSec = getIntervalBounds(timeline[0].date, interval).start;
 	const endSec = getIntervalBounds(timeline[timeline.length - 1].date, interval).end;
 	const dateKeys = generateDateKeys(startSec, endSec, interval);
 
-	const ranked: RankedAuthor[] = [...authors.entries()]
+	const ranked: RankedAuthor[] = [...acc.authors.entries()]
 		.map(([id, aggregate]) => ({
 			id,
 			aggregate,
@@ -410,6 +588,129 @@ export async function getStatsOverview(
 	});
 
 	return { timeline, contributors, startSec, endSec };
+}
+
+/**
+ * Live overview: two compound `GROUP BY author_id, strftime(...)` scans of
+ * discussions + replies. Fast for narrow ranges (created_at index seek); the
+ * ~930ms fallback for range=all when the materialized table is empty.
+ */
+async function getStatsOverviewLive(
+	db: D1Db,
+	interval: 'year' | 'month' | 'day',
+	rangeStartSec?: number
+): Promise<StatsOverview> {
+	const format = interval === 'year' ? '%Y' : interval === 'month' ? '%Y-%m' : '%Y-%m-%d';
+	const lowerBound = rangeStartSec ?? 0;
+	const [dRows, rRows] = await Promise.all([
+		db.all<DBAuthorTimelineRow>(sql`
+			SELECT author_id AS authorId,
+				strftime(${format}, datetime(created_at, 'unixepoch')) AS dateStr,
+				COUNT(*) AS count
+			FROM ${discussions}
+			WHERE deleted_at IS NULL AND created_at >= ${lowerBound}
+			GROUP BY author_id, dateStr
+		`),
+		db.all<DBAuthorTimelineRow>(sql`
+			SELECT author_id AS authorId,
+				strftime(${format}, datetime(created_at, 'unixepoch')) AS dateStr,
+				COUNT(*) AS count
+			FROM ${replies}
+			WHERE deleted_at IS NULL AND created_at >= ${lowerBound}
+			GROUP BY author_id, dateStr
+		`)
+	]);
+	const acc = createOverviewAccumulator();
+	for (const row of dRows) {
+		accumulateContribution(acc, Number(row.authorId), row.dateStr, Number(row.count), 0);
+	}
+	for (const row of rRows) {
+		accumulateContribution(acc, Number(row.authorId), row.dateStr, 0, Number(row.count));
+	}
+	return finalizeOverview(db, acc, interval);
+}
+
+/**
+ * Admin overview. Uses the materialized contribution_bucket_stats table for
+ * range=all + month/year (the slow case: aggregating 677K reply rows drops
+ * from ~930ms to ~13ms). Ranged views and interval=day stay live (they are
+ * already fast via the created_at index and avoid the partial-month boundary
+ * mismatch with month-granular frozen buckets). day + all is clamped to month.
+ */
+export async function getStatsOverview(
+	db: D1Db,
+	interval: 'year' | 'month' | 'day',
+	rangeStartSec?: number
+): Promise<StatsOverview> {
+	if (interval === 'day' && rangeStartSec === undefined) {
+		interval = 'month';
+	}
+	// Ranged views and day granularity: live (fast, exact).
+	if (rangeStartSec !== undefined || interval === 'day') {
+		return getStatsOverviewLive(db, interval, rangeStartSec);
+	}
+
+	// range=all + (month|year): materialized if the table is populated.
+	const lastFrozen = await getFrozenMonthBound(db);
+	if (lastFrozen === null) {
+		return getStatsOverviewLive(db, interval, rangeStartSec);
+	}
+	// Lazy-freeze any completed months not yet materialized (bounded, idempotent).
+	try {
+		await freezeRecentContributionStats(db);
+	} catch {
+		// A freeze failure must never break the read; fall back to live-only.
+		return getStatsOverviewLive(db, interval, rangeStartSec);
+	}
+
+	const curMonth = currentMonthKey();
+	const curMonthStart = monthStartSec(curMonth);
+	const acc = createOverviewAccumulator();
+
+	// Frozen past months (the table only ever holds months < currentMonth).
+	const frozenRows = await db.all<BucketContributionRow>(sql`
+		SELECT author_id AS authorId, bucket AS bucket,
+			reply_count AS replyCount, discussion_count AS discussionCount
+		FROM ${contributionBucketStats}
+		WHERE bucket_type = 'month' AND bucket < ${curMonth}
+	`);
+	for (const row of frozenRows) {
+		accumulateContribution(
+			acc,
+			Number(row.authorId),
+			row.bucket,
+			Number(row.discussionCount),
+			Number(row.replyCount)
+		);
+	}
+
+	// Live current month (month granularity; rolled to year in finalize if needed).
+	const [dRows, rRows] = await Promise.all([
+		db.all<DBAuthorTimelineRow>(sql`
+			SELECT author_id AS authorId,
+				strftime('%Y-%m', datetime(created_at, 'unixepoch')) AS dateStr,
+				COUNT(*) AS count
+			FROM ${discussions}
+			WHERE deleted_at IS NULL AND created_at >= ${curMonthStart}
+			GROUP BY author_id, dateStr
+		`),
+		db.all<DBAuthorTimelineRow>(sql`
+			SELECT author_id AS authorId,
+				strftime('%Y-%m', datetime(created_at, 'unixepoch')) AS dateStr,
+				COUNT(*) AS count
+			FROM ${replies}
+			WHERE deleted_at IS NULL AND created_at >= ${curMonthStart}
+			GROUP BY author_id, dateStr
+		`)
+	]);
+	for (const row of dRows) {
+		accumulateContribution(acc, Number(row.authorId), row.dateStr, Number(row.count), 0);
+	}
+	for (const row of rRows) {
+		accumulateContribution(acc, Number(row.authorId), row.dateStr, 0, Number(row.count));
+	}
+
+	return finalizeOverview(db, acc, interval);
 }
 
 function fillTimeline(

@@ -1,6 +1,11 @@
 import { sql } from 'drizzle-orm';
 import type { D1Db } from './db/index';
 import { listSettingsByPrefix, setSetting } from './db/dao/app-settings';
+import {
+	ensureContributionStatsSchema,
+	freezeRecentContributionStats,
+	rebuildContributionStats
+} from './db/dao/stats';
 import { ensureAndBackfillAll } from './search/backfill';
 import type {
 	MaintenanceOp,
@@ -20,7 +25,9 @@ import type {
 export const MAINTENANCE_OPS: readonly MaintenanceOp[] = [
 	'analyze',
 	'integrityCheck',
-	'ftsRebuild'
+	'ftsRebuild',
+	'statsRebuild',
+	'statsFreeze'
 ];
 
 const KV_PREFIX = 'maintenance.';
@@ -40,7 +47,7 @@ function lastResultKey(op: MaintenanceOp): string {
 // reindex would blow CPU limits, and D1 restricts PRAGMA. Mirrors how backups
 // gate themselves off on D1.
 export function isOpAvailable(op: MaintenanceOp, platform: App.Platform | undefined): boolean {
-	if (op === 'analyze') return true;
+	if (op === 'analyze' || op === 'statsRebuild' || op === 'statsFreeze') return true;
 	return !platform?.env?.D1_DB;
 }
 
@@ -61,6 +68,18 @@ export async function runMaintenanceOp(db: D1Db, op: MaintenanceOp): Promise<Mai
 			const rows = await db.all<IntegrityCheckRow>(sql.raw('PRAGMA integrity_check'));
 			const text = rows.map((r) => r.integrity_check).join('; ');
 			return { ok: true, result: text || 'ok' };
+		}
+		if (op === 'statsRebuild') {
+			await ensureContributionStatsSchema(db);
+			const counts = await rebuildContributionStats(db);
+			return {
+				ok: true,
+				result: `rebuilt ${counts.buckets} buckets (replies=${counts.replies}, discussions=${counts.discussions})`
+			};
+		}
+		if (op === 'statsFreeze') {
+			const froze = await freezeRecentContributionStats(db);
+			return { ok: true, result: froze ? 'frozen gap months' : 'already up to date' };
 		}
 		const counts = await ensureAndBackfillAll(db);
 		const total = Object.values(counts).reduce((sum, n) => sum + n, 0);
@@ -169,7 +188,9 @@ export async function getMaintenanceOverview(
 	const ops: MaintenanceOpsStatus = {
 		analyze: statusFor('analyze'),
 		integrityCheck: statusFor('integrityCheck'),
-		ftsRebuild: statusFor('ftsRebuild')
+		ftsRebuild: statusFor('ftsRebuild'),
+		statsRebuild: statusFor('statsRebuild'),
+		statsFreeze: statusFor('statsFreeze')
 	};
 	return { ops, run: getMaintenanceRunStatus() };
 }

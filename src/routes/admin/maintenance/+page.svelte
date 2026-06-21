@@ -26,6 +26,13 @@
 		run: MaintenanceOverview['run'];
 	}
 
+	/** Shape of POST /api/admin/maintenance for a sync op (analyze/statsRebuild/statsFreeze). */
+	interface MaintenanceSyncResponse {
+		success?: boolean;
+		error?: string;
+		result?: string | null;
+	}
+
 	const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 	let { data }: PageProps = $props();
@@ -35,10 +42,10 @@
 	const user = $derived(data.user);
 	const overview = $derived(data.overview as MaintenanceOverview);
 
-	// ANALYZE runs synchronously (its own busy flag); integrity_check / fts_rebuild
-	// run detached and share a single busy flag (the server allows only one
-	// detached maintenance run at a time).
-	let analyzeBusy = $state(false);
+	// ANALYZE / statsRebuild / statsFreeze run synchronously (shared busy flag);
+	// integrity_check / fts_rebuild run detached and share a single busy flag
+	// (the server allows only one detached maintenance run at a time).
+	let syncBusy = $state(false);
 	let detachedBusy = $state(false);
 	let message = $state<FeedbackMessage | null>(null);
 
@@ -46,19 +53,21 @@
 		message = { type, text };
 	}
 
-	async function runAnalyze() {
-		if (analyzeBusy) return;
-		analyzeBusy = true;
+	async function runSync(op: MaintenanceOp, doneText: string) {
+		if (syncBusy) return;
+		syncBusy = true;
 		message = null;
 		try {
 			const res = await fetch('/api/admin/maintenance', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ op: 'analyze' })
+				body: JSON.stringify({ op })
 			});
-			const result = (await res.json()) as ApiResult;
+			const result = (await res.json()) as MaintenanceSyncResponse;
 			if (result.success) {
-				setMessage('success', maintenanceT.analyzeDone);
+				// Stats ops return an informative result string ("rebuilt N buckets…");
+				// fall back to the localized done text when there is none (analyze).
+				setMessage('success', result.result ? String(result.result) : doneText);
 				await invalidateAll();
 			} else {
 				setMessage('error', result.error || t.common.error);
@@ -66,7 +75,7 @@
 		} catch {
 			setMessage('error', t.auth.networkError);
 		}
-		analyzeBusy = false;
+		syncBusy = false;
 	}
 
 	async function runDetached(op: MaintenanceOp) {
@@ -205,8 +214,8 @@
 					'analyze',
 					maintenanceT.analyzeLabel,
 					maintenanceT.analyzeDesc,
-					analyzeBusy,
-					runAnalyze
+					syncBusy,
+					() => runSync('analyze', maintenanceT.analyzeDone)
 				)}
 				{@render opCard(
 					'integrityCheck',
@@ -221,6 +230,20 @@
 					maintenanceT.ftsDesc,
 					detachedBusy,
 					() => runDetached('ftsRebuild')
+				)}
+				{@render opCard(
+					'statsRebuild',
+					maintenanceT.statsRebuildLabel,
+					maintenanceT.statsRebuildDesc,
+					syncBusy,
+					() => runSync('statsRebuild', maintenanceT.success)
+				)}
+				{@render opCard(
+					'statsFreeze',
+					maintenanceT.statsFreezeLabel,
+					maintenanceT.statsFreezeDesc,
+					syncBusy,
+					() => runSync('statsFreeze', maintenanceT.success)
 				)}
 			</div>
 		{:else}

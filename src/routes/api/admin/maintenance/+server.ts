@@ -46,7 +46,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		return jsonError(locals.t, 'maintenance.notAvailable', 400);
 	}
 
-	if (op === 'analyze') {
+	if (op === 'analyze' || op === 'statsRebuild' || op === 'statsFreeze') {
 		const result = await runMaintenanceAndRecord(locals.db, op);
 		if (!result.ok) return jsonError(locals.t, 'common.internalError', 500);
 		return json({ success: true, result: result.result ?? null });

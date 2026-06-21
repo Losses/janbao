@@ -586,3 +586,28 @@ export const appSettings = sqliteTable('app_settings', {
 		.notNull()
 		.default(sql`(strftime('%s', 'now'))`)
 });
+
+// Materialized per-author-per-period contribution counts backing /admin/stats.
+// Historical periods are immutable (created_at never moves a row across
+// buckets), so each past period is computed once and frozen here; the current
+// period is still read live from replies/discussions. bucket_type leads the PK
+// so reads filter `WHERE bucket_type='month'` as a prefix scan. Today only
+// 'month' is populated; the column exists so future granularities (week/quarter)
+// can coexist without a schema change. Kept in sync incrementally: maintenance
+// rebuild/freeze ops populate it, lazy-freeze fills gaps on read, and the
+// reply/discussion soft-delete hooks decrement the affected author+period.
+export const contributionBucketStats = sqliteTable(
+	'contribution_bucket_stats',
+	{
+		bucketType: text('bucket_type').notNull().default('month'),
+		authorId: integer('author_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		bucket: text('bucket').notNull(),
+		replyCount: integer('reply_count').notNull().default(0),
+		discussionCount: integer('discussion_count').notNull().default(0)
+	},
+	(table) => ({
+		pk: primaryKey({ columns: [table.bucketType, table.authorId, table.bucket] })
+	})
+);

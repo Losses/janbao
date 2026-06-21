@@ -27,6 +27,7 @@ import { resolveMentions } from '$lib/server/utils/mentions';
 import type { DbTransaction } from '$lib/server/db';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 import { indexReply, reindexReply, unindexReply, unindexDiscussion } from '$lib/server/search/fts';
+import { decrementContributionStats } from '$lib/server/db/dao/stats';
 import { enforcePostThrottle } from '$lib/server/throttle';
 
 // Self-join of users for the reply editor (distinct from the author join).
@@ -619,7 +620,9 @@ export const actions: Actions = {
 				id: replies.id,
 				discussionId: replies.discussionId,
 				categorySlug: discussions.categorySlug,
-				contentJson: replies.contentJson
+				contentJson: replies.contentJson,
+				authorId: replies.authorId,
+				createdAt: replies.createdAt
 			})
 			.from(replies)
 			.innerJoin(discussions, eq(replies.discussionId, discussions.id))
@@ -674,6 +677,14 @@ export const actions: Actions = {
 						lastReplyAt: sql`(SELECT MAX(${replies.createdAt}) FROM replies WHERE ${replies.discussionId} = ${replyRecord.discussionId} AND ${replies.deletedAt} IS NULL)`
 					})
 					.where(eq(discussions.id, replyRecord.discussionId));
+				// Keep the materialized contribution stats in sync. Only past months
+				// have a bucket row, so deleting a current-month reply is a no-op.
+				await decrementContributionStats(
+					tx,
+					Number(replyRecord.authorId),
+					Math.floor(replyRecord.createdAt.getTime() / 1000),
+					'reply'
+				);
 			});
 		} catch (err) {
 			console.error('Failed to delete reply:', err);
@@ -699,7 +710,9 @@ export const actions: Actions = {
 		const discussionRecords = await db
 			.select({
 				categorySlug: discussions.categorySlug,
-				title: discussions.title
+				title: discussions.title,
+				authorId: discussions.authorId,
+				createdAt: discussions.createdAt
 			})
 			.from(discussions)
 			.where(and(eq(discussions.id, discussionId), isNull(discussions.deletedAt)))
@@ -708,7 +721,7 @@ export const actions: Actions = {
 		if (discussionRecords.length === 0) {
 			error(404, locals.t.discussion.notFound);
 		}
-		const { categorySlug, title } = discussionRecords[0];
+		const { categorySlug, title, authorId, createdAt } = discussionRecords[0];
 
 		// Check permissions: canDelete
 		const perms = await resolvePermissions(db, categorySlug, user);
@@ -728,6 +741,15 @@ export const actions: Actions = {
 		// Remove the title from the search index. Replies are left indexed; search
 		// queries JOIN discussions and filter deletedAt, so they are excluded anyway.
 		await unindexDiscussion(db, discussionId, title);
+		// Decrement the discussion's bucket row. The OP reply is intentionally not
+		// decremented (it stays live via deleted_at IS NULL on replies, matching
+		// how the stats query counts it), so only the discussion_count drops.
+		await decrementContributionStats(
+			db,
+			Number(authorId),
+			Math.floor(createdAt.getTime() / 1000),
+			'discussion'
+		);
 
 		redirect(303, '/');
 	}

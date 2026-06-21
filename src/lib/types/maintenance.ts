@@ -5,7 +5,12 @@
  * shapes - mirroring how src/lib/types/backup.ts splits from backup.ts.
  */
 
-export type MaintenanceOp = 'analyze' | 'integrityCheck' | 'ftsRebuild';
+export type MaintenanceOp =
+	| 'analyze'
+	| 'integrityCheck'
+	| 'ftsRebuild'
+	| 'statsRebuild'
+	| 'statsFreeze';
 
 export interface MaintenanceOpStatus {
 	/** Whether this op can run on the current platform (local vs D1). */

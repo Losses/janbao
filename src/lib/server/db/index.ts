@@ -1,6 +1,7 @@
 import { drizzle } from 'drizzle-orm/d1';
 import * as schema from './schema';
 import { ensureFtsSchema } from '../search/fts-schema';
+import { ensureContributionStatsSchema } from './dao/stats';
 
 // Production: Cloudflare D1 database client
 export const getDb = (d1: D1Database) => drizzle(d1, { schema });
@@ -53,6 +54,10 @@ export async function getLocalDb(): Promise<D1Db> {
 		// virtual tables, so these live outside the migration journal and are
 		// applied idempotently here (local) and via the admin endpoint (production).
 		await ensureFtsSchema(castDb<D1Db>(sqliteDb));
+		// Materialized contribution stats table (backs /admin/stats). Mirrors FTS:
+		// created here as a safety net alongside the local migration, and in prod via
+		// the maintenance statsRebuild op.
+		await ensureContributionStatsSchema(castDb<D1Db>(sqliteDb));
 		_localDb = castDb<D1Db>(sqliteDb);
 	}
 	return _localDb;

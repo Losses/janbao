@@ -661,7 +661,11 @@
 		"integrityLabel": "完整性检查",
 		"integrityDesc": "校验 SQLite 数据库文件结构的完整性",
 		"ftsLabel": "重建搜索索引",
-		"ftsDesc": "为全部内容重建全文搜索索引，数据库较大时可能耗时较长"
+		"ftsDesc": "为全部内容重建全文搜索索引，数据库较大时可能耗时较长",
+		"statsRebuildLabel": "重建统计汇总",
+		"statsRebuildDesc": "从发帖和回复重新计算 /admin/stats 背后的按作者按月计数表",
+		"statsFreezeLabel": "冻结近期月份统计",
+		"statsFreezeDesc": "把新结束的月份并入统计表；通常在查看统计时自动完成"
 	},
 	"offline": {
 		"disabled": {
