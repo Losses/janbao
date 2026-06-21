@@ -24,7 +24,7 @@
 	 * the URL) so there is no race mid-transition. The paginator is shown only on
 	 * the active panel.
 	 */
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import type { Action } from 'svelte/action';
@@ -60,6 +60,20 @@
 	// pointer is dragging, applied in the transform so the track tracks 1:1.
 	let dragOffset = $state<number | null>(null);
 
+	$effect(() => {
+		console.log('[MobileTabPager] debug state:', {
+			activeIndex,
+			currentPathname: page.url.pathname,
+			currentPathIndex: getCurrentTabIndex(page.url.pathname),
+			settled,
+			pageDataTotalPages: page.data.totalPages,
+			dataHomeTotalPages: data.home.totalPages,
+			homeTotalPages: home.totalPages,
+			homePage: home.page,
+			paginate: activeIndex === 0
+		});
+	});
+
 	// Publish drag progress to the shared store so MobileTabBar's indicator
 	// tracks the finger. fractionalIndex = active tab + fractional drag offset
 	// (in panel widths); dragging drops the bar's CSS transition for 1:1 follow.
@@ -80,9 +94,20 @@
 	// Sync from the URL for deep links + browser back/forward. Writes activeIndex
 	// only (which this effect does not read), so no loop. A programmatic swipe
 	// sets activeIndex before goto resolves, so the effect is a no-op then.
+	let lastPathname = page.url.pathname;
 	$effect(() => {
-		const idx = getCurrentTabIndex(page.url.pathname);
-		if (idx >= 0 && idx !== activeIndex) activeIndex = idx;
+		const pathname = page.url.pathname;
+		if (pathname !== lastPathname) {
+			lastPathname = pathname;
+			untrack(() => {
+				const idx = getCurrentTabIndex(pathname);
+				if (idx >= 0 && idx !== activeIndex) {
+					activeIndex = idx;
+					logPaginator('syncFromUrl activeIndex updated');
+				}
+			});
+		}
+		logPaginator(`syncFromUrl pathname:${pathname}`);
 	});
 
 	const trackStyle = $derived(
@@ -91,6 +116,33 @@
 			: `transform: translateX(calc(-${activeIndex * STEP_PERCENT}% + ${dragOffset}px)); transition: none`
 	);
 
+	function logPaginator(phase: string): void {
+		if (typeof document === 'undefined') return;
+		const el = document.querySelector('.test-top-paginator');
+		if (el) {
+			const rect = el.getBoundingClientRect();
+			console.log(`[Paginator Log] ${phase}`, {
+				exists: true,
+				top: Math.round(rect.top),
+				bottom: Math.round(rect.bottom),
+				height: Math.round(rect.height),
+				width: Math.round(rect.width),
+				scrollY: Math.round(window.scrollY),
+				neighborOffset: Math.round(neighborOffset),
+				dragOffset: dragOffset ? Math.round(dragOffset) : 0,
+				activeIndex
+			});
+		} else {
+			console.log(`[Paginator Log] ${phase}`, {
+				exists: false,
+				scrollY: Math.round(window.scrollY),
+				neighborOffset: Math.round(neighborOffset),
+				dragOffset: dragOffset ? Math.round(dragOffset) : 0,
+				activeIndex
+			});
+		}
+	}
+
 	/** 1:1 in the middle; 0.4x rubber-band past the first/last tab (no neighbour). */
 	function follow(deltaX: number): number {
 		const last = MOBILE_TABS.length - 1;
@@ -98,23 +150,39 @@
 		if (activeIndex >= last && deltaX < 0) return deltaX * 0.4;
 		return deltaX;
 	}
+
+	let loggedMove = false;
 	function swipeMove(deltaX: number): void {
 		dragOffset = follow(deltaX);
 		getScrollChromeStore().show();
+		if (!loggedMove) {
+			loggedMove = true;
+			logPaginator('swipeMove start');
+		} else if (Math.round(Math.abs(deltaX)) % 25 === 0) {
+			logPaginator('swipeMove dragging');
+		}
 	}
 	function switchTo(index: number): void {
+		logPaginator(`switchTo target:${index} BEFORE`);
 		activeIndex = index;
+		if (typeof window !== 'undefined') {
+			window.scrollTo(0, 0);
+		}
 		// Show the header so it animates down in sync with the snap — the
 		// neighbor's translateY goes from scrollY→0 while the header fills
 		// the gap, giving a coordinated slide instead of a content jump.
 		getScrollChromeStore().show();
+		logPaginator(`switchTo target:${index} AFTER_SCROLL_RESET`);
 		void goto(MOBILE_TABS[index].href);
 	}
 	function swipeEnd(deltaX: number): void {
+		loggedMove = false;
+		logPaginator('swipeEnd start');
 		const last = MOBILE_TABS.length - 1;
 		if (deltaX <= -SWIPE_COMMIT && activeIndex < last) switchTo(activeIndex + 1);
 		else if (deltaX >= SWIPE_COMMIT && activeIndex > 0) switchTo(activeIndex - 1);
 		dragOffset = null;
+		logPaginator('swipeEnd finished');
 	}
 
 	// `settled` = the local activeIndex matches the URL's tab, i.e. no swipe
@@ -238,7 +306,7 @@
 				totalPages={home.totalPages}
 				{t}
 				{buildPageUrl}
-				paginate={activeIndex === 0}
+				paginate={true}
 			/>
 		</section>
 		<section
@@ -254,7 +322,7 @@
 				mentionedUsers={activity.mentionedUsers}
 				{t}
 				{user}
-				paginate={activeIndex === 1}
+				paginate={true}
 			/>
 		</section>
 		<section
@@ -267,7 +335,7 @@
 				currentPage={messages.page}
 				totalPages={messages.totalPages}
 				{t}
-				paginate={activeIndex === 2}
+				paginate={true}
 			/>
 		</section>
 	</div>

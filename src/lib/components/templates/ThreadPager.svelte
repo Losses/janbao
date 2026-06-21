@@ -11,6 +11,8 @@
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 
+	import { page } from '$app/state';
+
 	interface ThreadPagerProps {
 		left?: Snippet;
 		right?: Snippet;
@@ -25,7 +27,7 @@
 		$props();
 
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
-	let isMobile = $state(false);
+	let isMobile = $state(page.data.isMobile ?? false);
 
 	// Viewport element ref + scroll tracking for neighbor vertical alignment.
 	let viewportEl: HTMLElement | null = $state(null);

@@ -33,7 +33,7 @@
 
 	// Drawer gestures are mobile-only. Match the scroll-chrome breakpoint.
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
-	let isMobile = $state(false);
+	let isMobile = $state(page.data.isMobile ?? false);
 	onMount(() => {
 		const mq = window.matchMedia(MOBILE_BREAKPOINT);
 		const sync = () => (isMobile = mq.matches);

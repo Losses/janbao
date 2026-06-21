@@ -3,9 +3,11 @@ import { countUnreadNotifications } from '$lib/server/db/dao/notifications';
 import { countTotalUnreadMessages } from '$lib/server/db/dao/messages';
 import { getVapidPublicKeyBase64Url } from '$lib/server/push/keys';
 
-export const load: LayoutServerLoad = async ({ locals, depends, platform }) => {
+export const load: LayoutServerLoad = async ({ locals, depends, platform, request }) => {
 	depends('app:badges');
 	const user = locals.user;
+	const ua = request.headers.get('user-agent') || '';
+	const isMobile = /mobile|android|iphone|ipad|phone/i.test(ua);
 
 	// Sidebar icon unread counts. Seeded into the badges store by
 	// +layout.svelte. The layout load reads no params, so it is NOT re-run on
@@ -41,6 +43,7 @@ export const load: LayoutServerLoad = async ({ locals, depends, platform }) => {
 		t: locals.t,
 		unreadNotificationCount,
 		unreadMessageCount,
+		isMobile,
 		// VAPID public key (base64url) for the browser PushManager. Safe to expose:
 		// it is the public half of the VAPID ECDSA keypair and is also embedded in
 		// every push subscription. Null when VAPID is not configured and we are not
