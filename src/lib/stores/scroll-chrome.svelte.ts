@@ -15,25 +15,33 @@ import type { VoidHandler } from '$lib/types/handlers';
 
 interface ScrollChromeStore {
 	readonly hidden: boolean;
+	readonly translateY: number;
+	readonly scrolling: boolean;
+	setHeaderHeight: (height: number) => void;
 	start: VoidHandler;
 	show: VoidHandler;
 }
 
 const MOBILE_BREAKPOINT = '(max-width: 767px)';
 const TOP_THRESHOLD = 8; // px from top below which chrome always shows
-const DIRECTION_THRESHOLD = 4; // net px of movement before toggling visibility
 
 let hidden = $state(false);
+let translateY = $state(0);
+let scrolling = $state(false);
+let headerHeight = $state(56);
 let lastY = 0;
 let rafId = 0;
 let started = false;
 let mobileMq: MediaQueryList | null = null;
+let scrollTimeoutId = 0;
 
 function evaluate(): void {
 	const y = window.scrollY;
 	// Off-mobile (desktop): the header is in-flow, never hide.
 	if (!mobileMq?.matches) {
 		hidden = false;
+		translateY = 0;
+		scrolling = false;
 		lastY = y;
 		return;
 	}
@@ -42,16 +50,31 @@ function evaluate(): void {
 	// Pinned to the top: always show so the chrome does not vanish at rest.
 	if (y < TOP_THRESHOLD) {
 		hidden = false;
+		translateY = 0;
+		scrolling = false;
 		return;
 	}
-	if (delta > DIRECTION_THRESHOLD) {
-		hidden = true; // scrolling down
-	} else if (delta < -DIRECTION_THRESHOLD) {
-		hidden = false; // scrolling up
+
+	let newTranslateY = translateY - delta;
+	if (newTranslateY > 0) {
+		newTranslateY = 0;
+	} else if (newTranslateY < -headerHeight) {
+		newTranslateY = -headerHeight;
 	}
+
+	translateY = newTranslateY;
+	hidden = translateY <= -headerHeight;
 }
 
 function onScroll(): void {
+	scrolling = true;
+	if (scrollTimeoutId) {
+		window.clearTimeout(scrollTimeoutId);
+	}
+	scrollTimeoutId = window.setTimeout(() => {
+		scrolling = false;
+	}, 150);
+
 	if (rafId) return;
 	rafId = window.requestAnimationFrame(() => {
 		rafId = 0;
@@ -59,9 +82,21 @@ function onScroll(): void {
 	});
 }
 
+function onScrollEnd(): void {
+	scrolling = false;
+	if (scrollTimeoutId) {
+		window.clearTimeout(scrollTimeoutId);
+		scrollTimeoutId = 0;
+	}
+}
+
 function onBreakpoint(): void {
 	// Crossing back to desktop: ensure the chrome is visible again.
-	if (!mobileMq?.matches) hidden = false;
+	if (!mobileMq?.matches) {
+		hidden = false;
+		translateY = 0;
+		scrolling = false;
+	}
 }
 
 function start(): void {
@@ -70,11 +105,28 @@ function start(): void {
 	mobileMq = window.matchMedia(MOBILE_BREAKPOINT);
 	lastY = window.scrollY;
 	window.addEventListener('scroll', onScroll, { passive: true });
+	window.addEventListener('scrollend', onScrollEnd, { passive: true });
 	mobileMq.addEventListener('change', onBreakpoint);
 }
 
 function show(): void {
 	hidden = false;
+	translateY = 0;
+	scrolling = false;
+	if (typeof window !== 'undefined') {
+		lastY = window.scrollY;
+	}
+	if (scrollTimeoutId) {
+		window.clearTimeout(scrollTimeoutId);
+		scrollTimeoutId = 0;
+	}
+}
+
+function setHeaderHeight(height: number): void {
+	headerHeight = height;
+	if (translateY < -headerHeight) {
+		translateY = -headerHeight;
+	}
 }
 
 export function getScrollChromeStore(): ScrollChromeStore {
@@ -82,6 +134,13 @@ export function getScrollChromeStore(): ScrollChromeStore {
 		get hidden() {
 			return hidden;
 		},
+		get translateY() {
+			return translateY;
+		},
+		get scrolling() {
+			return scrolling;
+		},
+		setHeaderHeight,
 		start,
 		show
 	};

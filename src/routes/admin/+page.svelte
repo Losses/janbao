@@ -43,14 +43,12 @@
 				{
 					label: adminT['userGroups'],
 					href: '/admin/user-groups',
-					icon: mdiAccountGroup,
-					description: isZh ? '管理用户组设置及各组描述信息' : 'Manage user groups and descriptions'
+					icon: mdiAccountGroup
 				},
 				{
 					label: adminT['categoryPermissions'],
 					href: '/admin/permissions',
-					icon: mdiShieldLockOutline,
-					description: isZh ? '为话题分类配置细粒度的用户组读写发表权限' : 'Configure permissions per category'
+					icon: mdiShieldLockOutline
 				}
 			]
 		},
@@ -60,8 +58,7 @@
 				{
 					label: adminT['categories'],
 					href: '/admin/categories',
-					icon: mdiFolderOutline,
-					description: isZh ? '添加、编辑或删除论坛话题分类及Slug设置' : 'Manage forum discussion categories'
+					icon: mdiFolderOutline
 				}
 			]
 		},
@@ -71,14 +68,12 @@
 				{
 					label: t.backup.nav,
 					href: '/admin/backups',
-					icon: mdiBackupRestore,
-					description: isZh ? '管理数据库自动快照，进行手动备份与下载还原' : 'Manage database backups and snapshotting'
+					icon: mdiBackupRestore
 				},
 				{
 					label: t.maintenance.nav,
 					href: '/admin/maintenance',
-					icon: mdiWrenchOutline,
-					description: isZh ? '刷新查询规划器统计，执行完整性校验与索引重建' : 'Perform database optimization and index rebuilds'
+					icon: mdiWrenchOutline
 				}
 			]
 		}
@@ -98,8 +93,6 @@
 <DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-4">
 		<PageTitle title={adminT['title'] || 'Admin'} />
-		<div class="border-t border-base-300 pt-4">
-			<DirectoryGrid {groups} />
-		</div>
+		<DirectoryGrid {groups} />
 	</div>
 </DualColumnLayout>

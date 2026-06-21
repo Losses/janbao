@@ -34,20 +34,17 @@
 				{
 					label: profileT['editAccount'],
 					href: '/profile/edit',
-					icon: mdiAccountEditOutline,
-					description: isZh ? '更新您的公开显示名称、邮箱和个人简介' : 'Update your display name, email, and bio'
+					icon: mdiAccountEditOutline
 				},
 				{
 					label: profileT['changePassword'],
 					href: '/profile/password',
-					icon: mdiLockOutline,
-					description: isZh ? '定期修改您的登录密码以确保账户安全' : 'Change your account password for security'
+					icon: mdiLockOutline
 				},
 				{
 					label: profileT['avatar'],
 					href: '/profile/picture',
-					icon: mdiAccountCircleOutline,
-					description: isZh ? '上传或更新您的论坛个人头像' : 'Upload or update your forum profile picture'
+					icon: mdiAccountCircleOutline
 				}
 			]
 		},
@@ -57,20 +54,17 @@
 				{
 					label: profileT['preferences'],
 					href: '/profile/preferences',
-					icon: mdiBellOutline,
-					description: isZh ? '配置各种论坛互动的站内信与通知推送' : 'Configure email and notify preferences for interactions'
+					icon: mdiBellOutline
 				},
 				{
 					label: profileT['stealthSettings'],
 					href: '/profile/onlineNow',
-					icon: mdiIncognito,
-					description: isZh ? '启用隐身模式以隐藏您的在线状态' : 'Toggle incognito mode to hide your online status'
+					icon: mdiIncognito
 				},
 				{
 					label: profileT['editorSettingsNav'],
 					href: '/profile/editor',
-					icon: mdiFileDocumentEditOutline,
-					description: isZh ? '自定义您的发帖与回复富文本编辑器偏好' : 'Customize your rich text post editor options'
+					icon: mdiFileDocumentEditOutline
 				}
 			]
 		},
@@ -80,8 +74,7 @@
 				{
 					label: profileT['offlineReadingNav'],
 					href: '/profile/offlineReading',
-					icon: mdiCloudDownloadOutline,
-					description: isZh ? '管理离线缓存以在无网状态下阅读内容' : 'Configure device caching to read threads offline'
+					icon: mdiCloudDownloadOutline
 				}
 			]
 		}
@@ -101,8 +94,6 @@
 <DualColumnLayout {sidebar} {user} {t}>
 	<div class="space-y-4">
 		<PageTitle title={profileT['accountSettings'] || 'Settings'} />
-		<div class="border-t border-base-300 pt-4">
-			<DirectoryGrid {groups} />
-		</div>
+		<DirectoryGrid {groups} />
 	</div>
 </DualColumnLayout>

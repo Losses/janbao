@@ -28,13 +28,23 @@
 	const scrollChrome = getScrollChromeStore();
 	const tNav = $derived(t.nav);
 	const currentPath = $derived(page.url.pathname);
-	const hidden = $derived(scrollChrome.hidden);
+	const translateY = $derived(scrollChrome.translateY);
+	const scrolling = $derived(scrollChrome.scrolling);
+
+	let headerEl: HTMLElement | null = $state(null);
+
+	$effect(() => {
+		if (headerEl) {
+			scrollChrome.setHeaderHeight(headerEl.offsetHeight);
+		}
+	});
 </script>
 
 <header
-	class="sticky top-0 z-40 mx-auto w-full max-w-[960px] px-0 transition-transform duration-200 md:relative md:mt-6 md:px-6 {hidden
-		? '-translate-y-full'
-		: ''}"
+	bind:this={headerEl}
+	class="sticky top-0 z-40 mx-auto w-full max-w-[960px] px-0 transition-transform duration-200 md:relative md:mt-6 md:px-6"
+	class:scroll-chrome-scrolling={scrolling}
+	style:transform="translateY({translateY}px)"
 >
 	<div class="bg-neutral text-neutral-content shadow-md md:shadow-none">
 		<nav class="flex items-center px-2 py-2 md:items-end md:px-6 md:pt-3 md:pb-2.5">

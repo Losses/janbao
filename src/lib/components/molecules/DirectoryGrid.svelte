@@ -12,7 +12,6 @@
 		label: string;
 		href: string;
 		icon: string;
-		description?: string;
 	}
 
 	export interface DirectoryGroup {
@@ -27,7 +26,7 @@
 	let { groups }: DirectoryGridProps = $props();
 </script>
 
-<div class="space-y-8">
+<div class="space-y-6">
 	{#each groups as group}
 		<div class="space-y-3">
 			<h2 class="text-xs font-bold uppercase tracking-wider text-base-content/40 px-1">
@@ -47,18 +46,13 @@
 							<Icon path={item.icon} size={22} />
 						</div>
 
-						<!-- Label & Description -->
+						<!-- Label -->
 						<div class="flex-1 min-w-0 md:flex-initial">
 							<div
 								class="font-semibold text-base-content group-hover:text-primary transition-colors duration-200 truncate md:text-sm"
 							>
 								{item.label}
 							</div>
-							{#if item.description}
-								<div class="text-xs text-base-content/50 mt-0.5 line-clamp-1 md:hidden">
-									{item.description}
-								</div>
-							{/if}
 						</div>
 
 						<!-- Mobile Arrow -->

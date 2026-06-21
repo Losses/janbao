@@ -36,20 +36,17 @@
 				{
 					label: profileT['activities'],
 					href: `/profile/${user.id}/${targetUserSlug}`,
-					icon: mdiLightningBolt,
-					description: isZh ? '查看发布的所有动态和留言' : 'View all posted activities and comments'
+					icon: mdiLightningBolt
 				},
 				{
 					label: profileT['discussions'],
 					href: `/profile/discussions/${user.id}/${targetUserSlug}`,
-					icon: mdiForum,
-					description: isZh ? '查看发起的所有讨论话题' : 'View all initiated discussions'
+					icon: mdiForum
 				},
 				{
 					label: profileT['comments'],
 					href: `/profile/comments/${user.id}/${targetUserSlug}`,
-					icon: mdiCommentOutline,
-					description: isZh ? '查看参与的所有讨论回复与评论' : 'View all replied comments and discussions'
+					icon: mdiCommentOutline
 				}
 			]
 		},
@@ -59,14 +56,12 @@
 				{
 					label: profileT['mailbox'],
 					href: '/messages/inbox',
-					icon: mdiEmailOutline,
-					description: isZh ? '与其他用户的私聊站内信' : 'Private messages with other users'
+					icon: mdiEmailOutline
 				},
 				{
 					label: profileT['notifications'],
 					href: '/notifications',
-					icon: mdiBell,
-					description: isZh ? '接收系统与互动的通知提醒' : 'Receive system and interaction alerts'
+					icon: mdiBell
 				}
 			]
 		},
@@ -76,8 +71,7 @@
 				{
 					label: profileT['invitations'],
 					href: '/profile/invitations',
-					icon: mdiAccountPlusOutline,
-					description: isZh ? '管理与生成新用户的邀请码' : 'Manage and generate invite codes'
+					icon: mdiAccountPlusOutline
 				}
 			]
 		}
@@ -110,9 +104,7 @@
 				showLastActive={true}
 				t={t}
 			/>
-			<div class="border-t border-base-300 pt-6">
-				<DirectoryGrid {groups} />
-			</div>
+			<DirectoryGrid {groups} />
 		{/if}
 	</div>
 </DualColumnLayout>

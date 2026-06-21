@@ -202,3 +202,8 @@ header nav {
 	background-color: transparent !important;
 	color: var(--fallback-bc, oklch(var(--bc) / 1)) !important;
 }
+
+/* Suppress header/chrome transition during natural scrolling to prevent lag/damping */
+.scroll-chrome-scrolling {
+	transition: none !important;
+}
