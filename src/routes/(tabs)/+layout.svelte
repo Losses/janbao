@@ -92,15 +92,16 @@
 		<MobileTabPager {data} {t} {user} />
 	</DualColumnLayout>
 
-	<!-- Right-edge reserve for the OS back gesture. The pager claims horizontal
-	     (touch-action: pan-y) across the content, which would also swallow the
-	     system back gesture at the right edge. This strip's touch-action is left
-	     unrestricted (auto), so touches at the right edge are handled by the
-	     browser/OS (back gesture) instead of the pager; vertical scroll still
-	     passes through. Mirrors the left drawer edge zone (which, by contrast,
-	     claims its edge for the drawer). z-30 sits above the pager, below the
-	     header (z-40) and drawer (z-50). -->
-	<div class="fixed inset-y-0 right-0 z-30 w-8 md:hidden" aria-hidden="true"></div>
+	<div class="fixed inset-y-0 right-0 z-30 w-8 md:hidden" aria-hidden="true">
+		<!-- Right-edge reserve for the OS back gesture. The pager claims horizontal
+		     (touch-action: pan-y) across the content, which would also swallow the
+		     system back gesture at the right edge. This strip's touch-action is left
+		     unrestricted (auto), so touches at the right edge are handled by the
+		     browser/OS (back gesture) instead of the pager; vertical scroll still
+		     passes through. Mirrors the left drawer edge zone (which, by contrast,
+		     claims its edge for the drawer). z-30 sits above the pager, below the
+		     header (z-40) and drawer (z-50). -->
+	</div>
 {:else}
 	{@render children()}
 {/if}

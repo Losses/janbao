@@ -27,9 +27,7 @@
 </svelte:head>
 
 <DualColumnLayout t={data.t} user={data.user}>
-	{#snippet sidebar()}
-		<!-- empty -->
-	{/snippet}
+	{#snippet sidebar()}{/snippet}
 
 	<div class="space-y-3">
 		<h1 class="page-title">{data.t.nav.activity}</h1>

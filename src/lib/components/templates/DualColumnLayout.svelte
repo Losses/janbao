@@ -279,9 +279,6 @@
 </div>
 
 {#if sidebar}
-	<!-- Left-edge response zone: a rightward drag pulls the drawer out, tracking
-	     the finger. captureSwipe sets touch-action:none + preventDefault so the
-	     browser's built-in edge-back / pan never fires. -->
 	<div
 		class="fixed inset-y-0 left-0 z-30 w-8 md:hidden"
 		use:captureSwipe={{
@@ -290,9 +287,12 @@
 			disabled: () => isDrawerOpen || !isMobile
 		}}
 		aria-hidden="true"
-	></div>
+	>
+		<!-- Left-edge response zone: a rightward drag pulls the drawer out, tracking
+		     the finger. captureSwipe sets touch-action:none + preventDefault so the
+		     browser's built-in edge-back / pan never fires. -->
+	</div>
 
-	<!-- Backdrop overlay: tap to close, or drag leftward to close with finger-follow. -->
 	<button
 		type="button"
 		class="fixed inset-0 z-50 bg-black/50 transition-opacity duration-200 md:hidden {drawerVisible
@@ -308,10 +308,10 @@
 			onEnd: overlayEnd,
 			disabled: () => !isMobile
 		}}
-	></button>
+	>
+		<!-- Backdrop overlay: tap to close, or drag leftward to close with finger-follow. -->
+	</button>
 
-	<!-- Drawer panel: slides in from the left. An inline transform follows the
-	     finger while dragging; otherwise the CSS class + transition snaps it. -->
 	<div
 		class="fixed inset-y-0 left-0 z-50 w-[280px] border-r border-base-300 bg-base-100 flex flex-col shadow-lg transition-transform duration-200 md:hidden {drawerVisible
 			? 'pointer-events-auto'
@@ -322,6 +322,8 @@
 		aria-modal="true"
 		aria-label={t.nav.primary}
 	>
+		<!-- Drawer panel: slides in from the left. An inline transform follows the
+		     finger while dragging; otherwise the CSS class + transition snaps it. -->
 		<!-- Scrollable content area: contains Top Widget and Middle Content -->
 		<div class="flex-1 overflow-y-auto p-6 space-y-4">
 			<!-- Top Widget -->

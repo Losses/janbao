@@ -179,8 +179,8 @@
 <div class="space-y-4">
 	{#if user}
 		{#if isOwner}
-			<!-- Owner View: Full profile navigation -->
 			<ul class="menu menu-sm w-full gap-1">
+				<!-- Owner View: Full profile navigation -->
 				<li>
 					<a
 						href="/profile/{user.id}/{targetUserSlug}"
@@ -224,8 +224,8 @@
 				{@render logoutItem()}
 			</ul>
 		{:else}
-			<!-- Visitor View: Public navigation only -->
 			<ul class="menu menu-sm w-full gap-1">
+				<!-- Visitor View: Public navigation only -->
 				<li>
 					<a
 						href="/profile/{targetUserId}/{targetUserSlug}"
@@ -255,8 +255,8 @@
 			</ul>
 		{/if}
 	{:else}
-		<!-- Guest View: Public navigation + Sign-in/Register -->
 		<ul class="menu menu-sm w-full gap-1">
+			<!-- Guest View: Public navigation + Sign-in/Register -->
 			<li>
 				<a
 					href="/profile/{targetUserId}/{targetUserSlug}"
