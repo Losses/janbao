@@ -173,6 +173,11 @@ export function getAllowSlugChange(platformEnv: App.Platform['env'] | undefined)
 	return raw === 'true';
 }
 
+export function getAllowGuestActivity(platformEnv: App.Platform['env'] | undefined): boolean {
+	const raw = platformEnv?.ALLOW_GUEST_ACTIVITY || process.env.ALLOW_GUEST_ACTIVITY;
+	return raw === 'true';
+}
+
 /**
  * Resolved category-level CRUD permission flags.
  * When no explicit categoryPermissions row exists, defaults are applied

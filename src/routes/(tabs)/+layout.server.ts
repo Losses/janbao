@@ -1,11 +1,12 @@
 import type { LayoutServerLoad } from './$types';
 import { loadDiscussionsPage } from '$lib/server/db/dao/discussions';
-import { loadActivityPage } from '$lib/server/db/dao/activities';
+import { loadActivityPage, type ActivityPageResult } from '$lib/server/db/dao/activities';
 import { getConversations } from '$lib/server/db/dao/messages';
 import {
 	parseDiscussionPageFromPath,
 	resolveGroupSlug,
-	getDiscussionsLimit
+	getDiscussionsLimit,
+	getAllowGuestActivity
 } from '$lib/server/constants';
 import type { MessagesTabData, TabsLayoutData } from '$lib/types/tabs';
 
@@ -38,7 +39,16 @@ export const load: LayoutServerLoad = async (event) => {
 			totalPages: r.totalPages,
 			totalCount: r.totalCount
 		})),
-		loadActivityPage(db, { userId: user?.id ?? null, page: 1, platformEnv }),
+		!user && !getAllowGuestActivity(platformEnv)
+			? Promise.resolve<ActivityPageResult>({
+					activities: [],
+					page: 1,
+					totalPages: 1,
+					totalCount: 0,
+					activityDraft: null,
+					mentionedUsers: {}
+				})
+			: loadActivityPage(db, { userId: user?.id ?? null, page: 1, platformEnv }),
 		user
 			? getConversations(db, user.id, { limit: messagesLimit, offset: 0 }).then(
 					(r): MessagesTabData => ({

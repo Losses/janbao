@@ -14,8 +14,14 @@ import { indexActivity, unindexActivity } from '$lib/server/search/fts';
 import type { ActivityCreateBody, ActivityDeleteBody } from '$lib/types/api';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 import { enforcePostThrottle, tooManyRequests } from '$lib/server/throttle';
+import { getAllowGuestActivity } from '$lib/server/constants';
 
-export const GET: RequestHandler = async ({ url, locals }) => {
+export const GET: RequestHandler = async ({ url, locals, platform }) => {
+	const user = locals.user;
+	if (!user && !getAllowGuestActivity(platform?.env)) {
+		return jsonError(locals.t, 'common.unauthorized', 401);
+	}
+
 	const t = locals.t;
 	const parentId = Number(url.searchParams.get('parentId'));
 	if (!parentId) {

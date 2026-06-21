@@ -1,7 +1,14 @@
+import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { loadActivityPage } from '$lib/server/db/dao/activities';
+import { getAllowGuestActivity } from '$lib/server/constants';
 
 export const load: PageServerLoad = async (event) => {
+	const user = event.locals.user;
+	if (!user && !getAllowGuestActivity(event.platform?.env)) {
+		redirect(302, '/entry/signin');
+	}
+
 	const pageParam = event.url.searchParams.get('page');
 	let page = pageParam ? parseInt(pageParam, 10) : 1;
 	if (isNaN(page) || page < 1) {
@@ -9,7 +16,7 @@ export const load: PageServerLoad = async (event) => {
 	}
 
 	return loadActivityPage(event.locals.db, {
-		userId: event.locals.user?.id ?? null,
+		userId: user?.id ?? null,
 		page,
 		platformEnv: event.platform?.env
 	});

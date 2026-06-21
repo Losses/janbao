@@ -3,7 +3,7 @@ import type { PageServerLoad } from './$types';
 import { users, activities, drafts, activityJoins } from '$lib/server/db/schema';
 import { eq, and, isNull, desc, sql, or, inArray } from 'drizzle-orm';
 import { generateSlug } from '$lib/utils/slug';
-import { BOOTSTRAP_ADMIN_ID, SYSTEM_USER_ID } from '$lib/server/constants';
+import { BOOTSTRAP_ADMIN_ID, SYSTEM_USER_ID, getAllowGuestActivity } from '$lib/server/constants';
 import { resolveMentions } from '$lib/server/utils/mentions';
 import { getProfileHeaderPayload } from '$lib/server/db/dao/profile';
 import { listManageableUserGroups } from '$lib/server/db/dao/admin-permissions';
@@ -48,45 +48,50 @@ export const load: PageServerLoad = async (event) => {
 	// AND the viewer is logged in (guests never see it).
 	const headerEmail = targetUser.showEmail && currentUser ? headerPayload.email : null;
 
+	const allowGuestActivity = getAllowGuestActivity(event.platform?.env);
+
 	// 4. Fetch profile activities (directed to this user OR authored by this user,
 	//    OR isJoined activities this user is a member of), no parent.
-	const profileActivities = await db
-		.select({
-			id: activities.id,
-			authorId: activities.authorId,
-			recipientId: activities.recipientId,
-			contentJson: activities.contentJson,
-			createdAt: activities.createdAt,
-			isJoined: activities.isJoined,
-			authorDisplayName: users.displayName,
-			authorUsername: users.username,
-			authorAvatarFileId: users.avatarFileId
-		})
-		.from(activities)
-		.innerJoin(users, eq(activities.authorId, users.id))
-		.where(
-			and(
-				isNull(activities.deletedAt),
-				isNull(activities.parentActivityId),
-				or(
-					eq(activities.authorId, userId),
-					eq(activities.recipientId, userId),
-					// isJoined activities have author=SYSTEM_USER_ID; surface the ones
-					// where this profile's user is a member.
-					sql`(${activities.isJoined} = 1 AND EXISTS (SELECT 1 FROM activity_joins aj WHERE aj.activity_id = ${activities.id} AND aj.user_id = ${userId}))`
-				)
-			)
-		)
-		.orderBy(
-			// Vanilla surfaces an activity by its last-updated time (a comment bumps
-			// the parent status), not its insertion time. updatedAt holds that bumped
-			// time; fall back to createdAt for rows without it. The id tiebreaker
-			// keeps same-day activities (midnight-truncated timestamps from the
-			// date-only source) in newest-first order.
-			sql`COALESCE(${activities.updatedAt}, ${activities.createdAt}) DESC`,
-			desc(activities.id)
-		)
-		.limit(20);
+	const profileActivities =
+		!currentUser && !allowGuestActivity
+			? []
+			: await db
+					.select({
+						id: activities.id,
+						authorId: activities.authorId,
+						recipientId: activities.recipientId,
+						contentJson: activities.contentJson,
+						createdAt: activities.createdAt,
+						isJoined: activities.isJoined,
+						authorDisplayName: users.displayName,
+						authorUsername: users.username,
+						authorAvatarFileId: users.avatarFileId
+					})
+					.from(activities)
+					.innerJoin(users, eq(activities.authorId, users.id))
+					.where(
+						and(
+							isNull(activities.deletedAt),
+							isNull(activities.parentActivityId),
+							or(
+								eq(activities.authorId, userId),
+								eq(activities.recipientId, userId),
+								// isJoined activities have author=SYSTEM_USER_ID; surface the ones
+								// where this profile's user is a member.
+								sql`(${activities.isJoined} = 1 AND EXISTS (SELECT 1 FROM activity_joins aj WHERE aj.activity_id = ${activities.id} AND aj.user_id = ${userId}))`
+							)
+						)
+					)
+					.orderBy(
+						// Vanilla surfaces an activity by its last-updated time (a comment bumps
+						// the parent status), not its insertion time. updatedAt holds that bumped
+						// time; fall back to createdAt for rows without it. The id tiebreaker
+						// keeps same-day activities (midnight-truncated timestamps from the
+						// date-only source) in newest-first order.
+						sql`COALESCE(${activities.updatedAt}, ${activities.createdAt}) DESC`,
+						desc(activities.id)
+					)
+					.limit(20);
 
 	// 4b. Batch-fetch members of any isJoined activities on this profile feed.
 	const joinedActivityIds = profileActivities.filter((a) => a.isJoined).map((a) => a.id);

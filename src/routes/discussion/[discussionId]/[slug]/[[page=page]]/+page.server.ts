@@ -12,10 +12,14 @@ import {
 } from '$lib/server/db/schema';
 import { eq, and, isNull, count, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { getPaginationLimit, resolvePermissions } from '$lib/server/constants';
+import {
+	getPaginationLimit,
+	resolvePermissions,
+	getAllowGuestActivity
+} from '$lib/server/constants';
 import { parseDiscussionPageFromPath, resolveGroupSlug } from '$lib/server/constants';
 import { loadDiscussionsPage } from '$lib/server/db/dao/discussions';
-import { loadActivityPage } from '$lib/server/db/dao/activities';
+import { loadActivityPage, type ActivityPageResult } from '$lib/server/db/dao/activities';
 import { dispatchReplyNotifications } from '$lib/server/db/notifications';
 import type { NewNotificationRow } from '$lib/server/db/notifications';
 import { deliverPushForNotifications } from '$lib/server/push/deliver';
@@ -284,7 +288,16 @@ export const load: PageServerLoad = async (event) => {
 			totalPages: r.totalPages,
 			totalCount: r.totalCount
 		})),
-		loadActivityPage(db, { userId: user?.id ?? null, page: 1, platformEnv })
+		!user && !getAllowGuestActivity(platformEnv)
+			? Promise.resolve<ActivityPageResult>({
+					activities: [],
+					page: 1,
+					totalPages: 1,
+					totalCount: 0,
+					activityDraft: null,
+					mentionedUsers: {}
+				})
+			: loadActivityPage(db, { userId: user?.id ?? null, page: 1, platformEnv })
 	]);
 
 	return {
