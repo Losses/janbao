@@ -145,15 +145,77 @@
 		}
 		swipeOffset = 0;
 	}
+
+	let sidebarEl: HTMLElement | null = $state(null);
+	let middleContentEl: HTMLElement | null = $state(null);
+	let sloganEl: HTMLElement | null = $state(null);
+	let isSticky = $state(true);
+
+	function updateStickyState() {
+		if (!sidebarEl || !middleContentEl) return;
+		const children = Array.from(sidebarEl.children) as HTMLElement[];
+		let totalHeight = 0;
+		for (const child of children) {
+			if (child === sloganEl && !isSticky) {
+				totalHeight += 24;
+			}
+			totalHeight += child.offsetHeight;
+		}
+		const gapCount = children.length - 1;
+		totalHeight += gapCount * 16;
+
+		const headerHeight =
+			parseInt(
+				typeof window !== 'undefined'
+					? getComputedStyle(document.documentElement).getPropertyValue('--header-height')
+					: ''
+			) || 62;
+		const availableHeight =
+			(typeof window !== 'undefined' ? window.innerHeight : 800) - headerHeight - 48;
+
+		if (totalHeight <= availableHeight) {
+			isSticky = true;
+			return;
+		}
+
+		const middleRect = middleContentEl.getBoundingClientRect();
+		const sloganHeight = sloganEl?.offsetHeight || 200;
+		const neededSpace = sloganHeight + 40;
+
+		isSticky = middleRect.bottom <= window.innerHeight - neededSpace;
+	}
+
+	$effect(() => {
+		if (!sidebarEl || !middleContentEl) return;
+
+		const observer = new ResizeObserver(() => {
+			updateStickyState();
+		});
+
+		const children = Array.from(sidebarEl.children);
+		for (const child of children) {
+			observer.observe(child);
+		}
+
+		window.addEventListener('resize', updateStickyState);
+		window.addEventListener('scroll', updateStickyState, { passive: true });
+		updateStickyState();
+
+		return () => {
+			observer.disconnect();
+			window.removeEventListener('resize', updateStickyState);
+			window.removeEventListener('scroll', updateStickyState);
+		};
+	});
 </script>
 
 <div class="relative flex min-h-0 flex-1 flex-col text-base-content">
 	<!-- Main Content Container -->
 	<div class="mx-auto flex w-full max-w-[960px] flex-1 flex-col px-0 pb-6 md:px-6">
 		<div
-			class="flex flex-1 flex-col gap-4 border-b border-base-300 bg-base-100 {flush
+			class="flex flex-1 flex-col gap-3 border-b border-base-300 bg-base-100 {flush
 				? 'p-0 md:p-3'
-				: 'p-3'} md:flex-initial md:border-x md:flex-row"
+				: 'p-3'} md:flex-initial md:border-x md:flex-row desktop-min-height"
 		>
 			<!-- Left Column (Main Page Content). On non-pager pages a horizontal
 			     drag slides the content with the finger and a committed swipe
@@ -178,32 +240,37 @@
 
 			<!-- Right Column (Desktop Sidebar) -->
 			{#if sidebar}
-				<aside class="hidden w-full shrink-0 md:block md:w-[280px]">
-					<div class="space-y-4">
-						<!-- Top Widget -->
-						{#if resolvedUser}
-							<UserInfoBlock user={resolvedUser} {t} />
-						{:else}
-							<div class="space-y-2">
-								<h3 class="text-sm font-semibold text-base-content/70">{t.home.welcomeTo}</h3>
-								<div class="flex gap-2">
-									<a href="/entry/signin" class="btn btn-sm btn-primary flex-1">{t.nav.signin}</a>
-									<a href="/entry/register" class="btn btn-sm btn-outline flex-1"
-										>{t.nav.register}</a
-									>
-								</div>
+				<aside
+					bind:this={sidebarEl}
+					class="hidden w-full shrink-0 md:flex md:flex-col md:gap-4 md:w-[280px]"
+				>
+					<!-- Top Widget -->
+					{#if resolvedUser}
+						<UserInfoBlock user={resolvedUser} {t} />
+					{:else}
+						<div class="space-y-2">
+							<h3 class="text-sm font-semibold text-base-content/70">{t.home.welcomeTo}</h3>
+							<div class="flex gap-2">
+								<a href="/entry/signin" class="btn btn-sm btn-primary flex-1">{t.nav.signin}</a>
+								<a href="/entry/register" class="btn btn-sm btn-outline flex-1">{t.nav.register}</a>
 							</div>
-						{/if}
-
-						<!-- Middle Content -->
-						<div class="space-y-3">
-							{@render sidebar()}
 						</div>
+					{/if}
 
-						<!-- Bottom Slogan -->
-						<div class="pt-6">
-							<img src="/slogan.jpg" alt="Slogan" class="w-full rounded-box shadow-sm" />
-						</div>
+					<!-- Middle Content -->
+					<div bind:this={middleContentEl} class="space-y-3">
+						{@render sidebar()}
+					</div>
+
+					<!-- Bottom Slogan -->
+					<div
+						bind:this={sloganEl}
+						class="pt-2"
+						class:mt-auto={isSticky}
+						class:mt-6={!isSticky}
+						class:slogan-sticky={isSticky}
+					>
+						<img src="/slogan.jpg" alt="Slogan" class="w-full rounded-box shadow-sm" />
 					</div>
 				</aside>
 			{/if}
@@ -282,3 +349,16 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	@media (min-width: 768px) {
+		.desktop-min-height {
+			min-height: calc(100vh - var(--header-height, 62px) - 3rem);
+		}
+		.slogan-sticky {
+			position: sticky;
+			bottom: calc(var(--spacing) * 3);
+			z-index: 10;
+		}
+	}
+</style>
