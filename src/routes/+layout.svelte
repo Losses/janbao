@@ -4,6 +4,7 @@
 	import type { Snippet } from 'svelte';
 	import { setContext, onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { beforeNavigate } from '$app/navigation';
 	import AppShell from '$lib/components/templates/AppShell.svelte';
 	import type { LayoutData } from './$types';
 	import { getBadgesStore } from '$lib/stores/badges.svelte';
@@ -12,6 +13,7 @@
 	import { getOfflinePrefsStore } from '$lib/stores/offline-prefs.svelte';
 	import { DEFAULT_OFFLINE_PREFS } from '$lib/offline/prefs';
 	import { getEditorPrefsStore } from '$lib/stores/editor-prefs.svelte';
+	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 
 	interface LayoutProps {
 		data: LayoutData;
@@ -22,6 +24,20 @@
 
 	const badges = getBadgesStore();
 	const editorPrefs = getEditorPrefsStore();
+
+	// Entering a hash-anchored thread: SvelteKit scrolls top→hash, and the
+	// scroll-chrome header would react to the intermediate top-scroll (show) then
+	// the hash-scroll (hide) = a visible twitch. Freeze the header for the enter;
+	// the thread page unfreezes once its anchor scroll runs, and a fallback timer
+	// covers the no-hash / no-scroll case.
+	let navFreezeTimer = 0;
+	beforeNavigate(({ to }) => {
+		if (to?.url.hash && to.url.pathname.startsWith('/discussion')) {
+			getScrollChromeStore().freeze();
+			window.clearTimeout(navFreezeTimer);
+			navFreezeTimer = window.setTimeout(() => getScrollChromeStore().unfreeze(), 1200);
+		}
+	});
 
 	// Auth routes render their own standalone layout and must NOT get the
 	// persistent app shell (Header / tab bar).

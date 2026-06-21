@@ -22,6 +22,7 @@
 	import { onMount } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
+	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { writeThread, passthroughEnabledFor } from '$lib/offline/passthrough';
 	import type { ThreadPassthroughInput } from '$lib/offline/passthrough';
 	import type { PageData } from './$types';
@@ -183,6 +184,43 @@
 		});
 	}
 
+	/**
+	 * Resolve once the document layout has stopped shifting - same scrollHeight
+	 * across several rAFs (capped so it never waits forever). Entering a thread
+	 * with a #reply anchor fires the anchor scroll; if it runs while the thread
+	 * content, images, and the pager's height measurement are still settling, the
+	 * smooth scroll chases a moving target and the scroll-chrome header twitches.
+	 * A quiet layout makes the scroll a single, accurate motion.
+	 */
+	function waitForStableLayout(): Promise<void> {
+		return new Promise((resolve) => {
+			let lastHeight = -1;
+			let stableFrames = 0;
+			let frame = 0;
+			const maxFrames = 40; // ~660ms cap at 60fps
+			const tick = () => {
+				frame += 1;
+				const height = document.documentElement.scrollHeight;
+				if (height === lastHeight) {
+					stableFrames += 1;
+					if (stableFrames >= 3) {
+						resolve();
+						return;
+					}
+				} else {
+					stableFrames = 0;
+					lastHeight = height;
+				}
+				if (frame >= maxFrames) {
+					resolve();
+					return;
+				}
+				requestAnimationFrame(tick);
+			};
+			requestAnimationFrame(tick);
+		});
+	}
+
 	function quickReply(username: string, displayName: string) {
 		if (replyEditor) {
 			replyEditor.insertMention(username, displayName);
@@ -232,6 +270,8 @@
 	// 2. Navigation Anchor Smooth Scroll. Uses scrollToElement (window-only), not
 	// scrollIntoView: the ThreadPager viewport is overflow:hidden, so
 	// scrollIntoView would scroll it internally and lock the page on the anchor.
+	// Deferred until the layout is stable (waitForStableLayout) so it does not
+	// chase a moving target mid-enter and twitch the header.
 	let lastScrolledHash: string | null = null;
 	$effect(() => {
 		const hash = page.url.hash;
@@ -243,10 +283,17 @@
 					document.getElementById(targetId) || document.getElementById(`reply-${targetId}`);
 				if (element) {
 					lastScrolledHash = hash;
-					const timer = setTimeout(() => {
+					let cancelled = false;
+					void waitForStableLayout().then(() => {
+						if (cancelled) return;
+						// Resume header reaction (frozen on nav) right before the clean
+						// scroll so it hides smoothly instead of twitching on the nav scroll.
+						getScrollChromeStore().unfreeze();
 						scrollToElement(element);
-					}, 200);
-					return () => clearTimeout(timer);
+					});
+					return () => {
+						cancelled = true;
+					};
 				}
 			}
 		} else {
@@ -294,7 +341,7 @@
 				totalPages={data.list.totalPages}
 				{t}
 				{buildPageUrl}
-				paginate={false}
+				paginate={true}
 			/>
 		{/snippet}
 		{#snippet right()}
@@ -306,7 +353,7 @@
 				mentionedUsers={data.activity.mentionedUsers}
 				{t}
 				{user}
-				paginate={false}
+				paginate={true}
 			/>
 		{/snippet}
 		<div class="space-y-3">

@@ -22,6 +22,11 @@ interface ScrollChromeStore {
 	setHeaderHeight: SetHeaderHeightHandler;
 	start: VoidHandler;
 	show: VoidHandler;
+	/** Temporarily stop the header reacting to scroll - used while a navigation
+	 * scrolls top→hash, which would otherwise show-then-hide the header (twitch).
+	 * `unfreeze` re-syncs the header to the current position. */
+	freeze: VoidHandler;
+	unfreeze: VoidHandler;
 }
 
 const MOBILE_BREAKPOINT = '(max-width: 767px)';
@@ -36,9 +41,20 @@ let rafId = 0;
 let started = false;
 let mobileMq: MediaQueryList | null = null;
 let scrollTimeoutId = 0;
+// While true, evaluate() holds the header's current translateY and only refreshes
+// lastY. Set during a hash-anchored navigation so the header does not react to
+// SvelteKit's top→hash scroll (a show-then-hide twitch).
+let frozen = false;
 
 function evaluate(): void {
 	const y = window.scrollY;
+	if (frozen) {
+		// Keep lastY fresh so the post-unfreeze evaluate sees no stale delta, but do
+		// not move the header - the navigation's intermediate scroll is not user
+		// intent. unfreeze() re-syncs the header to the landing position.
+		lastY = y;
+		return;
+	}
 	// Off-mobile (desktop): the header is in-flow, never hide.
 	if (!mobileMq?.matches) {
 		hidden = false;
@@ -131,6 +147,32 @@ function setHeaderHeight(height: number): void {
 	}
 }
 
+function freeze(): void {
+	frozen = true;
+}
+
+function unfreeze(): void {
+	if (!frozen) return;
+	frozen = false;
+	scrolling = false;
+	if (scrollTimeoutId) {
+		window.clearTimeout(scrollTimeoutId);
+		scrollTimeoutId = 0;
+	}
+	if (typeof window === 'undefined') return;
+	const y = window.scrollY;
+	lastY = y;
+	// Re-sync the header to the landing position (evaluate was skipped while
+	// frozen): visible near the top, hidden once scrolled in.
+	if (!mobileMq?.matches || y < TOP_THRESHOLD) {
+		hidden = false;
+		translateY = 0;
+	} else {
+		hidden = true;
+		translateY = -headerHeight;
+	}
+}
+
 export function getScrollChromeStore(): ScrollChromeStore {
 	return {
 		get hidden() {
@@ -144,6 +186,8 @@ export function getScrollChromeStore(): ScrollChromeStore {
 		},
 		setHeaderHeight,
 		start,
+		freeze,
+		unfreeze,
 		show
 	};
 }

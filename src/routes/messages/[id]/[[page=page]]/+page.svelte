@@ -159,7 +159,7 @@
 				currentPage={data.inbox.page}
 				totalPages={data.inbox.totalPages}
 				{t}
-				paginate={false}
+				paginate={true}
 			/>
 		{/snippet}
 		<div class="space-y-3">
