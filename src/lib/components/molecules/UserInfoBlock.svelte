@@ -3,6 +3,7 @@
 	 * UserInfoBlock Molecule - Displays user avatar, display name, and a row of icon buttons
 	 * for Notifications, Messages, Bookmarks, and Settings.
 	 */
+		import { onMount } from 'svelte';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import Badge from '$lib/components/atoms/Badge.svelte';
@@ -14,7 +15,8 @@
 	import { getBadgesStore } from '$lib/stores/badges.svelte';
 	import type { UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
-	import { mdiCog, mdiShieldAccount, mdiBell, mdiEmailOutline, mdiBookmarkOutline } from '@mdi/js';
+	import { mdiCog, mdiShieldAccount, mdiBell, mdiEmail, mdiBookmark } from '@mdi/js';
+
 
 	interface UserInfoBlockProps {
 		user: UserInfoSummary;
@@ -46,6 +48,16 @@
 	function closeTooltip() {
 		openTooltip = null;
 	}
+
+	const MOBILE_BREAKPOINT = '(max-width: 767px)';
+	let isMobile = $state(false);
+	onMount(() => {
+		const mq = window.matchMedia(MOBILE_BREAKPOINT);
+		const sync = () => (isMobile = mq.matches);
+		sync();
+		mq.addEventListener('change', sync);
+		return () => mq.removeEventListener('change', sync);
+	});
 </script>
 
 <div class="flex flex-col gap-3 {className}">
@@ -59,7 +71,7 @@
 		/>
 		<div class="flex flex-col">
 			<a
-				href="/profile/{user.id}/{userSlug}"
+				href={isMobile ? '/profile' : `/profile/${user.id}/${userSlug}`}
 				class="user-display-name text-base-content hover:text-primary"
 			>
 				{user.displayName}
@@ -143,7 +155,7 @@
 					aria-label={tSidebar['messages']}
 					title={tSidebar['messages']}
 				>
-					<Icon path={mdiEmailOutline} size={16} />
+					<Icon path={mdiEmail} size={16} />
 					{#if unreadMessages > 0}
 						<Badge
 							variant="primary"
@@ -161,11 +173,11 @@
 					aria-label={tSidebar['bookmarks']}
 					title={tSidebar['bookmarks']}
 				>
-					<Icon path={mdiBookmarkOutline} size={16} />
+					<Icon path={mdiBookmark} size={16} />
 				</a>
 
 				<a
-					href="/profile/edit"
+					href="/profile/settings"
 					class="btn btn-ghost btn-xs sidebar-icon-btn"
 					aria-label={tSidebar['settings']}
 					title={tSidebar['settings']}
