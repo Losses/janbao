@@ -354,7 +354,7 @@
 
 <style>
 	.slogan {
-		opacity: 0.15;
+		opacity: 0.05;
 		filter: grayscale(90%);
 		transition: opacity 300ms, filter 300ms;
 	}
