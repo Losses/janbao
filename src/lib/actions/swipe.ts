@@ -91,11 +91,36 @@ function suppressNextClick(node: HTMLElement): void {
 
 export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => {
 	let params = initial;
+	// Capture is best-effort: we request it so the browser yields native pan /
+	// edge-back to us, but the gesture MUST complete (onEnd) on up / cancel even
+	// if capture failed or was lost. `capturedPointers` therefore only gates the
+	// release cleanup — never the call to `finish`.
 	const capturedPointers = new Set<number>();
 	let startX = 0;
 	let moved = false;
 	let active = false;
 	let primaryPointerId = NO_POINTER;
+
+	function releaseIfHeld(id: number): void {
+		if (!capturedPointers.has(id)) return;
+		try {
+			if (node.hasPointerCapture(id)) {
+				node.releasePointerCapture(id);
+			}
+		} catch {
+			// Ignore release failure
+		}
+		capturedPointers.delete(id);
+	}
+
+	/** Complete the active primary gesture exactly once on the terminal event. */
+	function finish(event: PointerEvent): void {
+		if (!active) return;
+		active = false;
+		primaryPointerId = NO_POINTER;
+		params.onEnd(event.clientX - startX);
+		if (moved) suppressNextClick(node);
+	}
 
 	function onDown(event: PointerEvent): void {
 		if (event.pointerType === 'mouse' || params.disabled?.()) {
@@ -114,57 +139,35 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 			node.setPointerCapture(id);
 			capturedPointers.add(id);
 		} catch {
-			// Ignore capture failure
+			// Capture is optional; the gesture still completes on up / cancel.
 		}
 	}
 
 	function onMove(event: PointerEvent): void {
 		if (event.pointerId !== primaryPointerId || !active) return;
 		event.preventDefault();
-		if (!moved && Math.abs(event.clientX - startX) > CLICK_THRESHOLD) {
+		const delta = event.clientX - startX;
+		if (!moved && Math.abs(delta) > CLICK_THRESHOLD) {
 			moved = true;
 		}
-		params.onMove(event.clientX - startX);
+		params.onMove(delta);
 	}
 
 	function onUp(event: PointerEvent): void {
-		const id = event.pointerId;
-		const isPrimary = id === primaryPointerId;
-
-		if (capturedPointers.has(id)) {
-			try {
-				if (node.hasPointerCapture(id)) {
-					node.releasePointerCapture(id);
-				}
-			} catch {
-				// Ignore release failure
-			}
-			capturedPointers.delete(id);
-
-			if (isPrimary && active) {
-				active = false;
-				const delta = event.clientX - startX;
-				params.onEnd(delta);
-				if (moved) {
-					suppressNextClick(node);
-				}
-			}
-		}
-
-		if (isPrimary) {
-			primaryPointerId = NO_POINTER;
-			active = false;
+		releaseIfHeld(event.pointerId);
+		if (event.pointerId === primaryPointerId) {
+			finish(event);
 		}
 	}
 
 	function onLostCapture(event: PointerEvent): void {
-		if (capturedPointers.has(event.pointerId)) {
-			capturedPointers.delete(event.pointerId);
-		}
-		if (event.pointerId === primaryPointerId) {
-			primaryPointerId = NO_POINTER;
-			active = false;
-		}
+		// Pointer capture was released (by us on up, or by the browser). Losing
+		// capture does NOT end the gesture: after release, pointer events resume
+		// normal hit-testing and — with the finger still over this node — the real
+		// pointerup / pointercancel still arrives and completes the gesture via
+		// onUp. Finishing here would snap on a stale delta, so we only keep the
+		// capture set accurate for destroy() and leave gesture state untouched.
+		capturedPointers.delete(event.pointerId);
 	}
 
 	node.style.touchAction = 'none';
@@ -180,13 +183,7 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 		},
 		destroy(): void {
 			for (const id of capturedPointers) {
-				try {
-					if (node.hasPointerCapture(id)) {
-						node.releasePointerCapture(id);
-					}
-				} catch {
-					// Ignore if already released or disconnected
-				}
+				releaseIfHeld(id);
 			}
 			capturedPointers.clear();
 			node.removeEventListener('pointerdown', onDown);
@@ -200,6 +197,9 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 
 export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => {
 	let params = initial;
+	// See captureSwipe: capture is best-effort. A recognised swipe MUST fire onEnd
+	// on up / cancel regardless of capture state, otherwise the pager / tab-slide
+	// animation freezes mid-transition.
 	const capturedPointers = new Set<number>();
 	let startX = 0;
 	let startY = 0;
@@ -207,6 +207,27 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 	let target: EventTarget | null = null;
 	let phase: SwipePhase = 'idle';
 	let primaryPointerId = NO_POINTER;
+
+	function releaseIfHeld(id: number): void {
+		if (!capturedPointers.has(id)) return;
+		try {
+			if (node.hasPointerCapture(id)) {
+				node.releasePointerCapture(id);
+			}
+		} catch {
+			// Ignore release failure
+		}
+		capturedPointers.delete(id);
+	}
+
+	/** Fire onEnd for an in-flight swipe exactly once on the terminal event. */
+	function finish(event: PointerEvent): void {
+		if (phase !== 'swipe') return;
+		phase = 'idle';
+		primaryPointerId = NO_POINTER;
+		params.onEnd(event.clientX - startX);
+		suppressNextClick(node);
+	}
 
 	function reset(): void {
 		phase = 'idle';
@@ -249,7 +270,7 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 					node.setPointerCapture(event.pointerId);
 					capturedPointers.add(event.pointerId);
 				} catch {
-					// Ignore capture failure
+					// Capture is optional; the swipe still completes on up / cancel.
 				}
 			} else {
 				phase = 'ignore';
@@ -261,37 +282,21 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 	}
 
 	function onUp(event: PointerEvent): void {
-		const id = event.pointerId;
-		const isPrimary = id === primaryPointerId;
-
-		if (capturedPointers.has(id)) {
-			try {
-				if (node.hasPointerCapture(id)) {
-					node.releasePointerCapture(id);
-				}
-			} catch {
-				// Ignore release failure
-			}
-			capturedPointers.delete(id);
-
-			if (isPrimary && phase === 'swipe') {
-				params.onEnd(event.clientX - startX);
-				suppressNextClick(node);
-			}
-		}
-
-		if (isPrimary) {
+		releaseIfHeld(event.pointerId);
+		if (event.pointerId !== primaryPointerId) return;
+		if (phase === 'swipe') {
+			finish(event);
+		} else {
 			reset();
 		}
 	}
 
 	function onLostCapture(event: PointerEvent): void {
-		if (capturedPointers.has(event.pointerId)) {
-			capturedPointers.delete(event.pointerId);
-		}
-		if (event.pointerId === primaryPointerId) {
-			reset();
-		}
+		// See captureSwipe.onLostCapture: losing capture does not end the gesture.
+		// The real pointerup / pointercancel still arrives and completes the swipe
+		// via onUp, so only sync the capture set; never snap from here (doing so
+		// sprang the pager back on a mid-swipe lostpointercapture).
+		capturedPointers.delete(event.pointerId);
 	}
 
 	node.addEventListener('pointerdown', onDown);
@@ -306,13 +311,7 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 		},
 		destroy(): void {
 			for (const id of capturedPointers) {
-				try {
-					if (node.hasPointerCapture(id)) {
-						node.releasePointerCapture(id);
-					}
-				} catch {
-					// Ignore if already released or disconnected
-				}
+				releaseIfHeld(id);
 			}
 			capturedPointers.clear();
 			node.removeEventListener('pointerdown', onDown);
