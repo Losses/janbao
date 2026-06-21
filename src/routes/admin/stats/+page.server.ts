@@ -14,12 +14,42 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			timeline: [],
 			initialContributors: [],
 			interval: 'month',
+			range: 'all',
 			startSec: 0,
 			endSec: 0
 		};
 	}
 
-	const timeline = await getTimelineStats(locals.db, interval);
+	const range = url.searchParams.get('range') || 'all';
+
+	let rangeStartSec: number | undefined;
+	const now = new Date();
+	const y = now.getUTCFullYear();
+	const m = now.getUTCMonth();
+	const d = now.getUTCDate();
+	switch (range) {
+		case '2y':
+			rangeStartSec = Math.floor(Date.UTC(y - 2, m, d) / 1000);
+			break;
+		case '1y':
+			rangeStartSec = Math.floor(Date.UTC(y - 1, m, d) / 1000);
+			break;
+		case '6m':
+			rangeStartSec = Math.floor(Date.UTC(y, m - 6, d) / 1000);
+			break;
+		case '3m':
+			rangeStartSec = Math.floor(Date.UTC(y, m - 3, d) / 1000);
+			break;
+		case 'current_month':
+			rangeStartSec = Math.floor(Date.UTC(y, m, 1) / 1000);
+			break;
+		case 'all':
+		default:
+			rangeStartSec = undefined;
+			break;
+	}
+
+	const timeline = await getTimelineStats(locals.db, interval, rangeStartSec);
 
 	let initialContributors: Contributor[] = [];
 	let startSec = 0;
@@ -42,6 +72,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		timeline,
 		initialContributors,
 		interval,
+		range,
 		startSec,
 		endSec
 	};

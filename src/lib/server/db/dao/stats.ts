@@ -47,26 +47,48 @@ export interface Contributor {
 
 export async function getTimelineStats(
 	db: D1Db,
-	interval: 'year' | 'month' | 'day'
+	interval: 'year' | 'month' | 'day',
+	startSec?: number
 ): Promise<TimelineDataPoint[]> {
 	const format = interval === 'year' ? '%Y' : interval === 'month' ? '%Y-%m' : '%Y-%m-%d';
 
-	const dQuery = sql`
-		SELECT 
-			strftime(${format}, datetime(created_at, 'unixepoch')) AS dateStr, 
-			COUNT(*) AS count 
-		FROM ${discussions} 
-		WHERE deleted_at IS NULL 
-		GROUP BY 1
-	`;
-	const rQuery = sql`
-		SELECT 
-			strftime(${format}, datetime(created_at, 'unixepoch')) AS dateStr, 
-			COUNT(*) AS count 
-		FROM ${replies} 
-		WHERE deleted_at IS NULL 
-		GROUP BY 1
-	`;
+	const dQuery =
+		startSec !== undefined
+			? sql`
+			SELECT 
+				strftime(${format}, datetime(created_at, 'unixepoch')) AS dateStr, 
+				COUNT(*) AS count 
+			FROM ${discussions} 
+			WHERE deleted_at IS NULL AND created_at >= ${startSec}
+			GROUP BY 1
+		`
+			: sql`
+			SELECT 
+				strftime(${format}, datetime(created_at, 'unixepoch')) AS dateStr, 
+				COUNT(*) AS count 
+			FROM ${discussions} 
+			WHERE deleted_at IS NULL 
+			GROUP BY 1
+		`;
+
+	const rQuery =
+		startSec !== undefined
+			? sql`
+			SELECT 
+				strftime(${format}, datetime(created_at, 'unixepoch')) AS dateStr, 
+				COUNT(*) AS count 
+			FROM ${replies} 
+			WHERE deleted_at IS NULL AND created_at >= ${startSec}
+			GROUP BY 1
+		`
+			: sql`
+			SELECT 
+				strftime(${format}, datetime(created_at, 'unixepoch')) AS dateStr, 
+				COUNT(*) AS count 
+			FROM ${replies} 
+			WHERE deleted_at IS NULL 
+			GROUP BY 1
+		`;
 
 	const [dRows, rRows] = await Promise.all([db.all<DBStatRow>(dQuery), db.all<DBStatRow>(rQuery)]);
 

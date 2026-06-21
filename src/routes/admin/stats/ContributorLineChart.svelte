@@ -2,6 +2,8 @@
 	import { SvelteDate } from 'svelte/reactivity';
 	import type { ContributorTimelinePoint } from '$lib/server/db/dao/stats';
 
+	const MAX_TIMELINE_POINTS = 100;
+
 	interface Props {
 		timeline: ContributorTimelinePoint[];
 	}
@@ -18,9 +20,9 @@
 
 	let { timeline }: Props = $props();
 
-	// Fold the timeline to at most 60 points
+	// Fold the timeline
 	const foldedTimeline = $derived.by(() => {
-		return foldTimelinePoints(timeline, 60);
+		return foldTimelinePoints(timeline, MAX_TIMELINE_POINTS);
 	});
 
 	const maxVal = $derived(Math.max(...foldedTimeline.map((item) => item.count), 1));
@@ -60,7 +62,7 @@
 
 	function foldTimelinePoints(
 		points: ContributorTimelinePoint[],
-		maxPoints = 60
+		maxPoints = MAX_TIMELINE_POINTS
 	): FoldedTimelinePoint[] {
 		if (!points || points.length === 0) return [];
 

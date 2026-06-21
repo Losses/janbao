@@ -49,12 +49,14 @@
 	let startLeft = 0;
 	let startRight = 0;
 
-	// Reset local state when data changes (e.g. interval selector reload)
+	// Reset local state when data changes (e.g. interval or range selector reload)
 	$effect(() => {
-		if (data.interval) {
-			left = 0;
-			right = 1;
-		}
+		// eslint-disable-next-line @typescript-eslint/no-unused-expressions
+		data.interval;
+		// eslint-disable-next-line @typescript-eslint/no-unused-expressions
+		data.range;
+		left = 0;
+		right = 1;
 	});
 
 	$effect(() => {
@@ -328,16 +330,34 @@
 		<div class="flex items-center justify-between border-b border-base-300 pb-4">
 			<h1 class="page-title">{adminT['stats'] || 'Statistics'}</h1>
 
-			<select
-				class="select select-bordered select-sm w-fit"
-				value={data.interval}
-				aria-label={adminT['stats']}
-				onchange={(e) => goto(`/admin/stats?interval=${e.currentTarget.value}`)}
-			>
-				<option value="year">{adminT['byYear']}</option>
-				<option value="month">{adminT['byMonth']}</option>
-				<option value="day">{adminT['byDay']}</option>
-			</select>
+			<div class="flex items-center gap-2">
+				<select
+					class="select select-bordered select-sm w-fit"
+					value={data.range || 'all'}
+					aria-label="Time Range"
+					onchange={(e) =>
+						goto(`/admin/stats?interval=${data.interval}&range=${e.currentTarget.value}`)}
+				>
+					<option value="2y">{adminT['range2y'] || 'Past 2 Years'}</option>
+					<option value="1y">{adminT['range1y'] || 'Past 1 Year'}</option>
+					<option value="6m">{adminT['range6m'] || 'Past 6 Months'}</option>
+					<option value="3m">{adminT['range3m'] || 'Past 3 Months'}</option>
+					<option value="current_month">{adminT['rangeCurrentMonth'] || 'This Month'}</option>
+					<option value="all">{adminT['rangeAll'] || 'All Time'}</option>
+				</select>
+
+				<select
+					class="select select-bordered select-sm w-fit"
+					value={data.interval}
+					aria-label={adminT['stats']}
+					onchange={(e) =>
+						goto(`/admin/stats?interval=${e.currentTarget.value}&range=${data.range || 'all'}`)}
+				>
+					<option value="year">{adminT['byYear']}</option>
+					<option value="month">{adminT['byMonth']}</option>
+					<option value="day">{adminT['byDay']}</option>
+				</select>
+			</div>
 		</div>
 
 		<div class="card card-bordered border-base-300 bg-base-100 p-5 space-y-4">
