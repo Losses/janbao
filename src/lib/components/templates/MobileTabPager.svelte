@@ -74,7 +74,24 @@
 	onMount(() => {
 		// Mark the pager as the driver; the tab bar falls back to the URL until then.
 		pager.set({ fractionalIndex: activeIndex, dragging: false, active: true });
-		return () => pager.set({ fractionalIndex: 0, dragging: false, active: false });
+
+		// Track scroll for neighbor vertical alignment.
+		const onScroll = () => {
+			scrollY = window.scrollY;
+			console.log('[MobileTabPager] scroll', {
+				scrollY: Math.round(scrollY),
+				viewportDocTop: Math.round(viewportDocTop),
+				offset: Math.round(Math.max(0, scrollY - viewportDocTop))
+			});
+		};
+		window.addEventListener('scroll', onScroll, { passive: true });
+		scrollY = window.scrollY;
+		console.log('[MobileTabPager] onMount', { scrollY, viewportDocTop, activeIndex });
+
+		return () => {
+			window.removeEventListener('scroll', onScroll);
+			pager.set({ fractionalIndex: 0, dragging: false, active: false });
+		};
 	});
 
 	// Sync from the URL for deep links + browser back/forward. Writes activeIndex
@@ -164,6 +181,12 @@
 	// animating the surrounding content container on every tab switch).
 	let panelHeights = $state<number[]>([0, 0, 0]);
 	const viewportHeight = $derived(panelHeights[activeIndex]);
+
+	// Neighbor vertical alignment: updated in the measureViewportWidth action
+	// (direct DOM access via `node`). Uses getBoundingClientRect().top for the
+	// exact screen position on every scroll — no stale cached values.
+	let neighborOffset = $state(0);
+
 	const viewportStyle = $derived(
 		`touch-action: pan-y pinch-zoom; flex: 1 0 auto${viewportHeight ? `; height: ${viewportHeight}px` : ''}`
 	);
@@ -181,6 +204,12 @@
 	const measureViewportWidth: Action<HTMLElement> = (node) => {
 		const update = () => {
 			viewportWidth = node.clientWidth;
+			viewportDocTop = node.getBoundingClientRect().top + window.scrollY;
+			console.log('[MobileTabPager] measureViewportWidth', {
+				viewportDocTop: Math.round(viewportDocTop),
+				scrollY: Math.round(window.scrollY),
+				neighborOffset: Math.round(Math.max(0, window.scrollY - viewportDocTop))
+			});
 		};
 		update();
 		const ro = new ResizeObserver(update);
@@ -196,7 +225,11 @@
 	use:measureViewportWidth
 >
 	<div class="flex w-[300%] items-start transition-transform duration-200" style={trackStyle}>
-		<section class="w-1/3 shrink-0 p-3" use:measureTab={0}>
+		<section
+			class="w-1/3 shrink-0 p-3"
+			style={`transform: translateY(${activeIndex === 0 ? 0 : neighborOffset}px)`}
+			use:measureTab={0}
+		>
 			<DiscussionsPanel
 				discussions={home.discussions}
 				currentPage={home.page}
@@ -206,7 +239,11 @@
 				paginate={activeIndex === 0}
 			/>
 		</section>
-		<section class="w-1/3 shrink-0 p-3" use:measureTab={1}>
+		<section
+			class="w-1/3 shrink-0 p-3"
+			style={`transform: translateY(${activeIndex === 1 ? 0 : neighborOffset}px)`}
+			use:measureTab={1}
+		>
 			<ActivityPanel
 				activities={activity.activities}
 				currentPage={activity.page}
@@ -218,7 +255,11 @@
 				paginate={activeIndex === 1}
 			/>
 		</section>
-		<section class="w-1/3 shrink-0 p-3" use:measureTab={2}>
+		<section
+			class="w-1/3 shrink-0 p-3"
+			style={`transform: translateY(${activeIndex === 2 ? 0 : neighborOffset}px)`}
+			use:measureTab={2}
+		>
 			<MessagesPanel
 				conversations={messages.conversations}
 				currentPage={messages.page}

@@ -1,14 +1,7 @@
 <script lang="ts">
 	/**
-	 * ThreadPager - Renders an inner page (discussion/message thread) as a REAL
-	 * pager panel flanked by its live neighbours. A horizontal drag reveals the
-	 * neighbour 1:1 (not a translated current page), and a committed release
-	 * slides to completion then navigates. Mobile only; desktop renders the
-	 * thread directly.
-	 *
-	 * Generalized from the original discussion-only version: the caller provides
-	 * optional `left` / `right` snippet panels + their hrefs + the tab indices
-	 * for the indicator. Same mechanics as MobileTabPager.
+	 * ThreadPager - Renders an inner page as a REAL pager panel flanked by its
+	 * live neighbours. Mobile only; desktop renders children directly.
 	 */
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -22,9 +15,7 @@
 		right?: Snippet;
 		leftHref?: string;
 		rightHref?: string;
-		/** Tab index of the center (thread's own tab), for the indicator. */
 		centerTab: number;
-		/** Tab index of the right panel (if any), for the indicator. */
 		rightTab?: number;
 		children: Snippet;
 	}
@@ -34,26 +25,28 @@
 
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	let isMobile = $state(false);
-	onMount(() => {
-		const mq = window.matchMedia(MOBILE_BREAKPOINT);
-		const sync = () => (isMobile = mq.matches);
-		sync();
-		mq.addEventListener('change', sync);
-		return () => mq.removeEventListener('change', sync);
-	});
 
-	// Dynamic panel count + active index.
+	// Viewport element ref + scroll tracking for neighbor vertical alignment.
+	let viewportEl: HTMLElement | null = $state(null);
+	let scrollY = $state(0);
+	let viewportDocTop = $state(0); // viewport's fixed Y in the document (set once)
+
 	const panelCount = $derived((left ? 1 : 0) + 1 + (right ? 1 : 0));
-	const ACTIVE = $derived(left ? 1 : 0); // center is at index 1 (if left) or 0
+	const ACTIVE = $derived(left ? 1 : 0);
 	const STEP_PERCENT = $derived(100 / panelCount);
 	const SWIPE_COMMIT = 60;
 
 	let dragOffset = $state<number | null>(null);
 	// svelte-ignore state_referenced_locally
 	let snapIndex = $state(ACTIVE);
-	// Set on swipeEnd commit; the track's transitionend handler navigates when
-	// the snap animation finishes. Cleared by cancelPendingNav on any new touch.
 	let pendingNav = $state<string | null>(null);
+	let viewportWidth = $state(0);
+	let threadHeight = $state(0);
+
+	// neighborOffset = how far the page is scrolled past the viewport's top.
+	// Applied as translateY on neighbor panels so their Y=0 aligns with the
+	// visible area top — matching the new page at scrollY=0 after navigation.
+	const neighborOffset = $derived(Math.max(0, scrollY - viewportDocTop));
 
 	const trackStyle = $derived(
 		dragOffset !== null
@@ -61,11 +54,17 @@
 			: `width: ${panelCount * 100}%; transform: translateX(-${snapIndex * STEP_PERCENT}%)`
 	);
 	const sectionWidth = $derived(`${100 / panelCount}%`);
+	const neighborStyle = $derived(
+		`width: ${sectionWidth}; transform: translateY(${neighborOffset}px)`
+	);
+	const centerStyle = $derived(`width: ${sectionWidth}`);
+	const viewportStyle = $derived(
+		`touch-action: pan-y pinch-zoom; flex: 1 0 auto${threadHeight ? `; height: ${threadHeight}px` : ''}`
+	);
 
 	function swipeMove(deltaX: number): void {
 		dragOffset = deltaX;
 	}
-	/** Any new touch cancels a pending snap-navigate. */
 	function cancelPendingNav(): void {
 		pendingNav = null;
 		snapIndex = ACTIVE;
@@ -84,7 +83,6 @@
 		}
 		dragOffset = null;
 	}
-	/** When the snap transition finishes, navigate. Event-driven — no timer. */
 	function onTrackTransitionEnd(event: TransitionEvent): void {
 		if (event.target !== event.currentTarget) return;
 		if (event.propertyName !== 'transform' || !pendingNav) return;
@@ -93,9 +91,7 @@
 		void goto(href);
 	}
 
-	// Publish drag progress to the shared store so the tab bar indicator tracks.
 	const pager = getMobilePagerStore();
-	let viewportWidth = $state(0);
 	$effect(() => {
 		let progress: number;
 		if (dragOffset !== null && viewportWidth) {
@@ -103,33 +99,67 @@
 			progress =
 				rightTab !== undefined ? centerTab + dragProgress * (rightTab - centerTab) : centerTab;
 		} else {
-			// At rest or snapping: follow snapIndex.
 			const rightPanelIdx = right ? panelCount - 1 : -1;
 			progress = snapIndex === rightPanelIdx && rightTab !== undefined ? rightTab : centerTab;
 		}
 		pager.set({ fractionalIndex: progress, dragging: dragOffset !== null, active: true });
 	});
+
 	onMount(() => {
+		console.log('[ThreadPager] onMount START');
+		// Mobile detection
+		const mq = window.matchMedia(MOBILE_BREAKPOINT);
+		const sync = () => (isMobile = mq.matches);
+		sync();
+		mq.addEventListener('change', sync);
+
+		// Pager store
 		pager.set({ fractionalIndex: centerTab, dragging: false, active: true });
+
+		// Scroll tracking
+		const onScroll = () => {
+			scrollY = window.scrollY;
+		};
+		window.addEventListener('scroll', onScroll, { passive: true });
+		scrollY = window.scrollY;
+
+		// After DOM renders ({#if isMobile}), read the viewport's position.
+		const raf = requestAnimationFrame(() => {
+			console.log('[ThreadPager] rAF fired', {
+				viewportElExists: !!viewportEl,
+				viewportElTop: viewportEl ? Math.round(viewportEl.getBoundingClientRect().top) : null,
+				scrollY: Math.round(window.scrollY)
+			});
+			if (viewportEl) {
+				viewportDocTop = viewportEl.getBoundingClientRect().top + window.scrollY;
+				viewportWidth = viewportEl.clientWidth;
+				console.log('[ThreadPager] set viewportDocTop', {
+					viewportDocTop: Math.round(viewportDocTop),
+					neighborOffset: Math.round(Math.max(0, scrollY - viewportDocTop))
+				});
+			}
+		});
+
 		return () => {
+			mq.removeEventListener('change', sync);
+			window.removeEventListener('scroll', onScroll);
+			cancelAnimationFrame(raf);
 			pendingNav = null;
 			pager.set({ fractionalIndex: 0, dragging: false, active: false });
 		};
 	});
-	const measureViewportWidth: Action<HTMLElement> = (node) => {
-		const update = () => {
+
+	// Re-measure viewport position on resize (header height might change).
+	const measureViewport: Action<HTMLElement> = (node) => {
+		viewportEl = node;
+		const ro = new ResizeObserver(() => {
 			viewportWidth = node.clientWidth;
-		};
-		update();
-		const ro = new ResizeObserver(update);
+			viewportDocTop = node.getBoundingClientRect().top + window.scrollY;
+		});
 		ro.observe(node);
 		return { destroy: () => ro.disconnect() };
 	};
 
-	let threadHeight = $state(0);
-	const viewportStyle = $derived(
-		`touch-action: pan-y pinch-zoom; flex: 1 0 auto${threadHeight ? `; height: ${threadHeight}px` : ''}`
-	);
 	const measureThread: Action<HTMLElement> = (node) => {
 		const update = () => {
 			threadHeight = node.offsetHeight;
@@ -144,11 +174,12 @@
 {#if isMobile}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
+		bind:this={viewportEl}
 		class="overflow-hidden"
 		style={viewportStyle}
 		onpointerdown={cancelPendingNav}
 		use:detectSwipe={{ onMove: swipeMove, onEnd: swipeEnd }}
-		use:measureViewportWidth
+		use:measureViewport
 	>
 		<div
 			class="flex items-start transition-transform duration-200"
@@ -156,15 +187,15 @@
 			ontransitionend={onTrackTransitionEnd}
 		>
 			{#if left}
-				<section class="shrink-0 p-3" style={`width: ${sectionWidth}`}>
+				<section class="shrink-0 p-3" style={neighborStyle}>
 					{@render left()}
 				</section>
 			{/if}
-			<section class="shrink-0 p-3" style={`width: ${sectionWidth}`} use:measureThread>
+			<section class="shrink-0 p-3" style={centerStyle} use:measureThread>
 				{@render children()}
 			</section>
 			{#if right}
-				<section class="shrink-0 p-3" style={`width: ${sectionWidth}`}>
+				<section class="shrink-0 p-3" style={neighborStyle}>
 					{@render right()}
 				</section>
 			{/if}
