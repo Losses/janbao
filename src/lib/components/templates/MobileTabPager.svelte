@@ -183,9 +183,11 @@
 	let panelHeights = $state<number[]>([0, 0, 0]);
 	const viewportHeight = $derived(panelHeights[activeIndex]);
 
-	// Neighbor vertical alignment: updated in the measureViewportWidth action
-	// (direct DOM access via `node`). Uses getBoundingClientRect().top for the
-	// exact screen position on every scroll - no stale cached values.
+	// Neighbour vertical alignment: tracks window.scrollY (updated on scroll in
+	// measureViewportWidth). It MUST equal scrollY so a neighbour stays at a fixed
+	// screen position while the window scrolls - that is what makes the horizontal
+	// swipe + committed scrollTo(0,0) seamless. Auto-scroll inflating it is
+	// expected and harmless (neighbours clipped off-screen, self-heal on commit).
 	let neighborOffset = $state(0);
 
 	const viewportStyle = $derived(
@@ -207,13 +209,25 @@
 		const updateAll = () => {
 			scrollRaf = 0;
 			viewportWidth = node.clientWidth;
-			neighborOffset = window.scrollY;
+			// Clamped >= 0 (ignore negative scrollY from overscroll). See the
+			// neighborOffset declaration for why this must track window.scrollY.
+			neighborOffset = Math.max(0, window.scrollY);
 		};
 		const onScroll = () => {
 			if (!scrollRaf) scrollRaf = requestAnimationFrame(updateAll);
 		};
+		// The pager viewport is overflow:hidden but still a programmatic scroll
+		// container; force its internal scroll back to 0,0 so a stray
+		// scrollIntoView / native hash scroll cannot lock the page on an anchor
+		// (the user cannot reset overflow:hidden scroll).
+		const resetViewportScroll = () => {
+			if (node.scrollTop !== 0) node.scrollTop = 0;
+			if (node.scrollLeft !== 0) node.scrollLeft = 0;
+		};
 		updateAll();
+		resetViewportScroll();
 		window.addEventListener('scroll', onScroll, { passive: true });
+		node.addEventListener('scroll', resetViewportScroll, { passive: true });
 		const ro = new ResizeObserver(() => {
 			viewportWidth = node.clientWidth;
 		});
@@ -222,6 +236,7 @@
 			destroy: () => {
 				ro.disconnect();
 				window.removeEventListener('scroll', onScroll);
+				node.removeEventListener('scroll', resetViewportScroll);
 				if (scrollRaf) cancelAnimationFrame(scrollRaf);
 			}
 		};

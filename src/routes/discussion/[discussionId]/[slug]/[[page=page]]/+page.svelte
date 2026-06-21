@@ -163,11 +163,31 @@
 		goto(`/discussion/${discussion.id}/${discussion.slug}/p${newPage}`);
 	}
 
+	/**
+	 * Bring an element to the top of the viewport by scrolling the WINDOW only -
+	 * never via Element.scrollIntoView. The thread lives inside the ThreadPager
+	 * viewport, which is `overflow: hidden`, and an overflow:hidden box is still a
+	 * CSS scroll container: scrollIntoView on a descendant scrolls that viewport
+	 * internally, where the user cannot scroll it back, locking the page on the
+	 * target with everything above clipped. Offset by the sticky header height so
+	 * the target lands just below the app bar.
+	 */
+	function scrollToElement(el: HTMLElement): void {
+		if (typeof window === 'undefined') return;
+		const headerOffset =
+			parseInt(getComputedStyle(document.documentElement).getPropertyValue('--header-height')) || 0;
+		const absoluteTop = el.getBoundingClientRect().top + window.scrollY;
+		window.scrollTo({
+			top: Math.max(0, absoluteTop - headerOffset),
+			behavior: 'smooth'
+		});
+	}
+
 	function quickReply(username: string, displayName: string) {
 		if (replyEditor) {
 			replyEditor.insertMention(username, displayName);
 			if (replyComposerElem) {
-				replyComposerElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+				scrollToElement(replyComposerElem);
 			}
 		}
 	}
@@ -209,7 +229,9 @@
 		}
 	});
 
-	// 2. Navigation Anchor Smooth Scroll
+	// 2. Navigation Anchor Smooth Scroll. Uses scrollToElement (window-only), not
+	// scrollIntoView: the ThreadPager viewport is overflow:hidden, so
+	// scrollIntoView would scroll it internally and lock the page on the anchor.
 	let lastScrolledHash: string | null = null;
 	$effect(() => {
 		const hash = page.url.hash;
@@ -222,7 +244,7 @@
 				if (element) {
 					lastScrolledHash = hash;
 					const timer = setTimeout(() => {
-						element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+						scrollToElement(element);
 					}, 200);
 					return () => clearTimeout(timer);
 				}

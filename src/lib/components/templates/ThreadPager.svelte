@@ -32,7 +32,6 @@
 	// Viewport element ref + scroll tracking for neighbor vertical alignment.
 	let viewportEl: HTMLElement | null = $state(null);
 	let scrollY = $state(0);
-	let viewportDocTop = $state(0); // viewport's fixed Y in the document (set once)
 
 	const panelCount = $derived((left ? 1 : 0) + 1 + (right ? 1 : 0));
 	const ACTIVE = $derived(left ? 1 : 0);
@@ -46,11 +45,13 @@
 	let viewportWidth = $state(0);
 	let threadHeight = $state(0);
 
-	// neighborOffset = scrollY (accounts for header height automatically).
-	// After navigation (scrollY=0, header visible) content is at screen-Y =
-	// headerHeight + sectionPadding. During the swipe (scrolled, header hidden)
-	// scrollY includes the header offset, so the neighbor content lands at the
-	// same screen-Y. Using scrollY directly (not scrollY - viewportDocTop).
+	// neighborOffset tracks window.scrollY so a neighbour panel stays at a fixed
+	// screen position while the window scrolls - this is what makes the horizontal
+	// swipe-to-neighbour transition seamless and lets the committed swipe's
+	// scrollTo(0,0) + translateY(0) land without a vertical jump. It MUST equal
+	// scrollY, so auto-scroll (which moves window.scrollY) inflating the neighbour
+	// transform is expected and harmless: neighbours are clipped off-screen and
+	// self-heal on the committed swipe.
 	const neighborOffset = $derived(scrollY);
 
 	const trackStyle = $derived(
@@ -118,7 +119,6 @@
 	});
 
 	onMount(() => {
-		console.log('[ThreadPager] onMount START');
 		// Mobile detection
 		const mq = window.matchMedia(MOBILE_BREAKPOINT);
 		const sync = () => (isMobile = mq.matches);
@@ -128,27 +128,25 @@
 		// Pager store
 		pager.set({ fractionalIndex: centerTab, dragging: false, active: true });
 
-		// Scroll tracking
+		// Scroll tracking for neighbour alignment. rAF-throttled (matches
+		// MobileTabPager) so a smooth auto-scroll does not rewrite neighborOffset
+		// on every frame. Clamped >= 0 to ignore negative scrollY from overscroll.
+		let scrollRaf = 0;
 		const onScroll = () => {
-			scrollY = window.scrollY;
+			if (scrollRaf) return;
+			scrollRaf = requestAnimationFrame(() => {
+				scrollRaf = 0;
+				scrollY = Math.max(0, window.scrollY);
+			});
 		};
 		window.addEventListener('scroll', onScroll, { passive: true });
-		scrollY = window.scrollY;
+		scrollY = Math.max(0, window.scrollY);
 
-		// After DOM renders ({#if isMobile}), read the viewport's position.
+		// After DOM renders ({#if isMobile}), read the viewport's width for the
+		// pager indicator.
 		const raf = requestAnimationFrame(() => {
-			console.log('[ThreadPager] rAF fired', {
-				viewportElExists: !!viewportEl,
-				viewportElTop: viewportEl ? Math.round(viewportEl.getBoundingClientRect().top) : null,
-				scrollY: Math.round(window.scrollY)
-			});
 			if (viewportEl) {
-				viewportDocTop = viewportEl.getBoundingClientRect().top + window.scrollY;
 				viewportWidth = viewportEl.clientWidth;
-				console.log('[ThreadPager] set viewportDocTop', {
-					viewportDocTop: Math.round(viewportDocTop),
-					neighborOffset: Math.round(Math.max(0, scrollY - viewportDocTop))
-				});
 			}
 		});
 
@@ -156,20 +154,35 @@
 			mq.removeEventListener('change', sync);
 			window.removeEventListener('scroll', onScroll);
 			cancelAnimationFrame(raf);
+			if (scrollRaf) cancelAnimationFrame(scrollRaf);
 			pendingNav = null;
 			pager.set({ fractionalIndex: 0, dragging: false, active: false });
 		};
 	});
 
-	// Re-measure viewport position on resize (header height might change).
+	// Re-measure viewport width on resize (header height might change). Also
+	// guards the viewport's internal scroll at 0,0: overflow:hidden is still a
+	// programmatic scroll container, so native hash scrolling or any stray
+	// scrollIntoView could set a non-zero scrollTop here that the user cannot
+	// reset - locking the page on the anchor with everything above clipped.
 	const measureViewport: Action<HTMLElement> = (node) => {
 		viewportEl = node;
+		const resetScroll = () => {
+			if (node.scrollTop !== 0) node.scrollTop = 0;
+			if (node.scrollLeft !== 0) node.scrollLeft = 0;
+		};
+		node.addEventListener('scroll', resetScroll, { passive: true });
+		resetScroll();
 		const ro = new ResizeObserver(() => {
 			viewportWidth = node.clientWidth;
-			viewportDocTop = node.getBoundingClientRect().top + window.scrollY;
 		});
 		ro.observe(node);
-		return { destroy: () => ro.disconnect() };
+		return {
+			destroy() {
+				node.removeEventListener('scroll', resetScroll);
+				ro.disconnect();
+			}
+		};
 	};
 
 	const measureThread: Action<HTMLElement> = (node) => {
