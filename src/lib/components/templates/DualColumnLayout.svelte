@@ -270,7 +270,7 @@
 						class:mt-6={!isSticky}
 						class:slogan-sticky={isSticky}
 					>
-						<img src="/slogan.jpg" alt="Slogan" class="w-full rounded-box shadow-sm" />
+						<img src="/slogan.jpg" alt="Slogan" class="w-full rounded-box slogan" />
 					</div>
 				</aside>
 			{/if}
@@ -347,12 +347,23 @@
 
 		<!-- Bottom Slogan pinned to the bottom of the page/drawer -->
 		<div class="w-full mt-auto">
-			<img src="/slogan.jpg" alt="Slogan" class="w-full object-cover" />
+			<img src="/slogan.jpg" alt="Slogan" class="w-full object-cover slogan" />
 		</div>
 	</div>
 {/if}
 
 <style>
+	.slogan {
+		opacity: 0.4;
+		filter: grayscale(80%);
+		transition: opacity 300ms, filter 300ms;
+	}
+
+	.slogan:hover {
+		opacity: 1;
+		filter: grayscale(0%);
+	}
+
 	@media (min-width: 768px) {
 		.desktop-min-height {
 			min-height: calc(100vh - var(--header-height, 62px) - 3rem);
