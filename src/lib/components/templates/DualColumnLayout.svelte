@@ -353,18 +353,20 @@
 {/if}
 
 <style>
-	.slogan {
-		opacity: 0.05;
-		filter: grayscale(90%);
-		transition: opacity 300ms, filter 300ms;
-	}
-
-	.slogan:hover {
-		opacity: 1;
-		filter: grayscale(0%);
-	}
-
 	@media (min-width: 768px) {
+		.slogan {
+			opacity: 0.05;
+			filter: grayscale(90%);
+			transition:
+				opacity 300ms,
+				filter 300ms;
+		}
+
+		.slogan:hover {
+			opacity: 1;
+			filter: grayscale(0%);
+		}
+
 		.desktop-min-height {
 			min-height: calc(100vh - var(--header-height, 62px) - 3rem);
 		}
