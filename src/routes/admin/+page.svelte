@@ -13,7 +13,8 @@
 		mdiShieldLockOutline,
 		mdiFolderOutline,
 		mdiBackupRestore,
-		mdiWrenchOutline
+		mdiWrenchOutline,
+		mdiChartBar
 	} from '@mdi/js';
 	import type { PageData } from './$types';
 
@@ -78,6 +79,11 @@
 								label: t.maintenance.nav,
 								href: '/admin/maintenance',
 								icon: mdiWrenchOutline
+							},
+							{
+								label: adminT['stats'],
+								href: '/admin/stats',
+								icon: mdiChartBar
 							}
 						]
 					}

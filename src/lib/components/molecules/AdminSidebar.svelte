@@ -46,5 +46,10 @@
 				{t.maintenance.nav}
 			</a>
 		</li>
+		<li>
+			<a href="/admin/stats" class={activeItem === 'stats' ? 'active' : ''}>
+				{adminT['stats']}
+			</a>
+		</li>
 	</ul>
 </div>

@@ -23,7 +23,17 @@
 		"newGroup": "New User Group",
 		"newCategory": "New Category",
 		"editUserGroup": "Edit User Group",
-		"editCategory": "Edit Category"
+		"editCategory": "Edit Category",
+		"stats": "Statistics",
+		"byYear": "By Year",
+		"byMonth": "By Month",
+		"byDay": "By Day",
+		"discussions": "Discussions",
+		"replies": "Replies",
+		"contributions": "Contributions",
+		"topContributors": "Top 20 Contributors",
+		"dateRange": "Date Range",
+		"overallActivity": "Overall Activity"
 	},
 	"search": {
 		"title": "Search",
