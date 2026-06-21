@@ -242,7 +242,7 @@
 			{#if sidebar}
 				<aside
 					bind:this={sidebarEl}
-					class="hidden w-full shrink-0 md:flex md:flex-col md:gap-4 md:w-[280px]"
+					class="hidden w-full shrink-0 md:flex md:flex-col md:gap-4 md:w-[280px] sidebar"
 				>
 					<!-- Top Widget -->
 					{#if resolvedUser}
@@ -354,12 +354,12 @@
 
 <style>
 	.slogan {
-		opacity: 0.4;
+		opacity: 0;
 		filter: grayscale(80%);
 		transition: opacity 300ms, filter 300ms;
 	}
 
-	.slogan:hover {
+	.sidebar:hover .slogan {
 		opacity: 1;
 		filter: grayscale(0%);
 	}
