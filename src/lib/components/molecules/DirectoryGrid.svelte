@@ -1,17 +1,21 @@
 <script lang="ts">
 	/**
-	 * DirectoryGrid Molecule - A reusable, responsive layout for list/directory pages.
-	 * Displays groups of links with icons.
-	 * On Mobile: Left-aligned icon, right-aligned text with chevrons.
-	 * On Desktop: Grid of cards with top icon and centered text.
+	 * DirectoryGrid Molecule - A reusable list of grouped navigation links.
+	 * Follows the flat list design language: no rounded corners, no shadows,
+	 * rows separated by horizontal divider lines (divide-y on border-base-300).
+	 * Each row is an icon + label + chevron; destructive items use the error tone.
 	 */
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import { mdiChevronRight } from '@mdi/js';
+
+	type DirectoryItemTone = 'error';
 
 	export interface DirectoryItem {
 		label: string;
 		href: string;
 		icon: string;
+		/** Destructive accent (e.g. sign out): error-colored icon, label, and chevron. */
+		tone?: DirectoryItemTone;
 	}
 
 	export interface DirectoryGroup {
@@ -23,46 +27,53 @@
 		groups: DirectoryGroup[];
 	}
 
+	interface DirectoryRowToneClasses {
+		icon: string;
+		label: string;
+		chevron: string;
+	}
+
 	let { groups }: DirectoryGridProps = $props();
+
+	function directoryRowToneClasses(tone: DirectoryItemTone | undefined): DirectoryRowToneClasses {
+		if (tone === 'error') {
+			return {
+				icon: 'text-error/80 group-hover:text-error',
+				label: 'text-error group-hover:text-error',
+				chevron: 'text-error/40 group-hover:text-error'
+			};
+		}
+		return {
+			icon: 'text-base-content/70 group-hover:text-primary',
+			label: 'text-base-content group-hover:text-primary',
+			chevron: 'text-base-content/30 group-hover:text-primary'
+		};
+	}
 </script>
 
 <div class="space-y-6">
-	{#each groups as group}
+	{#each groups as group (group.title)}
 		<div class="space-y-3">
-			<h2 class="text-xs font-bold uppercase tracking-wider text-base-content/40 px-1">
+			<h2 class="px-1 text-xs font-bold uppercase tracking-wider text-base-content/40">
 				{group.title}
 			</h2>
 
-			<div class="grid grid-cols-1 gap-3 md:grid-cols-3">
-				{#each group.items as item}
-					<a
-						href={item.href}
-						class="flex items-center gap-3.5 p-4 rounded-xl border border-base-300 bg-base-100 hover:border-primary/40 hover:bg-primary/5 hover:shadow-md active:scale-[0.99] hover:scale-[1.01] transform transition-all duration-200 ease-out group md:flex-col md:items-center md:justify-center md:text-center md:py-6 md:px-4"
-					>
-						<!-- Icon Container -->
-						<div
-							class="flex items-center justify-center w-10 h-10 rounded-xl bg-base-200 text-base-content/70 group-hover:bg-primary group-hover:text-primary-content transition-all duration-200 ease-out md:w-12 md:h-12 md:mb-2"
+			<div class="overflow-hidden border-y border-base-300 bg-base-100">
+				<div class="divide-y divide-base-300">
+					{#each group.items as item (item.href)}
+						{@const toneClasses = directoryRowToneClasses(item.tone)}
+						<a
+							href={item.href}
+							class="group flex items-center gap-3.5 p-4 transition-colors hover:bg-base-200/20"
 						>
-							<Icon path={item.icon} size={22} />
-						</div>
-
-						<!-- Label -->
-						<div class="flex-1 min-w-0 md:flex-initial">
-							<div
-								class="font-semibold text-base-content group-hover:text-primary transition-colors duration-200 truncate md:text-sm"
-							>
+							<Icon path={item.icon} size={22} class={toneClasses.icon} />
+							<span class="min-w-0 flex-1 truncate font-semibold {toneClasses.label}">
 								{item.label}
-							</div>
-						</div>
-
-						<!-- Mobile Arrow -->
-						<div
-							class="text-base-content/30 group-hover:text-primary transition-all duration-200 ease-out md:hidden"
-						>
-							<Icon path={mdiChevronRight} size={18} />
-						</div>
-					</a>
-				{/each}
+							</span>
+							<Icon path={mdiChevronRight} size={18} class={toneClasses.chevron} />
+						</a>
+					{/each}
+				</div>
 			</div>
 		</div>
 	{/each}

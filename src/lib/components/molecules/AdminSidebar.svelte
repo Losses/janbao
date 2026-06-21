@@ -3,7 +3,6 @@
 	 * AdminSidebar Molecule - Navigation for the /admin area.
 	 * Mirrors SettingsSidebar: UserInfoBlock + a menu of nav items.
 	 */
-	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import type { UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 
@@ -14,12 +13,13 @@
 	}
 
 	let { user, t, activeItem = '' }: AdminSidebarProps = $props();
+	// svelte-ignore state_referenced_locally
+	void user;
 
 	const adminT = $derived(t.admin);
 </script>
 
 <div class="space-y-4">
-	<UserInfoBlock {user} {t} />
 	<ul class="menu menu-sm w-full gap-1">
 		<li>
 			<a href="/admin/user-groups" class={activeItem === 'userGroups' ? 'active' : ''}>

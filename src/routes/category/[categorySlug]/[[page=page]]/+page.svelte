@@ -1,6 +1,5 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
-	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import ActiveUsersWall from '$lib/components/molecules/ActiveUsersWall.svelte';
 	import CategoryListWidget from '$lib/components/molecules/CategoryListWidget.svelte';
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
@@ -55,7 +54,6 @@
 {#snippet sidebar()}
 	<div class="space-y-4">
 		{#if user}
-			<UserInfoBlock {user} {t} />
 			<div class="flex flex-col gap-2">
 				<a href="/post/discussion?category={category.slug}" class="btn btn-primary btn-sm w-full">
 					{t.sidebar.createDiscussion}
@@ -69,14 +67,6 @@
 				<a href="/drafts" class="btn btn-outline btn-sm w-full">
 					{t.sidebar.myDrafts}
 				</a>
-			</div>
-		{:else}
-			<div class="space-y-2">
-				<h3 class="font-semibold text-sm text-base-content/70">{t.home.welcomeTo}</h3>
-				<div class="flex gap-2">
-					<a href="/entry/signin" class="btn btn-sm btn-primary flex-1">{t.nav.signin}</a>
-					<a href="/entry/register" class="btn btn-sm btn-outline flex-1">{t.nav.register}</a>
-				</div>
 			</div>
 		{/if}
 		<CategoryListWidget {t} activeSlug={category.slug} />

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
-	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import DiscussionRow from '$lib/components/organisms/DiscussionRow.svelte';
 	import { generateSlug } from '$lib/utils/slug';
@@ -33,7 +32,6 @@
 {#snippet sidebar()}
 	<div class="space-y-4">
 		{#if data.user}
-			<UserInfoBlock user={data.user} t={data.t} />
 			<div class="flex flex-col gap-2">
 				<a
 					class="btn btn-outline btn-sm w-full"
@@ -44,10 +42,6 @@
 				<a class="btn btn-outline btn-sm w-full" href="/drafts">
 					{data.t.sidebar.myDrafts}
 				</a>
-			</div>
-		{:else}
-			<div class="space-y-2">
-				<h3 class="font-semibold text-sm text-base-content/70">{data.t.home.welcomeTo}</h3>
 			</div>
 		{/if}
 	</div>

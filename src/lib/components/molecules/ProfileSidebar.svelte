@@ -7,7 +7,6 @@
 	 * Guest sees: Same as visitor + Sign-in/Register links.
 	 */
 	import { invalidateAll } from '$app/navigation';
-	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import type {
 		AdminManageableGroupItem,
 		ApiResult,
@@ -179,7 +178,6 @@
 
 <div class="space-y-4">
 	{#if user}
-		<UserInfoBlock {user} {t} />
 		{#if isOwner}
 			<!-- Owner View: Full profile navigation -->
 			<ul class="menu menu-sm w-full gap-1">
@@ -284,12 +282,6 @@
 				</a>
 			</li>
 		</ul>
-		<div class="flex gap-2">
-			<a href="/entry/signin" class="btn btn-sm btn-primary flex-1">{tNav['signin']}</a>
-			<a href="/entry/register" class="btn btn-sm btn-outline flex-1">
-				{tNav['register']}
-			</a>
-		</div>
 	{/if}
 </div>
 

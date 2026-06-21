@@ -3,7 +3,9 @@
 	import { goto } from '$app/navigation';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import AdminSidebar from '$lib/components/molecules/AdminSidebar.svelte';
-	import DirectoryGrid, { type DirectoryGroup } from '$lib/components/molecules/DirectoryGrid.svelte';
+	import DirectoryGrid, {
+		type DirectoryGroup
+	} from '$lib/components/molecules/DirectoryGrid.svelte';
 	import PageTitle from '$lib/components/molecules/PageTitle.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import {
@@ -36,48 +38,52 @@
 		}
 	});
 
-	const groups = $derived<DirectoryGroup[]>(user ? [
-		{
-			title: isZh ? '权限与用户' : 'Permissions & Users',
-			items: [
-				{
-					label: adminT['userGroups'],
-					href: '/admin/user-groups',
-					icon: mdiAccountGroup
-				},
-				{
-					label: adminT['categoryPermissions'],
-					href: '/admin/permissions',
-					icon: mdiShieldLockOutline
-				}
-			]
-		},
-		{
-			title: isZh ? '内容管理' : 'Content Management',
-			items: [
-				{
-					label: adminT['categories'],
-					href: '/admin/categories',
-					icon: mdiFolderOutline
-				}
-			]
-		},
-		{
-			title: isZh ? '系统维护' : 'System Maintenance',
-			items: [
-				{
-					label: t.backup.nav,
-					href: '/admin/backups',
-					icon: mdiBackupRestore
-				},
-				{
-					label: t.maintenance.nav,
-					href: '/admin/maintenance',
-					icon: mdiWrenchOutline
-				}
-			]
-		}
-	] : []);
+	const groups = $derived<DirectoryGroup[]>(
+		user
+			? [
+					{
+						title: isZh ? '权限与用户' : 'Permissions & Users',
+						items: [
+							{
+								label: adminT['userGroups'],
+								href: '/admin/user-groups',
+								icon: mdiAccountGroup
+							},
+							{
+								label: adminT['categoryPermissions'],
+								href: '/admin/permissions',
+								icon: mdiShieldLockOutline
+							}
+						]
+					},
+					{
+						title: isZh ? '内容管理' : 'Content Management',
+						items: [
+							{
+								label: adminT['categories'],
+								href: '/admin/categories',
+								icon: mdiFolderOutline
+							}
+						]
+					},
+					{
+						title: isZh ? '系统维护' : 'System Maintenance',
+						items: [
+							{
+								label: t.backup.nav,
+								href: '/admin/backups',
+								icon: mdiBackupRestore
+							},
+							{
+								label: t.maintenance.nav,
+								href: '/admin/maintenance',
+								icon: mdiWrenchOutline
+							}
+						]
+					}
+				]
+			: []
+	);
 </script>
 
 <svelte:head>

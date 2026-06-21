@@ -4,7 +4,6 @@
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import DateAtom from '$lib/components/atoms/Date.svelte';
 	import Icon from '$lib/components/atoms/Icon.svelte';
-	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import OfflinePlaceholder from '$lib/components/molecules/OfflinePlaceholder.svelte';
 	import { mdiCommentOutline } from '@mdi/js';
@@ -93,19 +92,7 @@
 </svelte:head>
 
 {#snippet sidebar()}
-	<div class="space-y-4">
-		{#if user}
-			<UserInfoBlock {user} {t} />
-		{:else}
-			<div class="space-y-2">
-				<h3 class="font-semibold text-sm text-base-content/70">{t.home.welcomeTo}</h3>
-				<div class="flex gap-2">
-					<a href="/entry/signin" class="btn btn-sm btn-primary flex-1">{t.nav.signin}</a>
-					<a href="/entry/register" class="btn btn-sm btn-outline flex-1">{t.nav.register}</a>
-				</div>
-			</div>
-		{/if}
-	</div>
+	<!-- empty -->
 {/snippet}
 
 <DualColumnLayout {sidebar} {t} {user}>

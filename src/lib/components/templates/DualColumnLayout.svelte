@@ -9,6 +9,7 @@
 	import { MOBILE_TABS, getSwipeBaseline, isPagerRoute } from '$lib/utils/mobile-tabs';
 	import type { UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
+	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 
 	interface DualColumnLayoutProps {
 		children: Snippet;
@@ -22,8 +23,10 @@
 	}
 
 	let { children, sidebar, user, t, flush = false }: DualColumnLayoutProps = $props();
-	// svelte-ignore state_referenced_locally
-	void user;
+
+	const resolvedUser = $derived(
+		user !== undefined ? user : (page.data.user as UserInfoSummary | null)
+	);
 
 	// The drawer's open state lives in the shared drawer store (the persistent
 	// AppShell Header drives it). The per-page sidebar snippet rendered in the
@@ -171,8 +174,31 @@
 			<!-- Right Column (Desktop Sidebar) -->
 			{#if sidebar}
 				<aside class="hidden w-full shrink-0 md:block md:w-[280px]">
-					<div class="space-y-3">
-						{@render sidebar()}
+					<div class="space-y-4">
+						<!-- Top Widget -->
+						{#if resolvedUser}
+							<UserInfoBlock user={resolvedUser} {t} />
+						{:else}
+							<div class="space-y-2">
+								<h3 class="text-sm font-semibold text-base-content/70">{t.home.welcomeTo}</h3>
+								<div class="flex gap-2">
+									<a href="/entry/signin" class="btn btn-sm btn-primary flex-1">{t.nav.signin}</a>
+									<a href="/entry/register" class="btn btn-sm btn-outline flex-1"
+										>{t.nav.register}</a
+									>
+								</div>
+							</div>
+						{/if}
+
+						<!-- Middle Content -->
+						<div class="space-y-3">
+							{@render sidebar()}
+						</div>
+
+						<!-- Bottom Slogan -->
+						<div class="pt-6">
+							<img src="/slogan.jpg" alt="Slogan" class="w-full rounded-box shadow-sm" />
+						</div>
 					</div>
 				</aside>
 			{/if}
@@ -215,7 +241,7 @@
 	<!-- Drawer panel: slides in from the left. An inline transform follows the
 	     finger while dragging; otherwise the CSS class + transition snaps it. -->
 	<div
-		class="fixed inset-y-0 left-0 z-50 w-[280px] border-r border-base-300 bg-base-100 p-6 shadow-lg transition-transform duration-200 md:hidden {drawerVisible
+		class="fixed inset-y-0 left-0 z-50 w-[280px] border-r border-base-300 bg-base-100 flex flex-col shadow-lg transition-transform duration-200 md:hidden {drawerVisible
 			? 'pointer-events-auto'
 			: 'pointer-events-none'}"
 		style={panelStyle}
@@ -224,8 +250,30 @@
 		aria-modal="true"
 		aria-label={t.nav.primary}
 	>
-		<div class="space-y-3">
-			{@render sidebar()}
+		<!-- Scrollable content area: contains Top Widget and Middle Content -->
+		<div class="flex-1 overflow-y-auto p-6 space-y-4">
+			<!-- Top Widget -->
+			{#if resolvedUser}
+				<UserInfoBlock user={resolvedUser} {t} />
+			{:else}
+				<div class="space-y-2">
+					<h3 class="text-sm font-semibold text-base-content/70">{t.home.welcomeTo}</h3>
+					<div class="flex gap-2">
+						<a href="/entry/signin" class="btn btn-sm btn-primary flex-1">{t.nav.signin}</a>
+						<a href="/entry/register" class="btn btn-sm btn-outline flex-1">{t.nav.register}</a>
+					</div>
+				</div>
+			{/if}
+
+			<!-- Middle Content -->
+			<div class="space-y-3">
+				{@render sidebar()}
+			</div>
+		</div>
+
+		<!-- Bottom Slogan pinned to the bottom of the page/drawer -->
+		<div class="w-full mt-auto">
+			<img src="/slogan.jpg" alt="Slogan" class="w-full object-cover" />
 		</div>
 	</div>
 {/if}

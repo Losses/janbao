@@ -3,7 +3,7 @@
 	 * UserInfoBlock Molecule - Displays user avatar, display name, and a row of icon buttons
 	 * for Notifications, Messages, Bookmarks, and Settings.
 	 */
-		import { onMount } from 'svelte';
+	import { onMount } from 'svelte';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import Badge from '$lib/components/atoms/Badge.svelte';
@@ -16,7 +16,6 @@
 	import type { UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 	import { mdiCog, mdiShieldAccount, mdiBell, mdiEmail, mdiBookmark } from '@mdi/js';
-
 
 	interface UserInfoBlockProps {
 		user: UserInfoSummary;

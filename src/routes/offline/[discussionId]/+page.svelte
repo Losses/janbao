@@ -4,7 +4,6 @@
 	import DiscussionMetadata from '$lib/components/molecules/DiscussionMetadata.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import BookmarkButton from '$lib/components/atoms/BookmarkButton.svelte';
-	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import { generateSlug } from '$lib/utils/slug';
 	import { recordOfflineRead } from '$lib/offline/read-state';
 	import { computeGapPlacements, type GapPlacement } from '$lib/offline/gap-placement';
@@ -97,7 +96,6 @@
 {#snippet sidebar()}
 	<div class="space-y-4">
 		{#if data.user}
-			<UserInfoBlock user={data.user} t={data.t} />
 			<div class="flex flex-col gap-2">
 				<a
 					class="btn btn-outline btn-sm w-full"
@@ -108,10 +106,6 @@
 				<a class="btn btn-outline btn-sm w-full" href="/drafts">
 					{data.t.sidebar.myDrafts}
 				</a>
-			</div>
-		{:else}
-			<div class="space-y-2">
-				<h3 class="font-semibold text-sm text-base-content/70">{data.t.home.welcomeTo}</h3>
 			</div>
 		{/if}
 	</div>

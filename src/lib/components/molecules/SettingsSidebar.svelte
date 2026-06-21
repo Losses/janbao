@@ -3,7 +3,6 @@
 	 * SettingsSidebar Molecule - Navigation sidebar for account settings pages.
 	 * Shows settings-specific navigation links.
 	 */
-	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import type { UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 
@@ -14,12 +13,13 @@
 	}
 
 	let { user, t, activeItem = '' }: SettingsSidebarProps = $props();
+	// svelte-ignore state_referenced_locally
+	void user;
 
 	const profileT = $derived(t.profile);
 </script>
 
 <div class="space-y-4">
-	<UserInfoBlock {user} {t} />
 	<ul class="menu menu-sm w-full gap-1">
 		<li>
 			<a href="/profile/edit" class={activeItem === 'editAccount' ? 'active' : ''}>

@@ -1,9 +1,8 @@
 <script lang="ts">
 	/**
-	 * ActivitySidebar - Minimal activity-tab sidebar (user block only). Shared by
-	 * the desktop activity route and the mobile pager drawer.
+	 * ActivitySidebar - Minimal activity-tab sidebar. Props are kept for call site
+	 * compatibility, but the block is empty as the user block is rendered globally.
 	 */
-	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
 	import type { UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 
@@ -13,8 +12,10 @@
 	}
 
 	let { t, user }: ActivitySidebarProps = $props();
+	// svelte-ignore state_referenced_locally
+	void t;
+	// svelte-ignore state_referenced_locally
+	void user;
 </script>
 
-{#if user}
-	<UserInfoBlock {user} {t} />
-{/if}
+<!-- Empty because user block is rendered globally -->
