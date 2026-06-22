@@ -10,9 +10,16 @@
 	import { detectSwipe } from '$lib/actions/swipe';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
-	import { consumeEnterFromList } from '$lib/stores/thread-enter.svelte';
+	import { consumeEnterFromList, backLandsOnList } from '$lib/stores/thread-nav.svelte';
 
 	import { page } from '$app/state';
+
+	interface PendingNav {
+		href: string;
+		/** Pop the history entry (history.back) instead of pushing a goto - true
+		 * for a back-to-list swipe when the thread was reached from the list. */
+		back: boolean;
+	}
 
 	interface ThreadPagerProps {
 		left?: Snippet;
@@ -60,7 +67,7 @@
 	const animateEnter = consumeEnterFromList();
 	// svelte-ignore state_referenced_locally
 	let snapIndex = $state(animateEnter ? 0 : ACTIVE);
-	let pendingNav = $state<string | null>(null);
+	let pendingNav = $state<PendingNav | null>(null);
 	let viewportWidth = $state(0);
 	let threadHeight = $state(0);
 
@@ -115,10 +122,14 @@
 		}
 		if (deltaX >= SWIPE_COMMIT && leftIdx >= 0 && leftHref) {
 			snapIndex = leftIdx;
-			pendingNav = leftHref;
+			// Pop the history entry when the real back destination is the list
+			// (navigation.entries, with an arrival-origin fallback), so swiping
+			// back does not stack duplicate `/` entries. Falls back to a pushed
+			// goto for a deep-linked / non-list-entered thread.
+			pendingNav = { href: leftHref, back: backLandsOnList() };
 		} else if (deltaX <= -SWIPE_COMMIT && rightIdx >= 0 && rightHref) {
 			snapIndex = rightIdx;
-			pendingNav = rightHref;
+			pendingNav = { href: rightHref, back: false };
 		} else {
 			snapIndex = ACTIVE;
 		}
@@ -127,9 +138,13 @@
 	function onTrackTransitionEnd(event: TransitionEvent): void {
 		if (event.target !== event.currentTarget) return;
 		if (event.propertyName !== 'transform' || !pendingNav) return;
-		const href = pendingNav;
+		const nav = pendingNav;
 		pendingNav = null;
-		void goto(href);
+		if (nav.back) {
+			history.back();
+		} else {
+			void goto(nav.href);
+		}
 	}
 
 	const pager = getMobilePagerStore();

@@ -14,7 +14,7 @@
 	import { DEFAULT_OFFLINE_PREFS } from '$lib/offline/prefs';
 	import { getEditorPrefsStore } from '$lib/stores/editor-prefs.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
-	import { markEnterFromList } from '$lib/stores/thread-enter.svelte';
+	import { markEnterFromList, setReachedFromList } from '$lib/stores/thread-nav.svelte';
 
 	interface LayoutProps {
 		data: LayoutData;
@@ -26,34 +26,38 @@
 	const badges = getBadgesStore();
 	const editorPrefs = getEditorPrefsStore();
 
-	// Freeze (and on mobile hash-enter, pin visible) the scroll-chrome header for
-	// navigations where SvelteKit's scroll would otherwise make it twitch:
+	// Hold the scroll-chrome header (and on mobile hash-enter, pin it visible)
+	// for navigations where SvelteKit's scroll would otherwise make it twitch:
 	// entering a hash-anchored thread (top→hash) and swiping back from a thread
-	// to the list (top→restored scroll). The destination unfreezes once its scroll
-	// is set (thread page for enter, (tabs) layout for swipe-back); a fallback
-	// timer covers the rest.
+	// to the list (top→restored scroll). The destination releases the hold and
+	// pins the header visible once its scroll is set (thread page for enter,
+	// (tabs) layout for swipe-back); a fallback timer covers the rest.
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	let navFreezeTimer = 0;
 	beforeNavigate(({ to, from }) => {
 		const threadEnter = to?.url.hash && to.url.pathname.startsWith('/discussion');
 		const swipeBack = from?.url.pathname.startsWith('/discussion') && to?.url.pathname === '/';
-		// Forward list→thread nav: signal ThreadPager to play a push slide-in.
-		if (from?.url.pathname === '/' && to?.url.pathname.startsWith('/discussion')) {
-			markEnterFromList();
+		// Record whether the thread was reached from the discussions list, so the
+		// swipe-back gesture can pop the history entry (history.back) instead of
+		// pushing a duplicate (goto). Set on every thread arrival so it reflects
+		// the current entry's origin; stays false on full load (no beforeNavigate)
+		// so a deep-linked thread never backs out of the site.
+		if (to?.url.pathname.startsWith('/discussion')) {
+			const fromList = from?.url.pathname === '/';
+			if (fromList) markEnterFromList();
+			setReachedFromList(fromList);
 		}
 		if (threadEnter || swipeBack) {
 			const store = getScrollChromeStore();
 			// Mobile hash-enter lands at the anchor via an instant programmatic
 			// scroll (see discussion +page.svelte); pin the header visible first so
 			// it stays on screen instead of hide-on-scroll reacting to that scroll.
-			// Desktop's header is in-flow and not driven by the store's translateY,
-			// so it is left untouched.
-			if (threadEnter && window.matchMedia(MOBILE_BREAKPOINT).matches) {
-				store.show();
-			}
-			store.freeze();
+			// Swipe-back already pinned it during the gesture (ThreadPager.swipeMove),
+			// so it only needs the hold. Desktop's header is in-flow and not driven
+			// by the store's translateY, so it is left untouched.
+			store.holdThroughNavigation(!!threadEnter && window.matchMedia(MOBILE_BREAKPOINT).matches);
 			window.clearTimeout(navFreezeTimer);
-			navFreezeTimer = window.setTimeout(() => store.unfreeze(), 1200);
+			navFreezeTimer = window.setTimeout(() => store.releaseNavigation(), 1200);
 		}
 	});
 

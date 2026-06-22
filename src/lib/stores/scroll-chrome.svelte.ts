@@ -14,6 +14,7 @@
 import type { VoidHandler } from '$lib/types/handlers';
 
 type SetHeaderHeightHandler = (height: number) => void;
+type HoldNavigationHandler = (pinVisible: boolean) => void;
 
 interface ScrollChromeStore {
 	readonly hidden: boolean;
@@ -22,11 +23,18 @@ interface ScrollChromeStore {
 	setHeaderHeight: SetHeaderHeightHandler;
 	start: VoidHandler;
 	show: VoidHandler;
-	/** Temporarily stop the header reacting to scroll - used while a navigation
-	 * scrolls top→hash, which would otherwise show-then-hide the header (twitch).
-	 * `unfreeze` re-syncs the header to the current position. */
-	freeze: VoidHandler;
-	unfreeze: VoidHandler;
+	/** A navigation that will programmatically scroll the window (a hash-anchored
+	 * thread enter, or a swipe-back to the list) is starting: hold the header so
+	 * hide-on-scroll does not react to the intermediate top→position scroll.
+	 * `pinVisible` pins it shown first (mobile hash-enter lands mid-thread).
+	 * Pair every call with `releaseNavigation` at the landing (or the fallback
+	 * timer in the root layout). */
+	holdThroughNavigation: HoldNavigationHandler;
+	/** A navigation has landed: release the hold and pin the header visible. A
+	 * navigation restores scroll programmatically (not via active scrolling), so
+	 * the chrome should stay put through the restore instead of hide-on-scroll
+	 * vanishing it; the next real scroll re-evaluates. */
+	releaseNavigation: VoidHandler;
 }
 
 const MOBILE_BREAKPOINT = '(max-width: 767px)';
@@ -42,8 +50,9 @@ let started = false;
 let mobileMq: MediaQueryList | null = null;
 let scrollTimeoutId = 0;
 // While true, evaluate() holds the header's current translateY and only refreshes
-// lastY. Set during a hash-anchored navigation so the header does not react to
-// SvelteKit's top→hash scroll (a show-then-hide twitch).
+// lastY. Set by holdThroughNavigation during a navigation that programatically
+// scrolls the window (hash-enter / swipe-back) so the header does not react to
+// that intermediate scroll; releaseNavigation clears it at the landing.
 let frozen = false;
 
 function evaluate(): void {
@@ -151,26 +160,18 @@ function freeze(): void {
 	frozen = true;
 }
 
-function unfreeze(): void {
-	if (!frozen) return;
+function holdThroughNavigation(pinVisible: boolean): void {
+	if (pinVisible) show();
+	freeze();
+}
+
+function releaseNavigation(): void {
+	// A navigation landing is not an active scroll: clear the hold and pin the
+	// header visible so the chrome is stable through the restore (the next real
+	// scroll re-evaluates). show() re-syncs lastY/translateY but does not touch
+	// `frozen`, so clear that explicitly.
 	frozen = false;
-	scrolling = false;
-	if (scrollTimeoutId) {
-		window.clearTimeout(scrollTimeoutId);
-		scrollTimeoutId = 0;
-	}
-	if (typeof window === 'undefined') return;
-	const y = window.scrollY;
-	lastY = y;
-	// Re-sync the header to the landing position (evaluate was skipped while
-	// frozen): visible near the top, hidden once scrolled in.
-	if (!mobileMq?.matches || y < TOP_THRESHOLD) {
-		hidden = false;
-		translateY = 0;
-	} else {
-		hidden = true;
-		translateY = -headerHeight;
-	}
+	show();
 }
 
 export function getScrollChromeStore(): ScrollChromeStore {
@@ -186,8 +187,8 @@ export function getScrollChromeStore(): ScrollChromeStore {
 		},
 		setHeaderHeight,
 		start,
-		freeze,
-		unfreeze,
+		holdThroughNavigation,
+		releaseNavigation,
 		show
 	};
 }

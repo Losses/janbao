@@ -64,9 +64,11 @@
 	const user = $derived(data.user);
 
 	// Remember the discussions-list scroll when leaving `/` for a thread, and
-	// restore it when returning (covers the programmatic swipe-back goto). The
-	// header is frozen for the swipe-back nav (see root +layout.svelte) so it does
-	// not react to the restore scroll; unfreeze here once the position is set.
+	// restore it when returning (covers swipe-back, which pops history via
+	// history.back when the thread was reached from the list, else a goto). The
+	// header is held for the swipe-back nav (see root +layout.svelte) so it does
+	// not react to the restore scroll; release the hold here (pinning the header
+	// visible) once the position is set.
 	const listScroll = getListScrollStore();
 	beforeNavigate(({ to }) => {
 		if (to?.url.pathname.startsWith('/discussion')) {
@@ -77,7 +79,11 @@
 		if (to?.url.pathname === '/' && typeof window !== 'undefined') {
 			const y = listScroll.consume();
 			if (y > 0) window.scrollTo(0, y);
-			getScrollChromeStore().unfreeze();
+			// Release the swipe-back hold and pin the header visible: the list
+			// lands via a restored (programmatic) scroll, not an active scroll, so
+			// the chrome stays put through the sync instead of hide-on-scroll
+			// vanishing it on the restore.
+			getScrollChromeStore().releaseNavigation();
 		}
 	});
 </script>

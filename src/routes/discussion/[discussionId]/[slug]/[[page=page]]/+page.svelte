@@ -257,9 +257,9 @@
 	 * SYNCHRONOUS first scroll below lands the anchor on the first visible frame
 	 * instead of flashing the thread top. It then re-scrolls each rAF while the
 	 * layout settles (images/fonts reflow) so it never chases a moving target.
-	 * The header is frozen + pinned visible for the whole navigation (see root
+	 * The header is held + pinned visible for the whole navigation (see root
 	 * +layout.svelte), so these scrolls cause no hide-on-scroll twitch. A previous
-	 * in-flight landing is cancelled via cancelLanding; finish() unfreezes.
+	 * in-flight landing is cancelled via cancelLanding; finish() releases the hold.
 	 */
 	function landAtAnchor(targetId: string): void {
 		cancelLanding?.();
@@ -280,9 +280,7 @@
 			done = true;
 			if (rafId) cancelAnimationFrame(rafId);
 			cancelLanding = null;
-			const store = getScrollChromeStore();
-			store.unfreeze();
-			store.show();
+			getScrollChromeStore().releaseNavigation();
 		}
 
 		function tick(): void {
@@ -402,7 +400,7 @@
 			if (cancelled) return;
 			// Resume header reaction (frozen on nav) right before the clean
 			// scroll so it hides smoothly instead of twitching on the nav scroll.
-			getScrollChromeStore().unfreeze();
+			getScrollChromeStore().releaseNavigation();
 			scrollToElement(element);
 		});
 		return () => {
