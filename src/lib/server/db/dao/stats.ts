@@ -46,7 +46,6 @@ export interface Contributor {
 	timeline: ContributorTimelinePoint[];
 }
 
-
 export interface StatsOverview {
 	timeline: TimelineDataPoint[];
 	contributors: Contributor[];
@@ -266,7 +265,6 @@ export function rangeToStartSec(range: string): number | undefined {
 			return undefined;
 	}
 }
-
 
 function mapToStatRows(counts: Map<string, number>): DBStatRow[] {
 	return [...counts.entries()].map(([dateStr, count]) => ({ dateStr, count }));
