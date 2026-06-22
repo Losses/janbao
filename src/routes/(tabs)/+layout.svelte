@@ -22,7 +22,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { beforeNavigate } from '$app/navigation';
+	import { beforeNavigate, afterNavigate } from '$app/navigation';
 	import type { Snippet } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import MobileTabPager from '$lib/components/templates/MobileTabPager.svelte';
@@ -85,14 +85,7 @@
 	const listScroll = getListScrollStore();
 	const overlaySidebar = getOverlaySidebarStore();
 
-	// Capture the list scroll when leaving a list route for a thread overlay, and
-	// restore it SYNCHRONOUSLY in beforeNavigate (before the new route paints)
-	// when returning, so the revealed pager is at the right scroll on the first
-	// frame - no white frame. This covers the browser/OS back button;
-	// ThreadPager's swipeEnd does the same restore for the swipe gesture -
-	// `consume()` resets to 0, so whoever restores first wins and the other's
-	// `y > 0` guard is a no-op. Release the scroll-chrome hold here (pinning the
-	// header visible) once the position is set.
+	// Capture the list scroll when leaving a list route for a thread overlay...
 	beforeNavigate(({ to, from }) => {
 		if (typeof window === 'undefined') return;
 		const toPath = to?.url.pathname ?? '';
@@ -100,11 +93,19 @@
 		if (isOverlayRoute(toPath) && isListRoute(fromPath)) {
 			listScroll.capture(window.scrollY);
 		}
-		if (isOverlayRoute(fromPath) && isListRoute(toPath)) {
-			const y = listScroll.consume();
-			if (y > 0) window.scrollTo(0, y);
-			getScrollChromeStore().releaseNavigation();
-		}
+	});
+	// ...and restore it in AFTERNAVIGATE. afterNavigate runs AFTER SvelteKit
+	// commits the navigation (including its own top-scroll) but BEFORE the browser
+	// paints, so the list lands at the captured scroll on the first visible frame
+	// - no 1-frame jump to the top. (Restoring in beforeNavigate lets SvelteKit's
+	// commit top-scroll override it -> top flash.) Release the scroll-chrome hold
+	// (set by root +layout for swipe-back) here, pinning the header visible.
+	afterNavigate(({ to }) => {
+		if (typeof window === 'undefined') return;
+		if (!isListRoute(to?.url.pathname ?? '')) return;
+		const y = listScroll.consume();
+		if (y > 0) window.scrollTo(0, y);
+		getScrollChromeStore().releaseNavigation();
 	});
 </script>
 

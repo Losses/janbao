@@ -267,7 +267,7 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		bind:this={viewportEl}
-		class="overflow-hidden"
+		class="overflow-hidden bg-base-100"
 		style={viewportStyle}
 		onpointerdown={cancelPendingNav}
 		use:detectSwipe={{ onMove: swipeMove, onEnd: swipeEnd }}
