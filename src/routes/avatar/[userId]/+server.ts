@@ -45,11 +45,11 @@ export const GET: RequestHandler = async (event) => {
 		headers.set('Content-Type', rec[0].contentType || 'image/webp');
 		headers.set('X-Content-Type-Options', 'nosniff');
 		headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-		// avatarFileId is a constant '1' (no per-version id in the DB), but pCloud's
-		// WebDAV ETag is size+mtime and changes whenever the avatar is overwritten,
-		// so we forward it (+ Last-Modified) as the avatar's validator. A long edge
-		// TTL (CDN-Cache-Control) still waits on URL versioning: the URL is
-		// userId-keyed, so without ?v=<sha> a stale avatar serves until expiry.
+		// The client appends the avatar's content sha as ?v=<sha> (Avatar.svelte),
+		// so a re-upload produces a new URL and a guaranteed edge cache miss: the
+		// long TTL below is safe. The forwarded ETag/Last-Modified give a cheap
+		// revalidation path once the TTL expires.
+		headers.set('CDN-Cache-Control', 'public, max-age=31536000');
 		const etag = upstream.get('etag');
 		if (etag) headers.set('ETag', etag);
 		const lastModified = upstream.get('last-modified');

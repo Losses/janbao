@@ -4,7 +4,9 @@
 	 * Supports sizes: xs (24px), sm (32px), md (40px), lg (56px).
 	 *
 	 * The avatar URL is derived here (not at every call site): when `avatarFileId`
-	 * is truthy the user has an uploaded avatar, served from `/avatar/<userId>`.
+	 * is truthy the user has an uploaded avatar, served from `/avatar/<userId>`
+	 * with `avatarFileId` (the avatar content sha) appended as `?v=` so the URL
+	 * changes on every re-upload and stays safely cacheable forever.
 	 * Pass `userId` + `avatarFileId`; omit both for a placeholder (letter fallback).
 	 */
 	interface AvatarProps {
@@ -32,7 +34,9 @@
 
 	const sizeClass = $derived(sizeMap[size] ?? 'w-10 h-10 text-base');
 	const fallbackLetter = $derived(displayName?.[0]?.toUpperCase() ?? '?');
-	const src = $derived(avatarFileId && userId != null ? `/avatar/${userId}` : null);
+	const src = $derived(
+		avatarFileId && userId != null ? `/avatar/${userId}?v=${avatarFileId}` : null
+	);
 </script>
 
 <div class="avatar {className}">

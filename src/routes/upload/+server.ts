@@ -110,15 +110,15 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	try {
+		const sha = bytesToHex(hasher.digest());
 		if (isAvatar) {
 			await pcloudMove(cfg, `/tmp/${tmpName}`, `/avatars/${user.id}`);
 			await db
 				.update(users)
-				.set({ avatarFileId: '1', avatarContentType: mime })
+				.set({ avatarFileId: sha, avatarContentType: mime })
 				.where(eq(users.id, user.id));
-			return json({ fileId: '1', url: `/avatar/${user.id}` });
+			return json({ fileId: sha, url: `/avatar/${user.id}` });
 		}
-		const sha = bytesToHex(hasher.digest());
 		await pcloudMove(cfg, `/tmp/${tmpName}`, `/attachments/${sha}`);
 		await db
 			.insert(attachments)
