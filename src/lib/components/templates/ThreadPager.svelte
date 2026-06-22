@@ -23,6 +23,7 @@
 	import { detectSwipe } from '$lib/actions/swipe';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
+	import { getListScrollStore } from '$lib/stores/list-scroll.svelte';
 	import { consumeEnterFromList, previousEntryIs } from '$lib/stores/thread-nav.svelte';
 
 	import { page } from '$app/state';
@@ -133,10 +134,10 @@
 			snapIndex = leftIdx;
 			// Pop the history entry when the real back destination is the list, so
 			// swiping back does not stack duplicate entries. Falls back to a pushed
-			// goto for a deep-linked / non-list-entered thread. The list scroll
-			// itself is restored synchronously by the (tabs) layout's beforeNavigate
-			// when the route actually changes (the preview masks the alignment until
-			// then via leftPreviewScroll).
+			// goto for a deep-linked / non-list-entered thread. The list scroll is
+			// restored in onTrackTransitionEnd (before history.back) so the overlay
+			// unmounts with the window already at listScroll (no post-animation
+			// jump); the preview masks the alignment until then via leftPreviewScroll.
 			pendingNav = { href: leftHref, back: leftHref ? previousEntryIs(leftHref) : false };
 		} else if (deltaX <= -SWIPE_COMMIT && rightIdx >= 0 && rightHref) {
 			snapIndex = rightIdx;
@@ -153,12 +154,24 @@
 		const nav = pendingNav;
 		pendingNav = null;
 		if (nav.back) {
+			// Scroll the window to the captured list scroll BEFORE history.back,
+			// still while the overlay covers the thread. The preview's
+			// translateY(neighborOffset - leftPreviewScroll) alignment tracks
+			// scrollY, so moving the window from the thread scroll to listScroll
+			// shifts the transform but keeps the preview's visual stable (no jump),
+			// and the overlay then unmounts with the window already at listScroll -
+			// so the document-height collapse (thread->list) does not clamp the
+			// scroll and there is no upward jump after the animation. consume()
+			// resets to 0 so the (tabs) afterNavigate fallback (browser-back) no-ops.
+			const y = listScroll.consume();
+			if (y > 0 && typeof window !== 'undefined') window.scrollTo(0, y);
 			history.back();
 		} else {
 			void goto(nav.href);
 		}
 	}
 
+	const listScroll = getListScrollStore();
 	const pager = getMobilePagerStore();
 	$effect(() => {
 		let progress: number;
@@ -267,7 +280,7 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		bind:this={viewportEl}
-		class="overflow-hidden bg-base-100"
+		class="overflow-hidden bg-base-200"
 		style={viewportStyle}
 		onpointerdown={cancelPendingNav}
 		use:detectSwipe={{ onMove: swipeMove, onEnd: swipeEnd }}
