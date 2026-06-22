@@ -14,7 +14,7 @@
 	import { DEFAULT_OFFLINE_PREFS } from '$lib/offline/prefs';
 	import { getEditorPrefsStore } from '$lib/stores/editor-prefs.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
-	import { markEnterFromList, setReachedFromList } from '$lib/stores/thread-nav.svelte';
+	import { markEnterFromList } from '$lib/stores/thread-nav.svelte';
 
 	interface LayoutProps {
 		data: LayoutData;
@@ -35,27 +35,26 @@
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	let navFreezeTimer = 0;
 	beforeNavigate(({ to, from }) => {
-		const threadEnter = to?.url.hash && to.url.pathname.startsWith('/discussion');
-		const swipeBack = from?.url.pathname.startsWith('/discussion') && to?.url.pathname === '/';
-		// Record whether the thread was reached from the discussions list, so the
-		// swipe-back gesture can pop the history entry (history.back) instead of
-		// pushing a duplicate (goto). Set on every thread arrival so it reflects
-		// the current entry's origin; stays false on full load (no beforeNavigate)
-		// so a deep-linked thread never backs out of the site.
-		if (to?.url.pathname.startsWith('/discussion')) {
-			const fromList = from?.url.pathname === '/';
-			if (fromList) markEnterFromList();
-			setReachedFromList(fromList);
+		const toPath = to?.url.pathname ?? '';
+		const fromPath = from?.url.pathname ?? '';
+		// Mark list→thread-overlay navigations so ThreadPager plays a forward push
+		// slide-in (the list neighbour slides out as the thread slides in).
+		if (
+			(toPath.startsWith('/discussion') || /^\/messages\/\d+/.test(toPath)) &&
+			(fromPath === '/' || fromPath === '/messages/inbox')
+		) {
+			markEnterFromList();
 		}
-		if (threadEnter || swipeBack) {
+		const threadEnter = to?.url.hash && to.url.pathname.startsWith('/discussion');
+		if (threadEnter) {
 			const store = getScrollChromeStore();
 			// Mobile hash-enter lands at the anchor via an instant programmatic
 			// scroll (see discussion +page.svelte); pin the header visible first so
 			// it stays on screen instead of hide-on-scroll reacting to that scroll.
-			// Swipe-back already pinned it during the gesture (ThreadPager.swipeMove),
-			// so it only needs the hold. Desktop's header is in-flow and not driven
-			// by the store's translateY, so it is left untouched.
-			store.holdThroughNavigation(!!threadEnter && window.matchMedia(MOBILE_BREAKPOINT).matches);
+			// Desktop's header is in-flow and not driven by the store's translateY,
+			// so it is left untouched. Swipe-back scroll restore + header release is
+			// owned by the (tabs) layout's beforeNavigate.
+			store.holdThroughNavigation(window.matchMedia(MOBILE_BREAKPOINT).matches);
 			window.clearTimeout(navFreezeTimer);
 			navFreezeTimer = window.setTimeout(() => store.releaseNavigation(), 1200);
 		}

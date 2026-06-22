@@ -166,10 +166,12 @@ function holdThroughNavigation(pinVisible: boolean): void {
 }
 
 function releaseNavigation(): void {
-	// A navigation landing is not an active scroll: clear the hold and pin the
-	// header visible so the chrome is stable through the restore (the next real
-	// scroll re-evaluates). show() re-syncs lastY/translateY but does not touch
-	// `frozen`, so clear that explicitly.
+	// No navigation hold in flight (a normal, non-anchored arrival): leave the
+	// header in its current scroll state. Only a held navigation (hash-enter /
+	// swipe-back) lands via a programmatic scroll, and there the chrome should
+	// stay put through the restore instead of hide-on-scroll vanishing it - so
+	// clear the hold and pin visible. The next real scroll re-evaluates.
+	if (!frozen) return;
 	frozen = false;
 	show();
 }

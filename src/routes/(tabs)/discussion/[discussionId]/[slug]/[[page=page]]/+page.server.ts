@@ -17,8 +17,6 @@ import {
 	resolvePermissions,
 	getAllowGuestActivity
 } from '$lib/server/constants';
-import { parseDiscussionPageFromPath, resolveGroupSlug } from '$lib/server/constants';
-import { loadDiscussionsPage } from '$lib/server/db/dao/discussions';
 import { authorPreviewColumns } from '$lib/server/db/dao/user-preview';
 import { loadActivityPage, type ActivityPageResult } from '$lib/server/db/dao/activities';
 import { dispatchReplyNotifications } from '$lib/server/db/notifications';
@@ -325,34 +323,21 @@ export const load: PageServerLoad = async (event) => {
 	const allContentJsons = [opReply?.contentJson, ...repliesStream.map((r) => r.contentJson)];
 	const mentionedUsers = await resolveMentions(allContentJsons, db);
 
-	// 12. Eager-fetch the discussions list (page 1) + Activity (page 1) so the
-	// mobile ThreadPager can mount the live neighbor panels ([list | thread |
-	// Activity]) for a real swipe reveal - not just a translated current page.
-	const groupSlug = resolveGroupSlug(user);
-	const { limit: listLimit } = parseDiscussionPageFromPath(undefined, platformEnv);
-	const [list, activity] = await Promise.all([
-		loadDiscussionsPage(db, {
-			userId: user?.id ?? null,
-			limit: listLimit,
-			offset: 0,
-			groupSlug
-		}).then((r) => ({
-			discussions: r.discussions,
-			page: 1,
-			totalPages: r.totalPages,
-			totalCount: r.totalCount
-		})),
+	// 12. Eager-fetch Activity (page 1) so the mobile ThreadPager can mount the
+	// live right neighbour (Activity) for a real swipe reveal. The list neighbour
+	// is no longer rendered here: the persistent MobileTabPager (see the (tabs)
+	// layout load) owns it and stays mounted under the thread overlay.
+	const activity: ActivityPageResult =
 		!user && !getAllowGuestActivity(platformEnv)
-			? Promise.resolve<ActivityPageResult>({
+			? {
 					activities: [],
 					page: 1,
 					totalPages: 1,
 					totalCount: 0,
 					activityDraft: null,
 					mentionedUsers: {}
-				})
-			: loadActivityPage(db, { userId: user?.id ?? null, page: 1, platformEnv })
-	]);
+				}
+			: await loadActivityPage(db, { userId: user?.id ?? null, page: 1, platformEnv });
 
 	// Map the raw OP + paginated replies (which carry the author avatar columns
 	// from `authorPreviewColumns`) to the shape the page consumes: the renderer
@@ -382,8 +367,7 @@ export const load: PageServerLoad = async (event) => {
 		canCreate: perms.canCreate,
 		user,
 		mentionedUsers,
-		// ThreadPager neighbor panels (mobile swipe reveal).
-		list,
+		// ThreadPager right neighbour (mobile Activity swipe reveal).
 		activity
 	};
 };
