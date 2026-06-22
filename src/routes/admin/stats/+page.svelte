@@ -8,7 +8,7 @@
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
 	import type { PageData } from './$types';
-	import { getIntervalBounds } from '$lib/server/db/dao/stats';
+	import { getIntervalBounds } from '$lib/utils/date';
 	import type { Contributor, TimelineDataPoint } from '$lib/server/db/dao/stats';
 
 	interface PageProps {
