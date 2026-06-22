@@ -75,7 +75,11 @@ export interface ThreadPassthroughInput {
 // Reply shape the thread +page.server.ts returns. Carries author display fields
 // (richer than the sync DTO) plus optional editor display fields (joined from
 // `editors` alias) so the writer can cache both the author and the editor as
-// CachedUser rows.
+// CachedUser rows. The author avatar is shipped as a ready `authorAvatarUrl`
+// (server-computed) and the passthrough caches it straight through - the client
+// never builds an avatar URL itself. The editor projection has no avatar URL on
+// the thread page, so editor CachedUser rows degrade to letter-avatar (same as
+// before the UserPreview.avatarUrl migration).
 interface ThreadReplyInput {
 	id: number;
 	contentJson: string;
@@ -86,7 +90,7 @@ interface ThreadReplyInput {
 	authorId: number;
 	authorDisplayName: string;
 	authorUsername: string;
-	authorAvatarFileId: string | null;
+	authorAvatarUrl: string | null;
 	editedByDisplayName: string | null;
 	editedByUsername: string | null;
 }
@@ -95,7 +99,7 @@ interface AuthorInput {
 	id: number;
 	displayName: string;
 	username: string;
-	avatarFileId: string | null;
+	avatarUrl: string | null;
 }
 
 // Prefs gate (INV-4 stays intact by gating the entire entry point). Early-
@@ -179,20 +183,23 @@ function mapListDiscussion(item: DiscussionListItem): LeanDiscussionFromList {
 
 // Map a thread-page author + reply to the cached user / reply row shapes. The
 // thread page carries display fields directly on each reply (joined server-side
-// for the live renderer), so we extract them here.
+// for the live renderer), so we extract them here. The author avatar URL is
+// server-computed and shipped ready-made on `r.authorAvatarUrl`; the passthrough
+// caches it straight through (no client-side URL building).
 function replyAuthorFromThread(r: ThreadReplyInput): AuthorInput {
 	return {
 		id: r.authorId,
 		displayName: r.authorDisplayName,
 		username: r.authorUsername,
-		avatarFileId: r.authorAvatarFileId
+		avatarUrl: r.authorAvatarUrl
 	};
 }
 
 // Editor projection: returns null when the reply has no editor id or no
 // display info (a deleted editor account yields null display fields). The
 // offline reader degrades gracefully for a missing CachedUser; we only cache
-// what we can resolve from the join.
+// what we can resolve from the join. The thread page has no editor avatar URL,
+// so editor rows cache `avatarUrl: null` (letter-avatar fallback).
 function editorFromThread(r: ThreadReplyInput): AuthorInput | null {
 	if (r.editedBy == null || !Number.isFinite(r.editedBy) || r.editedBy <= 0) return null;
 	const displayName = r.editedByDisplayName ?? r.editedByUsername;
@@ -202,7 +209,7 @@ function editorFromThread(r: ThreadReplyInput): AuthorInput | null {
 		id: r.editedBy,
 		displayName: displayName ?? 'user',
 		username: username ?? 'user',
-		avatarFileId: null
+		avatarUrl: null
 	};
 }
 
@@ -225,8 +232,7 @@ function mapCachedUser(author: AuthorInput, now: number): CachedUser {
 		id: author.id,
 		displayName: author.displayName,
 		username: author.username,
-		avatarFileId: author.avatarFileId,
-		avatarContentType: null,
+		avatarUrl: author.avatarUrl,
 		cachedAt: now
 	};
 }
@@ -300,7 +306,7 @@ export async function writeList(items: DiscussionListItem[]): Promise<void> {
 			id: item.authorId,
 			displayName: item.authorDisplayName,
 			username: item.authorUsername,
-			avatarFileId: item.authorAvatarFileId
+			avatarUrl: item.authorAvatarUrl
 		});
 		if (
 			item.lastReplyAuthorId != null &&
@@ -311,7 +317,10 @@ export async function writeList(items: DiscussionListItem[]): Promise<void> {
 				id: item.lastReplyAuthorId,
 				displayName: item.lastReplyAuthorDisplayName ?? item.lastReplyAuthorUsername ?? 'user',
 				username: item.lastReplyAuthorUsername ?? 'user',
-				avatarFileId: null
+				// DiscussionListItem does not ship lastReplyAuthorAvatarUrl; the
+				// cached row degrades to letter-avatar until the sync stream fills
+				// it in (same behavior as the previous avatarFileId: null path).
+				avatarUrl: null
 			});
 		}
 	}

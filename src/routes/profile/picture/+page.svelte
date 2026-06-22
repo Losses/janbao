@@ -18,8 +18,12 @@
 	const t = $derived(data.t);
 	const profileT = $derived(t.profile);
 	const user = $derived(data.user);
+	// avatarUrl is initialized from the server-built URL (hooks.server.ts
+	// computes it from the stored avatarFileId + contentType). After a successful
+	// upload we use the server-returned avatarUrl verbatim (the client never
+	// constructs avatar URLs itself).
 	// svelte-ignore state_referenced_locally
-	let avatarFileId = $state(data.avatarFileId);
+	let avatarUrl = $state(data.avatarUrl);
 	const online = getOnlineStore();
 
 	let saving = $state(false);
@@ -79,7 +83,9 @@
 
 			const editResult: ApiResult = await editRes.json();
 			if (editResult.success) {
-				avatarFileId = uploadResult.fileId;
+				// Use the server-built avatarUrl verbatim (the upload response carries
+				// the ready URL; the client never builds avatar URLs itself).
+				avatarUrl = uploadResult.avatarUrl ?? null;
 				message = { type: 'success', text: t.common.success };
 			} else {
 				message = { type: 'error', text: editResult.error || t.common.error };
@@ -118,12 +124,7 @@
 		<div class="space-y-3">
 			<!-- Current Avatar Preview -->
 			<div class="flex items-center gap-4">
-				<Avatar
-					userId={user?.id ?? null}
-					{avatarFileId}
-					displayName={user?.displayName || '?'}
-					size="lg"
-				/>
+				<Avatar {avatarUrl} displayName={user?.displayName || '?'} size="lg" />
 				<div>
 					<p class="font-medium text-base-content">{profileT.currentAvatar}</p>
 					<p class="text-sm text-base-content/50">

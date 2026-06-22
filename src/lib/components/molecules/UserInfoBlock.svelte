@@ -62,12 +62,7 @@
 <div class="flex flex-col gap-3 {className}">
 	<!-- User Avatar + Display Name -->
 	<div class="flex items-center gap-3">
-		<Avatar
-			userId={user.id}
-			avatarFileId={user.avatarFileId}
-			displayName={user.displayName}
-			size="md"
-		/>
+		<Avatar avatarUrl={user.avatarUrl} displayName={user.displayName} size="md" />
 		<div class="flex flex-col">
 			<a
 				href={isMobile ? '/profile' : `/profile/${user.id}/${userSlug}`}

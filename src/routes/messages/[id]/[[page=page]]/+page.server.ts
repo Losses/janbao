@@ -11,9 +11,11 @@ import {
 import { eq, and, isNull, count } from 'drizzle-orm';
 import { getPaginationLimit, getDiscussionsLimit } from '$lib/server/constants';
 import { getConversations } from '$lib/server/db/dao/messages';
+import { authorPreviewColumns } from '$lib/server/db/dao/user-preview';
 import { resolveMentions } from '$lib/server/utils/mentions';
 import { indexMessage, reindexMessage } from '$lib/server/search/fts';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
+import { buildAvatarUrl } from '$lib/utils/image';
 import { enforcePostThrottle } from '$lib/server/throttle';
 import { deliverPushForMessage } from '$lib/server/push/deliver';
 
@@ -78,17 +80,27 @@ export const load: PageServerLoad = async (event) => {
 
 	const limit = getPaginationLimit(event.platform?.env) || MESSAGE_PAGE_FALLBACK;
 
-	// 4. Fetch all participants (sidebar) with display info
-	const participants = await db
+	// 4. Fetch all participants (sidebar) with display info. Raw avatar columns
+	// are kept in the SELECT so buildAvatarUrl can derive the URL server-side;
+	// they are dropped from the returned ParticipantItem.
+	const participantRows = await db
 		.select({
 			userId: conversationParticipants.userId,
 			username: users.username,
 			displayName: users.displayName,
-			avatarFileId: users.avatarFileId
+			avatarFileId: users.avatarFileId,
+			avatarContentType: users.avatarContentType
 		})
 		.from(conversationParticipants)
 		.innerJoin(users, eq(conversationParticipants.userId, users.id))
 		.where(eq(conversationParticipants.conversationId, conversationId));
+
+	const participants = participantRows.map((p) => ({
+		userId: p.userId,
+		username: p.username,
+		displayName: p.displayName,
+		avatarUrl: buildAvatarUrl(p.userId, p.avatarFileId, p.avatarContentType)
+	}));
 
 	// 5. Total message count + paginated message stream (oldest first)
 	const totalResult = await db
@@ -98,7 +110,7 @@ export const load: PageServerLoad = async (event) => {
 	const totalCount = totalResult[0]?.value ?? 0;
 	const totalPages = Math.max(1, Math.ceil(totalCount / limit));
 
-	const messageRows = await db
+	const messageRowRows = await db
 		.select({
 			id: messages.id,
 			conversationId: messages.conversationId,
@@ -106,9 +118,7 @@ export const load: PageServerLoad = async (event) => {
 			contentJson: messages.contentJson,
 			createdAt: messages.createdAt,
 			updatedAt: messages.updatedAt,
-			authorDisplayName: users.displayName,
-			authorUsername: users.username,
-			authorAvatarFileId: users.avatarFileId
+			...authorPreviewColumns
 		})
 		.from(messages)
 		.innerJoin(users, eq(messages.authorId, users.id))
@@ -116,6 +126,24 @@ export const load: PageServerLoad = async (event) => {
 		.orderBy(messages.createdAt)
 		.limit(limit)
 		.offset((page - 1) * limit);
+
+	// Flatten raw author* avatar columns into the authorAvatarUrl the
+	// MessageItem/AuthorPreviewFields DTO requires.
+	const messageRows = messageRowRows.map((row) => ({
+		id: row.id,
+		conversationId: row.conversationId,
+		authorId: row.authorId,
+		contentJson: row.contentJson,
+		createdAt: row.createdAt,
+		updatedAt: row.updatedAt,
+		authorDisplayName: row.authorDisplayName,
+		authorUsername: row.authorUsername,
+		authorAvatarUrl: buildAvatarUrl(
+			row.authorId,
+			row.authorAvatarFileId,
+			row.authorAvatarContentType
+		)
+	}));
 
 	// 6. Mark conversation as read for the active user
 	await db

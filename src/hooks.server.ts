@@ -4,6 +4,7 @@ import { verifyJwt } from '$lib/server/auth';
 import { users } from '$lib/server/db/schema';
 import { getEditorPreferences } from '$lib/server/db/dao/editor-preferences';
 import { resolveLang, getTranslation } from '$lib/server/i18n';
+import { buildAvatarUrl } from '$lib/utils/image';
 import { getJwtSecret } from '$lib/server/constants';
 import { resolvePcloudConfig, pcloudIsConfigured } from '$lib/server/pcloud';
 import { maybeRunDailyBackup } from '$lib/server/backup';
@@ -78,7 +79,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 					email: userRecord.email,
 					displayName: userRecord.displayName,
 					bio: userRecord.bio,
-					avatarFileId: userRecord.avatarFileId,
+					avatarUrl: buildAvatarUrl(
+						userRecord.id,
+						userRecord.avatarFileId,
+						userRecord.avatarContentType
+					),
 					groupSlug: userRecord.groupSlug,
 					signupTime: userRecord.signupTime,
 					lastActiveTime: userRecord.lastActiveTime,

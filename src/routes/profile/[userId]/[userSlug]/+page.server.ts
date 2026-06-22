@@ -3,9 +3,11 @@ import type { PageServerLoad } from './$types';
 import { users, activities, drafts, activityJoins } from '$lib/server/db/schema';
 import { eq, and, isNull, desc, sql, or, inArray } from 'drizzle-orm';
 import { generateSlug } from '$lib/utils/slug';
+import { buildAvatarUrl } from '$lib/utils/image';
 import { BOOTSTRAP_ADMIN_ID, SYSTEM_USER_ID, getAllowGuestActivity } from '$lib/server/constants';
 import { resolveMentions } from '$lib/server/utils/mentions';
 import { getProfileHeaderPayload } from '$lib/server/db/dao/profile';
+import { authorPreviewColumns } from '$lib/server/db/dao/user-preview';
 import { listManageableUserGroups } from '$lib/server/db/dao/admin-permissions';
 import type { JoinedMember, RecipientInfo } from '$lib/types/api';
 
@@ -63,9 +65,7 @@ export const load: PageServerLoad = async (event) => {
 						contentJson: activities.contentJson,
 						createdAt: activities.createdAt,
 						isJoined: activities.isJoined,
-						authorDisplayName: users.displayName,
-						authorUsername: users.username,
-						authorAvatarFileId: users.avatarFileId
+						...authorPreviewColumns
 					})
 					.from(activities)
 					.innerJoin(users, eq(activities.authorId, users.id))
@@ -103,7 +103,8 @@ export const load: PageServerLoad = async (event) => {
 				userId: activityJoins.userId,
 				displayName: users.displayName,
 				username: users.username,
-				avatarFileId: users.avatarFileId
+				avatarFileId: users.avatarFileId,
+				avatarContentType: users.avatarContentType
 			})
 			.from(activityJoins)
 			.innerJoin(users, eq(activityJoins.userId, users.id))
@@ -115,7 +116,7 @@ export const load: PageServerLoad = async (event) => {
 				userId: r.userId,
 				displayName: r.displayName,
 				username: r.username,
-				avatarFileId: r.avatarFileId
+				avatarUrl: buildAvatarUrl(r.userId, r.avatarFileId, r.avatarContentType)
 			});
 			joinedMembersMap.set(r.activityId, arr);
 		}
@@ -210,11 +211,19 @@ export const load: PageServerLoad = async (event) => {
 		targetUserEmail,
 		invitedBy,
 		activities: profileActivities.map((a) => ({
-			...a,
+			id: a.id,
+			authorId: a.authorId,
+			authorDisplayName: a.authorDisplayName,
+			authorUsername: a.authorUsername,
+			authorAvatarUrl: buildAvatarUrl(a.authorId, a.authorAvatarFileId, a.authorAvatarContentType),
+			recipientId: a.recipientId,
 			recipientDisplayName: a.recipientId
 				? recipientMap.get(a.recipientId)?.displayName || null
 				: null,
 			recipientUsername: a.recipientId ? recipientMap.get(a.recipientId)?.username || null : null,
+			contentJson: a.contentJson,
+			createdAt: a.createdAt,
+			isJoined: a.isJoined,
 			commentCount: commentCountMap.get(a.id) || 0,
 			joinedMembers: a.isJoined ? (joinedMembersMap.get(a.id) ?? []) : []
 		})),

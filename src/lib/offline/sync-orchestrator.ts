@@ -554,8 +554,7 @@ async function backfillMissingUsers(): Promise<void> {
 					id: u.id,
 					displayName: u.displayName,
 					username: u.username,
-					avatarFileId: u.avatarFileId,
-					avatarContentType: u.avatarContentType ?? null,
+					avatarUrl: u.avatarUrl ?? null,
 					cachedAt: now
 				}))
 			);

@@ -71,12 +71,7 @@
 						href="/profile/{p.userId}/{generateSlug(p.username)}"
 						class="flex items-center gap-2 hover:text-primary transition-colors"
 					>
-						<Avatar
-							userId={p.userId}
-							avatarFileId={p.avatarFileId}
-							displayName={p.displayName}
-							size="xs"
-						/>
+						<Avatar avatarUrl={p.avatarUrl} displayName={p.displayName} size="xs" />
 						<span class="text-sm truncate">{p.displayName}</span>
 					</a>
 				{/each}
@@ -116,12 +111,7 @@
 							<span
 								class="inline-flex items-center gap-1.5 rounded bg-primary/15 pl-1 pr-1.5 py-0.5 text-xs font-medium text-primary"
 							>
-								<Avatar
-									userId={p.id}
-									avatarFileId={p.avatarFileId}
-									displayName={p.displayName}
-									size="xs"
-								/>
+								<Avatar avatarUrl={p.avatarUrl} displayName={p.displayName} size="xs" />
 								<span class="truncate max-w-[120px]">{p.displayName}</span>
 								<button
 									type="button"

@@ -9,6 +9,8 @@ import { and, isNull, desc, eq, sql, inArray } from 'drizzle-orm';
 import type { D1Db } from '../index';
 import { getActivitiesLimit, SYSTEM_USER_ID } from '$lib/server/constants';
 import { resolveMentions } from '$lib/server/utils/mentions';
+import { authorPreviewColumns } from './user-preview';
+import { buildAvatarUrl } from '$lib/utils/image';
 import type { ActivityListItem, JoinedMember, RecipientInfo } from '$lib/types/api';
 import type { MentionedUsersMap } from '$lib/types/mentions';
 
@@ -44,9 +46,7 @@ export async function loadActivityPage(
 			contentJson: activities.contentJson,
 			createdAt: activities.createdAt,
 			isJoined: activities.isJoined,
-			authorDisplayName: users.displayName,
-			authorUsername: users.username,
-			authorAvatarFileId: users.avatarFileId
+			...authorPreviewColumns
 		})
 		.from(activities)
 		.innerJoin(users, eq(activities.authorId, users.id))
@@ -68,7 +68,8 @@ export async function loadActivityPage(
 				userId: activityJoins.userId,
 				displayName: users.displayName,
 				username: users.username,
-				avatarFileId: users.avatarFileId
+				avatarFileId: users.avatarFileId,
+				avatarContentType: users.avatarContentType
 			})
 			.from(activityJoins)
 			.innerJoin(users, eq(activityJoins.userId, users.id))
@@ -80,7 +81,7 @@ export async function loadActivityPage(
 				userId: r.userId,
 				displayName: r.displayName,
 				username: r.username,
-				avatarFileId: r.avatarFileId
+				avatarUrl: buildAvatarUrl(r.userId, r.avatarFileId, r.avatarContentType)
 			});
 			joinedMembersMap.set(r.activityId, arr);
 		}
@@ -159,7 +160,7 @@ export async function loadActivityPage(
 		authorId: a.authorId,
 		authorDisplayName: a.authorDisplayName,
 		authorUsername: a.authorUsername,
-		authorAvatarFileId: a.authorAvatarFileId,
+		authorAvatarUrl: buildAvatarUrl(a.authorId, a.authorAvatarFileId, a.authorAvatarContentType),
 		recipientId: a.recipientId,
 		recipientDisplayName: a.recipientId
 			? (recipientMap.get(a.recipientId)?.displayName ?? null)

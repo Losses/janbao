@@ -3,23 +3,19 @@
 	 * Avatar Atom - Renders a circular user avatar image or a text-based fallback (first letter of displayName).
 	 * Supports sizes: xs (24px), sm (32px), md (40px), lg (56px).
 	 *
-	 * The avatar URL is derived here (not at every call site): when `avatarFileId`
-	 * is truthy the user has an uploaded avatar, served from `/avatar/<userId>`
-	 * with `avatarFileId` (the avatar content sha) appended as `?v=` so the URL
-	 * changes on every re-upload and stays safely cacheable forever.
-	 * Pass `userId` + `avatarFileId`; omit both for a placeholder (letter fallback).
+	 * The avatar URL is built server-side (see `buildAvatarUrl` in $lib/utils/image)
+	 * and passed in ready-made - this component does no URL/extension/content-type
+	 * logic. Pass `avatarUrl` (null/omitted → letter fallback) + `displayName`.
 	 */
 	interface AvatarProps {
-		userId?: number | null;
-		avatarFileId?: string | null;
+		avatarUrl?: string | null;
 		displayName?: string | null;
 		size?: 'xs' | 'sm' | 'md' | 'lg';
 		class?: string;
 	}
 
 	let {
-		userId = null,
-		avatarFileId = null,
+		avatarUrl = null,
 		displayName = null,
 		size = 'md',
 		class: className = ''
@@ -34,9 +30,7 @@
 
 	const sizeClass = $derived(sizeMap[size] ?? 'w-10 h-10 text-base');
 	const fallbackLetter = $derived(displayName?.[0]?.toUpperCase() ?? '?');
-	const src = $derived(
-		avatarFileId && userId != null ? `/avatar/${userId}?v=${avatarFileId}` : null
-	);
+	const src = $derived(avatarUrl);
 </script>
 
 <div class="avatar {className}">

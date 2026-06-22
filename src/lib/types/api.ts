@@ -10,14 +10,46 @@ export interface CategoryItem {
 }
 
 /**
+ * Canonical display subset of a user, shared by every avatar/name chip across
+ * the app (post/reply/message author, activity actor, notification source,
+ * search hit, online user, etc.). The server selects the raw avatar columns via
+ * `userPreviewColumns` ($lib/server/db/dao/user-preview) and computes
+ * `avatarUrl` server-side via `buildAvatarUrl` ($lib/utils/image), so the
+ * client always renders a ready URL string (never builds one itself). Adding a
+ * display field is a one-place change there + here, and every caller that
+ * spreads the column-set picks it up.
+ */
+export interface UserPreview {
+	id: number;
+	username: string;
+	displayName: string;
+	avatarUrl: string | null;
+}
+
+/**
+ * Flat author-display fields (the `author*` prefix) for any row that JOINs users
+ * as its author. Produced by spreading `authorPreviewColumns`
+ * ($lib/server/db/dao/user-preview) into a query; domain types `extends
+ * AuthorPreviewFields` so a field added to the column-set + this interface
+ * reaches every author-bearing row automatically. Fields are non-null because
+ * the author join is inner (a row always has an author).
+ */
+export interface AuthorPreviewFields {
+	authorDisplayName: string;
+	authorUsername: string;
+	authorAvatarUrl: string | null;
+}
+
+/**
  * Minimal user identity for rendering an avatar chip/card: id + name + avatar.
  * Shared base for online users, search/mention results, and viewer summaries.
+ * Carries a ready `avatarUrl` (server-built).
  */
 export interface UserCard {
 	id: number;
 	username: string;
 	displayName: string;
-	avatarFileId: string | null;
+	avatarUrl: string | null;
 }
 
 /** Online user item used by ActiveUsersWall and active-users store. */
@@ -101,14 +133,11 @@ export interface ActivityCommentsResponse {
 	comments: ActivityCommentItem[];
 }
 
-export interface ActivityCommentItem {
+export interface ActivityCommentItem extends AuthorPreviewFields {
 	id: number;
 	authorId: number;
 	contentJson: string;
 	createdAt: Date;
-	authorDisplayName: string;
-	authorUsername: string;
-	authorAvatarFileId: string | null;
 }
 
 // A member of an isJoined activity (a user who registered that day). Names render
@@ -117,7 +146,7 @@ export interface JoinedMember {
 	userId: number;
 	displayName: string;
 	username: string;
-	avatarFileId: string | null;
+	avatarUrl: string | null;
 }
 
 /**
@@ -125,12 +154,9 @@ export interface JoinedMember {
  * ActivityRow and JoinedActivityRow consume. Shared between the server DAO
  * (`loadActivityPage`), the activity panel, and the mobile tab pager.
  */
-export interface ActivityListItem {
+export interface ActivityListItem extends AuthorPreviewFields {
 	id: number;
 	authorId: number;
-	authorDisplayName: string;
-	authorUsername: string;
-	authorAvatarFileId: string | null;
 	recipientId?: number | null;
 	recipientDisplayName?: string | null;
 	recipientUsername?: string | null;
@@ -197,6 +223,9 @@ export interface ApiResult {
 	error?: string;
 	id?: number;
 	fileId?: string;
+	// Avatar uploads only: server-built avatar URL the client renders directly
+	// (no client-side URL construction). Omitted for attachment uploads.
+	avatarUrl?: string | null;
 }
 
 // --- Frontend Feedback Message Type ---
@@ -224,7 +253,7 @@ export interface NotificationItem {
 	sourceUserId: number | null;
 	sourceDisplayName: string | null;
 	sourceUsername: string | null;
-	sourceAvatarFileId: string | null;
+	sourceAvatarUrl: string | null;
 	discussionId: number | null;
 	discussionTitle: string | null;
 	discussionSlug: string | null;
@@ -265,19 +294,16 @@ export interface ConversationListItem {
 	lastAuthorId: number | null;
 	lastAuthorUsername: string | null;
 	lastAuthorDisplayName: string | null;
-	lastAuthorAvatarFileId: string | null;
+	lastAuthorAvatarUrl: string | null;
 	participantCount: number;
 	messageCount: number;
 	unreadCount: number;
 }
 
-export interface MessageItem {
+export interface MessageItem extends AuthorPreviewFields {
 	id: number;
 	conversationId: number;
 	authorId: number;
-	authorDisplayName: string;
-	authorUsername: string;
-	authorAvatarFileId: string | null;
 	contentJson: string;
 	createdAt: Date;
 	updatedAt: Date;
@@ -287,7 +313,7 @@ export interface ParticipantItem {
 	userId: number;
 	username: string;
 	displayName: string;
-	avatarFileId: string | null;
+	avatarUrl: string | null;
 }
 
 export interface MessageCreateBody {
@@ -488,13 +514,7 @@ export interface SyncActivityDTO {
 // Author display info for the offline reader. One row per unique authorId
 // referenced by the returned discussions + replies; the client caches it in
 // IDB so avatars and names render offline without a server round-trip.
-export interface SyncUserDTO {
-	id: number;
-	displayName: string;
-	username: string;
-	avatarFileId: string | null;
-	avatarContentType: string | null;
-}
+export type SyncUserDTO = UserPreview;
 
 export interface SyncCursors {
 	discussions: string;

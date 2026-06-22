@@ -165,8 +165,7 @@
 								<div class="relative flex-shrink-0">
 									<a href="/profile/{d.authorId}/{authorSlug}">
 										<Avatar
-											userId={d.authorId}
-											avatarFileId={d.authorAvatarFileId}
+											avatarUrl={d.authorAvatarUrl}
 											displayName={authorDisplayName}
 											size="md"
 										/>
@@ -218,12 +217,7 @@
 							{@const authorDisplayName = formatDisplayName(a.authorDisplayName, a.authorId, t)}
 							<div class="flex items-start gap-4 pl-3 pr-2 py-4 hover:bg-base-200/20">
 								<a href="/profile/{a.authorId}/{authorSlug}" class="flex-shrink-0">
-									<Avatar
-										userId={a.authorId}
-										avatarFileId={a.authorAvatarFileId}
-										displayName={authorDisplayName}
-										size="md"
-									/>
+									<Avatar avatarUrl={a.authorAvatarUrl} displayName={authorDisplayName} size="md" />
 								</a>
 								<div class="flex-1 min-w-0">
 									<a

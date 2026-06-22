@@ -2,6 +2,9 @@ import { discussions, users, bookmarks, discussionReads, replies, categories } f
 import { eq, and, or, gt, isNull, desc, sql, count, inArray } from 'drizzle-orm';
 import type { D1Db } from '../index';
 import { getReadableCategorySlugs } from '$lib/server/constants';
+import { authorPreviewColumns } from './user-preview';
+import { buildAvatarUrl } from '$lib/utils/image';
+import type { AuthorPreviewFields } from '$lib/types/api';
 
 export interface ReadHistory {
 	lastReadAt: Date | null;
@@ -9,16 +12,13 @@ export interface ReadHistory {
 	lastReadReplyId: number | null;
 }
 
-export interface DiscussionListItem {
+export interface DiscussionListItem extends AuthorPreviewFields {
 	id: number;
 	title: string;
 	slug: string;
 	categorySlug: string;
 	categoryTitle?: string;
 	authorId: number;
-	authorDisplayName: string;
-	authorUsername: string;
-	authorAvatarFileId: string | null;
 	viewCount: number;
 	commentCount: number;
 	isPinned: boolean;
@@ -102,14 +102,12 @@ export async function getDiscussionsList(
 			categorySlug: discussions.categorySlug,
 			categoryTitle: categories.title,
 			authorId: discussions.authorId,
+			...authorPreviewColumns,
 			viewCount: discussions.viewCount,
 			commentCount: discussions.commentCount,
 			isPinned: discussions.isPinned,
 			createdAt: discussions.createdAt,
 			lastReplyAt: discussions.lastReplyAt,
-			authorDisplayName: users.displayName,
-			authorUsername: users.username,
-			authorAvatarFileId: users.avatarFileId,
 			// Left joins if userId is present
 			isBookmarked:
 				userId !== null && userId !== undefined
@@ -289,7 +287,11 @@ export async function getDiscussionsList(
 		authorId: row.authorId,
 		authorDisplayName: row.authorDisplayName,
 		authorUsername: row.authorUsername,
-		authorAvatarFileId: row.authorAvatarFileId,
+		authorAvatarUrl: buildAvatarUrl(
+			row.authorId,
+			row.authorAvatarFileId,
+			row.authorAvatarContentType
+		),
 		viewCount: row.viewCount,
 		commentCount: row.commentCount,
 		isPinned: row.isPinned,

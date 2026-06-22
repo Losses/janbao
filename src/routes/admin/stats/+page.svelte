@@ -479,12 +479,7 @@
 								<!-- Contributor header detail: Left Avatar, Right Info -->
 								<div class="flex items-center gap-3">
 									<a href="/profile/{c.id}/{profileSlug}">
-										<Avatar
-											userId={c.id}
-											avatarFileId={c.avatarFileId}
-											displayName={c.displayName}
-											size="md"
-										/>
+										<Avatar avatarUrl={c.avatarUrl} displayName={c.displayName} size="md" />
 									</a>
 									<div class="min-w-0 flex-1">
 										<!-- Top: Nickname -->

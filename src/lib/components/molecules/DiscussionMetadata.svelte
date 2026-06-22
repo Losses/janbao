@@ -16,7 +16,7 @@
 		userId: number;
 		username: string;
 		displayName: string;
-		avatarFileId?: string | null;
+		avatarUrl?: string | null;
 		createdAt: string | number | Date;
 		/** When the body was last edited (null/absent = never edited). */
 		editedAt?: string | number | Date | null;
@@ -35,7 +35,7 @@
 		userId,
 		username,
 		displayName,
-		avatarFileId = null,
+		avatarUrl = null,
 		createdAt,
 		editedAt = null,
 		editedByDisplayName = null,
@@ -82,7 +82,7 @@
 
 <div class="flex items-center gap-3 {className}">
 	<a href="/profile/{userId}/{userSlug}" class="flex-shrink-0">
-		<Avatar {userId} {avatarFileId} displayName={displayUser} size="sm" />
+		<Avatar {avatarUrl} displayName={displayUser} size="sm" />
 	</a>
 	<div class="flex flex-col min-w-0">
 		<div class="flex items-center gap-1.5 flex-wrap">
