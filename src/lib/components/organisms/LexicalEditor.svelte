@@ -29,6 +29,7 @@
 		ListNode,
 		ListItemNode,
 		ImageNode,
+		InsertImage,
 		AutoLinkNode,
 		LinkNode,
 		ITALIC_STAR,
@@ -58,7 +59,7 @@
 		$isTextNode as isTextNodeFn,
 		$getRoot as getRoot
 	} from 'lexical';
-	import type { LexicalCommand } from 'lexical';
+	import type { LexicalCommand, LexicalEditor } from 'lexical';
 	import type { VoidHandler } from '$lib/types/handlers';
 	import type { TranslationDict } from '$lib/types/translation';
 
@@ -192,6 +193,62 @@
 	let lastSavedContent = $state('');
 	let saveStatus = $state<'idle' | 'saving' | 'saved'>('idle');
 	let autosaveTimer: ReturnType<typeof setInterval> | undefined;
+
+	let isUploadingImage = $state(false);
+	let uploadError = $state<string | null>(null);
+
+	function setUploadError(err: string) {
+		uploadError = err;
+		setTimeout(() => {
+			if (uploadError === err) uploadError = null;
+		}, 4000);
+	}
+
+	async function uploadAndInsertImage(editor: LexicalEditor, file: File) {
+		const MAX_ATTACHMENT = 5 * 1024 * 1024;
+		if (file.size > MAX_ATTACHMENT) {
+			setUploadError(t.upload.fileTooLarge);
+			return;
+		}
+
+		const allowedTypes = [
+			'image/png',
+			'image/jpeg',
+			'image/webp',
+			'image/gif',
+			'image/avif',
+			'image/bmp'
+		];
+		if (!allowedTypes.includes(file.type)) {
+			setUploadError(t.upload.invalidType);
+			return;
+		}
+
+		isUploadingImage = true;
+		uploadError = null;
+
+		try {
+			const res = await fetch('/upload', {
+				method: 'POST',
+				body: file
+			});
+			const result = (await res.json()) as { url?: string; error?: string };
+
+			if (!res.ok || !result.url) {
+				setUploadError(result.error || t.upload.uploadFailed);
+				return;
+			}
+
+			InsertImage(editor, {
+				src: result.url,
+				altText: file.name
+			});
+		} catch {
+			setUploadError(t.auth.networkError);
+		} finally {
+			isUploadingImage = false;
+		}
+	}
 
 	type EditorStateGetter = () => string;
 
@@ -426,8 +483,25 @@
 		const unregisterPaste = castEditor.registerCommand(
 			PASTE_COMMAND,
 			(event: unknown) => {
-				if (!f.plainMode) return false;
 				const clipboardEvent = event as ClipboardEvent;
+
+				// Handle image pasting if image feature is enabled and not in plain mode
+				if (!f.plainMode && f.image) {
+					const files = clipboardEvent.clipboardData?.files;
+					if (files && files.length > 0) {
+						const imageFiles = Array.from(files).filter((file) => file.type.startsWith('image/'));
+						if (imageFiles.length > 0) {
+							clipboardEvent.preventDefault();
+							for (const file of imageFiles) {
+								uploadAndInsertImage(editorInstance as LexicalEditor, file);
+							}
+							return true;
+						}
+					}
+				}
+
+				if (!f.plainMode) return false;
+
 				clipboardEvent.preventDefault();
 				const text = clipboardEvent.clipboardData?.getData('text/plain') ?? '';
 				castEditor.update!(() => {
@@ -594,6 +668,8 @@
 
 	// Derived save status label - uses i18n keys
 	const saveStatusLabel = $derived.by(() => {
+		if (isUploadingImage) return t.editor.uploading;
+		if (uploadError) return uploadError;
 		if (saveStatus === 'saving') return t.editor.saving;
 		if (saveStatus === 'saved') return t.editor.saved;
 		return '';
