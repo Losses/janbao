@@ -58,21 +58,41 @@ function webdavUrl(cfg: PcloudConfig, path: string): string {
 	return `https://${cfg.host}${fullPath(cfg, path)}`;
 }
 
+export interface PcloudStreamResult {
+	/** Streaming body, passed straight through to the client. */
+	body: ReadableStream<Uint8Array>;
+	/** Upstream response headers (e.g. content-length) the caller may forward. */
+	headers: Headers;
+}
+
 /**
- * GET a file from pCloud and return its streaming body for reverse-proxying.
- * Streams straight through (pCloud → client) with no buffering, so the caller
- * must supply the content-type (looked up in the DB)  - pCloud always returns
- * `application/octet-stream`. WebDAV serves the file in a single request in
- * both local and Worker runtimes.
+ * GET a file from pCloud and return its streaming body plus the upstream
+ * response headers for reverse-proxying. Streams straight through (pCloud →
+ * client) with no buffering, so the caller must supply the content-type
+ * (looked up in the DB)  - pCloud always returns `application/octet-stream`.
+ * The upstream headers are exposed so callers can forward content-length and
+ * other validators onto their own response. WebDAV serves the file in a single
+ * request in both local and Worker runtimes.
  */
-export async function pcloudStream(
-	cfg: PcloudConfig,
-	path: string
-): Promise<ReadableStream<Uint8Array>> {
+export async function pcloudStream(cfg: PcloudConfig, path: string): Promise<PcloudStreamResult> {
 	const res = await fetch(webdavUrl(cfg, path), { headers: { Authorization: basicAuth(cfg) } });
 	if (!res.ok) throw new Error(`pCloud WebDAV GET ${path} -> HTTP ${res.status}`);
 	if (!res.body) throw new Error(`pCloud WebDAV GET ${path} -> empty body`);
-	return res.body;
+	return { body: res.body, headers: res.headers };
+}
+
+/**
+ * Forward the upstream content-length onto a reverse-proxy response, but only
+ * when the body is uncompressed. When pCloud responds with Content-Encoding
+ * the runtime transparently decompresses the stream, so the declared length
+ * would no longer match the bytes actually sent and would corrupt the response;
+ * in that case we fall back to chunked transfer (no declared length).
+ */
+export function forwardContentLength(target: Headers, upstream: Headers): void {
+	const contentLength = upstream.get('content-length');
+	if (contentLength && !upstream.get('content-encoding')) {
+		target.set('Content-Length', contentLength);
+	}
 }
 
 /**

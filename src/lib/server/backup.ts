@@ -124,7 +124,8 @@ export async function downloadBackupStream(
 	name: string
 ): Promise<ReadableStream<Uint8Array>> {
 	if (!isValidBackupName(name)) throw new Error(`invalid backup name: ${name}`);
-	return pcloudStream(cfg, `${BACKUP_FOLDER}/${name}`);
+	const { body } = await pcloudStream(cfg, `${BACKUP_FOLDER}/${name}`);
+	return body;
 }
 
 /** Delete a single backup from pCloud. */

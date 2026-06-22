@@ -2,7 +2,12 @@ import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 import { eq } from 'drizzle-orm';
 import { attachments } from '$lib/server/db/schema';
-import { resolvePcloudConfig, pcloudStream, pcloudIsConfigured } from '$lib/server/pcloud';
+import {
+	resolvePcloudConfig,
+	pcloudStream,
+	pcloudIsConfigured,
+	forwardContentLength
+} from '$lib/server/pcloud';
 
 /**
  * Reverse-proxy a content attachment from pCloud. The content-type is read from
@@ -29,11 +34,16 @@ export const GET: RequestHandler = async (event) => {
 	}
 
 	try {
-		const body = await pcloudStream(cfg, `/attachments/${fileId}`);
+		const { body, headers: upstream } = await pcloudStream(cfg, `/attachments/${fileId}`);
 		const headers = new Headers();
 		headers.set('Content-Type', rec[0].contentType);
 		headers.set('X-Content-Type-Options', 'nosniff');
 		headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+		// fileId keys an immutable object (pre-conversion sha256), so the edge can
+		// safely hold this for the full TTL without serving stale content.
+		headers.set('CDN-Cache-Control', 'public, max-age=31536000');
+		headers.set('ETag', `"${fileId}"`);
+		forwardContentLength(headers, upstream);
 		return new Response(body, { status: 200, headers });
 	} catch {
 		return new Response(t.img.notFound, { status: 404 });
