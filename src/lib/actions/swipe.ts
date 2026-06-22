@@ -60,7 +60,7 @@ function insideHorizontalScroll(target: EventTarget | null, boundary: HTMLElemen
  * Suppress the next click so a drag does not double-fire as a tap. If the
  * browser generates a click after the drag, `swallow` catches it and cleans
  * up. If it does NOT (pointer-capture drags skip click generation), the next
- * `pointerdown` — the start of the user's next tap — cleans up the lingering
+ * `pointerdown` - the start of the user's next tap - cleans up the lingering
  * listener so that tap's click goes through. A 400ms safety timer acts as a
  * fallback cleanup in case pointerdown or click event flow is interrupted or bypassed.
  */
@@ -94,7 +94,7 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 	// Capture is best-effort: we request it so the browser yields native pan /
 	// edge-back to us, but the gesture MUST complete (onEnd) on up / cancel even
 	// if capture failed or was lost. `capturedPointers` therefore only gates the
-	// release cleanup — never the call to `finish`.
+	// release cleanup - never the call to `finish`.
 	const capturedPointers = new Set<number>();
 	let startX = 0;
 	let moved = false;
@@ -163,7 +163,7 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 	function onLostCapture(event: PointerEvent): void {
 		// Pointer capture was released (by us on up, or by the browser). Losing
 		// capture does NOT end the gesture: after release, pointer events resume
-		// normal hit-testing and — with the finger still over this node — the real
+		// normal hit-testing and - with the finger still over this node - the real
 		// pointerup / pointercancel still arrives and completes the gesture via
 		// onUp. Finishing here would snap on a stale delta, so we only keep the
 		// capture set accurate for destroy() and leave gesture state untouched.
