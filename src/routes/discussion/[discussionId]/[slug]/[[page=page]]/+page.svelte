@@ -20,7 +20,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { enhance } from '$app/forms';
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
@@ -41,6 +41,8 @@
 	}
 
 	let { data }: PageProps = $props();
+
+	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 
 	const online = getOnlineStore();
 	// The discussions list restores its scroll on swipe-back; the ThreadPager's
@@ -83,6 +85,23 @@
 	// each time. No bare `$effect` per [[svelte-effect-fetch-loop]].
 	afterNavigate(() => {
 		runThreadPassthrough(data);
+	});
+
+	// Mobile hash-enter lands at the anchor here, NOT in the $effect below:
+	// afterNavigate runs after SvelteKit's own scroll but before the browser
+	// paints, so landAtAnchor's synchronous first scroll puts the anchor on the
+	// first visible frame instead of flashing the thread top. (The $effect below
+	// handles desktop only.) No bare `$effect` per [[svelte-effect-fetch-loop]].
+	afterNavigate(({ to }) => {
+		if (!to?.url.hash || !to.url.pathname.startsWith('/discussion')) return;
+		if (!window.matchMedia(MOBILE_BREAKPOINT).matches) return;
+		const targetId = to.url.hash.startsWith('#') ? to.url.hash.substring(1) : to.url.hash;
+		landAtAnchor(targetId);
+	});
+
+	// Cancel an in-flight landing if the component unmounts mid-landing.
+	onDestroy(() => {
+		cancelLanding?.();
 	});
 
 	function runThreadPassthrough(current: PageData): void {
@@ -157,6 +176,10 @@
 	let loadedDiscussionId = $state<number | null>(null);
 	let loadedPage = $state<number | null>(null);
 
+	// Cancellation handle for the in-flight mobile anchor landing (see landAtAnchor
+	// / the mobile afterNavigate). Plain let, not $state: it is not read in markup.
+	let cancelLanding: VoidHandler | null = null;
+
 	$effect(() => {
 		if (discussion && (discussion.id !== loadedDiscussionId || currentPage !== loadedPage)) {
 			replyContent = data.replyDraft || '';
@@ -170,8 +193,6 @@
 	function handlePageChange(newPage: number) {
 		goto(`/discussion/${discussion.id}/${discussion.slug}/p${newPage}`);
 	}
-
-	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 
 	/**
 	 * Bring an element to the top of the viewport by scrolling the WINDOW only -
@@ -231,18 +252,22 @@
 	}
 
 	/**
-	 * Mobile-only anchor landing. Jumps to the anchor INSTANTLY (never smoothly)
-	 * the moment it is measurable and re-jumps each rAF while the layout settles
-	 * (images/fonts reflow), so the page shows the anchor from the first frame
-	 * instead of flashing the thread top, and never animates a scroll. The header
-	 * is frozen + pinned visible for the whole navigation (see root +layout.svelte),
-	 * so these programmatic scrolls cause no hide-on-scroll twitch. Returns a
-	 * cancel cleanup so a hash change mid-flight aborts the loop without
-	 * unfreezing - the next landing owns the freeze.
+	 * Mobile-only anchor landing, called from afterNavigate. afterNavigate runs
+	 * AFTER SvelteKit's own scroll but BEFORE the browser paints, so the
+	 * SYNCHRONOUS first scroll below lands the anchor on the first visible frame
+	 * instead of flashing the thread top. It then re-scrolls each rAF while the
+	 * layout settles (images/fonts reflow) so it never chases a moving target.
+	 * The header is frozen + pinned visible for the whole navigation (see root
+	 * +layout.svelte), so these scrolls cause no hide-on-scroll twitch. A previous
+	 * in-flight landing is cancelled via cancelLanding; finish() unfreezes.
 	 */
-	function landAtAnchor(targetId: string): VoidHandler {
+	function landAtAnchor(targetId: string): void {
+		cancelLanding?.();
+		cancelLanding = null;
 		const headerOffset =
 			parseInt(getComputedStyle(document.documentElement).getPropertyValue('--header-height')) || 0;
+		const resolveEl = (): HTMLElement | null =>
+			document.getElementById(targetId) || document.getElementById(`reply-${targetId}`);
 		let frame = 0;
 		let prevTargetY = 0;
 		let hasScrolled = false;
@@ -254,14 +279,16 @@
 			if (done) return;
 			done = true;
 			if (rafId) cancelAnimationFrame(rafId);
+			cancelLanding = null;
 			const store = getScrollChromeStore();
 			store.unfreeze();
 			store.show();
 		}
 
 		function tick(): void {
+			if (done) return;
 			frame += 1;
-			const el = document.getElementById(targetId) || document.getElementById(`reply-${targetId}`);
+			const el = resolveEl();
 			if (el) {
 				const targetY = Math.max(0, el.getBoundingClientRect().top + window.scrollY - headerOffset);
 				if (!hasScrolled || Math.abs(targetY - prevTargetY) > 1) {
@@ -284,9 +311,19 @@
 			rafId = requestAnimationFrame(tick);
 		}
 
-		rafId = requestAnimationFrame(tick);
+		// Synchronous first scroll: this is what beats the first paint. (Only when
+		// the anchor is already in the DOM - afterNavigate fires after load, so it
+		// is. If not, the rAF poll in tick() handles it with a brief flash.)
+		const el0 = resolveEl();
+		if (el0) {
+			const targetY = Math.max(0, el0.getBoundingClientRect().top + window.scrollY - headerOffset);
+			window.scrollTo({ top: targetY, behavior: 'auto' });
+			hasScrolled = true;
+			prevTargetY = targetY;
+		}
 
-		return () => {
+		rafId = requestAnimationFrame(tick);
+		cancelLanding = (): void => {
 			if (done) return;
 			done = true;
 			if (rafId) cancelAnimationFrame(rafId);
@@ -339,11 +376,12 @@
 		}
 	});
 
-	// 2. Navigation Anchor Scroll. Uses scrollToElement / landAtAnchor (both
-	// window-only), never scrollIntoView: the ThreadPager viewport is
+	// 2. Navigation Anchor Scroll (DESKTOP only). Uses scrollToElement
+	// (window-only), never scrollIntoView: the ThreadPager viewport is
 	// overflow:hidden, so scrollIntoView would scroll it internally and lock the
-	// page on the anchor. Mobile jumps to the anchor instantly and tracks reflow
-	// (landAtAnchor); desktop waits for a stable layout then smooth-scrolls.
+	// page on the anchor. Deferred until the layout is stable (waitForStableLayout)
+	// so it does not chase a moving target mid-enter and twitch the header. Mobile
+	// lands in afterNavigate (below) so the anchor is on the first paint - no flash.
 	let lastScrolledHash: string | null = null;
 	$effect(() => {
 		const hash = page.url.hash;
@@ -352,12 +390,9 @@
 			return;
 		}
 		if (hash === lastScrolledHash) return;
+		if (window.matchMedia(MOBILE_BREAKPOINT).matches) return; // mobile: afterNavigate
 		const targetId = hash.startsWith('#') ? hash.substring(1) : hash;
 		// Match either exactly targetId or reply-targetId
-		if (window.matchMedia(MOBILE_BREAKPOINT).matches) {
-			lastScrolledHash = hash;
-			return landAtAnchor(targetId);
-		}
 		const element =
 			document.getElementById(targetId) || document.getElementById(`reply-${targetId}`);
 		if (!element) return;

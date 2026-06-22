@@ -10,6 +10,7 @@
 	import { detectSwipe } from '$lib/actions/swipe';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
+	import { consumeEnterFromList } from '$lib/stores/thread-enter.svelte';
 
 	import { page } from '$app/state';
 
@@ -52,8 +53,13 @@
 	const SWIPE_COMMIT = 60;
 
 	let dragOffset = $state<number | null>(null);
+	// A forward list→thread navigation (see root +layout.svelte) plays a push
+	// slide-in: start on the left (list) neighbour and animate to the thread.
+	// Consumed once at init (module flag, reset on read); false on SSR / reload /
+	// non-list entry, so snapIndex defaults to ACTIVE (no animation) then.
+	const animateEnter = consumeEnterFromList();
 	// svelte-ignore state_referenced_locally
-	let snapIndex = $state(ACTIVE);
+	let snapIndex = $state(animateEnter ? 0 : ACTIVE);
 	let pendingNav = $state<string | null>(null);
 	let viewportWidth = $state(0);
 	let threadHeight = $state(0);
@@ -172,10 +178,23 @@
 			}
 		});
 
+		// Forward list→thread push slide-in: snapIndex started at 0 (list) so the
+		// first frame shows the list; this rAF flips it to ACTIVE on the next
+		// frame, and the track's transition-transform plays the slide. Scheduled
+		// after a frame (not sync) so the snapIndex=0 state actually paints and the
+		// transition has a start value to animate from.
+		let enterRaf = 0;
+		if (animateEnter) {
+			enterRaf = requestAnimationFrame(() => {
+				snapIndex = ACTIVE;
+			});
+		}
+
 		return () => {
 			mq.removeEventListener('change', sync);
 			window.removeEventListener('scroll', onScroll);
 			cancelAnimationFrame(raf);
+			if (enterRaf) cancelAnimationFrame(enterRaf);
 			if (scrollRaf) cancelAnimationFrame(scrollRaf);
 			pendingNav = null;
 			pager.set({ fractionalIndex: 0, dragging: false, active: false });

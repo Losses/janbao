@@ -14,6 +14,7 @@
 	import { DEFAULT_OFFLINE_PREFS } from '$lib/offline/prefs';
 	import { getEditorPrefsStore } from '$lib/stores/editor-prefs.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
+	import { markEnterFromList } from '$lib/stores/thread-enter.svelte';
 
 	interface LayoutProps {
 		data: LayoutData;
@@ -36,6 +37,10 @@
 	beforeNavigate(({ to, from }) => {
 		const threadEnter = to?.url.hash && to.url.pathname.startsWith('/discussion');
 		const swipeBack = from?.url.pathname.startsWith('/discussion') && to?.url.pathname === '/';
+		// Forward list→thread nav: signal ThreadPager to play a push slide-in.
+		if (from?.url.pathname === '/' && to?.url.pathname.startsWith('/discussion')) {
+			markEnterFromList();
+		}
 		if (threadEnter || swipeBack) {
 			const store = getScrollChromeStore();
 			// Mobile hash-enter lands at the anchor via an instant programmatic

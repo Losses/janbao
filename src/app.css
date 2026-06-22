@@ -207,3 +207,11 @@ header nav {
 .scroll-chrome-scrolling {
 	transition: none !important;
 }
+
+/* Reply anchors: offset native hash scrolling (full-page loads, and any
+ * scrollIntoView) by the sticky header so the target lands just below the app
+ * bar. The mobile landAtAnchor offset technique applies the same offset for
+ * client-side navigations. */
+[id^='reply-'] {
+	scroll-margin-top: var(--header-height, 0px);
+}
