@@ -17,7 +17,6 @@ import {
 	getPaginationLimit
 } from '$lib/server/constants';
 import { lexicalToSearchText } from '$lib/utils/lexical';
-import { buildAvatarUrl } from '$lib/utils/image';
 
 /**
  * Full-text search across the four content kinds. Each kind is searched on its
@@ -54,7 +53,7 @@ export interface DiscussionSearchItem {
 	authorId: number;
 	authorDisplayName: string;
 	authorUsername: string;
-	authorAvatarUrl: string | null;
+	authorAvatarFileId: string | null;
 	createdAt: Date;
 	updatedAt: Date;
 	commentCount: number;
@@ -74,7 +73,7 @@ export interface ActivitySearchItem {
 	authorId: number;
 	authorDisplayName: string;
 	authorUsername: string;
-	authorAvatarUrl: string | null;
+	authorAvatarFileId: string | null;
 	recipientId: number | null;
 	previewText: string;
 	createdAt: Date;
@@ -185,7 +184,6 @@ export async function searchActivities(
 			authorDisplayName: users.displayName,
 			authorUsername: users.username,
 			authorAvatarFileId: users.avatarFileId,
-			authorAvatarContentType: users.avatarContentType,
 			recipientId: activities.recipientId,
 			contentJson: activities.contentJson,
 			createdAt: activities.createdAt
@@ -227,7 +225,7 @@ export async function searchActivities(
 			authorId: r.authorId,
 			authorDisplayName: r.authorDisplayName,
 			authorUsername: r.authorUsername,
-			authorAvatarUrl: buildAvatarUrl(r.authorId, r.authorAvatarFileId, r.authorAvatarContentType),
+			authorAvatarFileId: r.authorAvatarFileId,
 			recipientId: r.recipientId,
 			previewText: lexicalToSearchText(r.contentJson),
 			createdAt: r.createdAt,
@@ -505,7 +503,6 @@ export async function searchDiscussions(
 			authorDisplayName: users.displayName,
 			authorUsername: users.username,
 			authorAvatarFileId: users.avatarFileId,
-			authorAvatarContentType: users.avatarContentType,
 			createdAt: discussions.createdAt,
 			updatedAt: discussions.updatedAt,
 			commentCount: discussions.commentCount
@@ -572,34 +569,8 @@ export async function searchDiscussions(
 				bestReplyId !== null && position !== null && position > 1
 					? Math.ceil((position - 1) / replyLimit)
 					: null;
-			const {
-				id,
-				title,
-				slug,
-				categorySlug,
-				categoryTitle,
-				authorId,
-				authorDisplayName,
-				authorUsername,
-				authorAvatarFileId,
-				authorAvatarContentType,
-				createdAt,
-				updatedAt,
-				commentCount
-			} = r;
 			return {
-				id,
-				title,
-				slug,
-				categorySlug,
-				categoryTitle,
-				authorId,
-				authorDisplayName,
-				authorUsername,
-				authorAvatarUrl: buildAvatarUrl(authorId, authorAvatarFileId, authorAvatarContentType),
-				createdAt,
-				updatedAt,
-				commentCount,
+				...r,
 				bodyPreview: bestReplyId !== null ? (bodyPreviewMap.get(bestReplyId) ?? null) : null,
 				bestReplyId,
 				matchKind,

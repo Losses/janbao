@@ -11,7 +11,6 @@
 import { users } from '../db/schema';
 import { inArray } from 'drizzle-orm';
 import { extractMentions } from '$lib/utils/mentions';
-import { buildAvatarUrl } from '$lib/utils/image';
 import type { D1Db } from '../db/index';
 import type { MentionedUsersMap } from '$lib/types/mentions';
 
@@ -52,8 +51,7 @@ export async function resolveMentions(
 			id: users.id,
 			displayName: users.displayName,
 			username: users.username,
-			avatarFileId: users.avatarFileId,
-			avatarContentType: users.avatarContentType
+			avatarFileId: users.avatarFileId
 		})
 		.from(users)
 		.where(inArray(users.username, allUsernames));
@@ -65,7 +63,7 @@ export async function resolveMentions(
 			id: u.id,
 			displayName: u.displayName,
 			username: u.username,
-			avatarUrl: buildAvatarUrl(u.id, u.avatarFileId, u.avatarContentType)
+			avatarFileId: u.avatarFileId
 		};
 	}
 

@@ -9,7 +9,6 @@ import { eq, and, isNull, inArray, ne, sql } from 'drizzle-orm';
 import type { D1Db } from '../index';
 import type { ConversationListItem, ListOffsetOptions } from '$lib/types/api';
 import { extractPlainText } from '$lib/utils/mentions';
-import { buildAvatarUrl } from '$lib/utils/image';
 
 interface ConversationListResult {
 	items: ConversationListItem[];
@@ -142,7 +141,6 @@ export async function getConversations(
 			username: users.username,
 			displayName: users.displayName,
 			avatarFileId: users.avatarFileId,
-			avatarContentType: users.avatarContentType,
 			joinedAt: conversationParticipants.joinedAt
 		})
 		.from(conversationParticipants)
@@ -206,11 +204,7 @@ export async function getConversations(
 			lastAuthorId: displayUser?.userId ?? null,
 			lastAuthorUsername: displayUser?.username ?? null,
 			lastAuthorDisplayName: displayUser?.displayName ?? null,
-			lastAuthorAvatarUrl: buildAvatarUrl(
-				displayUser?.userId ?? 0,
-				displayUser?.avatarFileId ?? null,
-				displayUser?.avatarContentType ?? null
-			),
+			lastAuthorAvatarFileId: displayUser?.avatarFileId ?? null,
 			participantCount: countMap.get(id) ?? 0,
 			messageCount: messageCountMap.get(id) ?? 0,
 			unreadCount: unreadMap.get(id) ?? 0

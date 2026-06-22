@@ -3,7 +3,6 @@ import { jsonError } from '$lib/server/errors';
 import { users } from '$lib/server/db/schema';
 import { like, not, eq, and, ne, or, desc } from 'drizzle-orm';
 import { SYSTEM_USER_ID } from '$lib/server/constants';
-import { buildAvatarUrl } from '$lib/utils/image';
 import type { RequestHandler } from './$types';
 import type { UserSearchResult } from '$lib/types/api';
 
@@ -41,8 +40,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			id: users.id,
 			username: users.username,
 			displayName: users.displayName,
-			avatarFileId: users.avatarFileId,
-			avatarContentType: users.avatarContentType
+			avatarFileId: users.avatarFileId
 		})
 		.from(users)
 		.where(
@@ -62,7 +60,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		id: r.id,
 		username: r.username,
 		displayName: r.displayName,
-		avatarUrl: buildAvatarUrl(r.id, r.avatarFileId, r.avatarContentType)
+		avatarFileId: r.avatarFileId
 	}));
 
 	return json({ users: mapped });

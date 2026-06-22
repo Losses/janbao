@@ -89,7 +89,12 @@
 >
 	<!-- Left: User Avatar -->
 	<a href="/profile/{discussion.authorId}/{authorSlug}" class="flex-shrink-0">
-		<Avatar avatarUrl={discussion.authorAvatarUrl} displayName={authorDisplayName} size="md" />
+		<Avatar
+			userId={discussion.authorId}
+			avatarFileId={discussion.authorAvatarFileId}
+			displayName={authorDisplayName}
+			size="md"
+		/>
 	</a>
 
 	<!-- Center: Title and Metadata -->

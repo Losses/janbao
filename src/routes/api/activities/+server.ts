@@ -9,11 +9,9 @@ import {
 } from '$lib/server/db/schema';
 import { eq, and, isNull, asc, inArray } from 'drizzle-orm';
 import { jsonError } from '$lib/server/errors';
-import { authorPreviewColumns } from '$lib/server/db/dao/user-preview';
-import { buildAvatarUrl } from '$lib/utils/image';
 import type { DbTransaction } from '$lib/server/db';
 import { indexActivity, unindexActivity } from '$lib/server/search/fts';
-import type { ActivityCommentItem, ActivityCreateBody, ActivityDeleteBody } from '$lib/types/api';
+import type { ActivityCreateBody, ActivityDeleteBody } from '$lib/types/api';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 import { enforcePostThrottle, tooManyRequests } from '$lib/server/throttle';
 import { getAllowGuestActivity } from '$lib/server/constants';
@@ -40,28 +38,20 @@ export const GET: RequestHandler = async ({ url, locals, platform }) => {
 		return jsonError(t, 'activity.parentNotFound', 404);
 	}
 
-	const rawComments = await locals.db
+	const comments = await locals.db
 		.select({
 			id: activities.id,
 			authorId: activities.authorId,
 			contentJson: activities.contentJson,
 			createdAt: activities.createdAt,
-			...authorPreviewColumns
+			authorDisplayName: users.displayName,
+			authorUsername: users.username,
+			authorAvatarFileId: users.avatarFileId
 		})
 		.from(activities)
 		.innerJoin(users, eq(activities.authorId, users.id))
 		.where(and(eq(activities.parentActivityId, parentId), isNull(activities.deletedAt)))
 		.orderBy(asc(activities.createdAt));
-
-	const comments: ActivityCommentItem[] = rawComments.map((c) => ({
-		id: c.id,
-		authorId: c.authorId,
-		authorDisplayName: c.authorDisplayName,
-		authorUsername: c.authorUsername,
-		authorAvatarUrl: buildAvatarUrl(c.authorId, c.authorAvatarFileId, c.authorAvatarContentType),
-		contentJson: c.contentJson,
-		createdAt: c.createdAt
-	}));
 
 	return json({ comments });
 };

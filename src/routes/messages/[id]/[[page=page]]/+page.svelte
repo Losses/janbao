@@ -1,7 +1,6 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ThreadPager from '$lib/components/templates/ThreadPager.svelte';
-	import OverlaySidebarBinding from '$lib/components/templates/OverlaySidebarBinding.svelte';
 	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
 	import PrivateMessageWindow from '$lib/components/organisms/PrivateMessageWindow.svelte';
 	import ParticipantAdder from '$lib/components/molecules/ParticipantAdder.svelte';
@@ -9,14 +8,11 @@
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
-	import { page } from '$app/state';
 	import { goto, invalidate } from '$app/navigation';
-	import { onMount } from 'svelte';
 	import { enhance } from '$app/forms';
 	import type { UserSearchResult, ParticipantItem } from '$lib/types/api';
 	import type { PageData } from './$types';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
-	import { getListScrollStore } from '$lib/stores/list-scroll.svelte';
 
 	interface PageProps {
 		data: PageData;
@@ -25,24 +21,6 @@
 	let { data }: PageProps = $props();
 
 	const online = getOnlineStore();
-
-	const MOBILE_BREAKPOINT = '(max-width: 767px)';
-	// Mobile renders the conversation as a slide-in overlay over the persistent
-	// inbox; desktop renders DualColumnLayout + inline content.
-	let isMobile = $state(page.data.isMobile ?? false);
-	onMount(() => {
-		const mq = window.matchMedia(MOBILE_BREAKPOINT);
-		const sync = () => (isMobile = mq.matches);
-		sync();
-		mq.addEventListener('change', sync);
-		return () => mq.removeEventListener('change', sync);
-	});
-
-	// The inbox restores its scroll on swipe-back; the ThreadPager's left neighbour
-	// previews at that same captured scroll so its reveal matches the restored
-	// position (no y-jump mid-swipe).
-	const listScroll = getListScrollStore();
-	const leftPreviewScroll = $derived(listScroll.captured);
 
 	const t = $derived(data.t);
 	const messageT = $derived(t.message);
@@ -93,7 +71,12 @@
 						href="/profile/{p.userId}/{generateSlug(p.username)}"
 						class="flex items-center gap-2 hover:text-primary transition-colors"
 					>
-						<Avatar avatarUrl={p.avatarUrl} displayName={p.displayName} size="xs" />
+						<Avatar
+							userId={p.userId}
+							avatarFileId={p.avatarFileId}
+							displayName={p.displayName}
+							size="xs"
+						/>
 						<span class="text-sm truncate">{p.displayName}</span>
 					</a>
 				{/each}
@@ -133,7 +116,12 @@
 							<span
 								class="inline-flex items-center gap-1.5 rounded bg-primary/15 pl-1 pr-1.5 py-0.5 text-xs font-medium text-primary"
 							>
-								<Avatar avatarUrl={p.avatarUrl} displayName={p.displayName} size="xs" />
+								<Avatar
+									userId={p.id}
+									avatarFileId={p.avatarFileId}
+									displayName={p.displayName}
+									size="xs"
+								/>
 								<span class="truncate max-w-[120px]">{p.displayName}</span>
 								<button
 									type="button"
@@ -163,51 +151,42 @@
 	</div>
 {/snippet}
 
-{#snippet threadBody()}
-	<div class="space-y-3">
-		<div class="flex items-center justify-between border-b border-base-300 pb-4">
-			<h1 class="page-title truncate">{conversation.title}</h1>
-		</div>
-
-		{#if totalPages > 1}
-			<div class="flex justify-end">
-				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
-			</div>
-		{/if}
-
-		<PrivateMessageWindow
-			messages={data.conversationMessages}
-			conversationId={conversation.id}
-			currentUserId={user?.id ?? null}
-			messageDraft={data.messageDraft}
-			mentionedUsers={data.mentionedUsers}
-			{t}
-		/>
-
-		{#if totalPages > 1}
-			<div class="flex justify-end pt-2">
-				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
-			</div>
-		{/if}
-	</div>
-{/snippet}
-
-{#if isMobile}
-	<OverlaySidebarBinding {sidebar} />
-	<ThreadPager centerTab={2} leftHref="/messages/inbox" {leftPreviewScroll}>
+<DualColumnLayout {sidebar} {user} {t} flush>
+	<ThreadPager centerTab={2} leftHref="/messages/inbox">
 		{#snippet left()}
 			<MessagesPanel
-				conversations={data.messages.conversations}
-				currentPage={data.messages.page}
-				totalPages={data.messages.totalPages}
+				conversations={data.inbox.conversations}
+				currentPage={data.inbox.page}
+				totalPages={data.inbox.totalPages}
 				{t}
 				paginate={true}
 			/>
 		{/snippet}
-		{@render threadBody()}
+		<div class="space-y-3">
+			<div class="flex items-center justify-between border-b border-base-300 pb-4">
+				<h1 class="page-title truncate">{conversation.title}</h1>
+			</div>
+
+			{#if totalPages > 1}
+				<div class="flex justify-end">
+					<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+				</div>
+			{/if}
+
+			<PrivateMessageWindow
+				messages={data.messages}
+				conversationId={conversation.id}
+				currentUserId={user?.id ?? null}
+				messageDraft={data.messageDraft}
+				mentionedUsers={data.mentionedUsers}
+				{t}
+			/>
+
+			{#if totalPages > 1}
+				<div class="flex justify-end pt-2">
+					<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+				</div>
+			{/if}
+		</div>
 	</ThreadPager>
-{:else}
-	<DualColumnLayout {sidebar} {user} {t} flush>
-		{@render threadBody()}
-	</DualColumnLayout>
-{/if}
+</DualColumnLayout>

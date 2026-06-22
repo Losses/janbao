@@ -6,7 +6,7 @@ export const SYSTEM_USER_ID = -1;
 /**
  * True for an id that refers to a real user account. The bootstrap super admin
  * is id 0, so the guard excludes the two negative sentinels (System User -1,
- * Vanilla-import ghost -2) rather than requiring a positive id - a `> 0` check
+ * Vanilla-import ghost -2) rather than requiring a positive id — a `> 0` check
  * wrongly drops the admin from recipient lists and sync hydration.
  */
 export function isRealUserId(id: unknown): id is number {

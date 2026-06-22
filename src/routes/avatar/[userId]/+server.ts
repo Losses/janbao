@@ -11,14 +11,8 @@ import {
 
 /**
  * Reverse-proxy a user avatar from pCloud (stored at /avatars/<userId>). The
- * client requests `/avatar/<userId>/<avatarFileId>.<ext>` where avatarFileId is
- * the content sha and <ext> is derived client-side from users.avatarContentType:
- * the real extension lets CDN edge caches that key on file extensions
- * (Cloudflare's default set) cache it without a cache-everything rule, and the
- * sha makes a re-upload a new URL (guaranteed cache miss). `[file]` is cosmetic
- * for serving (bytes always come from /avatars/<userId>). The content-type is
- * read from users.avatarContentType (defaulting to image/webp), so the pCloud
- * body streams straight through with no buffering.
+ * content-type is read from users.avatarContentType (defaulting to image/webp),
+ * so the pCloud body streams straight through with no buffering.
  */
 export const GET: RequestHandler = async (event) => {
 	const { userId: userIdParam } = event.params;
@@ -40,6 +34,7 @@ export const GET: RequestHandler = async (event) => {
 		.from(users)
 		.where(eq(users.id, userId))
 		.limit(1);
+	// avatarFileId is a truthy "has avatar" flag set by the import/avatar upload.
 	if (rec.length === 0 || !rec[0].avatarFileId) {
 		return new Response(t.img.notFound, { status: 404 });
 	}
@@ -50,9 +45,10 @@ export const GET: RequestHandler = async (event) => {
 		headers.set('Content-Type', rec[0].contentType || 'image/webp');
 		headers.set('X-Content-Type-Options', 'nosniff');
 		headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-		// The URL carries <sha>.<ext>, so a re-upload is a new URL and a guaranteed
-		// edge cache miss: the long TTL is safe. The forwarded ETag/Last-Modified
-		// give a cheap revalidation path once the TTL expires.
+		// The client appends the avatar's content sha as ?v=<sha> (Avatar.svelte),
+		// so a re-upload produces a new URL and a guaranteed edge cache miss: the
+		// long TTL below is safe. The forwarded ETag/Last-Modified give a cheap
+		// revalidation path once the TTL expires.
 		headers.set('CDN-Cache-Control', 'public, max-age=31536000');
 		const etag = upstream.get('etag');
 		if (etag) headers.set('ETag', etag);

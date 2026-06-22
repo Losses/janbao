@@ -138,7 +138,7 @@
 						userId={partitioned.op.authorId}
 						username={resolveUsername(partitioned.op)}
 						displayName={resolveName(partitioned.op)}
-						avatarUrl={partitioned.op.author.avatarUrl}
+						avatarFileId={partitioned.op.author.avatarFileId}
 						createdAt={partitioned.op.createdAt * 1000}
 						editedAt={partitioned.op.editedAt ? partitioned.op.editedAt * 1000 : null}
 						t={data.t}
@@ -175,7 +175,7 @@
 								userId={reply.authorId}
 								username={resolveUsername(reply)}
 								displayName={resolveName(reply)}
-								avatarUrl={reply.author.avatarUrl}
+								avatarFileId={reply.author.avatarFileId}
 								createdAt={reply.createdAt * 1000}
 								editedAt={reply.editedAt ? reply.editedAt * 1000 : null}
 								t={data.t}

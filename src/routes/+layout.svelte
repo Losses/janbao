@@ -14,7 +14,7 @@
 	import { DEFAULT_OFFLINE_PREFS } from '$lib/offline/prefs';
 	import { getEditorPrefsStore } from '$lib/stores/editor-prefs.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
-	import { markEnterFromList } from '$lib/stores/thread-nav.svelte';
+	import { markEnterFromList, setReachedFromList } from '$lib/stores/thread-nav.svelte';
 
 	interface LayoutProps {
 		data: LayoutData;
@@ -35,31 +35,26 @@
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	let navFreezeTimer = 0;
 	beforeNavigate(({ to, from }) => {
-		const toPath = to?.url.pathname ?? '';
-		const fromPath = from?.url.pathname ?? '';
-		// Mark list→thread-overlay navigations so ThreadPager plays a forward push
-		// slide-in (the list neighbour slides out as the thread slides in).
-		if (
-			(toPath.startsWith('/discussion') || /^\/messages\/\d+/.test(toPath)) &&
-			(fromPath === '/' || fromPath === '/messages/inbox')
-		) {
-			markEnterFromList();
-		}
 		const threadEnter = to?.url.hash && to.url.pathname.startsWith('/discussion');
-		// Swipe-back: overlay route -> its list route. Hold the scroll-chrome header
-		// through the nav so it does not animate reacting to SvelteKit's commit
-		// top-scroll + the afterNavigate restore (a double-scroll). The (tabs)
-		// afterNavigate releases the hold once the list scroll is set.
-		const swipeBack =
-			(fromPath.startsWith('/discussion') || /^\/messages\/\d+/.test(fromPath)) &&
-			(toPath === '/' || toPath === '/messages/inbox');
+		const swipeBack = from?.url.pathname.startsWith('/discussion') && to?.url.pathname === '/';
+		// Record whether the thread was reached from the discussions list, so the
+		// swipe-back gesture can pop the history entry (history.back) instead of
+		// pushing a duplicate (goto). Set on every thread arrival so it reflects
+		// the current entry's origin; stays false on full load (no beforeNavigate)
+		// so a deep-linked thread never backs out of the site.
+		if (to?.url.pathname.startsWith('/discussion')) {
+			const fromList = from?.url.pathname === '/';
+			if (fromList) markEnterFromList();
+			setReachedFromList(fromList);
+		}
 		if (threadEnter || swipeBack) {
 			const store = getScrollChromeStore();
 			// Mobile hash-enter lands at the anchor via an instant programmatic
 			// scroll (see discussion +page.svelte); pin the header visible first so
 			// it stays on screen instead of hide-on-scroll reacting to that scroll.
-			// Swipe-back only needs the hold (ThreadPager.swipeMove already showed it).
-			// Desktop's header is in-flow and not driven by the store's translateY.
+			// Swipe-back already pinned it during the gesture (ThreadPager.swipeMove),
+			// so it only needs the hold. Desktop's header is in-flow and not driven
+			// by the store's translateY, so it is left untouched.
 			store.holdThroughNavigation(!!threadEnter && window.matchMedia(MOBILE_BREAKPOINT).matches);
 			window.clearTimeout(navFreezeTimer);
 			navFreezeTimer = window.setTimeout(() => store.releaseNavigation(), 1200);

@@ -23,7 +23,7 @@
 		authorId: number;
 		authorDisplayName: string;
 		authorUsername: string;
-		authorAvatarUrl: string | null;
+		authorAvatarFileId: string | null;
 		contentJson: string;
 		createdAt: Date;
 		updatedAt: Date;
@@ -90,7 +90,8 @@
 						class="flex-shrink-0"
 					>
 						<Avatar
-							avatarUrl={msg.authorAvatarUrl}
+							userId={msg.authorId}
+							avatarFileId={msg.authorAvatarFileId}
 							displayName={formatDisplayName(msg.authorDisplayName, msg.authorId, t)}
 							size="sm"
 						/>

@@ -2,7 +2,6 @@ import { sql } from 'drizzle-orm';
 import { contributionBucketStats, discussions, replies, users } from '../schema';
 import type { D1Db, DbTransaction } from '../index';
 import { getIntervalBounds } from '$lib/utils/date';
-import { buildAvatarUrl } from '$lib/utils/image';
 
 export interface TimelineDataPoint {
 	date: string;
@@ -25,7 +24,6 @@ export interface DBContributorRaw {
 	username: string;
 	displayName: string;
 	avatarFileId: string | null;
-	avatarContentType: string | null;
 	discussionsCount: number;
 	repliesCount: number;
 	totalCount: number;
@@ -41,7 +39,7 @@ export interface Contributor {
 	id: number;
 	username: string;
 	displayName: string;
-	avatarUrl: string | null;
+	avatarFileId: string | null;
 	discussionsCount: number;
 	repliesCount: number;
 	totalCount: number;
@@ -60,7 +58,6 @@ interface UserLookupRow {
 	username: string;
 	displayName: string;
 	avatarFileId: string | null;
-	avatarContentType: string | null;
 }
 
 interface AuthorAggregate {
@@ -133,12 +130,11 @@ export async function getContributorsStats(
 ): Promise<Contributor[]> {
 	// 1. Get Top 20 contributors in the range
 	const topQuery = sql`
-		SELECT
-			u.id AS id,
-			u.username AS username,
-			u.display_name AS displayName,
+		SELECT 
+			u.id AS id, 
+			u.username AS username, 
+			u.display_name AS displayName, 
 			u.avatar_file_id AS avatarFileId,
-			u.avatar_content_type AS avatarContentType,
 			COALESCE(d_count.cnt, 0) AS discussionsCount,
 			COALESCE(r_count.cnt, 0) AS repliesCount,
 			(COALESCE(d_count.cnt, 0) + COALESCE(r_count.cnt, 0)) AS totalCount
@@ -235,11 +231,7 @@ export async function getContributorsStats(
 			id: Number(c.id),
 			username: String(c.username),
 			displayName: String(c.displayName),
-			avatarUrl: buildAvatarUrl(
-				Number(c.id),
-				c.avatarFileId ? String(c.avatarFileId) : null,
-				c.avatarContentType ? String(c.avatarContentType) : null
-			),
+			avatarFileId: c.avatarFileId ? String(c.avatarFileId) : null,
 			discussionsCount: Number(c.discussionsCount),
 			repliesCount: Number(c.repliesCount),
 			totalCount: Number(c.totalCount),
@@ -551,8 +543,7 @@ async function finalizeOverview(
 	const userRows =
 		ranked.length > 0
 			? await db.all<UserLookupRow>(sql`
-					SELECT id, username, display_name AS displayName,
-						avatar_file_id AS avatarFileId, avatar_content_type AS avatarContentType
+					SELECT id, username, display_name AS displayName, avatar_file_id AS avatarFileId
 					FROM ${users}
 					WHERE id IN (${sql.raw(ranked.map((r) => r.id).join(','))})
 				`)
@@ -565,11 +556,7 @@ async function finalizeOverview(
 			id,
 			username: String(user?.username ?? ''),
 			displayName: String(user?.displayName ?? ''),
-			avatarUrl: buildAvatarUrl(
-				id,
-				user?.avatarFileId ? String(user.avatarFileId) : null,
-				user?.avatarContentType ? String(user.avatarContentType) : null
-			),
+			avatarFileId: user?.avatarFileId ? String(user.avatarFileId) : null,
 			discussionsCount: aggregate.discussionsCount,
 			repliesCount: aggregate.repliesCount,
 			totalCount: total,

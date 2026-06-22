@@ -44,7 +44,12 @@
 		{#if first}
 			<div class="flex-shrink-0">
 				<a href="/profile/{first.userId}/{generateSlug(first.username)}">
-					<Avatar avatarUrl={first.avatarUrl} displayName={first.displayName} size="md" />
+					<Avatar
+						userId={first.userId}
+						avatarFileId={first.avatarFileId}
+						displayName={first.displayName}
+						size="md"
+					/>
 				</a>
 			</div>
 		{/if}

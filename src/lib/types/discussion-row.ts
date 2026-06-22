@@ -1,5 +1,3 @@
-import type { AuthorPreviewFields } from '$lib/types/api';
-
 // Shared row-shape types for the discussion list row (`DiscussionRow`). Kept in
 // a dedicated module (not inside the component) so both the online listing
 // (DiscussionListPage) and the offline reader (`/offline`) can construct rows of
@@ -11,11 +9,14 @@ import type { AuthorPreviewFields } from '$lib/types/api';
  * optional: the offline cache does not store view counts, so the views label is
  * hidden when it is absent.
  */
-export interface DiscussionRowItem extends AuthorPreviewFields {
+export interface DiscussionRowItem {
 	id: number;
 	title: string;
 	slug: string;
 	authorId: number;
+	authorDisplayName: string;
+	authorUsername: string;
+	authorAvatarFileId: string | null;
 	viewCount?: number;
 	commentCount: number;
 	isPinned: boolean;

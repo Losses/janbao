@@ -1,20 +1,14 @@
 <script lang="ts">
 	/**
-	 * (tabs) layout - branch point for the three primary tabs AND the thread
-	 * routes (`/discussion/*`, `/messages/[id]`), which live in this group so the
-	 * pager below stays mounted across list↔thread nav (no remount, no white flash).
+	 * (tabs) layout - branch point for the three primary tabs.
 	 *
 	 * Desktop: render the active route's own page (`children`) - each renders its
-	 * own DualColumnLayout + inline sidebar.
+	 * own DualColumnLayout + inline sidebar, exactly as before.
 	 *
-	 * Mobile: render ONE DualColumnLayout shell (Header/tab bar + a single drawer).
-	 * The MobileTabPager (all three panels) is a SINGLE persistent instance - on a
-	 * list route it is the in-flow content (`contents` wrapper); on a thread route
-	 * it is repositioned BEHIND a transparent OverlayLayer that hosts the thread
-	 * page. The thread's back-swipe slides its content away (ThreadPager) to reveal
-	 * the preserved pager at its captured scroll. The drawer shows the active tab's
-	 * sidebar, OR the overlay page's sidebar (via the overlay-sidebar store) when a
-	 * thread is open.
+	 * Mobile: render ONE DualColumnLayout shell (Header with the tab bar + a single
+	 * drawer) whose main content is the MobileTabPager (all three panels mounted)
+	 * and whose drawer shows the ACTIVE tab's sidebar. Suppresses the route's own
+	 * page so there is exactly one Header/drawer.
 	 *
 	 * SSR renders the desktop branch (isMobile defaults false); the mobile client
 	 * flips isMobile in onMount - a normal reactive update, not a hydration
@@ -22,11 +16,10 @@
 	 */
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { beforeNavigate, afterNavigate } from '$app/navigation';
+	import { afterNavigate, beforeNavigate } from '$app/navigation';
 	import type { Snippet } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import MobileTabPager from '$lib/components/templates/MobileTabPager.svelte';
-	import OverlayLayer from '$lib/components/templates/OverlayLayer.svelte';
 	import DiscussionsSidebar from '$lib/components/panels/DiscussionsSidebar.svelte';
 	import ActivitySidebar from '$lib/components/panels/ActivitySidebar.svelte';
 	import MessagesSidebar from '$lib/components/panels/MessagesSidebar.svelte';
@@ -34,7 +27,6 @@
 	import { getDrawerStore } from '$lib/stores/drawer.svelte';
 	import { getListScrollStore } from '$lib/stores/list-scroll.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
-	import { getOverlaySidebarStore } from '$lib/stores/overlay-sidebar.svelte';
 	import type { LayoutData } from './$types';
 
 	interface TabsLayoutProps {
@@ -71,50 +63,35 @@
 	const t = $derived(data.t);
 	const user = $derived(data.user);
 
-	// A thread route renders as a slide-in overlay over the persistent
-	// MobileTabPager (see the mobile branch below); a list route is the pager's
-	// own tab the thread was reached from (and swipe-back returns to).
-	function isOverlayRoute(p: string): boolean {
-		return p.startsWith('/discussion') || /^\/messages\/\d+/.test(p);
-	}
-	function isListRoute(p: string): boolean {
-		return p === '/' || p === '/messages/inbox';
-	}
-	const overlayActive = $derived(isOverlayRoute(page.url.pathname));
-
+	// Remember the discussions-list scroll when leaving `/` for a thread, and
+	// restore it when returning (covers swipe-back, which pops history via
+	// history.back when the thread was reached from the list, else a goto). The
+	// header is held for the swipe-back nav (see root +layout.svelte) so it does
+	// not react to the restore scroll; release the hold here (pinning the header
+	// visible) once the position is set.
 	const listScroll = getListScrollStore();
-	const overlaySidebar = getOverlaySidebarStore();
-
-	// Capture the list scroll when leaving a list route for a thread overlay...
-	beforeNavigate(({ to, from }) => {
-		if (typeof window === 'undefined') return;
-		const toPath = to?.url.pathname ?? '';
-		const fromPath = from?.url.pathname ?? '';
-		if (isOverlayRoute(toPath) && isListRoute(fromPath)) {
+	beforeNavigate(({ to }) => {
+		if (to?.url.pathname.startsWith('/discussion')) {
 			listScroll.capture(window.scrollY);
 		}
 	});
-	// ...and restore it in AFTERNAVIGATE. afterNavigate runs AFTER SvelteKit
-	// commits the navigation (including its own top-scroll) but BEFORE the browser
-	// paints, so the list lands at the captured scroll on the first visible frame
-	// - no 1-frame jump to the top. (Restoring in beforeNavigate lets SvelteKit's
-	// commit top-scroll override it -> top flash.) Release the scroll-chrome hold
-	// (set by root +layout for swipe-back) here, pinning the header visible.
 	afterNavigate(({ to }) => {
-		if (typeof window === 'undefined') return;
-		if (!isListRoute(to?.url.pathname ?? '')) return;
-		const y = listScroll.consume();
-		if (y > 0) window.scrollTo(0, y);
-		getScrollChromeStore().releaseNavigation();
+		if (to?.url.pathname === '/' && typeof window !== 'undefined') {
+			const y = listScroll.consume();
+			if (y > 0) window.scrollTo(0, y);
+			// Release the swipe-back hold and pin the header visible: the list
+			// lands via a restored (programmatic) scroll, not an active scroll, so
+			// the chrome stays put through the sync instead of hide-on-scroll
+			// vanishing it on the restore.
+			getScrollChromeStore().releaseNavigation();
+		}
 	});
 </script>
 
 {#if isMobile}
 	<DualColumnLayout {t} {user} flush>
 		{#snippet sidebar()}
-			{#if overlayActive && overlaySidebar.current}
-				{@render overlaySidebar.current()}
-			{:else if activeIndex === 0}
+			{#if activeIndex === 0}
 				<DiscussionsSidebar {t} {user} />
 			{:else if activeIndex === 1}
 				<ActivitySidebar {t} {user} />
@@ -122,25 +99,7 @@
 				<MessagesSidebar {t} {user} />
 			{/if}
 		{/snippet}
-		<!-- ONE persistent MobileTabPager instance - never unmounts across list↔thread
-		     nav, only repositioned. On list routes everything is `contents` so the
-		     pager is a direct flex child of the shell (fills, window-scrolls). On a
-		     thread route the wrapper becomes `relative overflow-hidden` (sized to the
-		     in-flow OverlayLayer = the thread height) and the pager lifts to
-		     `absolute inset-0 z-0` INSIDE it - so the pager's height is the thread
-		     height, not the viewport, and the wrapper's overflow-hidden CLIPS it. A
-		     short thread no longer lets the pager leak out below; what shows below is
-		     the shell's own card background (as when the list was a separate route). -->
-		<div class={overlayActive ? 'relative overflow-hidden' : 'contents'}>
-			<div class={overlayActive ? 'absolute inset-0 z-0 flex flex-col' : 'contents'}>
-				<MobileTabPager {data} {t} {user} />
-			</div>
-			{#if overlayActive}
-				<OverlayLayer>
-					{@render children()}
-				</OverlayLayer>
-			{/if}
-		</div>
+		<MobileTabPager {data} {t} {user} />
 	</DualColumnLayout>
 
 	<div class="fixed inset-y-0 right-0 z-30 w-8 md:hidden" aria-hidden="true">

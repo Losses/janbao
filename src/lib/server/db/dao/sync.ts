@@ -10,7 +10,6 @@ import type {
 	SyncUserDTO
 } from '$lib/types/api';
 import { isRealUserId } from '$lib/utils/user';
-import { buildAvatarUrl } from '$lib/utils/image';
 
 interface DeltaQuery {
 	sinceTs: number;
@@ -195,11 +194,8 @@ export async function getReplyTombstones(
 
 // Display info for every author referenced by the returned discussions +
 // replies. Lets the offline reader render avatars and names without a second
-// round-trip. The server computes `avatarUrl` once via `buildAvatarUrl`; the
-// raw avatar columns never leave this function (the client renders the ready
-// URL string, in line with the "server builds the avatar URL once" contract).
-// An empty input returns [] without hitting the DB (inArray([]) is rejected by
-// drizzle), and a hard cap guards against pathological fan-out.
+// round-trip. An empty input returns [] without hitting the DB (inArray([])
+// is rejected by drizzle), and a hard cap guards against pathological fan-out.
 const MAX_USER_BATCH = 500;
 
 export async function getCachedUsers(db: D1Db, userIds: number[]): Promise<SyncUserDTO[]> {
@@ -216,12 +212,7 @@ export async function getCachedUsers(db: D1Db, userIds: number[]): Promise<SyncU
 		})
 		.from(users)
 		.where(inArray(users.id, capped));
-	return rows.map((r) => ({
-		id: r.id,
-		displayName: r.displayName,
-		username: r.username,
-		avatarUrl: buildAvatarUrl(r.id, r.avatarFileId, r.avatarContentType)
-	}));
+	return rows;
 }
 
 // Page-1 discussion ids for a curated category (DV07). Mirrors the live homepage

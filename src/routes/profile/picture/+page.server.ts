@@ -8,6 +8,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 	}
 
 	return {
-		avatarUrl: user.avatarUrl
+		avatarFileId: user.avatarFileId
 	};
 };

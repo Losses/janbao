@@ -10,17 +10,12 @@ import {
 } from '$lib/server/pcloud';
 
 /**
- * Reverse-proxy a content attachment from pCloud. The URL may be
- * `/attachment/<sha>.<ext>` (the extension lets CDN edge caches key on it by
- * default); the cosmetic extension is stripped to recover the content sha. The
- * content-type is read from the attachments table (keyed by the pre-conversion
- * sha256), so the pCloud body streams straight through with no buffering.
+ * Reverse-proxy a content attachment from pCloud. The content-type is read from
+ * the attachments table (keyed by the pre-conversion sha256), so the pCloud
+ * body streams straight through with no buffering or sniffing.
  */
 export const GET: RequestHandler = async (event) => {
-	const { fileId: fileIdParam } = event.params;
-	// Strip a trailing cosmetic extension (e.g. ".webp") to recover the sha that
-	// keys both the DB row and the pCloud path (/attachments/<sha>).
-	const fileId = fileIdParam.replace(/\.[a-z0-9]+$/i, '');
+	const { fileId } = event.params;
 	const db = event.locals.db;
 	const t = event.locals.t;
 

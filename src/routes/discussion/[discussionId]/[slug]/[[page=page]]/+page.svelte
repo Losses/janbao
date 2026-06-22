@@ -1,7 +1,6 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ThreadPager from '$lib/components/templates/ThreadPager.svelte';
-	import OverlaySidebarBinding from '$lib/components/templates/OverlaySidebarBinding.svelte';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
 	import type { PageUrlBuilder } from '$lib/types/tabs';
@@ -46,17 +45,11 @@
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 
 	const online = getOnlineStore();
-	// Mobile renders the thread as a slide-in overlay over the persistent list
-	// (ThreadPager, no DualColumnLayout); desktop renders DualColumnLayout + inline
-	// content. Synced from the server-detected flag then the live matchMedia.
-	let isMobile = $state(page.data.isMobile ?? false);
-	onMount(() => {
-		const mq = window.matchMedia(MOBILE_BREAKPOINT);
-		const sync = () => (isMobile = mq.matches);
-		sync();
-		mq.addEventListener('change', sync);
-		return () => mq.removeEventListener('change', sync);
-	});
+	// The discussions list restores its scroll on swipe-back; the ThreadPager's
+	// list neighbour previews at that same captured scroll so the reveal matches
+	// the landing position (no commit jump).
+	const listScroll = getListScrollStore();
+	const leftPreviewScroll = $derived(listScroll.captured);
 
 	// Offline fallback: when the network drops while viewing a discussion that is
 	// cached locally, switch to the client-only offline reader (IDB, no server
@@ -146,11 +139,6 @@
 		});
 	}
 
-	// The discussions list restores its scroll on swipe-back; the ThreadPager's
-	// left neighbour previews at that same captured scroll so its reveal during the
-	// gesture matches the restored position (no y-jump mid-swipe).
-	const listScroll = getListScrollStore();
-	const leftPreviewScroll = $derived(listScroll.captured);
 	const buildPageUrl: PageUrlBuilder = (p) => (p === 1 ? '/' : `/discussions/p${p}`);
 
 	const t = $derived(data.t);
@@ -451,336 +439,13 @@
 	</div>
 {/snippet}
 
-{#snippet threadBody()}
-	<div class="space-y-3">
-		<!-- Discussion Header -->
-		<div class="border-b border-base-300 flex justify-between items-center pb-3 gap-3">
-			<h1 class="text-lg font-extrabold tracking-tight text-base-content break-words leading-tight">
-				{discussion.title}
-			</h1>
-			{#if user}
-				<BookmarkButton
-					discussionId={discussion.id}
-					bookmarked={!!discussion.isBookmarked}
-					{t}
-					class="flex-shrink-0 mt-0.5"
-				/>
-			{/if}
-		</div>
-
-		<!-- Original Post (OP) - Only visible on Page 1 -->
-		{#if currentPage === 1 && opReply}
-			<div id="reply-{opReply.id}" class="space-y-4">
-				<DiscussionMetadata
-					userId={opReply.authorId}
-					username={opReply.authorUsername}
-					displayName={opReply.authorDisplayName}
-					avatarUrl={opReply.authorAvatarUrl}
-					createdAt={opReply.createdAt}
-					editedAt={opReply.editedAt}
-					editedByDisplayName={opReply.editedByDisplayName}
-					editedById={opReply.editedBy}
-					{t}
-				/>
-				<LexicalRenderer contentJson={opReply.contentJson} {mentionedUsers} {t} />
-				{#if user}
-					<div class="flex justify-end items-center gap-2 pt-2">
-						{#if canDelete}
-							<form
-								method="POST"
-								action="?/togglePin"
-								use:enhance={() => {
-									isTogglingPin = true;
-									return async ({ update }) => {
-										isTogglingPin = false;
-										update();
-									};
-								}}
-							>
-								<button
-									type="submit"
-									class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
-									disabled={isTogglingPin}
-								>
-									{#if isTogglingPin}
-										<span class="loading loading-spinner loading-xs"></span>
-									{/if}
-									{discussion.isPinned ? t.discussion.unpin : t.discussion.pin}
-								</button>
-							</form>
-						{/if}
-						{#if canUpdate || user.id === opReply.authorId}
-							<a
-								href="/post/editDiscussion/{discussion.id}"
-								class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
-							>
-								{t.common.edit}
-							</a>
-						{/if}
-						{#if canDelete}
-							<button
-								type="button"
-								class="btn btn-xs btn-ghost text-error/60 hover:text-error"
-								onclick={() => triggerDeleteDiscussion()}
-							>
-								{t.common.delete}
-							</button>
-						{/if}
-					</div>
-				{/if}
-			</div>
-		{/if}
-
-		<!-- Paginator Top -->
-		{#if totalPages > 1}
-			<div class="flex justify-end">
-				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
-			</div>
-		{/if}
-
-		<!-- Replies Stream -->
-		{#if repliesList.length > 0}
-			<div
-				class="divide-y divide-base-300 {currentPage === 1 && opReply
-					? 'border-t border-base-300 pt-4'
-					: ''}"
-			>
-				{#each repliesList as reply (reply.id)}
-					<div id="reply-{reply.id}" class="space-y-4 py-4 first:pt-0 last:pb-0">
-						<DiscussionMetadata
-							userId={reply.authorId}
-							username={reply.authorUsername}
-							displayName={reply.authorDisplayName}
-							avatarUrl={reply.authorAvatarUrl}
-							createdAt={reply.createdAt}
-							editedAt={reply.editedAt}
-							editedByDisplayName={reply.editedByDisplayName}
-							editedById={reply.editedBy}
-							{t}
-						/>
-						{#if editingReplyId === reply.id}
-							<LexicalEditor
-								initialContent={reply.contentJson}
-								placeholder={t.editor.placeholderReply}
-								onContentChange={(json) => (editReplyContent = json)}
-								onSubmit={() => {
-									if (!isSubmitting && online.online) editReplyForm?.requestSubmit();
-								}}
-								{t}
-								class="mb-3"
-							/>
-							<form
-								method="POST"
-								action="?/editReply"
-								bind:this={editReplyForm}
-								use:enhance={({ cancel }) => {
-									if (isSubmitting) {
-										cancel();
-										return;
-									}
-									isSubmitting = true;
-									return async ({ result, update }) => {
-										isSubmitting = false;
-										if (
-											result.type === 'success' &&
-											result.data &&
-											'success' in result.data &&
-											result.data.success === false
-										) {
-											alert(result.data.error || t.discussion.editReplyFailed);
-										} else if (result.type === 'success') {
-											await update();
-											editingReplyId = null;
-											editReplyContent = '';
-										} else if (result.type === 'failure') {
-											alert(result.data?.error || t.discussion.editReplyFailed);
-										}
-									};
-								}}
-								class="flex gap-2 justify-end"
-							>
-								<input type="hidden" name="replyId" value={reply.id} />
-								<input type="hidden" name="contentJson" value={editReplyContent} />
-								<button
-									type="button"
-									class="btn btn-sm btn-ghost"
-									onclick={() => {
-										editingReplyId = null;
-										editReplyContent = '';
-									}}
-								>
-									{t.common.cancel}
-								</button>
-								<button
-									type="submit"
-									class="btn btn-sm btn-primary"
-									disabled={isLexicalEmpty(editReplyContent) ||
-										editReplyContent.length > MAX_CONTENT_SIZE ||
-										isSubmitting ||
-										!online.online}
-								>
-									{t.discussion.saveReply}
-								</button>
-							</form>
-						{:else}
-							<LexicalRenderer contentJson={reply.contentJson} {mentionedUsers} {t} />
-							{#if user}
-								<div class="flex justify-end items-center gap-2 mt-2">
-									{#if canCreate}
-										<button
-											type="button"
-											class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
-											onclick={() => quickReply(reply.authorUsername, reply.authorDisplayName)}
-										>
-											{t.discussion.quickReply}
-										</button>
-									{/if}
-									{#if canUpdate || user.id === reply.authorId}
-										<button
-											type="button"
-											class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
-											disabled={!online.online}
-											onclick={() => {
-												if (!online.online) return;
-												editingReplyId = reply.id;
-												editReplyContent = reply.contentJson;
-											}}
-										>
-											{t.common.edit}
-										</button>
-									{/if}
-									{#if canDelete}
-										<button
-											type="button"
-											class="btn btn-xs btn-ghost text-error/60 hover:text-error"
-											onclick={() => triggerDeleteReply(reply.id)}
-										>
-											{t.common.delete}
-										</button>
-									{/if}
-								</div>
-							{/if}
-						{/if}
-					</div>
-				{/each}
-			</div>
-		{:else if currentPage > 1}
-			<EmptyState message={t.common.noResults} bordered={false} />
-		{/if}
-
-		<!-- Paginator Bottom -->
-		{#if totalPages > 1}
-			<div class="flex justify-end pt-2">
-				<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
-			</div>
-		{/if}
-
-		<!-- Reply Composer at the bottom -->
-		<div bind:this={replyComposerElem} class="pt-6">
-			{#if user}
-				{#if canCreate}
-					<h3 class="text-lg font-bold mb-3 text-base-content">{t.common.reply}</h3>
-					{#key `${discussion.id}_${editorKey}`}
-						<LexicalEditor
-							bind:this={replyEditor}
-							contextType="reply"
-							contextId={discussion.id}
-							initialContent={data.replyDraft}
-							placeholder={t.editor.placeholderReply}
-							onContentChange={(json) => (replyContent = json)}
-							onSubmit={() => {
-								if (!isSubmitting && online.online) replyForm?.requestSubmit();
-							}}
-							{t}
-							class="mb-3"
-						/>
-					{/key}
-
-					<form
-						method="POST"
-						action="?/reply"
-						bind:this={replyForm}
-						use:enhance={({ cancel }) => {
-							if (isSubmitting) {
-								cancel();
-								return;
-							}
-							isSubmitting = true;
-							return async ({ result, update }) => {
-								isSubmitting = false;
-								if (result.type === 'success') {
-									const resData = result.data as ReplyActionResult | null;
-									if (resData && resData.success === false) {
-										alert(resData.error || t.discussion.createReplyFailed);
-										return;
-									}
-									await update({ reset: true });
-									replyContent = '';
-									editorKey++;
-									const replyId = resData?.replyId;
-									const page = resData?.page;
-									if (replyId && page) {
-										const url =
-											page <= 1
-												? `/discussion/${discussion.id}/${discussion.slug}#reply-${replyId}`
-												: `/discussion/${discussion.id}/${discussion.slug}/p${page}#reply-${replyId}`;
-										// Mobile: let landAtAnchor own the scroll (no SvelteKit top-scroll
-										// competing during the reply render window). Desktop unchanged.
-										goto(
-											url,
-											window.matchMedia(MOBILE_BREAKPOINT).matches ? { noScroll: true } : undefined
-										);
-									}
-								} else if (result.type === 'failure') {
-									alert(result.data?.error || t.discussion.createReplyFailed);
-								}
-							};
-						}}
-						class="flex justify-end"
-					>
-						<input type="hidden" name="contentJson" value={replyContent} />
-						<button
-							type="submit"
-							class="btn btn-primary"
-							disabled={isLexicalEmpty(replyContent) ||
-								replyContent.length > MAX_CONTENT_SIZE ||
-								isSubmitting ||
-								!online.online}
-						>
-							{#if isSubmitting}
-								<span class="loading loading-spinner loading-xs"></span>
-							{/if}
-							{t.common.submit}
-						</button>
-					</form>
-				{:else}
-					<div class="bg-base-200 p-6 text-center text-base-content/70 rounded-box">
-						{t.discussion.noPermission}
-					</div>
-				{/if}
-			{:else}
-				<div class="bg-base-200 p-6 text-center">
-					<p class="text-base-content/70 mb-3">
-						{t.discussion.signInToReply}
-					</p>
-					<div class="flex justify-center gap-2">
-						<a href="/entry/signin" class="btn btn-sm btn-primary">{t.nav.signin}</a>
-						<a href="/entry/register" class="btn btn-sm btn-outline">{t.nav.register}</a>
-					</div>
-				</div>
-			{/if}
-		</div>
-	</div>
-{/snippet}
-
-{#if isMobile}
-	<OverlaySidebarBinding {sidebar} />
+<DualColumnLayout {sidebar} {user} {t} flush>
 	<ThreadPager centerTab={0} rightTab={1} leftHref="/" rightHref="/activity" {leftPreviewScroll}>
 		{#snippet left()}
 			<DiscussionsPanel
-				discussions={data.home.discussions}
-				currentPage={data.home.page}
-				totalPages={data.home.totalPages}
+				discussions={data.list.discussions}
+				currentPage={data.list.page}
+				totalPages={data.list.totalPages}
 				{t}
 				{buildPageUrl}
 				paginate={true}
@@ -798,13 +463,331 @@
 				paginate={true}
 			/>
 		{/snippet}
-		{@render threadBody()}
+		<div class="space-y-3">
+			<!-- Discussion Header -->
+			<div class="border-b border-base-300 flex justify-between items-center pb-3 gap-3">
+				<h1
+					class="text-lg font-extrabold tracking-tight text-base-content break-words leading-tight"
+				>
+					{discussion.title}
+				</h1>
+				{#if user}
+					<BookmarkButton
+						discussionId={discussion.id}
+						bookmarked={!!discussion.isBookmarked}
+						{t}
+						class="flex-shrink-0 mt-0.5"
+					/>
+				{/if}
+			</div>
+
+			<!-- Original Post (OP) - Only visible on Page 1 -->
+			{#if currentPage === 1 && opReply}
+				<div id="reply-{opReply.id}" class="space-y-4">
+					<DiscussionMetadata
+						userId={opReply.authorId}
+						username={opReply.authorUsername}
+						displayName={opReply.authorDisplayName}
+						avatarFileId={opReply.authorAvatarFileId}
+						createdAt={opReply.createdAt}
+						editedAt={opReply.editedAt}
+						editedByDisplayName={opReply.editedByDisplayName}
+						editedById={opReply.editedBy}
+						{t}
+					/>
+					<LexicalRenderer contentJson={opReply.contentJson} {mentionedUsers} {t} />
+					{#if user}
+						<div class="flex justify-end items-center gap-2 pt-2">
+							{#if canDelete}
+								<form
+									method="POST"
+									action="?/togglePin"
+									use:enhance={() => {
+										isTogglingPin = true;
+										return async ({ update }) => {
+											isTogglingPin = false;
+											update();
+										};
+									}}
+								>
+									<button
+										type="submit"
+										class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
+										disabled={isTogglingPin}
+									>
+										{#if isTogglingPin}
+											<span class="loading loading-spinner loading-xs"></span>
+										{/if}
+										{discussion.isPinned ? t.discussion.unpin : t.discussion.pin}
+									</button>
+								</form>
+							{/if}
+							{#if canUpdate || user.id === opReply.authorId}
+								<a
+									href="/post/editDiscussion/{discussion.id}"
+									class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
+								>
+									{t.common.edit}
+								</a>
+							{/if}
+							{#if canDelete}
+								<button
+									type="button"
+									class="btn btn-xs btn-ghost text-error/60 hover:text-error"
+									onclick={() => triggerDeleteDiscussion()}
+								>
+									{t.common.delete}
+								</button>
+							{/if}
+						</div>
+					{/if}
+				</div>
+			{/if}
+
+			<!-- Paginator Top -->
+			{#if totalPages > 1}
+				<div class="flex justify-end">
+					<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+				</div>
+			{/if}
+
+			<!-- Replies Stream -->
+			{#if repliesList.length > 0}
+				<div
+					class="divide-y divide-base-300 {currentPage === 1 && opReply
+						? 'border-t border-base-300 pt-4'
+						: ''}"
+				>
+					{#each repliesList as reply (reply.id)}
+						<div id="reply-{reply.id}" class="space-y-4 py-4 first:pt-0 last:pb-0">
+							<DiscussionMetadata
+								userId={reply.authorId}
+								username={reply.authorUsername}
+								displayName={reply.authorDisplayName}
+								avatarFileId={reply.authorAvatarFileId}
+								createdAt={reply.createdAt}
+								editedAt={reply.editedAt}
+								editedByDisplayName={reply.editedByDisplayName}
+								editedById={reply.editedBy}
+								{t}
+							/>
+							{#if editingReplyId === reply.id}
+								<LexicalEditor
+									initialContent={reply.contentJson}
+									placeholder={t.editor.placeholderReply}
+									onContentChange={(json) => (editReplyContent = json)}
+									onSubmit={() => {
+										if (!isSubmitting && online.online) editReplyForm?.requestSubmit();
+									}}
+									{t}
+									class="mb-3"
+								/>
+								<form
+									method="POST"
+									action="?/editReply"
+									bind:this={editReplyForm}
+									use:enhance={({ cancel }) => {
+										if (isSubmitting) {
+											cancel();
+											return;
+										}
+										isSubmitting = true;
+										return async ({ result, update }) => {
+											isSubmitting = false;
+											if (
+												result.type === 'success' &&
+												result.data &&
+												'success' in result.data &&
+												result.data.success === false
+											) {
+												alert(result.data.error || t.discussion.editReplyFailed);
+											} else if (result.type === 'success') {
+												await update();
+												editingReplyId = null;
+												editReplyContent = '';
+											} else if (result.type === 'failure') {
+												alert(result.data?.error || t.discussion.editReplyFailed);
+											}
+										};
+									}}
+									class="flex gap-2 justify-end"
+								>
+									<input type="hidden" name="replyId" value={reply.id} />
+									<input type="hidden" name="contentJson" value={editReplyContent} />
+									<button
+										type="button"
+										class="btn btn-sm btn-ghost"
+										onclick={() => {
+											editingReplyId = null;
+											editReplyContent = '';
+										}}
+									>
+										{t.common.cancel}
+									</button>
+									<button
+										type="submit"
+										class="btn btn-sm btn-primary"
+										disabled={isLexicalEmpty(editReplyContent) ||
+											editReplyContent.length > MAX_CONTENT_SIZE ||
+											isSubmitting ||
+											!online.online}
+									>
+										{t.discussion.saveReply}
+									</button>
+								</form>
+							{:else}
+								<LexicalRenderer contentJson={reply.contentJson} {mentionedUsers} {t} />
+								{#if user}
+									<div class="flex justify-end items-center gap-2 mt-2">
+										{#if canCreate}
+											<button
+												type="button"
+												class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
+												onclick={() => quickReply(reply.authorUsername, reply.authorDisplayName)}
+											>
+												{t.discussion.quickReply}
+											</button>
+										{/if}
+										{#if canUpdate || user.id === reply.authorId}
+											<button
+												type="button"
+												class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary"
+												disabled={!online.online}
+												onclick={() => {
+													if (!online.online) return;
+													editingReplyId = reply.id;
+													editReplyContent = reply.contentJson;
+												}}
+											>
+												{t.common.edit}
+											</button>
+										{/if}
+										{#if canDelete}
+											<button
+												type="button"
+												class="btn btn-xs btn-ghost text-error/60 hover:text-error"
+												onclick={() => triggerDeleteReply(reply.id)}
+											>
+												{t.common.delete}
+											</button>
+										{/if}
+									</div>
+								{/if}
+							{/if}
+						</div>
+					{/each}
+				</div>
+			{:else if currentPage > 1}
+				<EmptyState message={t.common.noResults} bordered={false} />
+			{/if}
+
+			<!-- Paginator Bottom -->
+			{#if totalPages > 1}
+				<div class="flex justify-end pt-2">
+					<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+				</div>
+			{/if}
+
+			<!-- Reply Composer at the bottom -->
+			<div bind:this={replyComposerElem} class="pt-6">
+				{#if user}
+					{#if canCreate}
+						<h3 class="text-lg font-bold mb-3 text-base-content">{t.common.reply}</h3>
+						{#key `${discussion.id}_${editorKey}`}
+							<LexicalEditor
+								bind:this={replyEditor}
+								contextType="reply"
+								contextId={discussion.id}
+								initialContent={data.replyDraft}
+								placeholder={t.editor.placeholderReply}
+								onContentChange={(json) => (replyContent = json)}
+								onSubmit={() => {
+									if (!isSubmitting && online.online) replyForm?.requestSubmit();
+								}}
+								{t}
+								class="mb-3"
+							/>
+						{/key}
+
+						<form
+							method="POST"
+							action="?/reply"
+							bind:this={replyForm}
+							use:enhance={({ cancel }) => {
+								if (isSubmitting) {
+									cancel();
+									return;
+								}
+								isSubmitting = true;
+								return async ({ result, update }) => {
+									isSubmitting = false;
+									if (result.type === 'success') {
+										const resData = result.data as ReplyActionResult | null;
+										if (resData && resData.success === false) {
+											alert(resData.error || t.discussion.createReplyFailed);
+											return;
+										}
+										await update({ reset: true });
+										replyContent = '';
+										editorKey++;
+										const replyId = resData?.replyId;
+										const page = resData?.page;
+										if (replyId && page) {
+											const url =
+												page <= 1
+													? `/discussion/${discussion.id}/${discussion.slug}#reply-${replyId}`
+													: `/discussion/${discussion.id}/${discussion.slug}/p${page}#reply-${replyId}`;
+											// Mobile: let landAtAnchor own the scroll (no SvelteKit top-scroll
+											// competing during the reply render window). Desktop unchanged.
+											goto(
+												url,
+												window.matchMedia(MOBILE_BREAKPOINT).matches
+													? { noScroll: true }
+													: undefined
+											);
+										}
+									} else if (result.type === 'failure') {
+										alert(result.data?.error || t.discussion.createReplyFailed);
+									}
+								};
+							}}
+							class="flex justify-end"
+						>
+							<input type="hidden" name="contentJson" value={replyContent} />
+							<button
+								type="submit"
+								class="btn btn-primary"
+								disabled={isLexicalEmpty(replyContent) ||
+									replyContent.length > MAX_CONTENT_SIZE ||
+									isSubmitting ||
+									!online.online}
+							>
+								{#if isSubmitting}
+									<span class="loading loading-spinner loading-xs"></span>
+								{/if}
+								{t.common.submit}
+							</button>
+						</form>
+					{:else}
+						<div class="bg-base-200 p-6 text-center text-base-content/70 rounded-box">
+							{t.discussion.noPermission}
+						</div>
+					{/if}
+				{:else}
+					<div class="bg-base-200 p-6 text-center">
+						<p class="text-base-content/70 mb-3">
+							{t.discussion.signInToReply}
+						</p>
+						<div class="flex justify-center gap-2">
+							<a href="/entry/signin" class="btn btn-sm btn-primary">{t.nav.signin}</a>
+							<a href="/entry/register" class="btn btn-sm btn-outline">{t.nav.register}</a>
+						</div>
+					</div>
+				{/if}
+			</div>
+		</div>
 	</ThreadPager>
-{:else}
-	<DualColumnLayout {sidebar} {user} {t} flush>
-		{@render threadBody()}
-	</DualColumnLayout>
-{/if}
+</DualColumnLayout>
 
 <ConfirmationModal
 	open={showDeleteModal}

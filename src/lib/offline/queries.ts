@@ -14,8 +14,7 @@ import type {
  * omitted (not cached) so the views label is hidden; lastReplyAt falls back to
  * createdAt (the online DAO coalesces the same way) so reply-less threads still
  * show a timestamp instead of 1970. `unknownUser` substitutes for a missing
- * author display name. The avatar URL is the server-built value carried through
- * IDB (CachedUser.avatarUrl) - the client renders it as-is, never builds one.
+ * author display name.
  */
 export function mapOfflineDiscussionRow(
 	d: OfflineDiscussionView,
@@ -28,7 +27,7 @@ export function mapOfflineDiscussionRow(
 		authorId: d.authorId,
 		authorDisplayName: d.author.displayName ?? unknownUser,
 		authorUsername: d.author.username ?? 'user',
-		authorAvatarUrl: d.author.avatarUrl,
+		authorAvatarFileId: d.author.avatarFileId,
 		commentCount: d.commentCount,
 		isPinned: d.isPinned,
 		lastReplyAt: (d.lastReplyAt ?? d.createdAt) * 1000
@@ -45,7 +44,6 @@ export function mapOfflineDiscussionRow(
 
 // Build a user-id -> display-info projection from the cached users store,
 // shared by every list loader so avatars/names render without a server hop.
-// Carries the server-built avatarUrl straight through (no client URL building).
 async function loadAuthorMap(authorIds: number[]): Promise<Map<number, CachedAuthorProjection>> {
 	const db = getOfflineDB();
 	const users = await db.users.bulkGet(Array.from(new Set(authorIds)));
@@ -55,7 +53,7 @@ async function loadAuthorMap(authorIds: number[]): Promise<Map<number, CachedAut
 			map.set(u.id, {
 				displayName: u.displayName,
 				username: u.username,
-				avatarUrl: u.avatarUrl ?? null
+				avatarFileId: u.avatarFileId
 			});
 		}
 	}
@@ -119,7 +117,6 @@ export async function loadOfflineBookmarks(): Promise<OfflineBookmarkView[]> {
 // Restores the server's feed ordering (COALESCE(updatedAt, createdAt) DESC,
 // id DESC) since IDB only indexes createdAt. joinedMembers / @-mentions aren't
 // synced, so isJoined rows degrade (empty roster) and chips render as text.
-// Author avatar URLs come from the cached users store (server-built values).
 export async function loadOfflineActivity(): Promise<ActivityListItem[]> {
 	const db = getOfflineDB();
 	const cached = await db.activities.toArray();
@@ -145,7 +142,7 @@ export async function loadOfflineActivity(): Promise<ActivityListItem[]> {
 			authorId: a.authorId,
 			authorDisplayName: author.displayName ?? '',
 			authorUsername: author.username ?? '',
-			authorAvatarUrl: author.avatarUrl,
+			authorAvatarFileId: author.avatarFileId,
 			recipientId: a.recipientId,
 			recipientDisplayName: recipient?.displayName ?? null,
 			recipientUsername: recipient?.username ?? null,

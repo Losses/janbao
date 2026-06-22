@@ -48,7 +48,7 @@ export const load: PageLoad = async ({ params }) => {
 			usersById.set(u.id, {
 				displayName: u.displayName,
 				username: u.username,
-				avatarUrl: u.avatarUrl ?? null
+				avatarFileId: u.avatarFileId
 			});
 	}
 

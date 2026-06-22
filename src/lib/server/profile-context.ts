@@ -5,8 +5,8 @@ import {
 	getProfileAdminSidebarData,
 	type ProfileAdminSidebarData
 } from '$lib/server/db/dao/admin-permissions';
-import { getProfileHeaderPayload, type ProfileHeaderTarget } from '$lib/server/db/dao/profile';
-import type { UserInfoSummary } from '$lib/types/api';
+import { getProfileHeaderPayload } from '$lib/server/db/dao/profile';
+import type { ProfileHeaderUser, UserInfoSummary } from '$lib/types/api';
 
 interface ProfileSubPageRouteParams {
 	userId: string;
@@ -24,8 +24,7 @@ interface ProfileSubPageInput {
 export interface ProfileSubPageContext {
 	userId: number;
 	groupSlug: string;
-	// targetUser carries the server-built avatarUrl (see ProfileHeaderTarget).
-	targetUser: ProfileHeaderTarget;
+	targetUser: ProfileHeaderUser;
 	invitedBy: UserInfoSummary | null;
 	headerEmail: string | null;
 	page: number;

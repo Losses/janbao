@@ -1,20 +1,7 @@
 <script lang="ts">
 	/**
-	 * ThreadPager - renders a thread (discussion or conversation) as the CENTER
-	 * panel of a horizontal pager flanked by its live neighbours: a LEFT list
-	 * preview (the discussions list / message inbox) and an optional RIGHT
-	 * Activity feed. Mobile only; the page renders it only on the mobile branch
-	 * (desktop inlines the content into DualColumnLayout).
-	 *
-	 * Lives inside an OverlayLayer over the persistent MobileTabPager (see
-	 * `(tabs)/+layout.svelte`). The left neighbour is a preview rendered from the
-	 * (tabs) layout data; it is aligned (translateY(neighborOffset -
-	 * leftPreviewScroll)) so that DURING a back-swipe the revealed preview matches
-	 * the scroll position the committed navigation restores to - no y-jump
-	 * mid-gesture. On commit the overlay unmounts and the real persistent pager
-	 * (already at the restored scroll, set synchronously by the (tabs) layout's
-	 * beforeNavigate) is revealed. A forward list→thread navigation plays a push
-	 * slide-in via the enterFromList signal.
+	 * ThreadPager - Renders an inner page as a REAL pager panel flanked by its
+	 * live neighbours. Mobile only; desktop renders children directly.
 	 */
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -23,15 +10,14 @@
 	import { detectSwipe } from '$lib/actions/swipe';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
-	import { getListScrollStore } from '$lib/stores/list-scroll.svelte';
-	import { consumeEnterFromList, previousEntryIs } from '$lib/stores/thread-nav.svelte';
+	import { consumeEnterFromList, backLandsOnList } from '$lib/stores/thread-nav.svelte';
 
 	import { page } from '$app/state';
 
 	interface PendingNav {
 		href: string;
 		/** Pop the history entry (history.back) instead of pushing a goto - true
-		 * for a back-to-list swipe when the prior entry is the list route. */
+		 * for a back-to-list swipe when the thread was reached from the list. */
 		back: boolean;
 	}
 
@@ -42,9 +28,10 @@
 		rightHref?: string;
 		centerTab: number;
 		rightTab?: number;
-		/** Scroll the left neighbour should preview at (the captured list scroll),
-		 * so its reveal during a back-swipe matches the position the committed
-		 * navigation restores to. */
+		/** Scroll the left neighbour should preview at, so its reveal matches the
+		 * position the committed navigation restores to. Pass the captured value when
+		 * the destination restores scroll (the discussions list via list-scroll);
+		 * leave 0 when it lands at the top (the messages list). */
 		leftPreviewScroll?: number;
 		children: Snippet;
 	}
@@ -63,7 +50,7 @@
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	let isMobile = $state(page.data.isMobile ?? false);
 
-	// Viewport element ref + scroll tracking for neighbour vertical alignment.
+	// Viewport element ref + scroll tracking for neighbor vertical alignment.
 	let viewportEl: HTMLElement | null = $state(null);
 	let scrollY = $state(0);
 
@@ -86,8 +73,11 @@
 
 	// neighborOffset tracks window.scrollY so a neighbour panel stays at a fixed
 	// screen position while the window scrolls - this is what makes the horizontal
-	// swipe-to-neighbour transition seamless and lets the committed swipe land
-	// without a vertical jump. It MUST equal scrollY.
+	// swipe-to-neighbour transition seamless and lets the committed swipe's
+	// scrollTo(0,0) + translateY(0) land without a vertical jump. It MUST equal
+	// scrollY, so auto-scroll (which moves window.scrollY) inflating the neighbour
+	// transform is expected and harmless: neighbours are clipped off-screen and
+	// self-heal on the committed swipe.
 	const neighborOffset = $derived(scrollY);
 
 	const trackStyle = $derived(
@@ -99,12 +89,12 @@
 	const neighborStyle = $derived(
 		`width: ${sectionWidth}; transform: translateY(${neighborOffset}px)`
 	);
-	// The left neighbour previews at leftPreviewScroll (the captured list scroll),
-	// so the reveal matches the landing position and the list does not jump on
-	// commit. NOT clamped: when the list was scrolled deeper than the thread
-	// (capturedY > scrollY) the offset goes negative, which is correct (it just
-	// shows the neighbour scrolled up) - clamping it broke that case. The right
-	// neighbour commits to scroll 0, so it stays at neighborOffset.
+	// The left neighbour previews at leftPreviewScroll (the scroll the committed
+	// navigation restores to), so the reveal matches the landing position and the
+	// list does not jump on commit. NOT clamped: when the list was scrolled deeper
+	// than the thread (capturedY > scrollY) the offset goes negative, which is
+	// correct (it just shows the neighbour scrolled up) - clamping it broke that
+	// case. The right neighbour commits to scroll 0, so it stays at neighborOffset.
 	const leftNeighborStyle = $derived(
 		`width: ${sectionWidth}; transform: translateY(${neighborOffset - leftPreviewScroll}px)`
 	);
@@ -132,16 +122,13 @@
 		}
 		if (deltaX >= SWIPE_COMMIT && leftIdx >= 0 && leftHref) {
 			snapIndex = leftIdx;
-			// Pop the history entry when the real back destination is the list, so
-			// swiping back does not stack duplicate entries. Falls back to a pushed
-			// goto for a deep-linked / non-list-entered thread. The list scroll is
-			// restored in onTrackTransitionEnd (before history.back) so the overlay
-			// unmounts with the window already at listScroll (no post-animation
-			// jump); the preview masks the alignment until then via leftPreviewScroll.
-			pendingNav = { href: leftHref, back: leftHref ? previousEntryIs(leftHref) : false };
+			// Pop the history entry when the real back destination is the list
+			// (navigation.entries, with an arrival-origin fallback), so swiping
+			// back does not stack duplicate `/` entries. Falls back to a pushed
+			// goto for a deep-linked / non-list-entered thread.
+			pendingNav = { href: leftHref, back: backLandsOnList() };
 		} else if (deltaX <= -SWIPE_COMMIT && rightIdx >= 0 && rightHref) {
 			snapIndex = rightIdx;
-			if (typeof window !== 'undefined') window.scrollTo(0, 0);
 			pendingNav = { href: rightHref, back: false };
 		} else {
 			snapIndex = ACTIVE;
@@ -154,24 +141,12 @@
 		const nav = pendingNav;
 		pendingNav = null;
 		if (nav.back) {
-			// Scroll the window to the captured list scroll BEFORE history.back,
-			// still while the overlay covers the thread. The preview's
-			// translateY(neighborOffset - leftPreviewScroll) alignment tracks
-			// scrollY, so moving the window from the thread scroll to listScroll
-			// shifts the transform but keeps the preview's visual stable (no jump),
-			// and the overlay then unmounts with the window already at listScroll -
-			// so the document-height collapse (thread->list) does not clamp the
-			// scroll and there is no upward jump after the animation. consume()
-			// resets to 0 so the (tabs) afterNavigate fallback (browser-back) no-ops.
-			const y = listScroll.consume();
-			if (y > 0 && typeof window !== 'undefined') window.scrollTo(0, y);
 			history.back();
 		} else {
 			void goto(nav.href);
 		}
 	}
 
-	const listScroll = getListScrollStore();
 	const pager = getMobilePagerStore();
 	$effect(() => {
 		let progress: number;
@@ -241,10 +216,11 @@
 		};
 	});
 
-	// Re-measure viewport width on resize. Also guards the viewport's internal
-	// scroll at 0,0: overflow:hidden is still a programmatic scroll container, so
-	// native hash scrolling or any stray scrollIntoView could set a non-zero
-	// scrollTop here that the user cannot reset - locking the page on the anchor.
+	// Re-measure viewport width on resize (header height might change). Also
+	// guards the viewport's internal scroll at 0,0: overflow:hidden is still a
+	// programmatic scroll container, so native hash scrolling or any stray
+	// scrollIntoView could set a non-zero scrollTop here that the user cannot
+	// reset - locking the page on the anchor with everything above clipped.
 	const measureViewport: Action<HTMLElement> = (node) => {
 		viewportEl = node;
 		const resetScroll = () => {
@@ -280,7 +256,7 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		bind:this={viewportEl}
-		class="overflow-hidden bg-base-200"
+		class="overflow-hidden"
 		style={viewportStyle}
 		onpointerdown={cancelPendingNav}
 		use:detectSwipe={{ onMove: swipeMove, onEnd: swipeEnd }}
@@ -292,15 +268,15 @@
 			ontransitionend={onTrackTransitionEnd}
 		>
 			{#if left}
-				<section class="shrink-0 p-3 bg-base-100" style={leftNeighborStyle}>
+				<section class="shrink-0 p-3" style={leftNeighborStyle}>
 					{@render left()}
 				</section>
 			{/if}
-			<section class="shrink-0 p-3 bg-base-100" style={centerStyle} use:measureThread>
+			<section class="shrink-0 p-3" style={centerStyle} use:measureThread>
 				{@render children()}
 			</section>
 			{#if right}
-				<section class="shrink-0 p-3 bg-base-100" style={neighborStyle}>
+				<section class="shrink-0 p-3" style={neighborStyle}>
 					{@render right()}
 				</section>
 			{/if}

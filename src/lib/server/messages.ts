@@ -2,7 +2,6 @@ import { drafts, users } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 import type { D1Db } from '$lib/server/db';
 import type { UserSearchResult } from '$lib/types/api';
-import { buildAvatarUrl } from '$lib/utils/image';
 
 export interface MessageComposePrefill {
 	messageDraft: string | null;
@@ -37,27 +36,18 @@ export async function resolveMessageComposePrefill(
 
 	let prefillRecipient: UserSearchResult | null = null;
 	if (recipientId && recipientId !== userId) {
-		// Select the raw avatar columns so buildAvatarUrl can derive the URL;
-		// they are dropped from the returned UserSearchResult.
 		const recipientRows = await db
 			.select({
 				id: users.id,
 				username: users.username,
 				displayName: users.displayName,
-				avatarFileId: users.avatarFileId,
-				avatarContentType: users.avatarContentType
+				avatarFileId: users.avatarFileId
 			})
 			.from(users)
 			.where(eq(users.id, recipientId))
 			.limit(1);
 		if (recipientRows.length > 0) {
-			const r = recipientRows[0];
-			prefillRecipient = {
-				id: r.id,
-				username: r.username,
-				displayName: r.displayName,
-				avatarUrl: buildAvatarUrl(r.id, r.avatarFileId, r.avatarContentType)
-			};
+			prefillRecipient = recipientRows[0];
 		}
 	}
 

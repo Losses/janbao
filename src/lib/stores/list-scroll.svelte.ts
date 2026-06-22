@@ -1,14 +1,13 @@
 /**
- * List-Scroll Store - remembers the list scroll position so swiping back from a
- * thread overlay to its list (`/` or `/messages/inbox`) lands where you left off.
+ * List-Scroll Store - remembers the discussions-list scroll position so swiping
+ * back from a discussion thread to `/` lands where you left off.
  *
- * The `(tabs)` layout captures `window.scrollY` in beforeNavigate when leaving a
- * list route for a thread overlay, and restores it SYNCHRONOUSLY in beforeNavigate
- * when returning (before the new route paints) - this covers the browser/OS back
- * button. ThreadPager's swipeEnd does the same restore for the swipe gesture, so
- * the revealed pager is at the right scroll on the first frame (no white frame).
- * `consume()` resets to 0, so whichever caller restores first wins; the other's
- * `y > 0` guard is a no-op.
+ * The `(tabs)` layout captures `window.scrollY` in beforeNavigate when leaving
+ * `/` for a `/discussion/*` thread, and consumes/restores it in afterNavigate
+ * when returning to `/`. The ThreadPager's left neighbour also peeks `captured`
+ * (without resetting) so its swipe reveal previews the list at that same scroll
+ * instead of from the top - otherwise the reveal and the restore disagree and
+ * the list jumps on commit.
  */
 type CaptureScrollFn = (scrollY: number) => void;
 type ConsumeScrollFn = () => number;

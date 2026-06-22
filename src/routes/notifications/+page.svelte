@@ -160,7 +160,8 @@
 							{#if item.sourceUserId}
 								<a href="/profile/{item.sourceUserId}/{generateSlug(item.sourceUsername ?? '')}">
 									<Avatar
-										avatarUrl={item.sourceAvatarUrl}
+										userId={item.sourceUserId}
+										avatarFileId={item.sourceAvatarFileId}
 										displayName={formatDisplayName(item.sourceDisplayName, item.sourceUserId, t)}
 										size="sm"
 									/>

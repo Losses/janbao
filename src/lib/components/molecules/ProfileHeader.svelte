@@ -21,13 +21,11 @@
 		mdiEmailOutline,
 		mdiEyeOutline
 	} from '@mdi/js';
-	import type { UserInfoSummary } from '$lib/types/api';
+	import type { ProfileHeaderUser, UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
-	import type { ProfileHeaderTarget } from '$lib/server/db/dao/profile';
 
 	interface ProfileHeaderProps {
-		// targetUser carries the server-built avatarUrl (see ProfileHeaderTarget).
-		targetUser: ProfileHeaderTarget;
+		targetUser: ProfileHeaderUser;
 		invitedBy: UserInfoSummary | null;
 		email: string | null;
 		showLastActive: boolean;
@@ -55,7 +53,12 @@
 
 <div>
 	<div class="flex items-center gap-4">
-		<Avatar avatarUrl={targetUser.avatarUrl} displayName={displayUser} size="lg" />
+		<Avatar
+			userId={targetUser.id}
+			avatarFileId={targetUser.avatarFileId}
+			displayName={displayUser}
+			size="lg"
+		/>
 		<div>
 			<h1 class="user-display-name page-title">{displayUser}</h1>
 			{#if targetUser.bio}
