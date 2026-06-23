@@ -1,4 +1,6 @@
 <script lang="ts">
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import SettingsMenuPanel from '$lib/components/panels/SettingsMenuPanel.svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
 	import PageTitle from '$lib/components/molecules/PageTitle.svelte';
@@ -75,61 +77,73 @@
 	{/if}
 {/snippet}
 
+{#snippet leftPanel()}
+	{#if user}
+		<SettingsMenuPanel {user} {t} lang={data.lang} />
+	{/if}
+{/snippet}
+
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-3">
-		<PageTitle title={profileT.changePassword} />
+	<GesturePageLayout
+		left={leftPanel}
+		leftHref="/profile/settings"
+		fallbackRoute="/profile/settings"
+	>
+		<div class="space-y-3">
+			<PageTitle title={profileT.changePassword} />
 
-		{#if message}
-			<div
-				class="alert {message.type === 'success' ? 'alert-primary' : 'alert-warning'}"
-				role="alert"
-			>
-				{message.text}
-			</div>
-		{/if}
+			{#if message}
+				<div
+					class="alert {message.type === 'success' ? 'alert-primary' : 'alert-warning'}"
+					role="alert"
+				>
+					{message.text}
+				</div>
+			{/if}
 
-		<form onsubmit={handleSubmit} class="space-y-4">
-			<FormField
-				id="currentPassword"
-				type="password"
-				label={profileT.currentPassword}
-				bind:value={currentPassword}
-				required
-				autocomplete="current-password"
-			/>
+			<form onsubmit={handleSubmit} class="space-y-4">
+				<FormField
+					id="currentPassword"
+					type="password"
+					label={profileT.currentPassword}
+					bind:value={currentPassword}
+					required
+					autocomplete="current-password"
+				/>
 
-			<FormField
-				id="newPassword"
-				type="password"
-				label={profileT.newPassword}
-				bind:value={newPassword}
-				required
-				autocomplete="new-password"
-			>
-				{#snippet hint()}
-					<PasswordStrength
-						password={newPassword}
-						minLength={MIN_PASSWORD_LENGTH}
-						labelTooShort={t.auth.passwordTooShort}
-						labelOk={t.auth.passwordStrengthOk}
-					/>
-				{/snippet}
-			</FormField>
+				<FormField
+					id="newPassword"
+					type="password"
+					label={profileT.newPassword}
+					bind:value={newPassword}
+					required
+					autocomplete="new-password"
+				>
+					{#snippet hint()}
+						<PasswordStrength
+							password={newPassword}
+							minLength={MIN_PASSWORD_LENGTH}
+							labelTooShort={t.auth.passwordTooShort}
+							labelOk={t.auth.passwordStrengthOk}
+						/>
+					{/snippet}
+				</FormField>
 
-			<FormField
-				id="confirmPassword"
-				type="password"
-				label={t.auth.confirmPassword}
-				bind:value={confirmPassword}
-				required
-				autocomplete="new-password"
-			/>
+				<FormField
+					id="confirmPassword"
+					type="password"
+					label={t.auth.confirmPassword}
+					bind:value={confirmPassword}
+					required
+					autocomplete="new-password"
+				/>
 
-			<div class="pt-2">
-				<button type="submit" class="btn btn-primary" disabled={saving}>
-					{saving ? t.common.saving : t.common.submit}
-				</button>
-			</div>
-		</form>
-	</div>
+				<div class="pt-2">
+					<button type="submit" class="btn btn-primary" disabled={saving}>
+						{saving ? t.common.saving : t.common.submit}
+					</button>
+				</div>
+			</form>
+		</div>
+	</GesturePageLayout>
 </DualColumnLayout>

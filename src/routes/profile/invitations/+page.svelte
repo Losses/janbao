@@ -1,4 +1,6 @@
 <script lang="ts">
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import ProfileMenuPanel from '$lib/components/panels/ProfileMenuPanel.svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
@@ -100,76 +102,92 @@
 	{/if}
 {/snippet}
 
+{#snippet leftPanel()}
+	{#if user}
+		<ProfileMenuPanel {user} {t} lang={data.lang} />
+	{/if}
+{/snippet}
+
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-3">
-		<PageTitle title={profileT.invitations} />
-
-		{#if feedback}
-			<div
-				class="alert {feedback.type === 'success' ? 'alert-primary' : 'alert-warning'}"
-				role="alert"
-			>
-				{feedback.text}
-			</div>
-		{/if}
-
+	<GesturePageLayout left={leftPanel} leftHref="/profile" fallbackRoute="/profile">
 		<div class="space-y-3">
-			<p class="text-sm text-base-content/80">{allowanceText}</p>
-			<button
-				class="btn btn-primary btn-sm"
-				onclick={requestCode}
-				disabled={requesting || !data.canRequestMore || !online.online}
-			>
-				{#if requesting}
-					<span class="loading loading-spinner loading-xs"></span>
-				{/if}
-				{invitationT.requestCode}
-			</button>
-		</div>
+			<PageTitle title={profileT.invitations} />
 
-		{#if invitations.length === 0}
-			<EmptyState message={invitationT.noInvitations} />
-		{:else}
-			<div class="overflow-hidden">
-				<div class="overflow-x-auto">
-					<table class="table table-sm [&_tr]:border-base-300">
-						<thead>
-							<tr>
-								<th>{invitationT.code}</th>
-								<th>{invitationT.usedBy}</th>
-								<th>{invitationT.requestedAt}</th>
-								<th>{invitationT.status}</th>
-								<th>{invitationT.expiresAt}</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each invitations as inv (inv.code)}
-								<tr>
-									<td class="font-mono text-xs">{inv.code}</td>
-									<td>
-										{#if inv.usedByUsername}
-											{inv.usedByUsername}
-										{:else}
-											<span class="text-base-content/40">{invitationT.statusUnused}</span>
-										{/if}
-									</td>
-									<td>
-										<DateComponent value={inv.createdAt} {t} class="text-xs text-base-content/60" />
-									</td>
-									<td>
-										<Badge variant={statusVariant(inv.status)}>{statusLabel(inv.status)}</Badge>
-									</td>
-									<td>
-										<DateComponent value={inv.expiresAt} {t} class="text-xs text-base-content/60" />
-									</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
+			{#if feedback}
+				<div
+					class="alert {feedback.type === 'success' ? 'alert-primary' : 'alert-warning'}"
+					role="alert"
+				>
+					{feedback.text}
 				</div>
+			{/if}
+
+			<div class="space-y-3">
+				<p class="text-sm text-base-content/80">{allowanceText}</p>
+				<button
+					class="btn btn-primary btn-sm"
+					onclick={requestCode}
+					disabled={requesting || !data.canRequestMore || !online.online}
+				>
+					{#if requesting}
+						<span class="loading loading-spinner loading-xs"></span>
+					{/if}
+					{invitationT.requestCode}
+				</button>
 			</div>
-		{/if}
-	</div>
+
+			{#if invitations.length === 0}
+				<EmptyState message={invitationT.noInvitations} />
+			{:else}
+				<div class="overflow-hidden">
+					<div class="overflow-x-auto">
+						<table class="table table-sm [&_tr]:border-base-300">
+							<thead>
+								<tr>
+									<th>{invitationT.code}</th>
+									<th>{invitationT.usedBy}</th>
+									<th>{invitationT.requestedAt}</th>
+									<th>{invitationT.status}</th>
+									<th>{invitationT.expiresAt}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each invitations as inv (inv.code)}
+									<tr>
+										<td class="font-mono text-xs">{inv.code}</td>
+										<td>
+											{#if inv.usedByUsername}
+												{inv.usedByUsername}
+											{:else}
+												<span class="text-base-content/40">{invitationT.statusUnused}</span>
+											{/if}
+										</td>
+										<td>
+											<DateComponent
+												value={inv.createdAt}
+												{t}
+												class="text-xs text-base-content/60"
+											/>
+										</td>
+										<td>
+											<Badge variant={statusVariant(inv.status)}>{statusLabel(inv.status)}</Badge>
+										</td>
+										<td>
+											<DateComponent
+												value={inv.expiresAt}
+												{t}
+												class="text-xs text-base-content/60"
+											/>
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				</div>
+			{/if}
+		</div>
+	</GesturePageLayout>
 </DualColumnLayout>
 
 {#if showInviteModal}

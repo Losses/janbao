@@ -1,4 +1,6 @@
 <script lang="ts">
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import ProfileMenuPanel from '$lib/components/panels/ProfileMenuPanel.svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import ProfileHeader from '$lib/components/molecules/ProfileHeader.svelte';
@@ -72,45 +74,59 @@
 	/>
 {/snippet}
 
+{#snippet leftPanel()}
+	{#if targetUser}
+		<ProfileMenuPanel user={targetUser} {t} lang={data.lang} />
+	{/if}
+{/snippet}
+
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-3">
-		<!-- Profile Header -->
-		<ProfileHeader
-			{targetUser}
-			{invitedBy}
-			email={headerEmail}
-			{showLastActive}
-			canMessage={!isOwner && !!user && targetUser.id !== 0}
-			{t}
-		/>
+	<GesturePageLayout
+		left={leftPanel}
+		leftHref={targetUser && user && targetUser.id === user.id
+			? '/profile'
+			: `/profile/${targetUser.id}/${targetUserSlug}`}
+		fallbackRoute="/profile"
+	>
+		<div class="space-y-3">
+			<!-- Profile Header -->
+			<ProfileHeader
+				{targetUser}
+				{invitedBy}
+				email={headerEmail}
+				{showLastActive}
+				canMessage={!isOwner && !!user && targetUser.id !== 0}
+				{t}
+			/>
 
-		<!-- Discussions Listing -->
-		{#if discussionsList.length === 0}
-			<EmptyState message={t.common.noResults} />
-		{:else}
-			<div class="bg-base-100 overflow-hidden border-t border-b border-base-300">
-				<div class="divide-y divide-base-300">
-					{#each discussionsList as discussion (discussion.id)}
-						<DiscussionRow
-							{discussion}
-							readHistory={discussion.readHistory}
-							isBookmarked={discussion.isBookmarked}
-							unreadCount={discussion.unreadCount}
-							lastReplyAuthorDisplayName={discussion.lastReplyAuthorDisplayName}
-							lastReplyAuthorId={discussion.lastReplyAuthorId}
-							lastReplyAuthorUsername={discussion.lastReplyAuthorUsername}
-							{t}
-						/>
-					{/each}
+			<!-- Discussions Listing -->
+			{#if discussionsList.length === 0}
+				<EmptyState message={t.common.noResults} />
+			{:else}
+				<div class="bg-base-100 overflow-hidden border-t border-b border-base-300">
+					<div class="divide-y divide-base-300">
+						{#each discussionsList as discussion (discussion.id)}
+							<DiscussionRow
+								{discussion}
+								readHistory={discussion.readHistory}
+								isBookmarked={discussion.isBookmarked}
+								unreadCount={discussion.unreadCount}
+								lastReplyAuthorDisplayName={discussion.lastReplyAuthorDisplayName}
+								lastReplyAuthorId={discussion.lastReplyAuthorId}
+								lastReplyAuthorUsername={discussion.lastReplyAuthorUsername}
+								{t}
+							/>
+						{/each}
+					</div>
 				</div>
-			</div>
 
-			<!-- Bottom Paginator -->
-			{#if totalPages > 1}
-				<div class="flex justify-end pt-2">
-					<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
-				</div>
+				<!-- Bottom Paginator -->
+				{#if totalPages > 1}
+					<div class="flex justify-end pt-2">
+						<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+					</div>
+				{/if}
 			{/if}
-		{/if}
-	</div>
+		</div>
+	</GesturePageLayout>
 </DualColumnLayout>

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import AdminMenuPanel from '$lib/components/panels/AdminMenuPanel.svelte';
 	import { onMount } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
@@ -149,105 +151,113 @@
 	<AdminSidebar {user} {t} activeItem="maintenance" />
 {/snippet}
 
+{#snippet leftPanel()}
+	{#if user}
+		<AdminMenuPanel {user} {t} lang={data.lang} />
+	{/if}
+{/snippet}
+
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-3">
-		<div class="border-b border-base-300 pb-4">
-			<h1 class="page-title">{maintenanceT.title}</h1>
-		</div>
-
-		{#if message}
-			<div
-				class="alert {message.type === 'success' ? 'alert-primary' : 'alert-warning'}"
-				role="alert"
-			>
-				{message.text}
+	<GesturePageLayout left={leftPanel} leftHref="/admin" fallbackRoute="/admin">
+		<div class="space-y-3">
+			<div class="border-b border-base-300 pb-4">
+				<h1 class="page-title">{maintenanceT.title}</h1>
 			</div>
-		{/if}
 
-		{#if online.online}
-			<div class="space-y-3">
-				{#snippet opCard(
-					op: MaintenanceOp,
-					label: string,
-					desc: string,
-					busy: boolean,
-					onRun: VoidHandler
-				)}
-					{@const status = overview.ops[op]}
-					<div class="rounded-box border border-base-300 p-4 space-y-2">
-						<div class="flex items-start justify-between gap-3">
-							<div>
-								<div class="font-medium">{label}</div>
-								<p class="text-xs text-base-content/60">{desc}</p>
-							</div>
-							{#if status.available}
-								<button class="btn btn-primary btn-sm shrink-0" onclick={onRun} disabled={busy}>
-									{busy ? maintenanceT.running : maintenanceT.runNow}
-								</button>
-							{/if}
-						</div>
+			{#if message}
+				<div
+					class="alert {message.type === 'success' ? 'alert-primary' : 'alert-warning'}"
+					role="alert"
+				>
+					{message.text}
+				</div>
+			{/if}
 
-						{#if !status.available}
-							<p class="text-xs text-warning">{maintenanceT.notAvailable}</p>
-						{:else}
-							<div class="text-xs text-base-content/60 flex flex-wrap items-center gap-x-3">
-								<span>
-									{maintenanceT.lastRun}:
-									{#if status.lastRunIso}
-										<DateAtom value={status.lastRunIso} {t} />
-									{:else}
-										{maintenanceT.never}
-									{/if}
-								</span>
-								{#if status.lastResult}
-									<span
-										>{maintenanceT.lastResult}:
-										<span class="font-mono">{status.lastResult}</span></span
-									>
+			{#if online.online}
+				<div class="space-y-3">
+					{#snippet opCard(
+						op: MaintenanceOp,
+						label: string,
+						desc: string,
+						busy: boolean,
+						onRun: VoidHandler
+					)}
+						{@const status = overview.ops[op]}
+						<div class="rounded-box border border-base-300 p-4 space-y-2">
+							<div class="flex items-start justify-between gap-3">
+								<div>
+									<div class="font-medium">{label}</div>
+									<p class="text-xs text-base-content/60">{desc}</p>
+								</div>
+								{#if status.available}
+									<button class="btn btn-primary btn-sm shrink-0" onclick={onRun} disabled={busy}>
+										{busy ? maintenanceT.running : maintenanceT.runNow}
+									</button>
 								{/if}
 							</div>
-						{/if}
-					</div>
-				{/snippet}
 
-				{@render opCard(
-					'analyze',
-					maintenanceT.analyzeLabel,
-					maintenanceT.analyzeDesc,
-					syncBusy,
-					() => runSync('analyze', maintenanceT.analyzeDone)
-				)}
-				{@render opCard(
-					'integrityCheck',
-					maintenanceT.integrityLabel,
-					maintenanceT.integrityDesc,
-					detachedBusy,
-					() => runDetached('integrityCheck')
-				)}
-				{@render opCard(
-					'ftsRebuild',
-					maintenanceT.ftsLabel,
-					maintenanceT.ftsDesc,
-					detachedBusy,
-					() => runDetached('ftsRebuild')
-				)}
-				{@render opCard(
-					'statsRebuild',
-					maintenanceT.statsRebuildLabel,
-					maintenanceT.statsRebuildDesc,
-					syncBusy,
-					() => runSync('statsRebuild', maintenanceT.success)
-				)}
-				{@render opCard(
-					'statsFreeze',
-					maintenanceT.statsFreezeLabel,
-					maintenanceT.statsFreezeDesc,
-					syncBusy,
-					() => runSync('statsFreeze', maintenanceT.success)
-				)}
-			</div>
-		{:else}
-			<OfflinePlaceholder {t} />
-		{/if}
-	</div>
+							{#if !status.available}
+								<p class="text-xs text-warning">{maintenanceT.notAvailable}</p>
+							{:else}
+								<div class="text-xs text-base-content/60 flex flex-wrap items-center gap-x-3">
+									<span>
+										{maintenanceT.lastRun}:
+										{#if status.lastRunIso}
+											<DateAtom value={status.lastRunIso} {t} />
+										{:else}
+											{maintenanceT.never}
+										{/if}
+									</span>
+									{#if status.lastResult}
+										<span
+											>{maintenanceT.lastResult}:
+											<span class="font-mono">{status.lastResult}</span></span
+										>
+									{/if}
+								</div>
+							{/if}
+						</div>
+					{/snippet}
+
+					{@render opCard(
+						'analyze',
+						maintenanceT.analyzeLabel,
+						maintenanceT.analyzeDesc,
+						syncBusy,
+						() => runSync('analyze', maintenanceT.analyzeDone)
+					)}
+					{@render opCard(
+						'integrityCheck',
+						maintenanceT.integrityLabel,
+						maintenanceT.integrityDesc,
+						detachedBusy,
+						() => runDetached('integrityCheck')
+					)}
+					{@render opCard(
+						'ftsRebuild',
+						maintenanceT.ftsLabel,
+						maintenanceT.ftsDesc,
+						detachedBusy,
+						() => runDetached('ftsRebuild')
+					)}
+					{@render opCard(
+						'statsRebuild',
+						maintenanceT.statsRebuildLabel,
+						maintenanceT.statsRebuildDesc,
+						syncBusy,
+						() => runSync('statsRebuild', maintenanceT.success)
+					)}
+					{@render opCard(
+						'statsFreeze',
+						maintenanceT.statsFreezeLabel,
+						maintenanceT.statsFreezeDesc,
+						syncBusy,
+						() => runSync('statsFreeze', maintenanceT.success)
+					)}
+				</div>
+			{:else}
+				<OfflinePlaceholder {t} />
+			{/if}
+		</div>
+	</GesturePageLayout>
 </DualColumnLayout>

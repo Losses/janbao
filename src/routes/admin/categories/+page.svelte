@@ -1,4 +1,6 @@
 <script lang="ts">
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import AdminMenuPanel from '$lib/components/panels/AdminMenuPanel.svelte';
 	import { invalidateAll } from '$app/navigation';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import AdminSidebar from '$lib/components/molecules/AdminSidebar.svelte';
@@ -129,85 +131,93 @@
 	<AdminSidebar {user} {t} activeItem="categories" />
 {/snippet}
 
+{#snippet leftPanel()}
+	{#if user}
+		<AdminMenuPanel {user} {t} lang={data.lang} />
+	{/if}
+{/snippet}
+
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-3">
-		<div class="flex items-center justify-between border-b border-base-300 pb-4">
-			<h1 class="page-title">{adminT.categories}</h1>
-			{#if online.online}
-				<button class="btn btn-primary btn-sm" onclick={openAdd} disabled={saving}>
-					{adminT.addCategory}
-				</button>
-			{/if}
-		</div>
-
-		{#if message}
-			<div
-				class="alert {message.type === 'success' ? 'alert-primary' : 'alert-warning'}"
-				role="alert"
-			>
-				{message.text}
+	<GesturePageLayout left={leftPanel} leftHref="/admin" fallbackRoute="/admin">
+		<div class="space-y-3">
+			<div class="flex items-center justify-between border-b border-base-300 pb-4">
+				<h1 class="page-title">{adminT.categories}</h1>
+				{#if online.online}
+					<button class="btn btn-primary btn-sm" onclick={openAdd} disabled={saving}>
+						{adminT.addCategory}
+					</button>
+				{/if}
 			</div>
-		{/if}
 
-		{#if online.online}
-			<div class="overflow-x-auto">
-				<table class="table table-sm [&_tr]:border-base-300">
-					<thead>
-						<tr>
-							<th>{permissionsT.slug}</th>
-							<th>{permissionsT.title}</th>
-							<th>{permissionsT.order}</th>
-							<th>{permissionsT.status}</th>
-							<th>{permissionsT.actions}</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each categories as category (category.slug)}
-							<tr class={category.disabledAt ? 'opacity-60' : ''}>
-								<td class="font-mono text-xs">{category.slug}</td>
-								<td>
-									<div class="font-medium">{category.title}</div>
-									<div class="text-xs text-base-content/50">{category.description}</div>
-								</td>
-								<td>{category.displayOrder}</td>
-								<td>{category.disabledAt ? permissionsT.disabled : permissionsT.enabled}</td>
-								<td>
-									<div class="flex gap-1">
-										<button
-											class="btn btn-outline btn-xs"
-											onclick={() => openEdit(category)}
-											disabled={saving}
-										>
-											{t.common.edit}
-										</button>
-										{#if category.disabledAt}
+			{#if message}
+				<div
+					class="alert {message.type === 'success' ? 'alert-primary' : 'alert-warning'}"
+					role="alert"
+				>
+					{message.text}
+				</div>
+			{/if}
+
+			{#if online.online}
+				<div class="overflow-x-auto">
+					<table class="table table-sm [&_tr]:border-base-300">
+						<thead>
+							<tr>
+								<th>{permissionsT.slug}</th>
+								<th>{permissionsT.title}</th>
+								<th>{permissionsT.order}</th>
+								<th>{permissionsT.status}</th>
+								<th>{permissionsT.actions}</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each categories as category (category.slug)}
+								<tr class={category.disabledAt ? 'opacity-60' : ''}>
+									<td class="font-mono text-xs">{category.slug}</td>
+									<td>
+										<div class="font-medium">{category.title}</div>
+										<div class="text-xs text-base-content/50">{category.description}</div>
+									</td>
+									<td>{category.displayOrder}</td>
+									<td>{category.disabledAt ? permissionsT.disabled : permissionsT.enabled}</td>
+									<td>
+										<div class="flex gap-1">
 											<button
 												class="btn btn-outline btn-xs"
-												onclick={() => setCategoryDisabled(category.slug, false)}
+												onclick={() => openEdit(category)}
 												disabled={saving}
 											>
-												{permissionsT.restore}
+												{t.common.edit}
 											</button>
-										{:else}
-											<button
-												class="btn btn-warning btn-xs"
-												onclick={() => setCategoryDisabled(category.slug, true)}
-												disabled={saving}
-											>
-												{permissionsT.disable}
-											</button>
-										{/if}
-									</div>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		{:else}
-			<OfflinePlaceholder {t} />
-		{/if}
-	</div>
+											{#if category.disabledAt}
+												<button
+													class="btn btn-outline btn-xs"
+													onclick={() => setCategoryDisabled(category.slug, false)}
+													disabled={saving}
+												>
+													{permissionsT.restore}
+												</button>
+											{:else}
+												<button
+													class="btn btn-warning btn-xs"
+													onclick={() => setCategoryDisabled(category.slug, true)}
+													disabled={saving}
+												>
+													{permissionsT.disable}
+												</button>
+											{/if}
+										</div>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{:else}
+				<OfflinePlaceholder {t} />
+			{/if}
+		</div>
+	</GesturePageLayout>
 </DualColumnLayout>
 
 {#if showModal}

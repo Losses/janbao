@@ -1,4 +1,6 @@
 <script lang="ts">
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import SettingsMenuPanel from '$lib/components/panels/SettingsMenuPanel.svelte';
 	import { onMount } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
@@ -123,138 +125,159 @@
 	{/if}
 {/snippet}
 
+{#snippet leftPanel()}
+	{#if user}
+		<SettingsMenuPanel {user} {t} lang={data.lang} />
+	{/if}
+{/snippet}
+
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-6">
-		<PageTitle title={offlineT.title} />
+	<GesturePageLayout
+		left={leftPanel}
+		leftHref="/profile/settings"
+		fallbackRoute="/profile/settings"
+	>
+		<div class="space-y-6">
+			<PageTitle title={offlineT.title} />
 
-		{#if message}
-			<div
-				class="alert {message.kind === 'error' ? 'alert-warning' : 'alert-primary'}"
-				role="alert"
-			>
-				{message.text}
-			</div>
-		{/if}
+			{#if message}
+				<div
+					class="alert {message.kind === 'error' ? 'alert-warning' : 'alert-primary'}"
+					role="alert"
+				>
+					{message.text}
+				</div>
+			{/if}
 
-		<p class="text-sm text-base-content/70">
-			{offlineT.description}
-		</p>
+			<p class="text-sm text-base-content/70">
+				{offlineT.description}
+			</p>
 
-		{#if pwa.isInstalled}
-			<div class="alert alert-primary" role="status">
-				{offlineT.installedHint}
-			</div>
-		{/if}
+			{#if pwa.isInstalled}
+				<div class="alert alert-primary" role="status">
+					{offlineT.installedHint}
+				</div>
+			{/if}
 
-		<!-- Master enable toggle. When off, the curated-cache groups and the
+			<!-- Master enable toggle. When off, the curated-cache groups and the
 		     passthrough toggle below are not rendered at all (not greyed out). -->
-		<SettingsToggle
-			label={offlineT.enable}
-			description={enabled ? offlineT.enableActive : offlineT.enableInactive}
-			checked={enabled}
-			onchange={setEnabled}
-		/>
+			<SettingsToggle
+				label={offlineT.enable}
+				description={enabled ? offlineT.enableActive : offlineT.enableInactive}
+				checked={enabled}
+				onchange={setEnabled}
+			/>
 
-		{#if enabled}
-			<div class="space-y-6">
-				<SettingGroup title={offlineT.categoriesTitle} description={offlineT.categoriesDescription}>
-					<div class="form-control">
-						<label class="label cursor-pointer justify-start gap-3" for="offline-cat-latest">
-							<input
-								id="offline-cat-latest"
-								type="checkbox"
-								class="checkbox checkbox-sm checkbox-primary"
-								checked={categories.latest}
-								onchange={() => toggleCategory('latest')}
-							/>
-							<div>
-								<span class="label-text font-medium">{offlineT.catLatest}</span>
-								<p class="text-xs text-base-content/50">{offlineT.catLatestDesc}</p>
-							</div>
-						</label>
-					</div>
-
-					<div class="form-control">
-						<label class="label cursor-pointer justify-start gap-3" for="offline-cat-most-viewed">
-							<input
-								id="offline-cat-most-viewed"
-								type="checkbox"
-								class="checkbox checkbox-sm checkbox-primary"
-								checked={categories.mostViewed}
-								onchange={() => toggleCategory('mostViewed')}
-							/>
-							<div>
-								<span class="label-text font-medium">{offlineT.catMostViewed}</span>
-								<p class="text-xs text-base-content/50">{offlineT.catMostViewedDesc}</p>
-							</div>
-						</label>
-					</div>
-
-					<div class="form-control">
-						<label class="label cursor-pointer justify-start gap-3" for="offline-cat-most-replied">
-							<input
-								id="offline-cat-most-replied"
-								type="checkbox"
-								class="checkbox checkbox-sm checkbox-primary"
-								checked={categories.mostReplied}
-								onchange={() => toggleCategory('mostReplied')}
-							/>
-							<div>
-								<span class="label-text font-medium">{offlineT.catMostReplied}</span>
-								<p class="text-xs text-base-content/50">{offlineT.catMostRepliedDesc}</p>
-							</div>
-						</label>
-					</div>
-				</SettingGroup>
-
-				<SettingGroup title={offlineT.depthTitle} description={offlineT.depthDescription}>
-					<div class="flex flex-col gap-2">
-						{#each DEPTHS as option (option)}
-							<label class="label cursor-pointer justify-start gap-3" for="offline-depth-{option}">
-								<input
-									id="offline-depth-{option}"
-									type="radio"
-									name="offline-depth"
-									class="radio radio-sm radio-primary"
-									checked={depth === option}
-									onchange={() => setDepth(option)}
-								/>
-								<span class="label-text font-medium">
-									{offlineT[`depth_${option}`]}
-								</span>
-							</label>
-						{/each}
-					</div>
-				</SettingGroup>
-
-				<SettingGroup title={offlineT.refreshTitle} description={offlineT.refreshDescription}>
-					<select
-						class="select select-bordered select-sm w-full max-w-xs"
-						aria-label={offlineT.refreshTitle}
-						value={refreshIntervalDays}
-						onchange={(e) => {
-							const parsed = Number(e.currentTarget.value);
-							if (parsed === 1 || parsed === 2 || parsed === 3 || parsed === 5 || parsed === 7) {
-								setRefreshInterval(parsed);
-							}
-						}}
+			{#if enabled}
+				<div class="space-y-6">
+					<SettingGroup
+						title={offlineT.categoriesTitle}
+						description={offlineT.categoriesDescription}
 					>
-						{#each REFRESH_OPTIONS as days (days)}
-							<option value={days}>{offlineT[`refresh_${days}`]}</option>
-						{/each}
-					</select>
-				</SettingGroup>
+						<div class="form-control">
+							<label class="label cursor-pointer justify-start gap-3" for="offline-cat-latest">
+								<input
+									id="offline-cat-latest"
+									type="checkbox"
+									class="checkbox checkbox-sm checkbox-primary"
+									checked={categories.latest}
+									onchange={() => toggleCategory('latest')}
+								/>
+								<div>
+									<span class="label-text font-medium">{offlineT.catLatest}</span>
+									<p class="text-xs text-base-content/50">{offlineT.catLatestDesc}</p>
+								</div>
+							</label>
+						</div>
 
-				<!-- Passthrough is a browse-time caching behaviour, conceptually
+						<div class="form-control">
+							<label class="label cursor-pointer justify-start gap-3" for="offline-cat-most-viewed">
+								<input
+									id="offline-cat-most-viewed"
+									type="checkbox"
+									class="checkbox checkbox-sm checkbox-primary"
+									checked={categories.mostViewed}
+									onchange={() => toggleCategory('mostViewed')}
+								/>
+								<div>
+									<span class="label-text font-medium">{offlineT.catMostViewed}</span>
+									<p class="text-xs text-base-content/50">{offlineT.catMostViewedDesc}</p>
+								</div>
+							</label>
+						</div>
+
+						<div class="form-control">
+							<label
+								class="label cursor-pointer justify-start gap-3"
+								for="offline-cat-most-replied"
+							>
+								<input
+									id="offline-cat-most-replied"
+									type="checkbox"
+									class="checkbox checkbox-sm checkbox-primary"
+									checked={categories.mostReplied}
+									onchange={() => toggleCategory('mostReplied')}
+								/>
+								<div>
+									<span class="label-text font-medium">{offlineT.catMostReplied}</span>
+									<p class="text-xs text-base-content/50">{offlineT.catMostRepliedDesc}</p>
+								</div>
+							</label>
+						</div>
+					</SettingGroup>
+
+					<SettingGroup title={offlineT.depthTitle} description={offlineT.depthDescription}>
+						<div class="flex flex-col gap-2">
+							{#each DEPTHS as option (option)}
+								<label
+									class="label cursor-pointer justify-start gap-3"
+									for="offline-depth-{option}"
+								>
+									<input
+										id="offline-depth-{option}"
+										type="radio"
+										name="offline-depth"
+										class="radio radio-sm radio-primary"
+										checked={depth === option}
+										onchange={() => setDepth(option)}
+									/>
+									<span class="label-text font-medium">
+										{offlineT[`depth_${option}`]}
+									</span>
+								</label>
+							{/each}
+						</div>
+					</SettingGroup>
+
+					<SettingGroup title={offlineT.refreshTitle} description={offlineT.refreshDescription}>
+						<select
+							class="select select-bordered select-sm w-full max-w-xs"
+							aria-label={offlineT.refreshTitle}
+							value={refreshIntervalDays}
+							onchange={(e) => {
+								const parsed = Number(e.currentTarget.value);
+								if (parsed === 1 || parsed === 2 || parsed === 3 || parsed === 5 || parsed === 7) {
+									setRefreshInterval(parsed);
+								}
+							}}
+						>
+							{#each REFRESH_OPTIONS as days (days)}
+								<option value={days}>{offlineT[`refresh_${days}`]}</option>
+							{/each}
+						</select>
+					</SettingGroup>
+
+					<!-- Passthrough is a browse-time caching behaviour, conceptually
 				     separate from the curated/scheduled cache above, so it lives
 				     in its own self-describing toggle rather than inside any group. -->
-				<SettingsToggle
-					label={offlineT.passthrough}
-					description={offlineT.passthroughDesc}
-					checked={passthrough}
-					onchange={setPassthrough}
-				/>
-			</div>
-		{/if}
-	</div>
+					<SettingsToggle
+						label={offlineT.passthrough}
+						description={offlineT.passthroughDesc}
+						checked={passthrough}
+						onchange={setPassthrough}
+					/>
+				</div>
+			{/if}
+		</div>
+	</GesturePageLayout>
 </DualColumnLayout>

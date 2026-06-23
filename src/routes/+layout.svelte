@@ -16,6 +16,7 @@
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { markEnterFromList, setReachedFromList } from '$lib/stores/thread-nav.svelte';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
+	import { getPageScrollStore } from '$lib/stores/page-scroll.svelte';
 
 	interface LayoutProps {
 		data: LayoutData;
@@ -27,6 +28,7 @@
 	const badges = getBadgesStore();
 	const editorPrefs = getEditorPrefsStore();
 	const navStore = getNavigationStore();
+	const pageScrollStore = getPageScrollStore();
 
 	// Hold the scroll-chrome header (and on mobile hash-enter, pin it visible)
 	// for navigations where SvelteKit's scroll would otherwise make it twitch:
@@ -37,6 +39,9 @@
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	let navFreezeTimer = 0;
 	beforeNavigate(({ to, from, type, event }) => {
+		if (from) {
+			pageScrollStore.capture(from.url.pathname, window.scrollY);
+		}
 		if (to && from) {
 			const isTabClick =
 				event?.target instanceof Element && event.target.closest('[data-tab-nav]') !== null;

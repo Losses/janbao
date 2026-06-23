@@ -1,4 +1,6 @@
 <script lang="ts">
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import SettingsMenuPanel from '$lib/components/panels/SettingsMenuPanel.svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
 	import SettingsToggle from '$lib/components/molecules/SettingsToggle.svelte';
@@ -118,53 +120,65 @@
 	{/if}
 {/snippet}
 
+{#snippet leftPanel()}
+	{#if user}
+		<SettingsMenuPanel {user} {t} lang={data.lang} />
+	{/if}
+{/snippet}
+
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-6">
-		<PageTitle title={editorT.title} />
+	<GesturePageLayout
+		left={leftPanel}
+		leftHref="/profile/settings"
+		fallbackRoute="/profile/settings"
+	>
+		<div class="space-y-6">
+			<PageTitle title={editorT.title} />
 
-		{#if message}
-			<div
-				class="alert {message.type === 'success' ? 'alert-primary' : 'alert-warning'}"
-				role="alert"
-			>
-				{message.text}
-			</div>
-		{/if}
+			{#if message}
+				<div
+					class="alert {message.type === 'success' ? 'alert-primary' : 'alert-warning'}"
+					role="alert"
+				>
+					{message.text}
+				</div>
+			{/if}
 
-		<fieldset disabled={!online.online}>
-			<div class="space-y-6">
-				<!-- Master switch. No group title: the page title already says "Editor",
+			<fieldset disabled={!online.online}>
+				<div class="space-y-6">
+					<!-- Master switch. No group title: the page title already says "Editor",
 				     and the toggle's own label + description carry the plain-mode meaning. -->
-				<SettingsToggle
-					label={editorT.plainMode}
-					description={editorT.plainModeDesc}
-					checked={prefs.plainMode}
-					disabled={saving}
-					onchange={(v) => (prefs.plainMode = v)}
-				/>
+					<SettingsToggle
+						label={editorT.plainMode}
+						description={editorT.plainModeDesc}
+						checked={prefs.plainMode}
+						disabled={saving}
+						onchange={(v) => (prefs.plainMode = v)}
+					/>
 
-				{#if !prefs.plainMode}
-					{#each featureSections as section (section.title)}
-						<SettingGroup title={section.title}>
-							{#each section.items as ft (ft.key)}
-								<SettingsToggle
-									label={ft.label}
-									description={ft.description}
-									checked={prefs[ft.key]}
-									disabled={saving}
-									onchange={(v) => (prefs[ft.key] = v)}
-								/>
-							{/each}
-						</SettingGroup>
-					{/each}
-				{/if}
+					{#if !prefs.plainMode}
+						{#each featureSections as section (section.title)}
+							<SettingGroup title={section.title}>
+								{#each section.items as ft (ft.key)}
+									<SettingsToggle
+										label={ft.label}
+										description={ft.description}
+										checked={prefs[ft.key]}
+										disabled={saving}
+										onchange={(v) => (prefs[ft.key] = v)}
+									/>
+								{/each}
+							</SettingGroup>
+						{/each}
+					{/if}
+				</div>
+			</fieldset>
+
+			<div class="pt-2">
+				<button class="btn btn-primary" onclick={handleSave} disabled={saving}>
+					{saving ? t.common.saving : t.common.submit}
+				</button>
 			</div>
-		</fieldset>
-
-		<div class="pt-2">
-			<button class="btn btn-primary" onclick={handleSave} disabled={saving}>
-				{saving ? t.common.saving : t.common.submit}
-			</button>
 		</div>
-	</div>
+	</GesturePageLayout>
 </DualColumnLayout>

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import AdminMenuPanel from '$lib/components/panels/AdminMenuPanel.svelte';
 	import { onMount } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
@@ -178,115 +180,123 @@
 	<AdminSidebar {user} {t} activeItem="backups" />
 {/snippet}
 
+{#snippet leftPanel()}
+	{#if user}
+		<AdminMenuPanel {user} {t} lang={data.lang} />
+	{/if}
+{/snippet}
+
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-3">
-		<div class="flex items-center justify-between border-b border-base-300 pb-4">
-			<h1 class="page-title">{backupT.title}</h1>
-			{#if available && online.online}
-				<button class="btn btn-primary btn-sm" onclick={backupNow} disabled={backing}>
-					{backing ? backupT.backingUp : backupT.backupNow}
-				</button>
-			{/if}
-		</div>
-
-		{#if message}
-			<div
-				class="alert {message.type === 'success' ? 'alert-primary' : 'alert-warning'}"
-				role="alert"
-			>
-				{message.text}
-			</div>
-		{/if}
-
-		{#if !available}
-			<div class="alert" role="alert">
-				{backupT.notAvailable}
-			</div>
-		{:else}
-			<div class="space-y-4">
-				<!-- Policy -->
-				<div class="space-y-3">
-					<label class="flex items-center gap-3">
-						<input
-							type="checkbox"
-							class="checkbox checkbox-sm checkbox-primary"
-							bind:checked={enabledDraft}
-						/>
-						<span>{backupT.enableAuto}</span>
-					</label>
-
-					<div class="flex flex-wrap items-end gap-3">
-						<label class="form-control">
-							<div class="label pb-1">
-								<span class="label-text text-xs">{backupT.retentionDays}</span>
-							</div>
-							<input
-								type="number"
-								class="input input-bordered input-sm w-32"
-								min="1"
-								bind:value={retentionDraft}
-							/>
-						</label>
-						{#if online.online}
-							<button
-								class="btn btn-primary btn-sm"
-								onclick={savePolicy}
-								disabled={saving || !dirty}
-							>
-								{saving ? t.common.saving : backupT.save}
-							</button>
-						{/if}
-					</div>
-					<p class="text-xs text-base-content/60">{backupT.retentionDaysHelp}</p>
-				</div>
-
-				<!-- Backups list -->
-				{#if online.online}
-					<div class="overflow-x-auto">
-						<table class="table table-sm [&_tr]:border-base-300">
-							<thead>
-								<tr>
-									<th>{backupT.name}</th>
-									<th>{backupT.date}</th>
-									<th class="text-right">{backupT.actions}</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each backups as backup (backup.name)}
-									<tr>
-										<td class="font-mono text-xs">{backup.name}</td>
-										<td><DateAtom value={backup.date} {t} /></td>
-										<td class="text-right">
-											<div class="flex justify-end gap-1">
-												<a
-													class="btn btn-ghost btn-xs"
-													href={`/api/admin/backups/${encodeURIComponent(backup.name)}`}
-													download
-												>
-													{backupT.download}
-												</a>
-												<button
-													class="btn btn-ghost btn-xs text-error"
-													onclick={() => deleteBackup(backup.name)}
-													disabled={deletingName === backup.name}
-												>
-													{backupT.delete}
-												</button>
-											</div>
-										</td>
-									</tr>
-								{:else}
-									<tr>
-										<td colspan="3" class="text-base-content/50">{backupT.noBackups}</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-				{:else}
-					<OfflinePlaceholder {t} />
+	<GesturePageLayout left={leftPanel} leftHref="/admin" fallbackRoute="/admin">
+		<div class="space-y-3">
+			<div class="flex items-center justify-between border-b border-base-300 pb-4">
+				<h1 class="page-title">{backupT.title}</h1>
+				{#if available && online.online}
+					<button class="btn btn-primary btn-sm" onclick={backupNow} disabled={backing}>
+						{backing ? backupT.backingUp : backupT.backupNow}
+					</button>
 				{/if}
 			</div>
-		{/if}
-	</div>
+
+			{#if message}
+				<div
+					class="alert {message.type === 'success' ? 'alert-primary' : 'alert-warning'}"
+					role="alert"
+				>
+					{message.text}
+				</div>
+			{/if}
+
+			{#if !available}
+				<div class="alert" role="alert">
+					{backupT.notAvailable}
+				</div>
+			{:else}
+				<div class="space-y-4">
+					<!-- Policy -->
+					<div class="space-y-3">
+						<label class="flex items-center gap-3">
+							<input
+								type="checkbox"
+								class="checkbox checkbox-sm checkbox-primary"
+								bind:checked={enabledDraft}
+							/>
+							<span>{backupT.enableAuto}</span>
+						</label>
+
+						<div class="flex flex-wrap items-end gap-3">
+							<label class="form-control">
+								<div class="label pb-1">
+									<span class="label-text text-xs">{backupT.retentionDays}</span>
+								</div>
+								<input
+									type="number"
+									class="input input-bordered input-sm w-32"
+									min="1"
+									bind:value={retentionDraft}
+								/>
+							</label>
+							{#if online.online}
+								<button
+									class="btn btn-primary btn-sm"
+									onclick={savePolicy}
+									disabled={saving || !dirty}
+								>
+									{saving ? t.common.saving : backupT.save}
+								</button>
+							{/if}
+						</div>
+						<p class="text-xs text-base-content/60">{backupT.retentionDaysHelp}</p>
+					</div>
+
+					<!-- Backups list -->
+					{#if online.online}
+						<div class="overflow-x-auto">
+							<table class="table table-sm [&_tr]:border-base-300">
+								<thead>
+									<tr>
+										<th>{backupT.name}</th>
+										<th>{backupT.date}</th>
+										<th class="text-right">{backupT.actions}</th>
+									</tr>
+								</thead>
+								<tbody>
+									{#each backups as backup (backup.name)}
+										<tr>
+											<td class="font-mono text-xs">{backup.name}</td>
+											<td><DateAtom value={backup.date} {t} /></td>
+											<td class="text-right">
+												<div class="flex justify-end gap-1">
+													<a
+														class="btn btn-ghost btn-xs"
+														href={`/api/admin/backups/${encodeURIComponent(backup.name)}`}
+														download
+													>
+														{backupT.download}
+													</a>
+													<button
+														class="btn btn-ghost btn-xs text-error"
+														onclick={() => deleteBackup(backup.name)}
+														disabled={deletingName === backup.name}
+													>
+														{backupT.delete}
+													</button>
+												</div>
+											</td>
+										</tr>
+									{:else}
+										<tr>
+											<td colspan="3" class="text-base-content/50">{backupT.noBackups}</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					{:else}
+						<OfflinePlaceholder {t} />
+					{/if}
+				</div>
+			{/if}
+		</div>
+	</GesturePageLayout>
 </DualColumnLayout>

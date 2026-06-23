@@ -1,4 +1,6 @@
 <script lang="ts">
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import AdminMenuPanel from '$lib/components/panels/AdminMenuPanel.svelte';
 	import { invalidateAll } from '$app/navigation';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import AdminSidebar from '$lib/components/molecules/AdminSidebar.svelte';
@@ -151,105 +153,113 @@
 	<AdminSidebar {user} {t} activeItem="categoryPermissions" />
 {/snippet}
 
+{#snippet leftPanel()}
+	{#if user}
+		<AdminMenuPanel {user} {t} lang={data.lang} />
+	{/if}
+{/snippet}
+
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-3">
-		<div class="border-b border-base-300 pb-4">
-			<h1 class="page-title">{adminT.categoryPermissions}</h1>
-		</div>
-
-		{#if message}
-			<div
-				class="alert {message.type === 'success' ? 'alert-primary' : 'alert-warning'}"
-				role="alert"
-			>
-				{message.text}
-			</div>
-		{/if}
-
+	<GesturePageLayout left={leftPanel} leftHref="/admin" fallbackRoute="/admin">
 		<div class="space-y-3">
-			<select
-				class="select select-bordered select-sm w-full max-w-xs"
-				value={activeGroupSlug}
-				onchange={(e) => (overrideGroupSlug = (e.currentTarget as HTMLSelectElement).value)}
-			>
-				{#each groups as group (group.slug)}
-					<option value={group.slug}>{group.title}</option>
-				{/each}
-			</select>
+			<div class="border-b border-base-300 pb-4">
+				<h1 class="page-title">{adminT.categoryPermissions}</h1>
+			</div>
 
-			{#if online.online}
-				<div class="overflow-x-auto">
-					<table class="table table-sm [&_tr]:border-base-300">
-						<thead>
-							<tr>
-								<th>{permissionsT.category}</th>
-								<th>{permissionsT.canRead}</th>
-								<th>{permissionsT.canCreate}</th>
-								<th>{permissionsT.canUpdate}</th>
-								<th>{permissionsT.canDelete}</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each enabledCategories as category (category.slug)}
-								<tr>
-									<td>
-										<div class="font-medium">{category.title}</div>
-										<div class="font-mono text-xs text-base-content/50">{category.slug}</div>
-									</td>
-									<td>
-										<input
-											type="checkbox"
-											class="checkbox checkbox-sm checkbox-primary"
-											checked={permissionDraft[category.slug]?.canRead}
-											onchange={(e) =>
-												setPermission(category.slug, 'canRead', e.currentTarget.checked)}
-										/>
-									</td>
-									<td>
-										<input
-											type="checkbox"
-											class="checkbox checkbox-sm checkbox-primary"
-											checked={permissionDraft[category.slug]?.canCreate}
-											onchange={(e) =>
-												setPermission(category.slug, 'canCreate', e.currentTarget.checked)}
-										/>
-									</td>
-									<td>
-										<input
-											type="checkbox"
-											class="checkbox checkbox-sm checkbox-primary"
-											checked={permissionDraft[category.slug]?.canUpdate}
-											onchange={(e) =>
-												setPermission(category.slug, 'canUpdate', e.currentTarget.checked)}
-										/>
-									</td>
-									<td>
-										<input
-											type="checkbox"
-											class="checkbox checkbox-sm checkbox-primary"
-											checked={permissionDraft[category.slug]?.canDelete}
-											onchange={(e) =>
-												setPermission(category.slug, 'canDelete', e.currentTarget.checked)}
-										/>
-									</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-			{:else}
-				<OfflinePlaceholder {t} />
-			{/if}
-
-			{#if online.online}
-				<button
-					class="btn btn-primary btn-sm"
-					onclick={savePermissions}
-					disabled={saving || !activeGroupSlug || !hasDirty}
+			{#if message}
+				<div
+					class="alert {message.type === 'success' ? 'alert-primary' : 'alert-warning'}"
+					role="alert"
 				>
-					{saving ? t.common.saving : permissionsT.savePermissions}
-				</button>
+					{message.text}
+				</div>
 			{/if}
+
+			<div class="space-y-3">
+				<select
+					class="select select-bordered select-sm w-full max-w-xs"
+					value={activeGroupSlug}
+					onchange={(e) => (overrideGroupSlug = (e.currentTarget as HTMLSelectElement).value)}
+				>
+					{#each groups as group (group.slug)}
+						<option value={group.slug}>{group.title}</option>
+					{/each}
+				</select>
+
+				{#if online.online}
+					<div class="overflow-x-auto">
+						<table class="table table-sm [&_tr]:border-base-300">
+							<thead>
+								<tr>
+									<th>{permissionsT.category}</th>
+									<th>{permissionsT.canRead}</th>
+									<th>{permissionsT.canCreate}</th>
+									<th>{permissionsT.canUpdate}</th>
+									<th>{permissionsT.canDelete}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each enabledCategories as category (category.slug)}
+									<tr>
+										<td>
+											<div class="font-medium">{category.title}</div>
+											<div class="font-mono text-xs text-base-content/50">{category.slug}</div>
+										</td>
+										<td>
+											<input
+												type="checkbox"
+												class="checkbox checkbox-sm checkbox-primary"
+												checked={permissionDraft[category.slug]?.canRead}
+												onchange={(e) =>
+													setPermission(category.slug, 'canRead', e.currentTarget.checked)}
+											/>
+										</td>
+										<td>
+											<input
+												type="checkbox"
+												class="checkbox checkbox-sm checkbox-primary"
+												checked={permissionDraft[category.slug]?.canCreate}
+												onchange={(e) =>
+													setPermission(category.slug, 'canCreate', e.currentTarget.checked)}
+											/>
+										</td>
+										<td>
+											<input
+												type="checkbox"
+												class="checkbox checkbox-sm checkbox-primary"
+												checked={permissionDraft[category.slug]?.canUpdate}
+												onchange={(e) =>
+													setPermission(category.slug, 'canUpdate', e.currentTarget.checked)}
+											/>
+										</td>
+										<td>
+											<input
+												type="checkbox"
+												class="checkbox checkbox-sm checkbox-primary"
+												checked={permissionDraft[category.slug]?.canDelete}
+												onchange={(e) =>
+													setPermission(category.slug, 'canDelete', e.currentTarget.checked)}
+											/>
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{:else}
+					<OfflinePlaceholder {t} />
+				{/if}
+
+				{#if online.online}
+					<button
+						class="btn btn-primary btn-sm"
+						onclick={savePermissions}
+						disabled={saving || !activeGroupSlug || !hasDirty}
+					>
+						{saving ? t.common.saving : permissionsT.savePermissions}
+					</button>
+				{/if}
+			</div>
 		</div>
-	</div>
+	</GesturePageLayout>
 </DualColumnLayout>

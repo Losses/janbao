@@ -1,4 +1,6 @@
 <script lang="ts">
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import AdminMenuPanel from '$lib/components/panels/AdminMenuPanel.svelte';
 	import { onMount, type Component } from 'svelte';
 	import { goto } from '$app/navigation';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
@@ -306,217 +308,227 @@
 	{/if}
 {/snippet}
 
+{#snippet leftPanel()}
+	{#if user}
+		<AdminMenuPanel {user} {t} lang={data.lang} />
+	{/if}
+{/snippet}
+
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-6">
-		<!-- Header and Dropdown Selection -->
-		<div class="flex items-center justify-between border-b border-base-300 pb-4">
-			<h1 class="page-title">{adminT['stats'] || 'Statistics'}</h1>
+	<GesturePageLayout left={leftPanel} leftHref="/admin" fallbackRoute="/admin">
+		<div class="space-y-6">
+			<!-- Header and Dropdown Selection -->
+			<div class="flex items-center justify-between border-b border-base-300 pb-4">
+				<h1 class="page-title">{adminT['stats'] || 'Statistics'}</h1>
 
-			<div class="flex items-center gap-2">
-				<select
-					class="select select-bordered select-sm w-fit"
-					value={data.range || 'all'}
-					aria-label="Time Range"
-					onchange={(e) =>
-						goto(`/admin/stats?interval=${data.interval}&range=${e.currentTarget.value}`)}
-				>
-					<option value="2y">{adminT['range2y'] || 'Past 2 Years'}</option>
-					<option value="1y">{adminT['range1y'] || 'Past 1 Year'}</option>
-					<option value="6m">{adminT['range6m'] || 'Past 6 Months'}</option>
-					<option value="3m">{adminT['range3m'] || 'Past 3 Months'}</option>
-					<option value="current_month">{adminT['rangeCurrentMonth'] || 'This Month'}</option>
-					<option value="all">{adminT['rangeAll'] || 'All Time'}</option>
-				</select>
-
-				<select
-					class="select select-bordered select-sm w-fit"
-					value={data.interval}
-					aria-label={adminT['stats']}
-					onchange={(e) =>
-						goto(`/admin/stats?interval=${e.currentTarget.value}&range=${data.range || 'all'}`)}
-				>
-					<option value="year">{adminT['byYear']}</option>
-					<option value="month">{adminT['byMonth']}</option>
-					<option value="day">{adminT['byDay']}</option>
-				</select>
-			</div>
-		</div>
-
-		<div class="card card-bordered border-base-300 bg-base-100 p-5 space-y-4">
-			{#if selectedRangeText}
-				<div class="flex justify-end">
-					<span
-						class="badge badge-sm badge-outline font-mono border-base-300 text-base-content/80 p-2"
+				<div class="flex items-center gap-2">
+					<select
+						class="select select-bordered select-sm w-fit"
+						value={data.range || 'all'}
+						aria-label="Time Range"
+						onchange={(e) =>
+							goto(`/admin/stats?interval=${data.interval}&range=${e.currentTarget.value}`)}
 					>
-						{selectedRangeText}
-					</span>
-				</div>
-			{/if}
+						<option value="2y">{adminT['range2y'] || 'Past 2 Years'}</option>
+						<option value="1y">{adminT['range1y'] || 'Past 1 Year'}</option>
+						<option value="6m">{adminT['range6m'] || 'Past 6 Months'}</option>
+						<option value="3m">{adminT['range3m'] || 'Past 3 Months'}</option>
+						<option value="current_month">{adminT['rangeCurrentMonth'] || 'This Month'}</option>
+						<option value="all">{adminT['rangeAll'] || 'All Time'}</option>
+					</select>
 
-			<!-- Main LayerCake Chart -->
-			<div class="h-60 w-full relative">
-				{#if mounted && ClientChart}
-					{#if data.timeline && data.timeline.length > 0}
-						<ClientChart timeline={displayTimeline} {yAccessor} />
+					<select
+						class="select select-bordered select-sm w-fit"
+						value={data.interval}
+						aria-label={adminT['stats']}
+						onchange={(e) =>
+							goto(`/admin/stats?interval=${e.currentTarget.value}&range=${data.range || 'all'}`)}
+					>
+						<option value="year">{adminT['byYear']}</option>
+						<option value="month">{adminT['byMonth']}</option>
+						<option value="day">{adminT['byDay']}</option>
+					</select>
+				</div>
+			</div>
+
+			<div class="card card-bordered border-base-300 bg-base-100 p-5 space-y-4">
+				{#if selectedRangeText}
+					<div class="flex justify-end">
+						<span
+							class="badge badge-sm badge-outline font-mono border-base-300 text-base-content/80 p-2"
+						>
+							{selectedRangeText}
+						</span>
+					</div>
+				{/if}
+
+				<!-- Main LayerCake Chart -->
+				<div class="h-60 w-full relative">
+					{#if mounted && ClientChart}
+						{#if data.timeline && data.timeline.length > 0}
+							<ClientChart timeline={displayTimeline} {yAccessor} />
+						{:else}
+							<div
+								class="flex h-full w-full items-center justify-center text-sm text-base-content/50"
+							>
+								No data available
+							</div>
+						{/if}
 					{:else}
 						<div
 							class="flex h-full w-full items-center justify-center text-sm text-base-content/50"
 						>
-							No data available
+							<span class="loading loading-spinner loading-md"></span>
 						</div>
 					{/if}
+				</div>
+
+				<!-- Draggable Brush Range Selector Slider -->
+				<div class="space-y-1">
+					<div class="text-xs text-base-content/50 font-medium px-1">
+						{adminT['dateRange'] || 'Drag handles or selection area to select time window'}
+					</div>
+					<div
+						class="relative h-14 w-full bg-base-200 border border-base-300 rounded-box select-none touch-none"
+						bind:this={sliderEl}
+					>
+						<!-- Sparkline timeline background of total activities -->
+						<svg
+							class="absolute inset-0 w-full h-full pointer-events-none opacity-20 rounded-box overflow-hidden"
+							preserveAspectRatio="none"
+						>
+							{#if mounted && data.timeline && data.timeline.length > 0}
+								{@const sampled = downsampleTimelinePoints(data.timeline, 120)}
+								{@const maxVal = Math.max(...sampled.map((d) => d.discussions + d.replies), 1)}
+								{@const count = sampled.length}
+								{#each sampled as pt, idx (pt.date)}
+									{@const w = 100 / count}
+									{@const x = idx * w}
+									{@const h = ((pt.discussions + pt.replies) / maxVal) * 80}
+									{@const y = 100 - h}
+									<rect
+										x="{x}%"
+										y="{y}%"
+										width="calc({w}% - 0.5px)"
+										height="{h}%"
+										class="fill-base-content"
+									/>
+								{/each}
+							{/if}
+						</svg>
+
+						<div
+							class="absolute top-0 bottom-0 bg-primary/10 border-x border-primary cursor-grab active:cursor-grabbing flex items-center justify-between"
+							style="left: {left * 100}%; right: {(1 - right) * 100}%"
+							onmousedown={handleMiddleMouseDown}
+							ontouchstart={handleMiddleTouchStart}
+							role="slider"
+							tabindex="0"
+							aria-label="Selected range window"
+							aria-valuenow={Math.round(left * 100)}
+							aria-valuemin={0}
+							aria-valuemax={100}
+						>
+							<!-- Left handle inside the block (GitHub style) -->
+							<div
+								class="absolute left-0 top-0 bottom-0 w-2.5 -ml-1.5 bg-neutral border border-neutral-content/20 rounded-btn cursor-ew-resize flex items-center justify-center z-10"
+								onmousedown={handleLeftMouseDown}
+								ontouchstart={handleLeftTouchStart}
+								role="button"
+								aria-label="Left slider handle"
+								tabindex="0"
+							>
+								<div class="w-[1px] h-3 bg-neutral-content/40"></div>
+								<div class="absolute -inset-y-2 -inset-x-4"></div>
+							</div>
+
+							<!-- Right handle inside the block (GitHub style) -->
+							<div
+								class="absolute right-0 top-0 bottom-0 w-2.5 -mr-1.5 bg-neutral border border-neutral-content/20 rounded-btn cursor-ew-resize flex items-center justify-center z-10"
+								onmousedown={handleRightMouseDown}
+								ontouchstart={handleRightTouchStart}
+								role="button"
+								aria-label="Right slider handle"
+								tabindex="0"
+							>
+								<div class="w-[1px] h-3 bg-neutral-content/40"></div>
+								<div class="absolute -inset-y-2 -inset-x-4"></div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<!-- Legend of stack colors -->
+				<div
+					class="flex items-center gap-4 text-xs font-medium text-base-content/70 pt-2 border-t border-base-200"
+				>
+					<div class="flex items-center gap-1.5">
+						<div class="w-3 h-3 bg-primary/75 rounded-sm"></div>
+						<span>{adminT['discussions'] || 'Discussions'}</span>
+					</div>
+					<div class="flex items-center gap-1.5">
+						<div class="w-3 h-3 bg-secondary/75 rounded-sm"></div>
+						<span>{adminT['replies'] || 'Replies'}</span>
+					</div>
+				</div>
+			</div>
+
+			<!-- Top Contributors Section (GitHub Contributors Style layout) -->
+			<div class="space-y-4">
+				{#if contributors && contributors.length > 0}
+					<!-- Grid layout: 2 columns in larger screens -->
+					<div
+						class="grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200"
+						class:opacity-50={loadingContributors}
+					>
+						{#each contributors as c (c.id)}
+							{@const profileSlug = generateSlug(c.username)}
+							<div
+								class="card card-bordered border-base-300 bg-base-100 hover:bg-base-200/20 transition-colors rounded-none"
+							>
+								<div class="card-body p-4 gap-3">
+									<!-- Contributor header detail: Left Avatar, Right Info -->
+									<div class="flex items-center gap-3">
+										<a href="/profile/{c.id}/{profileSlug}">
+											<Avatar
+												userId={c.id}
+												avatarFileId={c.avatarFileId}
+												displayName={c.displayName}
+												size="md"
+											/>
+										</a>
+										<div class="min-w-0 flex-1">
+											<!-- Top: Nickname -->
+											<h3 class="font-bold text-sm text-base-content hover:text-primary truncate">
+												<a href="/profile/{c.id}/{profileSlug}">{c.displayName}</a>
+											</h3>
+											<!-- Bottom: P & R Contributions -->
+											<p class="text-xs text-base-content/60 font-mono">
+												{c.discussionsCount} P / {c.repliesCount} R
+											</p>
+										</div>
+									</div>
+
+									<!-- Bottom: Line Chart -->
+									<div class="h-10 w-full mt-1 border-t border-base-200/50 pt-2 flex items-end">
+										{#if mounted}
+											<ContributorLineChart timeline={c.timeline} />
+										{:else}
+											<div class="w-full h-8 bg-base-200/50 animate-pulse rounded-box"></div>
+										{/if}
+									</div>
+								</div>
+							</div>
+						{/each}
+					</div>
 				{:else}
-					<div class="flex h-full w-full items-center justify-center text-sm text-base-content/50">
-						<span class="loading loading-spinner loading-md"></span>
+					<div
+						class="card card-bordered border-base-300 bg-base-100 p-8 text-center text-sm text-base-content/50"
+					>
+						No active contributors found in this time range.
 					</div>
 				{/if}
 			</div>
-
-			<!-- Draggable Brush Range Selector Slider -->
-			<div class="space-y-1">
-				<div class="text-xs text-base-content/50 font-medium px-1">
-					{adminT['dateRange'] || 'Drag handles or selection area to select time window'}
-				</div>
-				<div
-					class="relative h-14 w-full bg-base-200 border border-base-300 rounded-box select-none touch-none"
-					bind:this={sliderEl}
-				>
-					<!-- Sparkline timeline background of total activities -->
-					<svg
-						class="absolute inset-0 w-full h-full pointer-events-none opacity-20 rounded-box overflow-hidden"
-						preserveAspectRatio="none"
-					>
-						{#if mounted && data.timeline && data.timeline.length > 0}
-							{@const sampled = downsampleTimelinePoints(data.timeline, 120)}
-							{@const maxVal = Math.max(...sampled.map((d) => d.discussions + d.replies), 1)}
-							{@const count = sampled.length}
-							{#each sampled as pt, idx (pt.date)}
-								{@const w = 100 / count}
-								{@const x = idx * w}
-								{@const h = ((pt.discussions + pt.replies) / maxVal) * 80}
-								{@const y = 100 - h}
-								<rect
-									x="{x}%"
-									y="{y}%"
-									width="calc({w}% - 0.5px)"
-									height="{h}%"
-									class="fill-base-content"
-								/>
-							{/each}
-						{/if}
-					</svg>
-
-					<div
-						class="absolute top-0 bottom-0 bg-primary/10 border-x border-primary cursor-grab active:cursor-grabbing flex items-center justify-between"
-						style="left: {left * 100}%; right: {(1 - right) * 100}%"
-						onmousedown={handleMiddleMouseDown}
-						ontouchstart={handleMiddleTouchStart}
-						role="slider"
-						tabindex="0"
-						aria-label="Selected range window"
-						aria-valuenow={Math.round(left * 100)}
-						aria-valuemin={0}
-						aria-valuemax={100}
-					>
-						<!-- Left handle inside the block (GitHub style) -->
-						<div
-							class="absolute left-0 top-0 bottom-0 w-2.5 -ml-1.5 bg-neutral border border-neutral-content/20 rounded-btn cursor-ew-resize flex items-center justify-center z-10"
-							onmousedown={handleLeftMouseDown}
-							ontouchstart={handleLeftTouchStart}
-							role="button"
-							aria-label="Left slider handle"
-							tabindex="0"
-						>
-							<div class="w-[1px] h-3 bg-neutral-content/40"></div>
-							<div class="absolute -inset-y-2 -inset-x-4"></div>
-						</div>
-
-						<!-- Right handle inside the block (GitHub style) -->
-						<div
-							class="absolute right-0 top-0 bottom-0 w-2.5 -mr-1.5 bg-neutral border border-neutral-content/20 rounded-btn cursor-ew-resize flex items-center justify-center z-10"
-							onmousedown={handleRightMouseDown}
-							ontouchstart={handleRightTouchStart}
-							role="button"
-							aria-label="Right slider handle"
-							tabindex="0"
-						>
-							<div class="w-[1px] h-3 bg-neutral-content/40"></div>
-							<div class="absolute -inset-y-2 -inset-x-4"></div>
-						</div>
-					</div>
-				</div>
-			</div>
-
-			<!-- Legend of stack colors -->
-			<div
-				class="flex items-center gap-4 text-xs font-medium text-base-content/70 pt-2 border-t border-base-200"
-			>
-				<div class="flex items-center gap-1.5">
-					<div class="w-3 h-3 bg-primary/75 rounded-sm"></div>
-					<span>{adminT['discussions'] || 'Discussions'}</span>
-				</div>
-				<div class="flex items-center gap-1.5">
-					<div class="w-3 h-3 bg-secondary/75 rounded-sm"></div>
-					<span>{adminT['replies'] || 'Replies'}</span>
-				</div>
-			</div>
 		</div>
-
-		<!-- Top Contributors Section (GitHub Contributors Style layout) -->
-		<div class="space-y-4">
-			{#if contributors && contributors.length > 0}
-				<!-- Grid layout: 2 columns in larger screens -->
-				<div
-					class="grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200"
-					class:opacity-50={loadingContributors}
-				>
-					{#each contributors as c (c.id)}
-						{@const profileSlug = generateSlug(c.username)}
-						<div
-							class="card card-bordered border-base-300 bg-base-100 hover:bg-base-200/20 transition-colors rounded-none"
-						>
-							<div class="card-body p-4 gap-3">
-								<!-- Contributor header detail: Left Avatar, Right Info -->
-								<div class="flex items-center gap-3">
-									<a href="/profile/{c.id}/{profileSlug}">
-										<Avatar
-											userId={c.id}
-											avatarFileId={c.avatarFileId}
-											displayName={c.displayName}
-											size="md"
-										/>
-									</a>
-									<div class="min-w-0 flex-1">
-										<!-- Top: Nickname -->
-										<h3 class="font-bold text-sm text-base-content hover:text-primary truncate">
-											<a href="/profile/{c.id}/{profileSlug}">{c.displayName}</a>
-										</h3>
-										<!-- Bottom: P & R Contributions -->
-										<p class="text-xs text-base-content/60 font-mono">
-											{c.discussionsCount} P / {c.repliesCount} R
-										</p>
-									</div>
-								</div>
-
-								<!-- Bottom: Line Chart -->
-								<div class="h-10 w-full mt-1 border-t border-base-200/50 pt-2 flex items-end">
-									{#if mounted}
-										<ContributorLineChart timeline={c.timeline} />
-									{:else}
-										<div class="w-full h-8 bg-base-200/50 animate-pulse rounded-box"></div>
-									{/if}
-								</div>
-							</div>
-						</div>
-					{/each}
-				</div>
-			{:else}
-				<div
-					class="card card-bordered border-base-300 bg-base-100 p-8 text-center text-sm text-base-content/50"
-				>
-					No active contributors found in this time range.
-				</div>
-			{/if}
-		</div>
-	</div>
+	</GesturePageLayout>
 </DualColumnLayout>

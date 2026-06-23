@@ -1,4 +1,6 @@
 <script lang="ts">
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import SettingsMenuPanel from '$lib/components/panels/SettingsMenuPanel.svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
 	import PageTitle from '$lib/components/molecules/PageTitle.svelte';
@@ -102,54 +104,66 @@
 	{/if}
 {/snippet}
 
+{#snippet leftPanel()}
+	{#if user}
+		<SettingsMenuPanel {user} {t} lang={data.lang} />
+	{/if}
+{/snippet}
+
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-3">
-		<PageTitle title={profileT.avatar} />
-
-		{#if message}
-			<div
-				class="alert {message.type === 'success' ? 'alert-primary' : 'alert-warning'}"
-				role="alert"
-			>
-				{message.text}
-			</div>
-		{/if}
-
+	<GesturePageLayout
+		left={leftPanel}
+		leftHref="/profile/settings"
+		fallbackRoute="/profile/settings"
+	>
 		<div class="space-y-3">
-			<!-- Current Avatar Preview -->
-			<div class="flex items-center gap-4">
-				<Avatar
-					userId={user?.id ?? null}
-					{avatarFileId}
-					displayName={user?.displayName || '?'}
-					size="lg"
-				/>
-				<div>
-					<p class="font-medium text-base-content">{profileT.currentAvatar}</p>
-					<p class="text-sm text-base-content/50">
-						{profileT.avatarRequirements}
-					</p>
+			<PageTitle title={profileT.avatar} />
+
+			{#if message}
+				<div
+					class="alert {message.type === 'success' ? 'alert-primary' : 'alert-warning'}"
+					role="alert"
+				>
+					{message.text}
 				</div>
-			</div>
+			{/if}
 
-			<!-- Upload Form -->
-			<form onsubmit={handleSubmit}>
-				<fieldset disabled={!online.online} class="space-y-4">
-					<FileInput
-						id="avatar-file"
-						label={profileT.selectFile}
-						placeholder={t.upload.noFile}
-						accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp"
-						bind:inputEl={fileInput}
+			<div class="space-y-3">
+				<!-- Current Avatar Preview -->
+				<div class="flex items-center gap-4">
+					<Avatar
+						userId={user?.id ?? null}
+						{avatarFileId}
+						displayName={user?.displayName || '?'}
+						size="lg"
 					/>
-
-					<div class="pt-2">
-						<button type="submit" class="btn btn-primary" disabled={saving}>
-							{saving ? t.common.saving : profileT.uploadAvatar}
-						</button>
+					<div>
+						<p class="font-medium text-base-content">{profileT.currentAvatar}</p>
+						<p class="text-sm text-base-content/50">
+							{profileT.avatarRequirements}
+						</p>
 					</div>
-				</fieldset>
-			</form>
+				</div>
+
+				<!-- Upload Form -->
+				<form onsubmit={handleSubmit}>
+					<fieldset disabled={!online.online} class="space-y-4">
+						<FileInput
+							id="avatar-file"
+							label={profileT.selectFile}
+							placeholder={t.upload.noFile}
+							accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp"
+							bind:inputEl={fileInput}
+						/>
+
+						<div class="pt-2">
+							<button type="submit" class="btn btn-primary" disabled={saving}>
+								{saving ? t.common.saving : profileT.uploadAvatar}
+							</button>
+						</div>
+					</fieldset>
+				</form>
+			</div>
 		</div>
-	</div>
+	</GesturePageLayout>
 </DualColumnLayout>

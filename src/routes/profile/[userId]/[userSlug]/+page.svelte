@@ -1,4 +1,6 @@
 <script lang="ts">
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import ProfileMenuPanel from '$lib/components/panels/ProfileMenuPanel.svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import ProfileHeader from '$lib/components/molecules/ProfileHeader.svelte';
@@ -83,67 +85,79 @@
 	/>
 {/snippet}
 
+{#snippet leftPanel()}
+	{#if user && targetUser && targetUser.id === user.id}
+		<ProfileMenuPanel {user} {t} lang={data.lang} />
+	{/if}
+{/snippet}
+
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-3">
-		<!-- Profile Header -->
-		<ProfileHeader
-			{targetUser}
-			{invitedBy}
-			email={headerEmail}
-			{showLastActive}
-			canMessage={!isOwner && !!user && targetUser.id !== 0}
-			{t}
-		/>
+	<GesturePageLayout
+		left={targetUser && user && targetUser.id === user.id ? leftPanel : undefined}
+		leftHref={targetUser && user && targetUser.id === user.id ? '/profile' : undefined}
+		fallbackRoute="/"
+	>
+		<div class="space-y-3">
+			<!-- Profile Header -->
+			<ProfileHeader
+				{targetUser}
+				{invitedBy}
+				email={headerEmail}
+				{showLastActive}
+				canMessage={!isOwner && !!user && targetUser.id !== 0}
+				{t}
+			/>
 
-		<!-- Directed/Normal Activity Composer (if logged in) -->
-		{#if user}
-			<div>
-				<p class="text-sm text-base-content/70 mb-2">
-					{#if isOwner}
-						{profileT.postNormalActivity}
-					{:else}
-						<span class="inline-flex items-center gap-1 flex-wrap">
-							{profileT.postToProfile}
-							<Icon path={mdiArrowRight} size={16} class="text-base-content/60" />
-							{displayTargetUser}
-						</span>
-					{/if}
-				</p>
-				<LexicalEditor
-					initialContent={data.activityDraft}
-					placeholder={t.editor.placeholderActivity}
-					contextType="activity"
-					contextId={targetUser.id}
-					{t}
-					disableHeadings={true}
-					onContentChange={handleEditorChange}
-					onSubmit={submitDirectedActivity}
-				/>
-				<div class="flex justify-end mt-3">
-					<button
-						class="btn btn-primary btn-sm"
-						onclick={submitDirectedActivity}
-						disabled={submitting || !editorContent.trim() || !online.online}
-					>
-						{submitting ? t.common.saving : t.common.submit}
-					</button>
+			<!-- Directed/Normal Activity Composer (if logged in) -->
+			{#if user}
+				<div>
+					<p class="text-sm text-base-content/70 mb-2">
+						{#if isOwner}
+							{profileT.postNormalActivity}
+						{:else}
+							<span class="inline-flex items-center gap-1 flex-wrap">
+								{profileT.postToProfile}
+								<Icon path={mdiArrowRight} size={16} class="text-base-content/60" />
+								{displayTargetUser}
+							</span>
+						{/if}
+					</p>
+					<LexicalEditor
+						initialContent={data.activityDraft}
+						placeholder={t.editor.placeholderActivity}
+						contextType="activity"
+						contextId={targetUser.id}
+						{t}
+						disableHeadings={true}
+						onContentChange={handleEditorChange}
+						onSubmit={submitDirectedActivity}
+					/>
+					<div class="flex justify-end mt-3">
+						<button
+							class="btn btn-primary btn-sm"
+							onclick={submitDirectedActivity}
+							disabled={submitting || !editorContent.trim() || !online.online}
+						>
+							{submitting ? t.common.saving : t.common.submit}
+						</button>
+					</div>
 				</div>
-			</div>
-		{/if}
+			{/if}
 
-		<!-- Activities Stream -->
-		{#if activityList.length === 0}
-			<EmptyState message={t.common.noResults} bordered={false} />
-		{:else}
-			<div class="overflow-hidden">
-				<ActivityList
-					items={activityList}
-					currentUserId={user?.id}
-					isAdmin={user?.groupSlug === 'admin'}
-					mentionedUsers={data.mentionedUsers}
-					{t}
-				/>
-			</div>
-		{/if}
-	</div>
+			<!-- Activities Stream -->
+			{#if activityList.length === 0}
+				<EmptyState message={t.common.noResults} bordered={false} />
+			{:else}
+				<div class="overflow-hidden">
+					<ActivityList
+						items={activityList}
+						currentUserId={user?.id}
+						isAdmin={user?.groupSlug === 'admin'}
+						mentionedUsers={data.mentionedUsers}
+						{t}
+					/>
+				</div>
+			{/if}
+		</div>
+	</GesturePageLayout>
 </DualColumnLayout>

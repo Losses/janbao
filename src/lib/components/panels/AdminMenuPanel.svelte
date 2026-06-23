@@ -1,14 +1,8 @@
+<!-- src/lib/components/panels/AdminMenuPanel.svelte -->
 <script lang="ts">
-	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
-	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
-	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
-	import AdminSidebar from '$lib/components/molecules/AdminSidebar.svelte';
 	import DirectoryGrid, {
 		type DirectoryGroup
 	} from '$lib/components/molecules/DirectoryGrid.svelte';
-	import PageTitle from '$lib/components/molecules/PageTitle.svelte';
-	import { formatTitle } from '$lib/utils/title';
 	import {
 		mdiAccountGroup,
 		mdiShieldLockOutline,
@@ -17,28 +11,19 @@
 		mdiWrenchOutline,
 		mdiChartBar
 	} from '@mdi/js';
-	import type { PageData } from './$types';
+	import type { UserInfoSummary } from '$lib/types/api';
+	import type { TranslationDict } from '$lib/types/translation';
 
-	interface PageProps {
-		data: PageData;
+	interface Props {
+		user: UserInfoSummary;
+		t: TranslationDict;
+		lang: string;
 	}
 
-	let { data }: PageProps = $props();
+	let { user, t, lang }: Props = $props();
 
-	const t = $derived(data.t);
 	const adminT = $derived(t.admin);
-	const user = $derived(data.user);
-
-	const isZh = $derived(data.lang === 'zh-CN');
-
-	// Client-side desktop check: redirect to user groups if the screen is desktop size
-	onMount(() => {
-		const MOBILE_BREAKPOINT = '(max-width: 767px)';
-		const mq = window.matchMedia(MOBILE_BREAKPOINT);
-		if (!mq.matches) {
-			void goto('/admin/user-groups', { replaceState: true });
-		}
-	});
+	const isZh = $derived(lang === 'zh-CN');
 
 	const groups = $derived<DirectoryGroup[]>(
 		user
@@ -93,21 +78,6 @@
 	);
 </script>
 
-<svelte:head>
-	<title>{formatTitle(adminT['title'] || 'Admin')}</title>
-</svelte:head>
-
-{#snippet sidebar()}
-	{#if user}
-		<AdminSidebar {user} {t} activeItem="" />
-	{/if}
-{/snippet}
-
-<DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout fallbackRoute="/">
-		<div class="space-y-4">
-			<PageTitle title={adminT['title'] || 'Admin'} />
-			<DirectoryGrid {groups} />
-		</div>
-	</GesturePageLayout>
-</DualColumnLayout>
+<div class="space-y-4">
+	<DirectoryGrid {groups} />
+</div>

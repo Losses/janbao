@@ -1,4 +1,6 @@
 <script lang="ts">
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import SettingsMenuPanel from '$lib/components/panels/SettingsMenuPanel.svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
 	import PageTitle from '$lib/components/molecules/PageTitle.svelte';
@@ -91,86 +93,103 @@
 	<SettingsSidebar {user} {t} activeItem="editAccount" />
 {/snippet}
 
+{#snippet leftPanel()}
+	{#if user}
+		<SettingsMenuPanel {user} {t} lang={data.lang} />
+	{/if}
+{/snippet}
+
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-3">
-		<PageTitle title={profileT.editAccount} />
+	<GesturePageLayout
+		left={leftPanel}
+		leftHref="/profile/settings"
+		fallbackRoute="/profile/settings"
+	>
+		<div class="space-y-3">
+			<PageTitle title={profileT.editAccount} />
 
-		{#if message}
-			<div
-				class="alert {message.type === 'success' ? 'alert-primary' : 'alert-warning'}"
-				role="alert"
-			>
-				{message.text}
-			</div>
-		{/if}
-
-		<form onsubmit={handleSubmit}>
-			<fieldset disabled={!online.online} class="space-y-4">
-				<FormField
-					id="username"
-					label={t.auth.username}
-					bind:value={username}
-					disabled={!allowSlugChange || !isAdmin}
-					error={username && !isValidUsername(username) ? t.auth.invalidUsername : ''}
-					hintId={allowSlugChange && !isAdmin ? 'username-hint' : undefined}
+			{#if message}
+				<div
+					class="alert {message.type === 'success' ? 'alert-primary' : 'alert-warning'}"
+					role="alert"
 				>
-					{#snippet hint()}
-						{#if allowSlugChange && !isAdmin}
-							<span class="block mt-1.5 text-xs text-base-content/50">
-								{profileT.usernameAdminOnly}
-							</span>
-						{/if}
-					{/snippet}
-				</FormField>
-
-				<FormField id="displayName" label={t.auth.displayName} bind:value={displayName} required />
-
-				<FormField
-					id="bio"
-					label={t.auth.bio}
-					bind:value={bio}
-					as="textarea"
-					rows={2}
-					maxlength={MAX_BIO_LENGTH}
-				>
-					{#snippet hint()}
-						<span class="block mt-1.5 text-xs text-base-content/50">
-							{bio.length}/{MAX_BIO_LENGTH}
-						</span>
-					{/snippet}
-				</FormField>
-
-				<FormField id="email" type="email" label={t.auth.email} bind:value={email} required />
-
-				<div class="form-control">
-					<label class="label cursor-pointer justify-start gap-3" for="showEmail">
-						<input
-							id="showEmail"
-							type="checkbox"
-							class="checkbox checkbox-sm"
-							bind:checked={showEmail}
-						/>
-						<span class="label-text">{profileT.showEmail}</span>
-					</label>
+					{message.text}
 				</div>
+			{/if}
 
-				<Field id="language" label={profileT.language}>
-					<select
-						id="language"
-						class="select select-bordered w-full"
-						bind:value={languagePreference}
+			<form onsubmit={handleSubmit}>
+				<fieldset disabled={!online.online} class="space-y-4">
+					<FormField
+						id="username"
+						label={t.auth.username}
+						bind:value={username}
+						disabled={!allowSlugChange || !isAdmin}
+						error={username && !isValidUsername(username) ? t.auth.invalidUsername : ''}
+						hintId={allowSlugChange && !isAdmin ? 'username-hint' : undefined}
 					>
-						<option value="en">{t.profile.languageEnglish}</option>
-						<option value="zh-CN">{t.profile.languageChinese}</option>
-					</select>
-				</Field>
+						{#snippet hint()}
+							{#if allowSlugChange && !isAdmin}
+								<span class="block mt-1.5 text-xs text-base-content/50">
+									{profileT.usernameAdminOnly}
+								</span>
+							{/if}
+						{/snippet}
+					</FormField>
 
-				<div class="pt-2">
-					<button type="submit" class="btn btn-primary" disabled={saving}>
-						{saving ? t.common.saving : t.common.submit}
-					</button>
-				</div>
-			</fieldset>
-		</form>
-	</div>
+					<FormField
+						id="displayName"
+						label={t.auth.displayName}
+						bind:value={displayName}
+						required
+					/>
+
+					<FormField
+						id="bio"
+						label={t.auth.bio}
+						bind:value={bio}
+						as="textarea"
+						rows={2}
+						maxlength={MAX_BIO_LENGTH}
+					>
+						{#snippet hint()}
+							<span class="block mt-1.5 text-xs text-base-content/50">
+								{bio.length}/{MAX_BIO_LENGTH}
+							</span>
+						{/snippet}
+					</FormField>
+
+					<FormField id="email" type="email" label={t.auth.email} bind:value={email} required />
+
+					<div class="form-control">
+						<label class="label cursor-pointer justify-start gap-3" for="showEmail">
+							<input
+								id="showEmail"
+								type="checkbox"
+								class="checkbox checkbox-sm"
+								bind:checked={showEmail}
+							/>
+							<span class="label-text">{profileT.showEmail}</span>
+						</label>
+					</div>
+
+					<Field id="language" label={profileT.language}>
+						<select
+							id="language"
+							class="select select-bordered w-full"
+							bind:value={languagePreference}
+						>
+							<option value="en">{t.profile.languageEnglish}</option>
+							<option value="zh-CN">{t.profile.languageChinese}</option>
+						</select>
+					</Field>
+
+					<div class="pt-2">
+						<button type="submit" class="btn btn-primary" disabled={saving}>
+							{saving ? t.common.saving : t.common.submit}
+						</button>
+					</div>
+				</fieldset>
+			</form>
+		</div>
+	</GesturePageLayout>
 </DualColumnLayout>

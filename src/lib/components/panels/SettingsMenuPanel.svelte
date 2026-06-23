@@ -1,11 +1,8 @@
+<!-- src/lib/components/panels/SettingsMenuPanel.svelte -->
 <script lang="ts">
-	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
-	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
 	import DirectoryGrid, {
 		type DirectoryGroup
 	} from '$lib/components/molecules/DirectoryGrid.svelte';
-	import PageTitle from '$lib/components/molecules/PageTitle.svelte';
-	import { formatTitle } from '$lib/utils/title';
 	import {
 		mdiAccountEditOutline,
 		mdiLockOutline,
@@ -15,21 +12,19 @@
 		mdiCloudDownloadOutline,
 		mdiFileDocumentEditOutline
 	} from '@mdi/js';
-	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
-	import ProfileMenuPanel from '$lib/components/panels/ProfileMenuPanel.svelte';
-	import type { PageData } from './$types';
+	import type { UserInfoSummary } from '$lib/types/api';
+	import type { TranslationDict } from '$lib/types/translation';
 
-	interface PageProps {
-		data: PageData;
+	interface Props {
+		user: UserInfoSummary;
+		t: TranslationDict;
+		lang: string;
 	}
 
-	let { data }: PageProps = $props();
+	let { user, t, lang }: Props = $props();
 
-	const t = $derived(data.t);
 	const profileT = $derived(t.profile);
-	const user = $derived(data.user);
-
-	const isZh = $derived(data.lang === 'zh-CN');
+	const isZh = $derived(lang === 'zh-CN');
 
 	const groups = $derived<DirectoryGroup[]>(
 		user
@@ -89,27 +84,6 @@
 	);
 </script>
 
-<svelte:head>
-	<title>{formatTitle(profileT['accountSettings'] || 'Settings')}</title>
-</svelte:head>
-
-{#snippet sidebar()}
-	{#if user}
-		<SettingsSidebar {user} {t} activeItem="" />
-	{/if}
-{/snippet}
-
-{#snippet leftPanel()}
-	{#if user}
-		<ProfileMenuPanel {user} {t} lang={data.lang} />
-	{/if}
-{/snippet}
-
-<DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout left={leftPanel} leftHref="/profile" fallbackRoute="/profile">
-		<div class="space-y-4">
-			<PageTitle title={profileT['accountSettings'] || 'Settings'} />
-			<DirectoryGrid {groups} />
-		</div>
-	</GesturePageLayout>
-</DualColumnLayout>
+<div class="space-y-4">
+	<DirectoryGrid {groups} />
+</div>

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import ProfileMenuPanel from '$lib/components/panels/ProfileMenuPanel.svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import ProfileHeader from '$lib/components/molecules/ProfileHeader.svelte';
@@ -71,51 +73,65 @@
 	/>
 {/snippet}
 
+{#snippet leftPanel()}
+	{#if targetUser}
+		<ProfileMenuPanel user={targetUser} {t} lang={data.lang} />
+	{/if}
+{/snippet}
+
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-3">
-		<!-- Profile Header -->
-		<ProfileHeader
-			{targetUser}
-			{invitedBy}
-			email={headerEmail}
-			{showLastActive}
-			canMessage={!isOwner && !!user && targetUser.id !== 0}
-			{t}
-		/>
+	<GesturePageLayout
+		left={leftPanel}
+		leftHref={targetUser && user && targetUser.id === user.id
+			? '/profile'
+			: `/profile/${targetUser.id}/${targetUserSlug}`}
+		fallbackRoute="/profile"
+	>
+		<div class="space-y-3">
+			<!-- Profile Header -->
+			<ProfileHeader
+				{targetUser}
+				{invitedBy}
+				email={headerEmail}
+				{showLastActive}
+				canMessage={!isOwner && !!user && targetUser.id !== 0}
+				{t}
+			/>
 
-		{#if views.length === 0}
-			<EmptyState message={commentT.noComments} />
-		{:else}
-			<div class="bg-base-100 overflow-hidden">
-				<div class="divide-y divide-base-300">
-					{#each views as view (view.comment.id)}
-						<div class="py-4 space-y-2">
-							<LexicalRenderer
-								contentJson={view.comment.contentJson}
-								mentionedUsers={data.mentionedUsers}
-								{t}
-							/>
-							<div class="flex items-center justify-between gap-2 pt-2">
-								<a href={view.href} class="text-xs text-primary hover:underline truncate">
-									{view.contextLabel}
-								</a>
-								<DateComponent
-									value={view.comment.createdAt}
+			{#if views.length === 0}
+				<EmptyState message={commentT.noComments} />
+			{:else}
+				<div class="bg-base-100 overflow-hidden">
+					<div class="divide-y divide-base-300">
+						{#each views as view (view.comment.id)}
+							<div class="py-4 space-y-2">
+								<LexicalRenderer
+									contentJson={view.comment.contentJson}
+									mentionedUsers={data.mentionedUsers}
 									{t}
-									class="text-xs text-base-content/40 flex-shrink-0"
 								/>
+								<div class="flex items-center justify-between gap-2 pt-2">
+									<a href={view.href} class="text-xs text-primary hover:underline truncate">
+										{view.contextLabel}
+									</a>
+									<DateComponent
+										value={view.comment.createdAt}
+										{t}
+										class="text-xs text-base-content/40 flex-shrink-0"
+									/>
+								</div>
 							</div>
-						</div>
-					{/each}
+						{/each}
+					</div>
 				</div>
-			</div>
 
-			<!-- Bottom Paginator -->
-			{#if totalPages > 1}
-				<div class="flex justify-end pt-2">
-					<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
-				</div>
+				<!-- Bottom Paginator -->
+				{#if totalPages > 1}
+					<div class="flex justify-end pt-2">
+						<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+					</div>
+				{/if}
 			{/if}
-		{/if}
-	</div>
+		</div>
+	</GesturePageLayout>
 </DualColumnLayout>

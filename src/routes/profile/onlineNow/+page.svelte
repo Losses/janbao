@@ -1,4 +1,6 @@
 <script lang="ts">
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import SettingsMenuPanel from '$lib/components/panels/SettingsMenuPanel.svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
 	import PageTitle from '$lib/components/molecules/PageTitle.svelte';
@@ -60,31 +62,43 @@
 	{/if}
 {/snippet}
 
+{#snippet leftPanel()}
+	{#if user}
+		<SettingsMenuPanel {user} {t} lang={data.lang} />
+	{/if}
+{/snippet}
+
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-3">
-		<PageTitle title={profileT.stealthSettings} />
+	<GesturePageLayout
+		left={leftPanel}
+		leftHref="/profile/settings"
+		fallbackRoute="/profile/settings"
+	>
+		<div class="space-y-3">
+			<PageTitle title={profileT.stealthSettings} />
 
-		{#if message}
-			<div
-				class="alert {message.type === 'success' ? 'alert-primary' : 'alert-warning'}"
-				role="alert"
-			>
-				{message.text}
+			{#if message}
+				<div
+					class="alert {message.type === 'success' ? 'alert-primary' : 'alert-warning'}"
+					role="alert"
+				>
+					{message.text}
+				</div>
+			{/if}
+
+			<div class="space-y-4">
+				<p class="text-sm text-base-content/70">
+					{profileT.stealthDescription}
+				</p>
+
+				<SettingsToggle
+					label={profileT.stealthMode}
+					description={isStealth ? profileT.stealthActive : profileT.stealthInactive}
+					checked={isStealth}
+					disabled={saving || !online.online}
+					onchange={setStealth}
+				/>
 			</div>
-		{/if}
-
-		<div class="space-y-4">
-			<p class="text-sm text-base-content/70">
-				{profileT.stealthDescription}
-			</p>
-
-			<SettingsToggle
-				label={profileT.stealthMode}
-				description={isStealth ? profileT.stealthActive : profileT.stealthInactive}
-				checked={isStealth}
-				disabled={saving || !online.online}
-				onchange={setStealth}
-			/>
 		</div>
-	</div>
+	</GesturePageLayout>
 </DualColumnLayout>
