@@ -50,6 +50,8 @@
 
 	const isEntering = shouldAnimateEnter();
 	let dragOffset = $state<number | null>(null);
+	let trackEl = $state<HTMLElement | null>(null);
+	let transitionEnabled = $state(false);
 	// svelte-ignore state_referenced_locally
 	let snapIndex = $state(isEntering ? 0 : left ? 1 : 0);
 	const panelCount = $derived((left ? 1 : 0) + 1);
@@ -89,7 +91,7 @@
 			? 'width: 100%; transform: none; display: block;'
 			: dragOffset !== null
 				? `width: ${panelCount * 100}%; transform: translateX(calc(-${ACTIVE * STEP_PERCENT}% + ${dragOffset}px)); transition: none; display: flex; height: 100%;`
-				: `width: ${panelCount * 100}%; transform: translateX(-${snapIndex * STEP_PERCENT}%); display: flex; height: 100%;`
+				: `width: ${panelCount * 100}%; transform: translateX(-${snapIndex * STEP_PERCENT}%); display: flex; height: 100%;${transitionEnabled ? '' : ' transition: none !important;'}`
 	);
 
 	const sectionWidth = $derived(`${100 / panelCount}%`);
@@ -185,11 +187,19 @@
 
 		let enterRaf = 0;
 		if (isEntering && isMobile) {
+			if (trackEl) {
+				// Force layout reflow to register initial style state before transition
+				void trackEl.offsetHeight;
+			}
 			enterRaf = requestAnimationFrame(() => {
 				enterRaf = requestAnimationFrame(() => {
+					transitionEnabled = true;
+					if (trackEl) void trackEl.offsetHeight;
 					snapIndex = ACTIVE;
 				});
 			});
+		} else {
+			transitionEnabled = true;
 		}
 
 		return () => {
@@ -223,6 +233,7 @@
 	use:measureViewport
 >
 	<div
+		bind:this={trackEl}
 		class={isMobile ? 'flex items-start transition-transform duration-200 h-full w-full' : ''}
 		style={trackStyle}
 		ontransitionend={onTrackTransitionEnd}
