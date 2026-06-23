@@ -3,6 +3,7 @@
 	import AdminMenuPanel from '$lib/components/panels/AdminMenuPanel.svelte';
 	import { onMount, type Component } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import AdminSidebar from '$lib/components/molecules/AdminSidebar.svelte';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
@@ -16,6 +17,25 @@
 	interface PageProps {
 		data: PageData;
 	}
+
+	/** Shape of GET /api/admin/stats?interval=&range= (range overview mode). */
+	interface StatsOverviewResponse {
+		timeline: TimelineDataPoint[];
+		contributors: Contributor[];
+		startSec: number;
+		endSec: number;
+	}
+
+	/** Shape of GET /api/admin/stats brush fetch (?interval=&start=&end=). */
+	interface StatsContributorsResponse {
+		contributors: Contributor[];
+	}
+
+	type StatsInterval = 'year' | 'month' | 'day';
+
+	// Skeleton contributor cards mirroring the loaded card so the
+	// skeleton-to-content swap doesn't reflow (tuned via MCP measurement).
+	const SKELETON_CARDS = [0, 1, 2, 3] as const;
 
 	let { data }: PageProps = $props();
 
@@ -36,13 +56,19 @@
 		mounted = true;
 	});
 
+	// interval/range come from the URL (the page is CSR + skeleton; the selects
+	// drive goto(), which changes the URL, which this $effect watches to reload).
+	const interval = $derived(parseInterval(page.url.searchParams.get('interval')));
+	const range = $derived(page.url.searchParams.get('range') || 'all');
+
+	let loaded = $state(false);
+	let timeline = $state<TimelineDataPoint[]>([]);
+
 	// Draggable brush states: left & right positions as percentage values (0 to 1)
 	let left = $state(0);
 	let right = $state(1);
 
-	// svelte-ignore state_referenced_locally
-	/* eslint-disable-next-line svelte/prefer-writable-derived */
-	let contributors = $state<Contributor[]>(data.initialContributors);
+	let contributors = $state<Contributor[]>([]);
 	let loadingContributors = $state(false);
 
 	let sliderEl = $state<HTMLDivElement | null>(null);
@@ -51,37 +77,62 @@
 	let startLeft = 0;
 	let startRight = 0;
 
+	function parseInterval(raw: string | null): StatsInterval {
+		return raw === 'year' || raw === 'day' ? raw : 'month';
+	}
+
+	// Fetch the range overview whenever interval/range change (incl. initial load).
+	// Reads only interval/range; writes timeline/contributors/loaded which it does
+	// not read back, so it cannot loop.
+	async function reload() {
+		try {
+			const res = await fetch(`/api/admin/stats?interval=${interval}&range=${range}`);
+			if (res.ok) {
+				const result = (await res.json()) as StatsOverviewResponse;
+				timeline = result.timeline;
+				contributors = result.contributors;
+			}
+		} catch {
+			// keep existing data
+		}
+		loaded = true;
+	}
+
+	$effect(() => {
+		// eslint-disable-next-line @typescript-eslint/no-unused-expressions
+		interval;
+		// eslint-disable-next-line @typescript-eslint/no-unused-expressions
+		range;
+		void reload();
+	});
+
 	// Reset local state when data changes (e.g. interval or range selector reload)
 	$effect(() => {
 		// eslint-disable-next-line @typescript-eslint/no-unused-expressions
-		data.interval;
+		interval;
 		// eslint-disable-next-line @typescript-eslint/no-unused-expressions
-		data.range;
+		range;
 		left = 0;
 		right = 1;
 	});
 
-	$effect(() => {
-		contributors = data.initialContributors;
-	});
-
 	// Min width percentage of the selected range window (at least 3 data points)
 	const minPercent = $derived(
-		data.timeline.length > 0 ? Math.max(0.02, 3 / data.timeline.length) : 0.05
+		timeline.length > 0 ? Math.max(0.02, 3 / timeline.length) : 0.05
 	);
 
 	// Get active date keys currently enclosed in the [left, right] selection
 	const activeTimelineRange = $derived.by(() => {
-		if (data.timeline.length === 0) return [];
+		if (timeline.length === 0) return [];
 		const startIdx = Math.max(
 			0,
-			Math.min(data.timeline.length - 1, Math.round(left * (data.timeline.length - 1)))
+			Math.min(timeline.length - 1, Math.round(left * (timeline.length - 1)))
 		);
 		const endIdx = Math.max(
 			0,
-			Math.min(data.timeline.length - 1, Math.round(right * (data.timeline.length - 1)))
+			Math.min(timeline.length - 1, Math.round(right * (timeline.length - 1)))
 		);
-		return data.timeline.slice(startIdx, endIdx + 1);
+		return timeline.slice(startIdx, endIdx + 1);
 	});
 
 	const selectedRangeText = $derived.by(() => {
@@ -95,31 +146,31 @@
 
 	// Query top contributors from API for the selected range (debounced)
 	function triggerContributorsFetch(l: number, r: number) {
-		if (data.timeline.length === 0) return;
+		if (timeline.length === 0) return;
 
 		const startIdx = Math.max(
 			0,
-			Math.min(data.timeline.length - 1, Math.round(l * (data.timeline.length - 1)))
+			Math.min(timeline.length - 1, Math.round(l * (timeline.length - 1)))
 		);
 		const endIdx = Math.max(
 			0,
-			Math.min(data.timeline.length - 1, Math.round(r * (data.timeline.length - 1)))
+			Math.min(timeline.length - 1, Math.round(r * (timeline.length - 1)))
 		);
 
-		const startPoint = data.timeline[startIdx];
-		const endPoint = data.timeline[endIdx];
+		const startPoint = timeline[startIdx];
+		const endPoint = timeline[endIdx];
 
-		const startBounds = getIntervalBounds(startPoint.date, data.interval);
-		const endBounds = getIntervalBounds(endPoint.date, data.interval);
+		const startBounds = getIntervalBounds(startPoint.date, interval);
+		const endBounds = getIntervalBounds(endPoint.date, interval);
 
 		clearTimeout(fetchTimeout);
 		fetchTimeout = setTimeout(async () => {
 			loadingContributors = true;
 			try {
 				const res = await fetch(
-					`/api/admin/stats?interval=${data.interval}&start=${startBounds.start}&end=${endBounds.end}`
+					`/api/admin/stats?interval=${interval}&start=${startBounds.start}&end=${endBounds.end}`
 				);
-				const json = (await res.json()) as { contributors: Contributor[] };
+				const json = (await res.json()) as StatsContributorsResponse;
 				if (json.contributors) {
 					contributors = json.contributors;
 				}
@@ -292,7 +343,7 @@
 	}
 
 	const displayTimeline = $derived.by(() => {
-		return downsampleTimelinePoints(data.timeline, 200);
+		return downsampleTimelinePoints(timeline, 200);
 	});
 
 	const yAccessor = (d: TimelineDataPoint) => d.discussions + d.replies;
@@ -324,10 +375,10 @@
 				<div class="flex items-center gap-2">
 					<select
 						class="select select-bordered select-sm w-fit"
-						value={data.range || 'all'}
+						value={range || 'all'}
 						aria-label="Time Range"
 						onchange={(e) =>
-							goto(`/admin/stats?interval=${data.interval}&range=${e.currentTarget.value}`)}
+							goto(`/admin/stats?interval=${interval}&range=${e.currentTarget.value}`)}
 					>
 						<option value="2y">{adminT['range2y'] || 'Past 2 Years'}</option>
 						<option value="1y">{adminT['range1y'] || 'Past 1 Year'}</option>
@@ -339,10 +390,10 @@
 
 					<select
 						class="select select-bordered select-sm w-fit"
-						value={data.interval}
+						value={interval}
 						aria-label={adminT['stats']}
 						onchange={(e) =>
-							goto(`/admin/stats?interval=${e.currentTarget.value}&range=${data.range || 'all'}`)}
+							goto(`/admin/stats?interval=${e.currentTarget.value}&range=${range || 'all'}`)}
 					>
 						<option value="year">{adminT['byYear']}</option>
 						<option value="month">{adminT['byMonth']}</option>
@@ -364,8 +415,8 @@
 
 				<!-- Main LayerCake Chart -->
 				<div class="h-60 w-full relative">
-					{#if mounted && ClientChart}
-						{#if data.timeline && data.timeline.length > 0}
+					{#if loaded && mounted && ClientChart}
+						{#if timeline && timeline.length > 0}
 							<ClientChart timeline={displayTimeline} {yAccessor} />
 						{:else}
 							<div
@@ -375,11 +426,7 @@
 							</div>
 						{/if}
 					{:else}
-						<div
-							class="flex h-full w-full items-center justify-center text-sm text-base-content/50"
-						>
-							<span class="loading loading-spinner loading-md"></span>
-						</div>
+						<div class="skeleton h-full w-full"></div>
 					{/if}
 				</div>
 
@@ -398,8 +445,8 @@
 							class="absolute inset-0 w-full h-full pointer-events-none opacity-20 rounded-box overflow-hidden"
 							preserveAspectRatio="none"
 						>
-							{#if mounted && data.timeline && data.timeline.length > 0}
-								{@const sampled = downsampleTimelinePoints(data.timeline, 120)}
+							{#if mounted && timeline && timeline.length > 0}
+								{@const sampled = downsampleTimelinePoints(timeline, 120)}
 								{@const maxVal = Math.max(...sampled.map((d) => d.discussions + d.replies), 1)}
 								{@const count = sampled.length}
 								{#each sampled as pt, idx (pt.date)}
@@ -476,7 +523,26 @@
 
 			<!-- Top Contributors Section (GitHub Contributors Style layout) -->
 			<div class="space-y-4">
-				{#if contributors && contributors.length > 0}
+				{#if !loaded}
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						{#each SKELETON_CARDS as i (i)}
+							<div class="card card-bordered border-base-300 bg-base-100 rounded-none">
+								<div class="card-body p-4 gap-3">
+									<div class="flex items-center gap-3">
+										<div class="skeleton h-10 w-10 rounded-full"></div>
+										<div class="space-y-1.5 flex-1">
+											<div class="skeleton h-3 w-32"></div>
+											<div class="skeleton h-2 w-20"></div>
+										</div>
+									</div>
+									<div class="h-10 w-full mt-1 border-t border-base-200/50 pt-2 flex items-end">
+										<div class="skeleton h-8 w-full"></div>
+									</div>
+								</div>
+							</div>
+						{/each}
+					</div>
+				{:else if contributors && contributors.length > 0}
 					<!-- Grid layout: 2 columns in larger screens -->
 					<div
 						class="grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200"

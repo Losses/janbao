@@ -14,10 +14,21 @@
 	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import { formatDisplayName } from '$lib/utils/user';
 	import type { PageData } from './$types';
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
+	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
+	import type { DiscussionListItem } from '$lib/server/db/dao/discussions';
 
 	interface PageProps {
 		data: PageData;
 	}
+
+	let { data }: PageProps = $props();
+
+	const listCache = getListCacheStore();
+	const cachedDiscussions = $derived(
+		listCache.home?.discussions as DiscussionListItem[] | undefined
+	);
 
 	interface UrlOptions {
 		scope?: string;
@@ -31,8 +42,6 @@
 	}
 
 	const SCOPES = ['discussions', 'activities', 'messages'];
-
-	let { data }: PageProps = $props();
 
 	const t = $derived(data.t);
 	const tSearch = $derived(t.search);
@@ -95,9 +104,23 @@
 	<!-- empty -->
 {/snippet}
 
+{#snippet leftPanel()}
+	{#if user}
+		<DiscussionsPanel
+			discussions={cachedDiscussions}
+			currentPage={listCache.home?.page ?? 1}
+			totalPages={listCache.home?.totalPages ?? 1}
+			t={t}
+			buildPageUrl={(page) => (page === 1 ? '/' : `/discussions/p${page}`)}
+			paginate={true}
+		/>
+	{/if}
+{/snippet}
+
 <DualColumnLayout {sidebar} {t} {user}>
-	<div class="space-y-3">
-		<h1 class="page-title border-b border-base-300 pb-4">{tSearch.title}</h1>
+	<GesturePageLayout left={leftPanel} leftHref="/" fallbackRoute="/">
+		<div class="space-y-3">
+			<h1 class="page-title border-b border-base-300 pb-4">{tSearch.title}</h1>
 
 		<!-- Scope selector (single-choice) + sort on the right -->
 		<div class="flex flex-wrap items-center gap-2">
@@ -277,5 +300,6 @@
 				</div>
 			{/if}
 		{/if}
-	</div>
+		</div>
+	</GesturePageLayout>
 </DualColumnLayout>

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
 	import AdminMenuPanel from '$lib/components/panels/AdminMenuPanel.svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import AdminSidebar from '$lib/components/molecules/AdminSidebar.svelte';
 	import OfflinePlaceholder from '$lib/components/molecules/OfflinePlaceholder.svelte';
@@ -27,6 +27,17 @@
 		canDelete: boolean;
 	}
 
+	/** Shape of GET /api/admin/category-permissions. */
+	interface CategoryPermissionsResponse {
+		groups: AdminManageableGroupItem[];
+		categories: AdminCategoryItem[];
+		categoryPermissions: AdminCategoryPermissionItem[];
+	}
+
+	// Skeleton row placeholders - count/widths mirror the loaded table so the
+	// skeleton-to-content swap doesn't reflow (tuned via MCP measurement).
+	const SKELETON_ROWS = [0, 1, 2, 3, 4, 5] as const;
+
 	let { data }: PageProps = $props();
 	const online = getOnlineStore();
 
@@ -34,9 +45,11 @@
 	const adminT = $derived(t.admin);
 	const permissionsT = $derived(t.permissions);
 	const user = $derived(data.user);
-	const groups = $derived(data.groups as AdminManageableGroupItem[]);
-	const categories = $derived(data.categories as AdminCategoryItem[]);
-	const categoryPermissions = $derived(data.categoryPermissions as AdminCategoryPermissionItem[]);
+
+	let loaded = $state(false);
+	let groups = $state<AdminManageableGroupItem[]>([]);
+	let categories = $state<AdminCategoryItem[]>([]);
+	let categoryPermissions = $state<AdminCategoryPermissionItem[]>([]);
 	const enabledCategories = $derived(categories.filter((category) => category.disabledAt === null));
 
 	let selectedGroupSlug = $state('');
@@ -51,6 +64,27 @@
 
 	const activeGroupSlug = $derived(overrideGroupSlug || selectedGroupSlug || groups[0]?.slug || '');
 	const hasDirty = $derived(dirtyCategories.length > 0);
+
+	async function reload() {
+		try {
+			const res = await fetch('/api/admin/category-permissions');
+			if (res.ok) {
+				const result = (await res.json()) as CategoryPermissionsResponse;
+				groups = result.groups;
+				categories = result.categories;
+				categoryPermissions = result.categoryPermissions;
+			} else {
+				message = { type: 'error', text: t.common.error };
+			}
+		} catch {
+			message = { type: 'error', text: t.auth.networkError };
+		}
+		loaded = true;
+	}
+
+	onMount(() => {
+		void reload();
+	});
 
 	$effect(() => {
 		if (
@@ -134,7 +168,7 @@
 				message = { type: 'success', text: permissionsT.permissionsSaved };
 				overrideGroupSlug = null;
 				dirtyCategories = [];
-				await invalidateAll();
+				await reload();
 			} else {
 				message = { type: 'error', text: result.error || t.common.error };
 			}
@@ -176,17 +210,48 @@
 			{/if}
 
 			<div class="space-y-3">
-				<select
-					class="select select-bordered select-sm w-full max-w-xs"
-					value={activeGroupSlug}
-					onchange={(e) => (overrideGroupSlug = (e.currentTarget as HTMLSelectElement).value)}
-				>
-					{#each groups as group (group.slug)}
-						<option value={group.slug}>{group.title}</option>
-					{/each}
-				</select>
+				{#if !loaded}
+					<div class="skeleton h-8 w-full max-w-xs"></div>
+				{:else}
+					<select
+						class="select select-bordered select-sm w-full max-w-xs"
+						value={activeGroupSlug}
+						onchange={(e) => (overrideGroupSlug = (e.currentTarget as HTMLSelectElement).value)}
+					>
+						{#each groups as group (group.slug)}
+							<option value={group.slug}>{group.title}</option>
+						{/each}
+					</select>
+				{/if}
 
-				{#if online.online}
+				{#if !loaded}
+					<div class="overflow-x-auto">
+						<table class="table table-sm [&_tr]:border-base-300">
+							<thead>
+								<tr>
+									<th>{permissionsT.category}</th>
+									<th>{permissionsT.canRead}</th>
+									<th>{permissionsT.canCreate}</th>
+									<th>{permissionsT.canUpdate}</th>
+									<th>{permissionsT.canDelete}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each SKELETON_ROWS as i (i)}
+									<tr>
+										<td>
+											<div class="skeleton h-3 w-32 mb-1"></div>
+											<div class="skeleton h-2 w-20"></div>
+										</td>
+										{#each [0, 1, 2, 3] as j (j)}
+											<td><div class="skeleton h-4 w-4 rounded"></div></td>
+										{/each}
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{:else if online.online}
 					<div class="overflow-x-auto">
 						<table class="table table-sm [&_tr]:border-base-300">
 							<thead>
@@ -250,7 +315,7 @@
 					<OfflinePlaceholder {t} />
 				{/if}
 
-				{#if online.online}
+				{#if loaded && online.online}
 					<button
 						class="btn btn-primary btn-sm"
 						onclick={savePermissions}

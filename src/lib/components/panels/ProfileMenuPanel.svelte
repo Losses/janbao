@@ -14,11 +14,13 @@
 		mdiCommentOutline,
 		mdiLogout
 	} from '@mdi/js';
-	import type { UserInfoSummary } from '$lib/types/api';
+	import type { ProfileHeaderUser, UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 
+	type UserData = NonNullable<App.Locals['user']>;
+
 	interface Props {
-		user: UserInfoSummary;
+		user: ProfileHeaderUser | UserData;
 		t: TranslationDict;
 		lang: string;
 	}
@@ -86,6 +88,6 @@
 </script>
 
 <div class="space-y-6">
-	<ProfileHeader targetUser={user} invitedBy={null} email={user.email} showLastActive={true} {t} />
+	<ProfileHeader targetUser={user} invitedBy={null} email={'email' in user ? user.email : null} showLastActive={true} {t} />
 	<DirectoryGrid {groups} />
 </div>

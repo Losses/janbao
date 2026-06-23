@@ -2,7 +2,6 @@
 	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
 	import AdminMenuPanel from '$lib/components/panels/AdminMenuPanel.svelte';
 	import { onMount } from 'svelte';
-	import { invalidateAll } from '$app/navigation';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import AdminSidebar from '$lib/components/molecules/AdminSidebar.svelte';
 	import DateAtom from '$lib/components/atoms/Date.svelte';
@@ -17,13 +16,21 @@
 		data: PageData;
 	}
 
-	/** Shape of the GET /api/admin/backups response, used by the poll loop. */
+	/** Shape of the GET /api/admin/backups response, used by the poll loop and reload. */
 	interface BackupPollResponse {
 		available: boolean;
 		policy: BackupPolicy;
 		backups: BackupListItem[];
 		run: BackupRunStatus | null;
 	}
+
+	// Matches BACKUP_SETTING_DEFAULTS.retentionDays (server-only constant) so the
+	// client has a fallback without importing server code.
+	const RETENTION_DAYS_DEFAULT = 30;
+
+	// Skeleton row placeholders - count/widths mirror the loaded table so the
+	// skeleton-to-content swap doesn't reflow (tuned via MCP measurement).
+	const SKELETON_ROWS = [0, 1, 2] as const;
 
 	const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -33,14 +40,15 @@
 	const t = $derived(data.t);
 	const backupT = $derived(t.backup);
 	const user = $derived(data.user);
-	const available = $derived(data.available);
-	const policy = $derived(data.policy as BackupPolicy);
-	const backups = $derived(data.backups as BackupListItem[]);
-	const retentionDaysDefault = $derived(data.retentionDaysDefault);
 
-	// Editable drafts. Initialized from defaults and re-synced from data.policy
-	// by the effect (mirrors the permissions page's empty-init-then-effect
-	// pattern), so a save → invalidateAll → refreshed policy resets the inputs.
+	let loaded = $state(false);
+	let available = $state(false);
+	let policy = $state<BackupPolicy>({ enabled: false, retentionDays: RETENTION_DAYS_DEFAULT });
+	let backups = $state<BackupListItem[]>([]);
+
+	// Editable drafts. Initialized from defaults and re-synced from policy by the
+	// effect (mirrors the permissions page's empty-init-then-effect pattern), so a
+	// save → reload → refreshed policy resets the inputs.
 	let enabledDraft = $state(false);
 	let retentionDraft = $state(0);
 	let saving = $state(false);
@@ -61,8 +69,36 @@
 		message = { type, text };
 	}
 
+	async function reload() {
+		try {
+			const res = await fetch('/api/admin/backups');
+			if (res.ok) {
+				const result = (await res.json()) as BackupPollResponse;
+				available = result.available;
+				policy = result.policy;
+				backups = result.backups;
+				// If a run is already in progress (e.g. the daily backup started while
+				// the admin was elsewhere), show the running state and poll. Mirrors the
+				// old onMount check, deferred until the status actually arrives.
+				if (!backing && result.run?.state === 'running') {
+					backing = true;
+					void pollBackupStatus();
+				}
+			} else {
+				setMessage('error', t.common.error);
+			}
+		} catch {
+			setMessage('error', t.auth.networkError);
+		}
+		loaded = true;
+	}
+
+	onMount(() => {
+		void reload();
+	});
+
 	async function savePolicy() {
-		const retention = Math.max(1, Math.floor(Number(retentionDraft) || retentionDaysDefault));
+		const retention = Math.max(1, Math.floor(Number(retentionDraft) || RETENTION_DAYS_DEFAULT));
 		saving = true;
 		message = null;
 		try {
@@ -74,7 +110,7 @@
 			const result = (await res.json()) as ApiResult;
 			if (result.success) {
 				setMessage('success', backupT.saved);
-				await invalidateAll();
+				await reload();
 			} else {
 				setMessage('error', result.error || t.common.error);
 			}
@@ -123,7 +159,7 @@
 				const run = data.run;
 				if (run && run.state === 'running') continue; // still uploading
 				// Terminal (succeeded/failed) or status lost on process restart.
-				await invalidateAll();
+				await reload();
 				if (run?.state === 'succeeded') {
 					setMessage('success', backupT.backupCreated);
 				} else {
@@ -136,19 +172,10 @@
 			}
 		}
 		// Deadline exceeded without a terminal state.
-		await invalidateAll();
+		await reload();
 		setMessage('error', backupT.backupTimedOut);
 		backing = false;
 	}
-
-	// If a run is already in progress when the page loads (e.g. the daily backup
-	// started while the admin was elsewhere), show the running state and poll.
-	onMount(() => {
-		if (data.run?.state === 'running') {
-			backing = true;
-			void pollBackupStatus();
-		}
-	});
 
 	async function deleteBackup(name: string) {
 		if (!confirm(backupT.confirmDelete)) return;
@@ -161,7 +188,7 @@
 			const result = (await res.json()) as ApiResult;
 			if (result.success) {
 				setMessage('success', backupT.deleted);
-				await invalidateAll();
+				await reload();
 			} else {
 				setMessage('error', result.error || t.common.error);
 			}
@@ -191,7 +218,9 @@
 		<div class="space-y-3">
 			<div class="flex items-center justify-between border-b border-base-300 pb-4">
 				<h1 class="page-title">{backupT.title}</h1>
-				{#if available && online.online}
+				{#if !loaded}
+					<div class="skeleton h-8 w-28"></div>
+				{:else if available && online.online}
 					<button class="btn btn-primary btn-sm" onclick={backupNow} disabled={backing}>
 						{backing ? backupT.backingUp : backupT.backupNow}
 					</button>
@@ -207,7 +236,45 @@
 				</div>
 			{/if}
 
-			{#if !available}
+			{#if !loaded}
+				<div class="space-y-4">
+					<div class="space-y-3">
+						<div class="skeleton h-5 w-40"></div>
+						<div class="flex flex-wrap items-end gap-3">
+							<div class="space-y-1">
+								<div class="skeleton h-3 w-20"></div>
+								<div class="skeleton h-8 w-32"></div>
+							</div>
+							<div class="skeleton h-8 w-16"></div>
+						</div>
+						<div class="skeleton h-3 w-72"></div>
+					</div>
+					<div class="overflow-x-auto">
+						<table class="table table-sm [&_tr]:border-base-300">
+							<thead>
+								<tr>
+									<th>{backupT.name}</th>
+									<th>{backupT.date}</th>
+									<th class="text-right">{backupT.actions}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each SKELETON_ROWS as i (i)}
+									<tr>
+										<td><div class="skeleton h-3 w-40"></div></td>
+										<td><div class="skeleton h-3 w-24"></div></td>
+										<td>
+											<div class="flex justify-end">
+												<div class="skeleton h-5 w-28"></div>
+											</div>
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				</div>
+			{:else if !available}
 				<div class="alert" role="alert">
 					{backupT.notAvailable}
 				</div>

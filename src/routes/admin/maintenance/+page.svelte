@@ -2,7 +2,6 @@
 	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
 	import AdminMenuPanel from '$lib/components/panels/AdminMenuPanel.svelte';
 	import { onMount } from 'svelte';
-	import { invalidateAll } from '$app/navigation';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import AdminSidebar from '$lib/components/molecules/AdminSidebar.svelte';
 	import DateAtom from '$lib/components/atoms/Date.svelte';
@@ -37,12 +36,18 @@
 
 	const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+	// One skeleton card per maintenance op, mirroring the loaded card so the
+	// skeleton-to-content swap doesn't reflow (tuned via MCP measurement).
+	const SKELETON_CARDS = [0, 1, 2, 3, 4] as const;
+
 	let { data }: PageProps = $props();
 	const online = getOnlineStore();
 	const t = $derived(data.t);
 	const maintenanceT = $derived(t.maintenance);
 	const user = $derived(data.user);
-	const overview = $derived(data.overview as MaintenanceOverview);
+
+	let loaded = $state(false);
+	let overview = $state<MaintenanceOverview | null>(null);
 
 	// ANALYZE / statsRebuild / statsFreeze run synchronously (shared busy flag);
 	// integrity_check / fts_rebuild run detached and share a single busy flag
@@ -54,6 +59,31 @@
 	function setMessage(type: 'success' | 'error', text: string) {
 		message = { type, text };
 	}
+
+	async function reload() {
+		try {
+			const res = await fetch('/api/admin/maintenance');
+			if (res.ok) {
+				overview = (await res.json()) as MaintenanceOverview;
+			} else {
+				setMessage('error', t.common.error);
+			}
+		} catch {
+			setMessage('error', t.auth.networkError);
+		}
+		loaded = true;
+		// Resume polling if a detached run was already in progress (e.g. the daily
+		// run started while the admin was elsewhere). Mirrors the old onMount check,
+		// now deferred until the overview actually arrives.
+		if (!detachedBusy && overview?.run?.state === 'running') {
+			detachedBusy = true;
+			void pollDetached();
+		}
+	}
+
+	onMount(() => {
+		void reload();
+	});
 
 	async function runSync(op: MaintenanceOp, doneText: string) {
 		if (syncBusy) return;
@@ -70,7 +100,7 @@
 				// Stats ops return an informative result string ("rebuilt N buckets…");
 				// fall back to the localized done text when there is none (analyze).
 				setMessage('success', result.result ? String(result.result) : doneText);
-				await invalidateAll();
+				await reload();
 			} else {
 				setMessage('error', result.error || t.common.error);
 			}
@@ -118,7 +148,7 @@
 				const poll = (await res.json()) as MaintenancePollResponse;
 				const run = poll.run;
 				if (run && run.state === 'running') continue;
-				await invalidateAll();
+				await reload();
 				setMessage(
 					run?.state === 'succeeded' ? 'success' : 'error',
 					run?.state === 'succeeded' ? maintenanceT.success : maintenanceT.failed
@@ -129,18 +159,10 @@
 				// transient network blip mid-poll - keep going until the deadline
 			}
 		}
-		await invalidateAll();
+		await reload();
 		setMessage('error', maintenanceT.timedOut);
 		detachedBusy = false;
 	}
-
-	// Resume polling if a detached run was already in progress when the page loaded.
-	onMount(() => {
-		if (overview.run?.state === 'running') {
-			detachedBusy = true;
-			void pollDetached();
-		}
-	});
 </script>
 
 <svelte:head>
@@ -173,7 +195,22 @@
 				</div>
 			{/if}
 
-			{#if online.online}
+			{#if !loaded}
+				<div class="space-y-3">
+					{#each SKELETON_CARDS as i (i)}
+						<div class="rounded-box border border-base-300 p-4 space-y-2">
+							<div class="flex items-start justify-between gap-3">
+								<div class="space-y-1.5 flex-1">
+									<div class="skeleton h-4 w-40"></div>
+									<div class="skeleton h-3 w-64"></div>
+								</div>
+								<div class="skeleton h-8 w-20 shrink-0"></div>
+							</div>
+							<div class="skeleton h-3 w-48"></div>
+						</div>
+					{/each}
+				</div>
+			{:else if online.online && overview}
 				<div class="space-y-3">
 					{#snippet opCard(
 						op: MaintenanceOp,
@@ -182,7 +219,7 @@
 						busy: boolean,
 						onRun: VoidHandler
 					)}
-						{@const status = overview.ops[op]}
+						{@const status = overview!.ops[op]}
 						<div class="rounded-box border border-base-300 p-4 space-y-2">
 							<div class="flex items-start justify-between gap-3">
 								<div>

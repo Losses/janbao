@@ -11,6 +11,10 @@
 	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import type { BookmarkListItem } from '$lib/types/api';
 	import type { PageData } from './$types';
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
+	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
+	import type { DiscussionListItem } from '$lib/server/db/dao/discussions';
 
 	const online = getOnlineStore();
 
@@ -20,28 +24,26 @@
 
 	let { data }: PageProps = $props();
 
+	const listCache = getListCacheStore();
+	const cachedDiscussions = $derived(
+		listCache.home?.discussions as DiscussionListItem[] | undefined
+	);
+
 	const t = $derived(data.t);
 	const bookmarkT = $derived(t.bookmark);
 	const user = $derived(data.user);
 	const bookmarks = $derived(data.bookmarks as BookmarkListItem[]);
 
-	const userSlug = $derived(generateSlug(user?.username || ''));
+	const userSlug = $derived(user ? generateSlug(user.username) : '');
 
-	function handlePageChange(newPage: number) {
-		goto(`?page=${newPage}`);
+	function handlePageChange(page: number) {
+		void goto(`/bookmarks?page=${page}`);
 	}
 
-	// Offline fallback: if the cached bookmarks snapshot is non-empty, swap to the
-	// client-only /offline/bookmarks reader so the list is viewable without a
-	// server round-trip.
 	onMount(() => {
-		if (navigator.onLine) return;
-		void (async () => {
-			const { getOfflineDB } = await import('$lib/offline/idb');
-			const row = await getOfflineDB().syncMeta.get('bookmarksSnapshot');
-			const has = Array.isArray(row?.value) && row.value.some((v) => typeof v === 'number');
-			if (has) await goto('/offline/bookmarks');
-		})();
+		if (!user) {
+			void goto('/entry/signin');
+		}
 	});
 </script>
 
@@ -55,54 +57,69 @@
 	{/if}
 {/snippet}
 
-<DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-3">
-		<h1 class="page-title border-b border-base-300 pb-4">{bookmarkT.myBookmarks}</h1>
+{#snippet leftPanel()}
+	{#if user}
+		<DiscussionsPanel
+			discussions={cachedDiscussions}
+			currentPage={listCache.home?.page ?? 1}
+			totalPages={listCache.home?.totalPages ?? 1}
+			t={t}
+			buildPageUrl={(page) => (page === 1 ? '/' : `/discussions/p${page}`)}
+			paginate={true}
+		/>
+	{/if}
+{/snippet}
 
-		{#if !online.online || bookmarks.length === 0}
-			<EmptyState message={!online.online ? t.offline.disabled.title : bookmarkT.noBookmarks} />
-		{:else}
-			<div class="divide-y divide-base-300">
-				{#each bookmarks as bookmark (bookmark.discussionId)}
-					{@const authorSlug = generateSlug(bookmark.authorUsername || '')}
-					<div class="py-3 px-0">
-						<div class="flex items-start justify-between gap-3">
-							<div class="min-w-0 flex-1">
-								<a
-									href="/discussion/{bookmark.discussionId}/{bookmark.slug || 'discussion'}"
-									class="font-semibold text-base-content hover:text-primary transition-colors truncate block"
-								>
-									{bookmark.title}
-								</a>
-								<p class="text-xs text-base-content/50 mt-1">
-									{bookmark.categoryTitle} ·
-									<a href="/profile/{bookmark.authorId}/{authorSlug}" class="hover:underline">
-										{bookmark.authorDisplayName}
+<DualColumnLayout {sidebar} {user} {t}>
+	<GesturePageLayout left={leftPanel} leftHref="/" fallbackRoute="/">
+		<div class="space-y-3">
+			<h1 class="page-title border-b border-base-300 pb-4">{bookmarkT.myBookmarks}</h1>
+
+			{#if !online.online || bookmarks.length === 0}
+				<EmptyState message={!online.online ? t.offline.disabled.title : bookmarkT.noBookmarks} />
+			{:else}
+				<div class="divide-y divide-base-300">
+					{#each bookmarks as bookmark (bookmark.discussionId)}
+						{@const authorSlug = generateSlug(bookmark.authorUsername || '')}
+						<div class="py-3 px-0">
+							<div class="flex items-start justify-between gap-3">
+								<div class="min-w-0 flex-1">
+									<a
+										href="/discussion/{bookmark.discussionId}/{bookmark.slug || 'discussion'}"
+										class="font-semibold text-base-content hover:text-primary transition-colors truncate block"
+									>
+										{bookmark.title}
 									</a>
-								</p>
-							</div>
-							<div class="flex items-center gap-2 flex-shrink-0">
-								<DateComponent
-									value={bookmark.bookmarkedAt}
-									{t}
-									class="text-xs text-base-content/40"
-								/>
+									<p class="text-xs text-base-content/50 mt-1">
+										{bookmark.categoryTitle} ·
+										<a href="/profile/{bookmark.authorId}/{authorSlug}" class="hover:underline">
+											{bookmark.authorDisplayName}
+										</a>
+									</p>
+								</div>
+								<div class="flex items-center gap-2 flex-shrink-0">
+									<DateComponent
+										value={bookmark.bookmarkedAt}
+										{t}
+										class="text-xs text-base-content/40"
+									/>
+								</div>
 							</div>
 						</div>
-					</div>
-				{/each}
-			</div>
-
-			{#if data.totalPages > 1}
-				<div class="flex justify-end pt-2">
-					<Paginator
-						currentPage={data.page}
-						totalPages={data.totalPages}
-						onPageChange={handlePageChange}
-						{t}
-					/>
+					{/each}
 				</div>
+
+				{#if data.totalPages > 1}
+					<div class="flex justify-end pt-2">
+						<Paginator
+							currentPage={data.page}
+							totalPages={data.totalPages}
+							onPageChange={handlePageChange}
+							{t}
+						/>
+					</div>
+				{/if}
 			{/if}
-		{/if}
-	</div>
+		</div>
+	</GesturePageLayout>
 </DualColumnLayout>

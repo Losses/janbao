@@ -17,19 +17,36 @@
 	} from '@mdi/js';
 	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
 	import ProfileMenuPanel from '$lib/components/panels/ProfileMenuPanel.svelte';
+	import { getNavigationStore } from '$lib/stores/navigation.svelte';
+	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
+	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import type { PageData } from './$types';
+	import type { DiscussionListItem } from '$lib/server/db/dao/discussions';
 
 	interface PageProps {
 		data: PageData;
 	}
 
 	let { data }: PageProps = $props();
+	const navStore = getNavigationStore();
+	const listCache = getListCacheStore();
+
+	const cachedDiscussions = $derived(
+		listCache.home?.discussions as DiscussionListItem[] | undefined
+	);
 
 	const t = $derived(data.t);
 	const profileT = $derived(t.profile);
 	const user = $derived(data.user);
 
 	const isZh = $derived(data.lang === 'zh-CN');
+
+	const prevPath = $derived(
+		navStore.activeStack.length >= 2
+			? navStore.activeStack[navStore.activeStack.length - 2].pathname
+			: null
+	);
+	const targetHref = $derived(prevPath === '/profile' ? '/profile' : '/');
 
 	const groups = $derived<DirectoryGroup[]>(
 		user
@@ -101,12 +118,23 @@
 
 {#snippet leftPanel()}
 	{#if user}
-		<ProfileMenuPanel {user} {t} lang={data.lang} />
+		{#if prevPath === '/profile'}
+			<ProfileMenuPanel {user} {t} lang={data.lang} />
+		{:else}
+			<DiscussionsPanel
+				discussions={cachedDiscussions}
+				currentPage={listCache.home?.page ?? 1}
+				totalPages={listCache.home?.totalPages ?? 1}
+				t={t}
+				buildPageUrl={(page) => (page === 1 ? '/' : `/discussions/p${page}`)}
+				paginate={true}
+			/>
+		{/if}
 	{/if}
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout left={leftPanel} leftHref="/profile" fallbackRoute="/profile">
+	<GesturePageLayout left={leftPanel} leftHref={targetHref} fallbackRoute={targetHref}>
 		<div class="space-y-4">
 			<PageTitle title={profileT['accountSettings'] || 'Settings'} />
 			<DirectoryGrid {groups} />

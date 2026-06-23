@@ -24,8 +24,10 @@
 	import type { ProfileHeaderUser, UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 
+	type UserData = NonNullable<App.Locals['user']>;
+
 	interface ProfileHeaderProps {
-		targetUser: ProfileHeaderUser;
+		targetUser: ProfileHeaderUser | UserData;
 		invitedBy: UserInfoSummary | null;
 		email: string | null;
 		showLastActive: boolean;
@@ -82,7 +84,7 @@
 		<div class="flex items-center gap-1.5">
 			<Icon path={mdiAccountGroup} size={16} class="text-base-content/50" />
 			<span class="font-medium text-base-content">{profileT.group}</span>
-			<span>{targetUser.groupTitle}</span>
+			<span>{'groupTitle' in targetUser ? targetUser.groupTitle : (targetUser.groupSlug === 'admin' ? 'Admin' : 'Member')}</span>
 		</div>
 		<div class="flex items-center gap-1.5">
 			<Icon path={mdiCalendarClock} size={16} class="text-base-content/50" />

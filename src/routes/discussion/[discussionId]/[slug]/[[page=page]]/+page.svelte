@@ -474,29 +474,30 @@
 	</div>
 {/snippet}
 
+{#snippet leftSnippet()}
+	<DiscussionsPanel
+		discussions={listCache.home?.discussions}
+		currentPage={listCache.home?.page ?? 1}
+		totalPages={listCache.home?.totalPages ?? 1}
+		{t}
+		{buildPageUrl}
+		paginate={true}
+	/>
+{/snippet}
+{#snippet rightSnippet()}
+	<ActivityPanel
+		activities={listCache.activity?.activities ?? []}
+		currentPage={listCache.activity?.page ?? 1}
+		totalPages={listCache.activity?.totalPages ?? 1}
+		activityDraft={listCache.activity?.activityDraft ?? null}
+		mentionedUsers={listCache.activity?.mentionedUsers ?? {}}
+		{t}
+		{user}
+		paginate={true}
+	/>
+{/snippet}
+
 <DualColumnLayout {sidebar} {user} {t} flush>
-	{#snippet leftSnippet()}
-		<DiscussionsPanel
-			discussions={listCache.home?.discussions}
-			currentPage={listCache.home?.page ?? 1}
-			totalPages={listCache.home?.totalPages ?? 1}
-			{t}
-			{buildPageUrl}
-			paginate={true}
-		/>
-	{/snippet}
-	{#snippet rightSnippet()}
-		<ActivityPanel
-			activities={listCache.activity?.activities ?? []}
-			currentPage={listCache.activity?.page ?? 1}
-			totalPages={listCache.activity?.totalPages ?? 1}
-			activityDraft={listCache.activity?.activityDraft}
-			mentionedUsers={listCache.activity?.mentionedUsers ?? []}
-			{t}
-			{user}
-			paginate={true}
-		/>
-	{/snippet}
 	<ThreadPager
 		centerTab={0}
 		rightTab={1}

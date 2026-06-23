@@ -11,6 +11,10 @@
 	import { formatDisplayName } from '$lib/utils/user';
 	import type { NotificationItem, ApiResult } from '$lib/types/api';
 	import type { PageData } from './$types';
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
+	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
+	import type { DiscussionListItem } from '$lib/server/db/dao/discussions';
 
 	const online = getOnlineStore();
 
@@ -19,6 +23,11 @@
 	}
 
 	let { data }: PageProps = $props();
+
+	const listCache = getListCacheStore();
+	const cachedDiscussions = $derived(
+		listCache.home?.discussions as DiscussionListItem[] | undefined
+	);
 
 	const t = $derived(data.t);
 	const notificationT = $derived(t.notification);
@@ -118,6 +127,19 @@
 	<title>{formatTitle(notificationT.title)}</title>
 </svelte:head>
 
+{#snippet leftPanel()}
+	{#if user}
+		<DiscussionsPanel
+			discussions={cachedDiscussions}
+			currentPage={listCache.home?.page ?? 1}
+			totalPages={listCache.home?.totalPages ?? 1}
+			t={t}
+			buildPageUrl={(page) => (page === 1 ? '/' : `/discussions/p${page}`)}
+			paginate={true}
+		/>
+	{/if}
+{/snippet}
+
 {#snippet sidebar()}
 	{#if user}
 		<ProfileSidebar
@@ -131,73 +153,86 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-3">
-		<div class="flex items-center justify-between border-b border-base-300 pb-4">
-			<h1 class="page-title">{notificationT.title}</h1>
-			{#if hasUnread}
-				<button
-					class="btn btn-sm btn-outline"
-					onclick={markAllRead}
-					disabled={marking || !online.online}
-				>
-					{notificationT.markAllRead}
-				</button>
-			{/if}
-		</div>
-
-		{#if !online.online || views.length === 0}
-			<EmptyState message={!online.online ? t.offline.disabled.title : notificationT.allCaughtUp} />
-		{:else}
-			<div>
-				{#each views as view (view.item.id)}
-					{@const item = view.item}
-					<div
-						class="flex gap-3 py-3 border-b border-base-300 last:border-b-0 {view.isRead
-							? 'opacity-60'
-							: ''}"
+	<GesturePageLayout left={leftPanel} leftHref="/" fallbackRoute="/">
+		<div class="space-y-3">
+			<div class="flex items-center justify-between border-b border-base-300 pb-4">
+				<h1 class="page-title">{notificationT.title}</h1>
+				{#if hasUnread}
+					<button
+						class="btn btn-sm btn-outline"
+						onclick={markAllRead}
+						disabled={marking || !online.online}
 					>
-						<div class="flex-shrink-0">
-							{#if item.sourceUserId}
-								<a href="/profile/{item.sourceUserId}/{generateSlug(item.sourceUsername ?? '')}">
-									<Avatar
-										userId={item.sourceUserId}
-										avatarFileId={item.sourceAvatarFileId}
-										displayName={formatDisplayName(item.sourceDisplayName, item.sourceUserId, t)}
-										size="sm"
-									/>
-								</a>
-							{:else}
-								<Avatar displayName="?" size="sm" />
-							{/if}
-						</div>
-						<div class="min-w-0 flex-1">
-							<div class="flex items-start justify-between gap-2">
-								<div class="min-w-0">
-									{#if view.href}
-										<a href={view.href} class="block">
-											<span class="text-sm text-base-content hover:text-primary transition-colors">
-												{view.label}
-											</span>
-										</a>
-									{:else}
-										<span class="text-sm text-base-content">{view.label}</span>
-									{/if}
-									{#if view.target}
-										<span class="block text-xs text-base-content/50 truncate">
-											{notificationT.in}
-											{view.target}
-										</span>
-									{/if}
-								</div>
-								{#if !view.isRead}
-									<Badge variant="primary" class="badge-xs"></Badge>
+						{notificationT.markAllRead}
+					</button>
+				{/if}
+			</div>
+
+			{#if !online.online || views.length === 0}
+				<EmptyState message={!online.online ? t.offline.disabled.title : notificationT.allCaughtUp} />
+			{:else}
+				<div class="divide-y divide-base-300">
+					{#each views as view (view.item.id)}
+						{@const item = view.item}
+						<div
+							class="flex gap-3 py-3 border-b border-base-300 last:border-b-0 {view.isRead
+								? 'opacity-60'
+								: ''}"
+						>
+							<div class="flex-shrink-0">
+								{#if item.sourceUserId}
+									{@const sourceSlug = generateSlug(item.sourceUsername || '')}
+									<a href="/profile/{item.sourceUserId}/{sourceSlug}">
+										<Avatar
+											userId={item.sourceUserId}
+											avatarFileId={item.sourceAvatarFileId}
+											displayName={item.sourceDisplayName}
+											size="sm"
+										/>
+									</a>
+								{:else}
+									<Avatar userId={0} avatarFileId={null} displayName="System" size="sm" />
 								{/if}
 							</div>
-							<DateComponent value={item.createdAt} {t} class="text-xs text-base-content/40" />
+							<div class="flex-grow min-w-0">
+								<div class="flex items-start justify-between gap-3">
+									<div class="text-sm break-words flex-1 min-w-0">
+										{#if item.sourceUserId}
+											{@const sourceSlug = generateSlug(item.sourceUsername || '')}
+											<a
+												href="/profile/{item.sourceUserId}/{sourceSlug}"
+												class="font-semibold text-base-content hover:underline"
+											>
+												{formatDisplayName(item.sourceDisplayName, item.sourceUserId, t)}
+											</a>
+										{:else}
+											<span class="font-semibold text-base-content">System</span>
+										{/if}
+										<span class="text-base-content/75">
+											{view.label}
+										</span>
+										{#if view.target}
+											{#if view.href}
+												<a href={view.href} class="text-primary font-medium hover:underline">
+													{view.target}
+												</a>
+											{:else}
+												<span class="font-medium text-base-content/85">
+													{view.target}
+												</span>
+											{/if}
+										{/if}
+									</div>
+									{#if !view.isRead}
+										<Badge variant="primary" class="badge-xs"></Badge>
+									{/if}
+								</div>
+								<DateComponent value={item.createdAt} {t} class="text-xs text-base-content/40" />
+							</div>
 						</div>
-					</div>
-				{/each}
-			</div>
-		{/if}
-	</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
+	</GesturePageLayout>
 </DualColumnLayout>

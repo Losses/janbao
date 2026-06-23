@@ -1,7 +1,7 @@
 <script lang="ts">
 	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
 	import AdminMenuPanel from '$lib/components/panels/AdminMenuPanel.svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import AdminSidebar from '$lib/components/molecules/AdminSidebar.svelte';
 	import FormField from '$lib/components/atoms/FormField.svelte';
@@ -15,6 +15,15 @@
 		data: PageData;
 	}
 
+	/** Shape of GET /api/admin/user-groups. */
+	interface UserGroupsResponse {
+		groups: AdminUserGroupItem[];
+	}
+
+	// Skeleton row placeholders - count/widths mirror the loaded table so the
+	// skeleton-to-content swap doesn't reflow (tuned via MCP measurement).
+	const SKELETON_ROWS = [0, 1, 2, 3, 4] as const;
+
 	let { data }: PageProps = $props();
 	const online = getOnlineStore();
 
@@ -22,7 +31,9 @@
 	const adminT = $derived(t.admin);
 	const permissionsT = $derived(t.permissions);
 	const user = $derived(data.user);
-	const groups = $derived(data.groups as AdminUserGroupItem[]);
+
+	let loaded = $state(false);
+	let groups = $state<AdminUserGroupItem[]>([]);
 
 	let showModal = $state(false);
 	let modalMode = $state<'add' | 'edit'>('add');
@@ -36,6 +47,25 @@
 	const pendingDeleteGroup = $derived(
 		pendingDeleteSlug ? (groups.find((group) => group.slug === pendingDeleteSlug) ?? null) : null
 	);
+
+	async function reload() {
+		try {
+			const res = await fetch('/api/admin/user-groups');
+			if (res.ok) {
+				const result = (await res.json()) as UserGroupsResponse;
+				groups = result.groups;
+			} else {
+				setMessage('error', t.common.error);
+			}
+		} catch {
+			setMessage('error', t.auth.networkError);
+		}
+		loaded = true;
+	}
+
+	onMount(() => {
+		void reload();
+	});
 
 	const modalHeading = $derived(modalMode === 'add' ? adminT.newGroup : adminT.editUserGroup);
 
@@ -76,7 +106,7 @@
 					'success',
 					modalMode === 'add' ? permissionsT.groupCreated : permissionsT.groupUpdated
 				);
-				await invalidateAll();
+				await reload();
 			} else {
 				setMessage('error', result.error || t.common.error);
 			}
@@ -98,7 +128,7 @@
 			const result = (await res.json()) as ApiResult;
 			if (result.success) {
 				setMessage('success', permissionsT.groupDeleted);
-				await invalidateAll();
+				await reload();
 			} else {
 				setMessage('error', result.error || t.common.error);
 			}
@@ -135,7 +165,7 @@
 			<div class="flex items-center justify-between border-b border-base-300 pb-4">
 				<h1 class="page-title">{adminT.userGroups}</h1>
 				{#if online.online}
-					<button class="btn btn-primary btn-sm" onclick={openAdd} disabled={saving}>
+					<button class="btn btn-primary btn-sm" onclick={openAdd} disabled={!loaded || saving}>
 						{adminT.addUserGroup}
 					</button>
 				{/if}
@@ -150,7 +180,35 @@
 				</div>
 			{/if}
 
-			{#if online.online}
+			{#if !loaded}
+				<div class="overflow-x-auto">
+					<table class="table table-sm [&_tr]:border-base-300">
+						<thead>
+							<tr>
+								<th>{permissionsT.slug}</th>
+								<th>{permissionsT.title}</th>
+								<th>{permissionsT.users}</th>
+								<th>{permissionsT.status}</th>
+								<th>{permissionsT.actions}</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each SKELETON_ROWS as i (i)}
+								<tr>
+									<td><div class="skeleton h-3 w-12"></div></td>
+									<td>
+										<div class="skeleton h-3 w-40 mb-1"></div>
+										<div class="skeleton h-2 w-56"></div>
+									</td>
+									<td><div class="skeleton h-3 w-4"></div></td>
+									<td><div class="skeleton h-3 w-16"></div></td>
+									<td><div class="skeleton h-5 w-24 rounded"></div></td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{:else if online.online}
 				<div class="overflow-x-auto">
 					<table class="table table-sm [&_tr]:border-base-300">
 						<thead>

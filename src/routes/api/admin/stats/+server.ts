@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireAdmin } from '$lib/server/admin';
-import { getTimelineStats, getContributorsStats, rangeToStartSec } from '$lib/server/db/dao/stats';
+import { getContributorsStats, getStatsOverview, rangeToStartSec } from '$lib/server/db/dao/stats';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
 	const authError = requireAdmin(locals.user, locals.t);
@@ -24,8 +24,16 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		const contributors = await getContributorsStats(locals.db, interval, startSec, endSec);
 		return json({ contributors });
 	} else {
+		// Range mode: return the full overview (timeline + contributors + bounds)
+		// so the CSR stats page can hydrate in one fetch. Mirrors the shape the
+		// page used to get from its old +page.server.ts load.
 		const range = url.searchParams.get('range') || 'all';
-		const timeline = await getTimelineStats(locals.db, interval, rangeToStartSec(range));
-		return json({ timeline });
+		const overview = await getStatsOverview(locals.db, interval, rangeToStartSec(range));
+		return json({
+			timeline: overview.timeline,
+			contributors: overview.contributors,
+			startSec: overview.startSec,
+			endSec: overview.endSec
+		});
 	}
 };

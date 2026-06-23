@@ -1,43 +1,59 @@
 // src/lib/stores/list-cache.svelte.ts
 
-export interface CachedList<T = unknown> {
-	discussions?: T[];
-	activities?: T[];
-	conversations?: T[];
-	page: number;
-	totalPages: number;
-	totalCount: number;
-	activityDraft?: string;
-	mentionedUsers?: unknown[];
+import type { DiscussionListItem } from '$lib/server/db/dao/discussions';
+import type { ActivityListItem } from '$lib/types/api';
+import type { MentionedUsersMap } from '$lib/types/mentions';
+
+export interface HomeCacheInput {
+	discussions?: DiscussionListItem[];
+	page?: number;
+	totalPages?: number;
+	totalCount?: number;
 }
 
 export interface HomeCacheData {
-	discussions?: unknown[];
+	discussions: DiscussionListItem[];
+	page: number;
+	totalPages: number;
+	totalCount: number;
+}
+
+export interface ActivityCacheInput {
+	activities?: ActivityListItem[];
 	page?: number;
 	totalPages?: number;
 	totalCount?: number;
+	activityDraft?: string | null;
+	mentionedUsers?: MentionedUsersMap;
 }
 
 export interface ActivityCacheData {
-	activities?: unknown[];
-	page?: number;
-	totalPages?: number;
-	totalCount?: number;
-	activityDraft?: string;
-	mentionedUsers?: unknown[];
+	activities: ActivityListItem[];
+	page: number;
+	totalPages: number;
+	totalCount: number;
+	activityDraft?: string | null;
+	mentionedUsers?: MentionedUsersMap;
 }
 
-export interface MessagesCacheData {
+export interface MessagesCacheInput {
 	conversations?: unknown[];
 	page?: number;
 	totalPages?: number;
 	totalCount?: number;
 }
 
+export interface MessagesCacheData {
+	conversations: unknown[];
+	page: number;
+	totalPages: number;
+	totalCount: number;
+}
+
 class ListCacheStore {
-	#home = $state<CachedList | null>(null);
-	#activity = $state<CachedList | null>(null);
-	#messages = $state<CachedList | null>(null);
+	#home = $state<HomeCacheData | null>(null);
+	#activity = $state<ActivityCacheData | null>(null);
+	#messages = $state<MessagesCacheData | null>(null);
 
 	get home() {
 		return this.#home;
@@ -51,7 +67,7 @@ class ListCacheStore {
 		return this.#messages;
 	}
 
-	setHome(data: HomeCacheData | null | undefined) {
+	setHome(data: HomeCacheInput | null | undefined) {
 		if (data && data.discussions) {
 			this.#home = {
 				discussions: data.discussions,
@@ -62,7 +78,7 @@ class ListCacheStore {
 		}
 	}
 
-	setActivity(data: ActivityCacheData | null | undefined) {
+	setActivity(data: ActivityCacheInput | null | undefined) {
 		if (data && data.activities) {
 			this.#activity = {
 				activities: data.activities,
@@ -75,7 +91,7 @@ class ListCacheStore {
 		}
 	}
 
-	setMessages(data: MessagesCacheData | null | undefined) {
+	setMessages(data: MessagesCacheInput | null | undefined) {
 		if (data && data.conversations) {
 			this.#messages = {
 				conversations: data.conversations,
