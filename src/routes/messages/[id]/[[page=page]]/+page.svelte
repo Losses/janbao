@@ -151,7 +151,7 @@
 	</div>
 {/snippet}
 
-<DualColumnLayout {sidebar} {user} {t} flush>
+<DualColumnLayout {sidebar} {user} {t}>
 	<ThreadPager centerTab={2} leftHref="/messages/inbox">
 		{#snippet left()}
 			<MessagesPanel

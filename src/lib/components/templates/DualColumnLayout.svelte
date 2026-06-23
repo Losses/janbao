@@ -17,7 +17,6 @@
 		/** Accepted for call-site compatibility but unused now that the Header lives in AppShell. */
 		user?: UserInfoSummary | null;
 		t: TranslationDict;
-		flush?: boolean;
 	}
 
 	let { children, sidebar, user, t }: DualColumnLayoutProps = $props();

@@ -39,7 +39,13 @@
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	let navFreezeTimer = 0;
 	beforeNavigate((nav) => {
-		const { to, from, type, event } = nav;
+		const { to, from, type } = nav;
+		const event = (nav as { event?: unknown }).event as
+			| MouseEvent
+			| TouchEvent
+			| PopStateEvent
+			| null
+			| undefined;
 		if (from) {
 			pageScrollStore.capture(from.url.pathname, getCurrentScrollY());
 		}

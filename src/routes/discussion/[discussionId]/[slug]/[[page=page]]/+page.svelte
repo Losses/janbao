@@ -497,7 +497,7 @@
 	/>
 {/snippet}
 
-<DualColumnLayout {sidebar} {user} {t} flush>
+<DualColumnLayout {sidebar} {user} {t}>
 	<ThreadPager
 		centerTab={0}
 		rightTab={1}
