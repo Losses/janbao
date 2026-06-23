@@ -37,15 +37,21 @@
 	let leftEl = $state<HTMLElement | null>(null);
 	const leftScrollTop = $derived(leftHref ? pageScrollStore.get(leftHref) : 0);
 
+	let centerEl = $state<HTMLElement | null>(null);
+	const currentScrollTop = $derived(page.url.pathname ? pageScrollStore.get(page.url.pathname) : 0);
+
 	const shouldAnimateEnter = () => {
 		if (!left || !leftHref) return false;
 		if (navStore.direction !== 'forward') return false;
 		if (navStore.activeStack.length < 2) return false;
-		return navStore.activeStack[navStore.activeStack.length - 2].pathname === leftHref;
+		const prevPath = navStore.activeStack[navStore.activeStack.length - 2].pathname;
+		return prevPath === leftHref;
 	};
 
+	const isEntering = shouldAnimateEnter();
 	let dragOffset = $state<number | null>(null);
-	let snapIndex = $state(shouldAnimateEnter() ? 0 : left ? 1 : 0);
+	// svelte-ignore state_referenced_locally
+	let snapIndex = $state(isEntering ? 0 : left ? 1 : 0);
 	const panelCount = $derived((left ? 1 : 0) + 1);
 	const ACTIVE = $derived(left ? 1 : 0);
 	const STEP_PERCENT = $derived(100 / panelCount);
@@ -60,6 +66,18 @@
 			const rafId = requestAnimationFrame(() => {
 				if (leftEl) {
 					leftEl.scrollTop = leftScrollTop;
+				}
+			});
+			return () => cancelAnimationFrame(rafId);
+		}
+	});
+
+	$effect(() => {
+		if (centerEl && currentScrollTop > 0) {
+			centerEl.scrollTop = currentScrollTop;
+			const rafId = requestAnimationFrame(() => {
+				if (centerEl) {
+					centerEl.scrollTop = currentScrollTop;
 				}
 			});
 			return () => cancelAnimationFrame(rafId);
@@ -156,7 +174,7 @@
 		const mq = window.matchMedia(MOBILE_BREAKPOINT);
 		const sync = () => {
 			isMobile = mq.matches;
-			if (isMobile && left) {
+			if (isMobile) {
 				document.documentElement.classList.add('fixed-viewport');
 			} else {
 				document.documentElement.classList.remove('fixed-viewport');
@@ -166,9 +184,11 @@
 		mq.addEventListener('change', sync);
 
 		let enterRaf = 0;
-		if (shouldAnimateEnter() && isMobile) {
+		if (isEntering && isMobile) {
 			enterRaf = requestAnimationFrame(() => {
-				snapIndex = ACTIVE;
+				enterRaf = requestAnimationFrame(() => {
+					snapIndex = ACTIVE;
+				});
 			});
 		}
 
@@ -199,7 +219,7 @@
 	bind:this={viewportEl}
 	class={isMobile ? 'overflow-hidden h-full w-full' : ''}
 	style={viewportStyle}
-	use:detectSwipe={{ onMove: onSwipeMove, onEnd: onSwipeEnd, disabled: () => !isMobile }}
+	use:detectSwipe={{ onMove: onSwipeMove, onEnd: onSwipeEnd, disabled: () => !isMobile || !left }}
 	use:measureViewport
 >
 	<div
@@ -208,11 +228,24 @@
 		ontransitionend={onTrackTransitionEnd}
 	>
 		{#if left && isMobile}
-			<section bind:this={leftEl} class="shrink-0 p-3 scroll-pane md:hidden" style={leftStyle}>
+			<section
+				bind:this={leftEl}
+				class="shrink-0 p-3 scroll-pane md:hidden"
+				style={leftStyle}
+				onscroll={(e) => {
+					if (leftHref && e.currentTarget.scrollTop > 0) {
+						pageScrollStore.capture(leftHref, e.currentTarget.scrollTop);
+					}
+				}}
+			>
 				{@render left()}
 			</section>
 		{/if}
-		<section class="shrink-0 p-3 scroll-pane detail-scroll-pane h-full w-full" style={centerStyle}>
+		<section
+			bind:this={centerEl}
+			class="shrink-0 p-3 scroll-pane detail-scroll-pane h-full w-full"
+			style={centerStyle}
+		>
 			{@render children()}
 		</section>
 	</div>

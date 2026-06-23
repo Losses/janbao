@@ -19,3 +19,14 @@ export function getPageScrollStore(): PageScrollStore {
 	}
 	return pageScrollStoreInstance;
 }
+
+export function getCurrentScrollY(): number {
+	if (typeof document !== 'undefined') {
+		const isMobile = window.matchMedia('(max-width: 767px)').matches;
+		if (isMobile) {
+			const pane = document.querySelector('.detail-scroll-pane');
+			if (pane) return pane.scrollTop;
+		}
+	}
+	return typeof window !== 'undefined' ? window.scrollY : 0;
+}

@@ -16,7 +16,7 @@
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { markEnterFromList, setReachedFromList } from '$lib/stores/thread-nav.svelte';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
-	import { getPageScrollStore } from '$lib/stores/page-scroll.svelte';
+	import { getPageScrollStore, getCurrentScrollY } from '$lib/stores/page-scroll.svelte';
 
 	interface LayoutProps {
 		data: LayoutData;
@@ -40,7 +40,7 @@
 	let navFreezeTimer = 0;
 	beforeNavigate(({ to, from, type, event }) => {
 		if (from) {
-			pageScrollStore.capture(from.url.pathname, window.scrollY);
+			pageScrollStore.capture(from.url.pathname, getCurrentScrollY());
 		}
 		if (to && from) {
 			const isTabClick =

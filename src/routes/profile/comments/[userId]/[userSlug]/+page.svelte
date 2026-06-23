@@ -84,7 +84,7 @@
 		left={leftPanel}
 		leftHref={targetUser && user && targetUser.id === user.id
 			? '/profile'
-			: `/profile/${targetUser.id}/${targetUserSlug}`}
+			: `/profile/${targetUser.id}/${targetSlug}`}
 		fallbackRoute="/profile"
 	>
 		<div class="space-y-3">

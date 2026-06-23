@@ -3,6 +3,7 @@
 	import DirectoryGrid, {
 		type DirectoryGroup
 	} from '$lib/components/molecules/DirectoryGrid.svelte';
+	import PageTitle from '$lib/components/molecules/PageTitle.svelte';
 	import {
 		mdiAccountEditOutline,
 		mdiLockOutline,
@@ -85,5 +86,6 @@
 </script>
 
 <div class="space-y-4">
+	<PageTitle title={profileT['accountSettings'] || 'Settings'} />
 	<DirectoryGrid {groups} />
 </div>
