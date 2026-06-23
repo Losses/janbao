@@ -19,21 +19,11 @@
 	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
 	import type { PageData } from './$types';
 
-	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
-	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
-	import type { DiscussionListItem } from '$lib/server/db/dao/discussions';
-
 	interface PageProps {
 		data: PageData;
 	}
 
 	let { data }: PageProps = $props();
-
-	const listCache = getListCacheStore();
-	const cachedDiscussions = $derived(
-		listCache.home?.discussions as DiscussionListItem[] | undefined
-	);
-
 	const t = $derived(data.t);
 	const profileT = $derived(t.profile);
 	const tNav = $derived(t.nav);
@@ -112,21 +102,8 @@
 	{/if}
 {/snippet}
 
-{#snippet leftPanel()}
-	{#if user}
-		<DiscussionsPanel
-			discussions={cachedDiscussions}
-			currentPage={listCache.home?.page ?? 1}
-			totalPages={listCache.home?.totalPages ?? 1}
-			{t}
-			buildPageUrl={(page) => (page === 1 ? '/' : `/discussions/p${page}`)}
-			paginate={true}
-		/>
-	{/if}
-{/snippet}
-
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout left={leftPanel} leftHref="/" fallbackRoute="/">
+	<GesturePageLayout fallbackRoute="/">
 		<div class="space-y-6">
 			{#if data.headerPayload}
 				<ProfileHeader

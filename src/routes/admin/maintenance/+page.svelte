@@ -201,12 +201,12 @@
 						<div class="rounded-box border border-base-300 p-4 space-y-2">
 							<div class="flex items-start justify-between gap-3">
 								<div class="space-y-1.5 flex-1">
-									<div class="skeleton h-4 w-40"></div>
-									<div class="skeleton h-3 w-64"></div>
+									<div class="skeleton h-5 w-40"></div>
+									<div class="skeleton h-4 w-64"></div>
 								</div>
 								<div class="skeleton h-8 w-20 shrink-0"></div>
 							</div>
-							<div class="skeleton h-3 w-48"></div>
+							<div class="skeleton h-4 w-48"></div>
 						</div>
 					{/each}
 				</div>

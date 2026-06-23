@@ -12,23 +12,12 @@
 	import type { NotificationItem, ApiResult } from '$lib/types/api';
 	import type { PageData } from './$types';
 	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
-	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
-	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
-	import type { DiscussionListItem } from '$lib/server/db/dao/discussions';
-
-	const online = getOnlineStore();
-
 	interface PageProps {
 		data: PageData;
 	}
 
 	let { data }: PageProps = $props();
-
-	const listCache = getListCacheStore();
-	const cachedDiscussions = $derived(
-		listCache.home?.discussions as DiscussionListItem[] | undefined
-	);
-
+	const online = getOnlineStore();
 	const t = $derived(data.t);
 	const notificationT = $derived(t.notification);
 	const user = $derived(data.user);
@@ -123,23 +112,6 @@
 	}
 </script>
 
-<svelte:head>
-	<title>{formatTitle(notificationT.title)}</title>
-</svelte:head>
-
-{#snippet leftPanel()}
-	{#if user}
-		<DiscussionsPanel
-			discussions={cachedDiscussions}
-			currentPage={listCache.home?.page ?? 1}
-			totalPages={listCache.home?.totalPages ?? 1}
-			{t}
-			buildPageUrl={(page) => (page === 1 ? '/' : `/discussions/p${page}`)}
-			paginate={true}
-		/>
-	{/if}
-{/snippet}
-
 {#snippet sidebar()}
 	{#if user}
 		<ProfileSidebar
@@ -152,8 +124,12 @@
 	{/if}
 {/snippet}
 
+<svelte:head>
+	<title>{formatTitle(notificationT.title)}</title>
+</svelte:head>
+
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout left={leftPanel} leftHref="/" fallbackRoute="/">
+	<GesturePageLayout fallbackRoute="/">
 		<div class="space-y-3">
 			<div class="flex items-center justify-between border-b border-base-300 pb-4">
 				<h1 class="page-title">{notificationT.title}</h1>

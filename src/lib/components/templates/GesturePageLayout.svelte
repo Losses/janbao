@@ -8,6 +8,11 @@
 	import { backHandler } from '$lib/stores/navigation.svelte';
 	import { detectSwipe } from '$lib/actions/swipe';
 	import type { Action } from 'svelte/action';
+	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
+	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
+	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
+	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
+	import type { ConversationListItem } from '$lib/types/api';
 
 	interface Props {
 		children: Snippet;
@@ -24,6 +29,7 @@
 	let { children, left, leftHref, fallbackRoute = '/' }: Props = $props();
 	const navStore = getNavigationStore();
 	const pageScrollStore = getPageScrollStore();
+	const listCache = getListCacheStore();
 
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	const getIsMobile = () => {
@@ -34,18 +40,21 @@
 	};
 	let isMobile = $state(getIsMobile());
 
+	const hasLeft = $derived(!!left || (navStore.activeTab >= 0 && navStore.activeTab <= 2));
+	const resolvedLeftHref = $derived(leftHref ?? navStore.backTarget);
+
 	let leftEl = $state<HTMLElement | null>(null);
-	const leftScrollTop = $derived(leftHref ? pageScrollStore.get(leftHref) : 0);
+	const leftScrollTop = $derived(resolvedLeftHref ? pageScrollStore.get(resolvedLeftHref) : 0);
 
 	let centerEl = $state<HTMLElement | null>(null);
 	const currentScrollTop = $derived(page.url.pathname ? pageScrollStore.get(page.url.pathname) : 0);
 
 	const shouldAnimateEnter = () => {
-		if (!left || !leftHref) return false;
+		if (!hasLeft || !resolvedLeftHref) return false;
 		if (navStore.direction !== 'forward') return false;
 		if (navStore.activeStack.length < 2) return false;
 		const prevPath = navStore.activeStack[navStore.activeStack.length - 2].pathname;
-		return prevPath === leftHref;
+		return prevPath === resolvedLeftHref;
 	};
 
 	const isEntering = shouldAnimateEnter();
@@ -53,9 +62,11 @@
 	let trackEl = $state<HTMLElement | null>(null);
 	let transitionEnabled = $state(false);
 	// svelte-ignore state_referenced_locally
-	let snapIndex = $state(isEntering ? 0 : left ? 1 : 0);
-	const panelCount = $derived((left ? 1 : 0) + 1);
-	const ACTIVE = $derived(left ? 1 : 0);
+	let snapIndex = $state(
+		isEntering ? 0 : left || (navStore.activeTab >= 0 && navStore.activeTab <= 2) ? 1 : 0
+	);
+	const panelCount = $derived(hasLeft ? 2 : 1);
+	const ACTIVE = $derived(hasLeft ? 1 : 0);
 	const STEP_PERCENT = $derived(100 / panelCount);
 	const SWIPE_COMMIT = 60;
 	let viewportEl: HTMLElement | null = $state(null);
@@ -140,10 +151,11 @@
 		if (committed) {
 			const consumed = backHandler.dispatch();
 			if (!consumed) {
-				if (left && leftHref) {
+				const targetHref = resolvedLeftHref;
+				if (hasLeft && targetHref) {
 					snapIndex = 0;
-					const back = backLandsOn(leftHref);
-					pendingNav = { href: leftHref, back };
+					const back = backLandsOn(targetHref);
+					pendingNav = { href: targetHref, back };
 				} else {
 					if (navStore.activeStack.length > 1) {
 						history.back();
@@ -229,7 +241,11 @@
 	bind:this={viewportEl}
 	class={isMobile ? 'overflow-hidden h-full w-full' : ''}
 	style={viewportStyle}
-	use:detectSwipe={{ onMove: onSwipeMove, onEnd: onSwipeEnd, disabled: () => !isMobile || !left }}
+	use:detectSwipe={{
+		onMove: onSwipeMove,
+		onEnd: onSwipeEnd,
+		disabled: () => !isMobile || !hasLeft
+	}}
 	use:measureViewport
 >
 	<div
@@ -238,18 +254,48 @@
 		style={trackStyle}
 		ontransitionend={onTrackTransitionEnd}
 	>
-		{#if left && isMobile}
+		{#if hasLeft && isMobile}
 			<section
 				bind:this={leftEl}
 				class="shrink-0 p-3 scroll-pane md:hidden"
 				style={leftStyle}
 				onscroll={(e) => {
-					if (leftHref && e.currentTarget.scrollTop > 0) {
-						pageScrollStore.capture(leftHref, e.currentTarget.scrollTop);
+					if (resolvedLeftHref && e.currentTarget.scrollTop > 0) {
+						pageScrollStore.capture(resolvedLeftHref, e.currentTarget.scrollTop);
 					}
 				}}
 			>
-				{@render left()}
+				{#if left}
+					{@render left()}
+				{:else if navStore.activeTab === 0}
+					<DiscussionsPanel
+						discussions={listCache.home?.discussions}
+						currentPage={listCache.home?.page ?? 1}
+						totalPages={listCache.home?.totalPages ?? 1}
+						t={page.data.t}
+						buildPageUrl={(page) => (page === 1 ? '/' : `/discussions/p${page}`)}
+						paginate={true}
+					/>
+				{:else if navStore.activeTab === 1}
+					<ActivityPanel
+						activities={listCache.activity?.activities ?? []}
+						currentPage={listCache.activity?.page ?? 1}
+						totalPages={listCache.activity?.totalPages ?? 1}
+						activityDraft={listCache.activity?.activityDraft ?? null}
+						mentionedUsers={listCache.activity?.mentionedUsers ?? {}}
+						t={page.data.t}
+						user={page.data.user}
+						paginate={true}
+					/>
+				{:else if navStore.activeTab === 2}
+					<MessagesPanel
+						conversations={(listCache.messages?.conversations ?? []) as ConversationListItem[]}
+						currentPage={listCache.messages?.page ?? 1}
+						totalPages={listCache.messages?.totalPages ?? 1}
+						t={page.data.t}
+						paginate={true}
+					/>
+				{/if}
 			</section>
 		{/if}
 		<section

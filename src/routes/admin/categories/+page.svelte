@@ -22,7 +22,7 @@
 
 	// Skeleton row placeholders - count/widths mirror the loaded table so the
 	// skeleton-to-content swap doesn't reflow (tuned via MCP measurement).
-	const SKELETON_ROWS = [0, 1, 2, 3, 4, 5] as const;
+	const SKELETON_ROWS = [0, 1, 2] as const;
 
 	let { data }: PageProps = $props();
 	const online = getOnlineStore();
@@ -190,7 +190,14 @@
 
 			{#if !loaded}
 				<div class="overflow-x-auto">
-					<table class="table table-sm [&_tr]:border-base-300">
+					<table class="table table-fixed table-sm [&_tr]:border-base-300">
+						<colgroup>
+							<col class="w-[15%]" />
+							<col class="w-[47%]" />
+							<col class="w-[11%]" />
+							<col class="w-[9%]" />
+							<col class="w-[18%]" />
+						</colgroup>
 						<thead>
 							<tr>
 								<th>{permissionsT.slug}</th>
@@ -203,14 +210,14 @@
 						<tbody>
 							{#each SKELETON_ROWS as i (i)}
 								<tr>
-									<td><div class="skeleton h-3 w-12"></div></td>
+									<td><div class="skeleton h-4 w-full max-w-[8rem]"></div></td>
 									<td>
-										<div class="skeleton h-3 w-40 mb-1"></div>
-										<div class="skeleton h-2 w-56"></div>
+										<div class="skeleton h-4 w-40"></div>
+										<div class="skeleton h-3 w-56 mt-2"></div>
 									</td>
-									<td><div class="skeleton h-3 w-4"></div></td>
-									<td><div class="skeleton h-3 w-16"></div></td>
-									<td><div class="skeleton h-5 w-24 rounded"></div></td>
+									<td><div class="skeleton h-4 w-6"></div></td>
+									<td><div class="skeleton h-4 w-full max-w-[5rem]"></div></td>
+									<td><div class="skeleton h-6 w-24 rounded"></div></td>
 								</tr>
 							{/each}
 						</tbody>
@@ -218,7 +225,14 @@
 				</div>
 			{:else if online.online}
 				<div class="overflow-x-auto">
-					<table class="table table-sm [&_tr]:border-base-300">
+					<table class="table table-fixed table-sm [&_tr]:border-base-300">
+						<colgroup>
+							<col class="w-[15%]" />
+							<col class="w-[47%]" />
+							<col class="w-[11%]" />
+							<col class="w-[9%]" />
+							<col class="w-[18%]" />
+						</colgroup>
 						<thead>
 							<tr>
 								<th>{permissionsT.slug}</th>

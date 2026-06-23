@@ -36,7 +36,7 @@
 
 	// Skeleton row placeholders - count/widths mirror the loaded table so the
 	// skeleton-to-content swap doesn't reflow (tuned via MCP measurement).
-	const SKELETON_ROWS = [0, 1, 2, 3, 4, 5] as const;
+	const SKELETON_ROWS = [0, 1, 2] as const;
 
 	let { data }: PageProps = $props();
 	const online = getOnlineStore();
@@ -226,7 +226,14 @@
 
 				{#if !loaded}
 					<div class="overflow-x-auto">
-						<table class="table table-sm [&_tr]:border-base-300">
+						<table class="table table-fixed table-sm [&_tr]:border-base-300">
+							<colgroup>
+								<col class="w-[40%]" />
+								<col class="w-[15%]" />
+								<col class="w-[15%]" />
+								<col class="w-[15%]" />
+								<col class="w-[15%]" />
+							</colgroup>
 							<thead>
 								<tr>
 									<th>{permissionsT.category}</th>
@@ -240,11 +247,11 @@
 								{#each SKELETON_ROWS as i (i)}
 									<tr>
 										<td>
-											<div class="skeleton h-3 w-32 mb-1"></div>
-											<div class="skeleton h-2 w-20"></div>
+											<div class="skeleton h-4 w-32"></div>
+											<div class="skeleton h-3 w-20 mt-2"></div>
 										</td>
 										{#each [0, 1, 2, 3] as j (j)}
-											<td><div class="skeleton h-4 w-4 rounded"></div></td>
+											<td><div class="skeleton h-5 w-5 rounded"></div></td>
 										{/each}
 									</tr>
 								{/each}
@@ -253,7 +260,14 @@
 					</div>
 				{:else if online.online}
 					<div class="overflow-x-auto">
-						<table class="table table-sm [&_tr]:border-base-300">
+						<table class="table table-fixed table-sm [&_tr]:border-base-300">
+							<colgroup>
+								<col class="w-[40%]" />
+								<col class="w-[15%]" />
+								<col class="w-[15%]" />
+								<col class="w-[15%]" />
+								<col class="w-[15%]" />
+							</colgroup>
 							<thead>
 								<tr>
 									<th>{permissionsT.category}</th>

@@ -250,7 +250,12 @@
 						<div class="skeleton h-3 w-72"></div>
 					</div>
 					<div class="overflow-x-auto">
-						<table class="table table-sm [&_tr]:border-base-300">
+						<table class="table table-fixed table-sm [&_tr]:border-base-300">
+							<colgroup>
+								<col class="w-[45%]" />
+								<col class="w-[25%]" />
+								<col class="w-[30%]" />
+							</colgroup>
 							<thead>
 								<tr>
 									<th>{backupT.name}</th>
@@ -261,11 +266,11 @@
 							<tbody>
 								{#each SKELETON_ROWS as i (i)}
 									<tr>
-										<td><div class="skeleton h-3 w-40"></div></td>
-										<td><div class="skeleton h-3 w-24"></div></td>
+										<td><div class="skeleton h-4 w-full max-w-[16rem]"></div></td>
+										<td><div class="skeleton h-4 w-24"></div></td>
 										<td>
 											<div class="flex justify-end">
-												<div class="skeleton h-5 w-28"></div>
+												<div class="skeleton h-6 w-28 rounded"></div>
 											</div>
 										</td>
 									</tr>
@@ -319,7 +324,12 @@
 					<!-- Backups list -->
 					{#if online.online}
 						<div class="overflow-x-auto">
-							<table class="table table-sm [&_tr]:border-base-300">
+							<table class="table table-fixed table-sm [&_tr]:border-base-300">
+								<colgroup>
+									<col class="w-[45%]" />
+									<col class="w-[25%]" />
+									<col class="w-[30%]" />
+								</colgroup>
 								<thead>
 									<tr>
 										<th>{backupT.name}</th>

@@ -1,6 +1,3 @@
-// src/lib/stores/navigation.svelte.ts
-import { page } from '$app/state';
-
 // Back Handler Callback contract
 export type BackCallback = () => boolean; // returns true if the back event is consumed
 
@@ -39,10 +36,21 @@ class NavigationStore {
 		1: [{ pathname: '/activity', search: '' }],
 		2: [{ pathname: '/messages/inbox', search: '' }]
 	});
-	#activeTab = $derived(this.getTabFromPath(page.url.pathname));
+	#activeTab = $state<number>(0);
 	#direction = $state<'forward' | 'backward' | 'none'>('none');
 
+	get activeTab() {
+		return this.#activeTab;
+	}
+
 	getTabFromPath(path: string): number {
+		const globalPrefixes = ['/admin', '/profile', '/search', '/bookmarks', '/notifications'];
+		const isGlobal = globalPrefixes.some(
+			(prefix) => path === prefix || path.startsWith(prefix + '/')
+		);
+		if (isGlobal) {
+			return this.#activeTab;
+		}
 		if (path.startsWith('/activity')) return 1;
 		if (path.startsWith('/messages')) return 2;
 		return 0;
@@ -92,6 +100,7 @@ class NavigationStore {
 
 	switchTab(toPath: string, search: string = '') {
 		const toTab = this.getTabFromPath(toPath);
+		this.#activeTab = toTab;
 		// If stack is empty or only has root, ensure it is set up
 		if (this.#stacks[toTab].length === 0) {
 			this.#stacks[toTab] = [{ pathname: toPath, search }];
@@ -103,7 +112,8 @@ class NavigationStore {
 		const fromTab = this.getTabFromPath(from);
 
 		if (toTab !== fromTab) {
-			// Tab switch - does not modify stack structures
+			// Tab switch - update activeTab and return without modifying stack structures
+			this.#activeTab = toTab;
 			return;
 		}
 
