@@ -34,8 +34,8 @@
 		categoryPermissions: AdminCategoryPermissionItem[];
 	}
 
-	// Skeleton row placeholders - count/widths mirror the loaded table so the
-	// skeleton-to-content swap doesn't reflow (tuned via MCP measurement).
+	// Skeleton row placeholders - one full-width bar per expected row (count
+	// tuned to typical data via MCP measurement).
 	const SKELETON_ROWS = [0, 1, 2] as const;
 
 	let { data }: PageProps = $props();
@@ -226,14 +226,7 @@
 
 				{#if !loaded}
 					<div class="overflow-x-auto">
-						<table class="table table-fixed table-sm [&_tr]:border-base-300">
-							<colgroup>
-								<col class="w-[40%]" />
-								<col class="w-[15%]" />
-								<col class="w-[15%]" />
-								<col class="w-[15%]" />
-								<col class="w-[15%]" />
-							</colgroup>
+						<table class="table table-sm [&_tr]:border-base-300">
 							<thead>
 								<tr>
 									<th>{permissionsT.category}</th>
@@ -246,13 +239,7 @@
 							<tbody>
 								{#each SKELETON_ROWS as i (i)}
 									<tr>
-										<td>
-											<div class="skeleton h-4 w-32"></div>
-											<div class="skeleton h-3 w-20 mt-2"></div>
-										</td>
-										{#each [0, 1, 2, 3] as j (j)}
-											<td><div class="skeleton h-5 w-5 rounded"></div></td>
-										{/each}
+										<td colspan="5"><div class="skeleton h-5 w-full"></div></td>
 									</tr>
 								{/each}
 							</tbody>
@@ -260,14 +247,7 @@
 					</div>
 				{:else if online.online}
 					<div class="overflow-x-auto">
-						<table class="table table-fixed table-sm [&_tr]:border-base-300">
-							<colgroup>
-								<col class="w-[40%]" />
-								<col class="w-[15%]" />
-								<col class="w-[15%]" />
-								<col class="w-[15%]" />
-								<col class="w-[15%]" />
-							</colgroup>
+						<table class="table table-sm [&_tr]:border-base-300">
 							<thead>
 								<tr>
 									<th>{permissionsT.category}</th>
