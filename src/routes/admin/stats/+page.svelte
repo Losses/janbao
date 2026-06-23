@@ -390,6 +390,7 @@
 					</div>
 					<div
 						class="relative h-14 w-full bg-base-200 border border-base-300 rounded-box select-none touch-none"
+						data-gesture-disabled
 						bind:this={sliderEl}
 					>
 						<!-- Sparkline timeline background of total activities -->

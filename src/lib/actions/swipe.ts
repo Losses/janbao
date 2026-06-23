@@ -37,11 +37,16 @@ const CLICK_THRESHOLD = 6; // px of travel before the trailing click is suppress
 // trailing click is suppressed separately (suppressNextClick) so a swipe never
 // double-fires as a tap. Form fields / the editor / horizontal scrollers keep
 // their native behaviour.
-const INTERACTIVE_SELECTOR = 'input, textarea, select, [contenteditable], [data-no-swipe]';
-
-function isInteractive(target: EventTarget | null): boolean {
+function isInteractive(target: EventTarget | null, targetWasFocused: boolean): boolean {
 	if (!(target instanceof Element)) return false;
-	return target.closest(INTERACTIVE_SELECTOR) !== null;
+	if (target.closest('[data-gesture-disabled], [data-no-swipe]') !== null) {
+		return true;
+	}
+	const editingAncestor = target.closest('input, textarea, select, [contenteditable]');
+	if (editingAncestor !== null) {
+		return targetWasFocused;
+	}
+	return false;
 }
 
 /** Walk up from the target; bail if any ancestor up to `boundary` scrolls horizontally. */
@@ -206,6 +211,7 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 	let startY = 0;
 	let startTime = 0;
 	let target: EventTarget | null = null;
+	let targetWasFocused = false;
 	let phase: SwipePhase = 'idle';
 	let primaryPointerId = NO_POINTER;
 
@@ -254,6 +260,10 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 			startY = event.clientY;
 			startTime = event.timeStamp;
 			target = event.target;
+
+			const editingAncestor = target instanceof Element ? target.closest('input, textarea, select, [contenteditable]') : null;
+			targetWasFocused = editingAncestor !== null && document.activeElement !== null && (document.activeElement === editingAncestor || editingAncestor.contains(document.activeElement));
+
 			phase = 'deciding';
 			console.log('[detectSwipe] down start:', { startX, startY, phase });
 		}
@@ -278,7 +288,7 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 
 			const horizontal = absDx > absDy * HORIZONTAL_RATIO;
 			const vertical = absDy > absDx * HORIZONTAL_RATIO;
-			const ignorable = isInteractive(target) || insideHorizontalScroll(target, node);
+			const ignorable = isInteractive(target, targetWasFocused) || insideHorizontalScroll(target, node);
 
 			console.log('[detectSwipe] deciding progress:', {
 				dx,
