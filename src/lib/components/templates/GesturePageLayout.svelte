@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { goto, preloadData } from '$app/navigation';
 	import { page } from '$app/state';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import { getPageScrollStore } from '$lib/stores/page-scroll.svelte';
@@ -13,6 +13,8 @@
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
 	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
 	import type { ConversationListItem } from '$lib/types/api';
+	import Icon from '$lib/components/atoms/Icon.svelte';
+	import { MOBILE_TABS } from '$lib/utils/mobile-tabs';
 
 	interface Props {
 		children: Snippet;
@@ -40,8 +42,62 @@
 	};
 	let isMobile = $state(getIsMobile());
 
+	// State declarations
+	let dragOffset = $state<number | null>(null);
+	let swipeNeedsLoadingAtStart = $state(false);
+	let isPendingNavigation = $state(false);
+	let isTransitioningOut = $state(false);
+	let prefetchStarted = false;
+
+	// Derived declarations
 	const hasLeft = $derived(!!left || (navStore.activeTab >= 0 && navStore.activeTab <= 2));
 	const resolvedLeftHref = $derived(leftHref ?? navStore.backTarget);
+
+	const isTargetTabRoot = $derived(
+		resolvedLeftHref === '/' ||
+			resolvedLeftHref === '/activity' ||
+			resolvedLeftHref === '/messages/inbox'
+	);
+	const isParentCachePopulated = $derived(
+		navStore.activeTab === 0
+			? !!listCache.home?.discussions
+			: navStore.activeTab === 1
+				? !!listCache.activity?.activities
+				: navStore.activeTab === 2
+					? !!(listCache.messages?.conversations && listCache.messages.conversations.length > 0)
+					: false
+	);
+	const needsLoading = $derived(isTargetTabRoot && !isParentCachePopulated);
+
+	const maxDrag = $derived(typeof window !== 'undefined' ? window.innerWidth * 0.3 : 100);
+	const W = $derived(typeof window !== 'undefined' ? window.innerWidth : 375);
+
+	const currentRevealWidth = $derived<number>(
+		isTransitioningOut ? W : isPendingNavigation ? maxDrag : dragOffset !== null ? dragOffset : 0
+	);
+
+	const progress = $derived(maxDrag > 0 ? Math.min(1, currentRevealWidth / maxDrag) : 0);
+
+	const targetTab = $derived(
+		resolvedLeftHref ? MOBILE_TABS.find((tab) => tab.isActive(resolvedLeftHref)) : null
+	);
+
+	const isCircle = $derived(currentRevealWidth < 40);
+	const chipStyleWidth = $derived(isCircle ? '36px' : 'auto');
+	const chipStyleHeight = $derived('36px');
+	const chipPadding = $derived(isCircle ? 'padding: 0;' : 'padding: 6px 12px;');
+
+	const baseScale = $derived(
+		currentRevealWidth < 40 ? currentRevealWidth / 40 : progress >= 0.9 ? 1.3 : 1 + progress * 0.15
+	);
+	const chipScale = $derived(isTransitioningOut ? 1.6 : isPendingNavigation ? 1.15 : baseScale);
+	const chipOpacity = $derived(isTransitioningOut ? 0 : 1);
+
+	const textProgress = $derived(
+		Math.max(0, Math.min(1, (currentRevealWidth - 40) / (maxDrag - 40)))
+	);
+	const chipMaxWidth = $derived(isCircle ? 36 : 36 + textProgress * 94);
+	const textMaxWidth = $derived(isCircle ? 0 : textProgress * 70);
 
 	let leftEl = $state<HTMLElement | null>(null);
 	const leftScrollTop = $derived(resolvedLeftHref ? pageScrollStore.get(resolvedLeftHref) : 0);
@@ -50,6 +106,7 @@
 	const currentScrollTop = $derived(page.url.pathname ? pageScrollStore.get(page.url.pathname) : 0);
 
 	const shouldAnimateEnter = () => {
+		if (needsLoading) return false; // Never animate entry from loading swipe
 		if (!hasLeft || !resolvedLeftHref) return false;
 		if (navStore.direction !== 'forward') return false;
 		if (navStore.activeStack.length < 2) return false;
@@ -58,15 +115,15 @@
 	};
 
 	const isEntering = shouldAnimateEnter();
-	let dragOffset = $state<number | null>(null);
 	let trackEl = $state<HTMLElement | null>(null);
 	let transitionEnabled = $state(false);
 	// svelte-ignore state_referenced_locally
 	let snapIndex = $state(
 		isEntering ? 0 : left || (navStore.activeTab >= 0 && navStore.activeTab <= 2) ? 1 : 0
 	);
-	const panelCount = $derived(hasLeft ? 2 : 1);
-	const ACTIVE = $derived(hasLeft ? 1 : 0);
+
+	const panelCount = $derived(hasLeft && !swipeNeedsLoadingAtStart ? 2 : 1);
+	const ACTIVE = $derived(hasLeft && !swipeNeedsLoadingAtStart ? 1 : 0);
 	const STEP_PERCENT = $derived(100 / panelCount);
 	const SWIPE_COMMIT = 60;
 	let viewportEl: HTMLElement | null = $state(null);
@@ -97,12 +154,26 @@
 		}
 	});
 
+	const trackTranslateX = $derived<string>(
+		!isMobile
+			? '0px'
+			: swipeNeedsLoadingAtStart
+				? isTransitioningOut
+					? `${W}px`
+					: isPendingNavigation
+						? `${maxDrag}px`
+						: dragOffset !== null
+							? `${dragOffset}px`
+							: '0px'
+				: dragOffset !== null
+					? `calc(-${ACTIVE * STEP_PERCENT}% + ${dragOffset}px)`
+					: `-${snapIndex * STEP_PERCENT}%`
+	);
+
 	const trackStyle = $derived(
 		!isMobile
 			? 'width: 100%; transform: none; display: block;'
-			: dragOffset !== null
-				? `width: ${panelCount * 100}%; transform: translateX(calc(-${ACTIVE * STEP_PERCENT}% + ${dragOffset}px)); transition: none; display: flex; height: 100%;`
-				: `width: ${panelCount * 100}%; transform: translateX(-${snapIndex * STEP_PERCENT}%); display: flex; height: 100%;${transitionEnabled ? '' : ' transition: none !important;'}`
+			: `width: ${panelCount * 100}%; transform: translateX(${trackTranslateX}); display: flex; height: 100%;${dragOffset !== null || !transitionEnabled ? ' transition: none !important;' : ''}`
 	);
 
 	const sectionWidth = $derived(`${100 / panelCount}%`);
@@ -125,7 +196,21 @@
 
 	function onSwipeMove(deltaX: number) {
 		if (deltaX > 0) {
-			dragOffset = deltaX;
+			if (dragOffset === null) {
+				swipeNeedsLoadingAtStart = needsLoading;
+			}
+
+			if (swipeNeedsLoadingAtStart) {
+				const maxDragDist = window.innerWidth * 0.3;
+				dragOffset = maxDragDist * Math.tanh(deltaX / (maxDragDist * 1.2));
+
+				if (dragOffset >= 30 && !prefetchStarted && resolvedLeftHref) {
+					prefetchStarted = true;
+					void preloadData(resolvedLeftHref).catch(() => {});
+				}
+			} else {
+				dragOffset = deltaX;
+			}
 		}
 	}
 
@@ -147,29 +232,70 @@
 	}
 
 	function onSwipeEnd(deltaX: number) {
-		const committed = deltaX >= SWIPE_COMMIT;
-		if (committed) {
-			const consumed = backHandler.dispatch();
-			if (!consumed) {
+		if (swipeNeedsLoadingAtStart) {
+			const maxDragDist = window.innerWidth * 0.3;
+			const committed = (dragOffset ?? 0) >= maxDragDist * 0.75 || deltaX >= SWIPE_COMMIT;
+			if (committed && resolvedLeftHref) {
 				const targetHref = resolvedLeftHref;
-				if (hasLeft && targetHref) {
-					snapIndex = 0;
-					const back = backLandsOn(targetHref);
-					pendingNav = { href: targetHref, back };
+				if (isParentCachePopulated) {
+					isTransitioningOut = true;
+					dragOffset = null;
+					setTimeout(() => {
+						void goto(targetHref, { replaceState: true }).then(() => {
+							isTransitioningOut = false;
+							prefetchStarted = false;
+							swipeNeedsLoadingAtStart = false;
+						});
+					}, 300);
 				} else {
-					if (navStore.activeStack.length > 1) {
-						history.back();
+					isPendingNavigation = true;
+					dragOffset = null;
+					preloadData(targetHref)
+						.catch(() => {})
+						.then(() => {
+							isPendingNavigation = false;
+							isTransitioningOut = true;
+							setTimeout(() => {
+								void goto(targetHref, { replaceState: true }).then(() => {
+									isTransitioningOut = false;
+									prefetchStarted = false;
+									swipeNeedsLoadingAtStart = false;
+								});
+							}, 300);
+						});
+				}
+			} else {
+				dragOffset = null;
+				prefetchStarted = false;
+				setTimeout(() => {
+					swipeNeedsLoadingAtStart = false;
+				}, 300);
+			}
+		} else {
+			const committed = deltaX >= SWIPE_COMMIT;
+			if (committed) {
+				const consumed = backHandler.dispatch();
+				if (!consumed) {
+					const targetHref = resolvedLeftHref;
+					if (hasLeft && targetHref) {
+						snapIndex = 0;
+						const back = backLandsOn(targetHref);
+						pendingNav = { href: targetHref, back };
 					} else {
-						void goto(fallbackRoute, { replaceState: true });
+						if (navStore.activeStack.length > 1) {
+							history.back();
+						} else {
+							void goto(fallbackRoute, { replaceState: true });
+						}
 					}
+				} else {
+					snapIndex = ACTIVE;
 				}
 			} else {
 				snapIndex = ACTIVE;
 			}
-		} else {
-			snapIndex = ACTIVE;
+			dragOffset = null;
 		}
-		dragOffset = null;
 	}
 
 	function onTrackTransitionEnd(event: TransitionEvent): void {
@@ -254,7 +380,7 @@
 		style={trackStyle}
 		ontransitionend={onTrackTransitionEnd}
 	>
-		{#if hasLeft && isMobile}
+		{#if hasLeft && isMobile && !swipeNeedsLoadingAtStart}
 			<section
 				bind:this={leftEl}
 				class="shrink-0 p-3 scroll-pane md:hidden"
@@ -306,4 +432,66 @@
 			{@render children()}
 		</section>
 	</div>
+
+	{#if swipeNeedsLoadingAtStart && isMobile && (dragOffset !== null || isPendingNavigation || isTransitioningOut)}
+		<div
+			class="loading-overlay absolute inset-y-0 left-0 z-50 flex items-center justify-center pointer-events-none"
+			class:dragging={dragOffset !== null}
+			style="width: {currentRevealWidth}px; opacity: {isTransitioningOut ? 0 : 1};"
+		>
+			<div
+				class="loading-chip bg-neutral text-neutral-content rounded-full flex items-center justify-center shadow-lg font-medium whitespace-nowrap overflow-hidden"
+				class:gap-2={!isCircle}
+				class:dragging={dragOffset !== null}
+				class:animate-pulse={isPendingNavigation}
+				style="transform: scale({chipScale}); opacity: {chipOpacity}; max-width: {chipMaxWidth}px; min-width: {isCircle
+					? '36px'
+					: '0px'}; height: {chipStyleHeight}; width: {chipStyleWidth}; {chipPadding}"
+			>
+				{#if targetTab}
+					<Icon path={targetTab.icon} size={18} class="shrink-0 text-neutral-content" />
+				{/if}
+				<span
+					class="loading-chip-text overflow-hidden text-sm whitespace-nowrap text-neutral-content"
+					style="max-width: {textMaxWidth}px;"
+				>
+					{#if targetTab}
+						{page.data.t.nav[targetTab.labelKey]}
+					{/if}
+				</span>
+			</div>
+		</div>
+	{/if}
 </div>
+
+<style>
+	.loading-overlay {
+		background-color: var(--color-base-200);
+		overflow: visible;
+		transition:
+			width 300ms cubic-bezier(0.25, 0.8, 0.25, 1),
+			opacity 300ms ease;
+	}
+	.loading-overlay.dragging {
+		transition: none !important;
+	}
+	.loading-chip {
+		font-family: var(--font-sans);
+		transition:
+			transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1),
+			opacity 300ms ease,
+			max-width 200ms ease;
+	}
+	.loading-chip.dragging {
+		transition:
+			max-width 0s linear,
+			transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+	}
+	.loading-chip-text {
+		display: inline-block;
+		transition: max-width 200ms ease;
+	}
+	.loading-chip.dragging .loading-chip-text {
+		transition: none !important;
+	}
+</style>
