@@ -236,7 +236,7 @@ header nav {
 		overflow: hidden;
 	}
 
-	html.fixed-viewport .flex-1 {
+	html.fixed-viewport .app-shell-content {
 		min-height: 0;
 		height: 100%;
 	}

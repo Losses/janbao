@@ -401,7 +401,13 @@
 			</div>
 
 			<div class="card card-bordered border-base-300 bg-base-100 p-5 space-y-4">
-				{#if selectedRangeText}
+				{#if !loaded}
+					<!-- Reserve the selected-range badge row so the chart below doesn't
+					     shift down when the badge renders post-load. -->
+					<div class="flex justify-end">
+						<div class="skeleton h-5 w-40 rounded-full"></div>
+					</div>
+				{:else if selectedRangeText}
 					<div class="flex justify-end">
 						<span
 							class="badge badge-sm badge-outline font-mono border-base-300 text-base-content/80 p-2"
