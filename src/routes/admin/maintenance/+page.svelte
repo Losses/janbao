@@ -36,17 +36,12 @@
 
 	const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-	// One skeleton card per maintenance op, mirroring the loaded card so the
-	// skeleton-to-content swap doesn't reflow (tuned via MCP measurement).
-	const SKELETON_CARDS = [0, 1, 2, 3, 4] as const;
-
 	let { data }: PageProps = $props();
 	const online = getOnlineStore();
 	const t = $derived(data.t);
 	const maintenanceT = $derived(t.maintenance);
 	const user = $derived(data.user);
 
-	let loaded = $state(false);
 	let overview = $state<MaintenanceOverview | null>(null);
 
 	// ANALYZE / statsRebuild / statsFreeze run synchronously (shared busy flag);
@@ -71,7 +66,6 @@
 		} catch {
 			setMessage('error', t.auth.networkError);
 		}
-		loaded = true;
 		// Resume polling if a detached run was already in progress (e.g. the daily
 		// run started while the admin was elsewhere). Mirrors the old onMount check,
 		// now deferred until the overview actually arrives.
@@ -195,22 +189,7 @@
 				</div>
 			{/if}
 
-			{#if !loaded}
-				<div class="space-y-3">
-					{#each SKELETON_CARDS as i (i)}
-						<div class="rounded-box border border-base-300 p-4 space-y-2">
-							<div class="flex items-start justify-between gap-3">
-								<div class="space-y-1.5 flex-1">
-									<div class="skeleton h-5 w-40"></div>
-									<div class="skeleton h-4 w-64"></div>
-								</div>
-								<div class="skeleton h-8 w-20 shrink-0"></div>
-							</div>
-							<div class="skeleton h-4 w-48"></div>
-						</div>
-					{/each}
-				</div>
-			{:else if online.online && overview}
+			{#if online.online}
 				<div class="space-y-3">
 					{#snippet opCard(
 						op: MaintenanceOp,
@@ -219,39 +198,41 @@
 						busy: boolean,
 						onRun: VoidHandler
 					)}
-						{@const status = overview!.ops[op]}
+						{@const status = overview?.ops[op]}
 						<div class="rounded-box border border-base-300 p-4 space-y-2">
 							<div class="flex items-start justify-between gap-3">
 								<div>
 									<div class="font-medium">{label}</div>
 									<p class="text-xs text-base-content/60">{desc}</p>
 								</div>
-								{#if status.available}
+								{#if status?.available}
 									<button class="btn btn-primary btn-sm shrink-0" onclick={onRun} disabled={busy}>
 										{busy ? maintenanceT.running : maintenanceT.runNow}
 									</button>
 								{/if}
 							</div>
 
-							{#if !status.available}
-								<p class="text-xs text-warning">{maintenanceT.notAvailable}</p>
-							{:else}
-								<div class="text-xs text-base-content/60 flex flex-wrap items-center gap-x-3">
-									<span>
-										{maintenanceT.lastRun}:
-										{#if status.lastRunIso}
-											<DateAtom value={status.lastRunIso} {t} />
-										{:else}
-											{maintenanceT.never}
+							{#if status}
+								{#if !status.available}
+									<p class="text-xs text-warning">{maintenanceT.notAvailable}</p>
+								{:else}
+									<div class="text-xs text-base-content/60 flex flex-wrap items-center gap-x-3">
+										<span>
+											{maintenanceT.lastRun}:
+											{#if status.lastRunIso}
+												<DateAtom value={status.lastRunIso} {t} />
+											{:else}
+												{maintenanceT.never}
+											{/if}
+										</span>
+										{#if status.lastResult}
+											<span
+												>{maintenanceT.lastResult}:
+												<span class="font-mono">{status.lastResult}</span></span
+											>
 										{/if}
-									</span>
-									{#if status.lastResult}
-										<span
-											>{maintenanceT.lastResult}:
-											<span class="font-mono">{status.lastResult}</span></span
-										>
-									{/if}
-								</div>
+									</div>
+								{/if}
 							{/if}
 						</div>
 					{/snippet}

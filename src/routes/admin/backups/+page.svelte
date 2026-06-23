@@ -218,10 +218,12 @@
 		<div class="space-y-3">
 			<div class="flex items-center justify-between border-b border-base-300 pb-4">
 				<h1 class="page-title">{backupT.title}</h1>
-				{#if !loaded}
-					<div class="skeleton h-8 w-28"></div>
-				{:else if available && online.online}
-					<button class="btn btn-primary btn-sm" onclick={backupNow} disabled={backing}>
+				{#if online.online}
+					<button
+						class="btn btn-primary btn-sm"
+						onclick={backupNow}
+						disabled={!loaded || !available || backing}
+					>
 						{backing ? backupT.backingUp : backupT.backupNow}
 					</button>
 				{/if}
@@ -236,45 +238,14 @@
 				</div>
 			{/if}
 
-			{#if !loaded}
-				<div class="space-y-4">
-					<div class="space-y-3">
-						<div class="skeleton h-5 w-40"></div>
-						<div class="flex flex-wrap items-end gap-3">
-							<div class="space-y-1">
-								<div class="skeleton h-3 w-20"></div>
-								<div class="skeleton h-8 w-32"></div>
-							</div>
-							<div class="skeleton h-8 w-16"></div>
-						</div>
-						<div class="skeleton h-3 w-72"></div>
-					</div>
-					<div class="overflow-x-auto">
-						<table class="table table-sm [&_tr]:border-base-300">
-							<thead>
-								<tr>
-									<th>{backupT.name}</th>
-									<th>{backupT.date}</th>
-									<th class="text-right">{backupT.actions}</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each SKELETON_ROWS as i (i)}
-									<tr>
-										<td colspan="3"><div class="skeleton h-5 w-full"></div></td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-				</div>
-			{:else if !available}
+			{#if loaded && !available}
 				<div class="alert" role="alert">
 					{backupT.notAvailable}
 				</div>
 			{:else}
 				<div class="space-y-4">
-					<!-- Policy -->
+					<!-- Policy controls are static UI; their values sync from the loaded
+					     policy via the draft effect, so they render immediately (no skeleton). -->
 					<div class="space-y-3">
 						<label class="flex items-center gap-3">
 							<input
@@ -310,8 +281,27 @@
 						<p class="text-xs text-base-content/60">{backupT.retentionDaysHelp}</p>
 					</div>
 
-					<!-- Backups list -->
-					{#if online.online}
+					<!-- Backups list (the only truly data-dependent region here) -->
+					{#if !loaded}
+						<div class="overflow-x-auto">
+							<table class="table table-sm [&_tr]:border-base-300">
+								<thead>
+									<tr>
+										<th>{backupT.name}</th>
+										<th>{backupT.date}</th>
+										<th class="text-right">{backupT.actions}</th>
+									</tr>
+								</thead>
+								<tbody>
+									{#each SKELETON_ROWS as i (i)}
+										<tr>
+											<td colspan="3"><div class="skeleton h-5 w-full"></div></td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					{:else if online.online}
 						<div class="overflow-x-auto">
 							<table class="table table-sm [&_tr]:border-base-300">
 								<thead>
