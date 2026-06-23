@@ -27,6 +27,7 @@
 	import { writeThread, passthroughEnabledFor } from '$lib/offline/passthrough';
 	import type { ThreadPassthroughInput } from '$lib/offline/passthrough';
 	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
+	import { getListScrollStore } from '$lib/stores/list-scroll.svelte';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -43,8 +44,9 @@
 	let { data }: PageProps = $props();
 
 	const listCache = getListCacheStore();
+	const listScroll = getListScrollStore();
 
-	let listScrollTop = $state(0);
+	let listScrollTop = $state(listScroll.captured);
 	let detailScrollTop = $state(0);
 
 	export const snapshot = {

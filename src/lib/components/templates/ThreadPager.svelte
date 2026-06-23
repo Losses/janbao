@@ -165,16 +165,27 @@
 		pager.set({ fractionalIndex: progress, dragging: dragOffset !== null, active: true });
 	});
 
-	// Synchronous Svelte 5 reactive effects to restore scrollTop upon mounting elements
+	// Synchronous Svelte 5 reactive effects to restore scrollTop upon mounting elements,
+	// with a requestAnimationFrame fallback to handle browser layout settling.
 	$effect(() => {
 		if (listEl && listScrollTop > 0) {
 			listEl.scrollTop = listScrollTop;
+			const rafId = requestAnimationFrame(() => {
+				if (listEl) {
+					listEl.scrollTop = listScrollTop;
+				}
+			});
+			return () => cancelAnimationFrame(rafId);
 		}
 	});
 
 	$effect(() => {
 		if (detailEl && detailScrollTop > 0) {
 			detailEl.scrollTop = detailScrollTop;
+			const rafId = requestAnimationFrame(() => {
+				if (detailEl) detailEl.scrollTop = detailScrollTop;
+			});
+			return () => cancelAnimationFrame(rafId);
 		}
 	});
 
@@ -328,7 +339,11 @@
 				bind:this={listEl}
 				class="shrink-0 p-3 scroll-pane md:hidden"
 				style={leftNeighborStyle}
-				onscroll={(e) => (listScrollTop = e.currentTarget.scrollTop)}
+				onscroll={(e) => {
+					if (e.currentTarget.scrollTop > 0) {
+						listScrollTop = e.currentTarget.scrollTop;
+					}
+				}}
 				use:boundaryLock={{ disabled: false }}
 			>
 				{@render left()}
