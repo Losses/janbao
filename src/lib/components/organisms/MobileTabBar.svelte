@@ -63,6 +63,7 @@
 		{@const branded = brandedFirstTab && item.labelKey === 'discussions'}
 		<a
 			href={item.href}
+			data-tab-nav
 			class="flex items-center rounded-full px-2.5 py-1.5 {dragging
 				? ''
 				: 'transition-colors duration-200'} {pillActive

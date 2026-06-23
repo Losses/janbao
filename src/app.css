@@ -215,3 +215,29 @@ header nav {
 [id^='reply-'] {
 	scroll-margin-top: var(--header-height, 0px);
 }
+
+/* Lock main document from scrolling and rubber-banding on mobile pager routes */
+@media (max-width: 767px) {
+	html.fixed-viewport,
+	html.fixed-viewport body {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		overflow: hidden;
+		width: 100%;
+		height: 100%;
+	}
+
+	html.fixed-viewport .min-h-screen {
+		height: 100% !important;
+		min-height: 100% !important;
+		overflow: hidden;
+	}
+
+	html.fixed-viewport .flex-1 {
+		min-height: 0;
+		height: 100%;
+	}
+}

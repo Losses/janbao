@@ -29,7 +29,7 @@ type SwipePhase = 'idle' | 'deciding' | 'swipe' | 'ignore';
 
 const NO_POINTER = -1;
 const DEAD_ZONE = 10; // px of travel before a drag is classified
-const HORIZONTAL_RATIO = 1.4; // |dx| must exceed |dy| * this to count as horizontal
+const HORIZONTAL_RATIO = 1.6; // |dx| must exceed |dy| * this to count as horizontal
 const LONG_PRESS_MS = 350; // a drag that only starts moving after this is a long-press/select, not a swipe
 const CLICK_THRESHOLD = 6; // px of travel before the trailing click is suppressed
 // Only editing controls opt out of swipe detection. Links and buttons do NOT:
@@ -153,6 +153,7 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 		params.onMove(delta);
 	}
 
+	// In captureSwipe we also block body elastic bounce when dragging the edge
 	function onUp(event: PointerEvent): void {
 		releaseIfHeld(event.pointerId);
 		if (event.pointerId === primaryPointerId) {
@@ -239,6 +240,14 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 			return;
 		}
 
+		// OS edge-swipe gesture collision guard (40px margin zone to match modern iOS/Android bezel-less native triggers)
+		const edgeDeadZone = 40;
+		if (event.clientX < edgeDeadZone || event.clientX > window.innerWidth - edgeDeadZone) {
+			console.log('[detectSwipe] ignored due to edge dead zone:', event.clientX);
+			phase = 'ignore';
+			return;
+		}
+
 		if (phase === 'idle') {
 			primaryPointerId = event.pointerId;
 			startX = event.clientX;
@@ -246,6 +255,7 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 			startTime = event.timeStamp;
 			target = event.target;
 			phase = 'deciding';
+			console.log('[detectSwipe] down start:', { startX, startY, phase });
 		}
 	}
 
@@ -255,25 +265,57 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 		const dx = event.clientX - startX;
 		const dy = event.clientY - startY;
 		if (phase === 'deciding') {
-			if (Math.abs(dx) < DEAD_ZONE && Math.abs(dy) < DEAD_ZONE) return;
+			const absDx = Math.abs(dx);
+			const absDy = Math.abs(dy);
+			if (absDx < DEAD_ZONE && absDy < DEAD_ZONE) return;
 			// A gesture that only begins moving after a long-press is selection /
 			// context-menu, not a flick - hand it back to the browser untouched.
 			if (event.timeStamp - startTime > LONG_PRESS_MS) {
+				console.log('[detectSwipe] ignored due to long press time:', event.timeStamp - startTime);
 				phase = 'ignore';
 				return;
 			}
-			const horizontal = Math.abs(dx) > Math.abs(dy) * HORIZONTAL_RATIO;
+
+			const horizontal = absDx > absDy * HORIZONTAL_RATIO;
+			const vertical = absDy > absDx * HORIZONTAL_RATIO;
 			const ignorable = isInteractive(target) || insideHorizontalScroll(target, node);
-			if (horizontal && !ignorable) {
-				phase = 'swipe';
-				try {
-					node.setPointerCapture(event.pointerId);
-					capturedPointers.add(event.pointerId);
-				} catch {
-					// Capture is optional; the swipe still completes on up / cancel.
+
+			console.log('[detectSwipe] deciding progress:', {
+				dx,
+				dy,
+				absDx,
+				absDy,
+				horizontal,
+				vertical,
+				ignorable
+			});
+
+			if (absDx >= DEAD_ZONE && horizontal) {
+				if (!ignorable) {
+					phase = 'swipe';
+					console.log('[detectSwipe] swipe activated!');
+					try {
+						node.setPointerCapture(event.pointerId);
+						capturedPointers.add(event.pointerId);
+					} catch (err) {
+						console.log('[detectSwipe] pointer capture failed:', err);
+					}
+				} else {
+					console.log('[detectSwipe] ignored because interactive/scrollable:', { ignorable });
+					phase = 'ignore';
+					return;
 				}
-			} else {
+			} else if (absDy >= DEAD_ZONE && vertical) {
+				console.log('[detectSwipe] vertical scroll detected, ignoring swipe');
 				phase = 'ignore';
+				return;
+			} else if (absDx > 25 || absDy > 25) {
+				console.log('[detectSwipe] ambiguous drag exceeded safety limit, ignoring');
+				phase = 'ignore';
+				return;
+			} else {
+				// Keep deciding (both are small, or ratio is close)
+				console.log('[detectSwipe] ambiguous diagonal movement under limit, continue deciding...');
 				return;
 			}
 		}
@@ -284,6 +326,7 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 	function onUp(event: PointerEvent): void {
 		releaseIfHeld(event.pointerId);
 		if (event.pointerId !== primaryPointerId) return;
+		console.log('[detectSwipe] up/cancel event:', { phase, deltaX: event.clientX - startX });
 		if (phase === 'swipe') {
 			finish(event);
 		} else {
@@ -299,11 +342,35 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 		capturedPointers.delete(event.pointerId);
 	}
 
+	// Intercept touchmove events to lock vertical scroll when horizontal swipe is active
+	function preventTouchMove(event: TouchEvent) {
+		if (phase === 'swipe') {
+			if (event.cancelable) {
+				event.preventDefault();
+			}
+		} else if (phase === 'deciding') {
+			const touch = event.touches[0];
+			if (touch) {
+				const dx = touch.clientX - startX;
+				const dy = touch.clientY - startY;
+				// If horizontal movement is dominant, prevent default early (even before DEAD_ZONE)
+				// to lock vertical scrolling and prevent the browser from claiming the gesture.
+				const horizontal = Math.abs(dx) > Math.abs(dy) * 1.1;
+				if (horizontal && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) {
+					if (event.cancelable) {
+						event.preventDefault();
+					}
+				}
+			}
+		}
+	}
+
 	node.addEventListener('pointerdown', onDown);
 	node.addEventListener('pointermove', onMove);
 	node.addEventListener('pointerup', onUp);
 	node.addEventListener('pointercancel', onUp);
 	node.addEventListener('lostpointercapture', onLostCapture);
+	node.addEventListener('touchmove', preventTouchMove, { passive: false });
 
 	return {
 		update(next: SwipeParams): void {
@@ -319,6 +386,7 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 			node.removeEventListener('pointerup', onUp);
 			node.removeEventListener('pointercancel', onUp);
 			node.removeEventListener('lostpointercapture', onLostCapture);
+			node.removeEventListener('touchmove', preventTouchMove);
 		}
 	};
 };

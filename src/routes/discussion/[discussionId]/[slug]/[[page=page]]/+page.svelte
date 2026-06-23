@@ -24,9 +24,9 @@
 	import { afterNavigate } from '$app/navigation';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
-	import { getListScrollStore } from '$lib/stores/list-scroll.svelte';
 	import { writeThread, passthroughEnabledFor } from '$lib/offline/passthrough';
 	import type { ThreadPassthroughInput } from '$lib/offline/passthrough';
+	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -42,15 +42,22 @@
 
 	let { data }: PageProps = $props();
 
+	const listCache = getListCacheStore();
+
+	let listScrollTop = $state(0);
+	let detailScrollTop = $state(0);
+
+	export const snapshot = {
+		capture: () => ({ listScrollTop, detailScrollTop }),
+		restore: (value) => {
+			listScrollTop = value.listScrollTop;
+			detailScrollTop = value.detailScrollTop;
+		}
+	};
+
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 
 	const online = getOnlineStore();
-	// The discussions list restores its scroll on swipe-back; the ThreadPager's
-	// list neighbour previews at that same captured scroll so the reveal matches
-	// the landing position (no commit jump).
-	const listScroll = getListScrollStore();
-	const leftPreviewScroll = $derived(listScroll.captured);
-
 	// Offline fallback: when the network drops while viewing a discussion that is
 	// cached locally, switch to the client-only offline reader (IDB, no server
 	// round-trip). The online read-mutation has already run for this view.
@@ -207,11 +214,27 @@
 		if (typeof window === 'undefined') return;
 		const headerOffset =
 			parseInt(getComputedStyle(document.documentElement).getPropertyValue('--header-height')) || 0;
-		const absoluteTop = el.getBoundingClientRect().top + window.scrollY;
-		window.scrollTo({
-			top: Math.max(0, absoluteTop - headerOffset),
-			behavior
-		});
+		const isMobile = window.matchMedia(MOBILE_BREAKPOINT).matches;
+		if (isMobile) {
+			const container = document.querySelector('.detail-scroll-pane') as HTMLElement | null;
+			if (container) {
+				const targetY = Math.max(
+					0,
+					container.scrollTop + el.getBoundingClientRect().top - headerOffset
+				);
+				container.scrollTo({
+					top: targetY,
+					behavior
+				});
+				detailScrollTop = targetY;
+			}
+		} else {
+			const absoluteTop = el.getBoundingClientRect().top + window.scrollY;
+			window.scrollTo({
+				top: Math.max(0, absoluteTop - headerOffset),
+				behavior
+			});
+		}
 	}
 
 	/**
@@ -287,10 +310,15 @@
 			if (done) return;
 			frame += 1;
 			const el = resolveEl();
-			if (el) {
-				const targetY = Math.max(0, el.getBoundingClientRect().top + window.scrollY - headerOffset);
+			const container = document.querySelector('.detail-scroll-pane') as HTMLElement | null;
+			if (el && container) {
+				const targetY = Math.max(
+					0,
+					container.scrollTop + el.getBoundingClientRect().top - headerOffset
+				);
 				if (!hasScrolled || Math.abs(targetY - prevTargetY) > 1) {
-					window.scrollTo({ top: targetY, behavior: 'auto' });
+					container.scrollTop = targetY;
+					detailScrollTop = targetY;
 					hasScrolled = true;
 					stableFrames = 0;
 				} else {
@@ -313,9 +341,14 @@
 		// the anchor is already in the DOM - afterNavigate fires after load, so it
 		// is. If not, the rAF poll in tick() handles it with a brief flash.)
 		const el0 = resolveEl();
-		if (el0) {
-			const targetY = Math.max(0, el0.getBoundingClientRect().top + window.scrollY - headerOffset);
-			window.scrollTo({ top: targetY, behavior: 'auto' });
+		const container0 = document.querySelector('.detail-scroll-pane') as HTMLElement | null;
+		if (el0 && container0) {
+			const targetY = Math.max(
+				0,
+				container0.scrollTop + el0.getBoundingClientRect().top - headerOffset
+			);
+			container0.scrollTop = targetY;
+			detailScrollTop = targetY;
 			hasScrolled = true;
 			prevTargetY = targetY;
 		}
@@ -440,29 +473,38 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t} flush>
-	<ThreadPager centerTab={0} rightTab={1} leftHref="/" rightHref="/activity" {leftPreviewScroll}>
-		{#snippet left()}
-			<DiscussionsPanel
-				discussions={data.list.discussions}
-				currentPage={data.list.page}
-				totalPages={data.list.totalPages}
-				{t}
-				{buildPageUrl}
-				paginate={true}
-			/>
-		{/snippet}
-		{#snippet right()}
-			<ActivityPanel
-				activities={data.activity.activities}
-				currentPage={data.activity.page}
-				totalPages={data.activity.totalPages}
-				activityDraft={data.activity.activityDraft}
-				mentionedUsers={data.activity.mentionedUsers}
-				{t}
-				{user}
-				paginate={true}
-			/>
-		{/snippet}
+	{#snippet leftSnippet()}
+		<DiscussionsPanel
+			discussions={listCache.home?.discussions}
+			currentPage={listCache.home?.page ?? 1}
+			totalPages={listCache.home?.totalPages ?? 1}
+			{t}
+			{buildPageUrl}
+			paginate={true}
+		/>
+	{/snippet}
+	{#snippet rightSnippet()}
+		<ActivityPanel
+			activities={listCache.activity?.activities ?? []}
+			currentPage={listCache.activity?.page ?? 1}
+			totalPages={listCache.activity?.totalPages ?? 1}
+			activityDraft={listCache.activity?.activityDraft}
+			mentionedUsers={listCache.activity?.mentionedUsers ?? []}
+			{t}
+			{user}
+			paginate={true}
+		/>
+	{/snippet}
+	<ThreadPager
+		centerTab={0}
+		rightTab={1}
+		leftHref="/"
+		rightHref="/activity"
+		bind:listScrollTop
+		bind:detailScrollTop
+		left={leftSnippet}
+		right={rightSnippet}
+	>
 		<div class="space-y-3">
 			<!-- Discussion Header -->
 			<div class="border-b border-base-300 flex justify-between items-center pb-3 gap-3">

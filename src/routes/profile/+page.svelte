@@ -16,6 +16,7 @@
 		mdiCommentOutline,
 		mdiLogout
 	} from '@mdi/js';
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -103,16 +104,18 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-6">
-		{#if data.headerPayload}
-			<ProfileHeader
-				targetUser={data.headerPayload.user}
-				invitedBy={data.headerPayload.invitedBy}
-				email={data.headerPayload.email}
-				showLastActive={true}
-				{t}
-			/>
-			<DirectoryGrid {groups} />
-		{/if}
-	</div>
+	<GesturePageLayout fallbackRoute="/">
+		<div class="space-y-6">
+			{#if data.headerPayload}
+				<ProfileHeader
+					targetUser={data.headerPayload.user}
+					invitedBy={data.headerPayload.invitedBy}
+					email={data.headerPayload.email}
+					showLastActive={true}
+					{t}
+				/>
+				<DirectoryGrid {groups} />
+			{/if}
+		</div>
+	</GesturePageLayout>
 </DualColumnLayout>

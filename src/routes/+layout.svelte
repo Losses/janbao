@@ -4,7 +4,7 @@
 	import type { Snippet } from 'svelte';
 	import { setContext, onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { beforeNavigate } from '$app/navigation';
+	import { beforeNavigate, afterNavigate } from '$app/navigation';
 	import AppShell from '$lib/components/templates/AppShell.svelte';
 	import type { LayoutData } from './$types';
 	import { getBadgesStore } from '$lib/stores/badges.svelte';
@@ -15,6 +15,7 @@
 	import { getEditorPrefsStore } from '$lib/stores/editor-prefs.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { markEnterFromList, setReachedFromList } from '$lib/stores/thread-nav.svelte';
+	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 
 	interface LayoutProps {
 		data: LayoutData;
@@ -25,6 +26,7 @@
 
 	const badges = getBadgesStore();
 	const editorPrefs = getEditorPrefsStore();
+	const navStore = getNavigationStore();
 
 	// Hold the scroll-chrome header (and on mobile hash-enter, pin it visible)
 	// for navigations where SvelteKit's scroll would otherwise make it twitch:
@@ -34,7 +36,17 @@
 	// (tabs) layout for swipe-back); a fallback timer covers the rest.
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	let navFreezeTimer = 0;
-	beforeNavigate(({ to, from }) => {
+	beforeNavigate(({ to, from, type, event }) => {
+		if (to && from) {
+			const isTabClick =
+				event?.target instanceof Element && event.target.closest('[data-tab-nav]') !== null;
+			if (isTabClick) {
+				navStore.switchTab(to.url.pathname, to.url.search);
+			} else {
+				navStore.handleBeforeNavigate(to.url.pathname, from.url.pathname, type, to.url.search);
+			}
+		}
+
 		const threadEnter = to?.url.hash && to.url.pathname.startsWith('/discussion');
 		const swipeBack = from?.url.pathname.startsWith('/discussion') && to?.url.pathname === '/';
 		// Record whether the thread was reached from the discussions list, so the
@@ -59,6 +71,10 @@
 			window.clearTimeout(navFreezeTimer);
 			navFreezeTimer = window.setTimeout(() => store.releaseNavigation(), 1200);
 		}
+	});
+
+	afterNavigate(() => {
+		navStore.handleAfterNavigate();
 	});
 
 	// Auth routes render their own standalone layout and must NOT get the
@@ -183,6 +199,7 @@
 	}
 
 	onMount(() => {
+		navStore.init(window.location.pathname, window.location.search);
 		unregisterDevServiceWorker();
 		online.setOnline(navigator.onLine);
 		// Decision #5: guests have no power to enable caching and the curated

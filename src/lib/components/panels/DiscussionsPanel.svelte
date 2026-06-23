@@ -22,7 +22,7 @@
 	import type { TranslationDict } from '$lib/types/translation';
 
 	interface DiscussionsPanelProps {
-		discussions: DiscussionListItem[];
+		discussions?: DiscussionListItem[];
 		currentPage: number;
 		totalPages: number;
 		t: TranslationDict;
@@ -99,7 +99,12 @@
 		{/if}
 
 		<!-- Discussions Stream -->
-		{#if discussions.length === 0}
+		{#if !discussions}
+			<div class="flex items-center justify-center gap-2 py-10 text-sm text-base-content/50">
+				<span class="loading loading-spinner loading-sm"></span>
+				{t.common.loading}
+			</div>
+		{:else if discussions.length === 0}
 			<EmptyState message={t.common.noResults} />
 		{:else}
 			<div class="overflow-hidden border-y border-base-300 bg-base-100">

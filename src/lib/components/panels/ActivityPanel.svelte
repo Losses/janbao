@@ -23,7 +23,7 @@
 	import type { TranslationDict } from '$lib/types/translation';
 
 	interface ActivityPanelProps {
-		activities: ActivityListItem[];
+		activities?: ActivityListItem[];
 		currentPage: number;
 		totalPages: number;
 		activityDraft: string | null;
@@ -162,6 +162,11 @@
 				<ActivityList items={offlineActivities} currentUserId={user?.id} {t} />
 			</div>
 		{/if}
+	{:else if !activities}
+		<div class="flex items-center justify-center gap-2 py-10 text-sm text-base-content/50">
+			<span class="loading loading-spinner loading-sm"></span>
+			{t.common.loading}
+		</div>
 	{:else if activities.length === 0}
 		<EmptyState message={t.common.noResults} bordered={false} />
 	{:else}

@@ -15,6 +15,7 @@
 		mdiCloudDownloadOutline,
 		mdiFileDocumentEditOutline
 	} from '@mdi/js';
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -98,8 +99,10 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-4">
-		<PageTitle title={profileT['accountSettings'] || 'Settings'} />
-		<DirectoryGrid {groups} />
-	</div>
+	<GesturePageLayout fallbackRoute="/profile">
+		<div class="space-y-4">
+			<PageTitle title={profileT['accountSettings'] || 'Settings'} />
+			<DirectoryGrid {groups} />
+		</div>
+	</GesturePageLayout>
 </DualColumnLayout>

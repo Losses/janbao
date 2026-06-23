@@ -27,6 +27,7 @@
 	import { getDrawerStore } from '$lib/stores/drawer.svelte';
 	import { getListScrollStore } from '$lib/stores/list-scroll.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
+	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 	import type { LayoutData } from './$types';
 
 	interface TabsLayoutProps {
@@ -35,6 +36,18 @@
 	}
 
 	let { data, children }: TabsLayoutProps = $props();
+
+	const listCache = getListCacheStore();
+
+	$effect(() => {
+		if (page.url.pathname === '/') {
+			listCache.setHome(page.data.discussions ? page.data : data.home);
+		} else if (page.url.pathname === '/activity') {
+			listCache.setActivity(page.data.activities ? page.data : data.activity);
+		} else if (page.url.pathname === '/messages/inbox') {
+			listCache.setMessages(page.data.conversations ? page.data : data.messages);
+		}
+	});
 
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	// svelte-ignore state_referenced_locally

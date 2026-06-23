@@ -11,7 +11,6 @@
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { consumeEnterFromList, backLandsOnList } from '$lib/stores/thread-nav.svelte';
-
 	import { page } from '$app/state';
 
 	interface PendingNav {
@@ -28,11 +27,8 @@
 		rightHref?: string;
 		centerTab: number;
 		rightTab?: number;
-		/** Scroll the left neighbour should preview at, so its reveal matches the
-		 * position the committed navigation restores to. Pass the captured value when
-		 * the destination restores scroll (the discussions list via list-scroll);
-		 * leave 0 when it lands at the top (the messages list). */
-		leftPreviewScroll?: number;
+		listScrollTop?: number;
+		detailScrollTop?: number;
 		children: Snippet;
 	}
 
@@ -43,16 +39,24 @@
 		rightHref,
 		centerTab,
 		rightTab,
-		leftPreviewScroll = 0,
+		listScrollTop = $bindable(0),
+		detailScrollTop = $bindable(0),
 		children
 	}: ThreadPagerProps = $props();
 
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
-	let isMobile = $state(page.data.isMobile ?? false);
+	const getIsMobile = () => {
+		if (typeof window === 'undefined') {
+			return page.data.isMobile ?? false;
+		}
+		return window.matchMedia(MOBILE_BREAKPOINT).matches;
+	};
+	let isMobile = $state(getIsMobile());
 
 	// Viewport element ref + scroll tracking for neighbor vertical alignment.
 	let viewportEl: HTMLElement | null = $state(null);
-	let scrollY = $state(0);
+	let listEl = $state<HTMLElement | null>(null);
+	let detailEl = $state<HTMLElement | null>(null);
 
 	const panelCount = $derived((left ? 1 : 0) + 1 + (right ? 1 : 0));
 	const ACTIVE = $derived(left ? 1 : 0);
@@ -69,38 +73,37 @@
 	let snapIndex = $state(animateEnter ? 0 : ACTIVE);
 	let pendingNav = $state<PendingNav | null>(null);
 	let viewportWidth = $state(0);
-	let threadHeight = $state(0);
 
-	// neighborOffset tracks window.scrollY so a neighbour panel stays at a fixed
-	// screen position while the window scrolls - this is what makes the horizontal
-	// swipe-to-neighbour transition seamless and lets the committed swipe's
-	// scrollTo(0,0) + translateY(0) land without a vertical jump. It MUST equal
-	// scrollY, so auto-scroll (which moves window.scrollY) inflating the neighbour
-	// transform is expected and harmless: neighbours are clipped off-screen and
-	// self-heal on the committed swipe.
-	const neighborOffset = $derived(scrollY);
+	let keyboardOffset = $state(0);
 
 	const trackStyle = $derived(
-		dragOffset !== null
-			? `width: ${panelCount * 100}%; transform: translateX(calc(-${ACTIVE * STEP_PERCENT}% + ${dragOffset}px)); transition: none`
-			: `width: ${panelCount * 100}%; transform: translateX(-${snapIndex * STEP_PERCENT}%)`
+		!isMobile
+			? 'width: 100%; transform: none; display: block;'
+			: dragOffset !== null
+				? `width: ${panelCount * 100}%; transform: translateX(calc(-${ACTIVE * STEP_PERCENT}% + ${dragOffset}px)); transition: none; display: flex; height: 100%;`
+				: `width: ${panelCount * 100}%; transform: translateX(-${snapIndex * STEP_PERCENT}%); display: flex; height: 100%;`
 	);
 	const sectionWidth = $derived(`${100 / panelCount}%`);
-	const neighborStyle = $derived(
-		`width: ${sectionWidth}; transform: translateY(${neighborOffset}px)`
-	);
-	// The left neighbour previews at leftPreviewScroll (the scroll the committed
-	// navigation restores to), so the reveal matches the landing position and the
-	// list does not jump on commit. NOT clamped: when the list was scrolled deeper
-	// than the thread (capturedY > scrollY) the offset goes negative, which is
-	// correct (it just shows the neighbour scrolled up) - clamping it broke that
-	// case. The right neighbour commits to scroll 0, so it stays at neighborOffset.
 	const leftNeighborStyle = $derived(
-		`width: ${sectionWidth}; transform: translateY(${neighborOffset - leftPreviewScroll}px)`
+		!isMobile
+			? 'display: none;'
+			: `width: ${sectionWidth}; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; touch-action: pan-y pinch-zoom;`
 	);
-	const centerStyle = $derived(`width: ${sectionWidth}`);
+	const centerStyle = $derived(
+		!isMobile
+			? 'width: 100%; display: block;'
+			: `width: ${sectionWidth}; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; touch-action: pan-y pinch-zoom;`
+	);
+	const neighborStyle = $derived(
+		!isMobile
+			? 'display: none;'
+			: `width: ${sectionWidth}; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; touch-action: pan-y pinch-zoom;`
+	);
+
 	const viewportStyle = $derived(
-		`touch-action: pan-y pinch-zoom; flex: 1 0 auto${threadHeight ? `; height: ${threadHeight}px` : ''}`
+		!isMobile
+			? 'touch-action: auto; overflow: visible; height: auto; width: 100%; position: relative;'
+			: `touch-action: pan-y pinch-zoom; flex: 1 1 auto; height: calc(100% - ${keyboardOffset}px); position: relative; width: 100%;`
 	);
 
 	function swipeMove(deltaX: number): void {
@@ -149,6 +152,7 @@
 
 	const pager = getMobilePagerStore();
 	$effect(() => {
+		if (!isMobile) return;
 		let progress: number;
 		if (dragOffset !== null && viewportWidth) {
 			const dragProgress = Math.max(0, Math.min(1, -dragOffset / viewportWidth));
@@ -161,37 +165,101 @@
 		pager.set({ fractionalIndex: progress, dragging: dragOffset !== null, active: true });
 	});
 
+	// Synchronous Svelte 5 reactive effects to restore scrollTop upon mounting elements
+	$effect(() => {
+		if (listEl && listScrollTop > 0) {
+			listEl.scrollTop = listScrollTop;
+		}
+	});
+
+	$effect(() => {
+		if (detailEl && detailScrollTop > 0) {
+			detailEl.scrollTop = detailScrollTop;
+		}
+	});
+
+	interface BoundaryLockParams {
+		disabled: boolean;
+	}
+
+	// Svelte Action for legacy iOS 15/WebView scroll boundary locking to prevent body overscroll.
+	// Uses programmatically added non-passive listeners to allow e.preventDefault().
+	const boundaryLock: Action<HTMLElement, BoundaryLockParams> = (node, initial) => {
+		let disabled = initial.disabled;
+		let startTouchY = 0;
+
+		const handleStart = (e: TouchEvent) => {
+			if (disabled) return;
+			startTouchY = e.touches[0]?.clientY ?? 0;
+		};
+
+		const handleMove = (e: TouchEvent) => {
+			if (disabled) return;
+			const currentY = e.touches[0]?.clientY ?? 0;
+			const direction = currentY - startTouchY;
+			const scrollTop = node.scrollTop;
+			const scrollHeight = node.scrollHeight;
+			const clientHeight = node.clientHeight;
+
+			if (scrollTop <= 0 && direction > 0) {
+				if (e.cancelable) e.preventDefault();
+			} else if (scrollTop + clientHeight >= scrollHeight && direction < 0) {
+				if (e.cancelable) e.preventDefault();
+			}
+		};
+
+		node.addEventListener('touchstart', handleStart, { passive: true });
+		node.addEventListener('touchmove', handleMove, { passive: false });
+
+		return {
+			update(next) {
+				disabled = next.disabled;
+			},
+			destroy() {
+				node.removeEventListener('touchstart', handleStart);
+				node.removeEventListener('touchmove', handleMove);
+			}
+		};
+	};
+
 	onMount(() => {
 		// Mobile detection
 		const mq = window.matchMedia(MOBILE_BREAKPOINT);
-		const sync = () => (isMobile = mq.matches);
+		const sync = () => {
+			isMobile = mq.matches;
+			if (isMobile) {
+				document.documentElement.classList.add('fixed-viewport');
+			} else {
+				document.documentElement.classList.remove('fixed-viewport');
+			}
+		};
 		sync();
 		mq.addEventListener('change', sync);
 
 		// Pager store
-		pager.set({ fractionalIndex: centerTab, dragging: false, active: true });
+		if (isMobile) {
+			pager.set({ fractionalIndex: centerTab, dragging: false, active: true });
+		}
 
-		// Scroll tracking for neighbour alignment. rAF-throttled (matches
-		// MobileTabPager) so a smooth auto-scroll does not rewrite neighborOffset
-		// on every frame. Clamped >= 0 to ignore negative scrollY from overscroll.
-		let scrollRaf = 0;
-		const onScroll = () => {
-			if (scrollRaf) return;
-			scrollRaf = requestAnimationFrame(() => {
-				scrollRaf = 0;
-				scrollY = Math.max(0, window.scrollY);
-			});
-		};
-		window.addEventListener('scroll', onScroll, { passive: true });
-		scrollY = Math.max(0, window.scrollY);
-
-		// After DOM renders ({#if isMobile}), read the viewport's width for the
-		// pager indicator.
+		// After DOM renders, read the viewport's width for the pager indicator.
 		const raf = requestAnimationFrame(() => {
 			if (viewportEl) {
 				viewportWidth = viewportEl.clientWidth;
 			}
 		});
+
+		// Visual Viewport Resize listener to handle software keyboard on iOS Safari
+		const handleViewportResize = () => {
+			if (!window.visualViewport) return;
+			const offset = window.innerHeight - window.visualViewport.height;
+			keyboardOffset = Math.max(0, offset);
+		};
+
+		if (window.visualViewport) {
+			window.visualViewport.addEventListener('resize', handleViewportResize);
+			window.visualViewport.addEventListener('scroll', handleViewportResize);
+			handleViewportResize();
+		}
 
 		// Forward list→thread push slide-in: snapIndex started at 0 (list) so the
 		// first frame shows the list; this rAF flips it to ACTIVE on the next
@@ -199,7 +267,7 @@
 		// after a frame (not sync) so the snapIndex=0 state actually paints and the
 		// transition has a start value to animate from.
 		let enterRaf = 0;
-		if (animateEnter) {
+		if (animateEnter && isMobile) {
 			enterRaf = requestAnimationFrame(() => {
 				snapIndex = ACTIVE;
 			});
@@ -207,20 +275,19 @@
 
 		return () => {
 			mq.removeEventListener('change', sync);
-			window.removeEventListener('scroll', onScroll);
+			document.documentElement.classList.remove('fixed-viewport');
 			cancelAnimationFrame(raf);
 			if (enterRaf) cancelAnimationFrame(enterRaf);
-			if (scrollRaf) cancelAnimationFrame(scrollRaf);
+			if (window.visualViewport) {
+				window.visualViewport.removeEventListener('resize', handleViewportResize);
+				window.visualViewport.removeEventListener('scroll', handleViewportResize);
+			}
 			pendingNav = null;
 			pager.set({ fractionalIndex: 0, dragging: false, active: false });
 		};
 	});
 
-	// Re-measure viewport width on resize (header height might change). Also
-	// guards the viewport's internal scroll at 0,0: overflow:hidden is still a
-	// programmatic scroll container, so native hash scrolling or any stray
-	// scrollIntoView could set a non-zero scrollTop here that the user cannot
-	// reset - locking the page on the anchor with everything above clipped.
+	// Re-measure viewport width on resize
 	const measureViewport: Action<HTMLElement> = (node) => {
 		viewportEl = node;
 		const resetScroll = () => {
@@ -240,48 +307,50 @@
 			}
 		};
 	};
-
-	const measureThread: Action<HTMLElement> = (node) => {
-		const update = () => {
-			threadHeight = node.offsetHeight;
-		};
-		update();
-		const ro = new ResizeObserver(update);
-		ro.observe(node);
-		return { destroy: () => ro.disconnect() };
-	};
 </script>
 
-{#if isMobile}
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+	bind:this={viewportEl}
+	class={isMobile ? 'overflow-hidden' : ''}
+	style={viewportStyle}
+	onpointerdown={isMobile ? cancelPendingNav : undefined}
+	use:detectSwipe={{ onMove: swipeMove, onEnd: swipeEnd, disabled: () => !isMobile }}
+	use:measureViewport
+>
 	<div
-		bind:this={viewportEl}
-		class="overflow-hidden"
-		style={viewportStyle}
-		onpointerdown={cancelPendingNav}
-		use:detectSwipe={{ onMove: swipeMove, onEnd: swipeEnd }}
-		use:measureViewport
+		class={isMobile ? 'flex items-start transition-transform duration-200' : ''}
+		style={trackStyle}
+		ontransitionend={onTrackTransitionEnd}
 	>
-		<div
-			class="flex items-start transition-transform duration-200"
-			style={trackStyle}
-			ontransitionend={onTrackTransitionEnd}
-		>
-			{#if left}
-				<section class="shrink-0 p-3" style={leftNeighborStyle}>
-					{@render left()}
-				</section>
-			{/if}
-			<section class="shrink-0 p-3" style={centerStyle} use:measureThread>
-				{@render children()}
+		{#if left && isMobile}
+			<section
+				bind:this={listEl}
+				class="shrink-0 p-3 scroll-pane md:hidden"
+				style={leftNeighborStyle}
+				onscroll={(e) => (listScrollTop = e.currentTarget.scrollTop)}
+				use:boundaryLock={{ disabled: false }}
+			>
+				{@render left()}
 			</section>
-			{#if right}
-				<section class="shrink-0 p-3" style={neighborStyle}>
-					{@render right()}
-				</section>
-			{/if}
-		</div>
+		{/if}
+		<section
+			bind:this={detailEl}
+			class="shrink-0 p-3 scroll-pane detail-scroll-pane"
+			style={centerStyle}
+			onscroll={isMobile ? (e) => (detailScrollTop = e.currentTarget.scrollTop) : undefined}
+			use:boundaryLock={{ disabled: !isMobile }}
+		>
+			{@render children()}
+		</section>
+		{#if right && isMobile}
+			<section
+				class="shrink-0 p-3 scroll-pane md:hidden"
+				style={neighborStyle}
+				use:boundaryLock={{ disabled: false }}
+			>
+				{@render right()}
+			</section>
+		{/if}
 	</div>
-{:else}
-	{@render children()}
-{/if}
+</div>
