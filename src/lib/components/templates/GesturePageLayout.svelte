@@ -142,7 +142,7 @@
 			if (!consumed) {
 				if (left && leftHref) {
 					snapIndex = 0;
-					const back = backLandsOn(leftHref) || navStore.activeStack.length > 1;
+					const back = backLandsOn(leftHref);
 					pendingNav = { href: leftHref, back };
 				} else {
 					if (navStore.activeStack.length > 1) {
@@ -168,7 +168,7 @@
 		if (nav.back) {
 			history.back();
 		} else {
-			void goto(nav.href);
+			void goto(nav.href, { replaceState: true });
 		}
 	}
 
