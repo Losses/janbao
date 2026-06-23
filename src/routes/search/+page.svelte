@@ -110,7 +110,7 @@
 			discussions={cachedDiscussions}
 			currentPage={listCache.home?.page ?? 1}
 			totalPages={listCache.home?.totalPages ?? 1}
-			t={t}
+			{t}
 			buildPageUrl={(page) => (page === 1 ? '/' : `/discussions/p${page}`)}
 			paginate={true}
 		/>
@@ -122,184 +122,186 @@
 		<div class="space-y-3">
 			<h1 class="page-title border-b border-base-300 pb-4">{tSearch.title}</h1>
 
-		<!-- Scope selector (single-choice) + sort on the right -->
-		<div class="flex flex-wrap items-center gap-2">
-			{#each SCOPES as s (s)}
-				<a
-					href={urlWith({ scope: s, page: 1 })}
-					class="btn btn-sm {scope === s ? 'btn-primary' : 'btn-ghost'}"
-					aria-current={scope === s ? 'page' : undefined}
+			<!-- Scope selector (single-choice) + sort on the right -->
+			<div class="flex flex-wrap items-center gap-2">
+				{#each SCOPES as s (s)}
+					<a
+						href={urlWith({ scope: s, page: 1 })}
+						class="btn btn-sm {scope === s ? 'btn-primary' : 'btn-ghost'}"
+						aria-current={scope === s ? 'page' : undefined}
+					>
+						{scopeLabel(s)}
+					</a>
+				{/each}
+				<select
+					class="select select-bordered select-sm ml-auto w-fit"
+					value={sort}
+					aria-label={tSearch.sortBy}
+					onchange={(e) => goto(urlWith({ sort: e.currentTarget.value, page: 1 }))}
 				>
-					{scopeLabel(s)}
-				</a>
-			{/each}
-			<select
-				class="select select-bordered select-sm ml-auto w-fit"
-				value={sort}
-				aria-label={tSearch.sortBy}
-				onchange={(e) => goto(urlWith({ sort: e.currentTarget.value, page: 1 }))}
-			>
-				<option value="newest">{tSearch.sortNewest}</option>
-				<option value="oldest">{tSearch.sortOldest}</option>
-				<option value="relevance">{tSearch.sortRelevance}</option>
-				{#if scope === 'discussions'}
-					<option value="replies">{tSearch.sortReplies}</option>
-				{/if}
-			</select>
-		</div>
+					<option value="newest">{tSearch.sortNewest}</option>
+					<option value="oldest">{tSearch.sortOldest}</option>
+					<option value="relevance">{tSearch.sortRelevance}</option>
+					{#if scope === 'discussions'}
+						<option value="replies">{tSearch.sortReplies}</option>
+					{/if}
+				</select>
+			</div>
 
-		{#if !online.online}
-			<OfflinePlaceholder {t} bordered={false} />
-		{/if}
+			{#if !online.online}
+				<OfflinePlaceholder {t} bordered={false} />
+			{/if}
 
-		<!-- Search form (GET → /search?q=&scope=) -->
-		<form method="GET" action="/search" class="flex gap-2">
-			<input type="hidden" name="scope" value={scope} />
-			<input
-				type="text"
-				name="q"
-				value={query}
-				placeholder={tSearch.placeholder}
-				class="input input-bordered input-sm flex-1"
-				autocomplete="off"
-			/>
-			<button type="submit" class="btn btn-sm btn-primary" disabled={!online.online}>
-				{tSearch.searchBtn}
-			</button>
-		</form>
+			<!-- Search form (GET → /search?q=&scope=) -->
+			<form method="GET" action="/search" class="flex gap-2">
+				<input type="hidden" name="scope" value={scope} />
+				<input
+					type="text"
+					name="q"
+					value={query}
+					placeholder={tSearch.placeholder}
+					class="input input-bordered input-sm flex-1"
+					autocomplete="off"
+				/>
+				<button type="submit" class="btn btn-sm btn-primary" disabled={!online.online}>
+					{tSearch.searchBtn}
+				</button>
+			</form>
 
-		{#if !online.online || query.trim().length === 0}
-			<EmptyState message={!online.online ? t.offline.disabled.title : tSearch.noQuery} />
-		{:else if total === 0}
-			<EmptyState message={tSearch.noResults} />
-		{:else}
-			<div class="text-sm text-base-content/60">{total} {tSearch.resultsLabel}</div>
-			<div class="bg-base-100 overflow-hidden">
-				<div class="divide-y divide-base-300">
-					{#if scope === 'discussions' && data.discussions}
-						{#each data.discussions as d (d.id)}
-							{@const authorSlug = generateSlug(d.authorUsername || 'user')}
-							{@const dUrl =
-								d.matchKind === 'reply' && d.bestReplyId !== null && d.replyPage !== null
-									? `/discussion/${d.id}/${d.slug}/p${d.replyPage}#reply-${d.bestReplyId}`
-									: `/discussion/${d.id}/${d.slug}`}
-							{@const authorDisplayName = formatDisplayName(d.authorDisplayName, d.authorId, t)}
-							<div class="flex items-start gap-4 pl-3 pr-2 py-4 hover:bg-base-200/20">
-								<div class="relative flex-shrink-0">
-									<a href="/profile/{d.authorId}/{authorSlug}">
+			{#if !online.online || query.trim().length === 0}
+				<EmptyState message={!online.online ? t.offline.disabled.title : tSearch.noQuery} />
+			{:else if total === 0}
+				<EmptyState message={tSearch.noResults} />
+			{:else}
+				<div class="text-sm text-base-content/60">{total} {tSearch.resultsLabel}</div>
+				<div class="bg-base-100 overflow-hidden">
+					<div class="divide-y divide-base-300">
+						{#if scope === 'discussions' && data.discussions}
+							{#each data.discussions as d (d.id)}
+								{@const authorSlug = generateSlug(d.authorUsername || 'user')}
+								{@const dUrl =
+									d.matchKind === 'reply' && d.bestReplyId !== null && d.replyPage !== null
+										? `/discussion/${d.id}/${d.slug}/p${d.replyPage}#reply-${d.bestReplyId}`
+										: `/discussion/${d.id}/${d.slug}`}
+								{@const authorDisplayName = formatDisplayName(d.authorDisplayName, d.authorId, t)}
+								<div class="flex items-start gap-4 pl-3 pr-2 py-4 hover:bg-base-200/20">
+									<div class="relative flex-shrink-0">
+										<a href="/profile/{d.authorId}/{authorSlug}">
+											<Avatar
+												userId={d.authorId}
+												avatarFileId={d.authorAvatarFileId}
+												displayName={authorDisplayName}
+												size="md"
+											/>
+										</a>
+										{#if d.matchKind === 'reply'}
+											<span
+												class="absolute -bottom-1 -right-1 badge badge-primary badge-xs flex items-center justify-center w-5 h-5 p-0"
+												title={tSearch.matchedReply}
+											>
+												<Icon path={mdiCommentOutline} size={12} />
+											</span>
+										{/if}
+									</div>
+									<div class="flex-1 min-w-0">
+										<a
+											href={dUrl}
+											class="font-semibold text-lg hover:text-primary hover:underline break-words leading-snug"
+										>
+											{#each highlightSegments(d.title, query) as seg, i (i)}{#if seg.match}<mark
+														>{seg.text}</mark
+													>{:else}{seg.text}{/if}{/each}
+										</a>
+										{#if d.bodyPreview}
+											<a href={dUrl} class="block mt-1 text-sm text-base-content/70 line-clamp-2">
+												{#each highlightSegments(contextPreview(d.bodyPreview, query), query) as seg, i (i)}{#if seg.match}<mark
+															>{seg.text}</mark
+														>{:else}{seg.text}{/if}{/each}
+											</a>
+										{/if}
+										<div
+											class="flex items-center gap-2 mt-1 text-xs text-base-content/60 flex-wrap"
+										>
+											<a
+												href="/profile/{d.authorId}/{authorSlug}"
+												class="hover:underline font-medium text-base-content/85"
+												>{authorDisplayName}</a
+											>
+											<span class="text-base-content/30">•</span>
+											<span>{d.categoryTitle}</span>
+											<span class="text-base-content/30">•</span>
+											<span>{d.commentCount} {t.forum.replies}</span>
+											<span class="text-base-content/30">•</span>
+											<DateAtom value={d.createdAt} {t} />
+										</div>
+									</div>
+								</div>
+							{/each}
+						{:else if scope === 'activities' && data.activities}
+							{#each data.activities as a (a.id)}
+								{@const authorSlug = generateSlug(a.authorUsername || 'user')}
+								{@const authorDisplayName = formatDisplayName(a.authorDisplayName, a.authorId, t)}
+								<div class="flex items-start gap-4 pl-3 pr-2 py-4 hover:bg-base-200/20">
+									<a href="/profile/{a.authorId}/{authorSlug}" class="flex-shrink-0">
 										<Avatar
-											userId={d.authorId}
-											avatarFileId={d.authorAvatarFileId}
+											userId={a.authorId}
+											avatarFileId={a.authorAvatarFileId}
 											displayName={authorDisplayName}
 											size="md"
 										/>
 									</a>
-									{#if d.matchKind === 'reply'}
-										<span
-											class="absolute -bottom-1 -right-1 badge badge-primary badge-xs flex items-center justify-center w-5 h-5 p-0"
-											title={tSearch.matchedReply}
+									<div class="flex-1 min-w-0">
+										<a
+											href="/profile/{a.authorId}/{authorSlug}"
+											class="block text-sm font-medium text-base-content/85 hover:underline"
 										>
-											<Icon path={mdiCommentOutline} size={12} />
-										</span>
-									{/if}
-								</div>
-								<div class="flex-1 min-w-0">
-									<a
-										href={dUrl}
-										class="font-semibold text-lg hover:text-primary hover:underline break-words leading-snug"
-									>
-										{#each highlightSegments(d.title, query) as seg, i (i)}{#if seg.match}<mark
-													>{seg.text}</mark
-												>{:else}{seg.text}{/if}{/each}
-									</a>
-									{#if d.bodyPreview}
-										<a href={dUrl} class="block mt-1 text-sm text-base-content/70 line-clamp-2">
-											{#each highlightSegments(contextPreview(d.bodyPreview, query), query) as seg, i (i)}{#if seg.match}<mark
+											{authorDisplayName}
+										</a>
+										<div class="mt-1 text-sm text-base-content/80 line-clamp-3">
+											{#each highlightSegments(contextPreview(a.previewText, query), query) as seg, i (i)}{#if seg.match}<mark
 														>{seg.text}</mark
 													>{:else}{seg.text}{/if}{/each}
-										</a>
-									{/if}
-									<div class="flex items-center gap-2 mt-1 text-xs text-base-content/60 flex-wrap">
-										<a
-											href="/profile/{d.authorId}/{authorSlug}"
-											class="hover:underline font-medium text-base-content/85"
-											>{authorDisplayName}</a
-										>
-										<span class="text-base-content/30">•</span>
-										<span>{d.categoryTitle}</span>
-										<span class="text-base-content/30">•</span>
-										<span>{d.commentCount} {t.forum.replies}</span>
-										<span class="text-base-content/30">•</span>
-										<DateAtom value={d.createdAt} {t} />
+										</div>
+										<div class="mt-1 text-xs text-base-content/60">
+											<DateAtom value={a.createdAt} {t} />
+										</div>
 									</div>
 								</div>
-							</div>
-						{/each}
-					{:else if scope === 'activities' && data.activities}
-						{#each data.activities as a (a.id)}
-							{@const authorSlug = generateSlug(a.authorUsername || 'user')}
-							{@const authorDisplayName = formatDisplayName(a.authorDisplayName, a.authorId, t)}
-							<div class="flex items-start gap-4 pl-3 pr-2 py-4 hover:bg-base-200/20">
-								<a href="/profile/{a.authorId}/{authorSlug}" class="flex-shrink-0">
-									<Avatar
-										userId={a.authorId}
-										avatarFileId={a.authorAvatarFileId}
-										displayName={authorDisplayName}
-										size="md"
-									/>
+							{/each}
+						{:else if scope === 'messages' && data.messages}
+							{#each data.messages as m (m.conversationId)}
+								<a
+									href="/messages/{m.conversationId}"
+									class="flex items-start gap-4 pl-3 pr-2 py-4 hover:bg-base-200/20"
+								>
+									<div class="flex-1 min-w-0">
+										<div class="font-semibold text-base-content hover:text-primary hover:underline">
+											{#each highlightSegments(m.title, query) as seg, i (i)}{#if seg.match}<mark
+														>{seg.text}</mark
+													>{:else}{seg.text}{/if}{/each}
+										</div>
+										<div class="mt-1 text-sm text-base-content/70 line-clamp-2">
+											{#each highlightSegments(contextPreview(m.previewText, query), query) as seg, i (i)}{#if seg.match}<mark
+														>{seg.text}</mark
+													>{:else}{seg.text}{/if}{/each}
+										</div>
+										<div class="mt-1 text-xs text-base-content/60">
+											{m.hitCount}
+											{tSearch.resultsLabel} • <DateAtom value={m.lastMessageAt} {t} />
+										</div>
+									</div>
 								</a>
-								<div class="flex-1 min-w-0">
-									<a
-										href="/profile/{a.authorId}/{authorSlug}"
-										class="block text-sm font-medium text-base-content/85 hover:underline"
-									>
-										{authorDisplayName}
-									</a>
-									<div class="mt-1 text-sm text-base-content/80 line-clamp-3">
-										{#each highlightSegments(contextPreview(a.previewText, query), query) as seg, i (i)}{#if seg.match}<mark
-													>{seg.text}</mark
-												>{:else}{seg.text}{/if}{/each}
-									</div>
-									<div class="mt-1 text-xs text-base-content/60">
-										<DateAtom value={a.createdAt} {t} />
-									</div>
-								</div>
-							</div>
-						{/each}
-					{:else if scope === 'messages' && data.messages}
-						{#each data.messages as m (m.conversationId)}
-							<a
-								href="/messages/{m.conversationId}"
-								class="flex items-start gap-4 pl-3 pr-2 py-4 hover:bg-base-200/20"
-							>
-								<div class="flex-1 min-w-0">
-									<div class="font-semibold text-base-content hover:text-primary hover:underline">
-										{#each highlightSegments(m.title, query) as seg, i (i)}{#if seg.match}<mark
-													>{seg.text}</mark
-												>{:else}{seg.text}{/if}{/each}
-									</div>
-									<div class="mt-1 text-sm text-base-content/70 line-clamp-2">
-										{#each highlightSegments(contextPreview(m.previewText, query), query) as seg, i (i)}{#if seg.match}<mark
-													>{seg.text}</mark
-												>{:else}{seg.text}{/if}{/each}
-									</div>
-									<div class="mt-1 text-xs text-base-content/60">
-										{m.hitCount}
-										{tSearch.resultsLabel} • <DateAtom value={m.lastMessageAt} {t} />
-									</div>
-								</div>
-							</a>
-						{/each}
-					{/if}
+							{/each}
+						{/if}
+					</div>
 				</div>
-			</div>
 
-			{#if totalPages > 1}
-				<div class="flex justify-end pt-2">
-					<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
-				</div>
+				{#if totalPages > 1}
+					<div class="flex justify-end pt-2">
+						<Paginator {currentPage} {totalPages} onPageChange={handlePageChange} {t} />
+					</div>
+				{/if}
 			{/if}
-		{/if}
 		</div>
 	</GesturePageLayout>
 </DualColumnLayout>

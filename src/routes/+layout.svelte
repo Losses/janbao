@@ -38,7 +38,7 @@
 	// (tabs) layout for swipe-back); a fallback timer covers the rest.
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	let navFreezeTimer = 0;
-	beforeNavigate((nav: any) => {
+	beforeNavigate((nav) => {
 		const { to, from, type, event } = nav;
 		if (from) {
 			pageScrollStore.capture(from.url.pathname, getCurrentScrollY());

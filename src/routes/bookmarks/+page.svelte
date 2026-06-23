@@ -63,7 +63,7 @@
 			discussions={cachedDiscussions}
 			currentPage={listCache.home?.page ?? 1}
 			totalPages={listCache.home?.totalPages ?? 1}
-			t={t}
+			{t}
 			buildPageUrl={(page) => (page === 1 ? '/' : `/discussions/p${page}`)}
 			paginate={true}
 		/>

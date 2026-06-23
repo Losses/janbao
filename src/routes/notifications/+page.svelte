@@ -133,7 +133,7 @@
 			discussions={cachedDiscussions}
 			currentPage={listCache.home?.page ?? 1}
 			totalPages={listCache.home?.totalPages ?? 1}
-			t={t}
+			{t}
 			buildPageUrl={(page) => (page === 1 ? '/' : `/discussions/p${page}`)}
 			paginate={true}
 		/>
@@ -169,7 +169,9 @@
 			</div>
 
 			{#if !online.online || views.length === 0}
-				<EmptyState message={!online.online ? t.offline.disabled.title : notificationT.allCaughtUp} />
+				<EmptyState
+					message={!online.online ? t.offline.disabled.title : notificationT.allCaughtUp}
+				/>
 			{:else}
 				<div class="divide-y divide-base-300">
 					{#each views as view (view.item.id)}

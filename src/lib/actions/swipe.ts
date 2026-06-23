@@ -261,8 +261,15 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 			startTime = event.timeStamp;
 			target = event.target;
 
-			const editingAncestor = target instanceof Element ? target.closest('input, textarea, select, [contenteditable]') : null;
-			targetWasFocused = editingAncestor !== null && document.activeElement !== null && (document.activeElement === editingAncestor || editingAncestor.contains(document.activeElement));
+			const editingAncestor =
+				target instanceof Element
+					? target.closest('input, textarea, select, [contenteditable]')
+					: null;
+			targetWasFocused =
+				editingAncestor !== null &&
+				document.activeElement !== null &&
+				(document.activeElement === editingAncestor ||
+					editingAncestor.contains(document.activeElement));
 
 			phase = 'deciding';
 			console.log('[detectSwipe] down start:', { startX, startY, phase });
@@ -288,7 +295,8 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 
 			const horizontal = absDx > absDy * HORIZONTAL_RATIO;
 			const vertical = absDy > absDx * HORIZONTAL_RATIO;
-			const ignorable = isInteractive(target, targetWasFocused) || insideHorizontalScroll(target, node);
+			const ignorable =
+				isInteractive(target, targetWasFocused) || insideHorizontalScroll(target, node);
 
 			console.log('[detectSwipe] deciding progress:', {
 				dx,

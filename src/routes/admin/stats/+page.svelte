@@ -117,9 +117,7 @@
 	});
 
 	// Min width percentage of the selected range window (at least 3 data points)
-	const minPercent = $derived(
-		timeline.length > 0 ? Math.max(0.02, 3 / timeline.length) : 0.05
-	);
+	const minPercent = $derived(timeline.length > 0 ? Math.max(0.02, 3 / timeline.length) : 0.05);
 
 	// Get active date keys currently enclosed in the [left, right] selection
 	const activeTimelineRange = $derived.by(() => {

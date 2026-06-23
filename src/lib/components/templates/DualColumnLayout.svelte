@@ -20,7 +20,7 @@
 		flush?: boolean;
 	}
 
-	let { children, sidebar, user, t, flush = false }: DualColumnLayoutProps = $props();
+	let { children, sidebar, user, t }: DualColumnLayoutProps = $props();
 
 	const resolvedUser = $derived(
 		user !== undefined ? user : (page.data.user as UserInfoSummary | null)
