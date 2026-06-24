@@ -114,3 +114,69 @@ test('Bug2: empty-cache panel shows the LoadingChip, not the spinner fallback', 
 	expect(chipCount, 'the shared LoadingChip should render for the cold-cache panel').toBeGreaterThan(0);
 	expect(spinnerCount, 'the old spinner must be gone').toBe(0);
 });
+
+// --- Bug3: on a deep page back-swipe the top tab pill must track the finger
+// (animate toward the back-target tab), not stay frozen and snap after nav. The
+// expansion must also be GRADUAL (not full after a tiny drag) and monotonic.
+test('Bug3: deep-page back-swipe animates the top tab pill gradually', async ({ page, context }) => {
+	await prepareContext(context);
+	await page.goto('/bookmarks');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+
+	// The discussions pill's label width tracks `closeness` live (0 at rest on a
+	// non-tab page, growing as the gesture moves toward home).
+	const labelWidth = () =>
+		page.locator('a[data-tab-nav][href="/"] span.overflow-hidden').first().evaluate((el) => {
+			return (el as HTMLElement).offsetWidth;
+		});
+	// The pill's fully-expanded label width, for a "not full yet" ceiling.
+	const fullLabel = await page
+		.locator('a[data-tab-nav][href="/"] span.overflow-hidden')
+		.first()
+		.evaluate((el) => el.scrollWidth);
+
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+	const before = await labelWidth();
+
+	const move = (x: number) =>
+		client.send('Input.dispatchTouchEvent', {
+			type: 'touchMove',
+			touchPoints: [{ x, y: 400, id: 1 }],
+			modifiers: 0,
+			timestamp: 0
+		});
+	await client.send('Input.dispatchTouchEvent', {
+		type: 'touchStart',
+		touchPoints: [{ x: 200, y: 400, id: 1 }],
+		modifiers: 0,
+		timestamp: 0
+	});
+	// Sample at three drag distances WITHOUT releasing → expansion must be
+	// monotonic (gradual) and far from full at the first sample.
+	await move(230);
+	await page.waitForTimeout(30);
+	const small = await labelWidth();
+	await move(260);
+	await page.waitForTimeout(30);
+	const mid = await labelWidth();
+	await move(290);
+	await page.waitForTimeout(30);
+	const large = await labelWidth();
+	await client.send('Input.dispatchTouchEvent', {
+		type: 'touchEnd',
+		touchPoints: [{ x: 290, y: 400, id: 1 }],
+		modifiers: 0,
+		timestamp: 0
+	});
+	await client.detach();
+
+	expect(before, 'pill collapsed at rest on a non-tab page').toBeLessThan(5);
+	expect(small, 'pill must start expanding early').toBeGreaterThan(before);
+	expect(small, 'pill must NOT be fully expanded after a small drag').toBeLessThan(fullLabel * 0.8);
+	expect(mid, 'expansion must be gradual/monotonic').toBeGreaterThan(small);
+	expect(large, 'expansion must keep growing').toBeGreaterThan(mid);
+});
+
+
