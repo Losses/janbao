@@ -71,7 +71,7 @@ class NavigationStore {
 	init(initialPath: string, search: string = '') {
 		this.#state = initNav(this.#state, initialPath, search);
 		// Dev-only readiness flag. The root layout runs init() in onMount, which
-		// is AFTER the client is interactive — so a test that drives a tab click
+		// is AFTER the client is interactive - so a test that drives a tab click
 		// right after hydration can race the deferred init('/') (which would
 		// clobber activeTab). E2E waits on this flag so every interaction happens
 		// after the one-time seed.

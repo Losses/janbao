@@ -8,7 +8,7 @@ Approve with Conditions
 
 ### Overview
 
-This review evaluates the architectural proposal in "DV08-Architecture.md" from the perspective of SvelteKit router mechanics. While the core objectives—such as mimicking the Jetpack Navigation BackStack model, eliminating server-side load overhead on detail pages, and stabilizing layout transitions—are sound, the current proposal relies on layout swaps and manual calculations that conflict with SvelteKit's hydration and routing lifecycle. By transitioning to a CSS-driven responsive layout, using SvelteKit's native "snapshot" API for scroll memory, and leveraging Svelte 5 runes for a robust navigation stack store, we can resolve the reported flashing and scroll bugs cleanly.
+This review evaluates the architectural proposal in "DV08-Architecture.md" from the perspective of SvelteKit router mechanics. While the core objectives-such as mimicking the Jetpack Navigation BackStack model, eliminating server-side load overhead on detail pages, and stabilizing layout transitions-are sound, the current proposal relies on layout swaps and manual calculations that conflict with SvelteKit's hydration and routing lifecycle. By transitioning to a CSS-driven responsive layout, using SvelteKit's native "snapshot" API for scroll memory, and leveraging Svelte 5 runes for a robust navigation stack store, we can resolve the reported flashing and scroll bugs cleanly.
 
 ---
 

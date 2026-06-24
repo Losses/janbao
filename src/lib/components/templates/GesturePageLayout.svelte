@@ -13,7 +13,7 @@
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
 	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
 	import type { ConversationListItem } from '$lib/types/api';
-	import Icon from '$lib/components/atoms/Icon.svelte';
+	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
 	import { MOBILE_TABS, isPagerRoute } from '$lib/utils/mobile-tabs';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 
@@ -119,9 +119,6 @@
 	);
 
 	const isCircle = $derived(currentRevealWidth < 40);
-	const chipStyleWidth = $derived(isCircle ? '36px' : 'auto');
-	const chipStyleHeight = $derived('36px');
-	const chipPadding = $derived(isCircle ? 'padding: 0;' : 'padding: 6px 12px;');
 
 	const baseScale = $derived(
 		currentRevealWidth < 40 ? currentRevealWidth / 40 : progress >= 0.9 ? 1.3 : 1 + progress * 0.15
@@ -587,27 +584,17 @@
 				? 'right: 0;'
 				: 'left: 0;'} width: {currentRevealWidth}px; opacity: {isTransitioningOut ? 0 : 1};"
 		>
-			<div
-				class="loading-chip bg-neutral text-neutral-content rounded-full flex items-center justify-center shadow-lg font-medium whitespace-nowrap overflow-hidden"
-				class:gap-2={!isCircle}
-				class:dragging={dragOffset !== null}
-				class:animate-pulse={isPendingNavigation}
-				style="transform: scale({chipScale}); opacity: {chipOpacity}; max-width: {chipMaxWidth}px; min-width: {isCircle
-					? '36px'
-					: '0px'}; height: {chipStyleHeight}; width: {chipStyleWidth}; {chipPadding}"
-			>
-				{#if targetTab}
-					<Icon path={targetTab.icon} size={18} class="shrink-0 text-neutral-content" />
-				{/if}
-				<span
-					class="loading-chip-text overflow-hidden text-sm whitespace-nowrap text-neutral-content"
-					style="max-width: {textMaxWidth}px;"
-				>
-					{#if targetTab}
-						{page.data.t.nav[targetTab.labelKey]}
-					{/if}
-				</span>
-			</div>
+			<LoadingChip
+				icon={targetTab?.icon}
+				label={targetTab ? page.data.t.nav[targetTab.labelKey] : undefined}
+				scale={chipScale}
+				expanded={!isCircle}
+				pulsing={isPendingNavigation}
+				dragging={dragOffset !== null}
+				opacity={chipOpacity}
+				maxWidth={chipMaxWidth}
+				{textMaxWidth}
+			/>
 		</div>
 	{/if}
 </div>
@@ -621,25 +608,6 @@
 			opacity 300ms ease;
 	}
 	.loading-overlay.dragging {
-		transition: none !important;
-	}
-	.loading-chip {
-		font-family: var(--font-sans);
-		transition:
-			transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1),
-			opacity 300ms ease,
-			max-width 200ms ease;
-	}
-	.loading-chip.dragging {
-		transition:
-			max-width 0s linear,
-			transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
-	}
-	.loading-chip-text {
-		display: inline-block;
-		transition: max-width 200ms ease;
-	}
-	.loading-chip.dragging .loading-chip-text {
 		transition: none !important;
 	}
 </style>

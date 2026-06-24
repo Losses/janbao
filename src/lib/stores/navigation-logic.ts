@@ -2,7 +2,7 @@
  * Pure (runes-free) navigation state logic, extracted from navigation.svelte.ts
  * so it is unit-testable with bun:test without a browser or the Svelte runtime.
  * The NavigationStore class holds a $state<NavState> and delegates every
- * transition to the reducers here — single source of truth for the tab/stack
+ * transition to the reducers here - single source of truth for the tab/stack
  * maths that drive the mobile back-swipe target.
  */
 

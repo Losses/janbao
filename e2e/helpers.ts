@@ -130,7 +130,7 @@ export async function prepareContext(context: BrowserContext): Promise<void> {
  * Client-side navigate to a global route deterministically. A real user reaches
  * /bookmarks etc. via the drawer, whose open transition races in tests.
  * `__e2eGoto` (a dev-only hook wrapping SvelteKit's goto) fires the EXACT same
- * beforeNavigate the drawer link ultimately does — so the backTarget
+ * beforeNavigate the drawer link ultimately does - so the backTarget
  * precondition under test is identical, without the timing surface.
  */
 export async function openSidebarAndGoto(page: Page, href: string): Promise<void> {
@@ -142,7 +142,7 @@ export async function openSidebarAndGoto(page: Page, href: string): Promise<void
 /**
  * Wait for SvelteKit hydration before clicking. A click before hydration is a
  * full browser navigation (not SPA), which runs init() instead of switchTab /
- * handleBeforeNavigate — silently changing the backTarget precondition under
+ * handleBeforeNavigate - silently changing the backTarget precondition under
  * test. The dev-only __navStore hook is set during root-layout client init, so
  * its presence marks a hydrated, SPA-ready page.
  */
@@ -170,7 +170,7 @@ export async function enterSource(page: Page, entry: Entry, source: Source): Pro
 	} else {
 		// In-app entry (tab tap / sidebar link). Both ultimately do a client-side
 		// nav that handleBeforeNavigate maps to the source's tab, setting activeTab
-		// correctly — the same as the real data-tab-nav switchTab path (whose
+		// correctly - the same as the real data-tab-nav switchTab path (whose
 		// logic is covered by the bun unit test). Driven deterministically via the
 		// goto hook so the SPA-vs-full-load timing of a raw link click does not
 		// make the control flake.

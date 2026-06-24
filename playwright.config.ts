@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * Mobile E2E for the back-swipe matrix. Runs under node (`npx playwright test`)
  * while the app/dev server stays Bun. On NixOS `playwright install` can't fetch
- * a browser, so we point at the system Chromium via executablePath — the
+ * a browser, so we point at the system Chromium via executablePath - the
  * Playwright driver ships in the npm package (no `playwright install` needed),
  * and the core CDP we use (Input.dispatchTouchEvent, Emulation, Network) is
  * stable across Chromium versions.
@@ -20,7 +20,7 @@ const BASE = process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`;
 
 export default defineConfig({
 	testDir: './e2e',
-	// Sequential: one chromium, one dev server, one admin session — avoids
+	// Sequential: one chromium, one dev server, one admin session - avoids
 	// login/DB contention and keeps gesture timing deterministic.
 	fullyParallel: false,
 	workers: 1,

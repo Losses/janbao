@@ -11,8 +11,9 @@
 	 * desktop activity route additionally redirects to `/offline/activity`.
 	 */
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
-	import ListSkeleton from '$lib/components/atoms/ListSkeleton.svelte';
+	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
 	import ActivityList from '$lib/components/organisms/ActivityList.svelte';
+	import { mdiLightningBolt } from '@mdi/js';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditorLazy.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
 	import { goto, invalidateAll } from '$app/navigation';
@@ -152,7 +153,9 @@
 	<!-- Activities Stream -->
 	{#if !online.online}
 		{#if offlineLoading}
-			<ListSkeleton label={t.common.loading} rows={6} rowClass="h-12" />
+			<div class="flex items-center justify-center py-10">
+				<LoadingChip icon={mdiLightningBolt} label={t.nav.activity} />
+			</div>
 		{:else if offlineActivities.length === 0}
 			<EmptyState message={t.common.noResults} bordered={false} />
 		{:else}
@@ -161,7 +164,9 @@
 			</div>
 		{/if}
 	{:else if !activities}
-		<ListSkeleton label={t.common.loading} rows={6} rowClass="h-12" />
+		<div class="flex items-center justify-center py-10">
+			<LoadingChip icon={mdiLightningBolt} label={t.nav.activity} />
+		</div>
 	{:else if activities.length === 0}
 		<EmptyState message={t.common.noResults} bordered={false} />
 	{:else}

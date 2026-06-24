@@ -9,7 +9,7 @@ bun.lockb
 /static/
 /drizzle/
 
-# E2E test infrastructure (Playwright/node) — formatted/run by Playwright
+# E2E test infrastructure (Playwright/node) - formatted/run by Playwright
 /e2e/
 /playwright.config.ts
 /test-results/

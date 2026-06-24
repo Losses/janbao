@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-This document presents a performance and database engineering review of the proposed refactoring for Janbao's mobile navigation, routing, and viewport layout (DV08-Architecture.md). The core architecture proposal—decoupling viewport layout from routing using a Jetpack Navigation-inspired back stack and resolving Safari viewport layout issues—is conceptually sound and addresses significant user experience issues.
+This document presents a performance and database engineering review of the proposed refactoring for Janbao's mobile navigation, routing, and viewport layout (DV08-Architecture.md). The core architecture proposal-decoupling viewport layout from routing using a Jetpack Navigation-inspired back stack and resolving Safari viewport layout issues-is conceptually sound and addresses significant user experience issues.
 
 However, the current implementation contains a critical database performance bottleneck on discussion thread page loads. Every time a thread detail page is loaded, the server eagerly queries the first page of discussions and the activity feed. This eagerly fetched data is redundant for desktop users and unnecessarily eager for mobile users. We propose resolving this redundant load by introducing a client-side reactive store/cache for lists, optimizing deep-linking behaviors, and minimizing database queries during transitions.
 
