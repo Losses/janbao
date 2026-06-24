@@ -145,33 +145,33 @@ guard above the dead-zone check:
 
 ```ts
 function onDown(event: PointerEvent): void {
-    if (event.pointerType === 'mouse' || params.disabled?.()) {
-        return;
-    }
-    // Only a gesture starting from idle can begin tracking. A second finger while
-    // one is already in flight, or an edge-dead-zone reject, must NOT touch phase -
-    // otherwise phase gets stranded in 'ignore' and no later gesture ever runs
-    // (the dead-zone pointer is never assigned primaryPointerId, so its pointerup
-    // cannot match and reset).
-    if (phase !== 'idle') {
-        return;
-    }
+	if (event.pointerType === 'mouse' || params.disabled?.()) {
+		return;
+	}
+	// Only a gesture starting from idle can begin tracking. A second finger while
+	// one is already in flight, or an edge-dead-zone reject, must NOT touch phase -
+	// otherwise phase gets stranded in 'ignore' and no later gesture ever runs
+	// (the dead-zone pointer is never assigned primaryPointerId, so its pointerup
+	// cannot match and reset).
+	if (phase !== 'idle') {
+		return;
+	}
 
-    // OS edge-swipe gesture collision guard
-    const edgeDeadZone = 40;
-    if (event.clientX < edgeDeadZone || event.clientX > window.innerWidth - edgeDeadZone) {
-        console.log('[detectSwipe] ignored due to edge dead zone:', event.clientX);
-        return; // phase stays 'idle'; this pointer is simply not tracked
-    }
+	// OS edge-swipe gesture collision guard
+	const edgeDeadZone = 40;
+	if (event.clientX < edgeDeadZone || event.clientX > window.innerWidth - edgeDeadZone) {
+		console.log('[detectSwipe] ignored due to edge dead zone:', event.clientX);
+		return; // phase stays 'idle'; this pointer is simply not tracked
+	}
 
-    primaryPointerId = event.pointerId;
-    startX = event.clientX;
-    startY = event.clientY;
-    startTime = event.timeStamp;
-    target = event.target;
-    // ... targetWasFocused computation unchanged ...
-    phase = 'deciding';
-    console.log('[detectSwipe] down start:', { startX, startY, phase });
+	primaryPointerId = event.pointerId;
+	startX = event.clientX;
+	startY = event.clientY;
+	startTime = event.timeStamp;
+	target = event.target;
+	// ... targetWasFocused computation unchanged ...
+	phase = 'deciding';
+	console.log('[detectSwipe] down start:', { startX, startY, phase });
 }
 ```
 
@@ -193,7 +193,7 @@ errors / 0 warnings; prettier + eslint clean on the file. Behaviour re-checked o
 live dev server with the same MCP mobile-touch harness:
 
 1. Single-touch dead-zone recovery - PASS. After a dead-zone touch (`ignored due to
-   edge dead zone: 370`), a centre `pointerdown` logs `down start` (was empty before
+edge dead zone: 370`), a centre `pointerdown` logs `down start` (was empty before
    the fix), and a clear horizontal swipe logs `deciding progress` + `swipe activated!`
    and commits the tab switch (track → `translateX(-33.3333%)`, Home → Activity).
 2. Multi-touch clobber - PASS. While a swipe is recognised, a second dead-zone

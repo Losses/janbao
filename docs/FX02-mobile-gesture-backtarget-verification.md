@@ -50,7 +50,6 @@ Inputting during execution. `oracle` = code simulation backTarget; `landed` = ge
 
 > Actual testing shows that the landing is consistent with oracle in all calibration scenarios → oracle is reliable, equivalent scenarios are filled with oracle.
 
-
 ### Group A: Entry Method × Source Tab (Target Fixed `/bookmarks`)
 
 | # | Entry Method | Source Tab | Expected | oracle | landed | preview | B2 | Conclusion |
@@ -133,7 +132,7 @@ Inputting during execution. `oracle` = code simulation backTarget; `landed` = ge
 
 1. **Bug 1 (Minimum Fix)**: Add `this.#activeTab = tabIdx;` to the end of `init()`. 2. **Bug 1 (Reinforcement, Recommendation)**: Review the semantics of `getTabFromPath` for "sticking to the old activeTab" in global routes—a more reliable approach would be to base the backTarget of global routes directly on the "real source page" (the previous entry in the Navigation API), rather than relying on activeTab for inference.
 
-3. **Bug 2**: Reuse the `!data` fallback of `DiscussionsPanel`/`ActivityPanel` with `loading-chip` (extracting it into a shared `LoadingChip` component, shared by gestures and panels).
+2. **Bug 2**: Reuse the `!data` fallback of `DiscussionsPanel`/`ActivityPanel` with `loading-chip` (extracting it into a shared `LoadingChip` component, shared by gestures and panels).
 
 ### Verification Methodology
 
