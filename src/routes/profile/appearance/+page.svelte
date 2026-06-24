@@ -35,22 +35,20 @@
 
 	const themesList = $derived(buildThemeOptions(t));
 
-	// Live theme preview while on this page. The capture/restore effect
-	// remembers the data-theme the root layout set (the saved interface theme)
-	// and restores it on unmount; the apply effect shadows it with the local
-	// selection so the user sees each option immediately. Empty selection
-	// resolves to SITE_DEFAULT_THEME and sets data-theme to it - removing the
-	// attribute (or setting '') makes daisyUI fall back to its light/dark
-	// built-ins, never the site default.
+	// Live theme preview while on this page. The apply effect below shadows the
+	// root layout's <html data-theme> with the local (uncommitted) selection so
+	// the user sees each option immediately. On unmount the first effect
+	// re-asserts the *committed* interface theme from the app-wide store: the
+	// root layout's single-owner effect does not re-fire on client-side
+	// navigation, so something has to put data-theme back to the saved value
+	// (which a save during this visit may have just changed) when this page leaves.
 	$effect(() => {
 		if (typeof document === 'undefined') return;
-		const originalTheme = document.documentElement.getAttribute('data-theme');
 		return () => {
-			if (originalTheme) {
-				document.documentElement.setAttribute('data-theme', originalTheme);
-			} else {
-				document.documentElement.removeAttribute('data-theme');
-			}
+			document.documentElement.setAttribute(
+				'data-theme',
+				uiPrefsStore.prefs.interfaceTheme || SITE_DEFAULT_THEME
+			);
 		};
 	});
 
