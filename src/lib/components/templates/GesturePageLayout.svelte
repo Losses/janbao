@@ -144,6 +144,10 @@
 	let centerEl = $state<HTMLElement | null>(null);
 	const currentScrollTop = $derived(page.url.pathname ? pageScrollStore.get(page.url.pathname) : 0);
 
+
+
+
+
 	const shouldAnimateEnter = () => {
 		if (leftNeedsLoading) return false; // Never animate entry from loading swipe
 		if (!hasLeft || !resolvedLeftHref) return false;
@@ -155,7 +159,7 @@
 
 	const isEntering = shouldAnimateEnter();
 	let trackEl = $state<HTMLElement | null>(null);
-	let transitionEnabled = $state(false);
+	let transitionEnabled = $state(true);
 	// svelte-ignore state_referenced_locally
 	let snapIndex = $state(isEntering ? 0 : hasLeft && !swipeNeedsLoadingAtStart ? 1 : 0);
 
@@ -263,7 +267,7 @@
 	const viewportStyle = $derived(
 		!isMobile
 			? 'touch-action: auto; overflow: visible; height: auto; width: 100%; position: relative;'
-			: 'touch-action: pan-y pinch-zoom; flex: 1 1 auto; height: 100%; position: relative; width: 100%; overflow: hidden;'
+			: 'touch-action: pan-y pinch-zoom; flex: 1 1 auto; height: 100%; position: relative; width: 100%; overflow: clip;'
 	);
 
 	function onSwipeMove(deltaX: number) {
@@ -458,19 +462,9 @@
 
 		let enterRaf = 0;
 		if (isEntering && isMobile) {
-			if (trackEl) {
-				// Force layout reflow to register initial style state before transition
-				void trackEl.offsetHeight;
-			}
 			enterRaf = requestAnimationFrame(() => {
-				enterRaf = requestAnimationFrame(() => {
-					transitionEnabled = true;
-					if (trackEl) void trackEl.offsetHeight;
-					snapIndex = ACTIVE;
-				});
+				snapIndex = ACTIVE;
 			});
-		} else {
-			transitionEnabled = true;
 		}
 
 		return () => {
@@ -501,11 +495,13 @@
 			}
 		};
 	};
+
+
 </script>
 
 <div
 	bind:this={viewportEl}
-	class={isMobile ? 'overflow-hidden h-full w-full' : ''}
+	class={isMobile ? 'overflow-clip h-full w-full' : ''}
 	style={viewportStyle}
 	use:detectSwipe={{
 		onMove: onSwipeMove,
