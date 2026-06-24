@@ -138,6 +138,8 @@ export interface ActivityListItem {
 	contentJson: string;
 	createdAt: Date;
 	commentCount: number;
+	/** Comments bundled by the page load so the feed renders them without a per-row fetch. Absent on the offline feed (not synced). */
+	comments?: ActivityCommentItem[];
 	isJoined: boolean;
 	joinedMembers: JoinedMember[];
 }

@@ -18,6 +18,7 @@
 		activityId: number;
 		open: boolean;
 		commentCount: number;
+		initialComments?: ActivityCommentItem[];
 		currentUserId?: number | null;
 		isAdmin?: boolean;
 		activityAuthorId: number;
@@ -29,6 +30,7 @@
 		activityId,
 		open = false,
 		commentCount = $bindable(0),
+		initialComments = [],
 		currentUserId = null,
 		isAdmin = false,
 		activityAuthorId,
@@ -36,21 +38,17 @@
 		t
 	}: ActivityCommentsProps = $props();
 
-	let commentsLoaded = $state(false);
-	let comments = $state<ActivityCommentItem[]>([]);
-	let loadingComments = $state(false);
+	// Comments are bundled by the page load (loadActivityPage), so local state is
+	// seeded from that prop and only refetched after a submit. There is no eager
+	// fetch on mount - the previous unconditional $effect fired a request for
+	// every row on the page and flashed "加载中" while it was in flight.
+	// svelte-ignore state_referenced_locally
+	let comments = $state<ActivityCommentItem[]>(initialComments);
 	let commentContentJson = $state('');
 	let submittingComment = $state(false);
 	let showDeleteModal = $state(false);
 	let deleteTargetId = $state<number | null>(null);
 	let editorKey = $state(0);
-
-	$effect(() => {
-		if (!commentsLoaded) {
-			commentsLoaded = true;
-			loadComments();
-		}
-	});
 
 	function handleCommentEditorChange(json: string) {
 		commentContentJson = json;
@@ -66,7 +64,6 @@
 	}
 
 	async function loadComments() {
-		loadingComments = true;
 		try {
 			const res = await fetch(`/api/activities?parentId=${activityId}`);
 			if (res.ok) {
@@ -76,7 +73,6 @@
 		} catch {
 			// Silently fail
 		}
-		loadingComments = false;
 	}
 
 	async function submitComment() {
@@ -145,7 +141,7 @@
 	}}
 />
 
-{#if open || loadingComments || comments.length > 0}
+{#if open || comments.length > 0}
 	<div class="mt-3 bg-base-200/50 rounded-box p-3">
 		{#if open && currentUserId !== null && currentUserId !== undefined}
 			<div class="mb-3 flex flex-col gap-2">
@@ -175,9 +171,7 @@
 			</div>
 		{/if}
 
-		{#if loadingComments}
-			<p class="text-sm text-base-content/50">{t.common.loading}</p>
-		{:else if comments.length > 0}
+		{#if comments.length > 0}
 			<div class="space-y-3">
 				{#each comments as comment (comment.id)}
 					<div class="flex gap-2">

@@ -5,11 +5,16 @@
  * the pager can mount all three tabs without duplicating the query body.
  */
 import { activities, users, drafts, activityJoins } from '../schema';
-import { and, isNull, desc, eq, sql, inArray } from 'drizzle-orm';
+import { and, isNull, desc, asc, eq, sql, inArray } from 'drizzle-orm';
 import type { D1Db } from '../index';
 import { getActivitiesLimit, SYSTEM_USER_ID } from '$lib/server/constants';
 import { resolveMentions } from '$lib/server/utils/mentions';
-import type { ActivityListItem, JoinedMember, RecipientInfo } from '$lib/types/api';
+import type {
+	ActivityListItem,
+	ActivityCommentItem,
+	JoinedMember,
+	RecipientInfo
+} from '$lib/types/api';
 import type { MentionedUsersMap } from '$lib/types/mentions';
 
 interface LoadActivityPageOptions {
@@ -102,22 +107,40 @@ export async function loadActivityPage(
 		}
 	}
 
-	// 4. Comment counts per activity (batch query).
+	// 4. Comments for every activity on this page (one batch query), bundled so
+	// the feed renders them inline without a per-row fetch. commentCount is
+	// derived from this map, so no separate COUNT query is needed.
 	const activityIds = activityList.map((a) => a.id);
-	const commentCountMap = new Map<number, number>();
+	const commentsMap = new Map<number, ActivityCommentItem[]>();
 	if (activityIds.length > 0) {
-		const commentCounts = await db
+		const commentRows = await db
 			.select({
 				parentActivityId: activities.parentActivityId,
-				count: sql<number>`COUNT(*)`
+				id: activities.id,
+				authorId: activities.authorId,
+				contentJson: activities.contentJson,
+				createdAt: activities.createdAt,
+				authorDisplayName: users.displayName,
+				authorUsername: users.username,
+				authorAvatarFileId: users.avatarFileId
 			})
 			.from(activities)
+			.innerJoin(users, eq(activities.authorId, users.id))
 			.where(and(inArray(activities.parentActivityId, activityIds), isNull(activities.deletedAt)))
-			.groupBy(activities.parentActivityId);
-		for (const cc of commentCounts) {
-			if (cc.parentActivityId) {
-				commentCountMap.set(cc.parentActivityId, cc.count);
-			}
+			.orderBy(asc(activities.parentActivityId), asc(activities.createdAt));
+		for (const c of commentRows) {
+			if (c.parentActivityId == null) continue;
+			const arr = commentsMap.get(c.parentActivityId) ?? [];
+			arr.push({
+				id: c.id,
+				authorId: c.authorId,
+				contentJson: c.contentJson,
+				createdAt: c.createdAt,
+				authorDisplayName: c.authorDisplayName,
+				authorUsername: c.authorUsername,
+				authorAvatarFileId: c.authorAvatarFileId
+			});
+			commentsMap.set(c.parentActivityId, arr);
 		}
 	}
 
@@ -167,7 +190,8 @@ export async function loadActivityPage(
 		recipientUsername: a.recipientId ? (recipientMap.get(a.recipientId)?.username ?? null) : null,
 		contentJson: a.contentJson,
 		createdAt: a.createdAt,
-		commentCount: commentCountMap.get(a.id) || 0,
+		commentCount: commentsMap.get(a.id)?.length ?? 0,
+		comments: commentsMap.get(a.id) ?? [],
 		isJoined: a.isJoined,
 		joinedMembers: a.isJoined ? (joinedMembersMap.get(a.id) ?? []) : []
 	}));

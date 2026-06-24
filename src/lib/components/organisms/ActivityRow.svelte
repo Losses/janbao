@@ -7,7 +7,7 @@
 	import { generateSlug } from '$lib/utils/slug';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import { mdiArrowRight } from '@mdi/js';
-	import type { ApiResult } from '$lib/types/api';
+	import type { ApiResult, ActivityCommentItem } from '$lib/types/api';
 	import type { MentionedUsersMap } from '$lib/types/mentions';
 	import type { TranslationDict } from '$lib/types/translation';
 
@@ -23,6 +23,7 @@
 		contentJson: string;
 		createdAt: Date;
 		commentCount: number;
+		comments?: ActivityCommentItem[];
 		currentUserId?: number | null;
 		isAdmin?: boolean;
 		t: TranslationDict;
@@ -42,6 +43,7 @@
 		contentJson,
 		createdAt,
 		commentCount = 0,
+		comments = [],
 		currentUserId = null,
 		isAdmin = false,
 		t,
@@ -164,6 +166,7 @@
 					activityId={id}
 					open={showEditor}
 					bind:commentCount={commentCountState}
+					initialComments={comments}
 					{currentUserId}
 					{isAdmin}
 					activityAuthorId={authorId}

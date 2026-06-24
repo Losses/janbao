@@ -3,7 +3,7 @@
 	import DateComponent from '$lib/components/atoms/Date.svelte';
 	import ActivityComments from '$lib/components/organisms/ActivityComments.svelte';
 	import { generateSlug } from '$lib/utils/slug';
-	import type { JoinedMember } from '$lib/types/api';
+	import type { ActivityCommentItem, JoinedMember } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 
 	interface JoinedActivityRowProps {
@@ -11,6 +11,7 @@
 		createdAt: Date;
 		members: JoinedMember[];
 		commentCount: number;
+		comments?: ActivityCommentItem[];
 		authorId: number;
 		currentUserId?: number | null;
 		isAdmin?: boolean;
@@ -22,6 +23,7 @@
 		createdAt,
 		members,
 		commentCount = 0,
+		comments = [],
 		authorId,
 		currentUserId = null,
 		isAdmin = false,
@@ -99,6 +101,7 @@
 				activityId={id}
 				open={showEditor}
 				bind:commentCount={commentCountState}
+				initialComments={comments}
 				{currentUserId}
 				{isAdmin}
 				activityAuthorId={authorId}

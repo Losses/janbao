@@ -30,6 +30,7 @@
 			members={activity.joinedMembers}
 			commentCount={activity.commentCount}
 			authorId={activity.authorId}
+			comments={activity.comments}
 			{currentUserId}
 			{isAdmin}
 			{t}
@@ -47,6 +48,7 @@
 			contentJson={activity.contentJson}
 			createdAt={activity.createdAt}
 			commentCount={activity.commentCount}
+			comments={activity.comments}
 			{currentUserId}
 			{isAdmin}
 			{t}
