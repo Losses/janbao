@@ -28,8 +28,7 @@
 	const t = $derived(data.t);
 	const adminT = $derived(t.admin);
 	const user = $derived(data.user);
-
-	const isZh = $derived(data.lang === 'zh-CN');
+	const directoryT = $derived(t.directory);
 
 	// Client-side desktop check: redirect to user groups if the screen is desktop size
 	onMount(() => {
@@ -44,7 +43,7 @@
 		user
 			? [
 					{
-						title: isZh ? '权限与用户' : 'Permissions & Users',
+						title: directoryT.permissionsUsers,
 						items: [
 							{
 								label: adminT['userGroups'],
@@ -59,7 +58,7 @@
 						]
 					},
 					{
-						title: isZh ? '内容管理' : 'Content Management',
+						title: directoryT.contentManagement,
 						items: [
 							{
 								label: adminT['categories'],
@@ -69,7 +68,7 @@
 						]
 					},
 					{
-						title: isZh ? '系统维护' : 'System Maintenance',
+						title: directoryT.systemMaintenance,
 						items: [
 							{
 								label: t.backup.nav,

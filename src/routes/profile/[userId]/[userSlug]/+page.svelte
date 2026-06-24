@@ -87,7 +87,7 @@
 
 {#snippet leftPanel()}
 	{#if user && targetUser && targetUser.id === user.id}
-		<ProfileMenuPanel user={targetUser} {t} lang={data.lang} />
+		<ProfileMenuPanel user={targetUser} {t} />
 	{/if}
 {/snippet}
 

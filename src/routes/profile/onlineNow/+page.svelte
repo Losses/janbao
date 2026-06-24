@@ -64,7 +64,7 @@
 
 {#snippet leftPanel()}
 	{#if user}
-		<SettingsMenuPanel {user} {t} lang={data.lang} />
+		<SettingsMenuPanel {user} {t} />
 	{/if}
 {/snippet}
 

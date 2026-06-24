@@ -71,26 +71,24 @@ export const POST: RequestHandler = async (event) => {
 			const displayNameHtml = escapeHtml(user.displayName);
 			const siteNameHtml = escapeHtml(siteName);
 
-			// Construct email content based on localized language
-			const isChinese = event.locals.lang === 'zh-CN';
+			// Email copy comes from the i18n dictionary; `t` is already resolved
+			// to the recipient's locale, so no language branching is needed.
+			// Function replacers keep any $ in interpolated values literal.
 			const subject = `[${siteName}] ${t.auth.resetPasswordSubject}`;
+			const footer = t.auth.resetEmailFooter;
+			const greetingText = t.auth.resetEmailGreeting.replace('{name}', () => user.displayName);
+			const introText = t.auth.resetEmailIntro.replace('{site}', () => siteName);
+			const greetingHtml = t.auth.resetEmailGreeting.replace(
+				'{name}',
+				() => `<strong>${displayNameHtml}</strong>`
+			);
+			const introHtml = t.auth.resetEmailIntro.replace('{site}', () => siteNameHtml);
 
-			let text = '';
-			let html = '';
-
-			if (isChinese) {
-				text = `您好 ${user.displayName}，\n\n我们收到了您在 ${siteName} 论坛的重置密码请求。请访问以下链接以重新设置您的密码（链接将在 48 小时后失效）：\n\n${resetLink}\n\n如果您没有发起该请求，请忽略此邮件。`;
-				html = `<p>您好 <strong>${displayNameHtml}</strong>，</p>
-<p>我们收到了您在 ${siteNameHtml} 论坛的重置密码请求。请点击下面的链接重新设置您的密码（链接将在 48 小时后失效）：</p>
+			const text = `${greetingText}\n\n${introText}\n\n${resetLink}\n\n${footer}`;
+			const html = `<p>${greetingHtml}</p>
+<p>${introHtml}</p>
 <p><a href="${resetLink}" target="_blank">${resetLink}</a></p>
-<p>如果您没有发起该请求，请忽略此邮件。</p>`;
-			} else {
-				text = `Hello ${user.displayName},\n\nWe received a password reset request for your account on ${siteName}. Please visit the link below to reset your password (valid for 48 hours):\n\n${resetLink}\n\nIf you did not request this, please ignore this email.`;
-				html = `<p>Hello <strong>${displayNameHtml}</strong>,</p>
-<p>We received a password reset request for your account on ${siteNameHtml}. Please click the link below to reset your password (valid for 48 hours):</p>
-<p><a href="${resetLink}" target="_blank">${resetLink}</a></p>
-<p>If you did not request this, please ignore this email.</p>`;
-			}
+<p>${footer}</p>`;
 
 			await sendEmail(
 				{

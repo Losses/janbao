@@ -36,8 +36,7 @@
 	const t = $derived(data.t);
 	const profileT = $derived(t.profile);
 	const user = $derived(data.user);
-
-	const isZh = $derived(data.lang === 'zh-CN');
+	const directoryT = $derived(t.directory);
 
 	const prevPath = $derived(
 		navStore.activeStack.length >= 2
@@ -50,7 +49,7 @@
 		user
 			? [
 					{
-						title: isZh ? '基本信息' : 'Basic Info',
+						title: directoryT.basicInfo,
 						items: [
 							{
 								label: profileT['editAccount'],
@@ -70,7 +69,7 @@
 						]
 					},
 					{
-						title: isZh ? '功能与偏好' : 'Features & Preferences',
+						title: directoryT.featuresPreferences,
 						items: [
 							{
 								label: profileT['preferences'],
@@ -95,7 +94,7 @@
 						]
 					},
 					{
-						title: isZh ? '高级特性' : 'Advanced Features',
+						title: directoryT.advancedFeatures,
 						items: [
 							{
 								label: profileT['offlineReadingNav'],
@@ -122,7 +121,7 @@
 {#snippet leftPanel()}
 	{#if user}
 		{#if prevPath === '/profile'}
-			<ProfileMenuPanel {user} {t} lang={data.lang} />
+			<ProfileMenuPanel {user} {t} />
 		{:else}
 			<DiscussionsPanel
 				discussions={cachedDiscussions}

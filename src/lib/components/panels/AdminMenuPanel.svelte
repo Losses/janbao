@@ -18,19 +18,18 @@
 	interface Props {
 		user: UserInfoSummary;
 		t: TranslationDict;
-		lang: string;
 	}
 
-	let { user, t, lang }: Props = $props();
+	let { user, t }: Props = $props();
 
 	const adminT = $derived(t.admin);
-	const isZh = $derived(lang === 'zh-CN');
+	const directoryT = $derived(t.directory);
 
 	const groups = $derived<DirectoryGroup[]>(
 		user
 			? [
 					{
-						title: isZh ? '权限与用户' : 'Permissions & Users',
+						title: directoryT.permissionsUsers,
 						items: [
 							{
 								label: adminT['userGroups'],
@@ -45,7 +44,7 @@
 						]
 					},
 					{
-						title: isZh ? '内容管理' : 'Content Management',
+						title: directoryT.contentManagement,
 						items: [
 							{
 								label: adminT['categories'],
@@ -55,7 +54,7 @@
 						]
 					},
 					{
-						title: isZh ? '系统维护' : 'System Maintenance',
+						title: directoryT.systemMaintenance,
 						items: [
 							{
 								label: t.backup.nav,

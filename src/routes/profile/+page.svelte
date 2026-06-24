@@ -30,14 +30,13 @@
 	const user = $derived(data.user);
 	const targetUser = $derived(data.headerPayload.user);
 	const targetUserSlug = $derived(generateSlug(targetUser.username));
-
-	const isZh = $derived(data.lang === 'zh-CN');
+	const directoryT = $derived(t.directory);
 
 	const groups = $derived<DirectoryGroup[]>(
 		user
 			? [
 					{
-						title: isZh ? '个人互动' : 'Personal Interactions',
+						title: directoryT.personalInteractions,
 						items: [
 							{
 								label: profileT['activities'],
@@ -57,7 +56,7 @@
 						]
 					},
 					{
-						title: isZh ? '消息与通知' : 'Messages & Notifications',
+						title: directoryT.messagesNotifications,
 						items: [
 							{
 								label: profileT['mailbox'],
@@ -72,7 +71,7 @@
 						]
 					},
 					{
-						title: isZh ? '账号与系统' : 'Account & System',
+						title: directoryT.accountSystem,
 						items: [
 							{
 								label: profileT['invitations'],

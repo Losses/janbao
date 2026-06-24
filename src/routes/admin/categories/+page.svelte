@@ -163,7 +163,7 @@
 
 {#snippet leftPanel()}
 	{#if user}
-		<AdminMenuPanel {user} {t} lang={data.lang} />
+		<AdminMenuPanel {user} {t} />
 	{/if}
 {/snippet}
 

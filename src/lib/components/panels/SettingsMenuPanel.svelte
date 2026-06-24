@@ -20,19 +20,18 @@
 	interface Props {
 		user: UserInfoSummary;
 		t: TranslationDict;
-		lang: string;
 	}
 
-	let { user, t, lang }: Props = $props();
+	let { user, t }: Props = $props();
 
 	const profileT = $derived(t.profile);
-	const isZh = $derived(lang === 'zh-CN');
+	const directoryT = $derived(t.directory);
 
 	const groups = $derived<DirectoryGroup[]>(
 		user
 			? [
 					{
-						title: isZh ? '基本信息' : 'Basic Info',
+						title: directoryT.basicInfo,
 						items: [
 							{
 								label: profileT['editAccount'],
@@ -52,7 +51,7 @@
 						]
 					},
 					{
-						title: isZh ? '功能与偏好' : 'Features & Preferences',
+						title: directoryT.featuresPreferences,
 						items: [
 							{
 								label: profileT['preferences'],
@@ -77,7 +76,7 @@
 						]
 					},
 					{
-						title: isZh ? '高级特性' : 'Advanced Features',
+						title: directoryT.advancedFeatures,
 						items: [
 							{
 								label: profileT['offlineReadingNav'],

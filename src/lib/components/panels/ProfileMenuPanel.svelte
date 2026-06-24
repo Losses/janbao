@@ -23,19 +23,18 @@
 	interface Props {
 		user: ProfileHeaderUser | UserData;
 		t: TranslationDict;
-		lang: string;
 	}
 
-	let { user, t, lang }: Props = $props();
+	let { user, t }: Props = $props();
 
 	const profileT = $derived(t.profile);
 	const tNav = $derived(t.nav);
+	const directoryT = $derived(t.directory);
 	const targetUserSlug = $derived(generateSlug(user.username));
-	const isZh = $derived(lang === 'zh-CN');
 
 	const groups = $derived<DirectoryGroup[]>([
 		{
-			title: isZh ? '个人互动' : 'Personal Interactions',
+			title: directoryT.personalInteractions,
 			items: [
 				{
 					label: profileT['activities'],
@@ -55,7 +54,7 @@
 			]
 		},
 		{
-			title: isZh ? '消息与通知' : 'Messages & Notifications',
+			title: directoryT.messagesNotifications,
 			items: [
 				{
 					label: profileT['mailbox'],
@@ -70,7 +69,7 @@
 			]
 		},
 		{
-			title: isZh ? '账号与系统' : 'Account & System',
+			title: directoryT.accountSystem,
 			items: [
 				{
 					label: profileT['invitations'],
