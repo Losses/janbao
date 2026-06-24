@@ -13,7 +13,7 @@
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
 	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
 	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
-	import { MOBILE_TABS, isPagerRoute } from '$lib/utils/mobile-tabs';
+	import { MOBILE_TABS, isPagerRoute, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 
 	interface Props {
@@ -204,17 +204,52 @@
 	});
 
 	$effect(() => {
-		if (!isMobile || centerTab === undefined) return;
-		let progressVal: number;
-		if (dragOffset !== null && viewportWidth) {
-			const dragProgress = Math.max(0, Math.min(1, -dragOffset / viewportWidth));
-			progressVal =
-				rightTab !== undefined ? centerTab + dragProgress * (rightTab - centerTab) : centerTab;
-		} else {
-			const rightPanelIdx = hasRight && !swipeNeedsLoadingAtStart ? panelCount - 1 : -1;
-			progressVal = snapIndex === rightPanelIdx && rightTab !== undefined ? rightTab : centerTab;
+		if (!isMobile) return;
+		if (centerTab !== undefined) {
+			// Page centered on a tab (e.g. a thread / messages conversation): drive
+			// the pill between centerTab and the optional rightTab as the user drags.
+			let progressVal: number;
+			if (dragOffset !== null && viewportWidth) {
+				const dragProgress = Math.max(0, Math.min(1, -dragOffset / viewportWidth));
+				progressVal =
+					rightTab !== undefined ? centerTab + dragProgress * (rightTab - centerTab) : centerTab;
+			} else {
+				const rightPanelIdx = hasRight && !swipeNeedsLoadingAtStart ? panelCount - 1 : -1;
+				progressVal = snapIndex === rightPanelIdx && rightTab !== undefined ? rightTab : centerTab;
+			}
+			pager.set({ fractionalIndex: progressVal, dragging: dragOffset !== null, active: true });
+			return;
 		}
-		pager.set({ fractionalIndex: progressVal, dragging: dragOffset !== null, active: true });
+		// Deep page with no tab of its own (bookmarks, profile, settings, search,
+		// ...): the MobileTabBar would otherwise show no pill and snap only after
+		// navigation. Drive the pill ourselves so a back-swipe animates it from the
+		// current page's tab index (-1 = no pill) toward the back target's tab,
+		// tracking the finger like the 3-tab pager does.
+		const fromIdx = getCurrentTabIndex(page.url.pathname);
+		const targetIdx = resolvedLeftHref ? getCurrentTabIndex(resolvedLeftHref) : -1;
+		const committed = isPendingNavigation || isTransitioningOut || pendingNav !== null;
+		if (dragOffset !== null && targetIdx >= 0) {
+			// Gradual expansion across the full drag (matched to the pager, which
+			// normalises by the viewport). Reaching ~15-30% by the commit point is
+			// fine: dropping `dragging` on commit re-enables the tab bar's CSS
+			// transition, which smoothly finishes the rest.
+			const progress = viewportWidth ? Math.min(1, Math.abs(dragOffset) / viewportWidth) : 0;
+			pager.set({
+				fractionalIndex: fromIdx + (targetIdx - fromIdx) * progress,
+				dragging: true,
+				active: true
+			});
+		} else if (committed && targetIdx >= 0) {
+			// Gesture committed, navigation in flight: HOLD the pill at the target
+			// (don't reset to fromIdx) so it doesn't collapse-then-re-expand before
+			// the destination page's pager takes over. dragging=false lets the CSS
+			// transition animate the final sliver into place.
+			pager.set({ fractionalIndex: targetIdx, dragging: false, active: true });
+		} else {
+			// True rest (idle, or backing toward a non-tab route): release the pager
+			// so MobileTabBar falls back to the URL tab (-1 => no pill on a deep page).
+			pager.set({ fractionalIndex: fromIdx, dragging: false, active: false });
+		}
 	});
 
 	const trackTranslateX = $derived<string>(
