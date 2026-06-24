@@ -117,3 +117,74 @@ test('handleAfterNavigate clears direction', () => {
 	s = handleAfterNavigateNav(s);
 	expect(s.direction).toBe('none');
 });
+
+// --- Tab-tap return must not leave a stale thread entry ----------------------
+// GesturePageLayout.shouldAnimateEnter plays the list→thread slide-in only when
+// the discussion was reached from `/`: after a forward push, the entry below the
+// stack top must be '/'. Returning to the list (via a tab-bar tap → switchTab,
+// or any cross-tab navigation landing on a tab root) must therefore reset that
+// tab's stack to its root - not carry a stale thread from a prior visit, which
+// would make the next list→thread push see prevPath = the stale thread and
+// suppress the animation. These mirror the e2e in enter-animation.spec.ts.
+
+test('switchTab to a tab root resets that tab stack to the root', () => {
+	let s = initialNavState();
+	s = initNav(s, '/', '');
+	s = handleBeforeNavigateNav(s, '/discussion/1/a', '/', 'link', '');
+	expect(s.stacks[0].map((e) => e.pathname)).toEqual(['/', '/discussion/1/a']);
+	s = switchTabNav(s, '/', '');
+	expect(s.stacks[0].map((e) => e.pathname)).toEqual(['/']);
+});
+
+test('switchTab preserves the OTHER tabs stacks, only resetting the destination', () => {
+	let s = initialNavState();
+	s = initNav(s, '/', '');
+	s = handleBeforeNavigateNav(s, '/discussion/1/a', '/', 'link', '');
+	s = switchTabNav(s, '/', '');
+	expect(s.stacks[0].map((e) => e.pathname)).toEqual(['/']);
+	expect(s.stacks[1].map((e) => e.pathname)).toEqual(['/activity']);
+	expect(s.stacks[2].map((e) => e.pathname)).toEqual(['/messages/inbox']);
+});
+
+test('a cross-tab navigation landing on a tab root resets that tab stack', () => {
+	let s = initialNavState();
+	s = initNav(s, '/', '');
+	s = handleBeforeNavigateNav(s, '/discussion/1/a', '/', 'link', ''); // tab0 = [/, discA]
+	// Cross-tab away to messages, then cross-tab back to the discussions root.
+	s = handleBeforeNavigateNav(s, '/messages/inbox', '/discussion/1/a', 'link', '');
+	expect(s.activeTab).toBe(2);
+	expect(s.stacks[0].map((e) => e.pathname)).toEqual(['/', '/discussion/1/a']); // untouched so far
+	s = handleBeforeNavigateNav(s, '/', '/messages/inbox', 'link', '');
+	expect(s.activeTab).toBe(0);
+	expect(s.stacks[0].map((e) => e.pathname)).toEqual(['/']); // stale thread cleared
+});
+
+test('second list→thread enter after a tab-tap return still originates from the list', () => {
+	let s = initialNavState();
+	s = initNav(s, '/', '');
+	s = handleBeforeNavigateNav(s, '/discussion/1/a', '/', 'link', ''); // visit A
+	s = switchTabNav(s, '/', ''); // tab-tap back to the list
+	s = handleBeforeNavigateNav(s, '/discussion/2/b', '/', 'link', ''); // visit B (different)
+	expect(s.direction).toBe('forward');
+	const stack = s.stacks[0];
+	expect(stack[stack.length - 1].pathname).toBe('/discussion/2/b');
+	// Precondition for the slide-in: came from '/', not the stale thread A.
+	expect(stack[stack.length - 2].pathname).toBe('/');
+});
+
+test('tab-tap return to the list makes backTarget the list root, not the stale thread', () => {
+	let s = initialNavState();
+	s = initNav(s, '/', '');
+	s = handleBeforeNavigateNav(s, '/discussion/1/a', '/', 'link', '');
+	s = switchTabNav(s, '/', '');
+	expect(backTargetFor(s)).toBe('/');
+});
+
+test('switchTab to a non-root tab page seeds [root, path] so back lands on the list', () => {
+	let s = initialNavState();
+	s = initNav(s, '/', '');
+	// A tab page that is not its tab root (e.g. a messages conversation).
+	s = switchTabNav(s, '/messages/2', '');
+	expect(s.activeTab).toBe(2);
+	expect(s.stacks[2].map((e) => e.pathname)).toEqual(['/messages/inbox', '/messages/2']);
+});

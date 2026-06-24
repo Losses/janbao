@@ -73,22 +73,39 @@ function clone(state: NavState): NavState {
 }
 
 /**
+ * Seed a tab's stack for a fresh landing: a single root entry when landing on
+ * the tab root, else `[root, path]` so a back-swipe lands on the list. Shared by
+ * initNav (first load / deep-link), switchTabNav (a tab-bar tap), and the
+ * cross-tab branch of handleBeforeNavigateNav. Centralising this is what
+ * prevents a stale thread entry from a prior visit surviving below the stack
+ * top after returning to a tab - which would otherwise break the list→thread
+ * enter animation's `prevPath === '/'` precondition (shouldAnimateEnter).
+ */
+function seedStackForLanding(
+	stacks: Record<number, RouteEntry[]>,
+	tabIdx: number,
+	path: string,
+	search: string
+): void {
+	const rootPath = TAB_ROOT_HREFS[tabIdx];
+	stacks[tabIdx] =
+		path === rootPath
+			? [{ pathname: path, search }]
+			: [
+					{ pathname: rootPath, search: '' },
+					{ pathname: path, search }
+				];
+}
+
+/**
  * Seed a tab's stack on first load / reload / deep-link. When the entry is a
  * tab root it becomes the sole entry; otherwise a synthetic root parent is
  * unshifted so a back-swipe lands on the list.
  */
 export function initNav(state: NavState, path: string, search: string): NavState {
 	const tabIdx = getTabFromPath(path, state.activeTab);
-	const rootPath = TAB_ROOT_HREFS[tabIdx];
 	const next = clone(state);
-	if (path === rootPath) {
-		next.stacks[tabIdx] = [{ pathname: path, search }];
-	} else {
-		next.stacks[tabIdx] = [
-			{ pathname: rootPath, search: '' },
-			{ pathname: path, search }
-		];
-	}
+	seedStackForLanding(next.stacks, tabIdx, path, search);
 	// Seed activeTab from the landed path. Without this a direct load / reload /
 	// deep-link onto /activity or /messages/inbox leaves activeTab at its default
 	// (0), so a subsequent navigation to a global route (/bookmarks, /profile,
@@ -97,21 +114,25 @@ export function initNav(state: NavState, path: string, search: string): NavState
 	return next;
 }
 
-/** Tap a primary tab: switch activeTab, seeding an empty stack with the target. */
+/**
+ * Tap a primary tab: switch activeTab and RESET that tab's stack for a fresh
+ * landing (seedStackForLanding). Resetting - rather than preserving whatever the
+ * tab had before - is what stops a stale thread entry from a prior visit sitting
+ * below the stack top and suppressing the next list→thread enter animation.
+ */
 export function switchTabNav(state: NavState, path: string, search: string): NavState {
 	const toTab = getTabFromPath(path, state.activeTab);
 	const next = clone(state);
 	next.activeTab = toTab;
-	if (next.stacks[toTab].length === 0) {
-		next.stacks[toTab] = [{ pathname: path, search }];
-	}
+	seedStackForLanding(next.stacks, toTab, path, search);
 	return next;
 }
 
 /**
- * Apply a SvelteKit navigation event. A cross-tab navigation just switches
- * activeTab (stacks untouched); within the same tab, popstate pops and a push
- * appends (deduping consecutive identical paths).
+ * Apply a SvelteKit navigation event. A cross-tab navigation switches activeTab
+ * and re-seeds the destination tab's stack (a fresh landing, same as a tab tap);
+ * within the same tab, popstate pops and a push appends (deduping consecutive
+ * identical paths).
  */
 export function handleBeforeNavigateNav(
 	state: NavState,
@@ -125,6 +146,7 @@ export function handleBeforeNavigateNav(
 	const next = clone(state);
 	if (toTab !== fromTab) {
 		next.activeTab = toTab;
+		seedStackForLanding(next.stacks, toTab, to, toSearch);
 		return next;
 	}
 	if (type === 'popstate') {

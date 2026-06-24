@@ -194,3 +194,100 @@ export function collectConsole(page: Page): string[] {
 	page.on('console', (m) => messages.push(m.text()));
 	return messages;
 }
+
+// --- Thread enter-animation capture ----------------------------------------
+// GesturePageLayout plays a list→thread slide-in when a discussion is reached
+// from `/` (shouldAnimateEnter): the track starts at translateX(0%) and animates
+// to translateX(-33.3%) over ~200ms. We sample the track's computed translateX
+// to prove the animation ran - the only behavioural signal that the transition
+// animated. The regression test for the tab-tap-return bug relies on this: a
+// stale thread entry in the nav stack suppresses the slide-in (the track is born
+// already centred and never moves).
+
+interface EnterAnimState {
+	samples: number[];
+	firstInline: string | null;
+	done: boolean;
+}
+
+interface EnterAnimWindow extends Window {
+	__anim?: EnterAnimState;
+}
+
+export interface EnterAnimCapture {
+	animated: boolean;
+	delta: number;
+	firstInline: string | null;
+	sampleCount: number;
+}
+
+/**
+ * Install a rAF sampler, trigger a navigation, then report whether the
+ * GesturePageLayout track translated (i.e. the slide-in played). The sampler
+ * polls for `.detail-scroll-pane` (the thread's centre panel, present only on a
+ * thread page) and records its parent track's translateX each frame for 700ms.
+ * `animated` is true iff the track moved >100px - unambiguous, since the only
+ * track animation on a thread page is the enter slide (≈ one viewport wide).
+ */
+export async function captureEnterAnimation(
+	page: Page,
+	trigger: () => Promise<void>
+): Promise<EnterAnimCapture> {
+	await page.evaluate(() => {
+		const w = window as unknown as EnterAnimWindow;
+		const state: EnterAnimState = { samples: [], firstInline: null, done: false };
+		w.__anim = state;
+		let startT: number | null = null;
+		let track: HTMLElement | null = null;
+		const findTrack = (): HTMLElement | null => {
+			const centre = document.querySelector('.detail-scroll-pane');
+			return centre ? (centre.parentElement as HTMLElement) : null;
+		};
+		const tick = (): void => {
+			if (track === null) {
+				track = findTrack();
+				if (track !== null) {
+					state.firstInline = track.style.transform;
+					startT = performance.now();
+				}
+			}
+			if (track !== null && startT !== null) {
+				const elapsed = performance.now() - startT;
+				let tx = 0;
+				try {
+					tx = new DOMMatrix(getComputedStyle(track).transform).m41;
+				} catch {
+					tx = 0;
+				}
+				state.samples.push(Math.round(tx));
+				if (elapsed > 700) {
+					state.done = true;
+					return;
+				}
+			}
+			requestAnimationFrame(tick);
+		};
+		requestAnimationFrame(tick);
+	});
+	await trigger();
+	await page.waitForFunction(
+		() => (window as unknown as EnterAnimWindow).__anim?.done === true,
+		{ timeout: 8000 }
+	);
+	return await page.evaluate(() => {
+		const a = (window as unknown as EnterAnimWindow).__anim!;
+		const samples = a.samples;
+		const delta = samples.length > 0 ? Math.max(...samples) - Math.min(...samples) : 0;
+		return {
+			animated: delta > 100,
+			delta,
+			firstInline: a.firstInline,
+			sampleCount: samples.length
+		};
+	});
+}
+
+/** Click the Nth discussion link in the discussions list (0-indexed). */
+export async function clickDiscussion(page: Page, index: number): Promise<void> {
+	await page.locator('a[href^="/discussion/"]').nth(index).click();
+}
