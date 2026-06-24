@@ -320,12 +320,37 @@
 			isMobile = mq.matches;
 			if (isMobile) {
 				document.documentElement.classList.add('fixed-viewport');
+				// Reset any parent element's scroll that might have been changed by browser's native anchor scrolling
+				// before fixed-viewport locked the scroll.
+				window.scrollTo(0, 0);
+				let parent = viewportEl?.parentElement;
+				while (parent) {
+					if (parent.scrollTop !== 0) parent.scrollTop = 0;
+					if (parent.scrollLeft !== 0) parent.scrollLeft = 0;
+					parent = parent.parentElement;
+				}
 			} else {
 				document.documentElement.classList.remove('fixed-viewport');
 			}
 		};
 		sync();
 		mq.addEventListener('change', sync);
+
+		// Intercept scroll events globally (in capture phase) to prevent the browser
+		// from natively scrolling parent layout containers (like AppShell .min-h-screen)
+		// when targeting a hash anchor on mount.
+		const forceZeroScroll = (e: Event) => {
+			if (!isMobile) return;
+			const target = e.target as HTMLElement | null;
+			if (!target) return;
+			if (target === document || target === (window as unknown as HTMLElement)) {
+				window.scrollTo(0, 0);
+			} else if (target.classList && !target.classList.contains('scroll-pane')) {
+				if (target.scrollTop !== 0) target.scrollTop = 0;
+				if (target.scrollLeft !== 0) target.scrollLeft = 0;
+			}
+		};
+		window.addEventListener('scroll', forceZeroScroll, true);
 
 		let enterRaf = 0;
 		if (isEntering && isMobile) {
@@ -346,6 +371,7 @@
 
 		return () => {
 			mq.removeEventListener('change', sync);
+			window.removeEventListener('scroll', forceZeroScroll, true);
 			document.documentElement.classList.remove('fixed-viewport');
 			if (enterRaf) cancelAnimationFrame(enterRaf);
 		};
