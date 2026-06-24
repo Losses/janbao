@@ -18,7 +18,8 @@ export interface PcloudConfig {
 }
 
 const DEFAULT_HOST = 'webdav.pcloud.com';
-const DEFAULT_BASE_PATH = '/Janbao';
+/** Project root folder under the pCloud account root. Exported for setup tooling. */
+export const DEFAULT_BASE_PATH = '/Janbao';
 
 /**
  * Resolve pCloud config from an env-like record. Callers pass their runtime's

@@ -245,35 +245,39 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 		if (event.pointerType === 'mouse' || params.disabled?.()) {
 			return;
 		}
+		// Only a fresh gesture (from idle) can begin tracking. A second finger while
+		// one is in flight, and an edge-dead-zone reject, must leave phase untouched —
+		// a dead-zone pointer is never assigned primaryPointerId, so mutating phase
+		// here would strand it in 'ignore' and kill every later swipe until reload.
+		if (phase !== 'idle') {
+			return;
+		}
 
 		// OS edge-swipe gesture collision guard (40px margin zone to match modern iOS/Android bezel-less native triggers)
 		const edgeDeadZone = 40;
 		if (event.clientX < edgeDeadZone || event.clientX > window.innerWidth - edgeDeadZone) {
 			console.log('[detectSwipe] ignored due to edge dead zone:', event.clientX);
-			phase = 'ignore';
 			return;
 		}
 
-		if (phase === 'idle') {
-			primaryPointerId = event.pointerId;
-			startX = event.clientX;
-			startY = event.clientY;
-			startTime = event.timeStamp;
-			target = event.target;
+		primaryPointerId = event.pointerId;
+		startX = event.clientX;
+		startY = event.clientY;
+		startTime = event.timeStamp;
+		target = event.target;
 
-			const editingAncestor =
-				target instanceof Element
-					? target.closest('input, textarea, select, [contenteditable]')
-					: null;
-			targetWasFocused =
-				editingAncestor !== null &&
-				document.activeElement !== null &&
-				(document.activeElement === editingAncestor ||
-					editingAncestor.contains(document.activeElement));
+		const editingAncestor =
+			target instanceof Element
+				? target.closest('input, textarea, select, [contenteditable]')
+				: null;
+		targetWasFocused =
+			editingAncestor !== null &&
+			document.activeElement !== null &&
+			(document.activeElement === editingAncestor ||
+				editingAncestor.contains(document.activeElement));
 
-			phase = 'deciding';
-			console.log('[detectSwipe] down start:', { startX, startY, phase });
-		}
+		phase = 'deciding';
+		console.log('[detectSwipe] down start:', { startX, startY, phase });
 	}
 
 	function onMove(event: PointerEvent): void {
