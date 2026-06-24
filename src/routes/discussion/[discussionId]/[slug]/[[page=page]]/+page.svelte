@@ -24,6 +24,7 @@
 	import { afterNavigate } from '$app/navigation';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
+	import { getPageThemeStore } from '$lib/stores/page-theme.svelte';
 	import { writeThread, passthroughEnabledFor } from '$lib/offline/passthrough';
 	import type { ThreadPassthroughInput } from '$lib/offline/passthrough';
 	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
@@ -60,6 +61,7 @@
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 
 	const online = getOnlineStore();
+	const pageTheme = getPageThemeStore();
 	// Offline fallback: when the network drops while viewing a discussion that is
 	// cached locally, switch to the client-only offline reader (IDB, no server
 	// round-trip). The online read-mutation has already run for this view.
@@ -394,18 +396,17 @@
 		deleteReplyId = null;
 	}
 
-	// 1. Reactive Theme Override
+	// 1. Publish the thread's theme as a page-level override. The root layout
+	// owns <html data-theme> in a single effect (interface theme vs. this page
+	// override), so the thread theme wins while this page is open and the
+	// interface theme resumes on unmount - no ordering race between a layout
+	// effect and a page effect. data.theme is null when the user blocks post
+	// themes, so the override is simply not published and the interface theme
+	// carries through the thread.
 	$effect(() => {
 		if (typeof document !== 'undefined' && data.theme) {
-			const originalTheme = document.documentElement.getAttribute('data-theme');
-			document.documentElement.setAttribute('data-theme', data.theme);
-			return () => {
-				if (originalTheme) {
-					document.documentElement.setAttribute('data-theme', originalTheme);
-				} else {
-					document.documentElement.removeAttribute('data-theme');
-				}
-			};
+			pageTheme.set(data.theme);
+			return () => pageTheme.clear();
 		}
 	});
 

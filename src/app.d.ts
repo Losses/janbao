@@ -2,6 +2,7 @@
 import type { D1Db } from '$lib/server/db';
 import type { TranslationDict } from '$lib/types/translation';
 import type { EditorPreferences } from '$lib/editor/prefs';
+import type { UiPreferences } from '$lib/ui/prefs';
 
 interface PlatformEnv {
 	D1_DB?: D1Database;
@@ -55,6 +56,7 @@ interface UserData {
 	rssToken: string;
 	viewCount: number;
 	editorPreferences: EditorPreferences;
+	uiPreferences: UiPreferences;
 }
 
 declare global {

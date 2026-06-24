@@ -56,5 +56,10 @@
 				{profileT['editorSettingsNav']}
 			</a>
 		</li>
+		<li>
+			<a href="/profile/appearance" class={activeItem === 'appearanceSettings' ? 'active' : ''}>
+				{profileT['appearanceSettingsNav']}
+			</a>
+		</li>
 	</ul>
 </div>

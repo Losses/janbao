@@ -11,7 +11,8 @@
 		mdiBellOutline,
 		mdiIncognito,
 		mdiCloudDownloadOutline,
-		mdiFileDocumentEditOutline
+		mdiFileDocumentEditOutline,
+		mdiPalette
 	} from '@mdi/js';
 	import type { UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
@@ -67,6 +68,11 @@
 								label: profileT['editorSettingsNav'],
 								href: '/profile/editor',
 								icon: mdiFileDocumentEditOutline
+							},
+							{
+								label: profileT['appearanceSettingsNav'],
+								href: '/profile/appearance',
+								icon: mdiPalette
 							}
 						]
 					},

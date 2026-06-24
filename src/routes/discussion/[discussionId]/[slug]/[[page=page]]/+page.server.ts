@@ -238,8 +238,13 @@ export const load: PageServerLoad = async (event) => {
 			);
 	}
 
-	// 10. Resolve theme: Discussion Theme -> Category Theme -> default
-	const resolvedTheme = discussion.themeName || discussion.categoryTheme || null;
+	// 10. Resolve theme: Discussion Theme -> Category Theme -> default.
+	// When the user has "block post theme" on, force null so the interface
+	// theme (applied by the root layout) carries through the whole thread.
+	const blockPostTheme = user?.uiPreferences?.blockPostTheme === true;
+	const resolvedTheme = blockPostTheme
+		? null
+		: discussion.themeName || discussion.categoryTheme || null;
 
 	// Fetch existing draft for bottom reply editor if logged in
 	let replyDraft = null;

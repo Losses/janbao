@@ -13,6 +13,8 @@
 	import { getOfflinePrefsStore } from '$lib/stores/offline-prefs.svelte';
 	import { DEFAULT_OFFLINE_PREFS } from '$lib/offline/prefs';
 	import { getEditorPrefsStore } from '$lib/stores/editor-prefs.svelte';
+	import { getUiPrefsStore } from '$lib/stores/ui-prefs.svelte';
+	import { getPageThemeStore } from '$lib/stores/page-theme.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { markEnterFromList, setReachedFromList } from '$lib/stores/thread-nav.svelte';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
@@ -33,16 +35,17 @@
 
 	const badges = getBadgesStore();
 	const editorPrefs = getEditorPrefsStore();
+	const uiPrefs = getUiPrefsStore();
+	const pageTheme = getPageThemeStore();
 	const navStore = getNavigationStore();
 	const pageScrollStore = getPageScrollStore();
 
-	// Hold the scroll-chrome header (and on mobile hash-enter, pin it visible)
-	// for navigations where SvelteKit's scroll would otherwise make it twitch:
+	// Hold the scroll-chrome header (and pin it visible on hash-enter) for
+	// navigations where SvelteKit's scroll would otherwise make it twitch:
 	// entering a hash-anchored thread (top→hash) and swiping back from a thread
 	// to the list (top→restored scroll). The destination releases the hold and
 	// pins the header visible once its scroll is set (thread page for enter,
 	// (tabs) layout for swipe-back); a fallback timer covers the rest.
-	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	let navFreezeTimer = 0;
 	beforeNavigate((nav) => {
 		const { to, from, type } = nav;
@@ -79,13 +82,13 @@
 		}
 		if (threadEnter || swipeBack) {
 			const store = getScrollChromeStore();
-			// Mobile hash-enter lands at the anchor via an instant programmatic
-			// scroll (see discussion +page.svelte); pin the header visible first so
-			// it stays on screen instead of hide-on-scroll reacting to that scroll.
-			// Swipe-back already pinned it during the gesture (ThreadPager.swipeMove),
-			// so it only needs the hold. Desktop's header is in-flow and not driven
-			// by the store's translateY, so it is left untouched.
-			store.holdThroughNavigation(!!threadEnter && window.matchMedia(MOBILE_BREAKPOINT).matches);
+			// Hash-enter lands at the anchor via an instant programmatic scroll (see
+			// discussion +page.svelte); pin the header visible first so it stays on
+			// screen instead of hide-on-scroll reacting to that scroll. Swipe-back
+			// already pinned it during the gesture (ThreadPager.swipeMove), so it
+			// only needs the hold. Both pin on every viewport: the store now drives
+			// the sticky header on mobile and desktop alike.
+			store.holdThroughNavigation(!!threadEnter);
 			window.clearTimeout(navFreezeTimer);
 			navFreezeTimer = window.setTimeout(() => store.releaseNavigation(), 1200);
 		}
@@ -142,6 +145,31 @@
 	$effect(() => {
 		if (data.user) {
 			editorPrefs.hydrate(data.user.editorPreferences);
+		}
+	});
+
+	// Seed interface prefs from the session. The layout load is param-free so it
+	// does not re-run on client navigation; this hydrate fires once per full load.
+	$effect(() => {
+		if (data.user) {
+			uiPrefs.hydrate(data.user.uiPreferences);
+		}
+	});
+	// Single owner of <html data-theme>. Resolves the page-level override (set by
+	// the discussion page while a themed thread is open and post themes are not
+	// blocked) over the user's interface theme; falls back to the interface theme,
+	// and when that is empty leaves data-theme unset so the base stylesheet wins.
+	// One effect avoids any ordering race between a layout effect and a deeper
+	// page effect. Deriveds dedupe by value so it re-fires only on real changes.
+	const interfaceTheme = $derived(uiPrefs.prefs.interfaceTheme);
+	const pageThemeOverride = $derived(pageTheme.current);
+	$effect(() => {
+		if (typeof document === 'undefined') return;
+		const resolved = pageThemeOverride ?? interfaceTheme;
+		if (resolved) {
+			document.documentElement.setAttribute('data-theme', resolved);
+		} else {
+			document.documentElement.removeAttribute('data-theme');
 		}
 	});
 

@@ -3,8 +3,9 @@ import { seedCore } from '$lib/server/db/seed';
 import { verifyJwt } from '$lib/server/auth';
 import { users } from '$lib/server/db/schema';
 import { getEditorPreferences } from '$lib/server/db/dao/editor-preferences';
+import { getUiPreferences } from '$lib/server/db/dao/ui-preferences';
 import { resolveLang, getTranslation } from '$lib/server/i18n';
-import { getJwtSecret } from '$lib/server/constants';
+import { getJwtSecret, getCookieSecure } from '$lib/server/constants';
 import { resolvePcloudConfig, pcloudIsConfigured } from '$lib/server/pcloud';
 import { maybeRunDailyBackup } from '$lib/server/backup';
 import { env } from '$env/dynamic/private';
@@ -19,6 +20,19 @@ if (typeof process !== 'undefined') {
 			process.env[key] = value;
 		}
 	}
+}
+
+// The default theme baked into app.html's <html data-theme="huoxin">. Injecting
+// the signed-in user's interface theme into the SSR HTML avoids the FOUC where
+// the page paints the default theme and only switches after hydration runs the
+// root layout's $effect. The client $effect still runs and agrees with this
+// value, so there is no conflict; the per-page theme override (discussion /
+// compose) remains a client-side store update.
+const DEFAULT_HTML_THEME = 'huoxin';
+
+function injectInterfaceTheme(html: string, theme: string | null | undefined): string {
+	if (!theme || theme === DEFAULT_HTML_THEME) return html;
+	return html.replace(`data-theme="${DEFAULT_HTML_THEME}"`, `data-theme="${theme}"`);
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
@@ -71,6 +85,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 				// instance reads them via the client store), so they ride along on
 				// the session. A PK lookup on a 1:1 row; sub-ms.
 				const editorPreferences = await getEditorPreferences(db, userRecord.id);
+				// Interface prefs (site theme override + block-post-theme) are read
+				// app-wide too - the root layout applies the theme via the client
+				// store, and the discussion/post forms gate on blockPostTheme.
+				const uiPreferences = await getUiPreferences(db, userRecord.id);
 				// Redact password hash before exposing to locals
 				const safeUser = {
 					id: userRecord.id,
@@ -87,7 +105,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 					isStealth: userRecord.isStealth,
 					rssToken: userRecord.rssToken,
 					viewCount: userRecord.viewCount,
-					editorPreferences
+					editorPreferences,
+					uiPreferences
 				};
 				event.locals.user = safeUser;
 
@@ -128,7 +147,31 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.lang = resolvedLang;
 	event.locals.t = getTranslation(resolvedLang);
 
-	const response = await resolve(event);
+	// Publish the user's interface theme as a readable (non-httpOnly) cookie so
+	// the inline script in app.html can set <html data-theme> during HTML parse,
+	// before first paint and before hydration. This is the second no-FOUC layer
+	// (transformPageChunk is the first): it corrects the theme even when the
+	// served HTML did not get the SSR bake (e.g. a stale service worker serving a
+	// cached app shell), as long as the cookie is present from a prior visit.
+	const interfaceThemeCookie = event.locals.user?.uiPreferences?.interfaceTheme;
+	if (interfaceThemeCookie) {
+		event.cookies.set('theme', interfaceThemeCookie, {
+			path: '/',
+			httpOnly: false,
+			sameSite: 'lax',
+			secure: getCookieSecure(event.url),
+			maxAge: 60 * 60 * 24 * 365
+		});
+	} else if (event.cookies.get('theme')) {
+		event.cookies.delete('theme', { path: '/' });
+	}
+
+	// Inject the user's interface theme into the SSR HTML so the first paint is
+	// already in their theme (no FOUC from the client $effect swapping it later).
+	const response = await resolve(event, {
+		transformPageChunk: ({ html }) =>
+			injectInterfaceTheme(html, event.locals.user?.uiPreferences?.interfaceTheme)
+	});
 	// The service worker script must always be revalidated: otherwise Firefox
 	// byte-serves a cached `/service-worker.js`, a freshly built SW never
 	// installs, and users get stuck on a stale app shell / offline layout.

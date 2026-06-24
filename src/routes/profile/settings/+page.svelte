@@ -13,7 +13,8 @@
 		mdiBellOutline,
 		mdiIncognito,
 		mdiCloudDownloadOutline,
-		mdiFileDocumentEditOutline
+		mdiFileDocumentEditOutline,
+		mdiPalette
 	} from '@mdi/js';
 	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
 	import ProfileMenuPanel from '$lib/components/panels/ProfileMenuPanel.svelte';
@@ -85,6 +86,11 @@
 								label: profileT['editorSettingsNav'],
 								href: '/profile/editor',
 								icon: mdiFileDocumentEditOutline
+							},
+							{
+								label: profileT['appearanceSettingsNav'],
+								href: '/profile/appearance',
+								icon: mdiPalette
 							}
 						]
 					},

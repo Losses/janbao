@@ -6,7 +6,7 @@ import type { ActivityListItem, ConversationListItem } from '$lib/types/api';
 import type { MentionedUsersMap } from '$lib/types/mentions';
 
 /**
- * Every tab's cached list shares one shape — `items` + pagination — keyed by the
+ * Every tab's cached list shares one shape - `items` + pagination - keyed by the
  * tab's labelKey. Because the key IS the tab and the array field is always
  * `items`, "is this tab's cache populated?" is a single generic expression with
  * no per-tab switch (see isPopulated). Activity additionally keeps composer
@@ -109,7 +109,7 @@ class ListCacheStore {
 		}
 	}
 
-	/** Generic populated check — no per-tab switch: every slot exposes `items`. */
+	/** Generic populated check - no per-tab switch: every slot exposes `items`. */
 	isPopulated(labelKey: MobileTabLabelKey): boolean {
 		return !!this.#state[labelKey]?.items.length;
 	}

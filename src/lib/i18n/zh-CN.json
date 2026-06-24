@@ -12,6 +12,17 @@
 		"discussions": "讨论",
 		"primary": "主导航"
 	},
+	"directory": {
+		"personalInteractions": "个人互动",
+		"messagesNotifications": "消息与通知",
+		"accountSystem": "账号与系统",
+		"basicInfo": "基本信息",
+		"featuresPreferences": "功能与偏好",
+		"advancedFeatures": "高级特性",
+		"permissionsUsers": "权限与用户",
+		"contentManagement": "内容管理",
+		"systemMaintenance": "系统维护"
+	},
 	"admin": {
 		"title": "管理后台",
 		"userGroups": "用户组",
@@ -103,7 +114,10 @@
 		"resetLinkGuidance": "请仅将此找回密码链接发送给 {email}，发送前请再次确认收件人，避免发错用户",
 		"copyResetLink": "复制链接",
 		"resetLinkCopied": "链接已复制到剪贴板",
-		"resetLinkCopyText": "你的账号邮箱是 {email}，请访问以下链接重置密码：{link}"
+		"resetLinkCopyText": "你的账号邮箱是 {email}，请访问以下链接重置密码：{link}",
+		"resetEmailGreeting": "您好 {name}，",
+		"resetEmailIntro": "我们收到了您在 {site} 论坛的重置密码请求。请访问以下链接以重新设置您的密码（链接将在 48 小时后失效）：",
+		"resetEmailFooter": "如果您没有发起该请求，请忽略此邮件。"
 	},
 	"common": {
 		"welcome": "欢迎加入！",
@@ -338,6 +352,13 @@
 			"passthrough": "自动缓存浏览内容",
 			"passthroughDesc": "浏览帖子时自动写入离线缓存",
 			"synced": "已同步缓存"
+		},
+		"appearanceSettingsNav": "外观",
+		"appearanceSettings": {
+			"title": "外观",
+			"interfaceTheme": "界面主题",
+			"blockPostTheme": "屏蔽帖子主题",
+			"blockPostThemeDesc": "浏览帖子时使用你的界面主题，不应用各帖的自定义主题"
 		},
 		"editorSettingsNav": "编辑器",
 		"editorSettings": {

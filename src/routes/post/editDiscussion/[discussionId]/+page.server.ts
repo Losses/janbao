@@ -154,7 +154,9 @@ export const actions: Actions = {
 		const data = await event.request.formData();
 		const title = data.get('title') as string;
 		const categorySlug = data.get('categorySlug') as string;
-		const themeName = (data.get('themeName') as string) || null;
+		const themeName = user.uiPreferences.blockPostTheme
+			? null
+			: (data.get('themeName') as string) || null;
 		const contentJson = data.get('contentJson') as string;
 
 		if (!title || title.trim() === '') {

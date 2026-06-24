@@ -246,7 +246,7 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 			return;
 		}
 		// Only a fresh gesture (from idle) can begin tracking. A second finger while
-		// one is in flight, and an edge-dead-zone reject, must leave phase untouched —
+		// one is in flight, and an edge-dead-zone reject, must leave phase untouched -
 		// a dead-zone pointer is never assigned primaryPointerId, so mutating phase
 		// here would strand it in 'ignore' and kill every later swipe until reload.
 		if (phase !== 'idle') {

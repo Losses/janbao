@@ -1,5 +1,6 @@
 import type { CookieSerializeOptions } from 'cookie';
 import type { EditorPreferences } from '$lib/editor/prefs';
+import type { UiPreferences } from '$lib/ui/prefs';
 
 // --- Shared Component Types ---
 
@@ -180,6 +181,9 @@ export interface ProfileStealthBody {
 
 /** Partial editor-preferences write body; every field optional + boolean. */
 export type EditorPreferencesBody = Partial<EditorPreferences>;
+
+/** Partial interface-preferences write body; every field optional. */
+export type UiPreferencesBody = Partial<UiPreferences>;
 
 // --- Generic API Response Types ---
 

@@ -2,6 +2,22 @@
 <html lang="en" data-theme="huoxin">
 	<head>
 		<meta charset="utf-8" />
+		<script>
+			// Set the user's interface theme before first paint to avoid a FOUC
+			// (the default theme flashing before hydration applies the chosen one).
+			// The cookie is set server-side in hooks.server.ts; reading it here at
+			// parse time sets <html data-theme> before the body is painted. Runs
+			// even when the served HTML was not SSR-themed (e.g. a stale SW cache).
+			(function () {
+				try {
+					var m = document.cookie.match(/(?:^|; )theme=([^;]+)/);
+					if (m) {
+						var t = decodeURIComponent(m[1]);
+						if (t) document.documentElement.setAttribute('data-theme', t);
+					}
+				} catch (e) {}
+			})();
+		</script>
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
 		<link rel="manifest" href="/manifest.webmanifest" />

@@ -1,12 +1,12 @@
 <script lang="ts">
 	/**
-	 * Header Organism - Global sticky header (the App Bar) rendered inside
-	 * DualColumnLayout. Desktop: logo + navigation links (Activity / Messages /
-	 * Search). Mobile: a single row with a square hamburger (left, opens the
-	 * drawer), the centered MobileTabBar (which replaces the logo), and a square
-	 * search icon (right) - one row, no second "forehead". The whole bar hides on
-	 * scroll-down (and returns on scroll-up) via the shared scroll-chrome store;
-	 * desktop is in-flow and unaffected.
+	 * Header Organism - Global sticky header (the App Bar) rendered once in
+	 * AppShell. Desktop: logo + navigation links (Activity / Messages / Search).
+	 * Mobile: a single row with a square hamburger (left, opens the drawer), the
+	 * centered MobileTabBar (which replaces the logo), and a square search icon
+	 * (right) - one row, no second "forehead". The whole bar hides on scroll-down
+	 * (and returns on scroll-up) via the shared scroll-chrome store on every
+	 * viewport - the same direction/threshold logic for mobile and desktop.
 	 */
 	import { page } from '$app/state';
 	import Logo from '$lib/components/atoms/Logo.svelte';
@@ -51,7 +51,7 @@
 
 <header
 	bind:this={headerEl}
-	class="sticky top-0 z-40 mx-auto w-full max-w-[960px] px-0 transition-transform duration-200 md:relative md:mt-6 md:px-6"
+	class="sticky top-0 z-40 mx-auto w-full max-w-[960px] px-0 transition-transform duration-200 md:mt-6 md:px-6"
 	class:scroll-chrome-scrolling={scrolling}
 	style:transform="translateY({translateY}px)"
 >

@@ -12,6 +12,7 @@
 		mdiEmailOutline,
 		mdiForum,
 		mdiCommentOutline,
+		mdiPalette,
 		mdiLogout
 	} from '@mdi/js';
 	import type { ProfileHeaderUser } from '$lib/types/api';
@@ -75,6 +76,11 @@
 					label: profileT['invitations'],
 					href: '/profile/invitations',
 					icon: mdiAccountPlusOutline
+				},
+				{
+					label: profileT['appearanceSettingsNav'],
+					href: '/profile/appearance',
+					icon: mdiPalette
 				},
 				{
 					label: tNav['signout'],

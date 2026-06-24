@@ -474,6 +474,26 @@ export const editorPreferences = sqliteTable('editor_preferences', {
 	markdown: integer('markdown', { mode: 'boolean' }).notNull().default(true)
 });
 
+// Per-user interface preferences: site-wide theme override and the
+// "block post theme" switch. 1:1 with users (cascade delete). A missing row
+// resolves to the code defaults in the DAO + client store (no theme override,
+// post themes honored), so the table stays empty until the user opens the
+// Appearance settings page. Read on every authed request (hooks.server.ts)
+// so the root layout can apply the theme app-wide via the client store.
+export const uiPreferences = sqliteTable('ui_preferences', {
+	userId: integer('user_id')
+		.primaryKey()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	// Site-wide theme override applied as <html data-theme>. Empty/null means
+	// "use the site default" - the root layout leaves data-theme unset so the
+	// base stylesheet wins, rather than forcing a named theme like 'light'.
+	interfaceTheme: text('interface_theme'),
+	// When true, per-discussion themes are ignored: the discussion page never
+	// sets data-theme and the post/edit forms hide the theme selector, forcing
+	// the default. Lets a user keep their interface theme while browsing.
+	blockPostTheme: integer('block_post_theme', { mode: 'boolean' }).notNull().default(false)
+});
+
 export const pushSubscriptions = sqliteTable('push_subscriptions', {
 	id: integer('id').primaryKey(),
 	userId: integer('user_id')

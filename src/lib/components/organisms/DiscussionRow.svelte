@@ -103,7 +103,9 @@
 			<!-- Title -->
 			<a
 				href={discussionUrl}
-				class="font-semibold text-lg hover:text-primary transition-colors hover:underline text-base-content break-words leading-snug"
+				class="{unreadCount > 0
+					? 'font-semibold'
+					: 'font-normal'} text-lg hover:text-primary transition-colors hover:underline text-base-content break-words leading-snug"
 			>
 				{discussion.title}
 				{#if unreadCount > 0}

@@ -49,7 +49,7 @@ export const MOBILE_TAB_DEFS: readonly TabDef[] = [
 ];
 
 /**
- * Routes with no tab of their own — sidebar destinations (bookmarks, profile,
+ * Routes with no tab of their own - sidebar destinations (bookmarks, profile,
  * notifications, ...) that belong to whichever tab the user is currently on.
  * Centralized here so the navigation logic never hardcodes them.
  */

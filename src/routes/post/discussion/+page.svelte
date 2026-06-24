@@ -7,9 +7,12 @@
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
+	import { getPageThemeStore } from '$lib/stores/page-theme.svelte';
+	import { buildThemeOptions } from '$lib/ui/prefs';
 	import type { PageData } from './$types';
 
 	const online = getOnlineStore();
+	const pageTheme = getPageThemeStore();
 
 	interface PageProps {
 		data: PageData;
@@ -21,6 +24,9 @@
 	const categories = $derived(data.categories);
 	const defaultCategorySlug = $derived(data.defaultCategorySlug);
 	const draftContent = $derived(data.draftContent);
+	// When the user blocks post themes, the theme selector is hidden and the
+	// category selector goes full-width; the preview effect is also skipped.
+	const blockPostTheme = $derived(data.user?.uiPreferences.blockPostTheme === true);
 
 	let title = $state('');
 	let categorySlug = $state('');
@@ -50,62 +56,18 @@
 		}
 	});
 
-	// Reactive Theme Preview
+	// Reactive Theme Preview. Publishes the form's current theme as a page-level
+	// override so the root layout (the single owner of <html data-theme>) applies
+	// it - no capture/restore needed, clearing the override on unmount resumes the
+	// interface theme. Gated on blockPostTheme: a blocking user never previews a
+	// per-thread theme (the interface theme carries through the compose page).
 	$effect(() => {
-		if (typeof document === 'undefined') return;
-		const originalTheme = document.documentElement.getAttribute('data-theme');
-		return () => {
-			if (originalTheme) {
-				document.documentElement.setAttribute('data-theme', originalTheme);
-			} else {
-				document.documentElement.removeAttribute('data-theme');
-			}
-		};
+		if (blockPostTheme) return;
+		pageTheme.set(currentTheme);
+		return () => pageTheme.clear();
 	});
 
-	$effect(() => {
-		if (typeof document === 'undefined') return;
-		document.documentElement.setAttribute('data-theme', currentTheme);
-	});
-
-	const themesList = $derived([
-		{ value: '', label: t.theme.defaultTheme },
-		{ value: 'light', label: t.theme.light },
-		{ value: 'dark', label: t.theme.dark },
-		{ value: 'cupcake', label: t.theme.cupcake },
-		{ value: 'bumblebee', label: t.theme.bumblebee },
-		{ value: 'emerald', label: t.theme.emerald },
-		{ value: 'corporate', label: t.theme.corporate },
-		{ value: 'synthwave', label: t.theme.synthwave },
-		{ value: 'retro', label: t.theme.retro },
-		{ value: 'cyberpunk', label: t.theme.cyberpunk },
-		{ value: 'valentine', label: t.theme.valentine },
-		{ value: 'halloween', label: t.theme.halloween },
-		{ value: 'garden', label: t.theme.garden },
-		{ value: 'forest', label: t.theme.forest },
-		{ value: 'aqua', label: t.theme.aqua },
-		{ value: 'lofi', label: t.theme.lofi },
-		{ value: 'pastel', label: t.theme.pastel },
-		{ value: 'fantasy', label: t.theme.fantasy },
-		{ value: 'wireframe', label: t.theme.wireframe },
-		{ value: 'black', label: t.theme.black },
-		{ value: 'luxury', label: t.theme.luxury },
-		{ value: 'dracula', label: t.theme.dracula },
-		{ value: 'cmyk', label: t.theme.cmyk },
-		{ value: 'autumn', label: t.theme.autumn },
-		{ value: 'business', label: t.theme.business },
-		{ value: 'acid', label: t.theme.acid },
-		{ value: 'lemonade', label: t.theme.lemonade },
-		{ value: 'night', label: t.theme.night },
-		{ value: 'coffee', label: t.theme.coffee },
-		{ value: 'winter', label: t.theme.winter },
-		{ value: 'dim', label: t.theme.dim },
-		{ value: 'nord', label: t.theme.nord },
-		{ value: 'sunset', label: t.theme.sunset },
-		{ value: 'caramellatte', label: t.theme.caramellatte },
-		{ value: 'abyss', label: t.theme.abyss },
-		{ value: 'silk', label: t.theme.silk }
-	]);
+	const themesList = $derived(buildThemeOptions(t));
 
 	async function saveDraftManual() {
 		if (!online.online) return;
@@ -195,8 +157,9 @@
 					/>
 				</div>
 
-				<!-- Selectors row -->
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+				<!-- Selectors row. When post themes are blocked the theme selector
+				     disappears and the category selector spans the full row. -->
+				<div class="grid grid-cols-1 {blockPostTheme ? '' : 'md:grid-cols-2'} gap-4">
 					<!-- Category Selector -->
 					<div class="form-control w-full">
 						<label class="label" for="category-select">
@@ -216,25 +179,27 @@
 						</select>
 					</div>
 
-					<!-- Theme Selector -->
-					<div class="form-control w-full">
-						<label class="label" for="theme-select">
-							<span class="label-text font-bold text-base-content font-medium">
-								{t.theme.customTheme}
-							</span>
-						</label>
-						<select
-							id="theme-select"
-							name="themeName"
-							bind:value={themeName}
-							class="select select-bordered w-full"
-							disabled={isSubmitting || isPreview}
-						>
-							{#each themesList as th (th.value)}
-								<option value={th.value}>{th.label}</option>
-							{/each}
-						</select>
-					</div>
+					{#if !blockPostTheme}
+						<!-- Theme Selector -->
+						<div class="form-control w-full">
+							<label class="label" for="theme-select">
+								<span class="label-text font-bold text-base-content font-medium">
+									{t.theme.customTheme}
+								</span>
+							</label>
+							<select
+								id="theme-select"
+								name="themeName"
+								bind:value={themeName}
+								class="select select-bordered w-full"
+								disabled={isSubmitting || isPreview}
+							>
+								{#each themesList as th (th.value)}
+									<option value={th.value}>{th.label}</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
 				</div>
 
 				<!-- Content Editor -->

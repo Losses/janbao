@@ -339,6 +339,13 @@
 			"passthroughDesc": "Automatically cache discussions as you browse",
 			"synced": "Cache synced"
 		},
+		"appearanceSettingsNav": "Appearance",
+		"appearanceSettings": {
+			"title": "Appearance",
+			"interfaceTheme": "Interface theme",
+			"blockPostTheme": "Block post themes",
+			"blockPostThemeDesc": "Browse threads with your interface theme instead of each post's custom theme"
+		},
 		"editorSettingsNav": "Editor",
 		"editorSettings": {
 			"title": "Editor",

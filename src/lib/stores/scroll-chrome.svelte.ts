@@ -1,10 +1,14 @@
 /**
- * Scroll-Chrome Store - Module-level reactive flag for whether the mobile app
- * chrome (top App Bar + bottom nav) should be hidden to reclaim vertical space
+ * Scroll-Chrome Store - Module-level reactive flag for whether the app chrome
+ * (top App Bar) should be translated out of view to reclaim vertical space
  * while reading. Driven by scroll direction: scrolling down hides the chrome,
- * scrolling up (or being near the top of the page) reveals it. Desktop is
- * unaffected - gated by a max-width:767px matchMedia - so the in-flow desktop
- * header keeps behaving as before.
+ * scrolling up (or being near the top of the page) reveals it. The same
+ * direction/threshold logic runs on all viewports (mobile and desktop) so the
+ * single sticky Header in AppShell is the only consumer.
+ *
+ * `headerHeight` is reported live by Header's ResizeObserver
+ * (`setHeaderHeight`), so the clamp range adapts to the current viewport's
+ * header height (56px mobile, taller on desktop) without hardcoding.
  *
  * A single passive scroll listener (rAF-throttled) is attached the first time
  * `start()` runs. The module-level singleton keeps it alive across client-side
@@ -26,7 +30,7 @@ interface ScrollChromeStore {
 	/** A navigation that will programmatically scroll the window (a hash-anchored
 	 * thread enter, or a swipe-back to the list) is starting: hold the header so
 	 * hide-on-scroll does not react to the intermediate top→position scroll.
-	 * `pinVisible` pins it shown first (mobile hash-enter lands mid-thread).
+	 * `pinVisible` pins it shown first (hash-enter lands mid-thread).
 	 * Pair every call with `releaseNavigation` at the landing (or the fallback
 	 * timer in the root layout). */
 	holdThroughNavigation: HoldNavigationHandler;
@@ -37,17 +41,17 @@ interface ScrollChromeStore {
 	releaseNavigation: VoidHandler;
 }
 
-const MOBILE_BREAKPOINT = '(max-width: 767px)';
 const TOP_THRESHOLD = 8; // px from top below which chrome always shows
 
 let hidden = $state(false);
 let translateY = $state(0);
 let scrolling = $state(false);
+// Seeded to the mobile header height; Header's ResizeObserver reports the real
+// height (which differs on desktop) via setHeaderHeight on mount.
 let headerHeight = $state(56);
 let lastY = 0;
 let rafId = 0;
 let started = false;
-let mobileMq: MediaQueryList | null = null;
 let scrollTimeoutId = 0;
 // While true, evaluate() holds the header's current translateY and only refreshes
 // lastY. Set by holdThroughNavigation during a navigation that programatically
@@ -61,14 +65,6 @@ function evaluate(): void {
 		// Keep lastY fresh so the post-unfreeze evaluate sees no stale delta, but do
 		// not move the header - the navigation's intermediate scroll is not user
 		// intent. unfreeze() re-syncs the header to the landing position.
-		lastY = y;
-		return;
-	}
-	// Off-mobile (desktop): the header is in-flow, never hide.
-	if (!mobileMq?.matches) {
-		hidden = false;
-		translateY = 0;
-		scrolling = false;
 		lastY = y;
 		return;
 	}
@@ -117,23 +113,12 @@ function onScrollEnd(): void {
 	}
 }
 
-function onBreakpoint(): void {
-	// Crossing back to desktop: ensure the chrome is visible again.
-	if (!mobileMq?.matches) {
-		hidden = false;
-		translateY = 0;
-		scrolling = false;
-	}
-}
-
 function start(): void {
 	if (started || typeof window === 'undefined') return;
 	started = true;
-	mobileMq = window.matchMedia(MOBILE_BREAKPOINT);
 	lastY = window.scrollY;
 	window.addEventListener('scroll', onScroll, { passive: true });
 	window.addEventListener('scrollend', onScrollEnd, { passive: true });
-	mobileMq.addEventListener('change', onBreakpoint);
 }
 
 function show(): void {
