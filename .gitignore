@@ -44,3 +44,5 @@ non-placeholder-user-emails.txt
 test-results/
 playwright-report/
 recrawl-profiles.log
+recrawl-avatars.log
+recrawl-profiles.sql
