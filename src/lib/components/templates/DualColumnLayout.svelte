@@ -206,18 +206,18 @@
 	});
 </script>
 
-<div class="relative flex min-h-0 flex-1 flex-col text-base-content">
+<div class="dual-column-layout relative flex min-h-0 flex-1 flex-col text-base-content">
 	<!-- Main Content Container -->
-	<div class="mx-auto flex w-full max-w-[960px] flex-1 flex-col px-0 pb-6 md:px-6">
+	<div class="dual-column-layout-inner mx-auto flex w-full max-w-[960px] flex-1 flex-col px-0 pb-6 md:px-6">
 		<div
-			class="flex flex-1 flex-col gap-3 border-b border-base-300 bg-base-100 p-0 md:p-3 md:flex-initial md:border-x md:flex-row desktop-min-height"
+			class="dual-column-layout-columns flex flex-1 flex-col gap-3 border-b border-base-300 bg-base-100 p-0 md:p-3 md:flex-initial md:border-x md:flex-row desktop-min-height"
 		>
 			<!-- Left Column (Main Page Content). On non-pager pages a horizontal
 			     drag slides the content with the finger and a committed swipe
 			     switches to the next/prev tab (disabled on the pager routes, where
 			     MobileTabPager owns the gesture). -->
 			<main
-				class="flex w-full min-w-0 flex-1 flex-col"
+				class="dual-column-layout-main flex w-full min-w-0 flex-1 flex-col"
 				style="touch-action: pan-y pinch-zoom"
 				use:detectSwipe={{
 					onMove: tabSwipeMove,
@@ -226,7 +226,7 @@
 				}}
 			>
 				<div
-					class="flex min-h-0 flex-1 flex-col transition-transform duration-200 ease-out"
+					class="dual-column-layout-content flex min-h-0 flex-1 flex-col transition-transform duration-200 ease-out"
 					style={contentSwipeStyle}
 				>
 					{@render children()}

@@ -240,4 +240,17 @@ header nav {
 		min-height: 0;
 		height: 100%;
 	}
+
+	/* DualColumnLayout must fill 100% height when fixed-viewport is active so the 
+	   inner ThreadPager / GesturePageLayout viewports can restrict their client height
+	   and scroll independently. Otherwise, flexbox parent height collapses and the
+	   entire layout stretches to scrollHeight, freezing all scrolling. */
+	html.fixed-viewport .dual-column-layout,
+	html.fixed-viewport .dual-column-layout-inner,
+	html.fixed-viewport .dual-column-layout-columns,
+	html.fixed-viewport .dual-column-layout-main,
+	html.fixed-viewport .dual-column-layout-content {
+		min-height: 0 !important;
+		height: 100% !important;
+	}
 }
