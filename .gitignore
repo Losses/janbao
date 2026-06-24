@@ -43,3 +43,4 @@ non-placeholder-user-emails.txt
 # Playwright E2E output
 test-results/
 playwright-report/
+recrawl-profiles.log

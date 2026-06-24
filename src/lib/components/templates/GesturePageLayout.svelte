@@ -12,7 +12,6 @@
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
 	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
-	import type { ConversationListItem } from '$lib/types/api';
 	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
 	import { MOBILE_TABS, isPagerRoute } from '$lib/utils/mobile-tabs';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
@@ -522,16 +521,16 @@
 					{@render left()}
 				{:else if navStore.activeTab === 0}
 					<DiscussionsPanel
-						discussions={listCache.home?.discussions}
-						currentPage={listCache.home?.page ?? 1}
-						totalPages={listCache.home?.totalPages ?? 1}
+						discussions={listCache.discussions?.items}
+						currentPage={listCache.discussions?.page ?? 1}
+						totalPages={listCache.discussions?.totalPages ?? 1}
 						t={page.data.t}
 						buildPageUrl={(page) => (page === 1 ? '/' : `/discussions/p${page}`)}
 						paginate={true}
 					/>
 				{:else if navStore.activeTab === 1}
 					<ActivityPanel
-						activities={listCache.activity?.activities ?? []}
+						activities={listCache.activity?.items ?? []}
 						currentPage={listCache.activity?.page ?? 1}
 						totalPages={listCache.activity?.totalPages ?? 1}
 						activityDraft={listCache.activity?.activityDraft ?? null}
@@ -542,7 +541,7 @@
 					/>
 				{:else if navStore.activeTab === 2}
 					<MessagesPanel
-						conversations={(listCache.messages?.conversations ?? []) as ConversationListItem[]}
+						conversations={listCache.messages?.items ?? []}
 						currentPage={listCache.messages?.page ?? 1}
 						totalPages={listCache.messages?.totalPages ?? 1}
 						t={page.data.t}

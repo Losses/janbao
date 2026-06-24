@@ -41,7 +41,7 @@
 
 	$effect(() => {
 		if (page.url.pathname === '/') {
-			listCache.setHome(page.data.discussions ? page.data : data.home);
+			listCache.setDiscussions(page.data.discussions ? page.data : data.home);
 		} else if (page.url.pathname === '/activity') {
 			listCache.setActivity(page.data.activities ? page.data : data.activity);
 		} else if (page.url.pathname === '/messages/inbox') {

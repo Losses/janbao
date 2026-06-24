@@ -21,7 +21,6 @@
 	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import type { PageData } from './$types';
-	import type { DiscussionListItem } from '$lib/server/db/dao/discussions';
 
 	interface PageProps {
 		data: PageData;
@@ -31,9 +30,7 @@
 	const navStore = getNavigationStore();
 	const listCache = getListCacheStore();
 
-	const cachedDiscussions = $derived(
-		listCache.home?.discussions as DiscussionListItem[] | undefined
-	);
+	const cachedDiscussions = $derived(listCache.discussions?.items);
 
 	const t = $derived(data.t);
 	const profileT = $derived(t.profile);
@@ -123,8 +120,8 @@
 		{:else}
 			<DiscussionsPanel
 				discussions={cachedDiscussions}
-				currentPage={listCache.home?.page ?? 1}
-				totalPages={listCache.home?.totalPages ?? 1}
+				currentPage={listCache.discussions?.page ?? 1}
+				totalPages={listCache.discussions?.totalPages ?? 1}
 				{t}
 				buildPageUrl={(page) => (page === 1 ? '/' : `/discussions/p${page}`)}
 				paginate={true}

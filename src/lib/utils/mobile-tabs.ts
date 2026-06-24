@@ -11,7 +11,7 @@
  * The Discussions tab covers the discussion list (`/`, `/discussions/pN`) AND a
  * thread view (`/discussion/[id]/...`) - all share the same primary section.
  */
-import { MOBILE_TAB_DEFS, type TabDef, type MobileTabLabelKey } from './tab-config';
+import { MOBILE_TAB_DEFS, type TabDef } from './tab-config';
 import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 
 export type { MobileTabLabelKey, PathMatcher } from './tab-config';
@@ -23,22 +23,11 @@ export interface MobileTab extends TabDef {
 	checkCache: CacheCheckFn;
 }
 
-/** Per-tab cache-populated check (the cache shape differs per tab). */
-function isTabCached(labelKey: MobileTabLabelKey): boolean {
-	const cache = getListCacheStore();
-	switch (labelKey) {
-		case 'discussions':
-			return !!cache.home?.discussions;
-		case 'activity':
-			return !!cache.activity?.activities;
-		case 'messages':
-			return !!(cache.messages?.conversations && cache.messages.conversations.length > 0);
-	}
-}
-
 export const MOBILE_TABS: readonly MobileTab[] = MOBILE_TAB_DEFS.map((tab) => ({
 	...tab,
-	checkCache: () => isTabCached(tab.labelKey)
+	// The cache store owns its shape and exposes a generic populated check keyed
+	// by labelKey, so no per-tab switch lives here.
+	checkCache: () => getListCacheStore().isPopulated(tab.labelKey)
 }));
 
 /** Index of the active tab for the given pathname, or -1 when on no tab route. */
