@@ -6,7 +6,7 @@
 	import SettingsToggle from '$lib/components/molecules/SettingsToggle.svelte';
 	import PageTitle from '$lib/components/molecules/PageTitle.svelte';
 	import { formatTitle } from '$lib/utils/title';
-	import { buildThemeOptions } from '$lib/ui/prefs';
+	import { buildThemeOptions, SITE_DEFAULT_THEME } from '$lib/ui/prefs';
 	import type { ApiResult, FeedbackMessage } from '$lib/types/api';
 	import type { PageData } from './$types';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
@@ -39,7 +39,9 @@
 	// remembers the data-theme the root layout set (the saved interface theme)
 	// and restores it on unmount; the apply effect shadows it with the local
 	// selection so the user sees each option immediately. Empty selection
-	// removes data-theme so the site default shows.
+	// resolves to SITE_DEFAULT_THEME and sets data-theme to it - removing the
+	// attribute (or setting '') makes daisyUI fall back to its light/dark
+	// built-ins, never the site default.
 	$effect(() => {
 		if (typeof document === 'undefined') return;
 		const originalTheme = document.documentElement.getAttribute('data-theme');
@@ -54,11 +56,10 @@
 
 	$effect(() => {
 		if (typeof document === 'undefined') return;
-		if (prefs.interfaceTheme) {
-			document.documentElement.setAttribute('data-theme', prefs.interfaceTheme);
-		} else {
-			document.documentElement.removeAttribute('data-theme');
-		}
+		document.documentElement.setAttribute(
+			'data-theme',
+			prefs.interfaceTheme || SITE_DEFAULT_THEME
+		);
 	});
 
 	async function handleSave() {
