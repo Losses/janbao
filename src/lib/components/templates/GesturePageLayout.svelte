@@ -268,7 +268,11 @@
 				dragOffset = null;
 				prefetchStarted = false;
 				setTimeout(() => {
+					transitionEnabled = false;
 					swipeNeedsLoadingAtStart = false;
+					setTimeout(() => {
+						transitionEnabled = true;
+					}, 50);
 				}, 300);
 			}
 		} else {
