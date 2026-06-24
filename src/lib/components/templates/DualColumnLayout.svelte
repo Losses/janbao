@@ -208,7 +208,9 @@
 
 <div class="dual-column-layout relative flex min-h-0 flex-1 flex-col text-base-content">
 	<!-- Main Content Container -->
-	<div class="dual-column-layout-inner mx-auto flex w-full max-w-[960px] flex-1 flex-col px-0 pb-6 md:px-6">
+	<div
+		class="dual-column-layout-inner mx-auto flex w-full max-w-[960px] flex-1 flex-col px-0 pb-6 md:px-6"
+	>
 		<div
 			class="dual-column-layout-columns flex flex-1 flex-col gap-3 border-b border-base-300 bg-base-100 p-0 md:p-3 md:flex-initial md:border-x md:flex-row desktop-min-height"
 		>

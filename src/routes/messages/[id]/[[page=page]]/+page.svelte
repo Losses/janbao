@@ -1,6 +1,6 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
-	import ThreadPager from '$lib/components/templates/ThreadPager.svelte';
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
 	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
 	import PrivateMessageWindow from '$lib/components/organisms/PrivateMessageWindow.svelte';
 	import ParticipantAdder from '$lib/components/molecules/ParticipantAdder.svelte';
@@ -152,7 +152,7 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<ThreadPager centerTab={2} leftHref="/messages/inbox">
+	<GesturePageLayout centerTab={2} leftHref="/messages/inbox">
 		{#snippet left()}
 			<MessagesPanel
 				conversations={data.inbox.conversations}
@@ -188,5 +188,5 @@
 				</div>
 			{/if}
 		</div>
-	</ThreadPager>
+	</GesturePageLayout>
 </DualColumnLayout>

@@ -14,24 +14,41 @@
 	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
 	import type { ConversationListItem } from '$lib/types/api';
 	import Icon from '$lib/components/atoms/Icon.svelte';
-	import { MOBILE_TABS } from '$lib/utils/mobile-tabs';
+	import { MOBILE_TABS, isPagerRoute } from '$lib/utils/mobile-tabs';
+	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 
 	interface Props {
 		children: Snippet;
 		left?: Snippet;
 		leftHref?: string;
+		right?: Snippet;
+		rightHref?: string;
 		fallbackRoute?: string;
+		centerTab?: number;
+		rightTab?: number;
 	}
 
 	interface PendingNav {
 		href: string;
 		back: boolean;
+		replaceState?: boolean;
 	}
 
-	let { children, left, leftHref, fallbackRoute = '/' }: Props = $props();
+	let {
+		children,
+		left,
+		leftHref,
+		right,
+		rightHref,
+		fallbackRoute = '/',
+		centerTab,
+		rightTab
+	}: Props = $props();
+
 	const navStore = getNavigationStore();
 	const pageScrollStore = getPageScrollStore();
 	const listCache = getListCacheStore();
+	const pager = getMobilePagerStore();
 
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	const getIsMobile = () => {
@@ -48,38 +65,57 @@
 	let isPendingNavigation = $state(false);
 	let isTransitioningOut = $state(false);
 	let prefetchStarted = false;
+	let swipeDirection = $state<'left' | 'right' | null>(null);
+	let viewportWidth = $state(0);
 
 	// Derived declarations
 	const hasLeft = $derived(!!left || (navStore.activeTab >= 0 && navStore.activeTab <= 2));
 	const resolvedLeftHref = $derived(leftHref ?? navStore.backTarget);
+	const hasRight = $derived(!!right);
+	const resolvedRightHref = $derived(rightHref);
 
-	const isTargetTabRoot = $derived(
-		resolvedLeftHref === '/' ||
-			resolvedLeftHref === '/activity' ||
-			resolvedLeftHref === '/messages/inbox'
+	// Configuration-driven Cache checks (removes hardcoding)
+	const isLeftTargetTabRoot = $derived(resolvedLeftHref ? isPagerRoute(resolvedLeftHref) : false);
+	const isLeftCachePopulated = $derived(
+		resolvedLeftHref
+			? (MOBILE_TABS.find((tab) => tab.href === resolvedLeftHref)?.checkCache() ?? false)
+			: false
 	);
-	const isParentCachePopulated = $derived(
-		navStore.activeTab === 0
-			? !!listCache.home?.discussions
-			: navStore.activeTab === 1
-				? !!listCache.activity?.activities
-				: navStore.activeTab === 2
-					? !!(listCache.messages?.conversations && listCache.messages.conversations.length > 0)
-					: false
+	const leftNeedsLoading = $derived(isLeftTargetTabRoot && !isLeftCachePopulated);
+
+	const isRightTargetTabRoot = $derived(
+		resolvedRightHref ? isPagerRoute(resolvedRightHref) : false
 	);
-	const needsLoading = $derived(isTargetTabRoot && !isParentCachePopulated);
+	const isRightCachePopulated = $derived(
+		resolvedRightHref
+			? (MOBILE_TABS.find((tab) => tab.href === resolvedRightHref)?.checkCache() ?? false)
+			: false
+	);
+	const rightNeedsLoading = $derived(isRightTargetTabRoot && !isRightCachePopulated);
 
 	const maxDrag = $derived(typeof window !== 'undefined' ? window.innerWidth * 0.3 : 100);
 	const W = $derived(typeof window !== 'undefined' ? window.innerWidth : 375);
 
 	const currentRevealWidth = $derived<number>(
-		isTransitioningOut ? W : isPendingNavigation ? maxDrag : dragOffset !== null ? dragOffset : 0
+		isTransitioningOut
+			? W
+			: isPendingNavigation
+				? maxDrag
+				: dragOffset !== null
+					? Math.abs(dragOffset)
+					: 0
 	);
 
 	const progress = $derived(maxDrag > 0 ? Math.min(1, currentRevealWidth / maxDrag) : 0);
 
 	const targetTab = $derived(
-		resolvedLeftHref ? MOBILE_TABS.find((tab) => tab.isActive(resolvedLeftHref)) : null
+		swipeDirection === 'left'
+			? resolvedRightHref
+				? MOBILE_TABS.find((tab) => tab.isActive(resolvedRightHref))
+				: null
+			: resolvedLeftHref
+				? MOBILE_TABS.find((tab) => tab.isActive(resolvedLeftHref))
+				: null
 	);
 
 	const isCircle = $derived(currentRevealWidth < 40);
@@ -102,11 +138,14 @@
 	let leftEl = $state<HTMLElement | null>(null);
 	const leftScrollTop = $derived(resolvedLeftHref ? pageScrollStore.get(resolvedLeftHref) : 0);
 
+	let rightEl = $state<HTMLElement | null>(null);
+	const rightScrollTop = $derived(resolvedRightHref ? pageScrollStore.get(resolvedRightHref) : 0);
+
 	let centerEl = $state<HTMLElement | null>(null);
 	const currentScrollTop = $derived(page.url.pathname ? pageScrollStore.get(page.url.pathname) : 0);
 
 	const shouldAnimateEnter = () => {
-		if (needsLoading) return false; // Never animate entry from loading swipe
+		if (leftNeedsLoading) return false; // Never animate entry from loading swipe
 		if (!hasLeft || !resolvedLeftHref) return false;
 		if (navStore.direction !== 'forward') return false;
 		if (navStore.activeStack.length < 2) return false;
@@ -118,11 +157,13 @@
 	let trackEl = $state<HTMLElement | null>(null);
 	let transitionEnabled = $state(false);
 	// svelte-ignore state_referenced_locally
-	let snapIndex = $state(
-		isEntering ? 0 : left || (navStore.activeTab >= 0 && navStore.activeTab <= 2) ? 1 : 0
-	);
+	let snapIndex = $state(isEntering ? 0 : hasLeft && !swipeNeedsLoadingAtStart ? 1 : 0);
 
-	const panelCount = $derived(hasLeft && !swipeNeedsLoadingAtStart ? 2 : 1);
+	const panelCount = $derived(
+		(hasLeft && !swipeNeedsLoadingAtStart ? 1 : 0) +
+			1 +
+			(hasRight && !swipeNeedsLoadingAtStart ? 1 : 0)
+	);
 	const ACTIVE = $derived(hasLeft && !swipeNeedsLoadingAtStart ? 1 : 0);
 	const STEP_PERCENT = $derived(100 / panelCount);
 	const SWIPE_COMMIT = 60;
@@ -143,6 +184,18 @@
 	});
 
 	$effect(() => {
+		if (rightEl && rightScrollTop > 0) {
+			rightEl.scrollTop = rightScrollTop;
+			const rafId = requestAnimationFrame(() => {
+				if (rightEl) {
+					rightEl.scrollTop = rightScrollTop;
+				}
+			});
+			return () => cancelAnimationFrame(rafId);
+		}
+	});
+
+	$effect(() => {
 		if (centerEl && currentScrollTop > 0) {
 			centerEl.scrollTop = currentScrollTop;
 			const rafId = requestAnimationFrame(() => {
@@ -154,14 +207,28 @@
 		}
 	});
 
+	$effect(() => {
+		if (!isMobile || centerTab === undefined) return;
+		let progressVal: number;
+		if (dragOffset !== null && viewportWidth) {
+			const dragProgress = Math.max(0, Math.min(1, -dragOffset / viewportWidth));
+			progressVal =
+				rightTab !== undefined ? centerTab + dragProgress * (rightTab - centerTab) : centerTab;
+		} else {
+			const rightPanelIdx = hasRight && !swipeNeedsLoadingAtStart ? panelCount - 1 : -1;
+			progressVal = snapIndex === rightPanelIdx && rightTab !== undefined ? rightTab : centerTab;
+		}
+		pager.set({ fractionalIndex: progressVal, dragging: dragOffset !== null, active: true });
+	});
+
 	const trackTranslateX = $derived<string>(
 		!isMobile
 			? '0px'
 			: swipeNeedsLoadingAtStart
 				? isTransitioningOut
-					? `${W}px`
+					? `${swipeDirection === 'left' ? -W : W}px`
 					: isPendingNavigation
-						? `${maxDrag}px`
+						? `${swipeDirection === 'left' ? -maxDrag : maxDrag}px`
 						: dragOffset !== null
 							? `${dragOffset}px`
 							: '0px'
@@ -187,6 +254,11 @@
 			? 'width: 100%; display: block;'
 			: `width: ${sectionWidth}; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; touch-action: pan-y pinch-zoom;`
 	);
+	const rightStyle = $derived(
+		!isMobile
+			? 'display: none;'
+			: `width: ${sectionWidth}; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; touch-action: pan-y pinch-zoom;`
+	);
 
 	const viewportStyle = $derived(
 		!isMobile
@@ -195,20 +267,36 @@
 	);
 
 	function onSwipeMove(deltaX: number) {
-		if (deltaX > 0) {
-			if (dragOffset === null) {
-				swipeNeedsLoadingAtStart = needsLoading;
+		if (dragOffset === null) {
+			swipeDirection = deltaX > 0 ? 'right' : deltaX < 0 ? 'left' : null;
+			if (swipeDirection === 'right') {
+				swipeNeedsLoadingAtStart = leftNeedsLoading;
+			} else if (swipeDirection === 'left') {
+				swipeNeedsLoadingAtStart = rightNeedsLoading;
+			} else {
+				swipeNeedsLoadingAtStart = false;
 			}
+		}
 
-			if (swipeNeedsLoadingAtStart) {
-				const maxDragDist = window.innerWidth * 0.3;
+		if (swipeNeedsLoadingAtStart) {
+			const maxDragDist = window.innerWidth * 0.3;
+			if (swipeDirection === 'right') {
 				dragOffset = maxDragDist * Math.tanh(deltaX / (maxDragDist * 1.2));
 
 				if (dragOffset >= 30 && !prefetchStarted && resolvedLeftHref) {
 					prefetchStarted = true;
 					void preloadData(resolvedLeftHref).catch(() => {});
 				}
-			} else {
+			} else if (swipeDirection === 'left') {
+				dragOffset = maxDragDist * Math.tanh(deltaX / (maxDragDist * 1.2));
+
+				if (dragOffset <= -30 && !prefetchStarted && resolvedRightHref) {
+					prefetchStarted = true;
+					void preloadData(resolvedRightHref).catch(() => {});
+				}
+			}
+		} else {
+			if ((deltaX > 0 && hasLeft) || (deltaX < 0 && hasRight)) {
 				dragOffset = deltaX;
 			}
 		}
@@ -234,35 +322,42 @@
 	function onSwipeEnd(deltaX: number) {
 		if (swipeNeedsLoadingAtStart) {
 			const maxDragDist = window.innerWidth * 0.3;
-			const committed = (dragOffset ?? 0) >= maxDragDist * 0.75 || deltaX >= SWIPE_COMMIT;
-			if (committed && resolvedLeftHref) {
-				const targetHref = resolvedLeftHref;
-				if (isParentCachePopulated) {
-					isTransitioningOut = true;
-					dragOffset = null;
-					setTimeout(() => {
-						void goto(targetHref, { replaceState: true }).then(() => {
-							isTransitioningOut = false;
-							prefetchStarted = false;
-							swipeNeedsLoadingAtStart = false;
-						});
-					}, 300);
-				} else {
-					isPendingNavigation = true;
-					dragOffset = null;
-					preloadData(targetHref)
-						.catch(() => {})
-						.then(() => {
-							isPendingNavigation = false;
-							isTransitioningOut = true;
-							setTimeout(() => {
-								void goto(targetHref, { replaceState: true }).then(() => {
-									isTransitioningOut = false;
-									prefetchStarted = false;
-									swipeNeedsLoadingAtStart = false;
-								});
-							}, 300);
-						});
+			const dragDist = Math.abs(dragOffset ?? 0);
+			const committed = dragDist >= maxDragDist * 0.75 || Math.abs(deltaX) >= SWIPE_COMMIT;
+			if (committed) {
+				const targetHref = swipeDirection === 'left' ? resolvedRightHref : resolvedLeftHref;
+				if (targetHref) {
+					const isPopulated =
+						MOBILE_TABS.find((tab) => tab.href === targetHref)?.checkCache() ?? false;
+					if (isPopulated) {
+						isTransitioningOut = true;
+						dragOffset = null;
+						setTimeout(() => {
+							void goto(targetHref, { replaceState: true }).then(() => {
+								isTransitioningOut = false;
+								prefetchStarted = false;
+								swipeNeedsLoadingAtStart = false;
+								swipeDirection = null;
+							});
+						}, 300);
+					} else {
+						isPendingNavigation = true;
+						dragOffset = null;
+						preloadData(targetHref)
+							.catch(() => {})
+							.then(() => {
+								isPendingNavigation = false;
+								isTransitioningOut = true;
+								setTimeout(() => {
+									void goto(targetHref, { replaceState: true }).then(() => {
+										isTransitioningOut = false;
+										prefetchStarted = false;
+										swipeNeedsLoadingAtStart = false;
+										swipeDirection = null;
+									});
+								}, 300);
+							});
+					}
 				}
 			} else {
 				dragOffset = null;
@@ -270,31 +365,38 @@
 				setTimeout(() => {
 					transitionEnabled = false;
 					swipeNeedsLoadingAtStart = false;
+					swipeDirection = null;
 					setTimeout(() => {
 						transitionEnabled = true;
 					}, 50);
 				}, 300);
 			}
 		} else {
-			const committed = deltaX >= SWIPE_COMMIT;
-			if (committed) {
+			const leftIdx = hasLeft ? 0 : -1;
+			const rightIdx = hasRight ? panelCount - 1 : -1;
+			const committedLeft = deltaX >= SWIPE_COMMIT && (hasLeft ? resolvedLeftHref : fallbackRoute);
+			const committedRight = deltaX <= -SWIPE_COMMIT && rightIdx >= 0 && resolvedRightHref;
+
+			if (committedLeft) {
 				const consumed = backHandler.dispatch();
 				if (!consumed) {
-					const targetHref = resolvedLeftHref;
-					if (hasLeft && targetHref) {
-						snapIndex = 0;
-						const back = backLandsOn(targetHref);
-						pendingNav = { href: targetHref, back };
+					if (hasLeft) {
+						snapIndex = leftIdx;
+						const back = backLandsOn(resolvedLeftHref);
+						pendingNav = { href: resolvedLeftHref, back, replaceState: true };
 					} else {
 						if (navStore.activeStack.length > 1) {
 							history.back();
 						} else {
-							void goto(fallbackRoute, { replaceState: true });
+							pendingNav = { href: fallbackRoute, back: false, replaceState: true };
 						}
 					}
 				} else {
 					snapIndex = ACTIVE;
 				}
+			} else if (committedRight) {
+				snapIndex = rightIdx;
+				pendingNav = { href: resolvedRightHref, back: false, replaceState: false };
 			} else {
 				snapIndex = ACTIVE;
 			}
@@ -310,7 +412,7 @@
 		if (nav.back) {
 			history.back();
 		} else {
-			void goto(nav.href, { replaceState: true });
+			void goto(nav.href, { replaceState: nav.replaceState });
 		}
 	}
 
@@ -341,13 +443,15 @@
 		// when targeting a hash anchor on mount.
 		const forceZeroScroll = (e: Event) => {
 			if (!isMobile) return;
-			const target = e.target as HTMLElement | null;
+			const target = e.target;
 			if (!target) return;
-			if (target === document || target === (window as unknown as HTMLElement)) {
+			if (target === document || target === window) {
 				window.scrollTo(0, 0);
-			} else if (target.classList && !target.classList.contains('scroll-pane')) {
-				if (target.scrollTop !== 0) target.scrollTop = 0;
-				if (target.scrollLeft !== 0) target.scrollLeft = 0;
+			} else if (target instanceof HTMLElement) {
+				if (!target.classList.contains('scroll-pane')) {
+					if (target.scrollTop !== 0) target.scrollTop = 0;
+					if (target.scrollLeft !== 0) target.scrollLeft = 0;
+				}
 			}
 		};
 		window.addEventListener('scroll', forceZeroScroll, true);
@@ -374,6 +478,7 @@
 			window.removeEventListener('scroll', forceZeroScroll, true);
 			document.documentElement.classList.remove('fixed-viewport');
 			if (enterRaf) cancelAnimationFrame(enterRaf);
+			pager.set({ fractionalIndex: 0, dragging: false, active: false });
 		};
 	});
 
@@ -385,9 +490,14 @@
 		};
 		node.addEventListener('scroll', resetScroll, { passive: true });
 		resetScroll();
+		const ro = new ResizeObserver(() => {
+			viewportWidth = node.clientWidth;
+		});
+		ro.observe(node);
 		return {
 			destroy() {
 				node.removeEventListener('scroll', resetScroll);
+				ro.disconnect();
 			}
 		};
 	};
@@ -400,7 +510,7 @@
 	use:detectSwipe={{
 		onMove: onSwipeMove,
 		onEnd: onSwipeEnd,
-		disabled: () => !isMobile || !hasLeft
+		disabled: () => !isMobile || (!hasLeft && !hasRight)
 	}}
 	use:measureViewport
 >
@@ -461,13 +571,31 @@
 		>
 			{@render children()}
 		</section>
+		{#if hasRight && isMobile && !swipeNeedsLoadingAtStart}
+			<section
+				bind:this={rightEl}
+				class="shrink-0 p-3 scroll-pane md:hidden"
+				style={rightStyle}
+				onscroll={(e) => {
+					if (resolvedRightHref && e.currentTarget.scrollTop > 0) {
+						pageScrollStore.capture(resolvedRightHref, e.currentTarget.scrollTop);
+					}
+				}}
+			>
+				{#if right}
+					{@render right()}
+				{/if}
+			</section>
+		{/if}
 	</div>
 
 	{#if swipeNeedsLoadingAtStart && isMobile && (dragOffset !== null || isPendingNavigation || isTransitioningOut)}
 		<div
-			class="loading-overlay absolute inset-y-0 left-0 z-50 flex items-center justify-center pointer-events-none"
+			class="loading-overlay absolute inset-y-0 z-50 flex items-center justify-center pointer-events-none"
 			class:dragging={dragOffset !== null}
-			style="width: {currentRevealWidth}px; opacity: {isTransitioningOut ? 0 : 1};"
+			style="{swipeDirection === 'left'
+				? 'right: 0;'
+				: 'left: 0;'} width: {currentRevealWidth}px; opacity: {isTransitioningOut ? 0 : 1};"
 		>
 			<div
 				class="loading-chip bg-neutral text-neutral-content rounded-full flex items-center justify-center shadow-lg font-medium whitespace-nowrap overflow-hidden"

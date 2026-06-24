@@ -8,16 +8,19 @@
  * thread view (`/discussion/[id]/...`) - all share the same primary section.
  */
 import { mdiForum, mdiLightningBolt, mdiEmailOutline } from '@mdi/js';
+import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 
 export type MobileTabLabelKey = 'discussions' | 'activity' | 'messages';
 
 type PathMatcher = (pathname: string) => boolean;
+type CacheCheckFn = () => boolean;
 
 export interface MobileTab {
 	href: string;
 	labelKey: MobileTabLabelKey;
 	icon: string;
 	isActive: PathMatcher;
+	checkCache: CacheCheckFn;
 }
 
 const isDiscussions: PathMatcher = (p) => p === '/' || p.startsWith('/discussion');
@@ -25,9 +28,30 @@ const isActivity: PathMatcher = (p) => p.startsWith('/activity');
 const isMessages: PathMatcher = (p) => p.startsWith('/messages');
 
 export const MOBILE_TABS: readonly MobileTab[] = [
-	{ href: '/', labelKey: 'discussions', icon: mdiForum, isActive: isDiscussions },
-	{ href: '/activity', labelKey: 'activity', icon: mdiLightningBolt, isActive: isActivity },
-	{ href: '/messages/inbox', labelKey: 'messages', icon: mdiEmailOutline, isActive: isMessages }
+	{
+		href: '/',
+		labelKey: 'discussions',
+		icon: mdiForum,
+		isActive: isDiscussions,
+		checkCache: () => !!getListCacheStore().home?.discussions
+	},
+	{
+		href: '/activity',
+		labelKey: 'activity',
+		icon: mdiLightningBolt,
+		isActive: isActivity,
+		checkCache: () => !!getListCacheStore().activity?.activities
+	},
+	{
+		href: '/messages/inbox',
+		labelKey: 'messages',
+		icon: mdiEmailOutline,
+		isActive: isMessages,
+		checkCache: () => {
+			const cache = getListCacheStore().messages;
+			return !!(cache?.conversations && cache.conversations.length > 0);
+		}
+	}
 ];
 
 /** Index of the active tab for the given pathname, or -1 when on no tab route. */

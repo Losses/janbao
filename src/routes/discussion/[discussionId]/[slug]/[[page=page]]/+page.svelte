@@ -1,6 +1,6 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
-	import ThreadPager from '$lib/components/templates/ThreadPager.svelte';
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
 	import type { PageUrlBuilder } from '$lib/types/tabs';
@@ -498,13 +498,11 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<ThreadPager
+	<GesturePageLayout
 		centerTab={0}
 		rightTab={1}
 		leftHref="/"
 		rightHref="/activity"
-		bind:listScrollTop
-		bind:detailScrollTop
 		left={leftSnippet}
 		right={rightSnippet}
 	>
@@ -831,7 +829,7 @@
 				{/if}
 			</div>
 		</div>
-	</ThreadPager>
+	</GesturePageLayout>
 </DualColumnLayout>
 
 <ConfirmationModal
