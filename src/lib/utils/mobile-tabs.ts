@@ -4,55 +4,42 @@
  * (DualColumnLayout). Keeping the list in one place guarantees the visible
  * tabs, their order, and the swipe-neighbour mapping never drift apart.
  *
+ * The tab definitions themselves live in tab-config.ts (pure, runes-free) so
+ * navigation-logic can share them without pulling in this module's cache store.
+ * Here we layer the browser-only `checkCache` on top.
+ *
  * The Discussions tab covers the discussion list (`/`, `/discussions/pN`) AND a
  * thread view (`/discussion/[id]/...`) - all share the same primary section.
  */
-import { mdiForum, mdiLightningBolt, mdiEmailOutline } from '@mdi/js';
+import { MOBILE_TAB_DEFS, type TabDef, type MobileTabLabelKey } from './tab-config';
 import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 
-export type MobileTabLabelKey = 'discussions' | 'activity' | 'messages';
+export type { MobileTabLabelKey, PathMatcher } from './tab-config';
 
-type PathMatcher = (pathname: string) => boolean;
 type CacheCheckFn = () => boolean;
 
-export interface MobileTab {
-	href: string;
-	labelKey: MobileTabLabelKey;
-	icon: string;
-	isActive: PathMatcher;
+export interface MobileTab extends TabDef {
+	isActive: TabDef['isActive'];
 	checkCache: CacheCheckFn;
 }
 
-const isDiscussions: PathMatcher = (p) => p === '/' || p.startsWith('/discussion');
-const isActivity: PathMatcher = (p) => p.startsWith('/activity');
-const isMessages: PathMatcher = (p) => p.startsWith('/messages');
-
-export const MOBILE_TABS: readonly MobileTab[] = [
-	{
-		href: '/',
-		labelKey: 'discussions',
-		icon: mdiForum,
-		isActive: isDiscussions,
-		checkCache: () => !!getListCacheStore().home?.discussions
-	},
-	{
-		href: '/activity',
-		labelKey: 'activity',
-		icon: mdiLightningBolt,
-		isActive: isActivity,
-		checkCache: () => !!getListCacheStore().activity?.activities
-	},
-	{
-		href: '/messages/inbox',
-		labelKey: 'messages',
-		icon: mdiEmailOutline,
-		isActive: isMessages,
-		checkCache: () => {
-			const cache = getListCacheStore().messages;
-			return !!(cache?.conversations && cache.conversations.length > 0);
-		}
+/** Per-tab cache-populated check (the cache shape differs per tab). */
+function isTabCached(labelKey: MobileTabLabelKey): boolean {
+	const cache = getListCacheStore();
+	switch (labelKey) {
+		case 'discussions':
+			return !!cache.home?.discussions;
+		case 'activity':
+			return !!cache.activity?.activities;
+		case 'messages':
+			return !!(cache.messages?.conversations && cache.messages.conversations.length > 0);
 	}
-];
+}
+
+export const MOBILE_TABS: readonly MobileTab[] = MOBILE_TAB_DEFS.map((tab) => ({
+	...tab,
+	checkCache: () => isTabCached(tab.labelKey)
+}));
 
 /** Index of the active tab for the given pathname, or -1 when on no tab route. */
 export function getCurrentTabIndex(pathname: string): number {
