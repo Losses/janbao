@@ -68,6 +68,9 @@ async function main(): Promise<void> {
 	if (stmts.length === 0) return;
 
 	const client = createClient({ url: `file:${dbPath}` });
+	// Wait (up to 10s) on write-lock contention instead of failing — lets this run
+	// alongside the live app under WAL without skipping statements on a busy db.
+	await client.execute('PRAGMA busy_timeout=10000');
 	const CHUNK = 200;
 	let done = 0;
 	let failed = 0;

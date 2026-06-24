@@ -54,7 +54,8 @@ import {
 	convertToWebp,
 	ensureWebpTools,
 	mapPool,
-	getErrorMessage
+	getErrorMessage,
+	type PoolTask
 } from './import-shared';
 import { resolvePcloudConfig, pcloudUploadBytes, pcloudListFolder } from '../src/lib/server/pcloud';
 
@@ -186,7 +187,7 @@ async function sanityCheck(cookie: string, delayMs: number): Promise<void> {
 	await sleep(delayMs);
 	if (looksLikeSignIn(res.body)) {
 		log(
-			`SANITY FAILED: ${profileUrl(liveId)} returned the sign-in page — JANBAO_COOKIE is invalid/expired. Aborting.`
+			`SANITY FAILED: ${profileUrl(liveId)} returned the sign-in page - JANBAO_COOKIE is invalid/expired. Aborting.`
 		);
 		process.exit(1);
 	}
@@ -204,9 +205,9 @@ async function sanityCheck(cookie: string, delayMs: number): Promise<void> {
 /**
  * The profile OWNER's avatar is the single "ProfilePhotoLarge" <img> in the
  * page header (PhotoWrapLarge). The "ProfilePhoto ProfilePhotoMedium" img is the
- * LOGGED-IN user (alt = our cookie's user, always noicon) — NOT the owner.
+ * LOGGED-IN user (alt = our cookie's user, always noicon) - NOT the owner.
  * Returns the owner's avatar src, or null when they have no custom avatar
- * (noicon) — callers then leave avatar_file_id NULL so the app's unified
+ * (noicon) - callers then leave avatar_file_id NULL so the app's unified
  * noicon fallback (the a6f84d6e5a8823a file) applies. Noicon.png is never
  * downloaded (the source stops serving it once cached).
  */
@@ -378,7 +379,7 @@ async function processId(userId: number, st: CrawlState): Promise<RecrawlRecord>
 			if (res.status === 410 || res.status === 404 || goneRedirect) {
 				base.status = 'deleted';
 			} else {
-				// 200 but not a profile (unexpected) — do NOT mark deleted; surface it.
+				// 200 but not a profile (unexpected) - do NOT mark deleted; surface it.
 				base.status = 'unexpected-200';
 				base.error = res.error ?? `status ${res.status}, not a profile page`;
 			}
@@ -503,7 +504,7 @@ async function runCrawl(dataDir: string, cookie: string): Promise<void> {
 	const noiconCanonical = resolveNoiconCanonical(dataDir);
 	if (!existsSync(noiconCanonical)) {
 		log(
-			'  WARNING: canonical noicon file not found — noicon users will get no avatar (letter fallback).'
+			'  WARNING: canonical noicon file not found - noicon users will get no avatar (letter fallback).'
 		);
 	} else {
 		log(`  noicon canonical: ${noiconCanonical}`);
@@ -535,7 +536,7 @@ async function runCrawl(dataDir: string, cookie: string): Promise<void> {
 		for (const r of recs) counts[r.status] = (counts[r.status] ?? 0) + 1;
 		processed += recs.length;
 		if (processed % 200 < concurrency) {
-			log(`  crawl ${processed}/${targets.length} — ${summary(counts)}`);
+			log(`  crawl ${processed}/${targets.length} - ${summary(counts)}`);
 		}
 	}
 	log(`crawl done. ${summary(counts)}`);
@@ -614,7 +615,7 @@ interface SqlEmit {
  *     email, or missing avatar);
  *   - each SET field is a CASE that preserves any value already present.
  * So whether to update is decided by the prod row itself at apply time, not by
- * the (stale) local snapshot — a complete prod user is never modified. Username
+ * the (stale) local snapshot - a complete prod user is never modified. Username
  * is isolated in its own OR IGNORE statement so a rare UNIQUE collision (a
  * popular name since taken by a newer sign-up) can't block the bio/avatar fill.
  */
@@ -655,12 +656,12 @@ function emitForUser(
 		return;
 	}
 
-	// (1) username — UNIQUE, so OR IGNORE: a collision skips just the username,
+	// (1) username - UNIQUE, so OR IGNORE: a collision skips just the username,
 	// not the backfill below. Only for placeholders (real users keep their name).
 	out.statements.push(
 		`UPDATE OR IGNORE users SET username = ${sqlVal(username)} WHERE id = ${userId} AND ${placeholderEmail};`
 	);
-	// (2) remaining fields — no UNIQUE column, so this never aborts. CASE keeps any
+	// (2) remaining fields - no UNIQUE column, so this never aborts. CASE keeps any
 	// value already set; the WHERE skips users that are already complete.
 	out.statements.push(
 		'UPDATE users SET ' +
@@ -708,7 +709,7 @@ async function runSql(dataDir: string): Promise<void> {
 
 	for (const userId of [...recIds].sort((a, b) => a - b)) {
 		const profilePath = join(dataDir, 'profiles', String(userId), 'profile.html');
-		if (!existsSync(profilePath)) continue; // deleted/unexpected — no SQL
+		if (!existsSync(profilePath)) continue; // deleted/unexpected - no SQL
 		const html = readFileSync(profilePath, 'utf-8');
 		const profile = parseProfileHtml(html);
 		const avFile = avatarFileFor(dataDir, userId);
@@ -748,9 +749,26 @@ async function runSql(dataDir: string): Promise<void> {
 	const footer = 'COMMIT;\n';
 	writeFileSync(OUT_SQL, header + out.statements.join('\n') + '\n' + footer, 'utf-8');
 	log(
-		`sql: wrote ${OUT_SQL} — ${out.statements.length} statements ` +
+		`sql: wrote ${OUT_SQL} - ${out.statements.length} statements ` +
 			`(inserts ${out.inserts}, conditional-updates ${out.updates}).`
 	);
+}
+
+/**
+ * Continuous concurrency pool: N workers each pull the next item, so a slow item
+ * only blocks its own worker - unlike mapPool's per-batch barrier, where one
+ * slow item (e.g. a pCloud PUT waiting on a socket-close) stalls the whole batch.
+ * Use this when per-item latency varies a lot.
+ */
+async function runPool<T>(items: T[], concurrency: number, fn: PoolTask<T>): Promise<void> {
+	let next = 0;
+	const worker = async (): Promise<void> => {
+		while (next < items.length) {
+			const i = next++;
+			await fn(items[i]);
+		}
+	};
+	await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
 }
 
 /**
@@ -765,7 +783,7 @@ async function runAvatars(dataDir: string): Promise<void> {
 	ensureWebpTools();
 	const cfg = resolvePcloudConfig(process.env as Record<string, string>);
 	if (!cfg.username || !cfg.password) {
-		log('avatars: PCLOUD_* not set — cannot upload. Aborting.');
+		log('avatars: PCLOUD_* not set - cannot upload. Aborting.');
 		process.exit(1);
 	}
 	log(`avatars: listing pCloud ${cfg.basePath}/avatars (to skip already-uploaded)...`);
@@ -782,13 +800,25 @@ async function runAvatars(dataDir: string): Promise<void> {
 	}
 	let done = 0;
 	let failed = 0;
-	await mapPool(uploadList, 32, async (userId) => {
+	const concurrency = Number(process.env.JANBAO_AVATAR_CONCURRENCY ?? 32);
+	await runPool(uploadList, concurrency, async (userId) => {
 		const avFile = avatarFileFor(dataDir, userId);
 		if (!avFile) return;
 		try {
 			const webp = convertToWebp(avFile);
-			await pcloudUploadBytes(cfg, '/avatars', String(userId), webp);
-			onCloud.add(String(userId));
+			// pCloud WebDAV closes sockets under concurrent PUT load; retry the
+			// (transient) upload failures so a burst of 4xx/socket-close doesn't
+			// leave a user avatarless.
+			for (let attempt = 1; attempt <= 3; attempt++) {
+				try {
+					await pcloudUploadBytes(cfg, '/avatars', String(userId), webp);
+					onCloud.add(String(userId));
+					break;
+				} catch (e: unknown) {
+					if (attempt === 3) throw e;
+					await sleep(400 * attempt);
+				}
+			}
 		} catch (e: unknown) {
 			failed++;
 			log(`  [avatar-fail] user ${userId}: ${getErrorMessage(e)}`);
@@ -797,7 +827,7 @@ async function runAvatars(dataDir: string): Promise<void> {
 		if (done % 200 === 0)
 			log(`  avatars: ${done}/${uploadList.length} uploaded${failed ? `, ${failed} failed` : ''}`);
 	});
-	log(`avatars: done — ${done} processed, ${failed} failed.`);
+	log(`avatars: done - ${done} processed, ${failed} failed.`);
 }
 
 async function main(): Promise<void> {
