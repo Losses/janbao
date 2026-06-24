@@ -7,7 +7,7 @@
  * never crawled: their profile + avatar are absent, and they render as
  * placeholders / "unknown" wherever referenced. This script fills that gap.
  *
- * Two modes:
+ * Three modes:
  *
  *   crawl  Fetch every missing user's profile page + avatar into the SHARED
  *          data dir (profiles/<id>/profile.html, profile-avatars/<id>-<sha>.<ext>),
@@ -20,10 +20,16 @@
  *          UPDATE for placeholders / avatar gaps). The local .local.db is read
  *          ONLY to classify INSERT-vs-UPDATE; the .sql is applied to prod.
  *
+ *   avatars  Convert (cwebp/gif2webp) + upload EVERY crawled user's avatar to
+ *          pCloud /avatars/<id>, mirroring import-data §4.7. Idempotent (lists
+ *          pCloud /avatars first, skips what's there). Safe to run in PARALLEL
+ *          with a `crawl` (own log file) and to re-run after it for new avatars.
+ *
  * Usage:
  *   JANBAO_COOKIE='Talk=...; Talk-tk=...; ...' \
  *     bun run scripts/recrawl-missing-profiles.ts crawl /home/losses/Downloads/data
  *   bun run scripts/recrawl-missing-profiles.ts sql  /home/losses/Downloads/data
+ *   bun run scripts/recrawl-missing-profiles.ts avatars /home/losses/Downloads/data
  *
  * Env (crawl): JANBAO_MAX_ID (default 57541), JANBAO_PROBE_AHEAD (default 1000),
  *   JANBAO_CONCURRENCY (4), JANBAO_DELAY (500), JANBAO_DRY=1, JANBAO_NO_AVATARS=1,
@@ -53,7 +59,9 @@ import {
 import { resolvePcloudConfig, pcloudUploadBytes, pcloudListFolder } from '../src/lib/server/pcloud';
 
 const BASE = 'https://janbao.net';
-const LOG_FILE = 'recrawl-profiles.log';
+// Separate log per mode so a parallel `avatars` run can't interleave with a
+// concurrent `crawl` run's append to the same file.
+const LOG_FILE = process.argv[2] === 'avatars' ? 'recrawl-avatars.log' : 'recrawl-profiles.log';
 const RECRAWL_JSONL = 'profile-recrawl.jsonl';
 const DELETED_JSONL = 'profile-deleted.jsonl';
 const OUT_SQL = 'recrawl-profiles.sql';
@@ -745,11 +753,60 @@ async function runSql(dataDir: string): Promise<void> {
 	);
 }
 
+/**
+ * Convert + upload EVERY crawled user's avatar to pCloud /avatars/<id> (webp),
+ * mirroring import-data §4.7: read the profile-avatars/ files, cwebp/gif2webp
+ * each, PUT to WebDAV, 32-way. Idempotent via a pCloud /avatars listing (skip
+ * what's already there), so it's safe to run in parallel with a `crawl` and to
+ * re-run after the crawl to pick up newly-fetched avatars. Logs to its own file
+ * (recrawl-avatars.log) to avoid interleaving with a concurrent crawl's log.
+ */
+async function runAvatars(dataDir: string): Promise<void> {
+	ensureWebpTools();
+	const cfg = resolvePcloudConfig(process.env as Record<string, string>);
+	if (!cfg.username || !cfg.password) {
+		log('avatars: PCLOUD_* not set — cannot upload. Aborting.');
+		process.exit(1);
+	}
+	log(`avatars: listing pCloud ${cfg.basePath}/avatars (to skip already-uploaded)...`);
+	const onCloud = await pcloudListFolder(cfg, '/avatars');
+	const avIds = [...scanAvatarIds(dataDir)].sort((a, b) => a - b);
+	const uploadList = avIds.filter((id) => !onCloud.has(String(id)));
+	log(
+		`avatars: ${avIds.length} crawled users with an avatar file; ${onCloud.size} already on cloud; ` +
+			`${uploadList.length} to convert+upload (32-way).`
+	);
+	if (uploadList.length === 0) {
+		log('avatars: nothing to do.');
+		return;
+	}
+	let done = 0;
+	let failed = 0;
+	await mapPool(uploadList, 32, async (userId) => {
+		const avFile = avatarFileFor(dataDir, userId);
+		if (!avFile) return;
+		try {
+			const webp = convertToWebp(avFile);
+			await pcloudUploadBytes(cfg, '/avatars', String(userId), webp);
+			onCloud.add(String(userId));
+		} catch (e: unknown) {
+			failed++;
+			log(`  [avatar-fail] user ${userId}: ${getErrorMessage(e)}`);
+		}
+		done++;
+		if (done % 200 === 0)
+			log(`  avatars: ${done}/${uploadList.length} uploaded${failed ? `, ${failed} failed` : ''}`);
+	});
+	log(`avatars: done — ${done} processed, ${failed} failed.`);
+}
+
 async function main(): Promise<void> {
 	const mode = process.argv[2];
 	const dataDir = process.argv[3];
-	if (!mode || !dataDir || !existsSync(dataDir) || !['crawl', 'sql'].includes(mode)) {
-		console.error('Usage: bun run scripts/recrawl-missing-profiles.ts <crawl|sql> <data-dir>');
+	if (!mode || !dataDir || !existsSync(dataDir) || !['crawl', 'sql', 'avatars'].includes(mode)) {
+		console.error(
+			'Usage: bun run scripts/recrawl-missing-profiles.ts <crawl|sql|avatars> <data-dir>'
+		);
 		process.exit(1);
 	}
 	if (mode === 'crawl') {
@@ -761,6 +818,8 @@ async function main(): Promise<void> {
 			process.exit(1);
 		}
 		await runCrawl(dataDir, cookie);
+	} else if (mode === 'avatars') {
+		await runAvatars(dataDir);
 	} else {
 		await runSql(dataDir);
 	}
