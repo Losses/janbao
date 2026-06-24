@@ -30,6 +30,9 @@ async function main(): Promise<void> {
 	// fixed offset is fragile because the wrapper length can vary subtly with
 	// implementation - the JWK route is the canonical WebCrypto way.
 	const jwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
+	// The `d` field is the base64url-encoded raw scalar; it is always present for
+	// an exported ECDSA private key, but the JsonWebKey type marks it optional.
+	if (!jwk.d) throw new Error('Private key JWK is missing the scalar field d');
 	const privateKey = base64UrlToBytes(jwk.d);
 
 	if (publicKey.length !== 65 || publicKey[0] !== 0x04) {
@@ -56,3 +59,5 @@ function base64UrlToBytes(b64url: string): Uint8Array {
 }
 
 await main();
+
+export {};

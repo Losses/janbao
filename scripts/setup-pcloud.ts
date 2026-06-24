@@ -17,6 +17,7 @@ import {
 	pcloudMkcol,
 	pcloudListFolder,
 	pcloudIsConfigured,
+	DEFAULT_BASE_PATH,
 	type PcloudConfig
 } from '../src/lib/server/pcloud';
 
@@ -57,7 +58,7 @@ async function main(): Promise<void> {
 	const host = regionInput.toUpperCase() === 'US' ? 'webdav.pcloud.com' : 'ewebdav.pcloud.com';
 	console.log(`Using WebDAV host: ${host}`);
 
-	const cfg: PcloudConfig = { username: email, password, host };
+	const cfg: PcloudConfig = { username: email, password, host, basePath: DEFAULT_BASE_PATH };
 	if (!pcloudIsConfigured(cfg)) {
 		console.error('Credentials missing.');
 		process.exit(1);

@@ -1,0 +1,15 @@
+{
+	// Scripts (import-data.ts, apply-sql.ts, recrawl-*, ...) are not part of the
+	// SvelteKit build, so .svelte-kit/tsconfig.json does not include scripts/**.
+	// Without an owning tsconfig, editors fall back to an inferred project that
+	// never loads the project's `types: ["bun"]`, leaving process/Buffer/fs/path/
+	// readline unresolved. This config gives script files a real project so the
+	// bun globals resolve, while still excluding scripts from `bun run check`
+	// (which targets the root tsconfig and only covers src/**).
+	"extends": "../tsconfig.json",
+	"compilerOptions": {
+		"types": ["bun"],
+		"noEmit": true
+	},
+	"include": ["**/*.ts", "../src/app.d.ts", "../.svelte-kit/ambient.d.ts"]
+}
