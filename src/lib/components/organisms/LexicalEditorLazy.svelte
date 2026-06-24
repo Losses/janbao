@@ -18,12 +18,22 @@
 	 * editor so parents that use `bind:this` (e.g. quickReply) keep working.
 	 */
 	import { onMount } from 'svelte';
+	import { getEditorPrefsStore } from '$lib/stores/editor-prefs.svelte';
 
 	type LexicalEditorInstance = ReturnType<LexicalEditorComponent>;
 
 	let { class: className = '', ...rest }: LexicalEditorProps = $props();
 	let Editor = $state<LexicalEditorComponent | null>(cachedEditor);
 	let inner: LexicalEditorInstance | undefined = $state();
+
+	// Mirror the loaded editor's plain-mode gate: the real editor unmounts its
+	// toolbar when plainMode is on, so the skeleton must drop its toolbar row
+	// too (and the height then matches the plain editor, shrinking the swap
+	// CLS). Reads the same session-hydrated store the editor does; the value is
+	// correct on first paint because this lazy chunk loads after the root
+	// layout's hydrate effect has run.
+	const editorPrefs = getEditorPrefsStore();
+	const plainMode = $derived(editorPrefs.prefs.plainMode);
 
 	onMount(() => {
 		if (cachedEditor) {
@@ -54,9 +64,11 @@
 		role="status"
 		aria-busy="true"
 	>
-		<div class="flex items-center gap-1.5 border-b border-base-300 bg-base-200 p-1.5">
-			<div class="h-6 w-32 animate-pulse rounded bg-base-300/50"></div>
-		</div>
+		{#if !plainMode}
+			<div class="flex items-center gap-1.5 border-b border-base-300 bg-base-200 p-1.5">
+				<div class="h-6 w-32 animate-pulse rounded bg-base-300/50"></div>
+			</div>
+		{/if}
 		<div class="prose prose-sm max-w-none min-h-[200px] px-3 py-2">
 			<div class="animate-pulse space-y-2">
 				<div class="h-3 w-3/4 rounded bg-base-300/50"></div>
