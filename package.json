@@ -14,6 +14,7 @@
 		"serve:node:debug": "bun run build:node:debug && bun run start:node:debug",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
+		"test:e2e": "playwright test",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsc --noEmit -p tsconfig.sw.json",
 		"check:sw": "tsc --noEmit -p tsconfig.sw.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
@@ -28,6 +29,7 @@
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20260612.1",
 		"@eslint/js": "^10.0.1",
+		"@playwright/test": "^1.61.1",
 		"@sveltejs/adapter-auto": "^7.0.1",
 		"@sveltejs/adapter-cloudflare": "^7.2.8",
 		"@sveltejs/adapter-node": "^5.5.4",

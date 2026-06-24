@@ -4,7 +4,7 @@
 	import type { Snippet } from 'svelte';
 	import { setContext, onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { beforeNavigate, afterNavigate } from '$app/navigation';
+	import { beforeNavigate, afterNavigate, goto } from '$app/navigation';
 	import AppShell from '$lib/components/templates/AppShell.svelte';
 	import type { LayoutData } from './$types';
 	import { getBadgesStore } from '$lib/stores/badges.svelte';
@@ -21,6 +21,12 @@
 	interface LayoutProps {
 		data: LayoutData;
 		children: Snippet;
+	}
+
+	/** Client-side navigation exposed to E2E (dev-only). See __e2eGoto below. */
+	type E2EGotoHandler = (href: string) => Promise<void>;
+	interface E2EWindow extends Window {
+		__e2eGoto?: E2EGotoHandler;
 	}
 
 	let { data, children }: LayoutProps = $props();
@@ -88,6 +94,14 @@
 	afterNavigate(() => {
 		navStore.handleAfterNavigate();
 	});
+
+	// Dev-only E2E hook: a deterministic client-side navigation that fires the
+	// same beforeNavigate as a real link click. Real global routes are reached
+	// via the drawer, whose open transition races in tests; goto is the exact
+	// SPA path the drawer link ultimately takes, without the timing surface.
+	if (import.meta.env.DEV && typeof window !== 'undefined') {
+		(window as E2EWindow).__e2eGoto = (href) => goto(href);
+	}
 
 	// Auth routes render their own standalone layout and must NOT get the
 	// persistent app shell (Header / tab bar).

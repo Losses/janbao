@@ -1,3 +1,15 @@
+import {
+	initialNavState,
+	initNav,
+	switchTabNav,
+	handleBeforeNavigateNav,
+	handleAfterNavigateNav,
+	getTabFromPath as getTabFromPathLogic,
+	backTargetFor,
+	type NavState,
+	type NavDirection
+} from './navigation-logic';
+
 // Back Handler Callback contract
 export type BackCallback = () => boolean; // returns true if the back event is consumed
 
@@ -24,116 +36,60 @@ class BackHandlerDispatcher {
 
 export const backHandler = new BackHandlerDispatcher();
 
-export interface RouteEntry {
-	pathname: string;
-	search: string;
-}
+export type { RouteEntry } from './navigation-logic';
 
 class NavigationStore {
-	// Virtual stacks for each of the 3 tabs: 0 (Discussions), 1 (Activity), 2 (Messages)
-	#stacks = $state<Record<number, RouteEntry[]>>({
-		0: [{ pathname: '/', search: '' }],
-		1: [{ pathname: '/activity', search: '' }],
-		2: [{ pathname: '/messages/inbox', search: '' }]
-	});
-	#activeTab = $state<number>(0);
-	#direction = $state<'forward' | 'backward' | 'none'>('none');
+	// Reactive nav state. All tab/stack maths live in navigation-logic.ts (pure,
+	// unit-tested); this class only holds the $state and delegates transitions.
+	#state = $state<NavState>(initialNavState());
 
 	get activeTab() {
-		return this.#activeTab;
+		return this.#state.activeTab;
 	}
 
 	getTabFromPath(path: string): number {
-		const globalPrefixes = ['/admin', '/profile', '/search', '/bookmarks', '/notifications'];
-		const isGlobal = globalPrefixes.some(
-			(prefix) => path === prefix || path.startsWith(prefix + '/')
-		);
-		if (isGlobal) {
-			return this.#activeTab;
-		}
-		if (path.startsWith('/activity')) return 1;
-		if (path.startsWith('/messages')) return 2;
-		return 0;
+		return getTabFromPathLogic(path, this.#state.activeTab);
 	}
 
 	get activeStack() {
-		return this.#stacks[this.#activeTab];
+		return this.#state.stacks[this.#state.activeTab];
 	}
 
-	getStack(tabIdx: number): RouteEntry[] {
-		return this.#stacks[tabIdx];
+	getStack(tabIdx: number) {
+		return this.#state.stacks[tabIdx];
 	}
 
 	get backTarget() {
-		const currentStack = this.activeStack;
-		if (currentStack.length > 1) {
-			const target = currentStack[currentStack.length - 2];
-			return target.pathname + target.search;
-		}
-		return '/';
+		return backTargetFor(this.#state);
 	}
 
-	get direction() {
-		return this.#direction;
+	get direction(): NavDirection {
+		return this.#state.direction;
 	}
 
 	// Synthetic stack initialization on startup to support deep linking back navigation
 	init(initialPath: string, search: string = '') {
-		const tabIdx = this.getTabFromPath(initialPath);
-		const tabRoots = {
-			0: '/',
-			1: '/activity',
-			2: '/messages/inbox'
-		};
-		const rootPath = tabRoots[tabIdx as 0 | 1 | 2];
-
-		if (initialPath === rootPath) {
-			this.#stacks[tabIdx] = [{ pathname: initialPath, search }];
-		} else {
-			// Synthetically construct root parent history so swiping back lands on the list page
-			this.#stacks[tabIdx] = [
-				{ pathname: rootPath, search: '' },
-				{ pathname: initialPath, search }
-			];
+		this.#state = initNav(this.#state, initialPath, search);
+		// Dev-only readiness flag. The root layout runs init() in onMount, which
+		// is AFTER the client is interactive — so a test that drives a tab click
+		// right after hydration can race the deferred init('/') (which would
+		// clobber activeTab). E2E waits on this flag so every interaction happens
+		// after the one-time seed.
+		if (import.meta.env.DEV && typeof window !== 'undefined') {
+			(window as Window & { __navReady?: boolean }).__navReady = true;
 		}
 	}
 
 	switchTab(toPath: string, search: string = '') {
-		const toTab = this.getTabFromPath(toPath);
-		this.#activeTab = toTab;
-		// If stack is empty or only has root, ensure it is set up
-		if (this.#stacks[toTab].length === 0) {
-			this.#stacks[toTab] = [{ pathname: toPath, search }];
-		}
+		this.#state = switchTabNav(this.#state, toPath, search);
 	}
 
 	handleBeforeNavigate(to: string, from: string, type: string, toSearch: string = '') {
-		const toTab = this.getTabFromPath(to);
-		const fromTab = this.getTabFromPath(from);
-
-		if (toTab !== fromTab) {
-			// Tab switch - update activeTab and return without modifying stack structures
-			this.#activeTab = toTab;
-			return;
-		}
-
-		if (type === 'popstate') {
-			this.#direction = 'backward';
-			if (this.#stacks[toTab].length > 1) {
-				this.#stacks[toTab].pop();
-			}
-		} else {
-			this.#direction = 'forward';
-			// Check if we are pushing a duplicate path to avoid stack pollution
-			const currentStack = this.#stacks[toTab];
-			if (currentStack.length === 0 || currentStack[currentStack.length - 1].pathname !== to) {
-				this.#stacks[toTab].push({ pathname: to, search: toSearch });
-			}
-		}
+		this.#state = handleBeforeNavigateNav(this.#state, to, from, type, toSearch);
 	}
 
 	handleAfterNavigate() {
-		this.#direction = 'none';
+		this.#state = handleAfterNavigateNav(this.#state);
 	}
 }
 

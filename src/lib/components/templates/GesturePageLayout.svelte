@@ -144,10 +144,6 @@
 	let centerEl = $state<HTMLElement | null>(null);
 	const currentScrollTop = $derived(page.url.pathname ? pageScrollStore.get(page.url.pathname) : 0);
 
-
-
-
-
 	const shouldAnimateEnter = () => {
 		if (leftNeedsLoading) return false; // Never animate entry from loading swipe
 		if (!hasLeft || !resolvedLeftHref) return false;
@@ -495,8 +491,6 @@
 			}
 		};
 	};
-
-
 </script>
 
 <div

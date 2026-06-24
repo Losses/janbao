@@ -11,6 +11,7 @@
 	 * so the Discussions tab is the offline list when there is no network.
 	 */
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
+	import ListSkeleton from '$lib/components/atoms/ListSkeleton.svelte';
 	import DiscussionRow from '$lib/components/organisms/DiscussionRow.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
 	import { goto } from '$app/navigation';
@@ -69,10 +70,7 @@
 	{#if !online.online}
 		<!-- Offline: cached discussions from IDB -->
 		{#if offlineLoading}
-			<div class="flex items-center justify-center gap-2 py-10 text-sm text-base-content/50">
-				<span class="loading loading-spinner loading-sm"></span>
-				{t.common.loading}
-			</div>
+			<ListSkeleton label={t.common.loading} rows={8} rowClass="h-16" />
 		{:else if offlineDiscussions.length === 0}
 			<EmptyState message={t.offline.reader.empty} bordered={false} />
 		{:else}
@@ -100,10 +98,7 @@
 
 		<!-- Discussions Stream -->
 		{#if !discussions}
-			<div class="flex items-center justify-center gap-2 py-10 text-sm text-base-content/50">
-				<span class="loading loading-spinner loading-sm"></span>
-				{t.common.loading}
-			</div>
+			<ListSkeleton label={t.common.loading} rows={8} rowClass="h-16" />
 		{:else if discussions.length === 0}
 			<EmptyState message={t.common.noResults} />
 		{:else}

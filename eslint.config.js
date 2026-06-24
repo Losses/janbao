@@ -9,6 +9,12 @@ import ts from 'typescript-eslint';
 const gitignorePath = path.resolve(import.meta.dirname, '.gitignore');
 
 export default defineConfig(
+	{
+		// E2E is test infrastructure driven by @playwright/test under node; it is
+		// not app code and is type-checked/run by Playwright itself, not the
+		// src lint gate.
+		ignores: ['e2e/**', 'playwright.config.ts']
+	},
 	includeIgnoreFile(gitignorePath),
 	js.configs.recommended,
 	ts.configs.recommended,

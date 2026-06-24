@@ -39,3 +39,7 @@ scratch/**/*
 discussion-page-audit.json
 recrawl.log
 non-placeholder-user-emails.txt
+
+# Playwright E2E output
+test-results/
+playwright-report/

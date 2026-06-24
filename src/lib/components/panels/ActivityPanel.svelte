@@ -11,6 +11,7 @@
 	 * desktop activity route additionally redirects to `/offline/activity`.
 	 */
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
+	import ListSkeleton from '$lib/components/atoms/ListSkeleton.svelte';
 	import ActivityList from '$lib/components/organisms/ActivityList.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditorLazy.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
@@ -151,10 +152,7 @@
 	<!-- Activities Stream -->
 	{#if !online.online}
 		{#if offlineLoading}
-			<div class="flex items-center justify-center gap-2 py-10 text-sm text-base-content/50">
-				<span class="loading loading-spinner loading-sm"></span>
-				{t.common.loading}
-			</div>
+			<ListSkeleton label={t.common.loading} rows={6} rowClass="h-12" />
 		{:else if offlineActivities.length === 0}
 			<EmptyState message={t.common.noResults} bordered={false} />
 		{:else}
@@ -163,10 +161,7 @@
 			</div>
 		{/if}
 	{:else if !activities}
-		<div class="flex items-center justify-center gap-2 py-10 text-sm text-base-content/50">
-			<span class="loading loading-spinner loading-sm"></span>
-			{t.common.loading}
-		</div>
+		<ListSkeleton label={t.common.loading} rows={6} rowClass="h-12" />
 	{:else if activities.length === 0}
 		<EmptyState message={t.common.noResults} bordered={false} />
 	{:else}
