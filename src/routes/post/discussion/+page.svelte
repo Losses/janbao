@@ -8,7 +8,7 @@
 	import { goto } from '$app/navigation';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import { getPageThemeStore } from '$lib/stores/page-theme.svelte';
-	import { buildThemeOptions } from '$lib/ui/prefs';
+	import { buildThemeOptions, SITE_DEFAULT_THEME } from '$lib/ui/prefs';
 	import type { PageData } from './$types';
 
 	const online = getOnlineStore();
@@ -39,7 +39,7 @@
 	let publishForm: HTMLFormElement | undefined = $state();
 
 	const currentTheme = $derived(
-		themeName || categories.find((c) => c.slug === categorySlug)?.themeName || 'huoxin'
+		themeName || categories.find((c) => c.slug === categorySlug)?.themeName || SITE_DEFAULT_THEME
 	);
 
 	// Sync categorySlug with default when data loads

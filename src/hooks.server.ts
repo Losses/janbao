@@ -4,6 +4,7 @@ import { verifyJwt } from '$lib/server/auth';
 import { users } from '$lib/server/db/schema';
 import { getEditorPreferences } from '$lib/server/db/dao/editor-preferences';
 import { getUiPreferences } from '$lib/server/db/dao/ui-preferences';
+import { SITE_DEFAULT_THEME } from '$lib/ui/prefs';
 import { resolveLang, getTranslation } from '$lib/server/i18n';
 import { getJwtSecret, getCookieSecure } from '$lib/server/constants';
 import { resolvePcloudConfig, pcloudIsConfigured } from '$lib/server/pcloud';
@@ -22,17 +23,16 @@ if (typeof process !== 'undefined') {
 	}
 }
 
-// The default theme baked into app.html's <html data-theme="huoxin">. Injecting
-// the signed-in user's interface theme into the SSR HTML avoids the FOUC where
-// the page paints the default theme and only switches after hydration runs the
-// root layout's $effect. The client $effect still runs and agrees with this
-// value, so there is no conflict; the per-page theme override (discussion /
-// compose) remains a client-side store update.
-const DEFAULT_HTML_THEME = 'huoxin';
-
+// Injecting the signed-in user's interface theme into the SSR HTML avoids the
+// FOUC where the page paints the default theme and only switches after
+// hydration runs the root layout's $effect. The client $effect still runs and
+// agrees with this value, so there is no conflict; the per-page theme override
+// (discussion / compose) remains a client-side store update. The default baked
+// into app.html is SITE_DEFAULT_THEME (huoxin); an empty interface theme is
+// left untouched (stays huoxin), never unset.
 function injectInterfaceTheme(html: string, theme: string | null | undefined): string {
-	if (!theme || theme === DEFAULT_HTML_THEME) return html;
-	return html.replace(`data-theme="${DEFAULT_HTML_THEME}"`, `data-theme="${theme}"`);
+	if (!theme || theme === SITE_DEFAULT_THEME) return html;
+	return html.replace(`data-theme="${SITE_DEFAULT_THEME}"`, `data-theme="${theme}"`);
 }
 
 export const handle: Handle = async ({ event, resolve }) => {

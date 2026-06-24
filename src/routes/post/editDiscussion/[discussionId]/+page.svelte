@@ -9,7 +9,7 @@
 	import type { PageData } from './$types';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import { getPageThemeStore } from '$lib/stores/page-theme.svelte';
-	import { buildThemeOptions } from '$lib/ui/prefs';
+	import { buildThemeOptions, SITE_DEFAULT_THEME } from '$lib/ui/prefs';
 
 	interface PageProps {
 		data: PageData;
@@ -41,7 +41,7 @@
 	let updateForm: HTMLFormElement | undefined = $state();
 
 	const currentTheme = $derived(
-		themeName || categories.find((c) => c.slug === categorySlug)?.themeName || 'huoxin'
+		themeName || categories.find((c) => c.slug === categorySlug)?.themeName || SITE_DEFAULT_THEME
 	);
 
 	$effect(() => {

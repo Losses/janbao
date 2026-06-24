@@ -14,6 +14,7 @@
 	import { DEFAULT_OFFLINE_PREFS } from '$lib/offline/prefs';
 	import { getEditorPrefsStore } from '$lib/stores/editor-prefs.svelte';
 	import { getUiPrefsStore } from '$lib/stores/ui-prefs.svelte';
+	import { SITE_DEFAULT_THEME } from '$lib/ui/prefs';
 	import { getPageThemeStore } from '$lib/stores/page-theme.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { markEnterFromList, setReachedFromList } from '$lib/stores/thread-nav.svelte';
@@ -157,20 +158,19 @@
 	});
 	// Single owner of <html data-theme>. Resolves the page-level override (set by
 	// the discussion page while a themed thread is open and post themes are not
-	// blocked) over the user's interface theme; falls back to the interface theme,
-	// and when that is empty leaves data-theme unset so the base stylesheet wins.
+	// blocked) over the user's interface theme; an empty interface theme falls
+	// back to the site default (SITE_DEFAULT_THEME), NOT to an unset/empty
+	// attribute - removing data-theme (or setting it to '') makes daisyUI fall
+	// back to its light/dark built-ins. `||` (not `??`) so the empty string that
+	// represents "no interface theme" also falls through to the site default.
 	// One effect avoids any ordering race between a layout effect and a deeper
 	// page effect. Deriveds dedupe by value so it re-fires only on real changes.
 	const interfaceTheme = $derived(uiPrefs.prefs.interfaceTheme);
 	const pageThemeOverride = $derived(pageTheme.current);
 	$effect(() => {
 		if (typeof document === 'undefined') return;
-		const resolved = pageThemeOverride ?? interfaceTheme;
-		if (resolved) {
-			document.documentElement.setAttribute('data-theme', resolved);
-		} else {
-			document.documentElement.removeAttribute('data-theme');
-		}
+		const resolved = (pageThemeOverride ?? interfaceTheme) || SITE_DEFAULT_THEME;
+		document.documentElement.setAttribute('data-theme', resolved);
 	});
 
 	// Online/offline status drives the delta-sync trigger and (via the shared

@@ -24,6 +24,15 @@ export const DEFAULT_UI_PREFERENCES: UiPreferences = {
 	blockPostTheme: false
 };
 
+/**
+ * The site's default theme (the custom daisyUI theme baked into app.html's
+ * <html data-theme>). `interfaceTheme === ''` means "use this", NOT "no theme":
+ * removing the data-theme attribute entirely makes daisyUI fall back to its
+ * `light`/`dark` (prefersdark) built-ins, so an empty interface theme must
+ * resolve back to this name, never to an unset attribute.
+ */
+export const SITE_DEFAULT_THEME = 'huoxin';
+
 /** Keys that form the API write allowlist (every settable field). */
 export const UI_PREF_KEYS = ['interfaceTheme', 'blockPostTheme'] as const;
 
