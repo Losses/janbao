@@ -54,10 +54,7 @@
 
 	$effect(() => {
 		if (typeof document === 'undefined') return;
-		document.documentElement.setAttribute(
-			'data-theme',
-			prefs.interfaceTheme || SITE_DEFAULT_THEME
-		);
+		document.documentElement.setAttribute('data-theme', prefs.interfaceTheme || SITE_DEFAULT_THEME);
 	});
 
 	async function handleSave() {

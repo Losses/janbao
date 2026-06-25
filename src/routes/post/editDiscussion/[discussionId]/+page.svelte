@@ -2,7 +2,9 @@
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditorLazy.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
+	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import { formatTitle } from '$lib/utils/title';
+	import { generateSlug } from '$lib/utils/slug';
 	import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
@@ -25,6 +27,8 @@
 	const opContentJson = $derived(data.opContentJson);
 	const categories = $derived(data.categories);
 	const draftContent = $derived(data.draftContent);
+	const user = $derived(data.user);
+	const userSlug = $derived(generateSlug(user?.username || ''));
 	// When the user blocks post themes, the theme selector is hidden and the
 	// category selector goes full-width; the preview effect is also skipped.
 	const blockPostTheme = $derived(data.user?.uiPreferences.blockPostTheme === true);
@@ -99,8 +103,14 @@
 	<title>{formatTitle(t.discussion.editDiscussion)}</title>
 </svelte:head>
 
-<DualColumnLayout {t}>
-	<div class="space-y-3 py-2">
+{#snippet sidebar()}
+	{#if user}
+		<ProfileSidebar {user} {t} targetUserId={user.id} targetUserSlug={userSlug} />
+	{/if}
+{/snippet}
+
+<DualColumnLayout {sidebar} {user} {t}>
+	<div class="space-y-3 px-4 py-2 md:px-0">
 		<!-- Header -->
 		<div class="border-b border-base-300 pb-4">
 			<h1 class="page-title">
