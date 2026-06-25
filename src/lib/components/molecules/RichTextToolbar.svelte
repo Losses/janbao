@@ -8,7 +8,7 @@
 		$isTextNode as isTextNodeFn,
 		FORMAT_TEXT_COMMAND,
 		KEY_DOWN_COMMAND,
-		COMMAND_PRIORITY_EDITOR
+		COMMAND_PRIORITY_NORMAL
 	} from 'lexical';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import {
@@ -171,6 +171,12 @@
 	// KEY_DOWN_COMMAND; the ones below are registered here so they stay
 	// feature-gated alongside their toolbar buttons. Feature flags are read at
 	// call time, so a live change from the settings store takes effect at once.
+	// Priority must beat the core handler: Lexical's built-in KEY_DOWN_COMMAND
+	// (COMMAND_PRIORITY_EDITOR = 0) returns true for every key it doesn't
+	// recognise, which aborts the chain, so registering at the same priority
+	// means this handler never runs. NORMAL (= 2, what svelte-lexical's own
+	// ShortcutsPlugin uses) runs first; this handler returns false for keys it
+	// doesn't own so B/I/U still fall through to the core.
 	function handleShortcut(event: KeyboardEvent): boolean {
 		if (!(event.ctrlKey || event.metaKey)) return false;
 		const shift = event.shiftKey;
@@ -214,7 +220,7 @@
 	$effect(() => {
 		const editor = activeEditor;
 		if (!editor || typeof editor.registerCommand !== 'function') return;
-		return editor.registerCommand(KEY_DOWN_COMMAND, handleShortcut, COMMAND_PRIORITY_EDITOR);
+		return editor.registerCommand(KEY_DOWN_COMMAND, handleShortcut, COMMAND_PRIORITY_NORMAL);
 	});
 
 	function handleInsertImage() {
