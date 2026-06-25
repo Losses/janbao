@@ -291,3 +291,93 @@ export async function captureEnterAnimation(
 export async function clickDiscussion(page: Page, index: number): Promise<void> {
 	await page.locator('a[href^="/discussion/"]').nth(index).click();
 }
+
+// --- Thread header hide-on-scroll capture ----------------------------------
+// On a mobile thread page the document window is locked by `html.fixed-viewport`
+// (html/body are position:fixed; overflow:hidden), so the thread scrolls INSIDE
+// `.detail-scroll-pane` (overflow-y:auto; height:100%), not the window. The
+// shared scroll-chrome store must therefore react to the CONTAINER's scroll for
+// the hide-on-down / reveal-on-up Header animation. Pre-fix it only listened to
+// `window` and the Header never moved.
+
+export interface HeaderScrollCapture {
+	downTranslateY: number | null;
+	upTranslateY: number | null;
+	downScrollTop: number;
+	upScrollTop: number;
+	/** Viewport-Y of the content column (`.app-shell-content`) after scrolling
+	 * down. When the Header is an overlay (out of flow) this is 0 — the thread
+	 * fills the space the Header vacated. When the Header is in flow it stays at
+	 * the Header height (≈56), exposing the header-tall blank strip on top. */
+	downContentTop: number;
+	upContentTop: number;
+	/** Viewport-Y of the first heading inside the scroll pane at the top of the
+	 * page. Guards against the "top eaten" regression: the Header overlays the
+	 * pane, so the pane's top padding must offset the content past the Header
+	 * (≈ header height + breathing room). If the padding is too small the heading
+	 * sits under the Header. */
+	topFirstContentTop: number;
+}
+
+/**
+ * Drive the thread's centre panel down near its bottom, then back to the top,
+ * and report the sticky Header's translateY + the content column's top at each
+ * extreme. Pre-fix both translateY phases read 0 (Header pinned) and the content
+ * top stays at the Header height (blank strip when hidden); post-fix the down
+ * phase reads a large negative translateY (Header hidden) with content top 0
+ * (no gap), and the up phase reads translateY 0 (Header revealed).
+ */
+export async function captureHeaderOnThreadScroll(page: Page): Promise<HeaderScrollCapture> {
+	return page.evaluate(async () => {
+		const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+		const afterFrame = (): Promise<void> =>
+			new Promise((resolve) =>
+				requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+			).then(() => sleep(40));
+		const readTy = (): number | null => {
+			const h = document.querySelector('header');
+			if (!h) return null;
+			const m = h.style.transform.match(/translateY\(([-0-9.]+)px\)/);
+			return m ? Number(m[1]) : 0;
+		};
+		const readContentTop = (): number => {
+			const el = document.querySelector('.app-shell-content') as HTMLElement | null;
+			return el ? Math.round(el.getBoundingClientRect().top) : -1;
+		};
+		const pane = document.querySelector('.detail-scroll-pane') as HTMLElement | null;
+		if (!pane) throw new Error('detail-scroll-pane not found');
+		const readFirstContentTop = (): number => {
+			const el = pane.querySelector('h1, h2, img, a, [id]');
+			return el ? Math.round(el.getBoundingClientRect().top) : -1;
+		};
+
+		// Measure at the top first (before scrolling): the first content element
+		// must sit below the overlay Header (not eaten).
+		pane.scrollTop = 0;
+		await afterFrame();
+		const topFirstContentTop = readFirstContentTop();
+
+		const downTarget = Math.max(800, pane.scrollHeight - pane.clientHeight - 200);
+		pane.scrollTop = downTarget;
+		await afterFrame();
+		const downScrollTop = Math.round(pane.scrollTop);
+		const downTranslateY = readTy();
+		const downContentTop = readContentTop();
+
+		pane.scrollTop = 0;
+		await afterFrame();
+		const upScrollTop = Math.round(pane.scrollTop);
+		const upTranslateY = readTy();
+		const upContentTop = readContentTop();
+
+		return {
+			downTranslateY,
+			upTranslateY,
+			downScrollTop,
+			upScrollTop,
+			downContentTop,
+			upContentTop,
+			topFirstContentTop
+		};
+	});
+}

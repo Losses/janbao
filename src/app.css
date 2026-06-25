@@ -253,4 +253,27 @@ header nav {
 		min-height: 0 !important;
 		height: 100% !important;
 	}
+
+	/* Hide-on-scroll slides the Header up via translateY. On these locked-viewport
+	   routes the document can't scroll, so the Header's in-flow box would leave a
+	   header-tall blank strip on top when it hides (unlike the homepage, whose
+	   MobileTabPager scrolls the window). Lift the Header out of flow (overlay)
+	   so the content column becomes full-height, then offset the scroll
+	   container's top padding by the header height. That extra padding lives
+	   INSIDE the scrollable content, so it scrolls away as the user scrolls down
+	   and the thread fills the space the Header vacated: no gap, no dynamic
+	   coupling. The padding preserves the original `p-3` breathing room below
+	   the Header, so at rest the content sits exactly where it did when the
+	   Header was in flow. Scoped to fixed-viewport so the homepage / desktop
+	   (sticky in flow, window-scrolls) are untouched. */
+	html.fixed-viewport header {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		width: auto;
+	}
+	html.fixed-viewport .detail-scroll-pane {
+		padding-top: calc(var(--header-height, 0px) + 0.75rem);
+	}
 }

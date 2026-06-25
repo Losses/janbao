@@ -15,6 +15,7 @@
 	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
 	import { MOBILE_TABS, isPagerRoute, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
+	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 
 	interface Props {
 		children: Snippet;
@@ -48,6 +49,12 @@
 	const pageScrollStore = getPageScrollStore();
 	const listCache = getListCacheStore();
 	const pager = getMobilePagerStore();
+	// On mobile this layout locks the document window (html.fixed-viewport) and
+	// scrolls the active panel inside `.detail-scroll-pane`; tell the shared
+	// scroll-chrome store to drive the Header from THAT container instead of the
+	// window (which never scrolls here). Desktop scrolls the window, so it only
+	// registers on mobile. Reverts automatically on unmount (null).
+	const scrollChrome = getScrollChromeStore();
 
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	const getIsMobile = () => {
@@ -206,6 +213,15 @@
 			});
 			return () => cancelAnimationFrame(rafId);
 		}
+	});
+
+	// Register the centre panel as the scroll-chrome source on mobile (see
+	// scrollChrome above). Re-runs when isMobile flips (resize) or the panel
+	// binds/unbinds; the cleanup reverts the store to the window on unmount.
+	$effect(() => {
+		if (!isMobile || !centerEl) return;
+		scrollChrome.setScrollContainer(centerEl);
+		return () => scrollChrome.setScrollContainer(null);
 	});
 
 	$effect(() => {

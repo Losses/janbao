@@ -291,6 +291,13 @@
 	function landAtAnchor(targetId: string): void {
 		cancelLanding?.();
 		cancelLanding = null;
+		// The container is now the scroll-chrome source (GesturePageLayout
+		// registered `.detail-scroll-pane` on mobile), so this landing scroll
+		// WOULD drive hide-on-scroll. On a hash deep-link beforeNavigate never
+		// fired (no root-layout hold), so hold here and release at finish/cancel
+		// to keep the Header visible through the landing instead of twitching on
+		// the top→anchor jump.
+		getScrollChromeStore().holdThroughNavigation(false);
 		const headerOffset =
 			parseInt(getComputedStyle(document.documentElement).getPropertyValue('--header-height')) || 0;
 		const resolveEl = (): HTMLElement | null =>
@@ -362,6 +369,9 @@
 			if (done) return;
 			done = true;
 			if (rafId) cancelAnimationFrame(rafId);
+			// Release the hold on cancel (superseded by a new landing, or the
+			// component unmounted) so the store is never left frozen.
+			getScrollChromeStore().releaseNavigation();
 		};
 	}
 

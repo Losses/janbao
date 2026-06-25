@@ -19,6 +19,7 @@ import type { VoidHandler } from '$lib/types/handlers';
 
 type SetHeaderHeightHandler = (height: number) => void;
 type HoldNavigationHandler = (pinVisible: boolean) => void;
+type SetScrollContainerHandler = (el: HTMLElement | null) => void;
 
 interface ScrollChromeStore {
 	readonly hidden: boolean;
@@ -27,6 +28,13 @@ interface ScrollChromeStore {
 	setHeaderHeight: SetHeaderHeightHandler;
 	start: VoidHandler;
 	show: VoidHandler;
+	/** Register the element whose scrolling now drives hide-on-scroll. The mobile
+	 * GesturePageLayout routes lock the document window (`html.fixed-viewport`:
+	 * html/body are position:fixed; overflow:hidden) and scroll the page inside a
+	 * centre panel (`.detail-scroll-pane`) instead; on those routes the window
+	 * never scrolls, so the store must listen to that container. Pass null on
+	 * unmount to revert to the window (the homepage / desktop scroll the window). */
+	setScrollContainer: SetScrollContainerHandler;
 	/** A navigation that will programmatically scroll the window (a hash-anchored
 	 * thread enter, or a swipe-back to the list) is starting: hold the header so
 	 * hide-on-scroll does not react to the intermediate top→position scroll.
@@ -58,9 +66,18 @@ let scrollTimeoutId = 0;
 // scrolls the window (hash-enter / swipe-back) so the header does not react to
 // that intermediate scroll; releaseNavigation clears it at the landing.
 let frozen = false;
+// When set, the page scrolls inside this element instead of the window (mobile
+// GesturePageLayout routes), so evaluate() reads its scrollTop and the scroll
+// listener is attached to it. null = scroll the window (homepage / desktop).
+let containerEl: HTMLElement | null = null;
+
+/** Current scroll position from whichever element is the active scroll source. */
+function readY(): number {
+	return containerEl ? containerEl.scrollTop : window.scrollY;
+}
 
 function evaluate(): void {
-	const y = window.scrollY;
+	const y = readY();
 	if (frozen) {
 		// Keep lastY fresh so the post-unfreeze evaluate sees no stale delta, but do
 		// not move the header - the navigation's intermediate scroll is not user
@@ -116,7 +133,7 @@ function onScrollEnd(): void {
 function start(): void {
 	if (started || typeof window === 'undefined') return;
 	started = true;
-	lastY = window.scrollY;
+	lastY = readY();
 	window.addEventListener('scroll', onScroll, { passive: true });
 	window.addEventListener('scrollend', onScrollEnd, { passive: true });
 }
@@ -126,11 +143,29 @@ function show(): void {
 	translateY = 0;
 	scrolling = false;
 	if (typeof window !== 'undefined') {
-		lastY = window.scrollY;
+		lastY = readY();
 	}
 	if (scrollTimeoutId) {
 		window.clearTimeout(scrollTimeoutId);
 		scrollTimeoutId = 0;
+	}
+}
+
+function setScrollContainer(el: HTMLElement | null): void {
+	if (containerEl === el) return;
+	if (containerEl) {
+		containerEl.removeEventListener('scroll', onScroll);
+		containerEl.removeEventListener('scrollend', onScrollEnd);
+	}
+	containerEl = el;
+	if (el) {
+		el.addEventListener('scroll', onScroll, { passive: true });
+		el.addEventListener('scrollend', onScrollEnd, { passive: true });
+		// Re-seed to the container's current position so the first real scroll
+		// produces the right delta (not a jump from the window's stale lastY).
+		lastY = el.scrollTop;
+	} else if (typeof window !== 'undefined') {
+		lastY = window.scrollY;
 	}
 }
 
@@ -172,6 +207,7 @@ export function getScrollChromeStore(): ScrollChromeStore {
 		},
 		setHeaderHeight,
 		start,
+		setScrollContainer,
 		holdThroughNavigation,
 		releaseNavigation,
 		show

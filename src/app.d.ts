@@ -25,6 +25,8 @@ interface PlatformEnv {
 	ACTIVITIES_LIMIT?: string;
 	ALLOW_SLUG_CHANGE?: string;
 	ALLOW_GUEST_ACTIVITY?: string;
+	ALLOW_GUEST_USER_SEARCH?: string;
+	ALLOW_GUEST_PROFILE_VIEW?: string;
 	POST_THROTTLE_WINDOW_SEC?: string;
 	POST_THROTTLE_LIMIT?: string;
 	SITE_URL?: string;
