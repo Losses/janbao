@@ -86,7 +86,7 @@ interface ThreadReplyInput {
 	authorId: number;
 	authorDisplayName: string;
 	authorUsername: string;
-	authorAvatarFileId: string | null;
+	authorAvatarUrl: string | null;
 	editedByDisplayName: string | null;
 	editedByUsername: string | null;
 }
@@ -95,7 +95,7 @@ interface AuthorInput {
 	id: number;
 	displayName: string;
 	username: string;
-	avatarFileId: string | null;
+	avatarUrl: string | null;
 }
 
 // Prefs gate (INV-4 stays intact by gating the entire entry point). Early-
@@ -185,14 +185,15 @@ function replyAuthorFromThread(r: ThreadReplyInput): AuthorInput {
 		id: r.authorId,
 		displayName: r.authorDisplayName,
 		username: r.authorUsername,
-		avatarFileId: r.authorAvatarFileId
+		avatarUrl: r.authorAvatarUrl
 	};
 }
 
 // Editor projection: returns null when the reply has no editor id or no
 // display info (a deleted editor account yields null display fields). The
 // offline reader degrades gracefully for a missing CachedUser; we only cache
-// what we can resolve from the join.
+// what we can resolve from the join. The thread page has no editor avatar URL,
+// so editor rows cache `avatarUrl: null` (letter-avatar fallback).
 function editorFromThread(r: ThreadReplyInput): AuthorInput | null {
 	if (r.editedBy == null || !Number.isFinite(r.editedBy) || r.editedBy <= 0) return null;
 	const displayName = r.editedByDisplayName ?? r.editedByUsername;
@@ -202,7 +203,7 @@ function editorFromThread(r: ThreadReplyInput): AuthorInput | null {
 		id: r.editedBy,
 		displayName: displayName ?? 'user',
 		username: username ?? 'user',
-		avatarFileId: null
+		avatarUrl: null
 	};
 }
 
@@ -225,8 +226,7 @@ function mapCachedUser(author: AuthorInput, now: number): CachedUser {
 		id: author.id,
 		displayName: author.displayName,
 		username: author.username,
-		avatarFileId: author.avatarFileId,
-		avatarContentType: null,
+		avatarUrl: author.avatarUrl,
 		cachedAt: now
 	};
 }
@@ -300,7 +300,7 @@ export async function writeList(items: DiscussionListItem[]): Promise<void> {
 			id: item.authorId,
 			displayName: item.authorDisplayName,
 			username: item.authorUsername,
-			avatarFileId: item.authorAvatarFileId
+			avatarUrl: item.authorAvatarUrl
 		});
 		if (
 			item.lastReplyAuthorId != null &&
@@ -311,7 +311,10 @@ export async function writeList(items: DiscussionListItem[]): Promise<void> {
 				id: item.lastReplyAuthorId,
 				displayName: item.lastReplyAuthorDisplayName ?? item.lastReplyAuthorUsername ?? 'user',
 				username: item.lastReplyAuthorUsername ?? 'user',
-				avatarFileId: null
+				// DiscussionListItem does not ship lastReplyAuthorAvatarUrl; the
+				// cached row degrades to letter-avatar until the sync stream fills
+				// it in (same behavior as the previous avatarFileId: null path).
+				avatarUrl: null
 			});
 		}
 	}

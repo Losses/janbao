@@ -27,7 +27,7 @@ export function mapOfflineDiscussionRow(
 		authorId: d.authorId,
 		authorDisplayName: d.author.displayName ?? unknownUser,
 		authorUsername: d.author.username ?? 'user',
-		authorAvatarFileId: d.author.avatarFileId,
+		authorAvatarUrl: d.author.avatarUrl,
 		commentCount: d.commentCount,
 		isPinned: d.isPinned,
 		lastReplyAt: (d.lastReplyAt ?? d.createdAt) * 1000
@@ -53,7 +53,7 @@ async function loadAuthorMap(authorIds: number[]): Promise<Map<number, CachedAut
 			map.set(u.id, {
 				displayName: u.displayName,
 				username: u.username,
-				avatarFileId: u.avatarFileId
+				avatarUrl: u.avatarUrl ?? null
 			});
 		}
 	}
@@ -142,7 +142,7 @@ export async function loadOfflineActivity(): Promise<ActivityListItem[]> {
 			authorId: a.authorId,
 			authorDisplayName: author.displayName ?? '',
 			authorUsername: author.username ?? '',
-			authorAvatarFileId: author.avatarFileId,
+			authorAvatarUrl: author.avatarUrl,
 			recipientId: a.recipientId,
 			recipientDisplayName: recipient?.displayName ?? null,
 			recipientUsername: recipient?.username ?? null,

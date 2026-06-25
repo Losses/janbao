@@ -102,11 +102,12 @@ export interface SyncResult {
 // reader UI. All fields optional because the user may not yet be cached (e.g.
 // an author whose content was synced before the users stream shipped, or an
 // editedBy referencing a deleted account). The reader degrades gracefully:
-// avatar falls back to a letter, name to "Unknown user".
+// avatar falls back to a letter, name to "Unknown user". `avatarUrl` is the
+// server-built URL carried through IDB (the client never builds one itself).
 export interface OfflineAuthorInfo {
 	displayName: string | null;
 	username: string | null;
-	avatarFileId: string | null;
+	avatarUrl: string | null;
 }
 
 // Minimal projection of a CachedUser used as the join map's value type. Kept
@@ -115,7 +116,7 @@ export interface OfflineAuthorInfo {
 export interface CachedAuthorProjection {
 	displayName: string;
 	username: string;
-	avatarFileId: string | null;
+	avatarUrl: string | null;
 }
 
 // A cached reply joined with its author display info, ready for the reader UI.
