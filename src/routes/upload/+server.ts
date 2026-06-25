@@ -13,7 +13,7 @@ import {
 	pcloudIsConfigured
 } from '$lib/server/pcloud';
 import { detectImageFormat, mimeForFormat, type ImageFormat } from '$lib/server/image';
-import { buildAvatarUrl } from '$lib/utils/image';
+import { buildAvatarUrl, extFromMime } from '$lib/utils/image';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 
@@ -125,12 +125,16 @@ export const POST: RequestHandler = async (event) => {
 			const avatarUrl = buildAvatarUrl(user.id, sha, mime);
 			return json({ fileId: sha, url: `/avatar/${user.id}/${sha}`, avatarUrl });
 		}
+		// Attachment URLs carry a real extension (baked into post content here) so
+		// CDN edge caches treat them as static assets without a cache-everything
+		// rule. The attachment route strips this cosmetic suffix to recover the sha.
+		const ext = extFromMime(mime) ?? 'webp';
 		await pcloudMove(cfg, `/tmp/${tmpName}`, `/attachments/${sha}`);
 		await db
 			.insert(attachments)
 			.values({ fileId: sha, contentType: mime, uploaderId: user.id })
 			.onConflictDoNothing();
-		return json({ fileId: sha, url: `/attachment/${sha}` });
+		return json({ fileId: sha, url: `/attachment/${sha}.${ext}` });
 	} catch (err) {
 		console.error('[Upload API Error - move/db]:', err);
 		await pcloudDelete(cfg, `/tmp/${tmpName}`).catch(() => {});
