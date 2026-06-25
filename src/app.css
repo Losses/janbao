@@ -216,6 +216,14 @@ header nav {
 	scroll-margin-top: var(--header-height, 0px);
 }
 
+/* GesturePageLayout content card. Wraps each panel's content so the scroll
+   container (`.scroll-pane`) can be the page-bg surface with this white card
+   floating inside it on mobile (matching the homepage). Transparent + padding
+   on desktop (replaces the pane's former `p-3`); white card on mobile. */
+.gpl-card {
+	padding: 0.75rem;
+}
+
 /* Lock main document from scrolling and rubber-banding on mobile pager routes */
 @media (max-width: 767px) {
 	html.fixed-viewport,
@@ -256,16 +264,11 @@ header nav {
 
 	/* Hide-on-scroll slides the Header up via translateY. On these locked-viewport
 	   routes the document can't scroll, so the Header's in-flow box would leave a
-	   header-tall blank strip on top when it hides (unlike the homepage, whose
-	   MobileTabPager scrolls the window). Lift the Header out of flow (overlay)
-	   so the content column becomes full-height, then offset the scroll
-	   container's top padding by the header height. That extra padding lives
-	   INSIDE the scrollable content, so it scrolls away as the user scrolls down
-	   and the thread fills the space the Header vacated: no gap, no dynamic
-	   coupling. The padding preserves the original `p-3` breathing room below
-	   the Header, so at rest the content sits exactly where it did when the
-	   Header was in flow. Scoped to fixed-viewport so the homepage / desktop
-	   (sticky in flow, window-scrolls) are untouched. */
+	   header-tall blank strip on top when it hides. Lift the Header out of flow
+	   (overlay) so the content column becomes full-height. The Header overlays the
+	   scroll container's top; the container's top padding (header height) scrolls
+	   away as the user scrolls down, so the thread fills the space the Header
+	   vacated: no gap. */
 	html.fixed-viewport header {
 		position: fixed;
 		top: 0;
@@ -273,20 +276,31 @@ header nav {
 		right: 0;
 		width: auto;
 	}
-	html.fixed-viewport .detail-scroll-pane {
-		padding-top: calc(var(--header-height, 0px) + 0.75rem);
-	}
-	/* The card's `pb-6` (24px) on .dual-column-layout-inner sits OUTSIDE the
-	   scroll container, so on these locked-viewport routes it is a permanent
-	   base-200 strip locked at the bottom (the card's bg-base-100 ends above
-	   it). Drop it here and move that breathing room INSIDE the scroll container
-	   (padding-bottom) so it scrolls away; the card now fills the full height, so
-	   the bottom padding shows the card's own bg-base-100 — no strip. Desktop
-	   keeps `pb-6` (the window scrolls it away naturally). */
+	/* Match the homepage's card-on-page-bg: the scroll container (page bg) holds
+	   the white content card (.gpl-card) floating inside it, so the page bg shows
+	   at the top (behind the overlay Header) and at the bottom — scrolling, never
+	   locked, and the card border ends above the page-bg strip exactly like the
+	   homepage. The outer .dual-column-layout-columns card is transparent on
+	   mobile (it stays the white card on desktop, where the window scrolls). The
+	   inner `pb-6` is dropped (its 24px breathing room moves inside the scroll
+	   container). Scoped to fixed-viewport; the .gpl-card wrapper is transparent
+	   on desktop (just replaces the pane's old `p-3`). */
 	html.fixed-viewport .dual-column-layout-inner {
 		padding-bottom: 0;
 	}
-	html.fixed-viewport .detail-scroll-pane {
+	html.fixed-viewport .dual-column-layout-columns {
+		background-color: transparent;
+		border-bottom: 0;
+	}
+	html.fixed-viewport .scroll-pane {
+		background-color: var(--color-base-200);
+		padding-top: var(--header-height, 0px);
 		padding-bottom: 1.5rem;
+		padding-left: 0;
+		padding-right: 0;
+	}
+	html.fixed-viewport .gpl-card {
+		background-color: var(--color-base-100);
+		border-bottom: 1px solid var(--color-base-300);
 	}
 }

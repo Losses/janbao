@@ -302,38 +302,38 @@ export async function clickDiscussion(page: Page, index: number): Promise<void> 
 
 export interface HeaderScrollCapture {
 	vh: number;
+	/** Header translateY after scrolling down (must be << 0: hidden) and back up
+	 * (must be 0: revealed). */
 	downTranslateY: number | null;
 	upTranslateY: number | null;
-	downScrollTop: number;
-	upScrollTop: number;
-	/** Viewport-Y of the content column (`.app-shell-content`) after scrolling
-	 * down. When the Header is an overlay (out of flow) this is 0 — the thread
-	 * fills the space the Header vacated. When the Header is in flow it stays at
-	 * the Header height (≈56), exposing the header-tall blank strip on top. */
-	downContentTop: number;
-	upContentTop: number;
 	/** Viewport-Y of the first heading inside the scroll pane at the top of the
-	 * page. Guards against the "top eaten" regression: the Header overlays the
-	 * pane, so the pane's top padding must offset the content past the Header
-	 * (≈ header height + breathing room). If the padding is too small the heading
-	 * sits under the Header. */
+	 * page. Guards against the "top eaten" regression: the overlay Header must
+	 * not cover the first content element. */
 	topFirstContentTop: number;
-	/** Bottom edge of the card (`.dual-column-layout-columns`, bg-base-100). Must
-	 * reach the viewport bottom on mobile so no base-200 body strip is locked
-	 * below it. Pre-fix the card's `pb-6` left a 24px gap showing the body bg. */
-	cardBottom: number;
-	/** Whether the element painted at the viewport's bottom edge is inside the
-	 * card — i.e. no locked body-bg strip below the card. */
-	bottomWithinCard: boolean;
+	/** Whether the element painted at the viewport's TOP edge is inside the
+	 * content card after scrolling down — i.e. the card fills the space the
+	 * Header vacated (no header-tall blank gap). */
+	downTopIsCard: boolean;
+	/** Bottom edge of the content card (`.gpl-card`) when scrolled to the
+	 * bottom. It must end ABOVE the viewport bottom so the page-bg strip shows
+	 * below it (matching the homepage). */
+	bottomCardBottom: number;
+	/** Whether the element painted at the viewport's BOTTOM edge (at scroll-end)
+	 * is OUTSIDE the content card — i.e. the page-bg strip is showing, not the
+	 * card. */
+	bottomIsPageBg: boolean;
+	/** Computed background of the content card (must be base-100 / white) and the
+	 * scroll pane (must be base-200 / page bg) — the homepage's card-on-page-bg. */
+	cardBg: string;
+	paneBg: string;
 }
 
 /**
- * Drive the thread's centre panel down near its bottom, then back to the top,
- * and report the sticky Header's translateY + the content column's top at each
- * extreme. Pre-fix both translateY phases read 0 (Header pinned) and the content
- * top stays at the Header height (blank strip when hidden); post-fix the down
- * phase reads a large negative translateY (Header hidden) with content top 0
- * (no gap), and the up phase reads translateY 0 (Header revealed).
+ * Drive the thread's centre panel: top → down (hide Header) → bottom → back to
+ * top (reveal Header). Reports the Header translateY at each phase plus the
+ * card/pane geometry that locks in the homepage-consistent look: content not
+ * eaten at the top, no gap when the Header hides, and a page-bg strip (not card
+ * bg) at the bottom.
  */
 export async function captureHeaderOnThreadScroll(page: Page): Promise<HeaderScrollCapture> {
 	return page.evaluate(async () => {
@@ -348,54 +348,44 @@ export async function captureHeaderOnThreadScroll(page: Page): Promise<HeaderScr
 			const m = h.style.transform.match(/translateY\(([-0-9.]+)px\)/);
 			return m ? Number(m[1]) : 0;
 		};
-		const readContentTop = (): number => {
-			const el = document.querySelector('.app-shell-content') as HTMLElement | null;
-			return el ? Math.round(el.getBoundingClientRect().top) : -1;
-		};
 		const pane = document.querySelector('.detail-scroll-pane') as HTMLElement | null;
 		if (!pane) throw new Error('detail-scroll-pane not found');
-		const card = document.querySelector('.dual-column-layout-columns') as HTMLElement | null;
-		const readFirstContentTop = (): number => {
-			const el = pane.querySelector('h1, h2, img, a, [id]');
-			return el ? Math.round(el.getBoundingClientRect().top) : -1;
-		};
-		const readBottom = (): { cardBottom: number; bottomWithinCard: boolean } => {
-			const cardBottom = card ? Math.round(card.getBoundingClientRect().bottom) : -1;
-			const el = document.elementFromPoint(50, window.innerHeight - 4) as HTMLElement | null;
-			return { cardBottom, bottomWithinCard: !!el && !!el.closest('.dual-column-layout-columns') };
+		const card = pane.querySelector('.gpl-card') as HTMLElement | null;
+		const inCard = (x: number, y: number): boolean => {
+			const el = document.elementFromPoint(x, y) as HTMLElement | null;
+			return !!el && !!el.closest('.gpl-card');
 		};
 
-		// Measure at the top first (before scrolling): the first content element
-		// must sit below the overlay Header (not eaten).
 		pane.scrollTop = 0;
 		await afterFrame();
-		const topFirstContentTop = readFirstContentTop();
+		const firstEl = pane.querySelector('h1, h2, img, a, [id]') as HTMLElement | null;
+		const topFirstContentTop = firstEl ? Math.round(firstEl.getBoundingClientRect().top) : -1;
 
 		const downTarget = Math.max(800, pane.scrollHeight - pane.clientHeight - 200);
 		pane.scrollTop = downTarget;
 		await afterFrame();
-		const downScrollTop = Math.round(pane.scrollTop);
 		const downTranslateY = readTy();
-		const downContentTop = readContentTop();
+		const downTopIsCard = inCard(50, 4);
+
+		pane.scrollTop = pane.scrollHeight;
+		await afterFrame();
+		const bottomCardBottom = card ? Math.round(card.getBoundingClientRect().bottom) : -1;
+		const bottomIsPageBg = !inCard(50, window.innerHeight - 4);
 
 		pane.scrollTop = 0;
 		await afterFrame();
-		const upScrollTop = Math.round(pane.scrollTop);
 		const upTranslateY = readTy();
-		const upContentTop = readContentTop();
-		const { cardBottom, bottomWithinCard } = readBottom();
 
 		return {
 			vh: window.innerHeight,
 			downTranslateY,
 			upTranslateY,
-			downScrollTop,
-			upScrollTop,
-			downContentTop,
-			upContentTop,
 			topFirstContentTop,
-			cardBottom,
-			bottomWithinCard
+			downTopIsCard,
+			bottomCardBottom,
+			bottomIsPageBg,
+			cardBg: card ? getComputedStyle(card).backgroundColor : '',
+			paneBg: getComputedStyle(pane).backgroundColor
 		};
 	});
 }

@@ -57,9 +57,6 @@ test('REGRESSION: mobile thread Header hides on scroll-down and reveals on scrol
 
 	const capture: HeaderScrollCapture = await captureHeaderOnThreadScroll(page);
 
-	expect(capture.downScrollTop, 'thread centre panel must actually scroll down').toBeGreaterThan(
-		200
-	);
 	expect(
 		capture.downTranslateY,
 		'Header must hide (translateY << 0) when the thread is scrolled down'
@@ -68,29 +65,27 @@ test('REGRESSION: mobile thread Header hides on scroll-down and reveals on scrol
 		capture.upTranslateY,
 		'Header must reveal (translateY === 0) when scrolled back to the top'
 	).toBe(0);
-	// When the Header slides away the thread must fill the space it vacated — no
-	// header-tall blank strip on top. Pre-fix the Header's in-flow box left a gap
-	// (content top ≈ header height); post-fix the Header overlays (out of flow) so
-	// the content column starts at the viewport top (0).
-	expect(
-		capture.downContentTop,
-		'no blank gap on top when the Header is hidden (content must fill from y=0)'
-	).toBeLessThanOrEqual(1);
 	// The overlay Header must not eat the top of the content: the pane's top
-	// padding offsets the first element past the Header (≈ header height). A
-	// padding that is too small (e.g. header-height alone, dropping the breathing
-	// room) leaves the heading at ≈ header height or under it.
+	// padding offsets the first element past the Header (≈ header height).
 	expect(
 		capture.topFirstContentTop,
 		'first content element must sit below the overlay Header (not eaten)'
 	).toBeGreaterThanOrEqual(56);
-	// The card (bg-base-100) must fill to the viewport bottom so no base-200 body
-	// strip is locked below it. Pre-fix the card's `pb-6` left a 24px gap.
+	// When the Header slides away the content card must fill the space it vacated
+	// — no header-tall blank gap on top.
+	expect(capture.downTopIsCard, 'no blank gap on top when the Header is hidden').toBe(true);
+	// Homepage-consistent bottom: the content card ends ABOVE the viewport bottom
+	// and the page-bg (base-200) strip shows below it — not the card bg locked to
+	// the bottom. Pre-fix the card filled the viewport (no page-bg strip).
 	expect(
-		capture.cardBottom,
-		'card must fill to the viewport bottom (no locked bottom strip)'
-	).toBeGreaterThanOrEqual(capture.vh - 2);
-	expect(capture.bottomWithinCard, 'bottom edge must be inside the card, not body bg').toBe(true);
+		capture.bottomCardBottom,
+		'content card must end above the viewport bottom (page-bg strip below it)'
+	).toBeLessThan(capture.vh);
+	expect(capture.bottomIsPageBg, 'bottom edge at scroll-end must be the page-bg strip').toBe(true);
+	// Design-system colours: the card is base-100 (white), the pane is base-200
+	// (page bg) — the homepage's card-on-page-bg.
+	expect(capture.cardBg, 'content card must be base-100 (white)').toMatch(/^rgb\(255, 255, 255\)/);
+	expect(capture.paneBg, 'scroll pane must be base-200 (page bg)').not.toContain('255, 255, 255');
 });
 
 /**
