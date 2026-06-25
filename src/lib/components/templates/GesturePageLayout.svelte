@@ -153,7 +153,12 @@
 	let trackEl = $state<HTMLElement | null>(null);
 	let transitionEnabled = $state(true);
 	// svelte-ignore state_referenced_locally
-	let snapIndex = $state(isEntering ? 0 : hasLeft && !swipeNeedsLoadingAtStart ? 1 : 0);
+	// Start at 0 (the list-preview frame) only when the slide-in will actually
+	// play, i.e. entering AND on mobile. On desktop the pager is display:block
+	// and never animates, so snapIndex must init at ACTIVE — otherwise it stays
+	// stranded at 0 (enterRaf below is mobile-only) and a later resize into
+	// mobile would rest on the left/list panel instead of the centre thread.
+	let snapIndex = $state(isEntering && isMobile ? 0 : hasLeft && !swipeNeedsLoadingAtStart ? 1 : 0);
 
 	const panelCount = $derived(
 		(hasLeft && !swipeNeedsLoadingAtStart ? 1 : 0) +
