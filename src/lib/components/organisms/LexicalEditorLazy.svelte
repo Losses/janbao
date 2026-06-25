@@ -6,6 +6,18 @@
 	// Cache the resolved editor across instances so a `{#key}` remount (e.g. after a
 	// reply/comment submit) doesn't re-flash the skeleton - the chunk is already loaded.
 	let cachedEditor: LexicalEditorComponent | null = null;
+
+	// Drop the cached constructor on hot disposal. A `<script module>` context
+	// outlives a Svelte component hot-update, so without this `cachedEditor` keeps
+	// pointing at the pre-edit constructor after `LexicalEditor.svelte` is
+	// recompiled. Reusing that stale constructor (whose compiled template state is
+	// invalidated) then tearing it down leaves Svelte's effect graph referencing
+	// dead nodes - the `node.remove is not a function` crash during branch destroy.
+	if (import.meta.hot) {
+		import.meta.hot.dispose(() => {
+			cachedEditor = null;
+		});
+	}
 </script>
 
 <script lang="ts">
@@ -35,15 +47,25 @@
 	const editorPrefs = getEditorPrefsStore();
 	const plainMode = $derived(editorPrefs.prefs.plainMode);
 
+	let mounted = true;
+
 	onMount(() => {
 		if (cachedEditor) {
 			Editor = cachedEditor;
-			return;
+			return () => {
+				mounted = false;
+			};
 		}
 		void import('./LexicalEditor.svelte').then((module) => {
 			cachedEditor = module.default;
-			Editor = cachedEditor;
+			// Bail if the instance unmounted while the chunk was loading: setting
+			// `Editor` would mount the heavy editor into a tearing-down subtree (the
+			// HMR destroy race) and re-trigger the stale-node crash.
+			if (mounted) Editor = cachedEditor;
 		});
+		return () => {
+			mounted = false;
+		};
 	});
 
 	export function insertMention(username: string, displayName: string): void {
