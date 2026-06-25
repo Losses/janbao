@@ -137,11 +137,7 @@ export async function loadActivityPage(
 				createdAt: c.createdAt,
 				authorDisplayName: c.authorDisplayName,
 				authorUsername: c.authorUsername,
-				authorAvatarUrl: buildAvatarUrl(
-					c.authorId,
-					c.authorAvatarFileId,
-					c.authorAvatarContentType
-				)
+				authorAvatarUrl: buildAvatarUrl(c.authorId, c.authorAvatarFileId, c.authorAvatarContentType)
 			});
 			commentsMap.set(c.parentActivityId, arr);
 		}

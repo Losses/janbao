@@ -94,12 +94,7 @@
 					class="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-base-200 transition-colors"
 					onmousedown={() => pick(user)}
 				>
-					<Avatar
-						userId={user.id}
-						avatarFileId={user.avatarFileId}
-						displayName={user.displayName}
-						size="xs"
-					/>
+					<Avatar avatarUrl={user.avatarUrl} displayName={user.displayName} size="xs" />
 					<span class="min-w-0 flex-1">
 						<span class="block truncate text-sm font-medium text-base-content">
 							{user.displayName}

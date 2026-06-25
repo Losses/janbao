@@ -70,7 +70,6 @@ export async function getProfileHeaderPayload(
 		user: {
 			...headerUser,
 			id,
-			avatarFileId,
 			avatarUrl,
 			groupTitle: groupTitle ?? headerUser.groupSlug
 		},

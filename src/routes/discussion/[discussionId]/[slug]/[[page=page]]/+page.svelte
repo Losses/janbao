@@ -532,7 +532,7 @@
 						userId={opReply.authorId}
 						username={opReply.authorUsername}
 						displayName={opReply.authorDisplayName}
-						avatarFileId={opReply.authorAvatarFileId}
+						avatarUrl={opReply.authorAvatarUrl}
 						createdAt={opReply.createdAt}
 						editedAt={opReply.editedAt}
 						editedByDisplayName={opReply.editedByDisplayName}
@@ -608,7 +608,7 @@
 								userId={reply.authorId}
 								username={reply.authorUsername}
 								displayName={reply.authorDisplayName}
-								avatarFileId={reply.authorAvatarFileId}
+								avatarUrl={reply.authorAvatarUrl}
 								createdAt={reply.createdAt}
 								editedAt={reply.editedAt}
 								editedByDisplayName={reply.editedByDisplayName}

@@ -49,12 +49,7 @@
 					title={u.displayName}
 					class="transition-transform hover:scale-110"
 				>
-					<Avatar
-						userId={u.id}
-						avatarFileId={u.avatarFileId}
-						displayName={u.displayName}
-						size="sm"
-					/>
+					<Avatar avatarUrl={u.avatarUrl} displayName={u.displayName} size="sm" />
 				</a>
 			{/each}
 		</div>

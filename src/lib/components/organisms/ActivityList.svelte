@@ -41,7 +41,7 @@
 			authorId={activity.authorId}
 			authorDisplayName={activity.authorDisplayName}
 			authorUsername={activity.authorUsername}
-			authorAvatarFileId={activity.authorAvatarFileId}
+			authorAvatarUrl={activity.authorAvatarUrl}
 			recipientId={activity.recipientId}
 			recipientDisplayName={activity.recipientDisplayName}
 			recipientUsername={activity.recipientUsername}

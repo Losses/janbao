@@ -166,8 +166,7 @@
 									<div class="relative flex-shrink-0">
 										<a href="/profile/{d.authorId}/{authorSlug}">
 											<Avatar
-												userId={d.authorId}
-												avatarFileId={d.authorAvatarFileId}
+												avatarUrl={d.authorAvatarUrl}
 												displayName={authorDisplayName}
 												size="md"
 											/>
@@ -222,8 +221,7 @@
 								<div class="flex items-start gap-4 pl-3 pr-2 py-4 hover:bg-base-200/20">
 									<a href="/profile/{a.authorId}/{authorSlug}" class="flex-shrink-0">
 										<Avatar
-											userId={a.authorId}
-											avatarFileId={a.authorAvatarFileId}
+											avatarUrl={a.authorAvatarUrl}
 											displayName={authorDisplayName}
 											size="md"
 										/>

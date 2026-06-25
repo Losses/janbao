@@ -55,12 +55,7 @@
 
 <div>
 	<div class="flex items-center gap-4">
-		<Avatar
-			userId={targetUser.id}
-			avatarFileId={targetUser.avatarFileId}
-			displayName={displayUser}
-			size="lg"
-		/>
+		<Avatar avatarUrl={targetUser.avatarUrl} displayName={displayUser} size="lg" />
 		<div>
 			<h1 class="user-display-name page-title">{displayUser}</h1>
 			{#if targetUser.bio}

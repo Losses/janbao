@@ -13,11 +13,7 @@ import { authorPreviewColumns } from '$lib/server/db/dao/user-preview';
 import { buildAvatarUrl } from '$lib/utils/image';
 import type { DbTransaction } from '$lib/server/db';
 import { indexActivity, unindexActivity } from '$lib/server/search/fts';
-import type {
-	ActivityCommentItem,
-	ActivityCreateBody,
-	ActivityDeleteBody
-} from '$lib/types/api';
+import type { ActivityCommentItem, ActivityCreateBody, ActivityDeleteBody } from '$lib/types/api';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 import { enforcePostThrottle, tooManyRequests } from '$lib/server/throttle';
 import { getAllowGuestActivity } from '$lib/server/constants';

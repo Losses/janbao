@@ -16,7 +16,7 @@
 		authorId: number;
 		authorDisplayName: string;
 		authorUsername: string;
-		authorAvatarFileId: string | null;
+		authorAvatarUrl: string | null;
 		recipientId?: number | null;
 		recipientDisplayName?: string | null;
 		recipientUsername?: string | null;
@@ -36,7 +36,7 @@
 		authorId,
 		authorDisplayName,
 		authorUsername,
-		authorAvatarFileId,
+		authorAvatarUrl,
 		recipientId = null,
 		recipientDisplayName = null,
 		recipientUsername = null,
@@ -101,12 +101,7 @@
 	<div class="flex gap-3">
 		<div class="flex-shrink-0">
 			<a href="/profile/{authorId}/{generateSlug(authorUsername)}">
-				<Avatar
-					userId={authorId}
-					avatarFileId={authorAvatarFileId}
-					displayName={formattedAuthorDisplayName}
-					size="md"
-				/>
+				<Avatar avatarUrl={authorAvatarUrl} displayName={formattedAuthorDisplayName} size="md" />
 			</a>
 		</div>
 		<div class="flex-1 min-w-0">

@@ -162,14 +162,13 @@
 									{@const sourceSlug = generateSlug(item.sourceUsername || '')}
 									<a href="/profile/{item.sourceUserId}/{sourceSlug}">
 										<Avatar
-											userId={item.sourceUserId}
-											avatarFileId={item.sourceAvatarFileId}
+											avatarUrl={item.sourceAvatarUrl}
 											displayName={item.sourceDisplayName}
 											size="sm"
 										/>
 									</a>
 								{:else}
-									<Avatar userId={0} avatarFileId={null} displayName="System" size="sm" />
+									<Avatar displayName="System" size="sm" />
 								{/if}
 							</div>
 							<div class="flex-grow min-w-0">

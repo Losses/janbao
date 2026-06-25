@@ -215,12 +215,7 @@
 					onmouseenter={() => (selectedIndex = index)}
 					onclick={() => addRecipient(user)}
 				>
-					<Avatar
-						userId={user.id}
-						avatarFileId={user.avatarFileId}
-						displayName={user.displayName}
-						size="xs"
-					/>
+					<Avatar avatarUrl={user.avatarUrl} displayName={user.displayName} size="xs" />
 					<span class="min-w-0 flex-1">
 						<span class="block truncate text-sm font-medium text-base-content">
 							{user.displayName}

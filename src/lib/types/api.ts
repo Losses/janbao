@@ -77,7 +77,7 @@ export interface ProfileHeaderUser {
 	username: string;
 	displayName: string;
 	bio: string | null;
-	avatarFileId: string | null;
+	avatarUrl: string | null;
 	signupTime: Date;
 	lastActiveTime: Date;
 	groupSlug: string;

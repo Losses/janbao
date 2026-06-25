@@ -60,8 +60,7 @@
 							{#if authorHref}
 								<a href={authorHref}>
 									<Avatar
-										userId={conv.lastAuthorId}
-										avatarFileId={conv.lastAuthorAvatarFileId}
+										avatarUrl={conv.lastAuthorAvatarUrl}
 										displayName={conv.lastAuthorDisplayName}
 										size="md"
 									/>

@@ -178,8 +178,7 @@
 						<div class="flex-shrink-0">
 							<a href="/profile/{comment.authorId}/{generateSlug(comment.authorUsername)}">
 								<Avatar
-									userId={comment.authorId}
-									avatarFileId={comment.authorAvatarFileId}
+									avatarUrl={comment.authorAvatarUrl}
 									displayName={formatDisplayName(comment.authorDisplayName, comment.authorId, t)}
 									size="xs"
 								/>

@@ -21,7 +21,7 @@
 	const profileT = $derived(t.profile);
 	const user = $derived(data.user);
 	// svelte-ignore state_referenced_locally
-	let avatarFileId = $state(data.avatarFileId);
+	let avatarUrl = $state(data.avatarUrl);
 	const online = getOnlineStore();
 
 	let saving = $state(false);
@@ -81,7 +81,7 @@
 
 			const editResult: ApiResult = await editRes.json();
 			if (editResult.success) {
-				avatarFileId = uploadResult.fileId;
+				avatarUrl = uploadResult.avatarUrl ?? null;
 				message = { type: 'success', text: t.common.success };
 			} else {
 				message = { type: 'error', text: editResult.error || t.common.error };
@@ -131,12 +131,7 @@
 			<div class="space-y-3">
 				<!-- Current Avatar Preview -->
 				<div class="flex items-center gap-4">
-					<Avatar
-						userId={user?.id ?? null}
-						{avatarFileId}
-						displayName={user?.displayName || '?'}
-						size="lg"
-					/>
+					<Avatar {avatarUrl} displayName={user?.displayName || '?'} size="lg" />
 					<div>
 						<p class="font-medium text-base-content">{profileT.currentAvatar}</p>
 						<p class="text-sm text-base-content/50">
