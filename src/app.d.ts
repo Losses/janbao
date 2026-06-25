@@ -67,6 +67,12 @@ declare global {
 			user: UserData | null;
 			lang: string;
 			t: TranslationDict;
+			// Per-page theme published by a load that carries one (a discussion
+			// thread when post themes are not blocked). hooks.server.ts SSR-injects
+			// it into <html data-theme> so the first paint is already correct,
+			// instead of the default/interface theme flashing until hydration.
+			// null everywhere else, so the interface theme (or site default) wins.
+			pageTheme: string | null;
 		}
 		// interface PageData {}
 		// interface PageState {}

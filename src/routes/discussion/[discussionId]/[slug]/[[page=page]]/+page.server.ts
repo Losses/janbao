@@ -246,6 +246,13 @@ export const load: PageServerLoad = async (event) => {
 		? null
 		: discussion.themeName || discussion.categoryTheme || null;
 
+	// Publish the thread theme for SSR: hooks.server.ts injects it into
+	// <html data-theme> via transformPageChunk, so the first paint is already
+	// in the thread's theme rather than the default/interface theme flashing
+	// until hydration applies it. null (blockPostTheme, or no theme) leaves the
+	// interface theme in charge.
+	event.locals.pageTheme = resolvedTheme;
+
 	// Fetch existing draft for bottom reply editor if logged in
 	let replyDraft = null;
 	if (user) {

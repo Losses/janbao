@@ -6,10 +6,17 @@
 			// Set the user's interface theme before first paint to avoid a FOUC
 			// (the default theme flashing before hydration applies the chosen one).
 			// The cookie is set server-side in hooks.server.ts; reading it here at
-			// parse time sets <html data-theme> before the body is painted. Runs
-			// even when the served HTML was not SSR-themed (e.g. a stale SW cache).
+			// parse time sets <html data-theme> before the body is painted.
+			//
+			// Skip when SSR already resolved the theme for this request (the
+			// data-theme-ssr marker, stamped by hooks.server.ts): overwriting it
+			// with the interface-theme cookie would flash the interface theme over
+			// a per-page theme (e.g. a themed discussion thread). The cookie
+			// fallback below only matters for a stale service-worker shell, which
+			// has no marker because it was never run through the transform.
 			(function () {
 				try {
+					if (document.documentElement.hasAttribute('data-theme-ssr')) return;
 					var m = document.cookie.match(/(?:^|; )theme=([^;]+)/);
 					if (m) {
 						var t = decodeURIComponent(m[1]);

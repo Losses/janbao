@@ -23,16 +23,32 @@ if (typeof process !== 'undefined') {
 	}
 }
 
-// Injecting the signed-in user's interface theme into the SSR HTML avoids the
-// FOUC where the page paints the default theme and only switches after
-// hydration runs the root layout's $effect. The client $effect still runs and
-// agrees with this value, so there is no conflict; the per-page theme override
-// (discussion / compose) remains a client-side store update. The default baked
-// into app.html is SITE_DEFAULT_THEME (huoxin); an empty interface theme is
-// left untouched (stays huoxin), never unset.
-function injectInterfaceTheme(html: string, theme: string | null | undefined): string {
-	if (!theme || theme === SITE_DEFAULT_THEME) return html;
-	return html.replace(`data-theme="${SITE_DEFAULT_THEME}"`, `data-theme="${theme}"`);
+// Inject the fully-resolved theme into the SSR HTML so the first paint is
+// already correct: a per-page theme (a discussion thread, published on
+// event.locals.pageTheme by its load) wins over the user's interface theme,
+// and an empty interface theme falls back to the site default. Without this a
+// themed discussion paints the default/interface theme and only switches once
+// hydration runs the root layout's $effect - a visible flash. The client
+// $effect still runs and agrees with the injected value, so there is no
+// conflict; compose-form theme previews remain client-side store updates.
+//
+// `data-theme-ssr` marks that SSR resolved the theme for THIS request. The
+// parse-time inline script in app.html (a cookie fallback for stale
+// service-worker-served shells) checks it and skips, so it cannot overwrite a
+// per-page theme with the interface-theme cookie. The marker is absent only
+// when the HTML came from a cached app shell that never ran this transform -
+// exactly when the cookie fallback should run.
+function injectResolvedTheme(
+	html: string,
+	pageTheme: string | null | undefined,
+	interfaceTheme: string | null | undefined
+): string {
+	const resolved = pageTheme ?? interfaceTheme;
+	const target = resolved && resolved !== SITE_DEFAULT_THEME ? resolved : SITE_DEFAULT_THEME;
+	return html.replace(
+		`data-theme="${SITE_DEFAULT_THEME}"`,
+		`data-theme="${target}" data-theme-ssr`
+	);
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
@@ -69,6 +85,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// 3. Retrieve and Verify JWT Cookie
 	const token = event.cookies.get('session_token');
 	event.locals.user = null;
+	// Default: no per-page theme. A discussion thread's load overrides this
+	// during resolve(), and transformPageChunk reads it when rendering the HTML.
+	event.locals.pageTheme = null;
 
 	const jwtSecret = getJwtSecret(event.platform?.env);
 
@@ -166,11 +185,15 @@ export const handle: Handle = async ({ event, resolve }) => {
 		event.cookies.delete('theme', { path: '/' });
 	}
 
-	// Inject the user's interface theme into the SSR HTML so the first paint is
-	// already in their theme (no FOUC from the client $effect swapping it later).
+	// Inject the resolved theme (per-page theme if a load published one, else
+	// the interface theme, else the site default) so the first paint is correct.
 	const response = await resolve(event, {
 		transformPageChunk: ({ html }) =>
-			injectInterfaceTheme(html, event.locals.user?.uiPreferences?.interfaceTheme)
+			injectResolvedTheme(
+				html,
+				event.locals.pageTheme,
+				event.locals.user?.uiPreferences?.interfaceTheme
+			)
 	});
 	// The service worker script must always be revalidated: otherwise Firefox
 	// byte-serves a cached `/service-worker.js`, a freshly built SW never
