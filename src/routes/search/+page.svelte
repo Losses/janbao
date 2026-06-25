@@ -32,7 +32,7 @@
 		match: boolean;
 	}
 
-	const SCOPES = ['discussions', 'activities', 'messages'];
+	const SCOPES = ['discussions', 'activities', 'messages', 'users'];
 
 	const t = $derived(data.t);
 	const tSearch = $derived(t.search);
@@ -48,6 +48,7 @@
 	function scopeLabel(s: string): string {
 		if (s === 'activities') return tSearch.scopeActivities;
 		if (s === 'messages') return tSearch.scopeMessages;
+		if (s === 'users') return tSearch.scopeUsers;
 		return tSearch.scopeDiscussions;
 	}
 
@@ -267,6 +268,41 @@
 										</div>
 									</div>
 								</a>
+							{/each}
+						{:else if scope === 'users' && data.users}
+							{#each data.users as u (u.id)}
+								{@const userSlug = generateSlug(u.username || 'user')}
+								{@const userDisplayName = formatDisplayName(u.displayName, u.id, t)}
+								{@const profileUrl = `/profile/${u.id}/${userSlug}`}
+								<div class="flex items-start gap-4 pl-3 pr-2 py-4 hover:bg-base-200/20">
+									<a href={profileUrl} class="flex-shrink-0">
+										<Avatar avatarUrl={u.avatarUrl} displayName={userDisplayName} size="md" />
+									</a>
+									<div class="flex-1 min-w-0">
+										<a href={profileUrl} class="block hover:underline">
+											<span class="font-semibold text-base-content">
+												{#each highlightSegments(u.displayName, query) as seg, i (i)}{#if seg.match}<mark
+															>{seg.text}</mark
+														>{:else}{seg.text}{/if}{/each}</span
+											>
+											<span class="ml-1 text-sm text-base-content/60"
+												>@{#each highlightSegments(u.username, query) as seg, i (i)}{#if seg.match}<mark
+															>{seg.text}</mark
+														>{:else}{seg.text}{/if}{/each}</span
+											>
+										</a>
+										{#if u.bio}
+											<div class="mt-1 text-sm text-base-content/80 line-clamp-2">
+												{#each highlightSegments(contextPreview(u.bio, query), query) as seg, i (i)}{#if seg.match}<mark
+															>{seg.text}</mark
+														>{:else}{seg.text}{/if}{/each}
+											</div>
+										{/if}
+										<div class="mt-1 text-xs text-base-content/60">
+											<DateAtom value={u.signupTime} {t} />
+										</div>
+									</div>
+								</div>
 							{/each}
 						{/if}
 					</div>

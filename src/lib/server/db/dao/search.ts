@@ -90,6 +90,16 @@ export interface MessageSearchItem {
 	rank: number;
 }
 
+export interface UserSearchItem {
+	id: number;
+	username: string;
+	displayName: string;
+	bio: string | null;
+	avatarUrl: string | null;
+	signupTime: Date;
+	rank: number;
+}
+
 interface FtsHit {
 	id: number;
 	rank: number;
@@ -691,4 +701,94 @@ async function discussionsLikeHits(db: D1Db, term: string): Promise<DiscussionFt
 function truncate(text: string, max = 160): string {
 	if (text.length <= max) return text;
 	return `${text.slice(0, max).trimEnd()}…`;
+}
+
+// ============================================================
+// Users (username + displayName + bio)
+// ============================================================
+
+export async function searchUsers(
+	db: D1Db,
+	query: string,
+	page: number,
+	platformEnv: App.Platform['env'] | undefined,
+	sort: SearchSort = 'newest'
+): Promise<SearchPage<UserSearchItem>> {
+	const trimmed = query.trim();
+	if (trimmed.length === 0) return emptyPage(page);
+
+	const limit = getActivitiesLimit(platformEnv);
+	const offset = (page - 1) * limit;
+	const fallback = trimmed.length < MIN_FTS_LENGTH;
+
+	const hits = fallback
+		? await usersLikeHits(db, escapeLike(trimmed))
+		: await usersFtsHits(db, cleanFtsQuery(trimmed));
+	if (hits.length === 0) return { ...emptyPage<UserSearchItem>(page), usedFallback: fallback };
+
+	const idToRank = new Map(hits.map((h) => [h.id, h.rank]));
+	const rows = await db
+		.select({
+			id: users.id,
+			username: users.username,
+			displayName: users.displayName,
+			bio: users.bio,
+			avatarFileId: users.avatarFileId,
+			avatarContentType: users.avatarContentType,
+			signupTime: users.signupTime
+		})
+		.from(users)
+		.where(and(inArray(users.id, [...idToRank.keys()]), eq(users.isStealth, false)));
+
+	const ranked = (id: number) => idToRank.get(id) ?? 0;
+	const sorted = [...rows].sort((a, b) => {
+		switch (sort) {
+			case 'oldest':
+				return a.signupTime.getTime() - b.signupTime.getTime();
+			case 'relevance':
+				return fallback
+					? b.signupTime.getTime() - a.signupTime.getTime()
+					: ranked(a.id) - ranked(b.id);
+			default:
+				return b.signupTime.getTime() - a.signupTime.getTime();
+		}
+	});
+	const total = sorted.length;
+	const paged = sorted.slice(offset, offset + limit);
+
+	return {
+		results: paged.map((r) => ({
+			id: r.id,
+			username: r.username,
+			displayName: r.displayName,
+			bio: r.bio,
+			avatarUrl: buildAvatarUrl(r.id, r.avatarFileId, r.avatarContentType),
+			signupTime: r.signupTime,
+			rank: idToRank.get(r.id) ?? 0
+		})),
+		total,
+		page,
+		totalPages: Math.max(1, Math.ceil(total / limit)),
+		usedFallback: fallback
+	};
+}
+
+async function usersFtsHits(db: D1Db, phrase: string): Promise<FtsHit[]> {
+	return db.all<FtsHit>(sql`
+		SELECT users_fts.rowid AS id, users_fts.rank AS rank
+		FROM users_fts
+		WHERE users_fts MATCH ${phrase}
+	`);
+}
+
+async function usersLikeHits(db: D1Db, term: string): Promise<FtsHit[]> {
+	const pattern = `%${term}%`;
+	const rows = await db.all<IdLikeHit>(sql`
+		SELECT id FROM users
+		WHERE username LIKE ${pattern} ESCAPE '\\'
+		   OR display_name LIKE ${pattern} ESCAPE '\\'
+		   OR bio LIKE ${pattern} ESCAPE '\\'
+		LIMIT ${LIKE_FALLBACK_LIMIT}
+	`);
+	return rows.map((r) => ({ id: r.id, rank: 0 }));
 }

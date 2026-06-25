@@ -1,10 +1,15 @@
-import { error } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { users, activities, drafts, activityJoins } from '$lib/server/db/schema';
 import { eq, and, isNull, desc, sql, or, inArray } from 'drizzle-orm';
 import { generateSlug } from '$lib/utils/slug';
 import { buildAvatarUrl } from '$lib/utils/image';
-import { BOOTSTRAP_ADMIN_ID, SYSTEM_USER_ID, getAllowGuestActivity } from '$lib/server/constants';
+import {
+	BOOTSTRAP_ADMIN_ID,
+	SYSTEM_USER_ID,
+	getAllowGuestActivity,
+	getAllowGuestProfileView
+} from '$lib/server/constants';
 import { resolveMentions } from '$lib/server/utils/mentions';
 import { getProfileHeaderPayload } from '$lib/server/db/dao/profile';
 import { authorPreviewColumns } from '$lib/server/db/dao/user-preview';
@@ -18,6 +23,13 @@ export const load: PageServerLoad = async (event) => {
 	}
 	const db = event.locals.db;
 	const currentUser = event.locals.user;
+
+	// Guests are blocked from profile pages unless explicitly allowed via env.
+	// Redirect to sign-in (preserving the destination) so a successful login
+	// lands them back on the profile they tried to view.
+	if (!currentUser && !getAllowGuestProfileView(event.platform?.env)) {
+		redirect(302, `/entry/signin?redirectTo=${encodeURIComponent(event.url.pathname)}`);
+	}
 
 	// 1. Fetch target user header data (shared across profile pages)
 	const headerPayload = await getProfileHeaderPayload(db, userId);

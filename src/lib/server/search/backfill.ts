@@ -29,6 +29,13 @@ interface IndexedEntry {
 	text: string;
 }
 
+interface UserBackfillRow {
+	id: number;
+	username: string;
+	displayName: string;
+	bio: string | null;
+}
+
 interface BackfillTask {
 	table: string;
 	sourceColumn: string;
@@ -151,6 +158,41 @@ export async function backfillTable(db: D1Db, task: BackfillTask): Promise<numbe
 	return count;
 }
 
+/**
+ * Backfill users_fts. Users have no soft-delete column and three indexed columns
+ * (username, display_name, bio), so they don't fit the single-column BackfillTask
+ * shape - this dedicated keyset loop selects all three and inserts each user as
+ * one multi-column FTS row. bio is coerced to '' (matching indexUser) so null and
+ * empty bios index identically.
+ */
+export async function backfillUsersTable(db: D1Db): Promise<number> {
+	await rebuildFtsTable(db, 'users_fts');
+	const minRow = await db.get<MinIdRow>(sql`SELECT MIN(id) AS minId FROM users`);
+	let lastId = (minRow?.minId ?? 1) - 1;
+	let count = 0;
+	while (true) {
+		const rows = await db.all<UserBackfillRow>(sql`
+			SELECT id, username, display_name AS displayName, bio
+			FROM users
+			WHERE id > ${lastId}
+			ORDER BY id LIMIT ${BATCH_SIZE}
+		`);
+		if (rows.length === 0) break;
+		// Coerce null bios to '' (matching indexUser) so null and empty bios index
+		// identically; the contentless delete must later resupply the same value.
+		await db.run(sql`
+			INSERT INTO users_fts (rowid, username, displayName, bio)
+			VALUES ${sql.join(
+				rows.map((r) => sql`(${r.id}, ${r.username}, ${r.displayName}, ${r.bio ?? ''})`),
+				sql`, `
+			)}
+		`);
+		count += rows.length;
+		lastId = rows[rows.length - 1].id;
+	}
+	return count;
+}
+
 /** Ensure the FTS schema exists, then clear + backfill every table. */
 export async function ensureAndBackfillAll(db: D1Db): Promise<Record<string, number>> {
 	await ensureFtsSchema(db);
@@ -158,5 +200,6 @@ export async function ensureAndBackfillAll(db: D1Db): Promise<Record<string, num
 	for (const task of TASKS) {
 		result[task.table] = await backfillTable(db, task);
 	}
+	result['users'] = await backfillUsersTable(db);
 	return result;
 }

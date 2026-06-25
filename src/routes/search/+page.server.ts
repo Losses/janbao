@@ -1,16 +1,22 @@
 import type { PageServerLoad } from './$types';
-import { resolveGroupSlug } from '$lib/server/constants';
-import { searchDiscussions, searchActivities, searchMessages } from '$lib/server/db/dao/search';
+import { resolveGroupSlug, getAllowGuestUserSearch } from '$lib/server/constants';
+import {
+	searchDiscussions,
+	searchActivities,
+	searchMessages,
+	searchUsers
+} from '$lib/server/db/dao/search';
 import type {
 	DiscussionSearchItem,
 	ActivitySearchItem,
 	MessageSearchItem,
+	UserSearchItem,
 	SearchSort
 } from '$lib/server/db/dao/search';
 
-type SearchScope = 'discussions' | 'activities' | 'messages';
+type SearchScope = 'discussions' | 'activities' | 'messages' | 'users';
 
-const SCOPES: SearchScope[] = ['discussions', 'activities', 'messages'];
+const SCOPES: SearchScope[] = ['discussions', 'activities', 'messages', 'users'];
 const SORTS: SearchSort[] = ['newest', 'oldest', 'relevance', 'replies'];
 
 interface SearchLoadData {
@@ -24,6 +30,7 @@ interface SearchLoadData {
 	discussions: DiscussionSearchItem[] | null;
 	activities: ActivitySearchItem[] | null;
 	messages: MessageSearchItem[] | null;
+	users: UserSearchItem[] | null;
 }
 
 function emptyResult(query: string, scope: SearchScope, sort: SearchSort): SearchLoadData {
@@ -37,7 +44,8 @@ function emptyResult(query: string, scope: SearchScope, sort: SearchSort): Searc
 		usedFallback: false,
 		discussions: null,
 		activities: null,
-		messages: null
+		messages: null,
+		users: null
 	};
 }
 
@@ -81,7 +89,8 @@ export const load: PageServerLoad = async (event) => {
 			usedFallback: r.usedFallback,
 			discussions: null,
 			activities: r.results,
-			messages: null
+			messages: null,
+			users: null
 		};
 	}
 
@@ -98,7 +107,29 @@ export const load: PageServerLoad = async (event) => {
 			usedFallback: r.usedFallback,
 			discussions: null,
 			activities: null,
-			messages: r.results
+			messages: r.results,
+			users: null
+		};
+	}
+
+	if (scope === 'users') {
+		// Guests need an explicit opt-in; logged-in users can always search users.
+		if (!user && !getAllowGuestUserSearch(platformEnv)) {
+			return emptyResult(q, scope, sort);
+		}
+		const r = await searchUsers(db, q, page, platformEnv, sort);
+		return {
+			query: q,
+			scope,
+			sort,
+			page: r.page,
+			totalPages: r.totalPages,
+			total: r.total,
+			usedFallback: r.usedFallback,
+			discussions: null,
+			activities: null,
+			messages: null,
+			users: r.results
 		};
 	}
 
@@ -114,6 +145,7 @@ export const load: PageServerLoad = async (event) => {
 		usedFallback: r.usedFallback,
 		discussions: r.results,
 		activities: null,
-		messages: null
+		messages: null,
+		users: null
 	};
 };

@@ -84,6 +84,13 @@ test('REGRESSION: mobile thread Header hides on scroll-down and reveals on scrol
 		capture.topFirstContentTop,
 		'first content element must sit below the overlay Header (not eaten)'
 	).toBeGreaterThanOrEqual(56);
+	// The card (bg-base-100) must fill to the viewport bottom so no base-200 body
+	// strip is locked below it. Pre-fix the card's `pb-6` left a 24px gap.
+	expect(
+		capture.cardBottom,
+		'card must fill to the viewport bottom (no locked bottom strip)'
+	).toBeGreaterThanOrEqual(capture.vh - 2);
+	expect(capture.bottomWithinCard, 'bottom edge must be inside the card, not body bg').toBe(true);
 });
 
 /**

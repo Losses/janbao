@@ -276,4 +276,17 @@ header nav {
 	html.fixed-viewport .detail-scroll-pane {
 		padding-top: calc(var(--header-height, 0px) + 0.75rem);
 	}
+	/* The card's `pb-6` (24px) on .dual-column-layout-inner sits OUTSIDE the
+	   scroll container, so on these locked-viewport routes it is a permanent
+	   base-200 strip locked at the bottom (the card's bg-base-100 ends above
+	   it). Drop it here and move that breathing room INSIDE the scroll container
+	   (padding-bottom) so it scrolls away; the card now fills the full height, so
+	   the bottom padding shows the card's own bg-base-100 — no strip. Desktop
+	   keeps `pb-6` (the window scrolls it away naturally). */
+	html.fixed-viewport .dual-column-layout-inner {
+		padding-bottom: 0;
+	}
+	html.fixed-viewport .detail-scroll-pane {
+		padding-bottom: 1.5rem;
+	}
 }

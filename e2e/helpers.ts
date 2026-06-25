@@ -301,6 +301,7 @@ export async function clickDiscussion(page: Page, index: number): Promise<void> 
 // `window` and the Header never moved.
 
 export interface HeaderScrollCapture {
+	vh: number;
 	downTranslateY: number | null;
 	upTranslateY: number | null;
 	downScrollTop: number;
@@ -317,6 +318,13 @@ export interface HeaderScrollCapture {
 	 * (≈ header height + breathing room). If the padding is too small the heading
 	 * sits under the Header. */
 	topFirstContentTop: number;
+	/** Bottom edge of the card (`.dual-column-layout-columns`, bg-base-100). Must
+	 * reach the viewport bottom on mobile so no base-200 body strip is locked
+	 * below it. Pre-fix the card's `pb-6` left a 24px gap showing the body bg. */
+	cardBottom: number;
+	/** Whether the element painted at the viewport's bottom edge is inside the
+	 * card — i.e. no locked body-bg strip below the card. */
+	bottomWithinCard: boolean;
 }
 
 /**
@@ -346,9 +354,15 @@ export async function captureHeaderOnThreadScroll(page: Page): Promise<HeaderScr
 		};
 		const pane = document.querySelector('.detail-scroll-pane') as HTMLElement | null;
 		if (!pane) throw new Error('detail-scroll-pane not found');
+		const card = document.querySelector('.dual-column-layout-columns') as HTMLElement | null;
 		const readFirstContentTop = (): number => {
 			const el = pane.querySelector('h1, h2, img, a, [id]');
 			return el ? Math.round(el.getBoundingClientRect().top) : -1;
+		};
+		const readBottom = (): { cardBottom: number; bottomWithinCard: boolean } => {
+			const cardBottom = card ? Math.round(card.getBoundingClientRect().bottom) : -1;
+			const el = document.elementFromPoint(50, window.innerHeight - 4) as HTMLElement | null;
+			return { cardBottom, bottomWithinCard: !!el && !!el.closest('.dual-column-layout-columns') };
 		};
 
 		// Measure at the top first (before scrolling): the first content element
@@ -369,15 +383,19 @@ export async function captureHeaderOnThreadScroll(page: Page): Promise<HeaderScr
 		const upScrollTop = Math.round(pane.scrollTop);
 		const upTranslateY = readTy();
 		const upContentTop = readContentTop();
+		const { cardBottom, bottomWithinCard } = readBottom();
 
 		return {
+			vh: window.innerHeight,
 			downTranslateY,
 			upTranslateY,
 			downScrollTop,
 			upScrollTop,
 			downContentTop,
 			upContentTop,
-			topFirstContentTop
+			topFirstContentTop,
+			cardBottom,
+			bottomWithinCard
 		};
 	});
 }

@@ -1,5 +1,9 @@
-import { error } from '@sveltejs/kit';
-import { parseDiscussionPagination, resolveGroupSlug } from '$lib/server/constants';
+import { error, redirect } from '@sveltejs/kit';
+import {
+	parseDiscussionPagination,
+	resolveGroupSlug,
+	getAllowGuestProfileView
+} from '$lib/server/constants';
 import type { D1Db } from '$lib/server/db';
 import {
 	getProfileAdminSidebarData,
@@ -43,6 +47,13 @@ export interface ProfileSubPageContext {
 export async function loadProfileSubPageContext(
 	input: ProfileSubPageInput
 ): Promise<ProfileSubPageContext> {
+	// Guests are blocked from profile pages unless explicitly allowed via env.
+	// Redirect to sign-in (preserving the destination) so a successful login
+	// lands them back on the profile they tried to view.
+	if (!input.user && !getAllowGuestProfileView(input.platformEnv)) {
+		redirect(302, `/entry/signin?redirectTo=${encodeURIComponent(input.url.pathname)}`);
+	}
+
 	const userId = Number(input.params.userId);
 	if (Number.isNaN(userId)) {
 		error(404, input.notFoundText);

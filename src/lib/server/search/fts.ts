@@ -15,6 +15,7 @@ import { lexicalToSearchText } from '$lib/utils/lexical';
  *
  * Tables (contentless, rowid = source PK - see fts-schema.ts):
  *   discussions_fts(title)  replies_fts(body)  activities_fts(body)  messages_fts(body)
+ *   users_fts(username, displayName, bio)
  */
 export type DbLike = D1Db | DbTransaction;
 
@@ -122,4 +123,48 @@ export async function reindexDiscussionTitle(
 ): Promise<void> {
 	await ftsDelete(db, 'discussions_fts', 'title', id, oldTitle);
 	await ftsInsert(db, 'discussions_fts', 'title', id, newTitle);
+}
+
+// --- Users (username + displayName + bio; all plain text, not Lexical JSON) ---
+// Multi-column: the whole row is one FTS entry, so insert/delete/resupply all
+// three columns together. bio is nullable in the source table but FTS5 wants a
+// value, so null is coerced to '' on both index and unindex (the delete must
+// resupply exactly what was indexed).
+
+export async function indexUser(
+	db: DbLike,
+	id: number,
+	username: string,
+	displayName: string,
+	bio: string | null
+): Promise<void> {
+	const bioText = bio ?? '';
+	await db.run(sql`INSERT INTO users_fts (rowid, username, displayName, bio)
+		VALUES (${id}, ${username}, ${displayName}, ${bioText})`);
+}
+
+export async function unindexUser(
+	db: DbLike,
+	id: number,
+	username: string,
+	displayName: string,
+	bio: string | null
+): Promise<void> {
+	const bioText = bio ?? '';
+	await db.run(sql`INSERT INTO users_fts (users_fts, rowid, username, displayName, bio)
+		VALUES ('delete', ${id}, ${username}, ${displayName}, ${bioText})`);
+}
+
+export async function reindexUser(
+	db: DbLike,
+	id: number,
+	oldUsername: string,
+	oldDisplayName: string,
+	oldBio: string | null,
+	newUsername: string,
+	newDisplayName: string,
+	newBio: string | null
+): Promise<void> {
+	await unindexUser(db, id, oldUsername, oldDisplayName, oldBio);
+	await indexUser(db, id, newUsername, newDisplayName, newBio);
 }

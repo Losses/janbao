@@ -53,10 +53,11 @@
 	},
 	"search": {
 		"title": "Search",
-		"placeholder": "Search discussions, activity, messages...",
+		"placeholder": "Search discussions, activity, messages, users...",
 		"scopeDiscussions": "Discussions",
 		"scopeActivities": "Activity",
 		"scopeMessages": "Messages",
+		"scopeUsers": "Users",
 		"searchBtn": "Search",
 		"noResults": "No results found",
 		"noQuery": "Enter a search term to begin",

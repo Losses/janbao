@@ -179,6 +179,25 @@ export function getAllowGuestActivity(platformEnv: App.Platform['env'] | undefin
 }
 
 /**
+ * Whether logged-out visitors may use the "Users" search scope. Defaults false:
+ * user discovery is members-only. Logged-in users can always search users.
+ */
+export function getAllowGuestUserSearch(platformEnv: App.Platform['env'] | undefined): boolean {
+	const raw = platformEnv?.ALLOW_GUEST_USER_SEARCH || process.env.ALLOW_GUEST_USER_SEARCH;
+	return raw === 'true';
+}
+
+/**
+ * Whether logged-out visitors may view profile pages. Defaults false. NOTE: this
+ * is stricter than the prior behavior (profiles used to be fully public with SEO
+ * slugs); set ALLOW_GUEST_PROFILE_VIEW=true to restore public profile access.
+ */
+export function getAllowGuestProfileView(platformEnv: App.Platform['env'] | undefined): boolean {
+	const raw = platformEnv?.ALLOW_GUEST_PROFILE_VIEW || process.env.ALLOW_GUEST_PROFILE_VIEW;
+	return raw === 'true';
+}
+
+/**
  * Resolved category-level CRUD permission flags.
  * When no explicit categoryPermissions row exists, defaults are applied
  * based on the resolved groupSlug:

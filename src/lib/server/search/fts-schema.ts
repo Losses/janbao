@@ -18,10 +18,11 @@ const FTS_TABLE_DDL: string[] = [
 	`CREATE VIRTUAL TABLE IF NOT EXISTS discussions_fts USING fts5(title, content='', tokenize='trigram')`,
 	`CREATE VIRTUAL TABLE IF NOT EXISTS replies_fts USING fts5(body, content='', tokenize='trigram')`,
 	`CREATE VIRTUAL TABLE IF NOT EXISTS activities_fts USING fts5(body, content='', tokenize='trigram')`,
-	`CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(body, content='', tokenize='trigram')`
+	`CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(body, content='', tokenize='trigram')`,
+	`CREATE VIRTUAL TABLE IF NOT EXISTS users_fts USING fts5(username, displayName, bio, content='', tokenize='trigram')`
 ];
 
-/** Create the four contentless FTS5 tables if they do not yet exist. */
+/** Create the contentless FTS5 tables if they do not yet exist. */
 export async function ensureFtsSchema(db: D1Db): Promise<void> {
 	for (const ddl of FTS_TABLE_DDL) {
 		await db.run(sql.raw(ddl));
@@ -32,7 +33,8 @@ const FTS_TABLE_NAMES: string[] = [
 	'discussions_fts',
 	'replies_fts',
 	'activities_fts',
-	'messages_fts'
+	'messages_fts',
+	'users_fts'
 ];
 
 /**

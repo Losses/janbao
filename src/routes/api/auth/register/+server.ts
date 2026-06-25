@@ -1,6 +1,7 @@
 import { users, invitations, notificationPreferences } from '$lib/server/db/schema';
 import type { DbTransaction } from '$lib/server/db';
 import { appendJoinedMember } from '$lib/server/db/joined-activity';
+import { indexUser } from '$lib/server/search/fts';
 import { hashPassword, signJwt, createSessionToken } from '$lib/server/auth';
 import { getJwtSecret, getCookieSecure } from '$lib/server/constants';
 import { jsonError } from '$lib/server/errors';
@@ -117,6 +118,10 @@ export const POST: RequestHandler = async (event) => {
 				await tx.insert(notificationPreferences).values({
 					userId: inserted[0].id
 				});
+
+				// Index the new user for the Users search scope. bio is unset at
+				// signup (defaults to null in the source row), so index it empty.
+				await indexUser(tx, inserted[0].id, username, displayName, '');
 
 				// Claim the invitation code atomically: the conditional update
 				// (usedById IS NULL AND still unexpired) ensures two concurrent

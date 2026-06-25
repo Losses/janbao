@@ -53,10 +53,11 @@
 	},
 	"search": {
 		"title": "搜索",
-		"placeholder": "搜索讨论、动态、私信...",
+		"placeholder": "搜索讨论、动态、私信、用户...",
 		"scopeDiscussions": "讨论",
 		"scopeActivities": "动态",
 		"scopeMessages": "私信",
+		"scopeUsers": "用户",
 		"searchBtn": "搜索",
 		"noResults": "没有找到相关结果",
 		"noQuery": "输入关键词开始搜索",
