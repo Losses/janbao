@@ -13,6 +13,7 @@ import {
 	pcloudIsConfigured
 } from '$lib/server/pcloud';
 import { detectImageFormat, mimeForFormat, type ImageFormat } from '$lib/server/image';
+import { buildAvatarUrl } from '$lib/utils/image';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 
@@ -112,12 +113,17 @@ export const POST: RequestHandler = async (event) => {
 	try {
 		const sha = bytesToHex(hasher.digest());
 		if (isAvatar) {
+			// avatarFileId is the pure content sha; avatarUrl is built server-side
+			// here and returned ready for the client to render (the client never
+			// constructs avatar URLs itself). The URL extension is derived from the
+			// freshly-detected MIME, so the type info is not coupled into the id.
 			await pcloudMove(cfg, `/tmp/${tmpName}`, `/avatars/${user.id}`);
 			await db
 				.update(users)
 				.set({ avatarFileId: sha, avatarContentType: mime })
 				.where(eq(users.id, user.id));
-			return json({ fileId: sha, url: `/avatar/${user.id}` });
+			const avatarUrl = buildAvatarUrl(user.id, sha, mime);
+			return json({ fileId: sha, url: `/avatar/${user.id}/${sha}`, avatarUrl });
 		}
 		await pcloudMove(cfg, `/tmp/${tmpName}`, `/attachments/${sha}`);
 		await db

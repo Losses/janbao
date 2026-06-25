@@ -2,11 +2,13 @@ import { notifications, users, discussions, categories } from '../schema';
 import { eq, and, desc, inArray, isNull, sql } from 'drizzle-orm';
 import type { D1Db } from '../index';
 import type { NotificationItem } from '$lib/types/api';
+import { buildAvatarUrl } from '$lib/utils/image';
 
 interface SourceUserInfo {
 	displayName: string;
 	username: string;
 	avatarFileId: string | null;
+	avatarContentType: string | null;
 }
 
 interface DiscussionInfo {
@@ -50,7 +52,8 @@ export async function getNotifications(
 				id: users.id,
 				displayName: users.displayName,
 				username: users.username,
-				avatarFileId: users.avatarFileId
+				avatarFileId: users.avatarFileId,
+				avatarContentType: users.avatarContentType
 			})
 			.from(users)
 			.where(inArray(users.id, uniqueSourceIds));
@@ -58,7 +61,8 @@ export async function getNotifications(
 			sourceMap.set(u.id, {
 				displayName: u.displayName,
 				username: u.username,
-				avatarFileId: u.avatarFileId
+				avatarFileId: u.avatarFileId,
+				avatarContentType: u.avatarContentType
 			});
 		}
 	}
@@ -99,7 +103,10 @@ export async function getNotifications(
 			sourceUserId: r.sourceUserId,
 			sourceDisplayName: source?.displayName ?? null,
 			sourceUsername: source?.username ?? null,
-			sourceAvatarFileId: source?.avatarFileId ?? null,
+			sourceAvatarUrl:
+				source && r.sourceUserId !== null
+					? buildAvatarUrl(r.sourceUserId, source.avatarFileId, source.avatarContentType)
+					: null,
 			discussionId: r.discussionId,
 			discussionTitle: discussion?.title ?? null,
 			discussionSlug: discussion?.slug ?? null,

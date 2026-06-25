@@ -2,6 +2,7 @@ import { invitations, users } from '../schema';
 import { eq, and, gte, lt, inArray, count, desc } from 'drizzle-orm';
 import type { D1Db, DbTransaction } from '../index';
 import type { InvitationItem, UserInfoSummary } from '$lib/types/api';
+import { buildAvatarUrl } from '$lib/utils/image';
 import type { DateBoundary } from '../welcome';
 
 /** A database handle that may be either the top-level client or a transaction. */
@@ -70,14 +71,22 @@ export async function getInviter(db: D1Db, userId: number): Promise<UserInfoSumm
 			id: users.id,
 			username: users.username,
 			displayName: users.displayName,
-			avatarFileId: users.avatarFileId
+			avatarFileId: users.avatarFileId,
+			avatarContentType: users.avatarContentType
 		})
 		.from(invitations)
 		.innerJoin(users, eq(invitations.creatorId, users.id))
 		.where(eq(invitations.usedById, userId))
 		.limit(1);
 
-	return rows.length > 0 ? rows[0] : null;
+	if (rows.length === 0) return null;
+	const r = rows[0];
+	return {
+		id: r.id,
+		username: r.username,
+		displayName: r.displayName,
+		avatarUrl: buildAvatarUrl(r.id, r.avatarFileId, r.avatarContentType)
+	};
 }
 
 /**

@@ -46,7 +46,7 @@ interface UserData {
 	email: string;
 	displayName: string;
 	bio: string | null;
-	avatarFileId: string | null;
+	avatarUrl: string | null;
 	groupSlug: string;
 	signupTime: Date;
 	lastActiveTime: Date;
