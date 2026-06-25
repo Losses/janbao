@@ -29,7 +29,7 @@
 		ListNode,
 		ListItemNode,
 		ImageNode,
-		InsertImage,
+		$createImageNode as createImageNode,
 		AutoLinkNode,
 		LinkNode,
 		ITALIC_STAR,
@@ -48,6 +48,11 @@
 	import { CodeNode, CodeHighlightNode } from '@lexical/code';
 	import { MentionNode, createMentionNode } from '$lib/components/atoms/MentionNode';
 	import { DeadImageNode, setDeadImageLabel } from '$lib/components/atoms/DeadImageNode';
+	import {
+		UploadingImageNode,
+		createUploadingImageNode,
+		setUploadingImageLabel
+	} from '$lib/components/atoms/UploadingImageNode';
 	import MentionTypeaheadPlugin from '$lib/components/molecules/MentionTypeaheadPlugin.svelte';
 	import {
 		COMMAND_PRIORITY_EDITOR,
@@ -57,9 +62,12 @@
 		$getSelection as getSelection,
 		$isRangeSelection as isRangeSelection,
 		$isTextNode as isTextNodeFn,
-		$getRoot as getRoot
+		$getRoot as getRoot,
+		$getNodeByKey as getNodeByKey,
+		$isRootOrShadowRoot as isRootOrShadowRoot,
+		$createParagraphNode as createParagraphNode
 	} from 'lexical';
-	import type { LexicalCommand, LexicalEditor } from 'lexical';
+	import type { LexicalCommand, LexicalEditor, LexicalNode } from 'lexical';
 	import type { VoidHandler } from '$lib/types/handlers';
 	import type { TranslationDict } from '$lib/types/translation';
 
@@ -83,6 +91,23 @@
 	type StringGetter = () => string;
 	type ToJSONFn = () => unknown;
 	type GetStyleFn = () => string;
+
+	/** Shape of the /upload endpoint JSON response. */
+	interface UploadResponse {
+		url?: string;
+		error?: string;
+	}
+
+	/** Minimal shape of a serialized Lexical node for placeholder stripping. */
+	interface SerializedNodeLike {
+		type?: string;
+		children?: SerializedNodeLike[];
+	}
+
+	/** Minimal shape of a serialized editor state ({ root: { children: [] } }). */
+	interface SerializedStateLike {
+		root?: SerializedNodeLike;
+	}
 	type SetStyleFn = (style: string) => void;
 	type GetNodesFn = () => NodeWithStyle[];
 	type UpdateFn = (fn: VoidHandler) => void;
@@ -182,6 +207,7 @@
 	// its DOM imperatively and has no access to `t`, so it reads a module value).
 	$effect(() => {
 		setDeadImageLabel(t.img.deadImage);
+		setUploadingImageLabel(t.editor.uploading);
 	});
 
 	// Use i18n placeholder if no override provided
@@ -194,7 +220,6 @@
 	let saveStatus = $state<'idle' | 'saving' | 'saved'>('idle');
 	let autosaveTimer: ReturnType<typeof setInterval> | undefined;
 
-	let isUploadingImage = $state(false);
 	let uploadError = $state<string | null>(null);
 
 	function setUploadError(err: string) {
@@ -202,6 +227,52 @@
 		setTimeout(() => {
 			if (uploadError === err) uploadError = null;
 		}, 4000);
+	}
+
+	/**
+	 * Wraps a block-level node in its own paragraph when it has landed directly
+	 * under the editor root, mirroring svelte-lexical's ImagePlugin so the node
+	 * owns a dedicated line and the cursor can navigate past it. Inlined from
+	 * @lexical/utils' $wrapNodeInElement (a 3-liner) to avoid taking a transitive
+	 * dependency just for this.
+	 */
+	function wrapInParagraph(node: LexicalNode): void {
+		const paragraph = createParagraphNode();
+		node.replace(paragraph);
+		paragraph.append(node);
+		paragraph.selectEnd();
+	}
+
+	/**
+	 * Drops the uploaded image in place of the placeholder identified by `key`.
+	 */
+	function replacePlaceholderWithImage(
+		editor: LexicalEditor,
+		key: string,
+		src: string,
+		altText: string
+	): void {
+		editor.update(() => {
+			const node = getNodeByKey(key);
+			// The user may have deleted the placeholder mid-upload, or the key no
+			// longer points at one (already replaced) - bail in both cases.
+			if (!node || node.getType() !== 'uploading-image') return;
+			const imageNode = createImageNode({ src, altText });
+			node.replace(imageNode);
+			if (isRootOrShadowRoot(imageNode.getParentOrThrow())) {
+				wrapInParagraph(imageNode);
+			}
+		});
+	}
+
+	/** Removes a still-pending placeholder (upload failed or was cancelled). */
+	function removePlaceholder(editor: LexicalEditor, key: string): void {
+		editor.update(() => {
+			const node = getNodeByKey(key);
+			if (node && node.getType() === 'uploading-image') {
+				node.remove();
+			}
+		});
 	}
 
 	async function uploadAndInsertImage(editor: LexicalEditor, file: File) {
@@ -224,29 +295,51 @@
 			return;
 		}
 
-		isUploadingImage = true;
-		uploadError = null;
+		// Reserve the image's spot up front with an in-place spinner. Its stable
+		// key anchors the eventual ImageNode to where the user pasted, so the
+		// finished image never jumps to the (possibly moved) live selection -
+		// the fix for pasting several images or typing mid-upload.
+		//
+		// The key is captured by the update callback writing into `placeholderKey`,
+		// which we read only after `await fetch` below. That is robust to update
+		// timing: the native paste path runs the callback synchronously, and even
+		// the beforeinput path (which nests inside another update) runs it within
+		// the same tick - long before any network await resolves.
+		let placeholderKey: string | null = null;
+		editor.update(() => {
+			let selection = getSelection();
+			if (!isRangeSelection(selection)) {
+				getRoot().selectEnd();
+				selection = getSelection();
+			}
+			if (!isRangeSelection(selection)) return;
+			const placeholder = createUploadingImageNode();
+			(selection as SelectionWithInsertNodes).insertNodes?.([placeholder]);
+			if (isRootOrShadowRoot(placeholder.getParentOrThrow())) {
+				wrapInParagraph(placeholder);
+			}
+			placeholderKey = placeholder.getKey();
+		});
 
 		try {
 			const res = await fetch('/upload', {
 				method: 'POST',
 				body: file
 			});
-			const result = (await res.json()) as { url?: string; error?: string };
+			const result = (await res.json()) as UploadResponse;
 
 			if (!res.ok || !result.url) {
 				setUploadError(result.error || t.upload.uploadFailed);
+				if (placeholderKey) removePlaceholder(editor, placeholderKey);
 				return;
 			}
 
-			InsertImage(editor, {
-				src: result.url,
-				altText: file.name
-			});
+			if (placeholderKey) {
+				replacePlaceholderWithImage(editor, placeholderKey, result.url, file.name);
+			}
 		} catch {
 			setUploadError(t.auth.networkError);
-		} finally {
-			isUploadingImage = false;
+			if (placeholderKey) removePlaceholder(editor, placeholderKey);
 		}
 	}
 
@@ -528,6 +621,7 @@
 		ListNode,
 		ListItemNode,
 		ImageNode,
+		UploadingImageNode,
 		AutoLinkNode,
 		LinkNode,
 		CodeNode,
@@ -578,9 +672,35 @@
 	function handleChange(editorState: EditorStateLike, editor: unknown) {
 		editorInstance = editor;
 		const castEditor = editor as EditorWithGetState;
-		editorStateGetter = () => JSON.stringify(castEditor.getEditorState?.().toJSON() ?? {});
-		const json = JSON.stringify(editorState.toJSON());
+		// Strip uploading placeholders from everything that leaves the editor: the
+		// parent's content model (onContentChange) and the autosave getter. They
+		// are a transient visual affordance and must never be persisted - a draft
+		// saved mid-upload or a post published mid-upload would otherwise capture
+		// a spinner block. toJSON() returns a fresh tree each call, so the in-place
+		// mutation in stripUploadingPlaceholders is safe.
+		editorStateGetter = () =>
+			JSON.stringify(stripUploadingPlaceholders(castEditor.getEditorState?.().toJSON() ?? {}));
+		const json = JSON.stringify(stripUploadingPlaceholders(editorState.toJSON()));
 		onContentChange?.(json);
+	}
+
+	/**
+	 * Recursively removes every uploading-image placeholder from a serialized
+	 * editor state, in place. Returns the same object for fluent use in
+	 * JSON.stringify. See handleChange for why placeholders must be stripped.
+	 */
+	function stripUploadingPlaceholders(state: unknown): unknown {
+		const typed = state as SerializedStateLike;
+		if (typed.root) removeUploadingNodes(typed.root);
+		return state;
+	}
+
+	function removeUploadingNodes(node: SerializedNodeLike): void {
+		if (!Array.isArray(node.children)) return;
+		node.children = node.children.filter((child) => child?.type !== 'uploading-image');
+		for (const child of node.children) {
+			removeUploadingNodes(child);
+		}
 	}
 
 	// Ctrl/Cmd+Enter signals submit intent to the parent. Plain Enter is left
@@ -666,9 +786,10 @@
 		return () => stopAutosave();
 	});
 
-	// Derived save status label - uses i18n keys
+	// Derived save status label - uses i18n keys. Image-upload progress is now
+	// shown in-place via the UploadingImageNode spinner, so only errors and
+	// autosave status surface here.
 	const saveStatusLabel = $derived.by(() => {
-		if (isUploadingImage) return t.editor.uploading;
 		if (uploadError) return uploadError;
 		if (saveStatus === 'saving') return t.editor.saving;
 		if (saveStatus === 'saved') return t.editor.saved;
