@@ -83,8 +83,6 @@
 
 		const anchorRect = anchorElem.getBoundingClientRect();
 		const menuRect = menuRef.getBoundingClientRect();
-		const viewportHeight = window.innerHeight;
-		const viewportWidth = window.innerWidth;
 
 		// top/left are offsets from the anchor's top-left corner. The menu is
 		// position:absolute inside the anchor, so these place it directly (NOT
@@ -92,17 +90,20 @@
 		let top = targetRect.bottom + 4 - anchorRect.top;
 		let left = targetRect.left - anchorRect.left;
 
-		// Flip above the cursor if it would overflow the viewport bottom
-		if (targetRect.bottom + menuRect.height + 4 > viewportHeight) {
+		// The anchor is the editor's scroll container, so anything outside its
+		// box is clipped. Keep the menu inside it: flip above the cursor when it
+		// would overflow the bottom edge, then clamp as a last resort.
+		if (targetRect.bottom + menuRect.height + 4 > anchorRect.bottom) {
 			const topAbove = targetRect.top - menuRect.height - 4 - anchorRect.top;
-			if (topAbove + anchorRect.top > 0) {
+			if (topAbove >= 0) {
 				top = topAbove;
 			}
 		}
+		top = Math.max(0, Math.min(top, anchorRect.height - menuRect.height));
 
-		// Clamp horizontally to the viewport
-		if (left + anchorRect.left + menuRect.width > viewportWidth) {
-			left = viewportWidth - anchorRect.left - menuRect.width - 4;
+		// Clamp horizontally to the anchor's box
+		if (left + menuRect.width > anchorRect.width) {
+			left = anchorRect.width - menuRect.width - 4;
 		}
 		if (left < 0) left = 4;
 

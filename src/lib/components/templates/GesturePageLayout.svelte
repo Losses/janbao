@@ -565,7 +565,7 @@
 		{#if hasLeft && isMobile && !swipeNeedsLoadingAtStart}
 			<section
 				bind:this={leftEl}
-				class="shrink-0 p-3 scroll-pane md:hidden"
+				class="shrink-0 scroll-pane md:hidden"
 				style={leftStyle}
 				onscroll={(e) => {
 					if (resolvedLeftHref && e.currentTarget.scrollTop > 0) {
@@ -573,50 +573,54 @@
 					}
 				}}
 			>
-				{#if left}
-					{@render left()}
-				{:else if navStore.activeTab === 0}
-					<DiscussionsPanel
-						discussions={listCache.discussions?.items}
-						currentPage={listCache.discussions?.page ?? 1}
-						totalPages={listCache.discussions?.totalPages ?? 1}
-						t={page.data.t}
-						buildPageUrl={(page) => (page === 1 ? '/' : `/discussions/p${page}`)}
-						paginate={true}
-					/>
-				{:else if navStore.activeTab === 1}
-					<ActivityPanel
-						activities={listCache.activity?.items ?? []}
-						currentPage={listCache.activity?.page ?? 1}
-						totalPages={listCache.activity?.totalPages ?? 1}
-						activityDraft={listCache.activity?.activityDraft ?? null}
-						mentionedUsers={listCache.activity?.mentionedUsers ?? {}}
-						t={page.data.t}
-						user={page.data.user}
-						paginate={true}
-					/>
-				{:else if navStore.activeTab === 2}
-					<MessagesPanel
-						conversations={listCache.messages?.items ?? []}
-						currentPage={listCache.messages?.page ?? 1}
-						totalPages={listCache.messages?.totalPages ?? 1}
-						t={page.data.t}
-						paginate={true}
-					/>
-				{/if}
+				<div class="gpl-card">
+					{#if left}
+						{@render left()}
+					{:else if navStore.activeTab === 0}
+						<DiscussionsPanel
+							discussions={listCache.discussions?.items}
+							currentPage={listCache.discussions?.page ?? 1}
+							totalPages={listCache.discussions?.totalPages ?? 1}
+							t={page.data.t}
+							buildPageUrl={(page) => (page === 1 ? '/' : `/discussions/p${page}`)}
+							paginate={true}
+						/>
+					{:else if navStore.activeTab === 1}
+						<ActivityPanel
+							activities={listCache.activity?.items ?? []}
+							currentPage={listCache.activity?.page ?? 1}
+							totalPages={listCache.activity?.totalPages ?? 1}
+							activityDraft={listCache.activity?.activityDraft ?? null}
+							mentionedUsers={listCache.activity?.mentionedUsers ?? {}}
+							t={page.data.t}
+							user={page.data.user}
+							paginate={true}
+						/>
+					{:else if navStore.activeTab === 2}
+						<MessagesPanel
+							conversations={listCache.messages?.items ?? []}
+							currentPage={listCache.messages?.page ?? 1}
+							totalPages={listCache.messages?.totalPages ?? 1}
+							t={page.data.t}
+							paginate={true}
+						/>
+					{/if}
+				</div>
 			</section>
 		{/if}
 		<section
 			bind:this={centerEl}
-			class="shrink-0 p-3 scroll-pane detail-scroll-pane h-full w-full"
+			class="shrink-0 scroll-pane detail-scroll-pane h-full w-full"
 			style={centerStyle}
 		>
-			{@render children()}
+			<div class="gpl-card">
+				{@render children()}
+			</div>
 		</section>
 		{#if hasRight && isMobile && !swipeNeedsLoadingAtStart}
 			<section
 				bind:this={rightEl}
-				class="shrink-0 p-3 scroll-pane md:hidden"
+				class="shrink-0 scroll-pane md:hidden"
 				style={rightStyle}
 				onscroll={(e) => {
 					if (resolvedRightHref && e.currentTarget.scrollTop > 0) {
@@ -624,9 +628,11 @@
 					}
 				}}
 			>
-				{#if right}
-					{@render right()}
-				{/if}
+				<div class="gpl-card">
+					{#if right}
+						{@render right()}
+					{/if}
+				</div>
 			</section>
 		{/if}
 	</div>

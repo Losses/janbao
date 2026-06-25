@@ -143,6 +143,8 @@
 		disableHeadings?: boolean;
 		/** Hide image upload button (for PM editor) */
 		disableImageUpload?: boolean;
+		/** Max height of the scrollable editing area (CSS length); the toolbar pins above it */
+		editorMaxHeight?: string;
 		/** Called when content changes with serialized JSON string */
 		onContentChange?: ContentChangeHandler;
 		/** Called on Ctrl/Cmd+Enter so the parent can trigger its submit path */
@@ -163,6 +165,7 @@
 		disabled = false,
 		disableHeadings = false,
 		disableImageUpload = false,
+		editorMaxHeight = '60vh',
 		onContentChange,
 		onSubmit,
 		t,
@@ -898,7 +901,8 @@
 		<!-- Editor Area -->
 		<div
 			bind:this={editorAreaElem}
-			class="relative {disabled ? 'opacity-60 pointer-events-none' : ''}"
+			class="relative overflow-y-auto {disabled ? 'opacity-60 pointer-events-none' : ''}"
+			style="max-height: {editorMaxHeight}"
 		>
 			<ContentEditable
 				ariaLabel={resolvedPlaceholder}

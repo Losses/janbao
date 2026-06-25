@@ -6,7 +6,9 @@
 		$getSelection as getSelection,
 		$isRangeSelection as isRangeSelection,
 		$isTextNode as isTextNodeFn,
-		FORMAT_TEXT_COMMAND
+		FORMAT_TEXT_COMMAND,
+		KEY_DOWN_COMMAND,
+		COMMAND_PRIORITY_EDITOR
 	} from 'lexical';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import {
@@ -21,6 +23,7 @@
 		formatBulletList,
 		formatNumberedList,
 		formatCheckList,
+		clearFormatting,
 		InsertImage
 	} from 'svelte-lexical';
 	import { TOGGLE_LINK_COMMAND } from '@lexical/link';
@@ -162,6 +165,57 @@
 	function handleToggleSpoiler() {
 		activeEditor.dispatchCommand(TOGGLE_SPOILER_COMMAND, undefined);
 	}
+
+	// Keyboard shortcuts for formatting actions that have no Lexical core
+	// binding. Bold/italic/underline (Ctrl+B/I/U) are handled by Lexical's own
+	// KEY_DOWN_COMMAND; the ones below are registered here so they stay
+	// feature-gated alongside their toolbar buttons. Feature flags are read at
+	// call time, so a live change from the settings store takes effect at once.
+	function handleShortcut(event: KeyboardEvent): boolean {
+		if (!(event.ctrlKey || event.metaKey)) return false;
+		const shift = event.shiftKey;
+		const code = event.code;
+
+		if (features.strikethrough && shift && code === 'KeyX') {
+			toggleStrikethrough(activeEditor);
+			event.preventDefault();
+			return true;
+		}
+		if (features.quote && shift && code === 'Period') {
+			formatQuote(activeEditor, $blockType);
+			event.preventDefault();
+			return true;
+		}
+		if (features.codeBlock && shift && code === 'KeyM') {
+			formatCode(activeEditor, $blockType);
+			event.preventDefault();
+			return true;
+		}
+		if (features.spoiler && shift && code === 'KeyP') {
+			activeEditor.dispatchCommand(TOGGLE_SPOILER_COMMAND, undefined);
+			event.preventDefault();
+			return true;
+		}
+		if (features.link && !shift && code === 'KeyK') {
+			handleToggleLink();
+			event.preventDefault();
+			return true;
+		}
+		// Clear formatting is always available while the toolbar is mounted
+		// (plainMode unmounts the toolbar entirely).
+		if (shift && code === 'KeyN') {
+			clearFormatting(activeEditor);
+			event.preventDefault();
+			return true;
+		}
+		return false;
+	}
+
+	$effect(() => {
+		const editor = activeEditor;
+		if (!editor || typeof editor.registerCommand !== 'function') return;
+		return editor.registerCommand(KEY_DOWN_COMMAND, handleShortcut, COMMAND_PRIORITY_EDITOR);
+	});
 
 	function handleInsertImage() {
 		if (imageUrl.trim()) {
@@ -352,6 +406,7 @@
 					<li>
 						<button
 							type="button"
+							title="{t.editor.quote} (Ctrl+Shift+.)"
 							class:active={$blockType === 'quote'}
 							onclick={(e) => {
 								formatQuote(activeEditor, $blockType);
@@ -367,6 +422,7 @@
 					<li>
 						<button
 							type="button"
+							title="{t.editor.codeBlock} (Ctrl+Shift+M)"
 							class:active={$blockType === 'code'}
 							onclick={(e) => {
 								formatCode(activeEditor, $blockType);
@@ -430,7 +486,7 @@
 				class:btn-active={$isStrikethrough}
 				class:btn-ghost={!$isStrikethrough}
 				onclick={() => toggleStrikethrough(activeEditor)}
-				title={t.editor.strikethrough}
+				title="{t.editor.strikethrough} (Ctrl+Shift+X)"
 			>
 				<Icon path={mdiFormatStrikethrough} size={16} />
 			</button>
@@ -454,7 +510,7 @@
 				class:btn-active={isSpoiler}
 				class:btn-ghost={!isSpoiler}
 				onclick={handleToggleSpoiler}
-				title={t.editor.spoiler}
+				title="{t.editor.spoiler} (Ctrl+Shift+P)"
 			>
 				<Icon path={mdiEyeOff} size={16} />
 			</button>
@@ -516,7 +572,7 @@
 				class:btn-active={$isLink}
 				class:btn-ghost={!$isLink}
 				onclick={handleToggleLink}
-				title={t.editor.link}
+				title="{t.editor.link} (Ctrl+K)"
 			>
 				<Icon path={mdiLink} size={16} />
 			</button>
