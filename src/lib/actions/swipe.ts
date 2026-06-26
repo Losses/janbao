@@ -16,12 +16,19 @@
  */
 import type { Action } from 'svelte/action';
 
-export type DeltaHandler = (deltaX: number) => void;
+// `onMove` fires per pointermove with the live displacement only; `onEnd` adds
+// `velocity` — the finger's release velocity in px/ms (positive = still moving
+// right at lift-off, negative = moving left), measured over the trailing
+// VELOCITY_WINDOW_MS. Consumers pair it with `reversedAtRelease` so a swipe that
+// crossed the commit threshold but was flicked back snaps to the origin instead
+// of advancing.
+export type MoveHandler = (deltaX: number) => void;
+export type EndHandler = (deltaX: number, velocity: number) => void;
 export type DisabledGetter = () => boolean;
 
 export interface SwipeParams {
-	onMove: DeltaHandler;
-	onEnd: DeltaHandler;
+	onMove: MoveHandler;
+	onEnd: EndHandler;
 	disabled?: DisabledGetter;
 }
 
@@ -32,6 +39,11 @@ const DEAD_ZONE = 10; // px of travel before a drag is classified
 const HORIZONTAL_RATIO = 1.6; // |dx| must exceed |dy| * this to count as horizontal
 const LONG_PRESS_MS = 350; // a drag that only starts moving after this is a long-press/select, not a swipe
 const CLICK_THRESHOLD = 6; // px of travel before the trailing click is suppressed
+// Release-direction detection. The finger's motion in the last VELOCITY_WINDOW_MS
+// is what reveals a change of intent at lift-off; the floor filters out sub-pixel
+// jitter / a steady hold near the turn-around so those still commit by position.
+const VELOCITY_WINDOW_MS = 80;
+const REVERSE_CANCEL_VEL = 0.2; // px/ms of opposite-direction motion that cancels a commit
 // Only editing controls opt out of swipe detection. Links and buttons do NOT:
 // a deliberate horizontal swipe over them should still switch tabs, and the
 // trailing click is suppressed separately (suppressNextClick) so a swipe never
@@ -94,6 +106,54 @@ function suppressNextClick(node: HTMLElement): void {
 	}, 400);
 }
 
+interface PositionSample {
+	x: number;
+	t: number;
+}
+
+/**
+ * Release velocity (px/ms) over the trailing movement window: positive = finger
+ * still moving right at lift-off, negative = moving left. Returns 0 when the
+ * window is undersampled (the finger paused before lifting), so commits fall
+ * back to pure position as before. The window is net displacement over time, so
+ * a single jitter sample cannot dominate it.
+ */
+export function releaseVelocity(samples: PositionSample[]): number {
+	const n = samples.length;
+	if (n < 2) return 0;
+	const last = samples[n - 1];
+	const cutoff = last.t - VELOCITY_WINDOW_MS;
+	// First sample that still falls inside the trailing window. The bound is n-2
+	// (not n-1): we always keep at least the previous sample so there is a span to
+	// differentiate, even when an aged outlier is the only earlier point — a
+	// 2-sample gesture must not collapse to dt = 0 just because the start sits
+	// outside an 80ms window.
+	let i = 0;
+	while (i < n - 2 && samples[i].t < cutoff) i++;
+	const first = samples[i];
+	const dt = last.t - first.t;
+	if (dt <= 0) return 0;
+	return (last.x - first.x) / dt;
+}
+
+function recordSample(samples: PositionSample[], x: number, t: number): void {
+	samples.push({ x, t });
+	if (samples.length > 32) samples.shift();
+}
+
+/**
+ * True when the finger was moving against the drag direction at release — the
+ * user crossed the commit threshold but then flicked back, signalling a change
+ * of intent. Consumers gate their commit on this so the gesture returns to its
+ * origin instead of advancing. `deltaX` is total displacement; `velocity` is the
+ * px/ms release velocity from `releaseVelocity`.
+ */
+export function reversedAtRelease(deltaX: number, velocity: number): boolean {
+	if (deltaX === 0) return false;
+	if (Math.abs(velocity) < REVERSE_CANCEL_VEL) return false;
+	return Math.sign(velocity) !== Math.sign(deltaX);
+}
+
 export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => {
 	let params = initial;
 	// Capture is best-effort: we request it so the browser yields native pan /
@@ -105,6 +165,7 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 	let moved = false;
 	let active = false;
 	let primaryPointerId = NO_POINTER;
+	let samples: PositionSample[] = [];
 
 	function releaseIfHeld(id: number): void {
 		if (!capturedPointers.has(id)) return;
@@ -123,7 +184,7 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 		if (!active) return;
 		active = false;
 		primaryPointerId = NO_POINTER;
-		params.onEnd(event.clientX - startX);
+		params.onEnd(event.clientX - startX, releaseVelocity(samples));
 		if (moved) suppressNextClick(node);
 	}
 
@@ -138,6 +199,7 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 			startX = event.clientX;
 			moved = false;
 			active = true;
+			samples = [];
 		}
 
 		try {
@@ -155,6 +217,7 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 		if (!moved && Math.abs(delta) > CLICK_THRESHOLD) {
 			moved = true;
 		}
+		recordSample(samples, event.clientX, event.timeStamp);
 		params.onMove(delta);
 	}
 
@@ -214,6 +277,7 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 	let targetWasFocused = false;
 	let phase: SwipePhase = 'idle';
 	let primaryPointerId = NO_POINTER;
+	let samples: PositionSample[] = [];
 
 	function releaseIfHeld(id: number): void {
 		if (!capturedPointers.has(id)) return;
@@ -232,7 +296,7 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 		if (phase !== 'swipe') return;
 		phase = 'idle';
 		primaryPointerId = NO_POINTER;
-		params.onEnd(event.clientX - startX);
+		params.onEnd(event.clientX - startX, releaseVelocity(samples));
 		suppressNextClick(node);
 	}
 
@@ -264,6 +328,7 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 		startY = event.clientY;
 		startTime = event.timeStamp;
 		target = event.target;
+		samples = [];
 
 		const editingAncestor =
 			target instanceof Element
@@ -324,6 +389,7 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 			}
 		}
 		event.preventDefault();
+		recordSample(samples, event.clientX, event.timeStamp);
 		params.onMove(dx);
 	}
 

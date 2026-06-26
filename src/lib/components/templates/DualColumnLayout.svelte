@@ -5,7 +5,7 @@
 	import { goto } from '$app/navigation';
 	import { getDrawerStore } from '$lib/stores/drawer.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
-	import { captureSwipe, detectSwipe } from '$lib/actions/swipe';
+	import { captureSwipe, detectSwipe, reversedAtRelease } from '$lib/actions/swipe';
 	import { MOBILE_TABS, getSwipeBaseline, isPagerRoute } from '$lib/utils/mobile-tabs';
 	import type { UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
@@ -79,16 +79,20 @@
 		if (isDrawerOpen) return;
 		drawerOffset = clampDrawer(-DRAWER_WIDTH + Math.max(0, deltaX));
 	}
-	function edgeEnd(deltaX: number): void {
-		if (deltaX >= DRAWER_COMMIT) drawer.open();
+	function edgeEnd(deltaX: number, velocity: number): void {
+		// Reversed at release (finger flicked back toward closed) is a change of
+		// intent: leave the drawer closed even if the drag crossed the commit line.
+		if (deltaX >= DRAWER_COMMIT && !reversedAtRelease(deltaX, velocity)) drawer.open();
 		else drawer.close();
 		drawerOffset = null;
 	}
 	function overlayMove(deltaX: number): void {
 		drawerOffset = clampDrawer(Math.min(0, deltaX));
 	}
-	function overlayEnd(deltaX: number): void {
-		if (deltaX > -DRAWER_COMMIT) drawer.open();
+	function overlayEnd(deltaX: number, velocity: number): void {
+		// Reversed at release (finger flicked back toward open) keeps the drawer
+		// open even if the drag crossed the close-commit line.
+		if (deltaX > -DRAWER_COMMIT || reversedAtRelease(deltaX, velocity)) drawer.open();
 		else drawer.close();
 		drawerOffset = null;
 	}
@@ -133,11 +137,13 @@
 		swipeOffset = swipeFollow(deltaX);
 		getScrollChromeStore().show();
 	}
-	function tabSwipeEnd(deltaX: number): void {
+	function tabSwipeEnd(deltaX: number, velocity: number): void {
 		const last = MOBILE_TABS.length - 1;
-		if (deltaX <= -TAB_SWIPE_COMMIT && swipeBaseline < last) {
+		// Reversed at release = change of intent: stay on the current tab.
+		const reversed = reversedAtRelease(deltaX, velocity);
+		if (deltaX <= -TAB_SWIPE_COMMIT && swipeBaseline < last && !reversed) {
 			void goto(MOBILE_TABS[swipeBaseline + 1].href);
-		} else if (deltaX >= TAB_SWIPE_COMMIT && swipeBaseline > 0) {
+		} else if (deltaX >= TAB_SWIPE_COMMIT && swipeBaseline > 0 && !reversed) {
 			void goto(MOBILE_TABS[swipeBaseline - 1].href);
 		}
 		swipeOffset = 0;

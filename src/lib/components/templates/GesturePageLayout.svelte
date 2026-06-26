@@ -6,7 +6,7 @@
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import { getPageScrollStore } from '$lib/stores/page-scroll.svelte';
 	import { backHandler } from '$lib/stores/navigation.svelte';
-	import { detectSwipe } from '$lib/actions/swipe';
+	import { detectSwipe, reversedAtRelease } from '$lib/actions/swipe';
 	import type { Action } from 'svelte/action';
 	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
@@ -371,11 +371,15 @@
 		return false;
 	}
 
-	function onSwipeEnd(deltaX: number) {
+	function onSwipeEnd(deltaX: number, velocity: number) {
+		// A swipe that crossed the commit line but was flicked back at release is a
+		// change of intent: return to the current panel instead of advancing.
+		const reversed = reversedAtRelease(deltaX, velocity);
 		if (swipeNeedsLoadingAtStart) {
 			const maxDragDist = window.innerWidth * 0.3;
 			const dragDist = Math.abs(dragOffset ?? 0);
-			const committed = dragDist >= maxDragDist * 0.75 || Math.abs(deltaX) >= SWIPE_COMMIT;
+			const committed =
+				!reversed && (dragDist >= maxDragDist * 0.75 || Math.abs(deltaX) >= SWIPE_COMMIT);
 			if (committed) {
 				const targetHref = swipeDirection === 'left' ? resolvedRightHref : resolvedLeftHref;
 				if (targetHref) {
@@ -426,8 +430,10 @@
 		} else {
 			const leftIdx = hasLeft ? 0 : -1;
 			const rightIdx = hasRight ? panelCount - 1 : -1;
-			const committedLeft = deltaX >= SWIPE_COMMIT && (hasLeft ? resolvedLeftHref : fallbackRoute);
-			const committedRight = deltaX <= -SWIPE_COMMIT && rightIdx >= 0 && resolvedRightHref;
+			const committedLeft =
+				deltaX >= SWIPE_COMMIT && !reversed && (hasLeft ? resolvedLeftHref : fallbackRoute);
+			const committedRight =
+				deltaX <= -SWIPE_COMMIT && !reversed && rightIdx >= 0 && resolvedRightHref;
 
 			if (committedLeft) {
 				const consumed = backHandler.dispatch();

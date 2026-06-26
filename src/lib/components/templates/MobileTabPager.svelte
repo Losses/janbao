@@ -28,7 +28,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import type { Action } from 'svelte/action';
-	import { detectSwipe } from '$lib/actions/swipe';
+	import { detectSwipe, reversedAtRelease } from '$lib/actions/swipe';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
@@ -123,10 +123,13 @@
 		getScrollChromeStore().show();
 		void goto(MOBILE_TABS[index].href);
 	}
-	function swipeEnd(deltaX: number): void {
+	function swipeEnd(deltaX: number, velocity: number): void {
 		const last = MOBILE_TABS.length - 1;
-		if (deltaX <= -SWIPE_COMMIT && activeIndex < last) switchTo(activeIndex + 1);
-		else if (deltaX >= SWIPE_COMMIT && activeIndex > 0) switchTo(activeIndex - 1);
+		// A swipe that crossed the commit line but was flicked back at release is a
+		// change of intent: snap to the current tab instead of switching.
+		const reversed = reversedAtRelease(deltaX, velocity);
+		if (deltaX <= -SWIPE_COMMIT && activeIndex < last && !reversed) switchTo(activeIndex + 1);
+		else if (deltaX >= SWIPE_COMMIT && activeIndex > 0 && !reversed) switchTo(activeIndex - 1);
 		dragOffset = null;
 	}
 
