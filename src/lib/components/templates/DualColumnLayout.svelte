@@ -297,7 +297,7 @@
 			: 'pointer-events-none opacity-0'}"
 		style={overlayStyle}
 		tabindex={drawerVisible ? 0 : -1}
-		aria-hidden={!drawerVisible}
+		inert={!drawerVisible}
 		aria-label={t.sidebar.closeAria}
 		onclick={drawer.close}
 		use:captureSwipe={{
