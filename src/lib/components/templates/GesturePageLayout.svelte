@@ -6,7 +6,7 @@
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import { getPageScrollStore } from '$lib/stores/page-scroll.svelte';
 	import { backHandler } from '$lib/stores/navigation.svelte';
-	import { detectSwipe, reversedAtRelease } from '$lib/actions/swipe';
+	import { detectSwipe } from '$lib/actions/swipe';
 	import type { Action } from 'svelte/action';
 	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
@@ -383,10 +383,9 @@
 		return false;
 	}
 
-	function onSwipeEnd(deltaX: number, velocity: number) {
-		// A swipe that crossed the commit line but was flicked back at release is a
-		// change of intent: return to the current panel instead of advancing.
-		const reversed = reversedAtRelease(deltaX, velocity);
+	function onSwipeEnd(deltaX: number, velocity: number, reversed: boolean) {
+		// `reversed` = the finger rebounded from the drag's peak before lift-off
+		// (change of intent): return to the current panel instead of advancing.
 		if (swipeNeedsLoadingAtStart) {
 			const maxDragDist = window.innerWidth * 0.3;
 			const dragDist = Math.abs(dragOffset ?? 0);

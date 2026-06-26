@@ -17,13 +17,12 @@
 import type { Action } from 'svelte/action';
 
 // `onMove` fires per pointermove with the live displacement only; `onEnd` adds
-// `velocity` — the finger's release velocity in px/ms (positive = still moving
-// right at lift-off, negative = moving left), measured over the trailing
-// VELOCITY_WINDOW_MS. Consumers pair it with `reversedAtRelease` so a swipe that
-// crossed the commit threshold but was flicked back snaps to the origin instead
-// of advancing.
+// `velocity` (release px/ms) and `reversed` (did the finger rebound from the
+// drag's peak before lift-off — a change of intent). Consumers gate commit on
+// `reversed` so a swipe that crossed the commit threshold but was pulled back
+// snaps to the origin instead of advancing.
 export type MoveHandler = (deltaX: number) => void;
-export type EndHandler = (deltaX: number, velocity: number) => void;
+export type EndHandler = (deltaX: number, velocity: number, reversed: boolean) => void;
 export type DisabledGetter = () => boolean;
 
 export interface SwipeParams {
@@ -39,11 +38,17 @@ const DEAD_ZONE = 10; // px of travel before a drag is classified
 const HORIZONTAL_RATIO = 1.6; // |dx| must exceed |dy| * this to count as horizontal
 const LONG_PRESS_MS = 350; // a drag that only starts moving after this is a long-press/select, not a swipe
 const CLICK_THRESHOLD = 6; // px of travel before the trailing click is suppressed
-// Release-direction detection. The finger's motion in the last VELOCITY_WINDOW_MS
-// is what reveals a change of intent at lift-off; the floor filters out sub-pixel
-// jitter / a steady hold near the turn-around so those still commit by position.
+// Release-intent detection. `velocity` is the finger's release speed over the
+// trailing VELOCITY_WINDOW_MS; `rebound` is how far it pulled back from the
+// drag's peak. A change of intent ("dragged past the commit line, then flicked
+// back") shows up as rebound, NOT velocity — at lift-off the finger is usually
+// already still (velocity ≈ 0), so pure release-speed can't tell "dragged back
+// and paused" from "dragged forward and paused". rebound is the primary signal;
+// the velocity gate only lets a genuine forward fling (finger still moving
+// toward the target) commit despite some trailing rebound.
 const VELOCITY_WINDOW_MS = 80;
-const REVERSE_CANCEL_VEL = 0.2; // px/ms of opposite-direction motion that cancels a commit
+const REBOUND_CANCEL_PX = 25; // peak→final pullback (px) that cancels a committed release
+const FLING_FORWARD_MAX = 0.3; // px/ms; a release faster than this forward still commits
 // Only editing controls opt out of swipe detection. Links and buttons do NOT:
 // a deliberate horizontal swipe over them should still switch tabs, and the
 // trailing click is suppressed separately (suppressNextClick) so a swipe never
@@ -114,9 +119,8 @@ interface PositionSample {
 /**
  * Release velocity (px/ms) over the trailing movement window: positive = finger
  * still moving right at lift-off, negative = moving left. Returns 0 when the
- * window is undersampled (the finger paused before lifting), so commits fall
- * back to pure position as before. The window is net displacement over time, so
- * a single jitter sample cannot dominate it.
+ * window is undersampled (the finger paused before lifting). The window is net
+ * displacement over time, so a single jitter sample cannot dominate it.
  */
 export function releaseVelocity(samples: PositionSample[]): number {
 	const n = samples.length;
@@ -142,16 +146,24 @@ function recordSample(samples: PositionSample[], x: number, t: number): void {
 }
 
 /**
- * True when the finger was moving against the drag direction at release — the
- * user crossed the commit threshold but then flicked back, signalling a change
- * of intent. Consumers gate their commit on this so the gesture returns to its
- * origin instead of advancing. `deltaX` is total displacement; `velocity` is the
- * px/ms release velocity from `releaseVelocity`.
+ * True when the user rebounded from the drag's peak before lift-off — crossed
+ * the commit threshold but then pulled back, signalling a change of intent.
+ * Consumers gate their commit on this so the gesture returns to its origin.
+ *
+ * `rebound` (peak − final position, px, always ≥ 0) is the primary signal;
+ * `velocity` is the px/ms release speed from `releaseVelocity`. At lift-off the
+ * finger is usually already still (velocity ≈ 0), so pure release-speed can't
+ * distinguish "dragged back and paused" from "dragged forward and paused" —
+ * hence rebound leads. The velocity gate only lets a genuine fling (still
+ * travelling toward the target at lift-off) commit despite some trailing
+ * rebound; it is sign-symmetric so leftward and rightward drags behave alike.
  */
-export function reversedAtRelease(deltaX: number, velocity: number): boolean {
+export function reversedAtRelease(deltaX: number, velocity: number, rebound: number): boolean {
 	if (deltaX === 0) return false;
-	if (Math.abs(velocity) < REVERSE_CANCEL_VEL) return false;
-	return Math.sign(velocity) !== Math.sign(deltaX);
+	if (rebound < REBOUND_CANCEL_PX) return false;
+	const flingingForward =
+		Math.sign(velocity) === Math.sign(deltaX) && Math.abs(velocity) >= FLING_FORWARD_MAX;
+	return !flingingForward;
 }
 
 export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => {
@@ -162,6 +174,8 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 	// release cleanup - never the call to `finish`.
 	const capturedPointers = new Set<number>();
 	let startX = 0;
+	let maxX = 0;
+	let minX = 0;
 	let moved = false;
 	let active = false;
 	let primaryPointerId = NO_POINTER;
@@ -184,7 +198,13 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 		if (!active) return;
 		active = false;
 		primaryPointerId = NO_POINTER;
-		params.onEnd(event.clientX - startX, releaseVelocity(samples));
+		const deltaX = event.clientX - startX;
+		const velocity = releaseVelocity(samples);
+		// rebound = how far the finger pulled back from the drag's extreme toward
+		// the origin (≥ 0). Tracked live (maxX/minX) so it is unaffected by the
+		// 32-sample cap on `samples`, which prunes the early part of long drags.
+		const rebound = deltaX >= 0 ? maxX - event.clientX : event.clientX - minX;
+		params.onEnd(deltaX, velocity, reversedAtRelease(deltaX, velocity, rebound));
 		if (moved) suppressNextClick(node);
 	}
 
@@ -197,6 +217,8 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 		if (primaryPointerId === NO_POINTER) {
 			primaryPointerId = id;
 			startX = event.clientX;
+			maxX = event.clientX;
+			minX = event.clientX;
 			moved = false;
 			active = true;
 			samples = [];
@@ -217,6 +239,8 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 		if (!moved && Math.abs(delta) > CLICK_THRESHOLD) {
 			moved = true;
 		}
+		if (event.clientX > maxX) maxX = event.clientX;
+		if (event.clientX < minX) minX = event.clientX;
 		recordSample(samples, event.clientX, event.timeStamp);
 		params.onMove(delta);
 	}
@@ -278,6 +302,8 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 	let phase: SwipePhase = 'idle';
 	let primaryPointerId = NO_POINTER;
 	let samples: PositionSample[] = [];
+	let maxX = 0;
+	let minX = 0;
 
 	function releaseIfHeld(id: number): void {
 		if (!capturedPointers.has(id)) return;
@@ -296,7 +322,12 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 		if (phase !== 'swipe') return;
 		phase = 'idle';
 		primaryPointerId = NO_POINTER;
-		params.onEnd(event.clientX - startX, releaseVelocity(samples));
+		const deltaX = event.clientX - startX;
+		const velocity = releaseVelocity(samples);
+		// See captureSwipe.finish: live-tracked extreme → rebound, independent of
+		// the 32-sample cap (which prunes the early part of long drags).
+		const rebound = deltaX >= 0 ? maxX - event.clientX : event.clientX - minX;
+		params.onEnd(deltaX, velocity, reversedAtRelease(deltaX, velocity, rebound));
 		suppressNextClick(node);
 	}
 
@@ -329,6 +360,8 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 		startTime = event.timeStamp;
 		target = event.target;
 		samples = [];
+		maxX = event.clientX;
+		minX = event.clientX;
 
 		const editingAncestor =
 			target instanceof Element
@@ -348,6 +381,10 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 		if (phase === 'idle' || phase === 'ignore') return;
 		const dx = event.clientX - startX;
 		const dy = event.clientY - startY;
+		// Track the drag's extreme on every move (incl. while still deciding) so
+		// rebound reflects the true peak even when the deciding phase travels.
+		if (event.clientX > maxX) maxX = event.clientX;
+		if (event.clientX < minX) minX = event.clientX;
 		if (phase === 'deciding') {
 			const absDx = Math.abs(dx);
 			const absDy = Math.abs(dy);

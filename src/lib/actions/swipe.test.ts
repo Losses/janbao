@@ -10,8 +10,8 @@ interface Sample {
 
 /**
  * releaseVelocity is the recognizer's windowed measurement of the finger's
- * motion right before lift-off. These tests pin its contract because it is the
- * signal that drives the "flicked back at release" cancellation.
+ * motion right before lift-off. These tests pin its contract because it feeds
+ * the velocity gate of the "flicked back at release" cancellation.
  */
 describe('releaseVelocity', () => {
 	test('net displacement over the trailing window, in px/ms', () => {
@@ -32,8 +32,8 @@ describe('releaseVelocity', () => {
 	});
 
 	test('ignores aged samples outside the ~80ms window (trailing motion wins)', () => {
-		// Old samples show strong rightward motion; the last 80ms show a reversal
-		// back to the left. The release velocity must reflect the recent reversal,
+		// Mirrors a long drag whose early forward travel was pruned by the
+		// 32-sample cap: the release velocity must reflect the recent reversal,
 		// not the stale forward travel.
 		const samples: Sample[] = [
 			{ x: 0, t: 0 },
@@ -46,8 +46,6 @@ describe('releaseVelocity', () => {
 	});
 
 	test('returns 0 when the finger paused before lift-off (no recent samples)', () => {
-		// All motion happened long ago; nothing inside the trailing window except
-		// the final held position -> undersampled -> 0 (commit falls back to position).
 		const samples: Sample[] = [
 			{ x: 0, t: 0 },
 			{ x: 200, t: 50 },
@@ -72,32 +70,53 @@ describe('releaseVelocity', () => {
 
 /**
  * reversedAtRelease is the shared policy every swipe consumer gates its commit
- * on: a release moving against the drag direction cancels, so a swipe that
- * crossed the threshold but was flicked back returns to the origin.
+ * on. `rebound` (peak − final position, px) leads: at lift-off the finger is
+ * usually already still, so a "dragged back and paused" gesture has velocity
+ * ≈ 0 and only the rebound exposes the change of intent. A genuine forward
+ * fling (still moving toward the target) is exempt so it still commits.
+ *
+ * The first three cases are transcribed from real device captures:
+ *   A = clean fling, B = drag-then-pullback-and-pause, case 3 = a smaller pullback.
  */
 describe('reversedAtRelease', () => {
-	test('not reversed when release motion continues the drag direction', () => {
-		// Dragged right (deltaX > 0), still moving right at release.
-		expect(reversedAtRelease(120, 0.8)).toBe(false);
-		// Dragged left (deltaX < 0), still moving left at release.
-		expect(reversedAtRelease(-120, -0.8)).toBe(false);
+	test('clean forward fling (no pullback, fast) does not reverse', () => {
+		// Capture A: deltaX=342, velocity=+2.341, rebound=1.
+		expect(reversedAtRelease(342, 2.341, 1)).toBe(false);
 	});
 
-	test('reversed when the release flicks back against the drag direction', () => {
-		// Dragged right past the threshold, flicked left at release.
-		expect(reversedAtRelease(120, -0.6)).toBe(true);
-		// Dragged left past the threshold, flicked right at release.
-		expect(reversedAtRelease(-120, 0.6)).toBe(true);
+	test('pullback then pause (large rebound, ~0 velocity) reverses', () => {
+		// Capture B: deltaX=308, velocity=-0.092, rebound=61.
+		expect(reversedAtRelease(308, -0.092, 61)).toBe(true);
 	});
 
-	test('sub-floor jitter does not cancel a position-qualified commit', () => {
-		// A tiny opposite nudge below the cancellation floor is treated as noise.
-		expect(reversedAtRelease(120, -0.1)).toBe(false);
-		expect(reversedAtRelease(-120, 0.1)).toBe(false);
+	test('moderate pullback with slight negative velocity reverses', () => {
+		// Capture "first": deltaX=232, velocity=-0.149, rebound=29.
+		expect(reversedAtRelease(232, -0.149, 29)).toBe(true);
 	});
 
-	test('zero displacement is never a reversal', () => {
-		expect(reversedAtRelease(0, 0.5)).toBe(false);
-		expect(reversedAtRelease(0, -0.5)).toBe(false);
+	test('rebound below the threshold does not reverse (minor pullback is noise)', () => {
+		expect(reversedAtRelease(200, 0, 24)).toBe(false);
+	});
+
+	test('rebound at the threshold with a still finger reverses', () => {
+		expect(reversedAtRelease(200, 0, 25)).toBe(true);
+	});
+
+	test('a forward fling commits despite trailing rebound (finger still on target)', () => {
+		// rebound is large but the finger is still moving toward the target.
+		expect(reversedAtRelease(200, 0.5, 61)).toBe(false);
+	});
+
+	test('leftward drag is symmetric: pullback reverses, fling commits', () => {
+		// Pullback (finger drifting back right) reverses.
+		expect(reversedAtRelease(-308, 0.092, 61)).toBe(true);
+		// Clean leftward fling commits.
+		expect(reversedAtRelease(-342, -2.341, 1)).toBe(false);
+		// Leftward fling still on target commits despite rebound.
+		expect(reversedAtRelease(-200, -0.5, 61)).toBe(false);
+	});
+
+	test('zero displacement never reverses', () => {
+		expect(reversedAtRelease(0, 0.5, 100)).toBe(false);
 	});
 });
