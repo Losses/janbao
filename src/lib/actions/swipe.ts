@@ -256,7 +256,6 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 		// OS edge-swipe gesture collision guard (40px margin zone to match modern iOS/Android bezel-less native triggers)
 		const edgeDeadZone = 40;
 		if (event.clientX < edgeDeadZone || event.clientX > window.innerWidth - edgeDeadZone) {
-			console.log('[detectSwipe] ignored due to edge dead zone:', event.clientX);
 			return;
 		}
 
@@ -277,7 +276,6 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 				editingAncestor.contains(document.activeElement));
 
 		phase = 'deciding';
-		console.log('[detectSwipe] down start:', { startX, startY, phase });
 	}
 
 	function onMove(event: PointerEvent): void {
@@ -292,7 +290,6 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 			// A gesture that only begins moving after a long-press is selection /
 			// context-menu, not a flick - hand it back to the browser untouched.
 			if (event.timeStamp - startTime > LONG_PRESS_MS) {
-				console.log('[detectSwipe] ignored due to long press time:', event.timeStamp - startTime);
 				phase = 'ignore';
 				return;
 			}
@@ -302,42 +299,27 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 			const ignorable =
 				isInteractive(target, targetWasFocused) || insideHorizontalScroll(target, node);
 
-			console.log('[detectSwipe] deciding progress:', {
-				dx,
-				dy,
-				absDx,
-				absDy,
-				horizontal,
-				vertical,
-				ignorable
-			});
-
 			if (absDx >= DEAD_ZONE && horizontal) {
 				if (!ignorable) {
 					phase = 'swipe';
-					console.log('[detectSwipe] swipe activated!');
 					try {
 						node.setPointerCapture(event.pointerId);
 						capturedPointers.add(event.pointerId);
-					} catch (err) {
-						console.log('[detectSwipe] pointer capture failed:', err);
+					} catch {
+						// Capture is best-effort: a failure (pointer already released) just means the gesture proceeds without capture.
 					}
 				} else {
-					console.log('[detectSwipe] ignored because interactive/scrollable:', { ignorable });
 					phase = 'ignore';
 					return;
 				}
 			} else if (absDy >= DEAD_ZONE && vertical) {
-				console.log('[detectSwipe] vertical scroll detected, ignoring swipe');
 				phase = 'ignore';
 				return;
 			} else if (absDx > 25 || absDy > 25) {
-				console.log('[detectSwipe] ambiguous drag exceeded safety limit, ignoring');
 				phase = 'ignore';
 				return;
 			} else {
 				// Keep deciding (both are small, or ratio is close)
-				console.log('[detectSwipe] ambiguous diagonal movement under limit, continue deciding...');
 				return;
 			}
 		}
@@ -348,7 +330,6 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 	function onUp(event: PointerEvent): void {
 		releaseIfHeld(event.pointerId);
 		if (event.pointerId !== primaryPointerId) return;
-		console.log('[detectSwipe] up/cancel event:', { phase, deltaX: event.clientX - startX });
 		if (phase === 'swipe') {
 			finish(event);
 		} else {
