@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { onMount } from 'svelte';
-	import { goto, preloadData } from '$app/navigation';
+	import { goto, preloadData, afterNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import { getPageScrollStore } from '$lib/stores/page-scroll.svelte';
@@ -73,6 +73,15 @@
 	let prefetchStarted = false;
 	let swipeDirection = $state<'left' | 'right' | null>(null);
 	let viewportWidth = $state(0);
+	// True from the moment a committed swipe dispatches its navigation (in
+	// onTrackTransitionEnd) until that navigation lands. While set, the pager-
+	// driving $effect treats the gesture as still "committed" and HOLDS the tab
+	// pill at the target tab — without this, clearing `pendingNav` (so the
+	// transitionend handler doesn't double-fire) drops `committed` to false a
+	// frame before the route swaps, and the effect's "true rest" branch resets
+	// the pill to fromIdx (-1 on a deep page), collapsing it and dropping its
+	// highlight until the destination pager mounts. See swipe-back-pill-flicker.
+	let navInFlight = $state(false);
 
 	// Derived declarations
 	const hasLeft = $derived(!!left || (navStore.activeTab >= 0 && navStore.activeTab <= 2));
@@ -248,7 +257,8 @@
 		// tracking the finger like the 3-tab pager does.
 		const fromIdx = getCurrentTabIndex(page.url.pathname);
 		const targetIdx = resolvedLeftHref ? getCurrentTabIndex(resolvedLeftHref) : -1;
-		const committed = isPendingNavigation || isTransitioningOut || pendingNav !== null;
+		const committed =
+			isPendingNavigation || isTransitioningOut || pendingNav !== null || navInFlight;
 		if (dragOffset !== null && targetIdx >= 0) {
 			// Gradual expansion across the full drag (matched to the pager, which
 			// normalises by the viewport). Reaching ~15-30% by the commit point is
@@ -320,6 +330,8 @@
 
 	function onSwipeMove(deltaX: number) {
 		if (dragOffset === null) {
+			// New gesture: drop any stale in-flight hold left by a cancelled nav.
+			navInFlight = false;
 			swipeDirection = deltaX > 0 ? 'right' : deltaX < 0 ? 'left' : null;
 			if (swipeDirection === 'right') {
 				swipeNeedsLoadingAtStart = leftNeedsLoading;
@@ -467,12 +479,24 @@
 		if (event.propertyName !== 'transform' || !pendingNav) return;
 		const nav = pendingNav;
 		pendingNav = null;
+		// Hold the pill at the target across the navigation: the route swap (and
+		// the destination pager taking over) is async, so without this flag the
+		// pager effect would reset to fromIdx in the gap and the pill would
+		// collapse/re-expand. Cleared by afterNavigate / unmount.
+		navInFlight = true;
 		if (nav.back) {
 			history.back();
 		} else {
 			void goto(nav.href, { replaceState: nav.replaceState });
 		}
 	}
+
+	// Navigation completed (or this layout survived a same-route no-op): release
+	// the hold so the pill reflects the real URL tab again. For the normal away-
+	// nav this layout unmounts first and the flag dies with it.
+	afterNavigate(() => {
+		navInFlight = false;
+	});
 
 	onMount(() => {
 		const mq = window.matchMedia(MOBILE_BREAKPOINT);
