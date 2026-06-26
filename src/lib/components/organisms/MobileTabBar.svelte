@@ -16,6 +16,7 @@
 	import { getBadgesStore } from '$lib/stores/badges.svelte';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
+	import { hopForHref } from '$lib/utils/history-nav';
 	import type { TranslationDict } from '$lib/types/translation';
 
 	interface MobileTabBarProps {
@@ -70,6 +71,21 @@
 				? 'bg-neutral-content/15 text-accent'
 				: 'text-neutral-content/70'}"
 			aria-current={pillActive ? 'page' : undefined}
+			onclick={(event) => {
+				// Hop via history.back/forward when an adjacent entry already matches
+				// this tab, so toggling two tabs collapses instead of pushing each time
+				// (no back-trap). preventDefault cancels SvelteKit's enhanced link nav;
+				// the resulting popstate runs the same cross-tab stack logic as a tap.
+				const hop = hopForHref(item.href);
+				if (hop === 'back' || hop === 'forward') {
+					event.preventDefault();
+					if (hop === 'back') {
+						history.back();
+					} else {
+						history.forward();
+					}
+				}
+			}}
 		>
 			<span class="relative inline-flex">
 				{#if branded}

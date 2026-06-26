@@ -1,4 +1,4 @@
-import { SvelteURL } from 'svelte/reactivity';
+import { hopForHref } from '$lib/utils/history-nav';
 
 /**
  * Thread-Nav Context - cross-component signals for navigations involving a
@@ -51,21 +51,8 @@ export function setReachedFromList(value: boolean): void {
  * hence omitted unless we standardise on the Navigation API elsewhere.
  */
 export function backLandsOnList(): boolean {
-	if (typeof navigation !== 'undefined') {
-		const cur = navigation.currentEntry;
-		// entries()[cur.index - 1] is the true back destination even when forward
-		// entries exist (currentEntry.index is the position within the full list).
-		if (cur && cur.index > 0) {
-			const prev = navigation.entries()[cur.index - 1];
-			if (prev && prev.url !== null) {
-				try {
-					return new SvelteURL(prev.url).pathname === '/';
-				} catch {
-					return false;
-				}
-			}
-		}
-		return false;
-	}
-	return reachedFromList;
+	if (typeof navigation === 'undefined') return reachedFromList;
+	// hopForHref inspects navigation.entries() to decide back/forward/push; we
+	// only care whether the previous entry is the discussions list.
+	return hopForHref('/') === 'back';
 }

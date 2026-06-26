@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
-import type { Page, Cookie } from '@playwright/test';
+import type { Page, Cookie, BrowserContext } from '@playwright/test';
 
 /**
  * E2E helpers for the mobile back-swipe matrix. Run under the Playwright (node)
@@ -54,6 +54,7 @@ export function mintAdminCookie(): Cookie {
 		value: `${message}.${signature}`,
 		domain: 'localhost',
 		path: '/',
+		expires: now + 2592000,
 		httpOnly: true,
 		secure: false,
 		sameSite: 'Strict'
@@ -70,21 +71,24 @@ export interface SwipeResult {
 	activated: boolean;
 }
 
-export async function swipeBack(page: Page): Promise<SwipeResult> {
+/**
+ * Drive a purely-horizontal touch swipe from `startX` to `endX` via CDP (the
+ * only path detectSwipe recognises - it rejects pointerType 'mouse'). The start
+ * point must stay inside the (40, width-40) edge dead-zone; dx is well past
+ * SWIPE_COMMIT(60) and purely horizontal so |dx| > |dy|*1.6.
+ */
+async function swipeHorizontal(page: Page, startX: number, endX: number): Promise<SwipeResult> {
 	const client = await page.context().newCDPSession(page);
 	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
-	const width = page.viewportSize()?.width ?? 393;
-	// Stay inside the (40, width-40) edge dead-zone; dx well past SWIPE_COMMIT(60);
-	// purely horizontal so |dx| > |dy|*1.6.
-	const startX = Math.round(width * 0.3);
 	const y = 400;
-	const endX = startX + 260;
 	const steps = 14;
 
 	const dispatch = (type: 'touchStart' | 'touchMove' | 'touchEnd', x: number, state: string) =>
 		client.send('Input.dispatchTouchEvent', {
 			type,
-			touchPoints: [{ state, x, y, id: 1 }],
+			// CDP needs each touch point's state (touchPressed/Moved/Released);
+			// playwright's TouchPoint type omits it, so cast past the mismatch.
+			touchPoints: [{ state, x, y, id: 1 }] as unknown as never,
 			modifiers: 0,
 			timestamp: 0
 		});
@@ -97,6 +101,20 @@ export async function swipeBack(page: Page): Promise<SwipeResult> {
 	await dispatch('touchEnd', endX, 'touchReleased');
 	await client.detach();
 	return { activated: true };
+}
+
+/** Rightward swipe (dx>0) → previous tab. */
+export async function swipeBack(page: Page): Promise<SwipeResult> {
+	const width = page.viewportSize()?.width ?? 393;
+	const startX = Math.round(width * 0.3);
+	return swipeHorizontal(page, startX, startX + 260);
+}
+
+/** Leftward swipe (dx<0) → next tab. Mirror of swipeBack. */
+export async function swipeForward(page: Page): Promise<SwipeResult> {
+	const width = page.viewportSize()?.width ?? 393;
+	const startX = Math.round(width * 0.7);
+	return swipeHorizontal(page, startX, startX - 260);
 }
 
 /** Stamp the test context: admin cookie + neuter any zombie service worker. */
@@ -339,7 +357,7 @@ export async function captureHeaderOnThreadScroll(page: Page): Promise<HeaderScr
 	return page.evaluate(async () => {
 		const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 		const afterFrame = (): Promise<void> =>
-			new Promise((resolve) =>
+			new Promise<void>((resolve) =>
 				requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
 			).then(() => sleep(40));
 		const readTy = (): number | null => {

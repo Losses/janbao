@@ -32,6 +32,7 @@
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
+	import { hopForHref } from '$lib/utils/history-nav';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
 	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
@@ -121,7 +122,17 @@
 		// neighbor's translateY goes from scrollY→0 while the header fills
 		// the gap, giving a coordinated slide instead of a content jump.
 		getScrollChromeStore().show();
-		void goto(MOBILE_TABS[index].href);
+		// Hop to the target tab via history.back / forward when an adjacent entry
+		// already matches it, so toggling two tabs collapses instead of pushing a
+		// new entry each time (which would trap the user in the app on back).
+		const hop = hopForHref(MOBILE_TABS[index].href);
+		if (hop === 'back') {
+			history.back();
+		} else if (hop === 'forward') {
+			history.forward();
+		} else {
+			void goto(MOBILE_TABS[index].href);
+		}
 	}
 	function swipeEnd(deltaX: number, velocity: number, reversed: boolean): void {
 		const last = MOBILE_TABS.length - 1;

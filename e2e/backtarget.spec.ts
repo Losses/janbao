@@ -6,7 +6,6 @@ import {
 	enterSource,
 	waitForUrlNot,
 	waitForHydration,
-	collectConsole,
 	type Entry,
 	type Source
 } from './helpers';
@@ -51,26 +50,22 @@ async function setupAuth(context: import('@playwright/test').BrowserContext): Pr
 }
 
 /**
- * Run one scenario end-to-end and return { landed, activated }. Throws if the
- * gesture was not recognised (so the caller never trusts a stale URL).
+ * Run one scenario end-to-end and return the post-swipe landing pathname. The
+ * gesture activating AND committing is proven by the URL leaving `sc.target`:
+ * waitForUrlNot times out if detectSwipe never recognised the drag, so a
+ * silently-failed gesture still fails loudly. (The old `[detectSwipe] swipe
+ * activated!` console gate relied on debug logs removed in 6065026.)
  */
-async function runScenario(
-	page: Page,
-	sc: Scenario
-): Promise<{ landed: string; activated: boolean; console: string[] }> {
+async function runScenario(page: Page, sc: Scenario): Promise<{ landed: string }> {
 	await setupAuth(page.context());
-	const console = collectConsole(page);
 	await enterSource(page, sc.entry, sc.source);
 	await openSidebarAndGoto(page, sc.target);
 	expect(new URL(page.url()).pathname).toBe(sc.target);
 
 	await swipeBack(page);
-	// Hard gate: detectSwipe MUST have entered its swipe phase. If this is false
-	// the landing URL below is meaningless (the gesture never committed).
 	await page.waitForTimeout(200);
-	const activated = console.some((m) => m.includes('swipe activated!'));
 	const landed = await waitForUrlNot(page, sc.target);
-	return { landed, activated, console };
+	return { landed };
 }
 
 // --- Calibration: the A4 control must PASS before any matrix result is trusted.
@@ -78,7 +73,6 @@ async function runScenario(
 // broken - do not read anything into the matrix below.
 test('CALIBRATION: A4 (tab → messages → bookmarks) lands on messages', async ({ page }) => {
 	const res = await runScenario(page, A_GROUP[3]);
-	expect(res.activated, 'detectSwipe did not activate - gesture harness broken').toBe(true);
 	expect(res.landed).toBe('/messages/inbox');
 });
 
@@ -88,10 +82,6 @@ for (const sc of [...A_GROUP, ...B_GROUP]) {
 		page
 	}) => {
 		const res = await runScenario(page, sc);
-		expect(
-			res.activated,
-			`detectSwipe did not activate for ${sc.id} - gesture result untrusted. console: ${res.console.join(' | ')}`
-		).toBe(true);
 		expect(res.landed).toBe(sc.expected);
 	});
 }

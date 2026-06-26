@@ -7,6 +7,7 @@
 	import { getPageScrollStore } from '$lib/stores/page-scroll.svelte';
 	import { backHandler } from '$lib/stores/navigation.svelte';
 	import { detectSwipe } from '$lib/actions/swipe';
+	import { hopForHref } from '$lib/utils/history-nav';
 	import type { Action } from 'svelte/action';
 	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
@@ -366,23 +367,6 @@
 		}
 	}
 
-	function backLandsOn(targetPath: string): boolean {
-		if (typeof navigation !== 'undefined') {
-			const cur = navigation.currentEntry;
-			if (cur && cur.index > 0) {
-				const prev = navigation.entries()[cur.index - 1];
-				if (prev && prev.url !== null) {
-					try {
-						return new URL(prev.url).pathname === targetPath;
-					} catch {
-						return false;
-					}
-				}
-			}
-		}
-		return false;
-	}
-
 	function onSwipeEnd(deltaX: number, velocity: number, reversed: boolean) {
 		// `reversed` = the finger rebounded from the drag's peak before lift-off
 		// (change of intent): return to the current panel instead of advancing.
@@ -451,7 +435,7 @@
 				if (!consumed) {
 					if (hasLeft) {
 						snapIndex = leftIdx;
-						const back = backLandsOn(resolvedLeftHref);
+						const back = hopForHref(resolvedLeftHref) === 'back';
 						pendingNav = { href: resolvedLeftHref, back, replaceState: true };
 					} else {
 						if (navStore.activeStack.length > 1) {
