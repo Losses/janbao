@@ -251,7 +251,12 @@
 				const rightPanelIdx = hasRight && !swipeNeedsLoadingAtStart ? panelCount - 1 : -1;
 				progressVal = snapIndex === rightPanelIdx && rightTab !== undefined ? rightTab : centerTab;
 			}
-			pager.set({ fractionalIndex: progressVal, dragging: dragOffset !== null, active: true });
+			pager.set({
+				fractionalIndex: progressVal,
+				dragging: dragOffset !== null,
+				active: true,
+				deepMorph: null
+			});
 			return;
 		}
 		// Deep page with no tab of its own (bookmarks, profile, settings, search,
@@ -272,18 +277,23 @@
 			pager.set({
 				fractionalIndex: fromIdx + (targetIdx - fromIdx) * progress,
 				dragging: true,
-				active: true
+				active: true,
+				// Same progress drives the Header's hamburger<->back-arrow morph, in
+				// sync with the pill (single writer, same branch): 0 = full back arrow
+				// at rest, 1 once the swipe-back commits toward the tab root.
+				deepMorph: progress
 			});
 		} else if (committed && targetIdx >= 0) {
 			// Gesture committed, navigation in flight: HOLD the pill at the target
 			// (don't reset to fromIdx) so it doesn't collapse-then-re-expand before
 			// the destination page's pager takes over. dragging=false lets the CSS
 			// transition animate the final sliver into place.
-			pager.set({ fractionalIndex: targetIdx, dragging: false, active: true });
+			pager.set({ fractionalIndex: targetIdx, dragging: false, active: true, deepMorph: 1 });
 		} else {
 			// True rest (idle, or backing toward a non-tab route): release the pager
 			// so MobileTabBar falls back to the URL tab (-1 => no pill on a deep page).
-			pager.set({ fractionalIndex: fromIdx, dragging: false, active: false });
+			// deepMorph=0 keeps the Header in deep mode (full back arrow) at rest.
+			pager.set({ fractionalIndex: fromIdx, dragging: false, active: false, deepMorph: 0 });
 		}
 	});
 
@@ -561,7 +571,7 @@
 			window.removeEventListener('scroll', forceZeroScroll, true);
 			document.documentElement.classList.remove('fixed-viewport');
 			if (enterRaf) cancelAnimationFrame(enterRaf);
-			pager.set({ fractionalIndex: 0, dragging: false, active: false });
+			pager.set({ fractionalIndex: 0, dragging: false, active: false, deepMorph: null });
 		};
 	});
 

@@ -64,18 +64,21 @@
 	// Publish drag progress to the shared store so MobileTabBar's indicator
 	// tracks the finger. fractionalIndex = active tab + fractional drag offset
 	// (in panel widths); dragging drops the bar's CSS transition for 1:1 follow.
+	// Tab routes are always root-mode for the Header, so deepMorph stays null
+	// here (the morph is driven only by deep-page swipe-back in GesturePageLayout).
 	const pager = getMobilePagerStore();
 	let viewportWidth = $state(0);
 	$effect(() => {
 		pager.set({
 			fractionalIndex: activeIndex - (dragOffset ?? 0) / (viewportWidth || 1),
 			dragging: dragOffset !== null,
-			active: true
+			active: true,
+			deepMorph: null
 		});
 	});
 	onMount(() => {
-		pager.set({ fractionalIndex: activeIndex, dragging: false, active: true });
-		return () => pager.set({ fractionalIndex: 0, dragging: false, active: false });
+		pager.set({ fractionalIndex: activeIndex, dragging: false, active: true, deepMorph: null });
+		return () => pager.set({ fractionalIndex: 0, dragging: false, active: false, deepMorph: null });
 	});
 
 	// Sync from the URL for deep links + browser back/forward. Writes activeIndex

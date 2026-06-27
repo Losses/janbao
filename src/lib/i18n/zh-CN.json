@@ -10,7 +10,8 @@
 		"menu": "打开菜单",
 		"search": "搜索",
 		"discussions": "讨论",
-		"primary": "主导航"
+		"primary": "主导航",
+		"back": "返回"
 	},
 	"directory": {
 		"personalInteractions": "个人互动",

@@ -218,6 +218,8 @@ export const load: PageServerLoad = async (event) => {
 
 	return {
 		targetUser,
+		// The header shows the target user's display name in deep-page mode.
+		headerTitle: targetUser.displayName,
 		headerEmail,
 		// Only expose the target user's email to admins (for the reset-link copy sentence).
 		targetUserEmail,

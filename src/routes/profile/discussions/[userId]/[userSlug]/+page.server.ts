@@ -26,6 +26,8 @@ export const load: PageServerLoad = async (event) => {
 
 	return {
 		targetUser: ctx.targetUser,
+		// The header shows "<user> - Discussions" in deep-page mode.
+		headerTitle: `${ctx.targetUser.displayName} - ${t.profile.discussions}`,
 		invitedBy: ctx.invitedBy,
 		headerEmail: ctx.headerEmail,
 		discussions,

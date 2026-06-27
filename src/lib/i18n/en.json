@@ -10,7 +10,8 @@
 		"menu": "Open menu",
 		"search": "Search",
 		"discussions": "Discussions",
-		"primary": "Primary navigation"
+		"primary": "Primary navigation",
+		"back": "Back"
 	},
 	"directory": {
 		"personalInteractions": "Personal Interactions",

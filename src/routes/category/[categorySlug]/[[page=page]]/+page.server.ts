@@ -53,6 +53,8 @@ export const load: PageServerLoad = async (event) => {
 
 	return {
 		category,
+		// The header shows the category's resolved name in deep-page mode.
+		headerTitle: category.title,
 		discussions,
 		page,
 		totalPages,
