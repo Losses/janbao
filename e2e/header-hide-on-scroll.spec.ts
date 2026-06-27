@@ -16,7 +16,7 @@ import {
  * the sticky Header's hide-on-down / reveal-on-up animation, so on these routes
  * it must react to the CONTAINER's scroll, not the window's. Pre-fix it only
  * attached its scroll listener to `window`, which never scrolls here, so the
- * Header stayed pinned forever — visibly different from the homepage (whose
+ * Header stayed pinned forever - visibly different from the homepage (whose
  * MobileTabPager scrolls the window and hides the Header correctly).
  *
  * The reported repro is "enter the thread directly at mobile size" (a hard
@@ -72,10 +72,10 @@ test('REGRESSION: mobile thread Header hides on scroll-down and reveals on scrol
 		'first content element must sit below the overlay Header (not eaten)'
 	).toBeGreaterThanOrEqual(56);
 	// When the Header slides away the content card must fill the space it vacated
-	// — no header-tall blank gap on top.
+	// - no header-tall blank gap on top.
 	expect(capture.downTopIsCard, 'no blank gap on top when the Header is hidden').toBe(true);
 	// Homepage-consistent bottom: the content card ends ABOVE the viewport bottom
-	// and the page-bg (base-200) strip shows below it — not the card bg locked to
+	// and the page-bg (base-200) strip shows below it - not the card bg locked to
 	// the bottom. Pre-fix the card filled the viewport (no page-bg strip).
 	expect(
 		capture.bottomCardBottom,
@@ -83,7 +83,7 @@ test('REGRESSION: mobile thread Header hides on scroll-down and reveals on scrol
 	).toBeLessThan(capture.vh);
 	expect(capture.bottomIsPageBg, 'bottom edge at scroll-end must be the page-bg strip').toBe(true);
 	// Design-system colours: the card is base-100 (white), the pane is base-200
-	// (page bg) — the homepage's card-on-page-bg.
+	// (page bg) - the homepage's card-on-page-bg.
 	expect(capture.cardBg, 'content card must be base-100 (white)').toMatch(/^rgb\(255, 255, 255\)/);
 	expect(capture.paneBg, 'scroll pane must be base-200 (page bg)').not.toContain('255, 255, 255');
 });
@@ -92,7 +92,7 @@ test('REGRESSION: mobile thread Header hides on scroll-down and reveals on scrol
  * A hash deep-link lands mid-thread via landAtAnchor, which programmatically
  * scrolls the container. That landing scroll must not hide the Header (the hold
  * pins it visible through the landing); at rest the Header must be visible so the
- * user can navigate away. Pre-fix the Header was visible too — but for the wrong
+ * user can navigate away. Pre-fix the Header was visible too - but for the wrong
  * reason (the store ignored the container entirely). This test guards a fix that
  * happens to pass the scroll test above while twitching the Header on landing.
  */
@@ -104,7 +104,7 @@ test('REGRESSION: hash deep-link lands with the Header visible (no landing twitc
 	await clickDiscussion(page, 0);
 	await page.waitForURL(/\/discussion\//);
 
-	// Pick the LAST reply anchor — near the bottom of the thread, so the landing
+	// Pick the LAST reply anchor - near the bottom of the thread, so the landing
 	// scroll is a large top→bottom jump (the reported #reply-741274 case). This is
 	// the hardest case for the landing hold: without it the down-jump hides the
 	// Header and it stays hidden at rest.

@@ -278,7 +278,7 @@ header nav {
 	}
 	/* Match the homepage's card-on-page-bg: the scroll container (page bg) holds
 	   the white content card (.gpl-card) floating inside it, so the page bg shows
-	   at the top (behind the overlay Header) and at the bottom — scrolling, never
+	   at the top (behind the overlay Header) and at the bottom - scrolling, never
 	   locked, and the card border ends above the page-bg strip exactly like the
 	   homepage. The outer .dual-column-layout-columns card is transparent on
 	   mobile (it stays the white card on desktop, where the window scrolls). The

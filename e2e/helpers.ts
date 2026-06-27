@@ -329,7 +329,7 @@ export interface HeaderScrollCapture {
 	 * not cover the first content element. */
 	topFirstContentTop: number;
 	/** Whether the element painted at the viewport's TOP edge is inside the
-	 * content card after scrolling down — i.e. the card fills the space the
+	 * content card after scrolling down - i.e. the card fills the space the
 	 * Header vacated (no header-tall blank gap). */
 	downTopIsCard: boolean;
 	/** Bottom edge of the content card (`.gpl-card`) when scrolled to the
@@ -337,11 +337,11 @@ export interface HeaderScrollCapture {
 	 * below it (matching the homepage). */
 	bottomCardBottom: number;
 	/** Whether the element painted at the viewport's BOTTOM edge (at scroll-end)
-	 * is OUTSIDE the content card — i.e. the page-bg strip is showing, not the
+	 * is OUTSIDE the content card - i.e. the page-bg strip is showing, not the
 	 * card. */
 	bottomIsPageBg: boolean;
 	/** Computed background of the content card (must be base-100 / white) and the
-	 * scroll pane (must be base-200 / page bg) — the homepage's card-on-page-bg. */
+	 * scroll pane (must be base-200 / page bg) - the homepage's card-on-page-bg. */
 	cardBg: string;
 	paneBg: string;
 }

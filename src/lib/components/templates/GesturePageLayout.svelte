@@ -74,7 +74,7 @@
 	// True from the moment a committed swipe dispatches its navigation (in
 	// onTrackTransitionEnd) until that navigation lands. While set, the pager-
 	// driving $effect treats the gesture as still "committed" and HOLDS the tab
-	// pill at the target tab — without this, clearing `pendingNav` (so the
+	// pill at the target tab - without this, clearing `pendingNav` (so the
 	// transitionend handler doesn't double-fire) drops `committed` to false a
 	// frame before the route swaps, and the effect's "true rest" branch resets
 	// the pill to fromIdx (-1 on a deep page), collapsing it and dropping its
@@ -86,7 +86,7 @@
 	const resolvedLeftHref = $derived(leftHref ?? navStore.backTarget);
 	// The left preview shows the tab list when back lands on the tab root. When
 	// the back target is elsewhere (e.g. a thread reached before /bookmarks) the
-	// target page is unmounted on this route so there is no DOM to preview — show
+	// target page is unmounted on this route so there is no DOM to preview - show
 	// the shared LoadingChip instead of a fake list.
 	const currentTabRoot = $derived(MOBILE_TABS[navStore.activeTab]?.href ?? '/');
 	const backTargetIsTabRoot = $derived(resolvedLeftHref === currentTabRoot);
@@ -175,7 +175,7 @@
 	// svelte-ignore state_referenced_locally
 	// Start at 0 (the list-preview frame) only when the slide-in will actually
 	// play, i.e. entering AND on mobile. On desktop the pager is display:block
-	// and never animates, so snapIndex must init at ACTIVE — otherwise it stays
+	// and never animates, so snapIndex must init at ACTIVE - otherwise it stays
 	// stranded at 0 (enterRaf below is mobile-only) and a later resize into
 	// mobile would rest on the left/list panel instead of the centre thread.
 	let snapIndex = $state(isEntering && isMobile ? 0 : hasLeft && !swipeNeedsLoadingAtStart ? 1 : 0);

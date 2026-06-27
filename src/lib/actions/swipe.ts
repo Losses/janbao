@@ -18,7 +18,7 @@ import type { Action } from 'svelte/action';
 
 // `onMove` fires per pointermove with the live displacement only; `onEnd` adds
 // `velocity` (release px/ms) and `reversed` (did the finger rebound from the
-// drag's peak before lift-off — a change of intent). Consumers gate commit on
+// drag's peak before lift-off - a change of intent). Consumers gate commit on
 // `reversed` so a swipe that crossed the commit threshold but was pulled back
 // snaps to the origin instead of advancing.
 export type MoveHandler = (deltaX: number) => void;
@@ -41,7 +41,7 @@ const CLICK_THRESHOLD = 6; // px of travel before the trailing click is suppress
 // Release-intent detection. `velocity` is the finger's release speed over the
 // trailing VELOCITY_WINDOW_MS; `rebound` is how far it pulled back from the
 // drag's peak. A change of intent ("dragged past the commit line, then flicked
-// back") shows up as rebound, NOT velocity — at lift-off the finger is usually
+// back") shows up as rebound, NOT velocity - at lift-off the finger is usually
 // already still (velocity ≈ 0), so pure release-speed can't tell "dragged back
 // and paused" from "dragged forward and paused". rebound is the primary signal;
 // the velocity gate only lets a genuine forward fling (finger still moving
@@ -129,7 +129,7 @@ export function releaseVelocity(samples: PositionSample[]): number {
 	const cutoff = last.t - VELOCITY_WINDOW_MS;
 	// First sample that still falls inside the trailing window. The bound is n-2
 	// (not n-1): we always keep at least the previous sample so there is a span to
-	// differentiate, even when an aged outlier is the only earlier point — a
+	// differentiate, even when an aged outlier is the only earlier point - a
 	// 2-sample gesture must not collapse to dt = 0 just because the start sits
 	// outside an 80ms window.
 	let i = 0;
@@ -146,14 +146,14 @@ function recordSample(samples: PositionSample[], x: number, t: number): void {
 }
 
 /**
- * True when the user rebounded from the drag's peak before lift-off — crossed
+ * True when the user rebounded from the drag's peak before lift-off - crossed
  * the commit threshold but then pulled back, signalling a change of intent.
  * Consumers gate their commit on this so the gesture returns to its origin.
  *
  * `rebound` (peak − final position, px, always ≥ 0) is the primary signal;
  * `velocity` is the px/ms release speed from `releaseVelocity`. At lift-off the
  * finger is usually already still (velocity ≈ 0), so pure release-speed can't
- * distinguish "dragged back and paused" from "dragged forward and paused" —
+ * distinguish "dragged back and paused" from "dragged forward and paused" -
  * hence rebound leads. The velocity gate only lets a genuine fling (still
  * travelling toward the target at lift-off) commit despite some trailing
  * rebound; it is sign-symmetric so leftward and rightward drags behave alike.

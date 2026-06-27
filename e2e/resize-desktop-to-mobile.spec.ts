@@ -7,12 +7,12 @@ import { prepareContext, waitForHydration, clickDiscussion } from './helpers';
  * The pager initialises `snapIndex = isEntering ? 0 : ACTIVE`. On a list→thread
  * SPA navigation `navStore.direction` is `'forward'` and the stack is
  * `['/', '/discussion/x']`, so `shouldAnimateEnter()` is true and `snapIndex`
- * starts at 0 — the first frame of the mobile slide-in. The one-frame `enterRaf`
+ * starts at 0 - the first frame of the mobile slide-in. The one-frame `enterRaf`
  * that advances it back to ACTIVE (centre) is gated `if (isEntering && isMobile)`,
  * so on a DESKTOP mount it never runs and `snapIndex` is stranded at 0. Desktop
  * hides this (the track is `display:block; transform:none`, snapIndex unused);
- * resizing into mobile then rests the pager on panel 0 — the LEFT / discussions
- * list ("homepage") — pushing the thread off-screen. Hard deep-links are immune
+ * resizing into mobile then rests the pager on panel 0 - the LEFT / discussions
+ * list ("homepage") - pushing the thread off-screen. Hard deep-links are immune
  * (`beforeNavigate` doesn't fire on load → direction stays `'none'` → snapIndex
  * starts at ACTIVE), so the reproduction MUST go through an in-app list→thread
  * navigation at desktop size.
@@ -50,7 +50,7 @@ test('thread stays centred after a desktop list→thread SPA nav + resize to mob
 	await clickDiscussion(page, 0);
 	await page.waitForURL(/\/discussion\//);
 
-	// 3. Shrink to mobile — this is where the bug manifests.
+	// 3. Shrink to mobile - this is where the bug manifests.
 	await page.setViewportSize(MOBILE_VIEWPORT);
 
 	// 4. The centre panel must re-enter / stay in the viewport. Pre-fix it sits
@@ -73,7 +73,7 @@ test('thread stays centred after a desktop list→thread SPA nav + resize to mob
 test('hard deep-link to a thread is immune (sanity for the reproduction path)', async ({ page }) => {
 	// A full load never fires beforeNavigate, so direction stays 'none',
 	// shouldAnimateEnter() is false, and snapIndex starts at ACTIVE. Resizing to
-	// mobile must therefore leave the thread centred — guards against a "fix" that
+	// mobile must therefore leave the thread centred - guards against a "fix" that
 	// happens to pass by accident on the deep-link path while missing the SPA path.
 	await page.setViewportSize(DESKTOP_VIEWPORT);
 	await page.goto('/');

@@ -25,7 +25,7 @@ type CacheCheckFn = () => boolean;
 
 // Each tab's list panel is a thin wrapper (TabDiscussionsPanel etc.) exposing a
 // UNIFIED props shape (TabPanelWrapperProps), so the panel slot is a single
-// concrete Component<TabPanelWrapperProps> — not a union of the heterogeneous
+// concrete Component<TabPanelWrapperProps> - not a union of the heterogeneous
 // underlying Panels. The wrapper owns the cache -> Panel wiring.
 type TabListComponent = Component<TabPanelWrapperProps>;
 

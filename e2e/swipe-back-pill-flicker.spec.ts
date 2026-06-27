@@ -6,11 +6,11 @@ import { prepareContext, swipeBack, openSidebarAndGoto, waitForHydration } from 
  *
  * Sibling of backtarget.spec.ts "Bug3" (which proves the pill EXPANDS gradually
  * DURING the drag). This file covers the moment Bug3 stops sampling: AFTER the
- * finger lifts. On a back-swipe from a deep page (/bookmarks — a page with no
+ * finger lifts. On a back-swipe from a deep page (/bookmarks - a page with no
  * tab of its own, GesturePageLayout fallbackRoute="/") back to a tab root (/),
  * the top Discussions pill must HOLD active+expanded through the handoff to the
  * homepage pager. Pre-fix it collapsed and lost its highlight, then re-expanded
- * — a visible flicker.
+ * - a visible flicker.
  *
  * Root cause: GesturePageLayout's pager-driving $effect has a "true rest" branch
  * that resets the pager to `fractionalIndex = fromIdx` (-1 on a deep page) +
@@ -21,8 +21,8 @@ import { prepareContext, swipeBack, openSidebarAndGoto, waitForHydration } from 
  * swaps, the homepage MobileTabPager sets active:true and the pill re-expands.
  *
  * Faithfulness: the back-swipe is a real CDP touch gesture (detectSwipe rejects
- * mouse), and /bookmarks is reached via the dev __e2eGoto hook — the same
- * beforeNavigate the drawer's 收藏 link ultimately fires — so the backTarget
+ * mouse), and /bookmarks is reached via the dev __e2eGoto hook - the same
+ * beforeNavigate the drawer's 收藏 link ultimately fires - so the backTarget
  * precondition matches a real user opening the sidebar → 收藏 → swiping back.
  */
 
@@ -70,7 +70,7 @@ async function readPillLog(page: Page): Promise<PillSample[]> {
 
 /**
  * Count active→inactive→active "V" dips in the timeline. A V-dip is an inactive
- * run flanked by active runs — exactly the collapse-re-expand flicker. It is
+ * run flanked by active runs - exactly the collapse-re-expand flicker. It is
  * immune to drag-phase churn (a mid-drag active run just merges into the commit
  * run) and to the final landing state. Pre-fix: ≥1. Post-fix: 0.
  */
@@ -92,7 +92,7 @@ test.beforeEach(async ({ context }) => {
 
 // CALIBRATION: prove the harness reaches /bookmarks, the gesture commits, and we
 // land on /. If this fails the regression assertion below is meaningless. (We
-// gate on the landing URL + the pill reaching active, not a console log — the
+// gate on the landing URL + the pill reaching active, not a console log - the
 // old "swipe activated!" log was removed in the Log-removal pass.)
 test('CALIBRATION: /bookmarks back-swipe commits and lands on /', async ({ page }) => {
 	await page.goto('/');
@@ -106,13 +106,13 @@ test('CALIBRATION: /bookmarks back-swipe commits and lands on /', async ({ page 
 	expect(new URL(page.url()).pathname).toBe('/');
 
 	const log = await readPillLog(page);
-	expect(log.some((s) => s.active), 'pill never became active — the swipe did not commit').toBe(
+	expect(log.some((s) => s.active), 'pill never became active - the swipe did not commit').toBe(
 		true
 	);
 });
 
 // REGRESSION: the Discussions pill must stay active from commit through the
-// homepage handoff — no collapse/re-expand flicker. Pre-fix this fails with a
+// homepage handoff - no collapse/re-expand flicker. Pre-fix this fails with a
 // single V-dip (active at commit → inactive at the pager reset → active on landing).
 test('REGRESSION: deep-page back-swipe holds the Discussions pill active (no collapse/re-expand)', async ({
 	page
@@ -133,7 +133,7 @@ test('REGRESSION: deep-page back-swipe holds the Discussions pill active (no col
 
 	// The gesture must have committed: the pill reached active at some point.
 	const everActive = log.some((s) => s.active);
-	expect(everActive, 'pill never became active — the swipe did not commit').toBe(true);
+	expect(everActive, 'pill never became active - the swipe did not commit').toBe(true);
 
 	// And it must end active on the homepage.
 	expect(log[log.length - 1].active, 'pill must end active on /').toBe(true);
