@@ -51,7 +51,7 @@
 	// 10.49px, matching mdiArrowLeft's diagonal exactly. (Verified by endpoint
 	// computation: both arms' tips land exactly on the tip point, coincident.)
 	const SPLAY = 7.4; // each arm reaches ±SPLAY px from the stem at p=1 (arm = SPLAY*1.414 = 10.49)
-	const TY = 2.12; // fixed by the fit (places the tip on the stem)
+	const TY = 1.2; // fixed by the fit (places the tip on the stem)
 	const TX = (8 - SPLAY / 2 + (5 - SPLAY / 2)) / 0.707 / 2;
 	const ARM_END = (SPLAY * 1.414) / 18; // arm length as a fraction of the bar at p=1
 	// The tip where both arms meet (and where the stem's left end retracts to).
@@ -60,7 +60,7 @@
 	// ~11.5, far shorter than the 18px middle bar. The stem retracts from both
 	// ends toward (TIP_X, SHAFT_RIGHT) so the arrowhead is proportionate (a full
 	// 18px stem made the arms look stubby, ratio 0.47 vs mdiArrowLeft's 0.91).
-	const SHAFT_RIGHT = 17;
+	const SHAFT_RIGHT = 20;
 	const SHAFT_SCALE = (SHAFT_RIGHT - TIP_X) / (RIGHT - LEFT); // shaft length / bar length
 	// The stem retracts into a shaft WHILE staying inside the rotating group (so
 	// it flips 180deg with the arms, preserving the Material morph motion). The
@@ -83,20 +83,19 @@
 	);
 </script>
 
-<svg
-	viewBox="0 0 24 24"
-	width="24"
-	height="24"
-	class="block"
-	fill="none"
-	stroke="currentColor"
-	stroke-width={T}
-	stroke-linecap="butt"
-	aria-hidden="true"
->
-	<g style={groupStyle}>
-		<line x1={LEFT} y1={STEM} x2={RIGHT} y2={STEM} style={stemStyle} />
-		<line x1={LEFT} y1={TOP} x2={RIGHT} y2={TOP} style={topStyle} />
-		<line x1={LEFT} y1={BOT} x2={RIGHT} y2={BOT} style={botStyle} />
-	</g>
+<svg viewBox="0 0 24 24" width="24" height="24" class="block" aria-hidden="true">
+	<defs>
+		<!-- Mask = the opaque union of the 3 bars. The visible icon is a SINGLE
+			currentColor rect painted through this mask, so where bars overlap (the
+			tip where all 3 meet) they do not alpha-compound into a darker patch:
+			the mask is a binary union and the one fill is uniform currentColor. -->
+		<mask id="burger-arrow" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+			<g style={groupStyle} fill="none" stroke="white" stroke-width={T} stroke-linecap="butt">
+				<line x1={LEFT} y1={STEM} x2={RIGHT} y2={STEM} style={stemStyle} />
+				<line x1={LEFT} y1={TOP} x2={RIGHT} y2={TOP} style={topStyle} />
+				<line x1={LEFT} y1={BOT} x2={RIGHT} y2={BOT} style={botStyle} />
+			</g>
+		</mask>
+	</defs>
+	<rect x="0" y="0" width="24" height="24" fill="currentColor" mask="url(#burger-arrow)" />
 </svg>
