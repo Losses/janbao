@@ -15,9 +15,9 @@
 	 * children, so they inherit the flip and THEN apply their own rotate
 	 * (+/-45deg) + translate + shorten (anim-before / anim-after). The 180deg
 	 * flip is load-bearing: without it the arms land on the RIGHT (a forward
-	 * arrow); the flip swings them to the LEFT to form the back arrow. The arms
-	 * shorten to 0.7 of the stem width (reference 42/60); the translate is tuned
-	 * for the MDI bar spacing so the chevron reads cleanly.
+	 * arrow); the flip swings them to the LEFT to form the back arrow. The arm
+	 * translate/length are ANALYTICALLY FITTED (not eye-tuned) so both arms meet
+	 * at one sharp tip on the stem; only SPLAY (arrowhead size) is a free knob.
 	 *
 	 * Each bar is a fixed <line> reshaped via CSS `transform` (transitionable,
 	 * unlike SVG geometry attributes), so the morph settles with the same 200ms
@@ -44,20 +44,26 @@
 	const STEM = 12;
 	const TOP = 7;
 	const BOT = 17;
-	// Arm translate tuned for the MDI spacing so the arms form a clean left
-	// chevron after the 180deg flip (the reference's translate ratios were sized
-	// for its wider 60:8:24 proportions).
-	const TX = 5; // arms translate right, then the flip puts them on the left
-	const TY = 4.5; // arms translate up/down, sets the chevron's vertical spread
+	// Analytically FITTED (solved, not tuned by eye) so the two arms meet at a
+	// single sharp tip ON the stem (≈(4,12)) and form a symmetric 45deg chevron.
+	// The transform math is inverted for a target tip at (4,12): TY is fixed by
+	// the fit, and TX + the arm length derive from SPLAY (how far each arm
+	// reaches from the stem). SPLAY is the only knob: smaller = tighter
+	// arrowhead; 6 matches mdiArrowLeft. (Verified: endpoints computed in the
+	// bun check, both arms' tips land exactly on (4,12), coincident.)
+	const SPLAY = 6; // each arm reaches ±SPLAY px from the stem at p=1
+	const TY = 2.12; // fixed by the fit (places the tip on the stem)
+	const TX = (8 - SPLAY / 2 + (5 - SPLAY / 2)) / 0.707 / 2;
+	const ARM_END = (SPLAY * 1.414) / 18; // arm length as a fraction of the bar at p=1
 
 	const groupStyle = $derived(
 		`transform-box: view-box; transform-origin: 12px ${STEM}px; transform: rotate(${180 * p}deg); transition: ${transition}`
 	);
 	const topStyle = $derived(
-		`transform-box: view-box; transform-origin: 12px ${TOP}px; transform: rotate(${45 * p}deg) translate(${TX * p}px, ${-TY * p}px) scaleX(${1 - 0.3 * p}); transition: ${transition}`
+		`transform-box: view-box; transform-origin: 12px ${TOP}px; transform: rotate(${45 * p}deg) translate(${TX * p}px, ${-TY * p}px) scaleX(${1 - (1 - ARM_END) * p}); transition: ${transition}`
 	);
 	const botStyle = $derived(
-		`transform-box: view-box; transform-origin: 12px ${BOT}px; transform: rotate(${-45 * p}deg) translate(${TX * p}px, ${TY * p}px) scaleX(${1 - 0.3 * p}); transition: ${transition}`
+		`transform-box: view-box; transform-origin: 12px ${BOT}px; transform: rotate(${-45 * p}deg) translate(${TX * p}px, ${TY * p}px) scaleX(${1 - (1 - ARM_END) * p}); transition: ${transition}`
 	);
 </script>
 
