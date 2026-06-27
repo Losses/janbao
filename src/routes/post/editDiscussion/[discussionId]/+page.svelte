@@ -110,7 +110,7 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-3 px-4 py-2 md:px-0">
+	<div class="space-y-3 md:py-2">
 		<!-- Header -->
 		<div class="border-b border-base-300 pb-4">
 			<h1 class="page-title">

@@ -292,6 +292,15 @@ header nav {
 		background-color: transparent;
 		border-bottom: 0;
 	}
+	/* Mobile content gutter for non-gesture routes: the single source of the
+	   0.75rem content padding (matches .gpl-card on gesture routes). Excluded
+	   under html.fixed-viewport because GesturePageLayout's .gpl-card already
+	   supplies 0.75rem inside a full-bleed page-bg scroll surface - padding here
+	   too would double-pad. Desktop padding lives on .dual-column-layout-columns
+	   (md:p-3). */
+	html:not(.fixed-viewport) .dual-column-layout-content {
+		padding: 0.75rem;
+	}
 	html.fixed-viewport .scroll-pane {
 		background-color: var(--color-base-200);
 		padding-top: var(--header-height, 0px);
