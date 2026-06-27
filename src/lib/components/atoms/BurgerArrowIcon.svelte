@@ -50,7 +50,7 @@
 	// the fit, TX + the arm length derive from SPLAY. SPLAY=7.4 makes each arm
 	// 10.49px, matching mdiArrowLeft's diagonal exactly. (Verified by endpoint
 	// computation: both arms' tips land exactly on the tip point, coincident.)
-	const SPLAY = 7.4; // each arm reaches ±SPLAY px from the stem at p=1 (arm = SPLAY*1.414 = 10.49)
+	const SPLAY = 8; // each arm reaches ±SPLAY px from the stem at p=1 (arm = SPLAY*1.414 = 10.49)
 	const TY = 1.2; // fixed by the fit (places the tip on the stem)
 	const TX = (8 - SPLAY / 2 + (5 - SPLAY / 2)) / 0.707 / 2;
 	const ARM_END = (SPLAY * 1.414) / 18; // arm length as a fraction of the bar at p=1
