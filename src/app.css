@@ -314,8 +314,7 @@ header nav {
 	     here would inset the viewport and make panels slide within a gutter
 	     instead of off-screen.
 	   Desktop padding lives on .dual-column-layout-columns (md:p-3). */
-	html:not(.fixed-viewport)
-		.dual-column-layout-content:not(:has(.mobile-tab-pager-viewport)) {
+	html:not(.fixed-viewport) .dual-column-layout-content:not(:has(.mobile-tab-pager-viewport)) {
 		padding: 0.75rem;
 	}
 	html.fixed-viewport .scroll-pane {
