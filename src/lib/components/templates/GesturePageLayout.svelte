@@ -130,10 +130,10 @@
 	const targetTab = $derived(
 		swipeDirection === 'left'
 			? resolvedRightHref
-				? MOBILE_TABS.find((tab) => tab.isActive(resolvedRightHref))
+				? MOBILE_TABS[navStore.getTabFromPath(resolvedRightHref)]
 				: null
 			: resolvedLeftHref
-				? MOBILE_TABS.find((tab) => tab.isActive(resolvedLeftHref))
+				? MOBILE_TABS[navStore.getTabFromPath(resolvedLeftHref)]
 				: null
 	);
 
@@ -391,9 +391,15 @@
 		// (change of intent): return to the current panel instead of advancing.
 		if (swipeNeedsLoadingAtStart) {
 			const maxDragDist = window.innerWidth * 0.3;
-			const dragDist = Math.abs(dragOffset ?? 0);
+			const dragDist = dragOffset !== null ? Math.abs(dragOffset) : 0;
+			const directionMatches =
+				swipeDirection === 'right'
+					? deltaX > 0 && (dragOffset ?? 0) > 0
+					: deltaX < 0 && (dragOffset ?? 0) < 0;
 			const committed =
-				!reversed && (dragDist >= maxDragDist * 0.75 || Math.abs(deltaX) >= SWIPE_COMMIT);
+				!reversed &&
+				directionMatches &&
+				(dragDist >= maxDragDist * 0.75 || Math.abs(deltaX) >= SWIPE_COMMIT);
 			if (committed) {
 				if (swipeDirection === 'right' && !isLeftTargetTabRoot) {
 					// Back target is not the tab root (e.g. a thread reached before
@@ -669,7 +675,7 @@
 
 	{#if swipeNeedsLoadingAtStart && isMobile && (dragOffset !== null || isPendingNavigation || isTransitioningOut)}
 		<div
-			class="loading-overlay absolute inset-y-0 z-50 flex items-center justify-center pointer-events-none"
+			class="loading-overlay absolute inset-y-0 z-30 flex items-center justify-center pointer-events-none"
 			class:dragging={dragOffset !== null}
 			style="{swipeDirection === 'left'
 				? 'right: 0;'
