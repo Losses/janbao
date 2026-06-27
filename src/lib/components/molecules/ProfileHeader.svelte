@@ -57,7 +57,7 @@
 	<div class="flex items-center gap-4">
 		<Avatar avatarUrl={targetUser.avatarUrl} displayName={displayUser} size="lg" />
 		<div>
-			<h1 class="user-display-name page-title">{displayUser}</h1>
+			<h1 class="user-display-name text-base">{displayUser}</h1>
 			{#if targetUser.bio}
 				<p class="text-base-content/70 mt-1 whitespace-pre-line">{targetUser.bio}</p>
 			{/if}
