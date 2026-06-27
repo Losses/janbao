@@ -10,9 +10,6 @@
 	import { hopForHref } from '$lib/utils/history-nav';
 	import type { Action } from 'svelte/action';
 	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
-	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
-	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
-	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
 	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
 	import { MOBILE_TABS, isPagerRoute, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
@@ -87,6 +84,16 @@
 	// Derived declarations
 	const hasLeft = $derived(!!left || (navStore.activeTab >= 0 && navStore.activeTab <= 2));
 	const resolvedLeftHref = $derived(leftHref ?? navStore.backTarget);
+	// The left preview shows the fixed tab list when the back target IS this
+	// tab's root (back -> list); otherwise it previews the actual back target
+	// (e.g. a thread) via the tab's previewFor resolver (mobile-tabs).
+	const currentTabRoot = $derived(MOBILE_TABS[navStore.activeTab]?.href ?? '/');
+	const backTargetIsTabRoot = $derived(resolvedLeftHref === currentTabRoot);
+	const backTargetPreview = $derived.by(() => {
+		if (!resolvedLeftHref) return null;
+		const tab = MOBILE_TABS.find((t) => t.isActive(resolvedLeftHref));
+		return tab?.previewFor(resolvedLeftHref) ?? null;
+	});
 	const hasRight = $derived(!!right);
 	const resolvedRightHref = $derived(rightHref);
 
@@ -589,34 +596,23 @@
 				<div class="gpl-card">
 					{#if left}
 						{@render left()}
-					{:else if navStore.activeTab === 0}
-						<DiscussionsPanel
-							discussions={listCache.discussions?.items}
-							currentPage={listCache.discussions?.page ?? 1}
-							totalPages={listCache.discussions?.totalPages ?? 1}
-							t={page.data.t}
-							buildPageUrl={(page) => (page === 1 ? '/' : `/discussions/p${page}`)}
-							paginate={true}
-						/>
-					{:else if navStore.activeTab === 1}
-						<ActivityPanel
-							activities={listCache.activity?.items ?? []}
-							currentPage={listCache.activity?.page ?? 1}
-							totalPages={listCache.activity?.totalPages ?? 1}
-							activityDraft={listCache.activity?.activityDraft ?? null}
-							mentionedUsers={listCache.activity?.mentionedUsers ?? {}}
-							t={page.data.t}
-							user={page.data.user}
-							paginate={true}
-						/>
-					{:else if navStore.activeTab === 2}
-						<MessagesPanel
-							conversations={listCache.messages?.items ?? []}
-							currentPage={listCache.messages?.page ?? 1}
-							totalPages={listCache.messages?.totalPages ?? 1}
-							t={page.data.t}
-							paginate={true}
-						/>
+					{:else if !resolvedLeftHref || backTargetIsTabRoot}
+						{@const Panel = MOBILE_TABS[navStore.activeTab]?.panel}
+						{#if Panel}
+							<Panel cache={listCache} t={page.data.t} user={page.data.user} />
+						{/if}
+					{:else if backTargetPreview}
+						<div class="space-y-2 p-5">
+							<div class="text-xs text-base-content/40">←</div>
+							<div class="text-base font-semibold leading-snug text-base-content line-clamp-4">
+								{backTargetPreview.title}
+							</div>
+							{#if backTargetPreview.meta}
+								<div class="text-xs text-base-content/50">{backTargetPreview.meta}</div>
+							{/if}
+						</div>
+					{:else}
+						<div class="flex h-full items-center p-6 text-sm text-base-content/40">←</div>
 					{/if}
 				</div>
 			</section>

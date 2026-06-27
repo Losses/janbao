@@ -55,7 +55,7 @@ interface ListCacheState {
 	messages: MessagesCacheData | null;
 }
 
-class ListCacheStore {
+export class ListCacheStore {
 	#state = $state<ListCacheState>({
 		discussions: null,
 		activity: null,

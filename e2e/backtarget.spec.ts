@@ -53,8 +53,7 @@ async function setupAuth(context: import('@playwright/test').BrowserContext): Pr
  * Run one scenario end-to-end and return the post-swipe landing pathname. The
  * gesture activating AND committing is proven by the URL leaving `sc.target`:
  * waitForUrlNot times out if detectSwipe never recognised the drag, so a
- * silently-failed gesture still fails loudly. (The old `[detectSwipe] swipe
- * activated!` console gate relied on debug logs removed in 6065026.)
+ * silently-failed gesture still fails loudly.
  */
 async function runScenario(page: Page, sc: Scenario): Promise<{ landed: string }> {
 	await setupAuth(page.context());

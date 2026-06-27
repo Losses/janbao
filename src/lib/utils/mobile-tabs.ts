@@ -11,23 +11,66 @@
  * The Discussions tab covers the discussion list (`/`, `/discussions/pN`) AND a
  * thread view (`/discussion/[id]/...`) - all share the same primary section.
  */
-import { MOBILE_TAB_DEFS, type TabDef } from './tab-config';
+import type { Component } from 'svelte';
+import { MOBILE_TAB_DEFS, type TabDef, type MobileTabLabelKey } from './tab-config';
 import { getListCacheStore } from '$lib/stores/list-cache.svelte';
+import TabDiscussionsPanel from '$lib/components/panels/TabDiscussionsPanel.svelte';
+import TabActivityPanel from '$lib/components/panels/TabActivityPanel.svelte';
+import TabMessagesPanel from '$lib/components/panels/TabMessagesPanel.svelte';
+import type { TabPanelWrapperProps } from '$lib/types/tabs';
 
 export type { MobileTabLabelKey, PathMatcher } from './tab-config';
 
 type CacheCheckFn = () => boolean;
 
+/** Back-target preview shown in the back-swipe's left panel when the back
+ * target is not the active tab root. Unified shape so the layout renders it
+ * with no per-tab switch. */
+export interface TabPreview {
+	title: string;
+	meta?: string;
+}
+
+type PreviewResolver = (path: string) => TabPreview | null;
+
+// One resolver per tab, keyed by labelKey, so a tab's back-target preview is a
+// config edit here — not a route-detail change in GesturePageLayout.
+const PREVIEW_RESOLVERS: Record<MobileTabLabelKey, PreviewResolver> = {
+	discussions: (path) => {
+		const items = getListCacheStore().discussions?.items;
+		const item = items?.find((d) => path.startsWith(`/discussion/${d.id}`));
+		return item ? { title: item.title, meta: `${item.commentCount}` } : null;
+	},
+	activity: () => null,
+	messages: () => null
+};
+
+// Each tab's list panel is a thin wrapper (TabDiscussionsPanel etc.) exposing a
+// UNIFIED props shape (TabPanelWrapperProps), so the panel slot is a single
+// concrete Component<TabPanelWrapperProps> — not a union of the heterogeneous
+// underlying Panels. The wrapper owns the cache -> Panel wiring.
+type TabListComponent = Component<TabPanelWrapperProps>;
+
+const TAB_LIST_COMPONENTS: Record<MobileTabLabelKey, TabListComponent> = {
+	discussions: TabDiscussionsPanel,
+	activity: TabActivityPanel,
+	messages: TabMessagesPanel
+};
+
 export interface MobileTab extends TabDef {
 	isActive: TabDef['isActive'];
 	checkCache: CacheCheckFn;
+	previewFor: PreviewResolver;
+	panel: TabListComponent;
 }
 
 export const MOBILE_TABS: readonly MobileTab[] = MOBILE_TAB_DEFS.map((tab) => ({
 	...tab,
 	// The cache store owns its shape and exposes a generic populated check keyed
 	// by labelKey, so no per-tab switch lives here.
-	checkCache: () => getListCacheStore().isPopulated(tab.labelKey)
+	checkCache: () => getListCacheStore().isPopulated(tab.labelKey),
+	previewFor: PREVIEW_RESOLVERS[tab.labelKey],
+	panel: TAB_LIST_COMPONENTS[tab.labelKey]
 }));
 
 /** Index of the active tab for the given pathname, or -1 when on no tab route. */

@@ -6,10 +6,10 @@
  * which would otherwise make the user unable to browser-back out of the app.
  *
  * Pure (runes-free): reads only the global Navigation History API. Returns
- * 'push' when that API is unavailable, so old browsers keep the existing
+ * 'push' when that API is unavailable, so old browsers keep the
  * push-on-every-switch behaviour (progressive enhancement). The same function
  * also backs the thread back-swipe's "does the previous entry match" check
- * (GesturePageLayout / thread-nav), replacing two duplicated implementations.
+ * (GesturePageLayout / thread-nav).
  *
  * Direction-agnostic: it only asks "which adjacent entry equals the target",
  * never "which way the finger moved" - so a left or right swipe that targets a
