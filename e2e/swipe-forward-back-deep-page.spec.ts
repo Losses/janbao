@@ -91,6 +91,12 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 
 	test('back-swipe returns to the originating deep page, not the discussions list', async ({ page }) => {
 		const threadPath = await threadPathOn(page);
+		// Capture the thread's rendered content BEFORE the round-trip, so we can
+		// assert the page actually RE-RENDERS on return (not just that the URL is
+		// right - a gray/blank page with the right URL would pass a URL-only check).
+		const threadTitle = await page.locator('h1').first().innerText();
+		const threadReplies = await page.locator('[id^="reply-"]').count();
+		expect(threadReplies, 'the thread rendered replies before the round-trip').toBeGreaterThan(0);
 
 		// Forward swipe (R→L): thread → its right-neighbour tab (Activity).
 		await swipeForward(page);
@@ -114,86 +120,64 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 
 		// Back swipe (L→R): must return to the thread, not the discussions root.
 		await swipeBack(page);
-		await page.waitForTimeout(400);
-		const landed = new URL(page.url()).pathname;
-		expect(landed, 'back-swipe from a tab reached via a deep page must return to that page').toBe(threadPath);
+
+		// Invariant 2a: the URL is the thread.
+		await page.waitForFunction(
+			(p) => location.pathname === p,
+			threadPath,
+			{ timeout: 5000 }
+		);
+		// Invariant 2b: the thread CONTENT actually re-renders (title + replies),
+		// not a gray/blank shell. Polled because the re-render is async.
+		await expect
+			.poll(async () => await page.locator('h1').first().innerText(), { timeout: 4000 })
+			.toBe(threadTitle);
+		const landedReplies = await page.locator('[id^="reply-"]').count();
+		expect(landedReplies, 'the thread re-renders its replies after the back-swipe (no gray blank)').toBeGreaterThan(0);
 	});
 
-	test('back-swipe preview matches the history-previous page, not the spatial previous tab', async ({ page }) => {
+	test('back-swipe preview reveals the actual destination thread, not a gray placeholder', async ({ page }) => {
 		const threadPath = await threadPathOn(page);
-		await swipeForward(page);
+		// Capture the thread's own title so we can assert the PREVIEW shows THIS
+		// page (the page being returned to), not a placeholder or a different page.
+		const threadTitle = await page.locator('h1').first().innerText();
+
+		await swipeForward(page); // thread → its right-neighbour tab (Activity)
 		await page.waitForFunction(() => location.pathname === '/activity', null, { timeout: 8000 });
 		await page.waitForTimeout(300);
 
-		// The back target is the thread (history-prev), which is NOT the spatial
-		// left-neighbour tab (Discussions). Its DOM is unmounted, so the preview
-		// cannot be the live Discussions panel - dragging the spatial track would
-		// slide that wrong tab into view, contradicting the landing.
-		const trackAt = async () =>
-			page.evaluate(() => {
-				const track = document.querySelector('.mobile-tab-pager-viewport > div') as HTMLElement | null;
-				if (!track) return null;
-				try {
-					return new DOMMatrix(getComputedStyle(track).transform).m41;
-				} catch {
-					return null;
-				}
-			});
-		const restTrackX = await trackAt();
+		// Hold a back-drag (no release) toward the thread.
+		const held = await holdDrag(page, 'back');
 
-		// Hold a back-drag (no release) past SWIPE_COMMIT.
-		const client = await page.context().newCDPSession(page);
-		await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
-		const width = page.viewportSize()?.width ?? 393;
-		const startX = Math.round(width * 0.3);
-		const heldX = startX + 130;
-		const dispatch = (type: 'touchStart' | 'touchMove' | 'touchEnd', x: number, state: string) =>
-			client.send('Input.dispatchTouchEvent', {
-				type,
-				// CDP needs each touch point's state; Playwright's TouchPoint omits it.
-				touchPoints: [{ state, x, y: 500, id: 1 }] as unknown as never,
-				modifiers: 0,
-				timestamp: 0
-			});
-		await dispatch('touchStart', startX, 'touchPressed');
-		await dispatch('touchMove', heldX, 'touchMoved');
-		await page.waitForTimeout(180);
+		// During the gesture the revealed preview must be the THREAD itself - its
+		// title is visible in the viewport - NOT a gray placeholder overlay and NOT
+		// the Discussions list (a different page from the destination). The thread
+		// must therefore stay mounted (previewed live) across list/tab ↔ thread.
+		const probe = await page.evaluate(
+			(title) => ({
+				threadTitleVisible: document.body.innerText.includes(title),
+				backChipOverlay: !!document.querySelector('.back-chip-overlay')
+			}),
+			threadTitle
+		);
+		await held.release();
 
-		const [dragTrackX, backOverlayPresent] = await page.evaluate(() => [
-			(() => {
-				const track = document.querySelector('.mobile-tab-pager-viewport > div') as HTMLElement | null;
-				if (!track) return null;
-				try {
-					return new DOMMatrix(getComputedStyle(track).transform).m41;
-				} catch {
-					return null;
-				}
-			})(),
-			!!document.querySelector('.back-chip-overlay')
-		]);
-
-		// The spatial track must NOT translate rightward (which would reveal the
-		// Discussions tab): dragTrackX stays at its rest position.
+		expect(probe.backChipOverlay, 'no gray chip overlay during the back-swipe').toBe(false);
 		expect(
-			(restTrackX === null || dragTrackX === null) ? true : dragTrackX <= restTrackX + 5,
-			'back-swipe must not slide the (wrong) Discussions tab panel into view when the real target is a deep page'
+			probe.threadTitleVisible,
+			'the back-swipe must reveal the actual destination thread (its title), not a placeholder or the wrong page'
 		).toBe(true);
-		// The shared unmounted-target back overlay (LoadingChip) shows instead - the
-		// same affordance GesturePageLayout uses for an unmounted back target.
-		expect(backOverlayPresent, 'the back-chip overlay must show during the drag').toBe(true);
 
 		// Release: lands on the thread (single source of truth - real history).
-		await dispatch('touchEnd', heldX, 'touchReleased');
-		await client.detach();
-		await page.waitForTimeout(400);
+		await page.waitForFunction((p) => location.pathname === p, threadPath, { timeout: 5000 });
 		expect(new URL(page.url()).pathname).toBe(threadPath);
 	});
 
-	// --- Scope guards: the back chip must appear ONLY for a tab back-swipe whose
-	// real target is a deep page. It must NEVER appear on a GesturePageLayout deep
-	// page (a thread), nor on a forward swipe, nor when the back target is a tab
-	// root. These catch the exact regressions the user reported (a chip on a
-	// thread back-swipe; a gray block on an Activity forward-swipe).
+	// --- Scope guards: a gray placeholder chip must NEVER appear during any swipe.
+	// The back-swipe must reveal the real destination page (see the test above);
+	// a gray chip is never an acceptable preview. These guard the cases where a
+	// chip must not appear: on a GesturePageLayout deep page (a thread), on a
+	// forward swipe, and when the back target is a tab root.
 
 	test('thread back-swipe never shows the back chip (it is GesturePageLayout, not the tab pager)', async ({ page }) => {
 		await threadPathOn(page);
@@ -259,6 +243,41 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		// chip, and the Discussions tab panel slides in from the left.
 		expect(probe.backChip, 'no back chip when the back target is a tab root').toBe(false);
 		expect(probe.discRight ?? -9999, 'the Discussions tab panel must slide into view').toBeGreaterThan(0);
+	});
+
+	// --- Scroll-restore flash on back-swipe to the list. Scrolling `/` to a
+	// remembered position, visiting a thread, then swiping back to `/` must land
+	// the list AT that position, not jump to the top for several frames before
+	// scrolling (a visible "top then remembered" flash). The flash comes from the
+	// `(tabs)` layout remounting (the thread is a top-level route, NOT under
+	// `(tabs)`): SvelteKit top-scrolls the remount, then `afterNavigate` restores
+	// the captured position ~90ms later.
+	test('back-swipe to the list restores scroll without a top-flash', async ({ page }) => {
+		await page.goto('/');
+		await waitForHydration(page);
+		const remembered = 600;
+		await page.evaluate((y) => window.scrollTo(0, y), remembered);
+		await page.waitForTimeout(200);
+
+		await clickDiscussion(page, 0);
+		await page.waitForFunction(() => location.pathname.startsWith('/discussion/'), null, { timeout: 8000 });
+		await page.waitForTimeout(300);
+		await swipeBack(page);
+		await page.waitForFunction(() => location.pathname === '/', null, { timeout: 5000 });
+
+		// Sample window.scrollY every ~30ms from the moment `/` lands. It must
+		// reach `remembered` within ~2 frames (~60ms), not linger at 0.
+		const framesToRestore = await page.evaluate(async (y) => {
+			for (let i = 0; i < 20; i++) {
+				if (Math.abs(window.scrollY - y) < 5) return i;
+				await new Promise((r) => setTimeout(r, 30));
+			}
+			return 20;
+		}, remembered);
+		expect(
+			framesToRestore,
+			`list scroll must restore within ~2 frames of landing, not flash at the top (got ${framesToRestore} frames)`
+		).toBeLessThan(3);
 	});
 
 	// --- Cold-cache back-preview. A user who opens / refreshes a thread directly
