@@ -45,19 +45,35 @@
 	const TOP = 7;
 	const BOT = 17;
 	// Analytically FITTED (solved, not tuned by eye) so the two arms meet at a
-	// single sharp tip ON the stem (≈(4,12)) and form a symmetric 45deg chevron.
-	// The transform math is inverted for a target tip at (4,12): TY is fixed by
-	// the fit, and TX + the arm length derive from SPLAY (how far each arm
-	// reaches from the stem). SPLAY is the only knob: smaller = tighter
-	// arrowhead; 6 matches mdiArrowLeft. (Verified: endpoints computed in the
-	// bun check, both arms' tips land exactly on (4,12), coincident.)
-	const SPLAY = 6; // each arm reaches ±SPLAY px from the stem at p=1
+	// single sharp tip ON the stem (the tip x) and form a symmetric 45deg
+	// chevron. The transform math is inverted for a target tip; TY is fixed by
+	// the fit, TX + the arm length derive from SPLAY. SPLAY=7.4 makes each arm
+	// 10.49px, matching mdiArrowLeft's diagonal exactly. (Verified by endpoint
+	// computation: both arms' tips land exactly on the tip point, coincident.)
+	const SPLAY = 7.4; // each arm reaches ±SPLAY px from the stem at p=1 (arm = SPLAY*1.414 = 10.49)
 	const TY = 2.12; // fixed by the fit (places the tip on the stem)
 	const TX = (8 - SPLAY / 2 + (5 - SPLAY / 2)) / 0.707 / 2;
 	const ARM_END = (SPLAY * 1.414) / 18; // arm length as a fraction of the bar at p=1
+	// The tip where both arms meet (and where the stem's left end retracts to).
+	const TIP_X = 4;
+	// The stem is the SHAFT, not the full hamburger bar: mdiArrowLeft's shaft is
+	// ~11.5, far shorter than the 18px middle bar. The stem retracts from both
+	// ends toward (TIP_X, SHAFT_RIGHT) so the arrowhead is proportionate (a full
+	// 18px stem made the arms look stubby, ratio 0.47 vs mdiArrowLeft's 0.91).
+	const SHAFT_RIGHT = 17;
+	const SHAFT_SCALE = (SHAFT_RIGHT - TIP_X) / (RIGHT - LEFT); // shaft length / bar length
+	// The stem retracts into a shaft WHILE staying inside the rotating group (so
+	// it flips 180deg with the arms, preserving the Material morph motion). The
+	// group flip mirrors x->24-x, so the pre-flip shift is from the RIGHT end,
+	// not the left: solving G(T_stem(bar)) = (TIP_X,12)-(SHAFT_RIGHT,12) gives a
+	// pre-flip translate of (RIGHT - SHAFT_RIGHT) and scale SHAFT_SCALE.
+	const STEM_SHIFT = RIGHT - SHAFT_RIGHT;
 
 	const groupStyle = $derived(
 		`transform-box: view-box; transform-origin: 12px ${STEM}px; transform: rotate(${180 * p}deg); transition: ${transition}`
+	);
+	const stemStyle = $derived(
+		`transform-box: view-box; transform-origin: ${LEFT}px ${STEM}px; transform: translate(${STEM_SHIFT * p}px, 0) scaleX(${1 - (1 - SHAFT_SCALE) * p}); transition: ${transition}`
 	);
 	const topStyle = $derived(
 		`transform-box: view-box; transform-origin: 12px ${TOP}px; transform: rotate(${45 * p}deg) translate(${TX * p}px, ${-TY * p}px) scaleX(${1 - (1 - ARM_END) * p}); transition: ${transition}`
@@ -79,7 +95,7 @@
 	aria-hidden="true"
 >
 	<g style={groupStyle}>
-		<line x1={LEFT} y1={STEM} x2={RIGHT} y2={STEM} />
+		<line x1={LEFT} y1={STEM} x2={RIGHT} y2={STEM} style={stemStyle} />
 		<line x1={LEFT} y1={TOP} x2={RIGHT} y2={TOP} style={topStyle} />
 		<line x1={LEFT} y1={BOT} x2={RIGHT} y2={BOT} style={botStyle} />
 	</g>
