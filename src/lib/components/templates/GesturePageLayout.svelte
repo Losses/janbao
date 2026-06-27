@@ -121,7 +121,9 @@
 			: isPendingNavigation
 				? maxDrag
 				: dragOffset !== null
-					? Math.abs(dragOffset)
+					? swipeDirection === 'left'
+						? Math.max(0, -dragOffset)
+						: Math.max(0, dragOffset)
 					: 0
 	);
 
