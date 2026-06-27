@@ -419,6 +419,14 @@
 					return;
 				}
 				const targetHref = swipeDirection === 'left' ? resolvedRightHref : resolvedLeftHref;
+				// A FORWARD swipe (left, to the right-neighbour tab) ADVANCES to a new
+				// page: it must PUSH so the originating page survives in history and a
+				// later back-swipe can return to it. (Pushing also keeps the entry the
+				// MobileTabPager's history-aware back-swipe looks for.) A back swipe
+				// replaces - matching the normal back path's replaceState (line ~481) -
+				// so it does not grow the stack.
+				const forwardSwipe = swipeDirection === 'left';
+				const targetReplaceState = !forwardSwipe;
 				if (targetHref) {
 					const isPopulated =
 						MOBILE_TABS.find((tab) => tab.href === targetHref)?.checkCache() ?? false;
@@ -426,7 +434,7 @@
 						isTransitioningOut = true;
 						dragOffset = null;
 						setTimeout(() => {
-							void goto(targetHref, { replaceState: true }).then(() => {
+							void goto(targetHref, { replaceState: targetReplaceState }).then(() => {
 								isTransitioningOut = false;
 								prefetchStarted = false;
 								swipeNeedsLoadingAtStart = false;
@@ -442,7 +450,7 @@
 								isPendingNavigation = false;
 								isTransitioningOut = true;
 								setTimeout(() => {
-									void goto(targetHref, { replaceState: true }).then(() => {
+									void goto(targetHref, { replaceState: targetReplaceState }).then(() => {
 										isTransitioningOut = false;
 										prefetchStarted = false;
 										swipeNeedsLoadingAtStart = false;

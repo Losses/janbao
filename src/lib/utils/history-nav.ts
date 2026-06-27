@@ -1,3 +1,5 @@
+import { MOBILE_TAB_DEFS } from '$lib/utils/tab-config';
+
 /**
  * history-nav - decide how to reach a tab route without growing the history
  * stack. Shared by every tab-switch entry point (MobileTabPager swipe,
@@ -21,6 +23,20 @@
  * tab root.
  */
 export type HistoryHop = 'back' | 'forward' | 'push';
+
+/**
+ * The tab-root pathnames, derived from the shared tab config so this never
+ * hardcodes the site's routes (add/reorder a tab in tab-config and every check
+ * here follows). A "tab root" is one of the primary pager routes the
+ * MobileTabPager owns (`/`, `/activity`, `/messages/inbox`); everything else
+ * (a thread, a profile, /bookmarks, /search, ...) is a DEEP page.
+ */
+const TAB_ROOT_PATHNAMES: readonly string[] = MOBILE_TAB_DEFS.map((tab) => tab.href);
+
+/** True iff `pathname` is exactly one of the tab-root (pager) routes. */
+export function isTabRootPath(pathname: string): boolean {
+	return TAB_ROOT_PATHNAMES.includes(pathname);
+}
 
 /**
  * How to navigate to `href` without adding a redundant history entry:
@@ -48,6 +64,41 @@ export function hopForHref(href: string): HistoryHop {
 		if (next && pathnameOf(next.url) === target) return 'forward';
 	}
 	return 'push';
+}
+
+/**
+ * The pathname of the history entry immediately BEHIND the current one, or null
+ * when there is no previous entry (or the Navigation API is unavailable). Reads
+ * only the global Navigation History API, so it is stub-able in unit tests the
+ * same way `hopForHref` is.
+ */
+export function previousEntryPathname(): string | null {
+	if (typeof navigation === 'undefined') return null;
+	const cur = navigation.currentEntry;
+	if (!cur || cur.index <= 0) return null;
+	const prev = navigation.entries()[cur.index - 1];
+	return prev ? pathnameOf(prev.url) : null;
+}
+
+/**
+ * Should a back-swipe performed on a TAB page pop real history
+ * (`history.back()`) instead of switching to the spatially-previous tab?
+ *
+ * True iff the entry behind the current tab is a DEEP page - i.e. the user
+ * reached this tab by forward-swiping from a thread / profile / bookmarks /
+ * search / ... (any non-tab-root route). In that case "back" must return to that
+ * originating page; switching to the previous tab root would strand it (the
+ * thread sits between the tab and its root in history, and hopForHref only
+ * inspects the adjacent entry, so the tab switch would push the root and skip
+ * the thread). When the previous entry IS a tab root (normal tab <-> tab use),
+ * the spatial switch is correct and this returns false.
+ *
+ * The discriminator is `isTabRootPath` (config-driven), so this is agnostic to
+ * which deep route is involved - no route is hardcoded.
+ */
+export function backSwipeShouldPopHistory(): boolean {
+	const prev = previousEntryPathname();
+	return prev !== null && !isTabRootPath(prev);
 }
 
 /**
