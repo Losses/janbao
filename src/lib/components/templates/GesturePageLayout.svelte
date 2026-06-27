@@ -84,16 +84,12 @@
 	// Derived declarations
 	const hasLeft = $derived(!!left || (navStore.activeTab >= 0 && navStore.activeTab <= 2));
 	const resolvedLeftHref = $derived(leftHref ?? navStore.backTarget);
-	// The left preview shows the fixed tab list when the back target IS this
-	// tab's root (back -> list); otherwise it previews the actual back target
-	// (e.g. a thread) via the tab's previewFor resolver (mobile-tabs).
+	// The left preview shows the tab list when back lands on the tab root. When
+	// the back target is elsewhere (e.g. a thread reached before /bookmarks) the
+	// target page is unmounted on this route so there is no DOM to preview — show
+	// the shared LoadingChip instead of a fake list.
 	const currentTabRoot = $derived(MOBILE_TABS[navStore.activeTab]?.href ?? '/');
 	const backTargetIsTabRoot = $derived(resolvedLeftHref === currentTabRoot);
-	const backTargetPreview = $derived.by(() => {
-		if (!resolvedLeftHref) return null;
-		const tab = MOBILE_TABS.find((t) => t.isActive(resolvedLeftHref));
-		return tab?.previewFor(resolvedLeftHref) ?? null;
-	});
 	const hasRight = $derived(!!right);
 	const resolvedRightHref = $derived(rightHref);
 
@@ -342,7 +338,11 @@
 			navInFlight = false;
 			swipeDirection = deltaX > 0 ? 'right' : deltaX < 0 ? 'left' : null;
 			if (swipeDirection === 'right') {
-				swipeNeedsLoadingAtStart = leftNeedsLoading;
+				// The tab-list load case (target tab root not cached) OR the
+				// can't-preview case (back target is not the tab root, so the target
+				// page's DOM is unmounted and there's nothing real to show): both go
+				// through the chip overlay path with its tanh damping + width animation.
+				swipeNeedsLoadingAtStart = leftNeedsLoading || (!left && !backTargetIsTabRoot);
 			} else if (swipeDirection === 'left') {
 				swipeNeedsLoadingAtStart = rightNeedsLoading;
 			} else {
@@ -383,6 +383,21 @@
 			const committed =
 				!reversed && (dragDist >= maxDragDist * 0.75 || Math.abs(deltaX) >= SWIPE_COMMIT);
 			if (committed) {
+				if (swipeDirection === 'right' && !isLeftTargetTabRoot) {
+					// Back target is not the tab root (e.g. a thread reached before
+					// /bookmarks): the chip overlay stood in for the unmounted target
+					// page. Commit to history.back() to land on the real previous page.
+					isTransitioningOut = true;
+					dragOffset = null;
+					setTimeout(() => {
+						if (navStore.activeStack.length > 1) {
+							history.back();
+						} else {
+							void goto(fallbackRoute, { replaceState: true });
+						}
+					}, 300);
+					return;
+				}
 				const targetHref = swipeDirection === 'left' ? resolvedRightHref : resolvedLeftHref;
 				if (targetHref) {
 					const isPopulated =
@@ -486,6 +501,12 @@
 	// nav this layout unmounts first and the flag dies with it.
 	afterNavigate(() => {
 		navInFlight = false;
+		// history.back() (back-to-unmounted-target path) has no promise to reset
+		// these in, so clear them here alongside the goto path's own .then resets.
+		isTransitioningOut = false;
+		prefetchStarted = false;
+		swipeNeedsLoadingAtStart = false;
+		swipeDirection = null;
 	});
 
 	onMount(() => {
@@ -596,23 +617,11 @@
 				<div class="gpl-card">
 					{#if left}
 						{@render left()}
-					{:else if !resolvedLeftHref || backTargetIsTabRoot}
+					{:else}
 						{@const Panel = MOBILE_TABS[navStore.activeTab]?.panel}
 						{#if Panel}
 							<Panel cache={listCache} t={page.data.t} user={page.data.user} />
 						{/if}
-					{:else if backTargetPreview}
-						<div class="space-y-2 p-5">
-							<div class="text-xs text-base-content/40">←</div>
-							<div class="text-base font-semibold leading-snug text-base-content line-clamp-4">
-								{backTargetPreview.title}
-							</div>
-							{#if backTargetPreview.meta}
-								<div class="text-xs text-base-content/50">{backTargetPreview.meta}</div>
-							{/if}
-						</div>
-					{:else}
-						<div class="flex h-full items-center p-6 text-sm text-base-content/40">←</div>
 					{/if}
 				</div>
 			</section>
