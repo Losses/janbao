@@ -260,14 +260,14 @@
 </script>
 
 <div
-	class="overflow-hidden"
+	class="mobile-tab-pager-viewport overflow-hidden"
 	style={viewportStyle}
 	use:detectSwipe={{ onMove: swipeMove, onEnd: swipeEnd }}
 	use:measureViewportWidth
 >
 	<div class="flex w-[300%] items-start transition-transform duration-200" style={trackStyle}>
 		<section
-			class="w-1/3 shrink-0"
+			class="w-1/3 shrink-0 p-3"
 			style={`transform: translateY(${activeIndex === 0 ? 0 : neighborOffset}px)`}
 			use:measureTab={0}
 		>
@@ -281,7 +281,7 @@
 			/>
 		</section>
 		<section
-			class="w-1/3 shrink-0"
+			class="w-1/3 shrink-0 p-3"
 			style={`transform: translateY(${activeIndex === 1 ? 0 : neighborOffset}px)`}
 			use:measureTab={1}
 		>
@@ -297,7 +297,7 @@
 			/>
 		</section>
 		<section
-			class="w-1/3 shrink-0"
+			class="w-1/3 shrink-0 p-3"
 			style={`transform: translateY(${activeIndex === 2 ? 0 : neighborOffset}px)`}
 			use:measureTab={2}
 		>
