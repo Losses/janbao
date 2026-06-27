@@ -153,6 +153,17 @@ header nav {
 	font-family: var(--font-sans);
 }
 
+/* On mobile, when the App Bar carries the page title (deep pages with a
+   resolvable title), hide the duplicate in-page title. The `.appbar-title`
+   class is stamped on AppShell's root whenever the bar has a title, so this is
+   SSR-correct (no flash of the duplicate). Desktop keeps the in-page title
+   because the bar shows the logo + nav there, not the title. */
+@media (max-width: 767px) {
+	.appbar-title .page-title {
+		display: none;
+	}
+}
+
 .section-title {
 	font-size: 1rem;
 	font-weight: 600;

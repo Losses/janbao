@@ -13,10 +13,12 @@
 	 */
 	import { onMount } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
+	import { page } from '$app/state';
 	import type { Snippet } from 'svelte';
 	import Header from '$lib/components/organisms/Header.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getDrawerStore } from '$lib/stores/drawer.svelte';
+	import { resolveDeepHeaderTitle } from '$lib/utils/deep-header-config';
 	import type { TranslationDict } from '$lib/types/translation';
 
 	interface AppShellProps {
@@ -27,6 +29,14 @@
 	let { children, t }: AppShellProps = $props();
 
 	const drawer = getDrawerStore();
+	// True when the App Bar is showing the page title (a deep page with a
+	// resolvable title). Stamped on the root div so CSS can hide the duplicate
+	// in-page title on mobile (where the bar carries it); desktop keeps the
+	// in-page title because the bar shows the logo + nav there. SSR-derived, so
+	// the class is in the first paint (no flash of the duplicate title).
+	const appbarHasTitle = $derived(
+		Boolean(page.data.headerTitle ?? resolveDeepHeaderTitle(page.url.pathname, t))
+	);
 
 	// Attach the (idempotent, mobile-gated) scroll listener that drives the
 	// hide-on-scroll Header. start() is guarded so re-mounting never
@@ -43,7 +53,7 @@
 	});
 </script>
 
-<div class="flex min-h-screen flex-col">
+<div class="flex min-h-screen flex-col" class:appbar-title={appbarHasTitle}>
 	<Header {t} onToggleDrawer={drawer.toggle} />
 	<div class="flex min-w-0 flex-1 flex-col app-shell-content">{@render children()}</div>
 </div>

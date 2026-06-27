@@ -269,18 +269,20 @@
 		const committed =
 			isPendingNavigation || isTransitioningOut || pendingNav !== null || navInFlight;
 		if (dragOffset !== null && targetIdx >= 0) {
-			// Gradual expansion across the full drag (matched to the pager, which
-			// normalises by the viewport). Reaching ~15-30% by the commit point is
-			// fine: dropping `dragging` on commit re-enables the tab bar's CSS
-			// transition, which smoothly finishes the rest.
+			// The bar slides back in on `deepMorph` at the full drag progress, but
+			// the target tab pill lags: it stays collapsed while the bar is still
+			// mostly above the viewport (the first half of the drag) and only
+			// expands over the second half. Otherwise the pill finishes expanding
+			// while the bar is off-screen and the expansion is never visible.
 			const progress = viewportWidth ? Math.min(1, Math.abs(dragOffset) / viewportWidth) : 0;
+			const pillProgress = Math.max(0, progress - 0.5) * 2;
 			pager.set({
-				fractionalIndex: fromIdx + (targetIdx - fromIdx) * progress,
+				fractionalIndex: fromIdx + (targetIdx - fromIdx) * pillProgress,
 				dragging: true,
 				active: true,
-				// Same progress drives the Header's hamburger<->back-arrow morph, in
-				// sync with the pill (single writer, same branch): 0 = full back arrow
-				// at rest, 1 once the swipe-back commits toward the tab root.
+				// The bar slide + hamburger<->back-arrow morph use the full progress
+				// (0 = full back arrow at rest, 1 once committed toward the tab root);
+				// the pill intentionally lags behind it (pillProgress above).
 				deepMorph: progress
 			});
 		} else if (committed && targetIdx >= 0) {
