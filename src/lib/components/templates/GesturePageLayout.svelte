@@ -97,7 +97,7 @@
 	const isLeftTargetTabRoot = $derived(resolvedLeftHref ? isPagerRoute(resolvedLeftHref) : false);
 	const isLeftCachePopulated = $derived(
 		resolvedLeftHref
-			? (MOBILE_TABS.find((tab) => tab.href === resolvedLeftHref)?.checkCache() ?? false)
+			? (MOBILE_TABS.find((tab) => tab.href === resolvedLeftHref)?.hasData(page.data) ?? false)
 			: false
 	);
 	const leftNeedsLoading = $derived(isLeftTargetTabRoot && !isLeftCachePopulated);
@@ -107,7 +107,7 @@
 	);
 	const isRightCachePopulated = $derived(
 		resolvedRightHref
-			? (MOBILE_TABS.find((tab) => tab.href === resolvedRightHref)?.checkCache() ?? false)
+			? (MOBILE_TABS.find((tab) => tab.href === resolvedRightHref)?.hasData(page.data) ?? false)
 			: false
 	);
 	const rightNeedsLoading = $derived(isRightTargetTabRoot && !isRightCachePopulated);
@@ -429,7 +429,7 @@
 				const targetReplaceState = !forwardSwipe;
 				if (targetHref) {
 					const isPopulated =
-						MOBILE_TABS.find((tab) => tab.href === targetHref)?.checkCache() ?? false;
+						MOBILE_TABS.find((tab) => tab.href === targetHref)?.hasData(page.data) ?? false;
 					if (isPopulated) {
 						isTransitioningOut = true;
 						dragOffset = null;

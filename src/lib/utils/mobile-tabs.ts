@@ -17,11 +17,26 @@ import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 import TabDiscussionsPanel from '$lib/components/panels/TabDiscussionsPanel.svelte';
 import TabActivityPanel from '$lib/components/panels/TabActivityPanel.svelte';
 import TabMessagesPanel from '$lib/components/panels/TabMessagesPanel.svelte';
-import type { TabPanelWrapperProps } from '$lib/types/tabs';
+import type { TabPanelWrapperProps, TabsLayoutData } from '$lib/types/tabs';
 
 export type { MobileTabLabelKey, PathMatcher } from './tab-config';
 
 type CacheCheckFn = () => boolean;
+/**
+ * "Is this tab's list present in the root layout data?" The root load eager-
+ * loads page 1 of every tab on EVERY route, so a tab's list is available via
+ * `data` even on a top-level deep page that never populated the list-cache
+ * store. `MobileTab.hasData` treats a tab as available when EITHER the cache OR
+ * this layout data has items. Accepts a `Partial` because `page.data` (in a
+ * shared component) is typed as the broad App.PageData.
+ */
+type TabDataCheck = (data: Partial<TabsLayoutData>) => boolean;
+
+const TAB_DATA_CHECKS: Record<MobileTabLabelKey, TabDataCheck> = {
+	discussions: (d) => (d.home?.discussions.length ?? 0) > 0,
+	activity: (d) => (d.activity?.activities.length ?? 0) > 0,
+	messages: (d) => (d.messages?.conversations.length ?? 0) > 0
+};
 
 // Each tab's list panel is a thin wrapper (TabDiscussionsPanel etc.) exposing a
 // UNIFIED props shape (TabPanelWrapperProps), so the panel slot is a single
@@ -38,6 +53,8 @@ const TAB_LIST_COMPONENTS: Record<MobileTabLabelKey, TabListComponent> = {
 export interface MobileTab extends TabDef {
 	isActive: TabDef['isActive'];
 	checkCache: CacheCheckFn;
+	/** A tab's list is available when the cache OR the root-layout data has items. */
+	hasData: TabDataCheck;
 	panel: TabListComponent;
 }
 
@@ -46,6 +63,8 @@ export const MOBILE_TABS: readonly MobileTab[] = MOBILE_TAB_DEFS.map((tab) => ({
 	// The cache store owns its shape and exposes a generic populated check keyed
 	// by labelKey, so no per-tab switch lives here.
 	checkCache: () => getListCacheStore().isPopulated(tab.labelKey),
+	hasData: (data) =>
+		getListCacheStore().isPopulated(tab.labelKey) || TAB_DATA_CHECKS[tab.labelKey](data),
 	panel: TAB_LIST_COMPONENTS[tab.labelKey]
 }));
 

@@ -487,9 +487,9 @@
 
 {#snippet leftSnippet()}
 	<DiscussionsPanel
-		discussions={listCache.discussions?.items}
-		currentPage={listCache.discussions?.page ?? 1}
-		totalPages={listCache.discussions?.totalPages ?? 1}
+		discussions={listCache.discussions?.items ?? data.home?.discussions}
+		currentPage={listCache.discussions?.page ?? data.home?.page ?? 1}
+		totalPages={listCache.discussions?.totalPages ?? data.home?.totalPages ?? 1}
 		{t}
 		{buildPageUrl}
 		paginate={true}
@@ -497,11 +497,11 @@
 {/snippet}
 {#snippet rightSnippet()}
 	<ActivityPanel
-		activities={listCache.activity?.items ?? []}
-		currentPage={listCache.activity?.page ?? 1}
-		totalPages={listCache.activity?.totalPages ?? 1}
-		activityDraft={listCache.activity?.activityDraft ?? null}
-		mentionedUsers={listCache.activity?.mentionedUsers ?? {}}
+		activities={listCache.activity?.items ?? data.activity?.activities ?? []}
+		currentPage={listCache.activity?.page ?? data.activity?.page ?? 1}
+		totalPages={listCache.activity?.totalPages ?? data.activity?.totalPages ?? 1}
+		activityDraft={listCache.activity?.activityDraft ?? data.activity?.activityDraft ?? null}
+		mentionedUsers={listCache.activity?.mentionedUsers ?? data.activity?.mentionedUsers ?? {}}
 		{t}
 		{user}
 		paginate={true}
