@@ -8,6 +8,38 @@ import ts from 'typescript-eslint';
 
 const gitignorePath = path.resolve(import.meta.dirname, '.gitignore');
 
+// Bans the em dash (U+2014) everywhere: comments, strings, identifiers, JSX/Svelte text.
+// Runs once per file as a raw text scan so it is not limited to specific AST node kinds.
+const noEmdash = {
+	meta: {
+		type: 'problem',
+		schema: [],
+		messages: {
+			emdash:
+				'Do not use the em dash character (U+2014). Use a comma, semicolon, colon, parentheses, or reword instead.'
+		}
+	},
+	create(context) {
+		const sourceCode = context.sourceCode;
+		// Escape form so this file does not trip its own rule.
+		const EMDASH = '\u2014';
+		return {
+			Program() {
+				const text = sourceCode.text;
+				let index = text.indexOf(EMDASH);
+				while (index !== -1) {
+					context.report({
+						node: sourceCode.getNodeByRangeIndex(index) ?? sourceCode.ast,
+						loc: sourceCode.getLocFromIndex(index),
+						messageId: 'emdash'
+					});
+					index = text.indexOf(EMDASH, index + EMDASH.length);
+				}
+			}
+		};
+	}
+};
+
 export default defineConfig(
 	{
 		// E2E is test infrastructure driven by @playwright/test under node; it is
@@ -42,7 +74,9 @@ export default defineConfig(
 	{
 		// Override or add rule settings here, such as:
 		// 'svelte/button-has-type': 'error'
+		plugins: { local: { rules: { 'no-emdash': noEmdash } } },
 		rules: {
+			'local/no-emdash': 'error',
 			'@typescript-eslint/no-explicit-any': 'error',
 			'@typescript-eslint/consistent-type-definitions': ['error', 'interface'],
 			'svelte/no-navigation-without-resolve': 'off',
