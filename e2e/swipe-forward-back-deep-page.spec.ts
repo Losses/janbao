@@ -175,35 +175,73 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		).toBe(landing.firstReplyId);
 	});
 
-	test('back-swipe preview remembers the thread scroll position', async ({ page }) => {
+	test('back-swipe preview is visually continuous across all three stages (scroll + title viewport position aligned)', async ({ page }) => {
 		await threadPathOn(page);
-		// Scroll the thread to a non-top position.
+		// Scroll the thread to a non-trivial position.
 		await page.evaluate(() => {
 			const pane = document.querySelector('.detail-scroll-pane');
 			if (pane) pane.scrollTop = 500;
 		});
-		await page.waitForTimeout(200);
-		const threadScroll = await page.evaluate(
-			() => document.querySelector('.detail-scroll-pane')?.scrollTop ?? 0
-		);
-		expect(threadScroll).toBeGreaterThan(100);
+		await page.waitForTimeout(300);
+
+		// STAGE 1 — before swiping away: the thread's scroll + title viewport Y.
+		const before = await page.evaluate(() => {
+			const pane = document.querySelector('.detail-scroll-pane') as HTMLElement | null;
+			const title = document.querySelector('h1');
+			return {
+				scrollTop: pane?.scrollTop ?? -1,
+				titleTop: title ? Math.round(title.getBoundingClientRect().top) : null
+			};
+		});
 
 		await swipeForward(page);
 		await page.waitForFunction(() => location.pathname === '/activity', null, { timeout: 8000 });
 		await page.waitForTimeout(300);
 
+		// STAGE 2 — during the back-swipe preview: the overlay's scroll + title.
 		const held = await holdDrag(page, 'back');
 		await page.waitForTimeout(200);
-		const previewScroll = await page.evaluate(
-			() => document.querySelector('[data-deep-preview]')?.scrollTop ?? -1
-		);
+		const preview = await page.evaluate(() => {
+			const overlay = document.querySelector('[data-deep-preview]') as HTMLElement | null;
+			const title = overlay?.querySelector('h1');
+			return {
+				scrollTop: overlay?.scrollTop ?? -1,
+				titleTop: title ? Math.round(title.getBoundingClientRect().top) : null
+			};
+		});
 		await held.release();
 
-		expect(previewScroll, 'preview panel exists and is scrolled').toBeGreaterThan(100);
-		expect(
-			Math.abs(previewScroll - threadScroll),
-			'preview scroll position matches the thread scroll position'
-		).toBeLessThan(50);
+		// STAGE 3 — after landing back on the thread: scroll + title again.
+		await page.waitForFunction(
+			() => location.pathname.startsWith('/discussion/'),
+			null,
+			{ timeout: 8000 }
+		);
+		await page.waitForTimeout(500);
+		const after = await page.evaluate(() => {
+			const pane = document.querySelector('.detail-scroll-pane') as HTMLElement | null;
+			const title = document.querySelector('h1');
+			return {
+				scrollTop: pane?.scrollTop ?? -1,
+				titleTop: title ? Math.round(title.getBoundingClientRect().top) : null,
+				snapFired: (window as unknown as { __snapFired?: number }).__snapFired ?? null
+			};
+		});
+
+		// All three stages must be aligned — scrollTop within 5px:
+		expect(Math.abs(before.scrollTop - preview.scrollTop),
+			`scrollTop mismatch: before=${before.scrollTop} preview=${preview.scrollTop}`).toBeLessThan(5);
+		expect(Math.abs(preview.scrollTop - after.scrollTop),
+			`scroll mismatch: preview=${preview.scrollTop} after=${after.scrollTop} snapFired=${after.snapFired}`).toBeLessThan(5);
+
+		// Title viewport Y within 5px (catches layout/offset differences scrollTop alone misses):
+		expect(before.titleTop, 'before: title exists').not.toBeNull();
+		expect(preview.titleTop, 'preview: title exists in overlay').not.toBeNull();
+		expect(after.titleTop, 'after: title exists').not.toBeNull();
+		expect(Math.abs(before.titleTop! - preview.titleTop!),
+			`titleTop mismatch: before=${before.titleTop} preview=${preview.titleTop}`).toBeLessThan(5);
+		expect(Math.abs(preview.titleTop! - after.titleTop!),
+			`titleTop mismatch: preview=${preview.titleTop} after=${after.titleTop}`).toBeLessThan(5);
 	});
 
 	test('back-swipe to deep page does not flash the discussions list on release', async ({ page }) => {

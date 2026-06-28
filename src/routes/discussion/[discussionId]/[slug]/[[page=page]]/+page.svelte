@@ -49,12 +49,24 @@
 
 	let listScrollTop = $state(listScroll.captured);
 	let detailScrollTop = $state(0);
+	// True when SvelteKit's snapshot.restore fired for this mount (a popstate
+	// back/forward). When set, the user's saved scroll position is already
+	// restored; landAtAnchor must NOT override it with the anchor position.
+	let snapshotRestored = false;
 
 	export const snapshot = {
-		capture: () => ({ listScrollTop, detailScrollTop }),
+		capture: () => ({
+			listScrollTop,
+			detailScrollTop:
+				typeof document !== 'undefined'
+					? ((document.querySelector('.detail-scroll-pane') as HTMLElement | null)?.scrollTop ??
+						detailScrollTop)
+					: detailScrollTop
+		}),
 		restore: (value) => {
 			listScrollTop = value.listScrollTop;
 			detailScrollTop = value.detailScrollTop;
+			snapshotRestored = true;
 		}
 	};
 
@@ -104,6 +116,32 @@
 	// first visible frame instead of flashing the thread top. (The $effect below
 	// handles desktop only.) No bare `$effect` per [[svelte-effect-fetch-loop]].
 	afterNavigate(({ to }) => {
+		if (snapshotRestored) {
+			// Popstate back/forward: the snapshot has the user's actual scroll
+			// position. SvelteKit's built-in hash-scroll uses scrollIntoView()
+			// (a native method that bypasses the scrollTop setter) in a later
+			// tick: intercept it temporarily so it doesn't override our position.
+			snapshotRestored = false;
+			const targetScroll = detailScrollTop;
+			const pane = document.querySelector('.detail-scroll-pane') as HTMLElement | null;
+			if (pane && targetScroll > 0) {
+				pane.scrollTop = targetScroll;
+				const origSIV = Element.prototype.scrollIntoView;
+				Element.prototype.scrollIntoView = function (...args: unknown[]) {
+					if (pane.contains(this as Node)) return; // suppress hash-scroll
+					return (origSIV as (...a: unknown[]) => void).apply(this, args);
+				};
+				const reapply = () => {
+					pane.scrollTop = targetScroll;
+					Element.prototype.scrollIntoView = origSIV;
+				};
+				requestAnimationFrame(() => {
+					pane.scrollTop = targetScroll;
+				});
+				setTimeout(reapply, 300);
+			}
+			return;
+		}
 		if (!to?.url.hash || !to.url.pathname.startsWith('/discussion')) return;
 		if (!window.matchMedia(MOBILE_BREAKPOINT).matches) return;
 		const targetId = to.url.hash.startsWith('#') ? to.url.hash.substring(1) : to.url.hash;
