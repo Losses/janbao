@@ -62,7 +62,7 @@
 	}
 
 	function handlePageChange(newPage: number) {
-		goto(urlWith({ page: newPage }));
+		goto(urlWith({ page: newPage }), { replaceState: true });
 	}
 
 	/** Split text into matched/unmatched segments around occurrences of `q` (case-insensitive). */
@@ -106,6 +106,7 @@
 				{#each SCOPES as s (s)}
 					<a
 						href={urlWith({ scope: s, page: 1 })}
+						data-sveltekit-replacestate="yes"
 						class="btn btn-sm {scope === s ? 'btn-primary' : 'btn-ghost'}"
 						aria-current={scope === s ? 'page' : undefined}
 					>
@@ -116,7 +117,8 @@
 					class="select select-bordered select-sm ml-auto w-fit"
 					value={sort}
 					aria-label={tSearch.sortBy}
-					onchange={(e) => goto(urlWith({ sort: e.currentTarget.value, page: 1 }))}
+					onchange={(e) =>
+						goto(urlWith({ sort: e.currentTarget.value, page: 1 }), { replaceState: true })}
 				>
 					<option value="newest">{tSearch.sortNewest}</option>
 					<option value="oldest">{tSearch.sortOldest}</option>
