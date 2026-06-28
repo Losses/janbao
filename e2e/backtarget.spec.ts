@@ -109,8 +109,9 @@ test('Bug2: empty-cache panel shows the LoadingChip, not the spinner fallback', 
 // expansion must also be GRADUAL (not full after a tiny drag) and monotonic.
 test('Bug3: deep-page back-swipe animates the top tab pill gradually', async ({ page, context }) => {
 	await prepareContext(context);
-	await page.goto('/bookmarks');
+	await page.goto('/');
 	await waitForHydration(page);
+	await openSidebarAndGoto(page, '/bookmarks');
 	await page.waitForTimeout(300);
 
 	// The discussions pill's label width tracks `closeness` live (0 at rest on a
@@ -138,24 +139,27 @@ test('Bug3: deep-page back-swipe animates the top tab pill gradually', async ({ 
 		});
 	await client.send('Input.dispatchTouchEvent', {
 		type: 'touchStart',
-		touchPoints: [{ x: 200, y: 400, id: 1 }],
+		touchPoints: [{ x: 50, y: 400, id: 1 }],
 		modifiers: 0,
 		timestamp: 0
 	});
 	// Sample at three drag distances WITHOUT releasing → expansion must be
 	// monotonic (gradual) and far from full at the first sample.
-	await move(230);
-	await page.waitForTimeout(30);
-	const small = await labelWidth();
+	// Since the target tab pill intentionally lags behind the bar (starts
+	// expanding after 50% drag progress, i.e. > 196.5px drag distance), we drag
+	// from x=50 to x=260/290/320 (dx=210px/240px/270px) to verify expansion.
 	await move(260);
 	await page.waitForTimeout(30);
-	const mid = await labelWidth();
+	const small = await labelWidth();
 	await move(290);
+	await page.waitForTimeout(30);
+	const mid = await labelWidth();
+	await move(320);
 	await page.waitForTimeout(30);
 	const large = await labelWidth();
 	await client.send('Input.dispatchTouchEvent', {
 		type: 'touchEnd',
-		touchPoints: [{ x: 290, y: 400, id: 1 }],
+		touchPoints: [{ x: 320, y: 400, id: 1 }],
 		modifiers: 0,
 		timestamp: 0
 	});
