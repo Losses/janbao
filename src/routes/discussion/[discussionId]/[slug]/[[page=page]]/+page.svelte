@@ -117,28 +117,20 @@
 	// handles desktop only.) No bare `$effect` per [[svelte-effect-fetch-loop]].
 	afterNavigate(({ to }) => {
 		if (snapshotRestored) {
-			// Popstate back/forward: the snapshot has the user's actual scroll
-			// position. SvelteKit's built-in hash-scroll uses scrollIntoView()
-			// (a native method that bypasses the scrollTop setter) in a later
-			// tick: intercept it temporarily so it doesn't override our position.
+			// Popstate back/forward: the snapshot has the user's scroll position.
+			// SvelteKit's built-in hash-scroll (scrollIntoView) runs synchronously
+			// AFTER afterNavigate in the same navigation cycle, overriding our
+			// value. A setTimeout(0) macrotask runs after SvelteKit's synchronous
+			// scroll, so re-applying there wins without any prototype hack or
+			// magic-number delay.
 			snapshotRestored = false;
 			const targetScroll = detailScrollTop;
 			const pane = document.querySelector('.detail-scroll-pane') as HTMLElement | null;
 			if (pane && targetScroll > 0) {
 				pane.scrollTop = targetScroll;
-				const origSIV = Element.prototype.scrollIntoView;
-				Element.prototype.scrollIntoView = function (...args: unknown[]) {
-					if (pane.contains(this as Node)) return; // suppress hash-scroll
-					return (origSIV as (...a: unknown[]) => void).apply(this, args);
-				};
-				const reapply = () => {
+				setTimeout(() => {
 					pane.scrollTop = targetScroll;
-					Element.prototype.scrollIntoView = origSIV;
-				};
-				requestAnimationFrame(() => {
-					pane.scrollTop = targetScroll;
-				});
-				setTimeout(reapply, 300);
+				}, 0);
 			}
 			return;
 		}
