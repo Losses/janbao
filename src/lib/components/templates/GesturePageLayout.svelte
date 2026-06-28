@@ -144,14 +144,22 @@
 
 	const progress = $derived(maxDrag > 0 ? Math.min(1, currentRevealWidth / maxDrag) : 0);
 
+	// Destination of an in-flight cross-tab tab-tap exit (set in beforeNavigate).
+	// The loading chip reads `targetTab` for its icon/label; without this the chip
+	// would show the SOURCE page's neighbour panel (wrong tab) for a cross-tab
+	// exit. null outside a cross-tab chip exit.
+	let pendingTargetHref = $state<string | null>(null);
+
 	const targetTab = $derived(
-		swipeDirection === 'left'
-			? resolvedRightHref
-				? MOBILE_TABS[navStore.getTabFromPath(resolvedRightHref)]
-				: null
-			: resolvedLeftHref
-				? MOBILE_TABS[navStore.getTabFromPath(resolvedLeftHref)]
-				: null
+		pendingTargetHref
+			? (MOBILE_TABS.find((tab) => tab.href === pendingTargetHref) ?? null)
+			: swipeDirection === 'left'
+				? resolvedRightHref
+					? MOBILE_TABS[navStore.getTabFromPath(resolvedRightHref)]
+					: null
+				: resolvedLeftHref
+					? MOBILE_TABS[navStore.getTabFromPath(resolvedLeftHref)]
+					: null
 	);
 
 	const isCircle = $derived(currentRevealWidth < 40);
@@ -208,6 +216,10 @@
 	let viewportEl: HTMLElement | null = $state(null);
 
 	let pendingNav = $state<PendingNav | null>(null);
+	// A cancelled gesture: the track slides back to rest (dragOffset -> 0). Reset
+	// the chip-path flags on that transform transitionend (consumed in
+	// onTrackTransitionEnd) instead of a fixed setTimeout.
+	let pendingCancel = $state(false);
 
 	$effect(() => {
 		if (leftEl && leftScrollTop > 0) {
@@ -426,13 +438,15 @@
 					// page. Commit to history.back() to land on the real previous page.
 					isTransitioningOut = true;
 					dragOffset = null;
-					setTimeout(() => {
-						if (navStore.activeStack.length > 1) {
-							history.back();
-						} else {
-							void goto(fallbackRoute, { replaceState: true });
-						}
-					}, 300);
+					// history.back() pops when a real previous entry exists, else
+					// replace onto the fallback. Pre-resolved at commit time so the
+					// slide-out transitionend dispatches identically to the old
+					// setTimeout callback.
+					pendingNav = {
+						href: fallbackRoute,
+						back: navStore.activeStack.length > 1,
+						replaceState: true
+					};
 					return;
 				}
 				const targetHref = swipeDirection === 'left' ? resolvedRightHref : resolvedLeftHref;
@@ -450,44 +464,26 @@
 					if (isPopulated) {
 						isTransitioningOut = true;
 						dragOffset = null;
-						setTimeout(() => {
-							void goto(targetHref, { replaceState: targetReplaceState }).then(() => {
-								isTransitioningOut = false;
-								prefetchStarted = false;
-								swipeNeedsLoadingAtStart = false;
-								swipeDirection = null;
-							});
-						}, 300);
+						pendingNav = { href: targetHref, back: false, replaceState: targetReplaceState };
 					} else {
 						isPendingNavigation = true;
 						dragOffset = null;
-						preloadData(targetHref)
+						void preloadData(targetHref)
 							.catch(() => {})
 							.then(() => {
 								isPendingNavigation = false;
 								isTransitioningOut = true;
-								setTimeout(() => {
-									void goto(targetHref, { replaceState: targetReplaceState }).then(() => {
-										isTransitioningOut = false;
-										prefetchStarted = false;
-										swipeNeedsLoadingAtStart = false;
-										swipeDirection = null;
-									});
-								}, 300);
+								pendingNav = { href: targetHref, back: false, replaceState: targetReplaceState };
 							});
 					}
 				}
 			} else {
 				dragOffset = null;
 				prefetchStarted = false;
-				setTimeout(() => {
-					transitionEnabled = false;
-					swipeNeedsLoadingAtStart = false;
-					swipeDirection = null;
-					setTimeout(() => {
-						transitionEnabled = true;
-					}, 50);
-				}, 300);
+				// The track slides back to rest (dragOffset -> 0). Reset the
+				// chip-path flags on that transform transitionend (pendingCancel,
+				// consumed in onTrackTransitionEnd) instead of a fixed setTimeout.
+				pendingCancel = true;
 			}
 		} else {
 			const leftIdx = hasLeft ? 0 : -1;
@@ -526,18 +522,37 @@
 
 	function onTrackTransitionEnd(event: TransitionEvent): void {
 		if (event.target !== event.currentTarget) return;
-		if (event.propertyName !== 'transform' || !pendingNav) return;
-		const nav = pendingNav;
-		pendingNav = null;
-		// Hold the pill at the target across the navigation: the route swap (and
-		// the destination pager taking over) is async, so without this flag the
-		// pager effect would reset to fromIdx in the gap and the pill would
-		// collapse/re-expand. Cleared by afterNavigate / unmount.
-		navInFlight = true;
-		if (nav.back) {
-			history.back();
-		} else {
-			void goto(nav.href, { replaceState: nav.replaceState });
+		if (event.propertyName !== 'transform') return;
+		if (pendingNav) {
+			const nav = pendingNav;
+			pendingNav = null;
+			// Hold the pill at the target across the navigation: the route swap
+			// (and the destination pager taking over) is async, so without this
+			// flag the pager effect would reset to fromIdx in the gap and the pill
+			// would collapse/re-expand. Cleared by afterNavigate / unmount.
+			navInFlight = true;
+			if (nav.back) {
+				history.back();
+			} else {
+				void goto(nav.href, { replaceState: nav.replaceState }).catch(() => {
+					navInFlight = false;
+				});
+			}
+			return;
+		}
+		// Cancelled gesture: the track slid back to rest (dragOffset -> 0). The
+		// chip overlay already unmounted when dragOffset cleared; reset the
+		// remaining chip-path flags now that the slide-back finished, then
+		// re-enable transitions on the next frame (replaces the former nested
+		// setTimeout(50)).
+		if (pendingCancel) {
+			pendingCancel = false;
+			transitionEnabled = false;
+			swipeNeedsLoadingAtStart = false;
+			swipeDirection = null;
+			requestAnimationFrame(() => {
+				transitionEnabled = true;
+			});
 		}
 	}
 
@@ -548,20 +563,63 @@
 		// Only animate on mobile
 		if (!isMobile) return;
 
-		// If a navigation is already in flight or transitioning, let it pass
-		if (navInFlight || pendingNav !== null || isTransitioningOut) return;
+		// If a navigation is already in flight or transitioning, let it pass.
+		// isPendingNavigation covers the cross-tab chip exit (which sets no
+		// pendingNav) just as pendingNav covers the same-panel slide.
+		if (
+			navInFlight ||
+			pendingNav !== null ||
+			isTransitioningOut ||
+			isPendingNavigation ||
+			pendingCancel
+		)
+			return;
 
 		// We only want to animate if we are exiting the detail page to a tab root page
 		if (!isTabRootPath(to.url.pathname)) return;
 
-		// Determine target tab index and current tab index
 		const toTabIdx = navStore.getTabFromPath(to.url.pathname);
 		const currentTabIdx = centerTab ?? getCurrentTabIndex(page.url.pathname);
+		const target = to.url.pathname + to.url.search;
+		const isBack = type === 'popstate' || hopForHref(to.url.pathname) === 'back';
+		const replaceState = type === 'popstate' ? undefined : !isBack;
 
-		// Determine exit direction
+		// Same-panel exit: the target matches a panel this page already rendered
+		// (its own left/right list), so the slide reveals the CORRECT list.
+		const matchesPreRenderedPanel =
+			to.url.pathname === resolvedLeftHref || to.url.pathname === resolvedRightHref;
+
+		if (!matchesPreRenderedPanel) {
+			// Cross-tab exit: neither pre-rendered panel matches the target. Sliding
+			// to either neighbour would flash the WRONG list for ~200ms. Route
+			// through the loading-chip overlay (the same primitive a back-swipe to an
+			// uncached target uses) so no panel is revealed: cancel, show the chip,
+			// preload the target, then navigate with the SAME history semantics as
+			// the same-panel path. history.back() on a back-hop (not a goto push) so
+			// repeated tab toggles collapse instead of trapping the user
+			// (history-nav no-back-trap). onTrackTransitionEnd dispatches the nav on
+			// the slide-out transitionend; flags clear in afterNavigate.
+			cancel();
+			swipeNeedsLoadingAtStart = true;
+			swipeDirection = toTabIdx > currentTabIdx ? 'left' : 'right';
+			pendingTargetHref = to.url.pathname;
+			prefetchStarted = true;
+			isPendingNavigation = true;
+			void preloadData(target)
+				.catch(() => {})
+				.then(() => {
+					isPendingNavigation = false;
+					isTransitioningOut = true;
+					pendingNav = { href: target, back: isBack, replaceState };
+				});
+			return;
+		}
+
+		// Same-panel: snap to the matching neighbour panel; pendingNav is consumed
+		// by onTrackTransitionEnd, which dispatches history.back()/goto on the
+		// transform transitionend.
 		let direction: 'left' | 'right';
 		let targetSnapIndex: number;
-
 		if (toTabIdx > currentTabIdx) {
 			direction = 'left'; // moving to a tab to the right -> track slides left
 			// If we have a right section, slide to it (snapIndex = panelCount - 1).
@@ -581,12 +639,7 @@
 		swipeDirection = direction;
 
 		// Save the target navigation details
-		const isBack = type === 'popstate' || hopForHref(to.url.pathname) === 'back';
-		pendingNav = {
-			href: to.url.pathname + to.url.search,
-			back: isBack,
-			replaceState: type === 'popstate' ? undefined : !isBack
-		};
+		pendingNav = { href: target, back: isBack, replaceState };
 	});
 
 	// Navigation completed (or this layout survived a same-route no-op): release
@@ -594,12 +647,16 @@
 	// nav this layout unmounts first and the flag dies with it.
 	afterNavigate(() => {
 		navInFlight = false;
-		// history.back() (back-to-unmounted-target path) has no promise to reset
-		// these in, so clear them here alongside the goto path's own .then resets.
+		// history.back() has no promise, and a transform transitionend that never
+		// fires (e.g. the transform was already terminal) would otherwise strand
+		// pendingNav and block the re-entry guard. Clear defensively.
+		pendingNav = null;
+		pendingCancel = false;
 		isTransitioningOut = false;
 		prefetchStarted = false;
 		swipeNeedsLoadingAtStart = false;
 		swipeDirection = null;
+		pendingTargetHref = null;
 	});
 
 	onMount(() => {
@@ -778,8 +835,8 @@
 		background-color: var(--color-base-200);
 		overflow: visible;
 		transition:
-			width 300ms cubic-bezier(0.25, 0.8, 0.25, 1),
-			opacity 300ms ease;
+			width 200ms cubic-bezier(0.25, 0.8, 0.25, 1),
+			opacity 200ms ease;
 	}
 	.loading-overlay.dragging {
 		transition: none !important;

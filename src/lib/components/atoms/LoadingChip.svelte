@@ -71,14 +71,14 @@
 	.loading-chip {
 		font-family: var(--font-sans);
 		transition:
-			transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1),
-			opacity 300ms ease,
+			transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+			opacity 200ms ease,
 			max-width 200ms ease;
 	}
 	.loading-chip.dragging {
 		transition:
 			max-width 0s linear,
-			transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+			transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
 	}
 	.loading-chip-text {
 		display: inline-block;
