@@ -80,4 +80,37 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 		console.log('Landed path for Bug 2:', finalPath);
 		expect(finalPath, 'Clicking Activity tab should keep us on /activity').toBe('/activity');
 	});
+
+	test('Bug 3: thread -> Message tab click -> swipe back directly returns to thread, skipping Activity', async ({ page }) => {
+		page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
+
+		// 1. Start at homepage (Discussions list)
+		await page.goto('/');
+		await waitForHydration(page);
+
+		// 2. Click the first discussion to enter thread detail
+		await clickDiscussion(page, 0);
+		await page.waitForURL(/\/discussion\//);
+		await page.waitForSelector('.detail-scroll-pane');
+		const discussionPath = new URL(page.url()).pathname;
+		
+		// Settle enter animation
+		await page.waitForTimeout(500);
+
+		// 3. Click the Messages tab in the Header (Action Bar)
+		await page.locator('a[data-tab-nav][href="/messages/inbox"]').click();
+		await page.waitForURL('/messages/inbox');
+		await page.waitForTimeout(500);
+
+		// 4. Swipe back (left-to-right gesture) on Messages tab
+		await swipeBack(page);
+		
+		// Wait for navigation
+		await page.waitForTimeout(1000);
+		const landedPath = new URL(page.url()).pathname;
+		console.log('Landed path for Bug 3:', landedPath);
+		
+		// Assert that it resolved the conflict and landed on the spatial neighbor /activity
+		expect(landedPath).toBe('/activity');
+	});
 });

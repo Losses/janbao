@@ -201,12 +201,12 @@ test('isTabRootPath is false for every kind of deep page (no /discussion hardcod
 // entry behind the tab is a deep page, and switch tabs otherwise.
 test('backSwipeShouldPopHistory is false when the Navigation API is absent', () => {
 	clearNav();
-	expect(backSwipeShouldPopHistory()).toBe(false);
+	expect(backSwipeShouldPopHistory(0)).toBe(false);
 });
 
 test('backSwipeShouldPopHistory is false at the first entry (nothing behind)', () => {
 	setNav([{ url: '/activity', index: 0 }], { url: '/activity', index: 0 });
-	expect(backSwipeShouldPopHistory()).toBe(false);
+	expect(backSwipeShouldPopHistory(0)).toBe(false);
 });
 
 test('backSwipeShouldPopHistory is false when the previous entry is a tab root (normal tab<->tab)', () => {
@@ -218,7 +218,7 @@ test('backSwipeShouldPopHistory is false when the previous entry is a tab root (
 		],
 		{ url: '/activity', index: 1 }
 	);
-	expect(backSwipeShouldPopHistory()).toBe(false);
+	expect(backSwipeShouldPopHistory(0)).toBe(false);
 });
 
 test('backSwipeShouldPopHistory is false when the previous entry is a different tab root', () => {
@@ -230,7 +230,7 @@ test('backSwipeShouldPopHistory is false when the previous entry is a different 
 		],
 		{ url: '/messages/inbox', index: 1 }
 	);
-	expect(backSwipeShouldPopHistory()).toBe(false);
+	expect(backSwipeShouldPopHistory(1)).toBe(false);
 });
 
 test('backSwipeShouldPopHistory is TRUE when the previous entry is a deep page (the bug case)', () => {
@@ -244,7 +244,22 @@ test('backSwipeShouldPopHistory is TRUE when the previous entry is a deep page (
 		],
 		{ url: '/activity', index: 2 }
 	);
-	expect(backSwipeShouldPopHistory()).toBe(true);
+	expect(backSwipeShouldPopHistory(0)).toBe(true);
+});
+
+test('backSwipeShouldPopHistory is false when previous entry belongs to a different tab than the target', () => {
+	// On /messages/inbox (Tab 2), target is /activity (Tab 1).
+	// Previous entry is a thread (belongs to Tab 0 Discussions).
+	// Target is Tab 1, previous is Tab 0 -> do not pop.
+	setNav(
+		[
+			{ url: '/', index: 0 },
+			{ url: '/discussion/1054/slug/p1', index: 1 },
+			{ url: '/messages/inbox', index: 2 }
+		],
+		{ url: '/messages/inbox', index: 2 }
+	);
+	expect(backSwipeShouldPopHistory(1)).toBe(false);
 });
 
 test('backSwipeShouldPopHistory is TRUE for any deep page behind the tab (generality)', () => {
@@ -255,7 +270,6 @@ test('backSwipeShouldPopHistory is TRUE for any deep page behind the tab (genera
 		'/bookmarks',
 		'/search',
 		'/notifications',
-		'/messages/2',
 		'/post/discussion',
 		'/discussions/p5'
 	];
@@ -268,6 +282,6 @@ test('backSwipeShouldPopHistory is TRUE for any deep page behind the tab (genera
 			],
 			{ url: '/activity', index: 2 }
 		);
-		expect(backSwipeShouldPopHistory(), `prev=${prev} should pop history`).toBe(true);
+		expect(backSwipeShouldPopHistory(0), `prev=${prev} should pop history`).toBe(true);
 	}
 });

@@ -147,7 +147,7 @@
 		// During a back-swipe toward a deep page:
 		// - If we have a cached snapshot, overlay the snapshot on section 0 and slide the track.
 		// - Otherwise, do not slide the track and show the shared back chip overlay instead.
-		if (deltaX > 0 && backSwipeShouldPopHistory()) {
+		if (deltaX > 0 && backSwipeShouldPopHistory(activeIndex - 1)) {
 			if (deepPageSnapshot.hasSnapshot) {
 				showDeepPreview = true;
 				backChipReveal = null;
@@ -191,12 +191,12 @@
 		}
 		getScrollChromeStore().show();
 
-		const shouldPop = backSwipeShouldPopHistory();
 		const targetIndex = activeIndex - 1;
+		const shouldPop = backSwipeShouldPopHistory(targetIndex);
 		if (!shouldPop) {
 			activeIndex = targetIndex;
 		}
-		navStore.navigateBackward(MOBILE_TABS[shouldPop ? activeIndex : targetIndex].href);
+		navStore.navigateBackward(MOBILE_TABS[targetIndex].href);
 	}
 	function swipeEnd(deltaX: number, velocity: number, reversed: boolean): void {
 		const last = MOBILE_TABS.length - 1;

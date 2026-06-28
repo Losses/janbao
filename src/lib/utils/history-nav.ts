@@ -96,9 +96,14 @@ export function previousEntryPathname(): string | null {
  * The discriminator is `isTabRootPath` (config-driven), so this is agnostic to
  * which deep route is involved - no route is hardcoded.
  */
-export function backSwipeShouldPopHistory(): boolean {
+export function backSwipeShouldPopHistory(targetTabIdx: number): boolean {
 	const prev = previousEntryPathname();
-	return prev !== null && !isTabRootPath(prev);
+	if (prev === null) return false;
+	if (isTabRootPath(prev)) return false;
+
+	const idx = MOBILE_TAB_DEFS.findIndex((tab) => tab.isActive(prev));
+	const prevTabIdx = idx >= 0 ? idx : 0;
+	return prevTabIdx === targetTabIdx;
 }
 
 /**
