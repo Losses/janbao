@@ -434,7 +434,7 @@ export interface ExitPreviewCapture {
 	 * contains only the target tab; a wrong tab list or a non-tab panel (null)
 	 * is a failure. */
 	seenTabs: PreviewTab[];
-	/** The non-detail panel with the highest single-frame viewport coverage —
+	/** The non-detail panel with the highest single-frame viewport coverage -
 	 * i.e. the panel the slide actually revealed as the preview. */
 	revealedTab: PreviewTab;
 }
@@ -460,7 +460,7 @@ interface ExitPreviewWindow extends Window {
  * viewport and records the `data-preview-tab` attribute of any covering >40% of
  * the width. The attribute is set by GesturePageLayout to the rendered panel's
  * tab labelKey (or null when the panel is not a tab list), so detection does not
- * depend on DOM content — content markers collide across pages and cannot
+ * depend on DOM content - content markers collide across pages and cannot
  * enumerate non-tab sidebars.
  */
 export async function captureExitPreview(

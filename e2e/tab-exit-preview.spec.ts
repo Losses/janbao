@@ -33,7 +33,7 @@ import {
  *   message    -> /activity         BUG      (reveals messages, not activity)
  *
  * Invariant under test (holds for any reasonable fix): the exit slide must not
- * preview a DIFFERENT tab's list. The controls double as calibration — if they
+ * preview a DIFFERENT tab's list. The controls double as calibration - if they
  * fail, the sampler/selectors are broken and the bug cases cannot be trusted.
  */
 
@@ -152,8 +152,8 @@ test.describe('cross-tab exit preview matches the target tab', () => {
 
 			// Tall detail pages (e.g. a long conversation) auto-scroll on mount; the
 			// shared hide-on-scroll Header then translates the tab bar off-screen, so
-			// the tab pill is not clickable. Scroll the centre pane back to the top —
-			// what a user does before tapping a tab — and let the Header reveal settle.
+			// the tab pill is not clickable. Scroll the centre pane back to the top -
+			// what a user does before tapping a tab - and let the Header reveal settle.
 			await page.evaluate(() => {
 				const pane = document.querySelector('.detail-scroll-pane');
 				if (pane instanceof HTMLElement) pane.scrollTop = 0;

@@ -163,7 +163,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		expect(preview.replyCount, 'preview shows thread replies, not the discussions list').toBeGreaterThan(0);
 		// 2. No gray chip.
 		expect(preview.hasChip, 'no gray chip during the gesture').toBe(false);
-		// 3. CRITICAL: the preview matches the landing page — the first reply ID
+		// 3. CRITICAL: the preview matches the landing page - the first reply ID
 		//    in the preview equals the first reply ID after landing. Without this
 		//    comparison, the preview could show the wrong thread (stale cache,
 		//    wrong page) and the test would still pass.
@@ -201,7 +201,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 			return imgs.every(img => img.complete);
 		});
 
-		// STAGE 1 — before swiping away: the thread's scroll + title viewport Y +
+		// STAGE 1 - before swiping away: the thread's scroll + title viewport Y +
 		// scroll RANGE (scrollHeight, clientHeight). The preview must have the SAME
 		// range, or the same scrollTop shows different content.
 		const before = await page.evaluate(() => {
@@ -219,7 +219,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		await page.waitForFunction(() => location.pathname === '/activity', null, { timeout: 8000 });
 		await page.waitForTimeout(300);
 
-		// STAGE 2 — during the back-swipe preview: the overlay's scroll + title +
+		// STAGE 2 - during the back-swipe preview: the overlay's scroll + title +
 		// scroll RANGE.
 		const held = await holdDrag(page, 'back');
 		await page.waitForTimeout(200);
@@ -235,7 +235,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		});
 		await held.release();
 
-		// STAGE 3 — after landing back on the thread: scroll + title again.
+		// STAGE 3 - after landing back on the thread: scroll + title again.
 		await page.waitForFunction(
 			() => location.pathname.startsWith('/discussion/'),
 			null,
@@ -266,7 +266,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		expect(Math.abs(before.scrollHeight - preview.scrollHeight),
 			`preview scrollHeight (${preview.scrollHeight}) must match real (${before.scrollHeight}) within 10px`).toBeLessThan(10);
 
-		// All three stages must be aligned — scrollTop within 5px:
+		// All three stages must be aligned - scrollTop within 5px:
 		expect(Math.abs(before.scrollTop - preview.scrollTop),
 			`scrollTop mismatch: before=${before.scrollTop} preview=${preview.scrollTop}`).toBeLessThan(5);
 		expect(Math.abs(preview.scrollTop - after.scrollTop),
@@ -357,7 +357,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 
 		// Sample the DOM rapidly after release. While still on /activity (before
 		// history.back loads the thread), the discussions list must NOT flash
-		// into view — the cached-thread overlay must persist until the pager
+		// into view - the cached-thread overlay must persist until the pager
 		// unmounts.
 		const samples = await page.evaluate(async () => {
 			const results: Array<{ href: string; discussionsVisible: boolean; hasOverlay: boolean }> = [];
@@ -466,7 +466,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 	// (in beforeNavigate) does NOT work: at beforeNavigate the `/` content is not
 	// yet rendered, so the scrollTo has no document, and SvelteKit's own top-scroll
 	// on the `/` render overrides it. Fully eliminating the flash requires the
-	// thread to stay mounted across list↔thread — the persistent-pager overlay
+	// thread to stay mounted across list↔thread - the persistent-pager overlay
 	// architecture that was tried and reverted in c339b2d (scroll-lock,
 	// SSR blanks, height jump, perf crash). Skipped until that architecture is
 	// re-attempted (if ever); the late afterNavigate restore (the working fallback)
