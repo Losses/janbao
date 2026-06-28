@@ -184,21 +184,26 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		});
 		await page.waitForTimeout(300);
 
-		// STAGE 1 — before swiping away: the thread's scroll + title viewport Y.
-		const before = await page.evaluate(() => {
-			const pane = document.querySelector('.detail-scroll-pane') as HTMLElement | null;
-			const title = document.querySelector('h1');
-			return {
-				scrollTop: pane?.scrollTop ?? -1,
-				titleTop: title ? Math.round(title.getBoundingClientRect().top) : null
-			};
-		});
+		// STAGE 1 — before swiping away: the thread's scroll + title viewport Y +
+	// scroll RANGE (scrollHeight, clientHeight). The preview must have the SAME
+	// range, or the same scrollTop shows different content.
+	const before = await page.evaluate(() => {
+		const pane = document.querySelector('.detail-scroll-pane') as HTMLElement | null;
+		const title = document.querySelector('h1');
+		return {
+			scrollTop: pane?.scrollTop ?? -1,
+			scrollHeight: pane?.scrollHeight ?? -1,
+			clientHeight: pane?.clientHeight ?? -1,
+			titleTop: title ? Math.round(title.getBoundingClientRect().top) : null
+		};
+	});
 
 		await swipeForward(page);
 		await page.waitForFunction(() => location.pathname === '/activity', null, { timeout: 8000 });
 		await page.waitForTimeout(300);
 
-		// STAGE 2 — during the back-swipe preview: the overlay's scroll + title.
+		// STAGE 2 — during the back-swipe preview: the overlay's scroll + title +
+		// scroll RANGE.
 		const held = await holdDrag(page, 'back');
 		await page.waitForTimeout(200);
 		const preview = await page.evaluate(() => {
@@ -206,6 +211,8 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 			const title = overlay?.querySelector('h1');
 			return {
 				scrollTop: overlay?.scrollTop ?? -1,
+				scrollHeight: overlay?.scrollHeight ?? -1,
+				clientHeight: overlay?.clientHeight ?? -1,
 				titleTop: title ? Math.round(title.getBoundingClientRect().top) : null
 			};
 		});
@@ -228,6 +235,14 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 			};
 		});
 
+		// Scroll RANGE: the preview's clientHeight must match the real pane's.
+		// If the preview is taller/shorter, the same scrollTop shows different
+		// content (the bug where preview maxScroll=9009 but real maxScroll=10800).
+		expect(Math.abs(before.clientHeight - preview.clientHeight),
+			`clientHeight mismatch: before=${before.clientHeight} preview=${preview.clientHeight}`).toBeLessThan(10);
+		expect(Math.abs(before.scrollHeight - preview.scrollHeight),
+			`scrollHeight mismatch: before=${before.scrollHeight} preview=${preview.scrollHeight}`).toBeLessThan(50);
+
 		// All three stages must be aligned — scrollTop within 5px:
 		expect(Math.abs(before.scrollTop - preview.scrollTop),
 			`scrollTop mismatch: before=${before.scrollTop} preview=${preview.scrollTop}`).toBeLessThan(5);
@@ -242,6 +257,71 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 			`titleTop mismatch: before=${before.titleTop} preview=${preview.titleTop}`).toBeLessThan(5);
 		expect(Math.abs(preview.titleTop! - after.titleTop!),
 			`titleTop mismatch: preview=${preview.titleTop} after=${after.titleTop}`).toBeLessThan(5);
+	});
+
+	test('header shows when a drag starts on the thread page (GesturePageLayout)', async ({ page }) => {
+		await threadPathOn(page);
+		// Wait for holdThroughNavigation pin to expire, then scroll down to hide header.
+		await page.waitForTimeout(1400);
+		await page.evaluate(() => {
+			const pane = document.querySelector('.detail-scroll-pane');
+			if (pane) pane.scrollTop += 500;
+		});
+		await page.waitForTimeout(400);
+
+		// If header is already visible (some layouts pin it), skip the "hidden"
+		// precondition and just verify it stays/becomes visible during drag.
+		const held = await holdDrag(page, 'forward');
+		await page.waitForTimeout(200);
+		const headerTYDuring = await page.evaluate(
+			() =>
+				Number(
+					document
+						.querySelector('header')
+						?.style.transform.match(/translateY\(([-0-9.]+)px\)/)?.[1] ?? '0'
+				)
+		);
+		await held.release();
+		expect(headerTYDuring, 'header visible during drag').toBeGreaterThan(-5);
+	});
+
+	test('back-swipe scroll position never transiently jumps to the anchor', async ({ page }) => {
+		await threadPathOn(page);
+		await page.evaluate(() => {
+			const pane = document.querySelector('.detail-scroll-pane');
+			if (pane) pane.scrollTop = 500;
+		});
+		await page.waitForTimeout(300);
+
+		await swipeForward(page);
+		await page.waitForFunction(() => location.pathname === '/activity', null, { timeout: 8000 });
+		await page.waitForTimeout(300);
+
+		// Full back-swipe, then rapidly sample scrollTop on landing.
+		await swipeBack(page);
+		await page.waitForFunction(
+			() => location.pathname.startsWith('/discussion/'),
+			null,
+			{ timeout: 8000 }
+		);
+
+		// Sample every ~16ms for ~500ms. The scroll must NEVER jump to the anchor
+		// (≈11700+); it should stay at ≈500 throughout.
+		const trajectory = await page.evaluate(async () => {
+			const pane = document.querySelector('.detail-scroll-pane');
+			const samples: number[] = [];
+			for (let i = 0; i < 30; i++) {
+				samples.push(Math.round(pane?.scrollTop ?? -1));
+				await new Promise((r) => setTimeout(r, 16));
+			}
+			return samples;
+		});
+
+		const maxScroll = Math.max(...trajectory);
+		expect(
+			maxScroll,
+			`scroll must never exceed 600 (no transient anchor jump); max was ${maxScroll}. Trajectory: ${trajectory.join(',')}`
+		).toBeLessThan(600);
 	});
 
 	test('back-swipe to deep page does not flash the discussions list on release', async ({ page }) => {

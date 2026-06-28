@@ -395,7 +395,8 @@
 			<div
 				data-deep-preview
 				bind:this={deepPreviewEl}
-				class="absolute inset-y-0 left-0 z-10 w-1/3 overflow-y-auto bg-base-100"
+				class="absolute top-0 left-0 z-10 w-1/3 overflow-y-auto bg-base-100 scroll-pane"
+				style={`height: ${typeof window !== 'undefined' ? window.innerHeight : 844}px;`}
 			>
 				<!-- Safe: app's own rendered content captured from the live DOM. -->
 				<!-- eslint-disable-next-line svelte/no-at-html-tags -->

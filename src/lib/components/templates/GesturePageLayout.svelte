@@ -347,8 +347,10 @@
 	);
 
 	function onSwipeMove(deltaX: number) {
+		// Show the header when a drag starts (it may be hidden from scroll);
+		// the gesture reveals a new panel, so the header should be visible.
+		scrollChrome.show();
 		if (dragOffset === null) {
-			// New gesture: drop any stale in-flight hold left by a cancelled nav.
 			navInFlight = false;
 			swipeDirection = deltaX > 0 ? 'right' : deltaX < 0 ? 'left' : null;
 			if (swipeDirection === 'right') {
