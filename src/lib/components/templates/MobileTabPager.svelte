@@ -33,6 +33,7 @@
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
 	import { hopForHref, backSwipeShouldPopHistory } from '$lib/utils/history-nav';
+	import { getDeepPageSnapshotStore } from '$lib/stores/deep-page-snapshot.svelte';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
 	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
@@ -60,6 +61,11 @@
 	// null at rest (CSS transition snaps to activeIndex); a live px offset while a
 	// pointer is dragging, applied in the transform so the track tracks 1:1.
 	let dragOffset = $state<number | null>(null);
+	// px width of the deep-page snapshot reveal during a back-swipe toward a
+	// deep page (thread, conversation, ...) whose rendered HTML was captured on
+	// navigation-away. Shows the actual destination page during the gesture
+	// instead of the spatially-previous tab. null at rest.
+	let deepPreviewReveal = $state<number | null>(null);
 
 	// Publish drag progress to the shared store so MobileTabBar's indicator
 	// tracks the finger. fractionalIndex = active tab + fractional drag offset
@@ -67,6 +73,7 @@
 	// Tab routes are always root-mode for the Header, so deepMorph stays null
 	// here (the morph is driven only by deep-page swipe-back in GesturePageLayout).
 	const pager = getMobilePagerStore();
+	const deepPageSnapshot = getDeepPageSnapshotStore();
 	let viewportWidth = $state(0);
 	$effect(() => {
 		pager.set({
@@ -113,7 +120,16 @@
 	}
 
 	function swipeMove(deltaX: number): void {
-		dragOffset = follow(deltaX);
+		if (deltaX > 0 && backSwipeShouldPopHistory() && deepPageSnapshot.hasSnapshot) {
+			// Back-swipe toward a deep page that has a cached snapshot: reveal the
+			// snapshot (the actual thread content) instead of sliding the
+			// discussions list into view.
+			deepPreviewReveal = Math.min(Math.abs(deltaX), window.innerWidth);
+			dragOffset = null;
+		} else {
+			deepPreviewReveal = null;
+			dragOffset = follow(deltaX);
+		}
 		getScrollChromeStore().show();
 	}
 	function switchTo(index: number): void {
@@ -173,6 +189,7 @@
 		if (deltaX <= -SWIPE_COMMIT && activeIndex < last && !reversed) switchTo(activeIndex + 1);
 		else if (deltaX >= SWIPE_COMMIT && activeIndex > 0 && !reversed) switchBackward();
 		dragOffset = null;
+		deepPreviewReveal = null;
 	}
 
 	// `settled` = the local activeIndex matches the URL's tab, i.e. no swipe
@@ -342,4 +359,19 @@
 			/>
 		</section>
 	</div>
+	{#if deepPreviewReveal !== null && deepPageSnapshot.html}
+		<!-- Cached snapshot of the deep page being returned to (the actual thread
+		     content), revealed left-to-right as the user drags. Non-interactive
+		     visual preview; history.back() on commit loads the real page. -->
+		<div
+			class="deep-preview-overlay absolute inset-y-0 left-0 z-20 overflow-y-auto overflow-x-hidden bg-base-100 pointer-events-none"
+			style="width: {deepPreviewReveal}px;"
+		>
+			<!-- Safe: the app's own rendered content, captured from the live DOM on
+			     navigation-away (not user input). Read-only visual snapshot, shown
+			     briefly during a gesture, replaced by the real page on commit. -->
+			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+			{@html deepPageSnapshot.html}
+		</div>
+	{/if}
 </div>

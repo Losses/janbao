@@ -136,32 +136,43 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		expect(landedReplies, 'the thread re-renders its replies after the back-swipe (no gray blank)').toBeGreaterThan(0);
 	});
 
-	test('back-swipe to a deep page shows no gray placeholder overlay', async ({ page }) => {
+	test('back-swipe previews the actual destination thread (preview matches landing)', async ({ page }) => {
 		const threadPath = await threadPathOn(page);
 
-		await swipeForward(page); // thread → its right-neighbour tab (Activity)
+		await swipeForward(page); // thread → Activity
 		await page.waitForFunction(() => location.pathname === '/activity', null, { timeout: 8000 });
 		await page.waitForTimeout(300);
 
-		// Hold a back-drag (no release) toward the thread.
+		// Hold a back-drag (no release): capture the PREVIEW content.
 		const held = await holdDrag(page, 'back');
-
-		// During the gesture there must be NO gray placeholder overlay covering the
-		// screen - the spatial track slides (revealing the Discussions list, the
-		// page the user originally came from), and on release history.back() lands
-		// the thread. (Showing the live thread during the gesture would require the
-		// thread to stay mounted - the persistent-pager overlay architecture that
-		// was tried and reverted in c339b2d; not viable.)
-		const probe = await page.evaluate(() => ({
-			backChipOverlay: !!document.querySelector('.back-chip-overlay')
+		const preview = await page.evaluate(() => ({
+			replyCount: document.querySelectorAll('[id^="reply-"]').length,
+			firstReplyId: document.querySelector('[id^="reply-"]')?.id ?? null,
+			hasChip: !!document.querySelector('.back-chip-overlay')
 		}));
 		await held.release();
 
-		expect(probe.backChipOverlay, 'no gray placeholder overlay during the back-swipe').toBe(false);
-
-		// Release: lands on the thread (single source of truth - real history).
+		// After landing: capture the DESTINATION content.
 		await page.waitForFunction((p) => location.pathname === p, threadPath, { timeout: 5000 });
-		expect(new URL(page.url()).pathname).toBe(threadPath);
+		await page.waitForTimeout(300);
+		const landing = await page.evaluate(() => ({
+			firstReplyId: document.querySelector('[id^="reply-"]')?.id ?? null
+		}));
+
+		// 1. The preview shows THREAD content (replies), not the discussions list.
+		expect(preview.replyCount, 'preview shows thread replies, not the discussions list').toBeGreaterThan(0);
+		// 2. No gray chip.
+		expect(preview.hasChip, 'no gray chip during the gesture').toBe(false);
+		// 3. CRITICAL: the preview matches the landing page — the first reply ID
+		//    in the preview equals the first reply ID after landing. Without this
+		//    comparison, the preview could show the wrong thread (stale cache,
+		//    wrong page) and the test would still pass.
+		expect(preview.firstReplyId, 'preview has a reply to compare').toBeTruthy();
+		expect(landing.firstReplyId, 'landing has a reply to compare').toBeTruthy();
+		expect(
+			preview.firstReplyId,
+			'preview must match landing (same thread, same first reply)'
+		).toBe(landing.firstReplyId);
 	});
 
 	// --- Scope guards: a gray placeholder chip must NEVER appear during any swipe.

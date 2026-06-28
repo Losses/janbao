@@ -20,6 +20,8 @@
 	import { markEnterFromList, setReachedFromList } from '$lib/stores/thread-nav.svelte';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import { getPageScrollStore, getCurrentScrollY } from '$lib/stores/page-scroll.svelte';
+	import { getDeepPageSnapshotStore } from '$lib/stores/deep-page-snapshot.svelte';
+	import { isTabRootPath } from '$lib/utils/history-nav';
 
 	interface LayoutProps {
 		data: LayoutData;
@@ -35,6 +37,7 @@
 	let { data, children }: LayoutProps = $props();
 
 	const badges = getBadgesStore();
+	const deepPageSnapshot = getDeepPageSnapshotStore();
 	const editorPrefs = getEditorPrefsStore();
 	const uiPrefs = getUiPrefsStore();
 	const pageTheme = getPageThemeStore();
@@ -86,6 +89,21 @@
 			store.holdThroughNavigation(!!threadEnter);
 			window.clearTimeout(navFreezeTimer);
 			navFreezeTimer = window.setTimeout(() => store.releaseNavigation(), 1200);
+		}
+
+		// Capture the deep page's rendered content for the back-swipe preview.
+		// When the user swipes from a thread into a tab, the thread unmounts;
+		// this snapshot lets the tab pager's back-swipe show the actual thread
+		// (not the discussions list) during the gesture.
+		if (
+			from &&
+			!isTabRootPath(from.url.pathname) &&
+			to &&
+			isTabRootPath(to.url.pathname) &&
+			typeof window !== 'undefined'
+		) {
+			const card = document.querySelector('.detail-scroll-pane > .gpl-card');
+			if (card) deepPageSnapshot.capture(card.outerHTML, from.url.pathname);
 		}
 	});
 
