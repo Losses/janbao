@@ -232,7 +232,7 @@ class NavigationStore {
 			} else if (hop === 'forward') {
 				history.forward();
 			} else {
-				void goto(fallbackHref);
+				void goto(fallbackHref, { replaceState: true });
 			}
 		}
 	}

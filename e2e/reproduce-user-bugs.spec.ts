@@ -81,7 +81,7 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 		expect(finalPath, 'Clicking Activity tab should keep us on /activity').toBe('/activity');
 	});
 
-	test('Bug 3: thread -> Message tab click -> swipe back directly returns to thread, skipping Activity', async ({ page }) => {
+	test('Bug 3: thread -> Message tab click -> swipe back twice lands on thread', async ({ page }) => {
 		page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
 
 		// 1. Start at homepage (Discussions list)
@@ -102,15 +102,17 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 		await page.waitForURL('/messages/inbox');
 		await page.waitForTimeout(500);
 
-		// 4. Swipe back (left-to-right gesture) on Messages tab
+		// 4. Swipe back once -> should land on /activity
 		await swipeBack(page);
-		
-		// Wait for navigation
+		await page.waitForURL('/activity');
+		await page.waitForTimeout(500);
+
+		// 5. Swipe back twice -> should go back to the discussion page
+		await swipeBack(page);
 		await page.waitForTimeout(1000);
 		const landedPath = new URL(page.url()).pathname;
-		console.log('Landed path for Bug 3:', landedPath);
+		console.log('Landed path for Bug 3 (after 2 swipes):', landedPath);
 		
-		// Assert that it resolved the conflict and landed on the spatial neighbor /activity
-		expect(landedPath).toBe('/activity');
+		expect(landedPath).toBe(discussionPath);
 	});
 });
