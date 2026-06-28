@@ -1,13 +1,13 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { onMount } from 'svelte';
-	import { goto, preloadData, afterNavigate } from '$app/navigation';
+	import { goto, preloadData, afterNavigate, beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import { getPageScrollStore } from '$lib/stores/page-scroll.svelte';
 	import { backHandler } from '$lib/stores/navigation.svelte';
 	import { detectSwipe } from '$lib/actions/swipe';
-	import { hopForHref } from '$lib/utils/history-nav';
+	import { hopForHref, isTabRootPath } from '$lib/utils/history-nav';
 	import type { Action } from 'svelte/action';
 	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
@@ -525,6 +525,54 @@
 			void goto(nav.href, { replaceState: nav.replaceState });
 		}
 	}
+
+	beforeNavigate((navigation) => {
+		const { to, from, cancel, type } = navigation;
+		if (!to || !from) return;
+
+		// Only animate on mobile
+		if (!isMobile) return;
+
+		// If a navigation is already in flight or transitioning, let it pass
+		if (navInFlight || pendingNav !== null || isTransitioningOut) return;
+
+		// We only want to animate if we are exiting the detail page to a tab root page
+		if (!isTabRootPath(to.url.pathname)) return;
+
+		// Determine target tab index and current tab index
+		const toTabIdx = navStore.getTabFromPath(to.url.pathname);
+		const currentTabIdx = centerTab ?? getCurrentTabIndex(page.url.pathname);
+
+		// Determine exit direction
+		let direction: 'left' | 'right';
+		let targetSnapIndex: number;
+
+		if (toTabIdx > currentTabIdx) {
+			direction = 'left'; // moving to a tab to the right -> track slides left
+			// If we have a right section, slide to it (snapIndex = panelCount - 1).
+			// Otherwise slide to the left (snapIndex = 0) as a fallback.
+			targetSnapIndex = hasRight && !swipeNeedsLoadingAtStart ? panelCount - 1 : 0;
+		} else {
+			direction = 'right'; // moving to a tab to the left/same -> track slides right
+			targetSnapIndex = 0; // slide to the left section (index 0)
+		}
+
+		// Cancel the SvelteKit navigation so we can play the animation first
+		cancel();
+
+		// Start the transition
+		transitionEnabled = true;
+		snapIndex = targetSnapIndex;
+		swipeDirection = direction;
+
+		// Save the target navigation details
+		const isBack = type === 'popstate' || hopForHref(to.url.pathname) === 'back';
+		pendingNav = {
+			href: to.url.pathname + to.url.search,
+			back: isBack,
+			replaceState: type === 'popstate' ? undefined : !isBack
+		};
+	});
 
 	// Navigation completed (or this layout survived a same-route no-op): release
 	// the hold so the pill reflects the real URL tab again. For the normal away-

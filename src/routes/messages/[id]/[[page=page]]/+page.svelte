@@ -8,7 +8,7 @@
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
-	import { goto, invalidate } from '$app/navigation';
+	import { goto, invalidate, afterNavigate } from '$app/navigation';
 	import { enhance } from '$app/forms';
 	import type { UserSearchResult, ParticipantItem } from '$lib/types/api';
 	import type { PageData } from './$types';
@@ -51,8 +51,7 @@
 	// layout re-fetches the true count whenever the open conversation changes
 	// (the component is reused across conversations, so onMount would only
 	// fire once).
-	$effect(() => {
-		void conversation.id; // track cross-conversation navigation
+	afterNavigate(() => {
 		void invalidate('app:badges');
 	});
 </script>
