@@ -65,6 +65,7 @@
 
 	// State declarations
 	let dragOffset = $state<number | null>(null);
+	let rawDragOffset = $state<number | null>(null);
 	let swipeNeedsLoadingAtStart = $state(false);
 	let isPendingNavigation = $state(false);
 	let isTransitioningOut = $state(false);
@@ -303,7 +304,9 @@
 			// mostly above the viewport (the first half of the drag) and only
 			// expands over the second half. Otherwise the pill finishes expanding
 			// while the bar is off-screen and the expansion is never visible.
-			const progress = viewportWidth ? Math.min(1, Math.abs(dragOffset) / viewportWidth) : 0;
+			const progress = viewportWidth
+				? Math.min(1, Math.abs(rawDragOffset ?? dragOffset) / viewportWidth)
+				: 0;
 			const pillProgress = Math.max(0, progress - 0.5) * 2;
 			pager.set({
 				fractionalIndex: fromIdx + (targetIdx - fromIdx) * pillProgress,
@@ -374,6 +377,7 @@
 	);
 
 	function onSwipeMove(deltaX: number) {
+		rawDragOffset = deltaX;
 		// Show the header when a drag starts (it may be hidden from scroll);
 		// the gesture reveals a new panel, so the header should be visible.
 		scrollChrome.show();
@@ -439,6 +443,7 @@
 					// page. Commit to history.back() to land on the real previous page.
 					isTransitioningOut = true;
 					dragOffset = null;
+					rawDragOffset = null;
 					// history.back() pops when a real previous entry exists, else
 					// replace onto the fallback. Resolved at commit time because the
 					// dispatch (onTrackTransitionEnd) runs later, on transitionend.
@@ -464,10 +469,12 @@
 					if (isPopulated) {
 						isTransitioningOut = true;
 						dragOffset = null;
+						rawDragOffset = null;
 						pendingNav = { href: targetHref, back: false, replaceState: targetReplaceState };
 					} else {
 						isPendingNavigation = true;
 						dragOffset = null;
+						rawDragOffset = null;
 						void preloadData(targetHref)
 							.catch(() => {})
 							.then(() => {
@@ -479,6 +486,7 @@
 				}
 			} else {
 				dragOffset = null;
+				rawDragOffset = null;
 				prefetchStarted = false;
 				// The track slides back to rest (dragOffset -> 0). Reset the
 				// chip-path flags on that transform transitionend (pendingCancel,
@@ -517,6 +525,7 @@
 				snapIndex = ACTIVE;
 			}
 			dragOffset = null;
+			rawDragOffset = null;
 		}
 	}
 
