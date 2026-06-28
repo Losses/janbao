@@ -551,4 +551,40 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		await held.release();
 		expect(during.loadingOverlay, 'no loading overlay during a seeded-cache back-swipe').toBe(false);
 	});
+
+	test('back-swipe from tab page back to thread animates the transition on release and does not freeze', async ({ page }) => {
+		await threadPathOn(page);
+		await swipeForward(page);
+		await page.waitForFunction(() => location.pathname === '/activity', null, { timeout: 8000 });
+		await page.waitForTimeout(300);
+
+		// Start back swipe from /activity back to thread page
+		const held = await holdDrag(page, 'back');
+		await page.waitForTimeout(200);
+
+		// Capture layout track state right before release: transition must be disabled (none)
+		const beforeRelease = await page.evaluate(() => {
+			const track = document.querySelector('.mobile-tab-pager-viewport > div') as HTMLElement | null;
+			return {
+				transform: track?.style.transform ?? '',
+				transition: track?.style.transition ?? ''
+			};
+		});
+
+		// Release touch
+		await held.release();
+
+		// Immediately after release: the track style must NOT have transition: none,
+		// and it must be transitioning toward translateX(0px).
+		const immediatelyAfter = await page.evaluate(() => {
+			const track = document.querySelector('.mobile-tab-pager-viewport > div') as HTMLElement | null;
+			return {
+				transform: track?.style.transform ?? '',
+				transition: track?.style.transition ?? ''
+			};
+		});
+
+		expect(beforeRelease.transition).toContain('none');
+		expect(immediatelyAfter.transition).not.toContain('none');
+	});
 });

@@ -113,10 +113,20 @@
 		}
 	});
 
+	let isTransitioningOut = $state(false);
+
+	const trackTranslateX = $derived(
+		isTransitioningOut
+			? '0px'
+			: dragOffset === null
+				? `-${activeIndex * STEP_PERCENT}%`
+				: `calc(-${activeIndex * STEP_PERCENT}% + ${dragOffset}px)`
+	);
+
 	const trackStyle = $derived(
-		dragOffset === null
-			? `transform: translateX(-${activeIndex * STEP_PERCENT}%)`
-			: `transform: translateX(calc(-${activeIndex * STEP_PERCENT}% + ${dragOffset}px)); transition: none`
+		dragOffset !== null && !isTransitioningOut
+			? `transform: translateX(${trackTranslateX}); transition: none`
+			: `transform: translateX(${trackTranslateX})`
 	);
 
 	/** 1:1 in the middle; 0.4x rubber-band past the first/last tab (no neighbour). */
@@ -205,16 +215,16 @@
 			dragOffset = null;
 			showDeepPreview = false;
 		} else if (deltaX >= SWIPE_COMMIT && activeIndex > 0 && !reversed) {
-			switchBackward();
-			if (!wasDeepPreview) {
-				// Normal tab back: snap back.
+			if (wasDeepPreview) {
+				isTransitioningOut = true;
+				setTimeout(() => {
+					switchBackward();
+				}, 300);
+			} else {
+				switchBackward();
 				dragOffset = null;
 				showDeepPreview = false;
 			}
-			// Deep-page back: KEEP dragOffset + showDeepPreview so the overlay
-			// persists and the track stays at the dragged position until the
-			// pager unmounts on the thread route. Clearing now would flash the
-			// discussions list between release and history.back() completion.
 		} else {
 			dragOffset = null;
 			showDeepPreview = false;
