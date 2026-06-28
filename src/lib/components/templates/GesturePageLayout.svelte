@@ -92,6 +92,21 @@
 	const backTargetIsTabRoot = $derived(resolvedLeftHref === currentTabRoot);
 	const hasRight = $derived(!!right);
 	const resolvedRightHref = $derived(rightHref);
+	// Identity (tab labelKey) of whatever the left/right preview panel actually
+	// renders, exposed as `data-preview-tab` so the exit-preview e2e can assert
+	// "the revealed panel matches the tapped tab" without classifying DOM content
+	// (content markers collide across pages and miss non-tab sidebars). null means
+	// the panel is not a tab list; a wrong non-tab preview must still fail the test.
+	const leftPreviewTab = $derived(
+		leftHref
+			? (MOBILE_TABS.find((tab) => tab.href === leftHref)?.labelKey ?? null)
+			: left
+				? null
+				: (MOBILE_TABS[navStore.activeTab]?.labelKey ?? null)
+	);
+	const rightPreviewTab = $derived(
+		rightHref ? (MOBILE_TABS.find((tab) => tab.href === rightHref)?.labelKey ?? null) : null
+	);
 
 	// Configuration-driven Cache checks (removes hardcoding)
 	const isLeftTargetTabRoot = $derived(resolvedLeftHref ? isPagerRoute(resolvedLeftHref) : false);
@@ -684,6 +699,7 @@
 		{#if hasLeft && isMobile && !swipeNeedsLoadingAtStart}
 			<section
 				bind:this={leftEl}
+				data-preview-tab={leftPreviewTab}
 				class="shrink-0 scroll-pane md:hidden"
 				style={leftStyle}
 				onscroll={(e) => {
@@ -716,6 +732,7 @@
 		{#if hasRight && isMobile && !swipeNeedsLoadingAtStart}
 			<section
 				bind:this={rightEl}
+				data-preview-tab={rightPreviewTab}
 				class="shrink-0 scroll-pane md:hidden"
 				style={rightStyle}
 				onscroll={(e) => {

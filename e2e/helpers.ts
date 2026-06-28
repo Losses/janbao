@@ -430,8 +430,10 @@ export interface ExitPreviewCapture {
 	animated: boolean;
 	delta: number;
 	sampleCount: number;
-	/** Distinct non-detail tab lists that covered >40% of the viewport during the
-	 * slide, in first-seen order. A correct exit contains only the target tab. */
+	/** Distinct `data-preview-tab` values of non-centre panels that covered >40%
+	 * of the viewport during the slide, in first-seen order. A correct exit
+	 * contains only the target tab; a wrong tab list or a non-tab panel (null)
+	 * is a failure. */
 	seenTabs: PreviewTab[];
 	/** The non-detail panel with the highest single-frame viewport coverage —
 	 * i.e. the panel the slide actually revealed as the preview. */
@@ -455,12 +457,12 @@ interface ExitPreviewWindow extends Window {
  * navigation, then report which tab list the slide revealed. The sampler polls
  * `.detail-scroll-pane` (the thread/conversation centre panel); its parent track
  * holds the left/right preview `<section>`s side-by-side with the centre. Each
- * frame it measures every section's horizontal intersection with the viewport,
- * classifies the non-centre ones by their content, and records any that cover
- * >40% of the width. Classification is content-based and stable:
- *   messages  -> the inbox's compose button `a[href="/messages/new"]`
- *   activity  -> `h1.page-title` (ActivityPanel heading; DiscussionsPanel none)
- *   discussions -> `a[href^="/discussion/"]` (thread links)
+ * frame it measures every non-centre section's horizontal intersection with the
+ * viewport and records the `data-preview-tab` attribute of any covering >40% of
+ * the width. The attribute is set by GesturePageLayout to the rendered panel's
+ * tab labelKey (or null when the panel is not a tab list), so detection does not
+ * depend on DOM content — content markers collide across pages and cannot
+ * enumerate non-tab sidebars.
  */
 export async function captureExitPreview(
 	page: Page,
@@ -477,12 +479,6 @@ export async function captureExitPreview(
 		};
 		w.__exitPreview = state;
 		let startT: number | null = null;
-		const classify = (sec: Element): PreviewTab => {
-			if (sec.querySelector('a[href="/messages/new"]')) return 'messages';
-			if (sec.querySelector('h1.page-title')) return 'activity';
-			if (sec.querySelector('a[href^="/discussion/"]')) return 'discussions';
-			return null;
-		};
 		const tick = (): void => {
 			const centre = document.querySelector('.detail-scroll-pane');
 			if (!centre) {
@@ -512,12 +508,15 @@ export async function captureExitPreview(
 				const inter = Math.max(0, Math.min(rect.right, vw) - Math.max(rect.left, 0));
 				const cov = vw > 0 ? inter / vw : 0;
 				if (cov <= 0.4) continue;
-				const cls = classify(s);
-				if (!cls) continue;
-				if (!state.seen.includes(cls)) state.seen.push(cls);
+				// Identity comes from the section's `data-preview-tab` attribute
+				// (set by GesturePageLayout), not from DOM content. null means the
+				// panel is not a tab list; record it so a wrong non-tab preview
+				// still fails the test (null !== any target tab).
+				const key = s.getAttribute('data-preview-tab') as PreviewTab;
+				if (!state.seen.includes(key)) state.seen.push(key);
 				if (cov > state.maxCov) {
 					state.maxCov = cov;
-					state.maxCovCls = cls;
+					state.maxCovCls = key;
 				}
 			}
 			if (performance.now() - startT > 900) {

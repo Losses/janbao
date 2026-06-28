@@ -97,6 +97,16 @@ const CASES: ExitCase[] = [
 	}
 ];
 
+// Deep pages WITHOUT a centerTab (bookmarks, profile, search, notifications,
+// admin/*) were considered as additional sources. They are EXCLUDED: in deep
+// mode the Header slides the MobileTabBar off-screen and shows the page title
+// instead (Header.svelte ~L172-179), so there is no visible tab to tap. A user
+// leaves those pages via the back arrow, never a tab tap. The cross-tab-exit
+// beforeNavigate path is therefore unreachable from them by any real
+// interaction, and the audits' open question (does activeTab flip before the
+// slide plays?) is moot. The bug's reachable surface is exactly the two
+// centerTab detail pages above.
+
 async function enterDiscussionDetail(page: import('@playwright/test').Page): Promise<void> {
 	await page.goto('/');
 	await waitForHydration(page);
@@ -139,6 +149,16 @@ test.describe('cross-tab exit preview matches the target tab', () => {
 			} else {
 				await enterMessageDetail(page);
 			}
+
+			// Tall detail pages (e.g. a long conversation) auto-scroll on mount; the
+			// shared hide-on-scroll Header then translates the tab bar off-screen, so
+			// the tab pill is not clickable. Scroll the centre pane back to the top —
+			// what a user does before tapping a tab — and let the Header reveal settle.
+			await page.evaluate(() => {
+				const pane = document.querySelector('.detail-scroll-pane');
+				if (pane instanceof HTMLElement) pane.scrollTop = 0;
+			});
+			await page.waitForTimeout(300);
 
 			const anim: ExitPreviewCapture = await captureExitPreview(page, async () => {
 				await page.locator(`a[data-tab-nav][href="${c.target.href}"]`).click();
