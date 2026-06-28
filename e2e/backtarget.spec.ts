@@ -172,4 +172,52 @@ test('Bug3: deep-page back-swipe animates the top tab pill gradually', async ({ 
 	expect(large, 'expansion must keep growing').toBeGreaterThan(mid);
 });
 
+test('Bug4: global page (search) back-swipe shows the loading chip overlay and limits drag distance', async ({ page, context }) => {
+	await prepareContext(context);
+	await page.goto('/search');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+
+	await client.send('Input.dispatchTouchEvent', {
+		type: 'touchStart',
+		touchPoints: [{ x: 50, y: 400, id: 2 }],
+		modifiers: 0,
+		timestamp: 0
+	});
+
+	await client.send('Input.dispatchTouchEvent', {
+		type: 'touchMove',
+		touchPoints: [{ x: 250, y: 400, id: 2 }],
+		modifiers: 0,
+		timestamp: 0
+	});
+
+	await page.waitForTimeout(100);
+
+	const metrics = await page.evaluate(() => {
+		const overlay = document.querySelector('.loading-overlay') as HTMLElement | null;
+		return {
+			hasOverlay: !!overlay,
+			overlayWidth: overlay ? overlay.offsetWidth : 0,
+			hasChip: !!overlay?.querySelector('.loading-chip')
+		};
+	});
+
+	await client.send('Input.dispatchTouchEvent', {
+		type: 'touchEnd',
+		touchPoints: [{ x: 250, y: 400, id: 2 }],
+		modifiers: 0,
+		timestamp: 0
+	});
+	await client.detach();
+
+	expect(metrics.hasOverlay, 'the loading overlay must be visible during the swipe').toBe(true);
+	expect(metrics.overlayWidth, 'the overlay width must be damped/restricted').toBeLessThan(120);
+	expect(metrics.hasChip, 'the LoadingChip must be present inside the overlay').toBe(true);
+});
+
+
 
