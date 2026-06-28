@@ -21,7 +21,7 @@
 	import { goto } from '$app/navigation';
 	import { enhance } from '$app/forms';
 	import { onMount, onDestroy } from 'svelte';
-	import { afterNavigate } from '$app/navigation';
+	import { afterNavigate, beforeNavigate } from '$app/navigation';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getPageThemeStore } from '$lib/stores/page-theme.svelte';
@@ -29,6 +29,8 @@
 	import type { ThreadPassthroughInput } from '$lib/offline/passthrough';
 	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 	import { getListScrollStore } from '$lib/stores/list-scroll.svelte';
+	import { getDeepPageSnapshotStore } from '$lib/stores/deep-page-snapshot.svelte';
+	import { isTabRootPath } from '$lib/utils/history-nav';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -46,6 +48,7 @@
 
 	const listCache = getListCacheStore();
 	const listScroll = getListScrollStore();
+	const deepPageSnapshot = getDeepPageSnapshotStore();
 
 	let listScrollTop = $state(listScroll.captured);
 	let detailScrollTop = $state(0);
@@ -108,6 +111,29 @@
 	// each time. No bare `$effect` per [[svelte-effect-fetch-loop]].
 	afterNavigate(() => {
 		runThreadPassthrough(data);
+	});
+
+	// Each deep page captures its own data for the MobileTabPager's back-swipe
+	// preview. The thread page knows its own data shape; the root layout does
+	// NOT hardcode any route-specific fields. Config-driven: any deep page can
+	// register a preview by importing the store and capturing here.
+	beforeNavigate(({ to }) => {
+		if (to && isTabRootPath(to.url.pathname) && typeof window !== 'undefined') {
+			const pane = document.querySelector('.detail-scroll-pane') as HTMLElement | null;
+			if (pane) {
+				deepPageSnapshot.capture({
+					pathname: page.url.pathname,
+					discussion: data.discussion,
+					opReply: data.opReply ?? null,
+					replies: data.replies ?? [],
+					mentionedUsers: data.mentionedUsers ?? {},
+					t: data.t,
+					user: data.user ?? null,
+					theme: data.theme ?? null,
+					scrollTop: pane.scrollTop
+				});
+			}
+		}
 	});
 
 	// Mobile hash-enter lands at the anchor here, NOT in the $effect below:

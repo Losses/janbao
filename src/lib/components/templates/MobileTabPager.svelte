@@ -34,6 +34,7 @@
 	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
 	import { hopForHref, backSwipeShouldPopHistory } from '$lib/utils/history-nav';
 	import { getDeepPageSnapshotStore } from '$lib/stores/deep-page-snapshot.svelte';
+	import ThreadPreviewPanel from '$lib/components/panels/ThreadPreviewPanel.svelte';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
 	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
@@ -387,21 +388,36 @@
 				paginate={true}
 			/>
 		</section>
-		{#if showDeepPreview && deepPageSnapshot.html}
-			<!-- Cached snapshot of the deep page (thread/conversation) being returned
-			     to, overlaid on section 0 so the track's normal slide reveals it.
-			     This is INSIDE the track div so it moves 1:1 with the track (same
-			     two-panel sliding motion as tab switching), NOT a separate clip. -->
+		{#if showDeepPreview && deepPageSnapshot.data}
+			<!-- Real Svelte component rendering the cached thread DATA (not injected
+			     HTML). Uses the same atoms (DiscussionMetadata, LexicalRenderer) as
+			     the thread page, so scoped CSS applies correctly. Overlaid on
+			     section 0 inside the track so it slides 1:1 with the gesture. -->
 			<div
 				data-deep-preview
 				bind:this={deepPreviewEl}
-				class="absolute top-0 left-0 z-10 w-1/3 overflow-y-auto bg-base-100 scroll-pane"
-				style={`height: ${typeof window !== 'undefined' ? window.innerHeight : 844}px;`}
+				class="absolute left-0 z-10 w-1/3 overflow-y-auto scroll-pane gpl-preview-pane"
+				style={`top: calc(-1 * var(--header-height, 0px)); height: ${typeof window !== 'undefined' ? window.innerHeight : 844}px;`}
 			>
-				<!-- Safe: app's own rendered content captured from the live DOM. -->
-				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-				{@html deepPageSnapshot.html}
+				<div class="gpl-card">
+					<ThreadPreviewPanel data={deepPageSnapshot.data} {t} />
+				</div>
 			</div>
 		{/if}
 	</div>
 </div>
+
+<style>
+	/* Mirror the html.fixed-viewport-gated layout rules from app.css so the
+	   preview renders identically without needing the html class (the pager
+	   route does not add it). */
+	.gpl-preview-pane {
+		background-color: var(--color-base-200);
+		padding-top: var(--header-height, 0px);
+		padding-bottom: 1.5rem;
+	}
+	.gpl-preview-pane > .gpl-card {
+		background-color: var(--color-base-100);
+		border-bottom: 1px solid var(--color-base-300);
+	}
+</style>
