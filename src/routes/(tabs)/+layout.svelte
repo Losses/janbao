@@ -39,6 +39,19 @@
 
 	const listCache = getListCacheStore();
 
+	// SvelteKit snapshot: capture/restore the list scroll position per-route.
+	// The restore callback sets a $state that an $effect applies: $effects run
+	// after render but before the browser paints, so the scroll is set BEFORE the
+	// user sees the top. This replaces the late afterNavigate restore (which fired
+	// after SvelteKit's own top-scroll, causing the ~90ms top-flash).
+	let restoredScrollY = $state(0);
+	export const snapshot = {
+		capture: () => (typeof window !== 'undefined' ? window.scrollY : 0),
+		restore: (value: number) => {
+			restoredScrollY = value;
+		}
+	};
+
 	$effect(() => {
 		if (page.url.pathname === '/') {
 			listCache.setDiscussions(page.data.discussions ? page.data : data.home);
@@ -46,6 +59,13 @@
 			listCache.setActivity(page.data.activities ? page.data : data.activity);
 		} else if (page.url.pathname === '/messages/inbox') {
 			listCache.setMessages(page.data.conversations ? page.data : data.messages);
+		}
+	});
+
+	$effect(() => {
+		if (restoredScrollY > 0 && typeof window !== 'undefined') {
+			window.scrollTo(0, restoredScrollY);
+			restoredScrollY = 0;
 		}
 	});
 
@@ -89,13 +109,7 @@
 		}
 	});
 	afterNavigate(({ to }) => {
-		if (to?.url.pathname === '/' && typeof window !== 'undefined') {
-			const y = listScroll.consume();
-			if (y > 0) window.scrollTo(0, y);
-			// Release the swipe-back hold and pin the header visible: the list
-			// lands via a restored (programmatic) scroll, not an active scroll, so
-			// the chrome stays put through the sync instead of hide-on-scroll
-			// vanishing it on the restore.
+		if (to?.url.pathname === '/') {
 			getScrollChromeStore().releaseNavigation();
 		}
 	});

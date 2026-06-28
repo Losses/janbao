@@ -36,8 +36,6 @@
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
 	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
-	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
-	import { mdiArrowLeft } from '@mdi/js';
 	import type { PageUrlBuilder, TabsLayoutData } from '$lib/types/tabs';
 	import type { TranslationDict } from '$lib/types/translation';
 	import type { UserInfoSummary } from '$lib/types/api';
@@ -62,16 +60,6 @@
 	// null at rest (CSS transition snaps to activeIndex); a live px offset while a
 	// pointer is dragging, applied in the transform so the track tracks 1:1.
 	let dragOffset = $state<number | null>(null);
-	// px width of the back chip overlay during a back-swipe toward a DEEP
-	// (unmounted) page; null at rest and for normal tab<->tab swipes. When set,
-	// the spatial tab track does NOT move (dragOffset is null): the deep page
-	// can't be previewed live, so sliding the track would reveal the previous
-	// TAB - a different page from where the gesture lands (history.back to the
-	// deep page). The chip is the honest "returning to the previous page"
-	// affordance, the same one GesturePageLayout uses for an unmounted back
-	// target. Keys off real history (backSwipeShouldPopHistory), so it covers
-	// every deep page without hardcoding any route.
-	let backChipReveal = $state<number | null>(null);
 
 	// Publish drag progress to the shared store so MobileTabBar's indicator
 	// tracks the finger. fractionalIndex = active tab + fractional drag offset
@@ -125,19 +113,7 @@
 	}
 
 	function swipeMove(deltaX: number): void {
-		if (deltaX > 0 && backSwipeShouldPopHistory()) {
-			// Back-swipe toward a deep page (this tab was reached by a forward
-			// swipe from a thread / profile / ...). That page is unmounted, so the
-			// spatial track can't preview it - dragging the track would slide the
-			// previous TAB into view, contradicting where the gesture lands. Show
-			// the shared back chip overlay instead; history.back() (in
-			// switchBackward) lands the real previous page on commit.
-			backChipReveal = Math.min(Math.abs(deltaX), window.innerWidth * 0.6);
-			dragOffset = null;
-		} else {
-			backChipReveal = null;
-			dragOffset = follow(deltaX);
-		}
+		dragOffset = follow(deltaX);
 		getScrollChromeStore().show();
 	}
 	function switchTo(index: number): void {
@@ -197,7 +173,6 @@
 		if (deltaX <= -SWIPE_COMMIT && activeIndex < last && !reversed) switchTo(activeIndex + 1);
 		else if (deltaX >= SWIPE_COMMIT && activeIndex > 0 && !reversed) switchBackward();
 		dragOffset = null;
-		backChipReveal = null;
 	}
 
 	// `settled` = the local activeIndex matches the URL's tab, i.e. no swipe
@@ -367,22 +342,4 @@
 			/>
 		</section>
 	</div>
-	{#if backChipReveal !== null}
-		<div
-			class="back-chip-overlay absolute inset-y-0 left-0 z-30 flex items-center justify-center pointer-events-none"
-			style="width: {backChipReveal}px;"
-		>
-			<LoadingChip icon={mdiArrowLeft} scale={1} expanded={false} pulsing={false} dragging />
-		</div>
-	{/if}
 </div>
-
-<style>
-	/* The back-to-deep-page overlay: covers from the left edge, growing with the
-	   drag, hosting the shared LoadingChip back affordance. No width transition -
-	   it tracks the finger 1:1 and is removed on release (history.back lands the
-	   real target), so there is no snap-back to animate. */
-	.back-chip-overlay {
-		background-color: var(--color-base-200);
-	}
-</style>

@@ -83,12 +83,6 @@
 		}
 		if (threadEnter || swipeBack) {
 			const store = getScrollChromeStore();
-			// Hash-enter lands at the anchor via an instant programmatic scroll (see
-			// discussion +page.svelte); pin the header visible first so it stays on
-			// screen instead of hide-on-scroll reacting to that scroll. Swipe-back
-			// already pinned it during the gesture (ThreadPager.swipeMove), so it
-			// only needs the hold. Both pin on every viewport: the store now drives
-			// the sticky header on mobile and desktop alike.
 			store.holdThroughNavigation(!!threadEnter);
 			window.clearTimeout(navFreezeTimer);
 			navFreezeTimer = window.setTimeout(() => store.releaseNavigation(), 1200);
