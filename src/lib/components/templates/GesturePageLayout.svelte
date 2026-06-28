@@ -385,7 +385,8 @@
 				// can't-preview case (back target is not the tab root, so the target
 				// page's DOM is unmounted and there's nothing real to show): both go
 				// through the chip overlay path with its tanh damping + width animation.
-				swipeNeedsLoadingAtStart = leftNeedsLoading || (!left && !backTargetIsTabRoot);
+				swipeNeedsLoadingAtStart =
+					leftNeedsLoading || (!left && !backTargetIsTabRoot) || (centerTab === undefined && !left);
 			} else if (swipeDirection === 'left') {
 				swipeNeedsLoadingAtStart = rightNeedsLoading;
 			} else {

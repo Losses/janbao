@@ -37,6 +37,8 @@
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
 	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
+	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
+	import { mdiArrowLeft } from '@mdi/js';
 	import type { PageUrlBuilder, TabsLayoutData } from '$lib/types/tabs';
 	import type { TranslationDict } from '$lib/types/translation';
 	import type { UserInfoSummary } from '$lib/types/api';
@@ -67,6 +69,9 @@
 	// motion (NOT a separate width-clip animation).
 	let showDeepPreview = $state(false);
 	let deepPreviewEl = $state<HTMLElement | null>(null);
+	// px width of the back chip overlay during a back-swipe toward a DEEP page
+	// when no cached snapshot is available; null at rest.
+	let backChipReveal = $state<number | null>(null);
 
 	// Publish drag progress to the shared store so MobileTabBar's indicator
 	// tracks the finger. fractionalIndex = active tab + fractional drag offset
@@ -79,7 +84,7 @@
 	$effect(() => {
 		pager.set({
 			fractionalIndex: activeIndex - (dragOffset ?? 0) / (viewportWidth || 1),
-			dragging: dragOffset !== null,
+			dragging: dragOffset !== null || backChipReveal !== null,
 			active: true,
 			deepMorph: null
 		});
@@ -138,12 +143,24 @@
 	}
 
 	function swipeMove(deltaX: number): void {
-		// During a back-swipe toward a deep page with a cached snapshot, overlay
-		// the snapshot on section 0 so the normal track-slide reveals the actual
-		// destination page. The track ALWAYS slides (dragOffset = follow): same
-		// two-panel motion as tab switching, reusing the existing design.
-		showDeepPreview = deltaX > 0 && backSwipeShouldPopHistory() && deepPageSnapshot.hasSnapshot;
-		dragOffset = follow(deltaX);
+		// During a back-swipe toward a deep page:
+		// - If we have a cached snapshot, overlay the snapshot on section 0 and slide the track.
+		// - Otherwise, do not slide the track and show the shared back chip overlay instead.
+		if (deltaX > 0 && backSwipeShouldPopHistory()) {
+			if (deepPageSnapshot.hasSnapshot) {
+				showDeepPreview = true;
+				backChipReveal = null;
+				dragOffset = follow(deltaX);
+			} else {
+				showDeepPreview = false;
+				backChipReveal = Math.min(deltaX, window.innerWidth * 0.6);
+				dragOffset = null;
+			}
+		} else {
+			showDeepPreview = false;
+			backChipReveal = null;
+			dragOffset = follow(deltaX);
+		}
 		getScrollChromeStore().show();
 	}
 	function switchTo(index: number): void {
@@ -209,11 +226,12 @@
 	}
 	function swipeEnd(deltaX: number, velocity: number, reversed: boolean): void {
 		const last = MOBILE_TABS.length - 1;
-		const wasDeepPreview = showDeepPreview;
+		const wasDeepPreview = showDeepPreview || backChipReveal !== null;
 		if (deltaX <= -SWIPE_COMMIT && activeIndex < last && !reversed) {
 			switchTo(activeIndex + 1);
 			dragOffset = null;
 			showDeepPreview = false;
+			backChipReveal = null;
 		} else if (deltaX >= SWIPE_COMMIT && activeIndex > 0 && !reversed) {
 			if (wasDeepPreview) {
 				isTransitioningOut = true;
@@ -224,10 +242,12 @@
 				switchBackward();
 				dragOffset = null;
 				showDeepPreview = false;
+				backChipReveal = null;
 			}
 		} else {
 			dragOffset = null;
 			showDeepPreview = false;
+			backChipReveal = null;
 		}
 	}
 
@@ -416,6 +436,17 @@
 			</div>
 		{/if}
 	</div>
+	{#if backChipReveal !== null}
+		<div
+			class="back-chip-overlay absolute inset-y-0 left-0 z-30 flex items-center justify-center pointer-events-none"
+			class:transitioning={isTransitioningOut}
+			style="width: {isTransitioningOut
+				? '100%'
+				: `${backChipReveal}px`}; opacity: {isTransitioningOut ? 0 : 1};"
+		>
+			<LoadingChip icon={mdiArrowLeft} scale={1} expanded={false} pulsing={false} dragging />
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -430,5 +461,15 @@
 	.gpl-preview-pane > .gpl-card {
 		background-color: var(--color-base-100);
 		border-bottom: 1px solid var(--color-base-300);
+	}
+	/* The back-to-deep-page overlay: covers from the left edge, growing with the
+	   drag, hosting the shared LoadingChip back affordance. */
+	.back-chip-overlay {
+		background-color: var(--color-base-200);
+	}
+	.back-chip-overlay.transitioning {
+		transition:
+			width 300ms cubic-bezier(0.25, 0.8, 0.25, 1),
+			opacity 300ms ease;
 	}
 </style>
