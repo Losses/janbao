@@ -411,3 +411,146 @@ export async function captureHeaderOnThreadScroll(page: Page): Promise<HeaderScr
 		};
 	});
 }
+
+// --- Cross-tab exit preview capture ----------------------------------------
+// Tapping a tab from a GesturePageLayout deep page (thread / messages
+// conversation) cancels the SvelteKit nav in beforeNavigate, slides the track
+// to reveal a neighbouring panel as the exit "preview", then navigates on
+// transitionend. The detail page FIXES which lists those panels hold:
+//   discussion -> left=DiscussionsPanel, right=ActivityPanel
+//   messages   -> left=MessagesPanel only (no right)
+// So tapping a tab that is NOT one of the pre-rendered panels reveals the
+// WRONG list during the slide (e.g. message->/ previews the messages inbox,
+// not the homepage). This sampler records which tab list actually covered the
+// viewport during the slide, so a test can prove preview == target.
+
+export type PreviewTab = 'discussions' | 'activity' | 'messages' | null;
+
+export interface ExitPreviewCapture {
+	animated: boolean;
+	delta: number;
+	sampleCount: number;
+	/** Distinct non-detail tab lists that covered >40% of the viewport during the
+	 * slide, in first-seen order. A correct exit contains only the target tab. */
+	seenTabs: PreviewTab[];
+	/** The non-detail panel with the highest single-frame viewport coverage —
+	 * i.e. the panel the slide actually revealed as the preview. */
+	revealedTab: PreviewTab;
+}
+
+interface ExitPreviewSamplerState {
+	tx: number[];
+	seen: PreviewTab[];
+	maxCovCls: PreviewTab;
+	maxCov: number;
+	done: boolean;
+}
+
+interface ExitPreviewWindow extends Window {
+	__exitPreview?: ExitPreviewSamplerState;
+}
+
+/**
+ * Install a rAF sampler over the GesturePageLayout track, trigger a tab-tap
+ * navigation, then report which tab list the slide revealed. The sampler polls
+ * `.detail-scroll-pane` (the thread/conversation centre panel); its parent track
+ * holds the left/right preview `<section>`s side-by-side with the centre. Each
+ * frame it measures every section's horizontal intersection with the viewport,
+ * classifies the non-centre ones by their content, and records any that cover
+ * >40% of the width. Classification is content-based and stable:
+ *   messages  -> the inbox's compose button `a[href="/messages/new"]`
+ *   activity  -> `h1.page-title` (ActivityPanel heading; DiscussionsPanel none)
+ *   discussions -> `a[href^="/discussion/"]` (thread links)
+ */
+export async function captureExitPreview(
+	page: Page,
+	trigger: () => Promise<void>
+): Promise<ExitPreviewCapture> {
+	await page.evaluate(() => {
+		const w = window as unknown as ExitPreviewWindow;
+		const state: ExitPreviewSamplerState = {
+			tx: [],
+			seen: [],
+			maxCovCls: null,
+			maxCov: 0,
+			done: false
+		};
+		w.__exitPreview = state;
+		let startT: number | null = null;
+		const classify = (sec: Element): PreviewTab => {
+			if (sec.querySelector('a[href="/messages/new"]')) return 'messages';
+			if (sec.querySelector('h1.page-title')) return 'activity';
+			if (sec.querySelector('a[href^="/discussion/"]')) return 'discussions';
+			return null;
+		};
+		const tick = (): void => {
+			const centre = document.querySelector('.detail-scroll-pane');
+			if (!centre) {
+				state.done = true;
+				return;
+			}
+			const track = centre.parentElement;
+			if (!track) {
+				requestAnimationFrame(tick);
+				return;
+			}
+			if (startT === null) startT = performance.now();
+			let tx = 0;
+			try {
+				tx = new DOMMatrix(getComputedStyle(track).transform).m41;
+			} catch {
+				tx = 0;
+			}
+			state.tx.push(Math.round(tx));
+			const vw = window.innerWidth;
+			const sections = Array.from(track.children).filter(
+				(c) => c.tagName === 'SECTION'
+			) as HTMLElement[];
+			for (const s of sections) {
+				if (s.classList.contains('detail-scroll-pane')) continue;
+				const rect = s.getBoundingClientRect();
+				const inter = Math.max(0, Math.min(rect.right, vw) - Math.max(rect.left, 0));
+				const cov = vw > 0 ? inter / vw : 0;
+				if (cov <= 0.4) continue;
+				const cls = classify(s);
+				if (!cls) continue;
+				if (!state.seen.includes(cls)) state.seen.push(cls);
+				if (cov > state.maxCov) {
+					state.maxCov = cov;
+					state.maxCovCls = cls;
+				}
+			}
+			if (performance.now() - startT > 900) {
+				state.done = true;
+				return;
+			}
+			requestAnimationFrame(tick);
+		};
+		requestAnimationFrame(tick);
+	});
+
+	await trigger();
+
+	try {
+		await page.waitForFunction(
+			() => (window as unknown as ExitPreviewWindow).__exitPreview?.done === true,
+			{ timeout: 2000 }
+		);
+	} catch {
+		/* The detail layout unmounts when the deferred nav lands; that's the
+		 * normal end of the animation. */
+	}
+
+	return await page.evaluate(() => {
+		const s = (window as unknown as ExitPreviewWindow).__exitPreview!;
+		const tx = s.tx;
+		const delta = tx.length > 0 ? Math.max(...tx) - Math.min(...tx) : 0;
+		return {
+			animated: delta > 50,
+			delta,
+			sampleCount: tx.length,
+			seenTabs: s.seen,
+			revealedTab: s.maxCovCls
+		};
+	});
+}
