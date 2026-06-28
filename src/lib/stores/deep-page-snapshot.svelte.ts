@@ -13,6 +13,7 @@
 class DeepPageSnapshotStore {
 	#html = $state<string | null>(null);
 	#pathname = $state<string | null>(null);
+	#scrollTop = $state(0);
 
 	get html(): string | null {
 		return this.#html;
@@ -22,18 +23,24 @@ class DeepPageSnapshotStore {
 		return this.#pathname;
 	}
 
+	get scrollTop(): number {
+		return this.#scrollTop;
+	}
+
 	get hasSnapshot(): boolean {
 		return this.#html !== null;
 	}
 
-	capture(html: string, pathname: string): void {
+	capture(html: string, pathname: string, scrollTop: number): void {
 		this.#html = html;
 		this.#pathname = pathname;
+		this.#scrollTop = scrollTop;
 	}
 
 	clear(): void {
 		this.#html = null;
 		this.#pathname = null;
+		this.#scrollTop = 0;
 	}
 }
 

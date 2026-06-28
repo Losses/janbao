@@ -175,6 +175,74 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		).toBe(landing.firstReplyId);
 	});
 
+	test('back-swipe preview remembers the thread scroll position', async ({ page }) => {
+		await threadPathOn(page);
+		// Scroll the thread to a non-top position.
+		await page.evaluate(() => {
+			const pane = document.querySelector('.detail-scroll-pane');
+			if (pane) pane.scrollTop = 500;
+		});
+		await page.waitForTimeout(200);
+		const threadScroll = await page.evaluate(
+			() => document.querySelector('.detail-scroll-pane')?.scrollTop ?? 0
+		);
+		expect(threadScroll).toBeGreaterThan(100);
+
+		await swipeForward(page);
+		await page.waitForFunction(() => location.pathname === '/activity', null, { timeout: 8000 });
+		await page.waitForTimeout(300);
+
+		const held = await holdDrag(page, 'back');
+		await page.waitForTimeout(200);
+		const previewScroll = await page.evaluate(
+			() => document.querySelector('[data-deep-preview]')?.scrollTop ?? -1
+		);
+		await held.release();
+
+		expect(previewScroll, 'preview panel exists and is scrolled').toBeGreaterThan(100);
+		expect(
+			Math.abs(previewScroll - threadScroll),
+			'preview scroll position matches the thread scroll position'
+		).toBeLessThan(50);
+	});
+
+	test('back-swipe to deep page does not flash the discussions list on release', async ({ page }) => {
+		await threadPathOn(page);
+		await swipeForward(page);
+		await page.waitForFunction(() => location.pathname === '/activity', null, { timeout: 8000 });
+		await page.waitForTimeout(300);
+
+		await swipeBack(page);
+
+		// Sample the DOM rapidly after release. While still on /activity (before
+		// history.back loads the thread), the discussions list must NOT flash
+		// into view — the cached-thread overlay must persist until the pager
+		// unmounts.
+		const samples = await page.evaluate(async () => {
+			const results: Array<{ href: string; discussionsVisible: boolean; hasOverlay: boolean }> = [];
+			for (let i = 0; i < 12; i++) {
+				const el = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+				results.push({
+					href: location.pathname,
+					discussionsVisible: !!el?.closest('[data-tab-panel="discussions"]'),
+					hasOverlay: !!document.querySelector('[data-deep-preview]')
+				});
+				await new Promise((r) => setTimeout(r, 30));
+			}
+			return results;
+		});
+
+		// Any sample still on /activity where discussions is visible WITHOUT the
+		// overlay is a homepage flash.
+		const flashes = samples.filter(
+			(s) => s.href === '/activity' && s.discussionsVisible && !s.hasOverlay
+		);
+		expect(
+			flashes,
+			'no discussions-list flash between release and thread load (overlay must persist)'
+		).toHaveLength(0);
+	});
+
 	// --- Scope guards: a gray placeholder chip must NEVER appear during any swipe.
 	// The back-swipe must reveal the real destination page (see the test above);
 	// a gray chip is never an acceptable preview. These guard the cases where a

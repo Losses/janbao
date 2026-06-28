@@ -102,8 +102,11 @@
 			isTabRootPath(to.url.pathname) &&
 			typeof window !== 'undefined'
 		) {
-			const card = document.querySelector('.detail-scroll-pane > .gpl-card');
-			if (card) deepPageSnapshot.capture(card.outerHTML, from.url.pathname);
+			const pane = document.querySelector('.detail-scroll-pane') as HTMLElement | null;
+			const card = pane?.querySelector('.gpl-card');
+			if (card && pane) {
+				deepPageSnapshot.capture(card.outerHTML, from.url.pathname, pane.scrollTop);
+			}
 		}
 	});
 

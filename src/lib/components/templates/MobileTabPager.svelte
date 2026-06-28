@@ -61,11 +61,12 @@
 	// null at rest (CSS transition snaps to activeIndex); a live px offset while a
 	// pointer is dragging, applied in the transform so the track tracks 1:1.
 	let dragOffset = $state<number | null>(null);
-	// px width of the deep-page snapshot reveal during a back-swipe toward a
-	// deep page (thread, conversation, ...) whose rendered HTML was captured on
-	// navigation-away. Shows the actual destination page during the gesture
-	// instead of the spatially-previous tab. null at rest.
-	let deepPreviewReveal = $state<number | null>(null);
+	// True during a back-swipe toward a deep page that has a cached snapshot.
+	// The snapshot overlays section 0 (Discussions) so the normal track-slide
+	// reveals the actual destination page, reusing the existing two-panel sliding
+	// motion (NOT a separate width-clip animation).
+	let showDeepPreview = $state(false);
+	let deepPreviewEl = $state<HTMLElement | null>(null);
 
 	// Publish drag progress to the shared store so MobileTabBar's indicator
 	// tracks the finger. fractionalIndex = active tab + fractional drag offset
@@ -82,6 +83,13 @@
 			active: true,
 			deepMorph: null
 		});
+	});
+	// When the deep-page preview overlay appears, restore the thread's scroll
+	// position so the preview shows the thread where the user left it.
+	$effect(() => {
+		if (deepPreviewEl && showDeepPreview) {
+			deepPreviewEl.scrollTop = deepPageSnapshot.scrollTop;
+		}
 	});
 	onMount(() => {
 		pager.set({ fractionalIndex: activeIndex, dragging: false, active: true, deepMorph: null });
@@ -120,16 +128,12 @@
 	}
 
 	function swipeMove(deltaX: number): void {
-		if (deltaX > 0 && backSwipeShouldPopHistory() && deepPageSnapshot.hasSnapshot) {
-			// Back-swipe toward a deep page that has a cached snapshot: reveal the
-			// snapshot (the actual thread content) instead of sliding the
-			// discussions list into view.
-			deepPreviewReveal = Math.min(Math.abs(deltaX), window.innerWidth);
-			dragOffset = null;
-		} else {
-			deepPreviewReveal = null;
-			dragOffset = follow(deltaX);
-		}
+		// During a back-swipe toward a deep page with a cached snapshot, overlay
+		// the snapshot on section 0 so the normal track-slide reveals the actual
+		// destination page. The track ALWAYS slides (dragOffset = follow): same
+		// two-panel motion as tab switching, reusing the existing design.
+		showDeepPreview = deltaX > 0 && backSwipeShouldPopHistory() && deepPageSnapshot.hasSnapshot;
+		dragOffset = follow(deltaX);
 		getScrollChromeStore().show();
 	}
 	function switchTo(index: number): void {
@@ -163,6 +167,17 @@
 	 * keys off the shared tab config), so it covers every deep page.
 	 */
 	function switchBackward(): void {
+		if (backSwipeShouldPopHistory()) {
+			// Deep-page back: do NOT snap activeIndex (that would reveal the
+			// discussions list). Keep the current tab position + the cached-thread
+			// overlay until history.back() loads the thread and the pager unmounts.
+			if (typeof window !== 'undefined') {
+				window.scrollTo(0, 0);
+			}
+			getScrollChromeStore().show();
+			history.back();
+			return;
+		}
 		const targetIndex = activeIndex - 1;
 		activeIndex = targetIndex;
 		if (typeof window !== 'undefined') {
@@ -184,12 +199,26 @@
 	}
 	function swipeEnd(deltaX: number, velocity: number, reversed: boolean): void {
 		const last = MOBILE_TABS.length - 1;
-		// `reversed` = the finger rebounded from the drag's peak before lift-off
-		// (change of intent): snap to the current tab instead of switching.
-		if (deltaX <= -SWIPE_COMMIT && activeIndex < last && !reversed) switchTo(activeIndex + 1);
-		else if (deltaX >= SWIPE_COMMIT && activeIndex > 0 && !reversed) switchBackward();
-		dragOffset = null;
-		deepPreviewReveal = null;
+		const wasDeepPreview = showDeepPreview;
+		if (deltaX <= -SWIPE_COMMIT && activeIndex < last && !reversed) {
+			switchTo(activeIndex + 1);
+			dragOffset = null;
+			showDeepPreview = false;
+		} else if (deltaX >= SWIPE_COMMIT && activeIndex > 0 && !reversed) {
+			switchBackward();
+			if (!wasDeepPreview) {
+				// Normal tab back: snap back.
+				dragOffset = null;
+				showDeepPreview = false;
+			}
+			// Deep-page back: KEEP dragOffset + showDeepPreview so the overlay
+			// persists and the track stays at the dragged position until the
+			// pager unmounts on the thread route. Clearing now would flash the
+			// discussions list between release and history.back() completion.
+		} else {
+			dragOffset = null;
+			showDeepPreview = false;
+		}
 	}
 
 	// `settled` = the local activeIndex matches the URL's tab, i.e. no swipe
@@ -358,20 +387,20 @@
 				paginate={true}
 			/>
 		</section>
+		{#if showDeepPreview && deepPageSnapshot.html}
+			<!-- Cached snapshot of the deep page (thread/conversation) being returned
+			     to, overlaid on section 0 so the track's normal slide reveals it.
+			     This is INSIDE the track div so it moves 1:1 with the track (same
+			     two-panel sliding motion as tab switching), NOT a separate clip. -->
+			<div
+				data-deep-preview
+				bind:this={deepPreviewEl}
+				class="absolute inset-y-0 left-0 z-10 w-1/3 overflow-y-auto bg-base-100"
+			>
+				<!-- Safe: app's own rendered content captured from the live DOM. -->
+				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+				{@html deepPageSnapshot.html}
+			</div>
+		{/if}
 	</div>
-	{#if deepPreviewReveal !== null && deepPageSnapshot.html}
-		<!-- Cached snapshot of the deep page being returned to (the actual thread
-		     content), revealed left-to-right as the user drags. Non-interactive
-		     visual preview; history.back() on commit loads the real page. -->
-		<div
-			class="deep-preview-overlay absolute inset-y-0 left-0 z-20 overflow-y-auto overflow-x-hidden bg-base-100 pointer-events-none"
-			style="width: {deepPreviewReveal}px;"
-		>
-			<!-- Safe: the app's own rendered content, captured from the live DOM on
-			     navigation-away (not user input). Read-only visual snapshot, shown
-			     briefly during a gesture, replaced by the real page on commit. -->
-			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-			{@html deepPageSnapshot.html}
-		</div>
-	{/if}
 </div>
