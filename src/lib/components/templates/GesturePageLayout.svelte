@@ -218,7 +218,7 @@
 	let pendingNav = $state<PendingNav | null>(null);
 	// A cancelled gesture: the track slides back to rest (dragOffset -> 0). Reset
 	// the chip-path flags on that transform transitionend (consumed in
-	// onTrackTransitionEnd) instead of a fixed setTimeout.
+	// onTrackTransitionEnd).
 	let pendingCancel = $state(false);
 
 	$effect(() => {
@@ -439,9 +439,8 @@
 					isTransitioningOut = true;
 					dragOffset = null;
 					// history.back() pops when a real previous entry exists, else
-					// replace onto the fallback. Pre-resolved at commit time so the
-					// slide-out transitionend dispatches identically to the old
-					// setTimeout callback.
+					// replace onto the fallback. Resolved at commit time because the
+					// dispatch (onTrackTransitionEnd) runs later, on transitionend.
 					pendingNav = {
 						href: fallbackRoute,
 						back: navStore.activeStack.length > 1,
@@ -482,7 +481,7 @@
 				prefetchStarted = false;
 				// The track slides back to rest (dragOffset -> 0). Reset the
 				// chip-path flags on that transform transitionend (pendingCancel,
-				// consumed in onTrackTransitionEnd) instead of a fixed setTimeout.
+				// consumed in onTrackTransitionEnd).
 				pendingCancel = true;
 			}
 		} else {
@@ -543,8 +542,7 @@
 		// Cancelled gesture: the track slid back to rest (dragOffset -> 0). The
 		// chip overlay already unmounted when dragOffset cleared; reset the
 		// remaining chip-path flags now that the slide-back finished, then
-		// re-enable transitions on the next frame (replaces the former nested
-		// setTimeout(50)).
+		// re-enable transitions on the next frame.
 		if (pendingCancel) {
 			pendingCancel = false;
 			transitionEnabled = false;
