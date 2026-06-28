@@ -186,24 +186,17 @@
 	 * keys off the shared tab config), so it covers every deep page.
 	 */
 	function switchBackward(): void {
-		if (backSwipeShouldPopHistory()) {
-			// Deep-page back: do NOT snap activeIndex (that would reveal the
-			// discussions list). Keep the current tab position + the cached-thread
-			// overlay until history.back() loads the thread and the pager unmounts.
-			if (typeof window !== 'undefined') {
-				window.scrollTo(0, 0);
-			}
-			getScrollChromeStore().show();
-			history.back();
-			return;
-		}
-		const targetIndex = activeIndex - 1;
-		activeIndex = targetIndex;
 		if (typeof window !== 'undefined') {
 			window.scrollTo(0, 0);
 		}
 		getScrollChromeStore().show();
-		navStore.navigateBackward(MOBILE_TABS[targetIndex].href);
+
+		const shouldPop = backSwipeShouldPopHistory();
+		const targetIndex = activeIndex - 1;
+		if (!shouldPop) {
+			activeIndex = targetIndex;
+		}
+		navStore.navigateBackward(MOBILE_TABS[shouldPop ? activeIndex : targetIndex].href);
 	}
 	function swipeEnd(deltaX: number, velocity: number, reversed: boolean): void {
 		const last = MOBILE_TABS.length - 1;

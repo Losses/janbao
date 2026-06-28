@@ -75,7 +75,6 @@
 	// the pill to fromIdx (-1 on a deep page), collapsing it and dropping its
 	// highlight until the destination pager mounts. See swipe-back-pill-flicker.
 
-
 	// Derived declarations
 	const hasLeft = $derived(!!left || (navStore.activeTab >= 0 && navStore.activeTab <= 2));
 	const resolvedLeftHref = $derived(leftHref ?? navStore.backTarget);
@@ -210,7 +209,6 @@
 	const SWIPE_COMMIT = 60;
 	let viewportEl: HTMLElement | null = $state(null);
 
-
 	// A cancelled gesture: the track slides back to rest (dragOffset -> 0). Reset
 	// the chip-path flags on that transform transitionend (consumed in
 	// onTrackTransitionEnd).
@@ -291,7 +289,10 @@
 		const fromIdx = getCurrentTabIndex(page.url.pathname);
 		const targetIdx = resolvedLeftHref ? getCurrentTabIndex(resolvedLeftHref) : -1;
 		const committed =
-			isPendingNavigation || isTransitioningOut || navStore.pendingNav !== null || navStore.navInFlight;
+			isPendingNavigation ||
+			isTransitioningOut ||
+			navStore.pendingNav !== null ||
+			navStore.navInFlight;
 		if (dragOffset !== null && targetIdx >= 0) {
 			// The bar slides back in on `deepMorph` at the full drag progress, but
 			// the target tab pill lags: it stays collapsed while the bar is still
@@ -490,11 +491,7 @@
 						snapIndex = leftIdx;
 						navStore.setPendingNav(resolvedLeftHref, 'link');
 					} else {
-						if (navStore.activeStack.length > 1) {
-							history.back();
-						} else {
-							navStore.setPendingNav(fallbackRoute, 'link');
-						}
+						navStore.navigateBackward(fallbackRoute);
 					}
 				} else {
 					snapIndex = ACTIVE;
@@ -557,7 +554,6 @@
 		const toTabIdx = navStore.getTabFromPath(to.url.pathname);
 		const currentTabIdx = centerTab ?? getCurrentTabIndex(page.url.pathname);
 		const target = to.url.pathname + to.url.search;
-
 
 		// Same-panel exit: the target matches a panel this page already rendered
 		// (its own left/right list), so the slide reveals the CORRECT list.

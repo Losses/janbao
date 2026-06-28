@@ -48,8 +48,6 @@ interface PendingNavState {
 	isPopstate: boolean;
 }
 
-
-
 interface DirectionResult {
 	isBack: boolean;
 	isForward: boolean;
