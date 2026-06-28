@@ -34,7 +34,6 @@
 	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
 	import { hopForHref, backSwipeShouldPopHistory } from '$lib/utils/history-nav';
 	import { getDeepPageSnapshotStore } from '$lib/stores/deep-page-snapshot.svelte';
-	import ThreadPreviewPanel from '$lib/components/panels/ThreadPreviewPanel.svelte';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
 	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
@@ -400,7 +399,9 @@
 				style={`top: calc(-1 * var(--header-height, 0px)); height: ${typeof window !== 'undefined' ? window.innerHeight : 844}px;`}
 			>
 				<div class="gpl-card">
-					<ThreadPreviewPanel data={deepPageSnapshot.data} {t} />
+					{#if deepPageSnapshot.snippet}
+						{@render deepPageSnapshot.snippet()}
+					{/if}
 				</div>
 			</div>
 		{/if}

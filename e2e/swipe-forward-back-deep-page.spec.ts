@@ -176,27 +176,44 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 	});
 
 	test('back-swipe preview is visually continuous across all three stages (scroll + title viewport position aligned)', async ({ page }) => {
+		page.on('console', msg => console.log('PAGE LOG:', msg.text()));
 		await threadPathOn(page);
-		// Scroll the thread to a non-trivial position.
+		// Scroll the thread to the non-trivial target position
 		await page.evaluate(() => {
 			const pane = document.querySelector('.detail-scroll-pane');
 			if (pane) pane.scrollTop = 500;
 		});
 		await page.waitForTimeout(300);
 
+		// Wait for the lazy editor skeleton to load and mount
+		await page.waitForSelector('[role="status"][aria-busy="true"]', { state: 'detached', timeout: 5000 });
+
+		// Remove lazy loading from all images to force immediate load in the test context
+		await page.evaluate(() => {
+			for (const img of document.querySelectorAll('img')) {
+				img.removeAttribute('loading');
+			}
+		});
+
+		// Wait for all images in the thread to finish loading now that they've been un-lazy-loaded
+		await page.waitForFunction(() => {
+			const imgs = [...document.querySelectorAll('.detail-scroll-pane img')] as HTMLImageElement[];
+			return imgs.every(img => img.complete);
+		});
+
 		// STAGE 1 — before swiping away: the thread's scroll + title viewport Y +
-	// scroll RANGE (scrollHeight, clientHeight). The preview must have the SAME
-	// range, or the same scrollTop shows different content.
-	const before = await page.evaluate(() => {
-		const pane = document.querySelector('.detail-scroll-pane') as HTMLElement | null;
-		const title = document.querySelector('h1');
-		return {
-			scrollTop: pane?.scrollTop ?? -1,
-			scrollHeight: pane?.scrollHeight ?? -1,
-			clientHeight: pane?.clientHeight ?? -1,
-			titleTop: title ? Math.round(title.getBoundingClientRect().top) : null
-		};
-	});
+		// scroll RANGE (scrollHeight, clientHeight). The preview must have the SAME
+		// range, or the same scrollTop shows different content.
+		const before = await page.evaluate(() => {
+			const pane = document.querySelector('.detail-scroll-pane') as HTMLElement | null;
+			const title = document.querySelector('h1');
+			return {
+				scrollTop: pane?.scrollTop ?? -1,
+				scrollHeight: pane?.scrollHeight ?? -1,
+				clientHeight: pane?.clientHeight ?? -1,
+				titleTop: title ? Math.round(title.getBoundingClientRect().top) : null
+			};
+		});
 
 		await swipeForward(page);
 		await page.waitForFunction(() => location.pathname === '/activity', null, { timeout: 8000 });
@@ -235,20 +252,19 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 			};
 		});
 
+		console.log('DEBUG METRICS BEFORE AND PREVIEW:', { before, preview });
+
 		// clientHeight (viewport height) must match: if the preview's viewport is
 		// taller/shorter, the same scrollTop shows different content.
 		expect(Math.abs(before.clientHeight - preview.clientHeight),
 			`clientHeight mismatch: before=${before.clientHeight} preview=${preview.clientHeight}`).toBeLessThan(10);
 
-		// scrollHeight: the preview intentionally omits interactive chrome (reply
-		// composer, paginator, action buttons), so it is shorter than the real
-		// page. The content (replies + OP) is identical. Assert the preview is
-		// SHORTER (not taller, which would indicate a CSS/layout bug) and within
-		// a reasonable margin of the real page.
-		expect(preview.scrollHeight,
-			`preview scrollHeight (${preview.scrollHeight}) must not exceed real (${before.scrollHeight})`).toBeLessThanOrEqual(before.scrollHeight);
-		expect(before.scrollHeight - preview.scrollHeight,
-			`preview is too short: missing more than 2000px of content (before=${before.scrollHeight} preview=${preview.scrollHeight})`).toBeLessThan(2000);
+		// scrollHeight: now that the preview is rendered using the exact same snippet
+		// from the thread page, the contents are identical (including reply composer,
+		// paginator, and buttons). Assert that their scrollHeights match within a
+		// tight 10px tolerance (eliminating the loose 2000px cheat).
+		expect(Math.abs(before.scrollHeight - preview.scrollHeight),
+			`preview scrollHeight (${preview.scrollHeight}) must match real (${before.scrollHeight}) within 10px`).toBeLessThan(10);
 
 		// All three stages must be aligned — scrollTop within 5px:
 		expect(Math.abs(before.scrollTop - preview.scrollTop),

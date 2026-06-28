@@ -121,6 +121,15 @@
 		if (to && isTabRootPath(to.url.pathname) && typeof window !== 'undefined') {
 			const pane = document.querySelector('.detail-scroll-pane') as HTMLElement | null;
 			if (pane) {
+				console.log('[DEBUG CAPTURED SNAPSHOT]:', {
+					pathname: page.url.pathname,
+					currentPage: data.page,
+					totalPages: data.totalPages,
+					repliesCount: data.replies?.length,
+					canCreate: data.canCreate,
+					canUpdate: data.canUpdate,
+					canDelete: data.canDelete
+				});
 				deepPageSnapshot.capture({
 					pathname: page.url.pathname,
 					discussion: data.discussion,
@@ -130,8 +139,14 @@
 					t: data.t,
 					user: data.user ?? null,
 					theme: data.theme ?? null,
-					scrollTop: pane.scrollTop
-				});
+					scrollTop: pane.scrollTop,
+					canCreate: data.canCreate ?? false,
+					canUpdate: data.canUpdate ?? false,
+					canDelete: data.canDelete ?? false,
+					currentPage: data.page ?? 1,
+					totalPages: data.totalPages ?? 1,
+					replyDraft: data.replyDraft ?? null
+				}, threadContentSnippet);
 			}
 		}
 	});
@@ -564,15 +579,7 @@
 	/>
 {/snippet}
 
-<DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout
-		centerTab={0}
-		rightTab={1}
-		leftHref="/"
-		rightHref="/activity"
-		left={leftSnippet}
-		right={rightSnippet}
-	>
+{#snippet threadContentSnippet()}
 		<div class="space-y-3">
 			<!-- Discussion Header -->
 			<div class="border-b border-base-300 flex justify-between items-center pb-3 gap-3">
@@ -896,6 +903,18 @@
 				{/if}
 			</div>
 		</div>
+{/snippet}
+
+<DualColumnLayout {sidebar} {user} {t}>
+	<GesturePageLayout
+		centerTab={0}
+		rightTab={1}
+		leftHref="/"
+		rightHref="/activity"
+		left={leftSnippet}
+		right={rightSnippet}
+	>
+		{@render threadContentSnippet()}
 	</GesturePageLayout>
 </DualColumnLayout>
 

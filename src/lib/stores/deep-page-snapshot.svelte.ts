@@ -12,6 +12,7 @@
 import type { MentionedUsersMap } from '$lib/types/mentions';
 import type { TranslationDict } from '$lib/types/translation';
 import type { UserInfoSummary } from '$lib/types/api';
+import type { Snippet } from 'svelte';
 
 export interface ThreadReplyData {
 	id: number;
@@ -47,17 +48,28 @@ export interface ThreadPreviewData {
 	user: UserInfoSummary | null;
 	theme: string | null;
 	scrollTop: number;
+	canCreate: boolean;
+	canUpdate: boolean;
+	canDelete: boolean;
+	currentPage: number;
+	totalPages: number;
+	replyDraft: string | null;
 }
 
 class DeepPageSnapshotStore {
 	#data = $state<ThreadPreviewData | null>(null);
+	#snippet = $state<Snippet | null>(null);
 
 	get data(): ThreadPreviewData | null {
 		return this.#data;
 	}
 
+	get snippet(): Snippet | null {
+		return this.#snippet;
+	}
+
 	get hasSnapshot(): boolean {
-		return this.#data !== null;
+		return this.#data !== null || this.#snippet !== null;
 	}
 
 	get pathname(): string | null {
@@ -68,12 +80,16 @@ class DeepPageSnapshotStore {
 		return this.#data?.scrollTop ?? 0;
 	}
 
-	capture(data: ThreadPreviewData): void {
+	capture(data: ThreadPreviewData, snippet?: Snippet): void {
 		this.#data = data;
+		if (snippet) {
+			this.#snippet = snippet;
+		}
 	}
 
 	clear(): void {
 		this.#data = null;
+		this.#snippet = null;
 	}
 }
 
