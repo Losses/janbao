@@ -356,10 +356,9 @@ export interface HeaderScrollCapture {
 export async function captureHeaderOnThreadScroll(page: Page): Promise<HeaderScrollCapture> {
 	return page.evaluate(async () => {
 		const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-		// Wait for a layout frame AND for the Header's hide/show `transition-transform
-		// duration-200` to settle. Reading geometry mid-transition (the old 40ms
-		// buffer) caught the header part-way hidden and misread a covered top as a
-		// "gap" - the assertions are about the SETTLED state, not the animation.
+		// Wait for a layout frame AND for the Header's hide/show
+		// `transition-transform duration-200` to settle before reading geometry:
+		// the assertions check the SETTLED state, not mid-animation.
 		const afterFrame = (): Promise<void> =>
 			new Promise<void>((resolve) =>
 				requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
