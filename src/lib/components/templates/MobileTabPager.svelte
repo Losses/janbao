@@ -26,13 +26,13 @@
 	 */
 	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
 	import type { Action } from 'svelte/action';
 	import { detectSwipe } from '$lib/actions/swipe';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
+	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
-	import { hopForHref, backSwipeShouldPopHistory } from '$lib/utils/history-nav';
+	import { backSwipeShouldPopHistory } from '$lib/utils/history-nav';
 	import { getDeepPageSnapshotStore } from '$lib/stores/deep-page-snapshot.svelte';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
@@ -80,6 +80,7 @@
 	// here (the morph is driven only by deep-page swipe-back in GesturePageLayout).
 	const pager = getMobilePagerStore();
 	const deepPageSnapshot = getDeepPageSnapshotStore();
+	const navStore = getNavigationStore();
 	let viewportWidth = $state(0);
 	$effect(() => {
 		pager.set({
@@ -172,17 +173,8 @@
 		// neighbor's translateY goes from scrollY→0 while the header fills
 		// the gap, giving a coordinated slide instead of a content jump.
 		getScrollChromeStore().show();
-		// Hop to the target tab via history.back / forward when an adjacent entry
-		// already matches it, so toggling two tabs collapses instead of pushing a
-		// new entry each time (which would trap the user in the app on back).
-		const hop = hopForHref(MOBILE_TABS[index].href);
-		if (hop === 'back') {
-			history.back();
-		} else if (hop === 'forward') {
-			history.forward();
-		} else {
-			void goto(MOBILE_TABS[index].href);
-		}
+		// Hop to the target tab via the navigation coordinator
+		navStore.navigateForward(MOBILE_TABS[index].href);
 	}
 	/**
 	 * Back-swipe toward the previous tab. When the history entry behind this tab
@@ -211,18 +203,7 @@
 			window.scrollTo(0, 0);
 		}
 		getScrollChromeStore().show();
-		if (backSwipeShouldPopHistory()) {
-			history.back();
-			return;
-		}
-		const hop = hopForHref(MOBILE_TABS[targetIndex].href);
-		if (hop === 'back') {
-			history.back();
-		} else if (hop === 'forward') {
-			history.forward();
-		} else {
-			void goto(MOBILE_TABS[targetIndex].href);
-		}
+		navStore.navigateBackward(MOBILE_TABS[targetIndex].href);
 	}
 	function swipeEnd(deltaX: number, velocity: number, reversed: boolean): void {
 		const last = MOBILE_TABS.length - 1;

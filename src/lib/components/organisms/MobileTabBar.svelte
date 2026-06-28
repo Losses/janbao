@@ -15,6 +15,7 @@
 	import LogoText from '$lib/components/atoms/LogoText.svelte';
 	import { getBadgesStore } from '$lib/stores/badges.svelte';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
+	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
 	import { hopForHref } from '$lib/utils/history-nav';
 	import type { TranslationDict } from '$lib/types/translation';
@@ -27,6 +28,7 @@
 
 	const badges = getBadgesStore();
 	const pager = getMobilePagerStore();
+	const navStore = getNavigationStore();
 	const tNav = $derived(t.nav);
 	const currentPath = $derived(page.url.pathname);
 	const showMessagesDot = $derived(badges.unreadMessages > 0);
@@ -79,11 +81,7 @@
 				const hop = hopForHref(item.href);
 				if (hop === 'back' || hop === 'forward') {
 					event.preventDefault();
-					if (hop === 'back') {
-						history.back();
-					} else {
-						history.forward();
-					}
+					navStore.navigateForward(item.href);
 				}
 			}}
 		>

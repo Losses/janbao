@@ -38,7 +38,7 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 		await swipeBack(page);
 		
 		// We expect to land back on the originating discussion
-		await page.waitForTimeout(300);
+		await page.waitForURL(/\/discussion\//);
 		const landedPath = new URL(page.url()).pathname;
 		
 		console.log('Landed path for Bug 1:', landedPath);

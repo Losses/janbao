@@ -1,13 +1,13 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { onMount } from 'svelte';
-	import { goto, preloadData, afterNavigate, beforeNavigate } from '$app/navigation';
+	import { preloadData, afterNavigate, beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import { getPageScrollStore } from '$lib/stores/page-scroll.svelte';
 	import { backHandler } from '$lib/stores/navigation.svelte';
 	import { detectSwipe } from '$lib/actions/swipe';
-	import { hopForHref, isTabRootPath } from '$lib/utils/history-nav';
+	import { isTabRootPath } from '$lib/utils/history-nav';
 	import type { Action } from 'svelte/action';
 	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
@@ -24,12 +24,6 @@
 		fallbackRoute?: string;
 		centerTab?: number;
 		rightTab?: number;
-	}
-
-	interface PendingNav {
-		href: string;
-		back: boolean;
-		replaceState?: boolean;
 	}
 
 	let {
@@ -80,7 +74,7 @@
 	// frame before the route swaps, and the effect's "true rest" branch resets
 	// the pill to fromIdx (-1 on a deep page), collapsing it and dropping its
 	// highlight until the destination pager mounts. See swipe-back-pill-flicker.
-	let navInFlight = $state(false);
+
 
 	// Derived declarations
 	const hasLeft = $derived(!!left || (navStore.activeTab >= 0 && navStore.activeTab <= 2));
@@ -216,7 +210,7 @@
 	const SWIPE_COMMIT = 60;
 	let viewportEl: HTMLElement | null = $state(null);
 
-	let pendingNav = $state<PendingNav | null>(null);
+
 	// A cancelled gesture: the track slides back to rest (dragOffset -> 0). Reset
 	// the chip-path flags on that transform transitionend (consumed in
 	// onTrackTransitionEnd).
@@ -297,7 +291,7 @@
 		const fromIdx = getCurrentTabIndex(page.url.pathname);
 		const targetIdx = resolvedLeftHref ? getCurrentTabIndex(resolvedLeftHref) : -1;
 		const committed =
-			isPendingNavigation || isTransitioningOut || pendingNav !== null || navInFlight;
+			isPendingNavigation || isTransitioningOut || navStore.pendingNav !== null || navStore.navInFlight;
 		if (dragOffset !== null && targetIdx >= 0) {
 			// The bar slides back in on `deepMorph` at the full drag progress, but
 			// the target tab pill lags: it stays collapsed while the bar is still
@@ -382,7 +376,7 @@
 		// the gesture reveals a new panel, so the header should be visible.
 		scrollChrome.show();
 		if (dragOffset === null) {
-			navInFlight = false;
+			navStore.navInFlight = false;
 			swipeDirection = deltaX > 0 ? 'right' : deltaX < 0 ? 'left' : null;
 			if (swipeDirection === 'right') {
 				// The tab-list load case (target tab root not cached) OR the
@@ -447,22 +441,10 @@
 					// history.back() pops when a real previous entry exists, else
 					// replace onto the fallback. Resolved at commit time because the
 					// dispatch (onTrackTransitionEnd) runs later, on transitionend.
-					pendingNav = {
-						href: fallbackRoute,
-						back: navStore.activeStack.length > 1,
-						replaceState: true
-					};
+					navStore.setPendingNav(fallbackRoute, 'link');
 					return;
 				}
 				const targetHref = swipeDirection === 'left' ? resolvedRightHref : resolvedLeftHref;
-				// A FORWARD swipe (left, to the right-neighbour tab) ADVANCES to a new
-				// page: it must PUSH so the originating page survives in history and a
-				// later back-swipe can return to it. (Pushing also keeps the entry the
-				// MobileTabPager's history-aware back-swipe looks for.) A back swipe
-				// replaces - matching the normal back path's replaceState (line ~481) -
-				// so it does not grow the stack.
-				const forwardSwipe = swipeDirection === 'left';
-				const targetReplaceState = !forwardSwipe;
 				if (targetHref) {
 					const isPopulated =
 						MOBILE_TABS.find((tab) => tab.href === targetHref)?.hasData(page.data) ?? false;
@@ -470,7 +452,7 @@
 						isTransitioningOut = true;
 						dragOffset = null;
 						rawDragOffset = null;
-						pendingNav = { href: targetHref, back: false, replaceState: targetReplaceState };
+						navStore.setPendingNav(targetHref, 'link');
 					} else {
 						isPendingNavigation = true;
 						dragOffset = null;
@@ -480,7 +462,7 @@
 							.then(() => {
 								isPendingNavigation = false;
 								isTransitioningOut = true;
-								pendingNav = { href: targetHref, back: false, replaceState: targetReplaceState };
+								navStore.setPendingNav(targetHref, 'link');
 							});
 					}
 				}
@@ -506,13 +488,12 @@
 				if (!consumed) {
 					if (hasLeft) {
 						snapIndex = leftIdx;
-						const back = hopForHref(resolvedLeftHref) === 'back';
-						pendingNav = { href: resolvedLeftHref, back, replaceState: true };
+						navStore.setPendingNav(resolvedLeftHref, 'link');
 					} else {
 						if (navStore.activeStack.length > 1) {
 							history.back();
 						} else {
-							pendingNav = { href: fallbackRoute, back: false, replaceState: true };
+							navStore.setPendingNav(fallbackRoute, 'link');
 						}
 					}
 				} else {
@@ -520,7 +501,7 @@
 				}
 			} else if (committedRight) {
 				snapIndex = rightIdx;
-				pendingNav = { href: resolvedRightHref, back: false, replaceState: false };
+				navStore.setPendingNav(resolvedRightHref, 'link');
 			} else {
 				snapIndex = ACTIVE;
 			}
@@ -532,21 +513,8 @@
 	function onTrackTransitionEnd(event: TransitionEvent): void {
 		if (event.target !== event.currentTarget) return;
 		if (event.propertyName !== 'transform') return;
-		if (pendingNav) {
-			const nav = pendingNav;
-			pendingNav = null;
-			// Hold the pill at the target across the navigation: the route swap
-			// (and the destination pager taking over) is async, so without this
-			// flag the pager effect would reset to fromIdx in the gap and the pill
-			// would collapse/re-expand. Cleared by afterNavigate / unmount.
-			navInFlight = true;
-			if (nav.back) {
-				history.back();
-			} else {
-				void goto(nav.href, { replaceState: nav.replaceState }).catch(() => {
-					navInFlight = false;
-				});
-			}
+		if (navStore.pendingNav) {
+			navStore.executePendingNav();
 			return;
 		}
 		// Cancelled gesture: the track slid back to rest (dragOffset -> 0). The
@@ -575,8 +543,8 @@
 		// isPendingNavigation covers the cross-tab chip exit (which sets no
 		// pendingNav) just as pendingNav covers the same-panel slide.
 		if (
-			navInFlight ||
-			pendingNav !== null ||
+			navStore.navInFlight ||
+			navStore.pendingNav !== null ||
 			isTransitioningOut ||
 			isPendingNavigation ||
 			pendingCancel
@@ -589,8 +557,7 @@
 		const toTabIdx = navStore.getTabFromPath(to.url.pathname);
 		const currentTabIdx = centerTab ?? getCurrentTabIndex(page.url.pathname);
 		const target = to.url.pathname + to.url.search;
-		const isBack = type === 'popstate' || hopForHref(to.url.pathname) === 'back';
-		const replaceState = type === 'popstate' ? undefined : !isBack;
+
 
 		// Same-panel exit: the target matches a panel this page already rendered
 		// (its own left/right list), so the slide reveals the CORRECT list.
@@ -618,7 +585,7 @@
 				.then(() => {
 					isPendingNavigation = false;
 					isTransitioningOut = true;
-					pendingNav = { href: target, back: isBack, replaceState };
+					navStore.setPendingNav(target, type);
 				});
 			return;
 		}
@@ -647,18 +614,14 @@
 		swipeDirection = direction;
 
 		// Save the target navigation details
-		pendingNav = { href: target, back: isBack, replaceState };
+		navStore.setPendingNav(target, type);
 	});
 
 	// Navigation completed (or this layout survived a same-route no-op): release
 	// the hold so the pill reflects the real URL tab again. For the normal away-
 	// nav this layout unmounts first and the flag dies with it.
 	afterNavigate(() => {
-		navInFlight = false;
-		// history.back() has no promise, and a transform transitionend that never
-		// fires (e.g. the transform was already terminal) would otherwise strand
-		// pendingNav and block the re-entry guard. Clear defensively.
-		pendingNav = null;
+		navStore.clearPendingNav();
 		pendingCancel = false;
 		isTransitioningOut = false;
 		prefetchStarted = false;
