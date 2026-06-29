@@ -932,7 +932,7 @@
 					}
 				}}
 			>
-				<div class="gpl-card">
+				{#if isLeftTargetTabRoot}
 					{#if left}
 						{@render left()}
 					{:else}
@@ -941,7 +941,18 @@
 							<PreviewPanel cache={listCache} t={page.data.t} user={previewUser} />
 						{/if}
 					{/if}
-				</div>
+				{:else}
+					<div class="gpl-card">
+						{#if left}
+							{@render left()}
+						{:else}
+							{@const PreviewPanel = getPreviewPanel(resolvedLeftHref)}
+							{#if PreviewPanel}
+								<PreviewPanel cache={listCache} t={page.data.t} user={previewUser} />
+							{/if}
+						{/if}
+					</div>
+				{/if}
 			</section>
 		{/if}
 		<section
@@ -965,11 +976,17 @@
 					}
 				}}
 			>
-				<div class="gpl-card">
+				{#if isRightTargetTabRoot}
 					{#if right}
 						{@render right()}
 					{/if}
-				</div>
+				{:else}
+					<div class="gpl-card">
+						{#if right}
+							{@render right()}
+						{/if}
+					</div>
+				{/if}
 			</section>
 		{/if}
 	</div>
