@@ -63,18 +63,19 @@
 	const translateY = $derived(scrollChrome.translateY);
 	const scrolling = $derived(scrollChrome.scrolling);
 
+	const currentHasTabs = $derived(getCurrentTabIndex(currentPath) >= 0);
+	const targetHasTabs = $derived(
+		navStore.backTarget ? getCurrentTabIndex(navStore.backTarget) >= 0 : false
+	);
+	const isDeepToDeep = $derived(!currentHasTabs && !targetHasTabs);
+
 	const mode = $derived(resolveHeaderMode(currentPath));
 	const isSearch = $derived(mode === 'search');
 	const isDeep = $derived(mode === 'deep');
-	const morph = $derived(pager.backMorph ?? (mode === 'root' ? 1 : 0));
 	const dragging = $derived(pager.dragging);
-	// Freeze the icon morph during a search transition so the hamburger does not
-	// morph into an arrow while it is sliding off-screen.
-	const iconProgress = $derived(isSearch ? 0 : 1 - morph);
 	const title = $derived(page.data.headerTitle ?? resolveDeepHeaderTitle(currentPath, t) ?? '');
-	const slideT = $derived(
-		dragging || navStore.navInFlight ? 'none' : 'transform 200ms ease-out, opacity 200ms ease-out'
-	);
+
+	type TitleDirection = 'forward' | 'back';
 
 	// Unified title state machine. The deep-title layer renders from ONE model
 	// (`titleView` below): a single (outgoing, incoming, progress, transition,
@@ -91,6 +92,23 @@
 	let settleAwaitTitle = $state(false); // commit holds settling until the nav lands (title === latchedIncoming); cancel/non-gesture end on the visual transition
 	let titleDirection = $state<TitleDirection>('forward');
 	let lastGestureMorph = $state(0); // per-frame latch while dragging (pager.backMorph has already jumped to 1/0 by the time dragging flips false)
+
+	const morph = $derived(
+		dragging
+			? (pager.backMorph ?? 0)
+			: settling
+				? settleProgress
+				: (currentHasTabs ? 1 : 0)
+	);
+
+	// Freeze the icon morph during a search transition so the hamburger does not
+	// morph into an arrow while it is sliding off-screen.
+	const iconProgress = $derived(isSearch ? 0 : 1 - morph);
+	const slideT = $derived(
+		dragging || (navStore.navInFlight && !settling)
+			? 'none'
+			: 'transform 200ms ease-out, opacity 200ms ease-out'
+	);
 	let settleRafId: number | undefined;
 	let settleTimeoutId: ReturnType<typeof setTimeout> | undefined;
 	let active = true; // HMR/destroy guard (onDestroy sets false)
@@ -129,7 +147,7 @@
 		untrack(() => {
 			const out = title;
 			const inc = navStore.backTarget ? (resolveDeepHeaderTitle(navStore.backTarget, t) ?? '') : '';
-			if (!inc) {
+			if (!navStore.backTarget) {
 				lastGestureMorph = 0;
 				return;
 			}
@@ -253,14 +271,7 @@
 		}
 	});
 
-	const currentHasTabs = $derived(getCurrentTabIndex(currentPath) >= 0);
-	const targetHasTabs = $derived(
-		navStore.backTarget ? getCurrentTabIndex(navStore.backTarget) >= 0 : false
-	);
-
-	const isDeepToDeep = $derived(!currentHasTabs && !targetHasTabs);
-
-	type TitleDirection = 'forward' | 'back';
+	// Derived tab status and direction are declared at the top of script to satisfy dependency order.
 
 	interface TitleView {
 		outgoing: string;
@@ -309,13 +320,13 @@
 		isSearch
 			? 'transform: none; opacity: 1;'
 			: `transform: translateY(${
-					!currentHasTabs && !(dragging && targetHasTabs) ? -100 : -(1 - morph) * 100
+					!(currentHasTabs || targetHasTabs) ? -100 : -(1 - morph) * 100
 				}%); transition: ${slideT}; pointer-events: ${
 					morph > 0.5 && targetHasTabs ? 'auto' : 'none'
 				}`
 	);
 	const layerDownStyle = $derived(
-		`transform: translateY(${(settling || isDeepToDeep ? 0 : morph) * 100}%); transition: ${slideT}; pointer-events: ${
+		`transform: translateY(${(isDeepToDeep ? 0 : morph) * 100}%); transition: ${slideT}; pointer-events: ${
 			morph < 0.5 ? 'auto' : 'none'
 		}`
 	);
