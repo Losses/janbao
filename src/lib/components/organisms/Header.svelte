@@ -36,6 +36,7 @@
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getNavigationStore, backHandler } from '$lib/stores/navigation.svelte';
 	import { hopForHref } from '$lib/utils/history-nav';
+	import { HEADER_MORPH_THRESHOLD } from '$lib/utils/gesture-constants';
 	import { mdiMagnify, mdiFilterVariant } from '@mdi/js';
 	import type { SearchSort, SearchScope } from '$lib/types/search';
 	import type { VoidHandler } from '$lib/types/handlers';
