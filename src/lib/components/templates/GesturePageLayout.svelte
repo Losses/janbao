@@ -283,7 +283,8 @@
 				fractionalIndex: progressVal,
 				dragging: dragOffset !== null,
 				active: true,
-				backMorph: null
+				backMorph: null,
+				targetIndex: null
 			});
 			return;
 		}
@@ -316,21 +317,24 @@
 				fractionalIndex: targetIdx >= 0 ? fromIdx + (targetIdx - fromIdx) * pillProgress : fromIdx,
 				dragging: true,
 				active: true,
-				backMorph: progress
+				backMorph: progress,
+				targetIndex: targetIdx >= 0 ? targetIdx : null
 			});
 		} else if (committed) {
 			pager.set({
 				fractionalIndex: targetIdx >= 0 ? targetIdx : fromIdx,
 				dragging: false,
 				active: true,
-				backMorph: 1
+				backMorph: 1,
+				targetIndex: targetIdx >= 0 ? targetIdx : null
 			});
 		} else {
 			pager.set({
 				fractionalIndex: fromIdx,
 				dragging: false,
 				active: false,
-				backMorph: 0
+				backMorph: 0,
+				targetIndex: null
 			});
 		}
 	});

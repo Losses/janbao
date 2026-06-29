@@ -18,6 +18,7 @@
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
 	import { hopForHref } from '$lib/utils/history-nav';
+	import { PILL_EXPANSION_THRESHOLD } from '$lib/utils/gesture-constants';
 	import type { TranslationDict } from '$lib/types/translation';
 
 	interface MobileTabBarProps {
@@ -49,8 +50,23 @@
 	const dragging = $derived(pager.dragging);
 	const labelTransition = 'max-width 200ms ease-out, margin-left 200ms ease-out';
 
+	// Deep-page back/forward swipe detection: when we are swiping to/from a deep
+	// page, we directly transition the target tab instead of sliding intermediate tabs.
+	const isDeepSwipe = $derived(
+		pager.active && pager.backMorph !== null && pager.targetIndex !== null && pager.targetIndex >= 0
+	);
+
+	function getDeepSwipePillProgress(): number {
+		if (!isDeepSwipe) return 0;
+		const progress = pager.backMorph ?? 0;
+		return Math.max(0, progress - PILL_EXPANSION_THRESHOLD) / (1 - PILL_EXPANSION_THRESHOLD);
+	}
+
 	/** Per-pill expansion: 1 at the tab's centre, 0 once the drag is a full tab away. */
 	function closeness(index: number): number {
+		if (isDeepSwipe) {
+			return index === pager.targetIndex ? getDeepSwipePillProgress() : 0;
+		}
 		return Math.max(0, Math.min(1, 1 - Math.abs(fractionalIndex - index)));
 	}
 
@@ -62,7 +78,9 @@
 
 <nav class="flex items-center justify-center gap-1" aria-label={tNav['primary']}>
 	{#each MOBILE_TABS as item, i (item.href)}
-		{@const pillActive = Math.round(fractionalIndex) === i}
+		{@const pillActive = isDeepSwipe
+			? (getDeepSwipePillProgress() >= 0.5 && pager.targetIndex === i)
+			: Math.round(fractionalIndex) === i}
 		{@const branded = brandedFirstTab && item.labelKey === 'discussions'}
 		<a
 			href={item.href}

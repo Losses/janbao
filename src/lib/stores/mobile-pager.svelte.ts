@@ -29,11 +29,13 @@ interface PagerUpdate {
 	dragging: boolean;
 	active: boolean;
 	backMorph: number | null;
+	targetIndex?: number | null;
 }
 
 type SetPagerFn = (update: PagerUpdate) => void;
 
 interface PagerStore extends PagerUpdate {
+	targetIndex: number | null;
 	set: SetPagerFn;
 }
 
@@ -42,12 +44,14 @@ export function createPagerStore(): PagerStore {
 	let dragging = $state(false);
 	let active = $state(false);
 	let backMorph = $state<number | null>(null);
+	let targetIndex = $state<number | null>(null);
 
 	function set(update: PagerUpdate): void {
 		fractionalIndex = update.fractionalIndex;
 		dragging = update.dragging;
 		active = update.active;
 		backMorph = update.backMorph;
+		targetIndex = update.targetIndex !== undefined ? update.targetIndex : null;
 	}
 
 	return {
@@ -62,6 +66,9 @@ export function createPagerStore(): PagerStore {
 		},
 		get backMorph() {
 			return backMorph;
+		},
+		get targetIndex() {
+			return targetIndex;
 		},
 		set
 	};
