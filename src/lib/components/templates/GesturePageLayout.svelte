@@ -383,14 +383,17 @@
 		scrollChrome.show();
 		if (dragOffset === null) {
 			navStore.navInFlight = false;
-			swipeDirection = deltaX > 0 ? 'right' : deltaX < 0 ? 'left' : null;
+			const dir = deltaX > 0 ? 'right' : deltaX < 0 ? 'left' : null;
+			if ((dir === 'right' && !hasLeft) || (dir === 'left' && !hasRight)) {
+				return;
+			}
+			swipeDirection = dir;
 			if (swipeDirection === 'right') {
 				// The tab-list load case (target tab root not cached) OR the
 				// can't-preview case (back target is not the tab root, so the target
 				// page's DOM is unmounted and there's nothing real to show): both go
 				// through the chip overlay path with its tanh damping + width animation.
-				swipeNeedsLoadingAtStart =
-					leftNeedsLoading || (!left && !backTargetIsTabRoot) || (centerTab === undefined && !left);
+				swipeNeedsLoadingAtStart = leftNeedsLoading || (!left && !backTargetIsTabRoot);
 			} else if (swipeDirection === 'left') {
 				swipeNeedsLoadingAtStart = rightNeedsLoading;
 			} else {
@@ -398,17 +401,19 @@
 			}
 		}
 
+		const clampedX = swipeDirection === 'right' ? Math.max(0, deltaX) : Math.min(0, deltaX);
+
 		if (swipeNeedsLoadingAtStart) {
 			const maxDragDist = window.innerWidth * 0.3;
 			if (swipeDirection === 'right') {
-				dragOffset = maxDragDist * Math.tanh(deltaX / (maxDragDist * 1.2));
+				dragOffset = maxDragDist * Math.tanh(clampedX / (maxDragDist * 1.2));
 
 				if (dragOffset >= 30 && !prefetchStarted && resolvedLeftHref) {
 					prefetchStarted = true;
 					void preloadData(resolvedLeftHref).catch(() => {});
 				}
 			} else if (swipeDirection === 'left') {
-				dragOffset = maxDragDist * Math.tanh(deltaX / (maxDragDist * 1.2));
+				dragOffset = maxDragDist * Math.tanh(clampedX / (maxDragDist * 1.2));
 
 				if (dragOffset <= -30 && !prefetchStarted && resolvedRightHref) {
 					prefetchStarted = true;
@@ -416,9 +421,7 @@
 				}
 			}
 		} else {
-			if ((deltaX > 0 && hasLeft) || (deltaX < 0 && hasRight)) {
-				dragOffset = deltaX;
-			}
+			dragOffset = clampedX;
 		}
 	}
 
