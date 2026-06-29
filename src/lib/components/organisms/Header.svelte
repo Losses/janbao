@@ -140,7 +140,7 @@
 	// and runs every drag frame; on the release flush `dragging` is already false
 	// so `if (dragging)` skips the write and the last in-drag value M survives.
 	$effect.pre(() => {
-		const m = morph;
+		const m = pager.backMorph ?? 0;
 		if (dragging)
 			untrack(() => {
 				lastGestureMorph = m;
@@ -371,7 +371,7 @@
 			? {
 					outgoing: currentTitle,
 					incoming: backTitle,
-					progress: morph,
+					progress: pager.backMorph ?? 0,
 					transition: 'none',
 					direction: 'back'
 				}

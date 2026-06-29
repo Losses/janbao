@@ -6,7 +6,7 @@ test.describe('Profile Settings Drag & Cancel E2E Bugs', () => {
 		await prepareContext(context);
 	});
 
-	test('Bug 1 & Bug 2: reproducing drag morph and cancel jump', async ({ page }) => {
+	test('Bug 1, Bug 2 & Bug 3: reproducing drag morph, cancel jump, and drag title sync', async ({ page }) => {
 		await page.goto('/profile/settings');
 		await waitForHydration(page);
 
@@ -51,6 +51,21 @@ test.describe('Profile Settings Drag & Cancel E2E Bugs', () => {
 
 		console.log('Progress during dragging (CDP):', progressDuringDrag);
 
+		// Check Bug 3: While dragging midway, the titles must shift relative to the gesture progress.
+		// If they do not sync, the active title (Edit Profile) translateY remains 0%, and target title is at -100%/100%.
+		const dragTitleStates = await page.evaluate(() => {
+			const els = Array.from(document.querySelectorAll('div[style*="translateY"]'));
+			return els.map(el => {
+				const style = el.getAttribute('style') || '';
+				const text = el.textContent?.trim() || '';
+				const match = style.match(/translateY\(([-.\d]+)%\)/);
+				const y = match ? parseFloat(match[1]) : null;
+				return { text, y };
+			});
+		});
+
+		console.log('Dragging title states (CDP):', dragTitleStates);
+
 		// Now pull back to cancel (endX)
 		for (let i = 1; i <= steps; i++) {
 			const x = Math.round(midX + (endX - midX) * (i / steps));
@@ -82,8 +97,20 @@ test.describe('Profile Settings Drag & Cancel E2E Bugs', () => {
 		// Assert Bug 1: Icon must not morph to hamburger during dragging
 		expect(progressDuringDrag, 'Icon progress must remain close to 1 (arrow) during deep-to-deep drag').toBeGreaterThan(0.95);
 
+		// Assert Bug 3: Title must move during active dragging (translateY must not be exactly 0% for current title)
+		const dragCurrentTitle = dragTitleStates.find(t => t.text === '编辑资料');
+		expect(dragCurrentTitle, 'Current title element must exist in DOM during drag').toBeDefined();
+		expect(Math.abs(dragCurrentTitle?.y ?? 0), 'Current title must shift away from 0% in sync with drag gesture').toBeGreaterThan(10);
+
 		// Assert Bug 2: Title must not show the back target title during cancel settle
-		const activeTitle = titleStates.find(t => t.y !== null && Math.abs(t.y) < 50);
-		expect(activeTitle?.text, 'Active title during cancel transition must be "编辑资料" (current), not "设置"').not.toBe('设置');
+		const currentTitleEl = titleStates.find(t => t.text === '编辑资料');
+		const targetTitleEl = titleStates.find(t => t.text === '账号设置');
+
+		expect(currentTitleEl, 'Current title element must exist in DOM during cancel').toBeDefined();
+		expect(Math.abs(currentTitleEl?.y ?? 100), 'Current title must roll back close to 0%').toBeLessThan(50);
+
+		if (targetTitleEl) {
+			expect(Math.abs(targetTitleEl.y ?? 0), 'Target title must retreat back to off-screen').toBeGreaterThan(50);
+		}
 	});
 });
