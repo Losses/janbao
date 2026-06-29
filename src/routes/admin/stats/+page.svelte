@@ -1,9 +1,8 @@
 <script lang="ts">
-	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
-	import AdminMenuPanel from '$lib/components/panels/AdminMenuPanel.svelte';
 	import { onMount, type Component } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import AdminSidebar from '$lib/components/molecules/AdminSidebar.svelte';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
@@ -357,14 +356,8 @@
 	{/if}
 {/snippet}
 
-{#snippet leftPanel()}
-	{#if user}
-		<AdminMenuPanel {user} {t} />
-	{/if}
-{/snippet}
-
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout left={leftPanel} leftHref="/admin" fallbackRoute="/admin">
+	<GesturePageLayout fallbackRoute="/admin">
 		<div class="space-y-6">
 			<!-- Header and Dropdown Selection -->
 			<div class="flex items-center justify-between border-b border-base-300 pb-4">

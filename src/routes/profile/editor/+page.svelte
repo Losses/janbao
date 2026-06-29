@@ -1,6 +1,5 @@
 <script lang="ts">
 	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
-	import SettingsMenuPanel from '$lib/components/panels/SettingsMenuPanel.svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import SettingsSidebar from '$lib/components/molecules/SettingsSidebar.svelte';
 	import SettingsToggle from '$lib/components/molecules/SettingsToggle.svelte';
@@ -120,18 +119,8 @@
 	{/if}
 {/snippet}
 
-{#snippet leftPanel()}
-	{#if user}
-		<SettingsMenuPanel {user} {t} />
-	{/if}
-{/snippet}
-
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout
-		left={leftPanel}
-		leftHref="/profile/settings"
-		fallbackRoute="/profile/settings"
-	>
+	<GesturePageLayout fallbackRoute="/profile/settings">
 		<div class="space-y-6">
 			<PageTitle title={editorT.title} />
 

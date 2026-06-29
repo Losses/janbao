@@ -1,6 +1,5 @@
 <script lang="ts">
 	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
-	import AdminMenuPanel from '$lib/components/panels/AdminMenuPanel.svelte';
 	import { onMount } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import AdminSidebar from '$lib/components/molecules/AdminSidebar.svelte';
@@ -187,14 +186,8 @@
 	<AdminSidebar {user} {t} activeItem="categoryPermissions" />
 {/snippet}
 
-{#snippet leftPanel()}
-	{#if user}
-		<AdminMenuPanel {user} {t} />
-	{/if}
-{/snippet}
-
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout left={leftPanel} leftHref="/admin" fallbackRoute="/admin">
+	<GesturePageLayout fallbackRoute="/admin">
 		<div class="space-y-3">
 			<div class="border-b border-base-300 pb-4">
 				<h1 class="page-title">{adminT.categoryPermissions}</h1>
