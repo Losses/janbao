@@ -11,7 +11,13 @@
 	import type { Action } from 'svelte/action';
 	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
-	import { MOBILE_TABS, isPagerRoute, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
+	import {
+		MOBILE_TABS,
+		isPagerRoute,
+		getCurrentTabIndex,
+		HEADER_MORPH_THRESHOLD,
+		PILL_EXPANSION_THRESHOLD
+	} from '$lib/utils/mobile-tabs';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 
@@ -312,7 +318,7 @@
 					progress = Math.min(1, Math.max(0, val) / viewportWidth);
 				}
 			}
-			const pillProgress = Math.max(0, progress - 0.5) * 2;
+			const pillProgress = Math.max(0, progress - PILL_EXPANSION_THRESHOLD) / (1 - PILL_EXPANSION_THRESHOLD);
 			pager.set({
 				fractionalIndex: fromIdx + (targetIdx - fromIdx) * pillProgress,
 				dragging: true,
@@ -342,8 +348,8 @@
 			: swipeNeedsLoadingAtStart
 				? dragOffset
 				: swipeDirection === 'right'
-					? Math.max(0, dragOffset - W * 0.2) / 0.8
-					: Math.min(0, dragOffset + W * 0.2) / 0.8
+					? Math.max(0, dragOffset - W * HEADER_MORPH_THRESHOLD) / (1 - HEADER_MORPH_THRESHOLD)
+					: Math.min(0, dragOffset + W * HEADER_MORPH_THRESHOLD) / (1 - HEADER_MORPH_THRESHOLD)
 	);
 
 	const trackTranslateX = $derived<string>(

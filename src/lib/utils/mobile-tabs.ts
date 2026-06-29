@@ -21,6 +21,9 @@ import type { TabPanelWrapperProps, TabsLayoutData } from '$lib/types/tabs';
 
 export type { MobileTabLabelKey, PathMatcher } from './tab-config';
 
+export const HEADER_MORPH_THRESHOLD = 0.3;
+export const PILL_EXPANSION_THRESHOLD = 0.8;
+
 type CacheCheckFn = () => boolean;
 /**
  * "Is this tab's list present in the root layout data?" The root load eager-
