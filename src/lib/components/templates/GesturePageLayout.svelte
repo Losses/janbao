@@ -304,9 +304,14 @@
 			// mostly above the viewport (the first half of the drag) and only
 			// expands over the second half. Otherwise the pill finishes expanding
 			// while the bar is off-screen and the expansion is never visible.
-			const progress = viewportWidth
-				? Math.min(1, Math.abs(rawDragOffset ?? dragOffset) / viewportWidth)
-				: 0;
+			let progress = 0;
+			if (viewportWidth) {
+				const rawOffset = rawDragOffset ?? dragOffset;
+				if (rawOffset !== null) {
+					const val = swipeDirection === 'right' ? rawOffset : -rawOffset;
+					progress = Math.min(1, Math.max(0, val) / viewportWidth);
+				}
+			}
 			const pillProgress = Math.max(0, progress - 0.5) * 2;
 			pager.set({
 				fractionalIndex: fromIdx + (targetIdx - fromIdx) * pillProgress,
@@ -315,7 +320,7 @@
 				// The bar slide + hamburger<->back-arrow morph use the full progress
 				// (0 = full back arrow at rest, 1 once committed toward the tab root);
 				// the pill intentionally lags behind it (pillProgress above).
-				backMorph: Math.min(1, progress / 0.2)
+				backMorph: progress
 			});
 		} else if (committed && targetIdx >= 0) {
 			// Gesture committed, navigation in flight: HOLD the pill at the target

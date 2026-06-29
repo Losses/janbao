@@ -199,4 +199,61 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 		const transform = await page.locator('header .flex.w-\\[200\\%\\]').evaluate(el => el.style.transform);
 		expect(transform).toBe('translateX(0%)');
 	});
+
+	test('Bug 7: direct navigate to search -> swipe back -> preview has discussions rows rendered', async ({ page }) => {
+		page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
+
+		// 1. Directly go to search
+		await page.goto('/search?q=test');
+		await waitForHydration(page);
+
+		// 2. Start a swipe back (drag right) on the search viewport
+		const box = await page.locator('[data-search-scope-pager]').boundingBox();
+		if (!box) throw new Error('Search scope pager not found');
+
+		const startX = box.x + 50;
+		const startY = box.y + 150;
+		
+		await page.mouse.move(startX, startY);
+		await page.mouse.down();
+		
+		// Drag right by 150px to reveal Discussions tab preview
+		await page.mouse.move(startX + 150, startY, { steps: 5 });
+		await page.waitForTimeout(200);
+
+		// Assert that the preview section's discussion rows are visible (meaning layout fallback worked)
+		const row = page.locator('section[data-preview-tab="discussions"] a[href^="/discussion/"]').first();
+		await expect(row).toBeVisible();
+
+		await page.mouse.up();
+	});
+
+	test('Bug 8: direct navigate to search -> drag left (opposite direction) -> no header morph', async ({ page }) => {
+		page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
+
+		// 1. Directly go to search
+		await page.goto('/search?q=test');
+		await waitForHydration(page);
+
+		// 2. Start a drag left (opposite direction since search has no right panel)
+		const box = await page.locator('[data-search-scope-pager]').boundingBox();
+		if (!box) throw new Error('Search scope pager not found');
+
+		const startX = box.x + box.width - 50;
+		const startY = box.y + 150;
+
+		await page.mouse.move(startX, startY);
+		await page.mouse.down();
+
+		// Drag left by 100px (opposite/out-of-bounds)
+		await page.mouse.move(startX - 100, startY, { steps: 5 });
+		await page.waitForTimeout(200);
+
+		// Assert that the header's tab bar is still fully expanded (not collapsed/morphed)
+		// Because opposite drag shouldn't trigger header morph (backMorph stays 0)
+		const maxCssHeight = await page.locator('header div.overflow-hidden.md\\:hidden').evaluate(el => (el as HTMLElement).style.maxHeight);
+		expect(maxCssHeight).toContain('3rem');
+
+		await page.mouse.up();
+	});
 });
