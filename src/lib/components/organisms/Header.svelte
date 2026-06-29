@@ -4,18 +4,19 @@
 	 *
 	 * Desktop: logo + navigation links (Activity / Messages / Search).
 	 *
-	 * Mobile: three modes, resolved from the URL by `resolveHeaderMode`:
-	 *   - 'root'   the tab bar (MobileTabBar) + hamburger (drawer) + search icon.
-	 *   - 'deep'   back-arrow + title (the existing morph, driven by `backMorph`).
-	 *   - 'search' a magnifier (decorative, non-functional) + query input + filter
-	 *              button + the SearchTabBar scope strip. Exit from /search is the
-	 *              leftmost-scope left-swipe (GesturePageLayout back-swipe), so the
-	 *              search-mode left slot has no back/drawer action.
+	 * Mobile: a 2-panel horizontal track (root panel + search panel, mirrors the
+	 * MobileTabPager pattern). The search button is a SINGLE absolutely-positioned
+	 * `<a>` that slides from the right edge to the left edge via a `left` CSS
+	 * transition: one icon, no duplicate. Entering search slides the track left
+	 * (root content exits left, search content pushes in from the right) while the
+	 * search button independently travels right-to-left, stopping at the
+	 * hamburger's position.
 	 *
-	 * The centre region stacks the root/deep/search layers absolutely and
-	 * cross-fades them by `morph` (`backMorph ?? (mode==='root'?1:0)`), the same
-	 * `translateY` discipline the deep-page morph uses; the search layer slides
-	 * down out as a back-swipe commits toward the source tab.
+	 * The root↔deep vertical morph (BurgerArrowIcon + title) lives INSIDE panel 0
+	 * but is FROZEN during a search transition (the tabs must exit horizontally
+	 * with the track, never float up vertically).
+	 *
+	 * The SearchTabBar row clip-expands (max-height 0 → auto) rather than jumping.
 	 */
 	import { untrack } from 'svelte';
 	import { page } from '$app/state';
@@ -58,37 +59,62 @@
 	const mode = $derived(resolveHeaderMode(currentPath));
 	const isSearch = $derived(mode === 'search');
 	const isDeep = $derived(mode === 'deep');
-	// backMorph is published only while a deep/search swipe-back is in flight; the
-	// mode-derived default otherwise keeps SSR + at-rest correct (root -> 1, else 0).
 	const morph = $derived(pager.backMorph ?? (mode === 'root' ? 1 : 0));
 	const dragging = $derived(pager.dragging);
-	const iconProgress = $derived(1 - morph); // BurgerArrowIcon: 0 hamburger, 1 arrow
+	// Freeze the icon morph during a search transition so the hamburger does not
+	// morph into an arrow while it is sliding off-screen.
+	const iconProgress = $derived(isSearch ? 0 : 1 - morph);
 	const title = $derived(page.data.headerTitle ?? resolveDeepHeaderTitle(currentPath, t) ?? '');
-	const slideT = $derived(dragging ? 'none' : 'transform 200ms ease-out');
-	// rootLayer (tabs): in place at morph 1, slid up off at morph 0.
+	const slideT = $derived(dragging ? 'none' : 'transform 200ms ease-out, opacity 200ms ease-out');
+
+	// Root↔deep vertical morph: FROZEN in search mode so the tabs exit
+	// horizontally with the track, never float up.
 	const rootLayerStyle = $derived(
-		`transform: translateY(${-(1 - morph) * 100}%); transition: ${slideT}; pointer-events: ${
-			morph > 0.5 ? 'auto' : 'none'
-		}`
+		isSearch
+			? 'transform: none; opacity: 1;'
+			: `transform: translateY(${-(1 - morph) * 100}%); transition: ${slideT}; pointer-events: ${
+					morph > 0.5 ? 'auto' : 'none'
+				}`
 	);
-	// deepLayer (title) + searchLayer (input): in place at morph 0, slid down off at morph 1.
 	const layerDownStyle = $derived(
 		`transform: translateY(${morph * 100}%); transition: ${slideT}; pointer-events: ${
 			morph < 0.5 ? 'auto' : 'none'
 		}`
 	);
 
-	// Search query input. The field owns its value (bind:value); a debounced
-	// goto updates the URL. Composition (IME) is tracked so a search never fires
-	// mid-composition (which would force the unfinished candidate to commit and
-	// drop focus) and the field is never reset while the user is composing.
+	// Root↔search horizontal track.
+	const searchProgress = $derived(isSearch ? 1 - morph : 0);
+	const trackStyle = $derived(
+		`transform: translateX(${-(searchProgress * 50).toFixed(2)}%); transition: ${
+			dragging ? 'none' : 'transform 200ms ease-out'
+		};`
+	);
+
+	// The SINGLE search button: absolute, slides from right to left. Driven by
+	// the SAME searchProgress as the track so it is gesture-synced (1:1 with the
+	// finger during a back-swipe). `left` is a linear interp from calc(100% -
+	// 3rem) at progress 0 to 0.5rem at progress 1.
+	const searchButtonLeft = $derived(
+		`calc(${((1 - searchProgress) * 100).toFixed(2)}% - ${((1 - searchProgress) * 3).toFixed(2)}rem + ${(searchProgress * 0.5).toFixed(2)}rem)`
+	);
+	const searchButtonStyle = $derived(
+		`left: ${searchButtonLeft}; transition: ${dragging ? 'none' : 'left 200ms ease-out'};`
+	);
+
+	// SearchTabBar row: clip-expand (max-height) driven by searchProgress so it
+	// gesture-syncs with the track and the search button.
+	const tabBarStyle = $derived(
+		`max-height: ${(searchProgress * 3).toFixed(2)}rem; transition: ${
+			dragging ? 'none' : 'max-height 200ms ease-out'
+		};`
+	);
+
+	// Search query input (bind:value + composition gating + debounce + keepFocus).
 	const urlQ = $derived(page.url.searchParams.get('q') ?? '');
 	let inputValue = $state(untrack(() => urlQ));
 	let lastUrlQ = untrack(() => urlQ);
 	let composing = $state(false);
 	let debounceId: ReturnType<typeof setTimeout> | 0 = 0;
-	// Sync from the URL (back/forward, deep link) only when NOT composing and the
-	// URL value genuinely differs from the field, so it never resets mid-typing.
 	$effect(() => {
 		if (composing) return;
 		if (urlQ !== lastUrlQ && urlQ !== inputValue) {
@@ -115,7 +141,6 @@
 		debounceId = setTimeout(() => commitQuery(inputValue), 400);
 	}
 	function onInput(): void {
-		// bind:value keeps inputValue in sync; just (re)schedule the search.
 		scheduleCommit();
 	}
 	function onCompositionStart(): void {
@@ -148,7 +173,6 @@
 	}
 
 	let headerEl: HTMLElement | null = $state(null);
-
 	$effect(() => {
 		if (!headerEl) return;
 		const observer = new ResizeObserver((entries) => {
@@ -162,9 +186,6 @@
 		return () => observer.disconnect();
 	});
 
-	/** Replicates the GesturePageLayout swipe-back commit for the deep-mode back
-	 * arrow: let a registered back handler consume it, else hop via the navigation
-	 * API, falling back to the site root. */
 	function onBack(): void {
 		if (backHandler.dispatch()) return;
 		const target = navStore.backTarget;
@@ -178,22 +199,14 @@
 			void goto('/', { replaceState: true });
 		}
 	}
-
 	function onLeftButton(): void {
-		if (isDeep) {
-			onBack();
-		} else if (!isSearch) {
-			onToggleDrawer();
-		}
-		// search mode: the magnifier is decorative (no action).
+		if (isDeep) onBack();
+		else onToggleDrawer();
 	}
 
-	// Autofocus the search input on entering /search (client-only).
 	let inputEl: HTMLInputElement | null = $state(null);
 	$effect(() => {
-		if (browser && isSearch && inputEl) {
-			inputEl.focus();
-		}
+		if (browser && isSearch && inputEl) inputEl.focus();
 	});
 </script>
 
@@ -204,119 +217,111 @@
 	style:transform="translateY({translateY}px)"
 >
 	<div class="bg-neutral text-neutral-content shadow-md md:shadow-none">
-		<nav class="flex items-center px-2 py-2 md:items-end md:px-6 md:pt-3 md:pb-2.5">
-			<!-- Mobile left slot: hamburger (root) / back arrow (deep) / decorative
-			     magnifier (search, non-functional). -->
-			{#if isSearch}
-				<span
-					class="flex size-10 shrink-0 items-center justify-center text-neutral-content/80 md:hidden"
-					aria-hidden="true"
+		<!-- Desktop nav -->
+		<nav class="hidden items-end gap-6 px-6 pt-3 pb-2.5 md:flex">
+			<Logo {t} class="text-neutral-content" />
+			<div class="flex items-end gap-4">
+				<a
+					href="/activity"
+					class="text-sm font-medium text-neutral-content/70 hover:text-neutral-content hover:underline"
+					class:text-accent={isNavActive(currentPath, '/activity')}
+					aria-current={isNavActive(currentPath, '/activity') ? 'page' : undefined}
 				>
-					<Icon path={mdiMagnify} size={22} />
-				</span>
-			{:else}
-				<button
-					type="button"
-					class="flex size-10 shrink-0 items-center justify-center text-neutral-content/80 hover:bg-neutral-content/10 hover:text-neutral-content md:hidden"
-					onclick={onLeftButton}
-					aria-label={isDeep ? tNav['back'] : tNav['menu']}
+					{tNav['activity']}
+				</a>
+				<a
+					href="/messages/inbox"
+					class="text-sm font-medium text-neutral-content/70 hover:text-neutral-content hover:underline"
+					class:text-accent={isNavActive(currentPath, '/messages')}
+					aria-current={isNavActive(currentPath, '/messages') ? 'page' : undefined}
 				>
-					<BurgerArrowIcon progress={iconProgress} {dragging} />
-				</button>
-			{/if}
-
-			<!-- Desktop: logo + nav links. -->
-			<div class="hidden items-end gap-6 md:flex">
-				<Logo {t} class="text-neutral-content" />
-				<div class="flex items-end gap-4">
-					<a
-						href="/activity"
-						class="text-sm font-medium text-neutral-content/70 hover:text-neutral-content hover:underline"
-						class:text-accent={isNavActive(currentPath, '/activity')}
-						aria-current={isNavActive(currentPath, '/activity') ? 'page' : undefined}
-					>
-						{tNav['activity']}
-					</a>
-					<a
-						href="/messages/inbox"
-						class="text-sm font-medium text-neutral-content/70 hover:text-neutral-content hover:underline"
-						class:text-accent={isNavActive(currentPath, '/messages')}
-						aria-current={isNavActive(currentPath, '/messages') ? 'page' : undefined}
-					>
-						{tNav['messages']}
-					</a>
-					<a
-						href="/search"
-						class="text-sm font-medium text-neutral-content/70 hover:text-neutral-content hover:underline"
-						class:text-accent={isNavActive(currentPath, '/search')}
-						aria-current={isNavActive(currentPath, '/search') ? 'page' : undefined}
-					>
-						{tNav['search']}
-					</a>
-				</div>
-			</div>
-
-			<!-- Mobile centre: stacked layers cross-faded by morph. -->
-			<div class="relative h-10 flex-1 md:hidden">
-				<div class="absolute inset-0 flex items-center justify-center" style={rootLayerStyle}>
-					<MobileTabBar {t} />
-				</div>
-				{#if isDeep}
-					<div
-						class="absolute inset-0 flex items-center justify-center px-2"
-						style={layerDownStyle}
-					>
-						<span class="w-full truncate text-center font-medium text-neutral-content">{title}</span
-						>
-					</div>
-				{/if}
-				{#if isSearch}
-					<div class="absolute inset-0 flex items-center gap-2 px-2" style={layerDownStyle}>
-						<input
-							bind:this={inputEl}
-							bind:value={inputValue}
-							type="text"
-							oninput={onInput}
-							oncompositionstart={onCompositionStart}
-							oncompositionend={onCompositionEnd}
-							onkeydown={onInputKeydown}
-							placeholder={t.search.placeholder}
-							class="input input-sm h-9 flex-1 border-0 bg-neutral-content/10 text-neutral-content placeholder:text-neutral-content/50 focus:outline-none"
-							autocomplete="off"
-						/>
-					</div>
-				{/if}
-			</div>
-
-			<!-- Mobile right slot: search icon (root) / filter button (search). -->
-			{#if isSearch}
-				<button
-					type="button"
-					class="flex size-10 shrink-0 items-center justify-center text-neutral-content/80 hover:bg-neutral-content/10 hover:text-neutral-content md:hidden"
-					onclick={() => (filterOpen = true)}
-					aria-label={t.search.sortBy}
-				>
-					<Icon path={mdiFilterVariant} size={22} />
-				</button>
-			{:else}
+					{tNav['messages']}
+				</a>
 				<a
 					href="/search"
-					class="flex size-10 shrink-0 items-center justify-center text-neutral-content/80 hover:bg-neutral-content/10 hover:text-neutral-content md:hidden"
-					aria-label={tNav['search']}
+					class="text-sm font-medium text-neutral-content/70 hover:text-neutral-content hover:underline"
+					class:text-accent={isNavActive(currentPath, '/search')}
 					aria-current={isNavActive(currentPath, '/search') ? 'page' : undefined}
 				>
-					<Icon path={mdiMagnify} size={22} />
+					{tNav['search']}
 				</a>
-			{/if}
+			</div>
 		</nav>
 
-		<!-- Mobile search scope strip (search mode only); bg-neutral continues the
-		     top bar colour, with the stretchy underline in SearchTabBar. -->
-		{#if isSearch}
-			<div class="md:hidden">
-				<SearchTabBar {t} />
+		<!-- Mobile nav: 2-panel track + single absolute search button. -->
+		<div class="relative overflow-clip md:hidden">
+			<div class="flex w-[200%]" style={trackStyle}>
+				<!-- Panel 0: root/deep content (no search button here; the absolute
+				     <a> below covers the right area in root mode). -->
+				<div class="flex w-1/2 shrink-0 items-center px-2 py-2">
+					<button
+						type="button"
+						class="flex size-10 shrink-0 items-center justify-center text-neutral-content/80 hover:bg-neutral-content/10 hover:text-neutral-content"
+						onclick={onLeftButton}
+						aria-label={isDeep ? tNav['back'] : tNav['menu']}
+					>
+						<BurgerArrowIcon progress={iconProgress} {dragging} />
+					</button>
+					<div class="relative h-10 flex-1">
+						<div class="absolute inset-0 flex items-center justify-center" style={rootLayerStyle}>
+							<MobileTabBar {t} />
+						</div>
+						{#if isDeep}
+							<div
+								class="absolute inset-0 flex items-center justify-center px-2"
+								style={layerDownStyle}
+							>
+								<span class="w-full truncate text-center font-medium text-neutral-content"
+									>{title}</span
+								>
+							</div>
+						{/if}
+					</div>
+				</div>
+
+				<!-- Panel 1: search content. pl-14 leaves room for the search button
+				     (absolute, at left in search mode). -->
+				<div class="flex w-1/2 shrink-0 items-center gap-2 py-2 pr-2 pl-14">
+					<input
+						bind:this={inputEl}
+						bind:value={inputValue}
+						type="text"
+						oninput={onInput}
+						oncompositionstart={onCompositionStart}
+						oncompositionend={onCompositionEnd}
+						onkeydown={onInputKeydown}
+						placeholder={t.search.placeholder}
+						class="input input-sm h-9 flex-1 border-0 bg-neutral-content/10 text-neutral-content placeholder:text-neutral-content/50 focus:outline-none"
+						autocomplete="off"
+					/>
+					<button
+						type="button"
+						class="flex size-10 shrink-0 items-center justify-center text-neutral-content/80 hover:bg-neutral-content/10 hover:text-neutral-content"
+						onclick={() => (filterOpen = true)}
+						aria-label={t.search.sortBy}
+					>
+						<Icon path={mdiFilterVariant} size={22} />
+					</button>
+				</div>
 			</div>
-		{/if}
+
+			<!-- Single search button: slides from right (root) to left (search =
+			     hamburger position) via `left` transition. Always rendered; ONE icon. -->
+			<a
+				href="/search"
+				class="absolute top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center text-neutral-content/80 hover:bg-neutral-content/10 hover:text-neutral-content"
+				style={searchButtonStyle}
+				aria-label={tNav['search']}
+				aria-current={isNavActive(currentPath, '/search') ? 'page' : undefined}
+			>
+				<Icon path={mdiMagnify} size={22} />
+			</a>
+		</div>
+
+		<!-- SearchTabBar row: clip-expand via max-height (no mount jump). -->
+		<div class="overflow-hidden md:hidden" style={tabBarStyle}>
+			<SearchTabBar {t} />
+		</div>
 	</div>
 </header>
 
