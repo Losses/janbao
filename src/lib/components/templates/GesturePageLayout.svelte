@@ -16,6 +16,47 @@
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 
+	import ProfileMenuPanel from '$lib/components/panels/ProfileMenuPanel.svelte';
+	import SettingsMenuPanel from '$lib/components/panels/SettingsMenuPanel.svelte';
+	import AdminMenuPanel from '$lib/components/panels/AdminMenuPanel.svelte';
+	import TabDiscussionsPanel from '$lib/components/panels/TabDiscussionsPanel.svelte';
+	import TabActivityPanel from '$lib/components/panels/TabActivityPanel.svelte';
+	import TabMessagesPanel from '$lib/components/panels/TabMessagesPanel.svelte';
+
+	// Configuration-driven mapping of routes to their transition preview panels
+	const PREVIEW_PANELS = [
+		{
+			// Profile pages should preview the profile menu
+			match: (path: string) => path === '/profile' || /^\/profile\/\d+/.test(path),
+			component: ProfileMenuPanel
+		},
+		{
+			// Settings page should preview the settings directory
+			match: (path: string) => path === '/profile/settings',
+			component: SettingsMenuPanel
+		},
+		{
+			// Admin page should preview the admin menu
+			match: (path: string) => path === '/admin',
+			component: AdminMenuPanel
+		},
+		{
+			// Discussions tab root / subpages
+			match: (path: string) => path === '/' || path.startsWith('/discussion'),
+			component: TabDiscussionsPanel
+		},
+		{
+			// Activity tab root / subpages
+			match: (path: string) => path.startsWith('/activity'),
+			component: TabActivityPanel
+		},
+		{
+			// Messages tab root / subpages
+			match: (path: string) => path.startsWith('/messages'),
+			component: TabMessagesPanel
+		}
+	];
+
 	interface Props {
 		children: Snippet;
 		left?: Snippet;
@@ -58,6 +99,12 @@
 	};
 	let isMobile = $state(getIsMobile());
 
+	function getPreviewPanel(path: string | null | undefined) {
+		if (!path) return null;
+		const match = PREVIEW_PANELS.find((p) => p.match(path));
+		return match ? match.component : (MOBILE_TABS[navStore.activeTab]?.panel ?? null);
+	}
+
 	// State declarations
 	let dragOffset = $state<number | null>(null);
 	let rawDragOffset = $state<number | null>(null);
@@ -78,8 +125,21 @@
 
 	// Derived declarations
 	const hasLeft = $derived(!!left || (navStore.activeTab >= 0 && navStore.activeTab <= 2));
+	let lockedLeftHref = $state<string | null>(null);
+	$effect(() => {
+		const currentTarget = leftHref ?? navStore.backTarget;
+		const committed =
+			isPendingNavigation ||
+			isTransitioningOut ||
+			navStore.pendingNav !== null ||
+			navStore.navInFlight;
+		if (!committed) {
+			lockedLeftHref = currentTarget;
+		}
+	});
+
 	const resolvedLeftHref = $derived(
-		navStore.pendingNav ? navStore.pendingNav.href : (leftHref ?? navStore.backTarget)
+		navStore.pendingNav ? navStore.pendingNav.href : (lockedLeftHref ?? leftHref ?? navStore.backTarget)
 	);
 	// The left preview shows the tab list when back lands on the tab root. When
 	// the back target is elsewhere (e.g. a thread reached before /bookmarks) the
@@ -764,9 +824,9 @@
 					{#if left}
 						{@render left()}
 					{:else}
-						{@const Panel = MOBILE_TABS[navStore.activeTab]?.panel}
-						{#if Panel}
-							<Panel cache={listCache} t={page.data.t} user={page.data.user} />
+						{@const PreviewPanel = getPreviewPanel(resolvedLeftHref)}
+						{#if PreviewPanel}
+							<PreviewPanel cache={listCache} t={page.data.t} user={page.data.user} />
 						{/if}
 					{/if}
 				</div>

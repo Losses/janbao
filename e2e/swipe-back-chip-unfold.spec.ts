@@ -180,3 +180,69 @@ test('NEW BUG: back-swipe from bookmarks after entering via sidebar returns to d
 	expect(new URL(page.url()).pathname).toBe('/messages/inbox');
 });
 
+test('NEW BUG: back-swipe from profile settings after entering via sidebar returns to messages, not homepage', async ({ page }) => {
+	// 1. Start at homepage
+	await page.goto('/');
+	await waitForHydration(page);
+
+	// 2. Click Messages tab in the top tab bar
+	await page.locator('a[data-tab-nav][href="/messages/inbox"]').click();
+	await page.waitForURL('/messages/inbox');
+	await page.waitForTimeout(300);
+
+	// 3. Open the sidebar drawer by clicking the menu button
+	const menuBtn = page.locator('header button').first();
+	await expect(menuBtn).toBeVisible();
+	await menuBtn.click();
+	await page.waitForTimeout(300);
+
+	// 4. Click "Settings" link inside the mobile drawer
+	const settingsLink = page.locator('a[href="/profile/settings"]').filter({ visible: true }).first();
+	await expect(settingsLink).toBeVisible();
+	await settingsLink.click();
+	await page.waitForURL('/profile/settings');
+	await page.waitForTimeout(300);
+
+	// 5. Simulate swipe back using CDP TouchEvents
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+
+	const width = page.viewportSize()?.width ?? 393;
+	const startX = 60;
+	const endX = 320;
+	const y = 400;
+
+	await client.send('Input.dispatchTouchEvent', {
+		type: 'touchStart',
+		touchPoints: [{ state: 'touchPressed', x: startX, y, id: 1 }] as unknown as any,
+		modifiers: 0,
+		timestamp: 0
+	});
+	await page.waitForTimeout(50);
+
+	const steps = 14;
+	for (let i = 1; i <= steps; i++) {
+		const x = Math.round(startX + (endX - startX) * (i / steps));
+		await client.send('Input.dispatchTouchEvent', {
+			type: 'touchMove',
+			touchPoints: [{ state: 'touchMoved', x, y, id: 1 }] as unknown as any,
+			modifiers: 0,
+			timestamp: 0
+		});
+		await page.waitForTimeout(20);
+	}
+
+	await client.send('Input.dispatchTouchEvent', {
+		type: 'touchEnd',
+		touchPoints: [{ state: 'touchReleased', x: endX, y, id: 1 }] as unknown as any,
+		modifiers: 0,
+		timestamp: 0
+	});
+	await client.detach();
+
+	// 6. We expect to land on /messages/inbox!
+	await page.waitForURL('/messages/inbox', { timeout: 5000 });
+	expect(new URL(page.url()).pathname).toBe('/messages/inbox');
+});
+
+

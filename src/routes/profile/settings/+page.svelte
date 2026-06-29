@@ -17,10 +17,6 @@
 		mdiPalette
 	} from '@mdi/js';
 	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
-	import ProfileMenuPanel from '$lib/components/panels/ProfileMenuPanel.svelte';
-	import { getNavigationStore } from '$lib/stores/navigation.svelte';
-	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
-	import TabDiscussionsPanel from '$lib/components/panels/TabDiscussionsPanel.svelte';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -28,20 +24,13 @@
 	}
 
 	let { data }: PageProps = $props();
-	const navStore = getNavigationStore();
-	const listCache = getListCacheStore();
 
 	const t = $derived(data.t);
 	const profileT = $derived(t.profile);
 	const user = $derived(data.user);
 	const directoryT = $derived(t.directory);
 
-	const prevPath = $derived(
-		navStore.activeStack.length >= 2
-			? navStore.activeStack[navStore.activeStack.length - 2].pathname
-			: null
-	);
-	const targetHref = $derived(prevPath === '/profile' ? '/profile' : '/');
+
 
 	const groups = $derived<DirectoryGroup[]>(
 		user
@@ -116,18 +105,8 @@
 	{/if}
 {/snippet}
 
-{#snippet leftPanel()}
-	{#if user}
-		{#if prevPath === '/profile'}
-			<ProfileMenuPanel {user} {t} />
-		{:else}
-			<TabDiscussionsPanel cache={listCache} {t} {user} />
-		{/if}
-	{/if}
-{/snippet}
-
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout left={leftPanel} leftHref={targetHref} fallbackRoute={targetHref}>
+	<GesturePageLayout fallbackRoute="/">
 		<div class="space-y-4">
 			<PageTitle title={profileT['accountSettings'] || 'Settings'} />
 			<DirectoryGrid {groups} />
