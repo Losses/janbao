@@ -65,7 +65,9 @@
 	// morph into an arrow while it is sliding off-screen.
 	const iconProgress = $derived(isSearch ? 0 : 1 - morph);
 	const title = $derived(page.data.headerTitle ?? resolveDeepHeaderTitle(currentPath, t) ?? '');
-	const slideT = $derived(dragging ? 'none' : 'transform 200ms ease-out, opacity 200ms ease-out');
+	const slideT = $derived(
+		dragging || navStore.navInFlight ? 'none' : 'transform 200ms ease-out, opacity 200ms ease-out'
+	);
 
 	// Root↔deep vertical morph: FROZEN in search mode so the tabs exit
 	// horizontally with the track, never float up.
@@ -86,7 +88,7 @@
 	const searchProgress = $derived(isSearch ? 1 - morph : 0);
 	const trackStyle = $derived(
 		`transform: translateX(${-(searchProgress * 50).toFixed(2)}%); transition: ${
-			dragging ? 'none' : 'transform 200ms ease-out'
+			dragging || navStore.navInFlight ? 'none' : 'transform 200ms ease-out'
 		};`
 	);
 
@@ -98,14 +100,14 @@
 		`calc(${((1 - searchProgress) * 100).toFixed(2)}% - ${((1 - searchProgress) * 3).toFixed(2)}rem + ${(searchProgress * 0.5).toFixed(2)}rem)`
 	);
 	const searchButtonStyle = $derived(
-		`left: ${searchButtonLeft}; transition: ${dragging ? 'none' : 'left 200ms ease-out'};`
+		`left: ${searchButtonLeft}; transition: ${dragging || navStore.navInFlight ? 'none' : 'left 200ms ease-out'};`
 	);
 
 	// SearchTabBar row: clip-expand (max-height) driven by searchProgress so it
 	// gesture-syncs with the track and the search button.
 	const tabBarStyle = $derived(
 		`max-height: ${(searchProgress * 3).toFixed(2)}rem; transition: ${
-			dragging ? 'none' : 'max-height 200ms ease-out'
+			dragging || navStore.navInFlight ? 'none' : 'max-height 200ms ease-out'
 		};`
 	);
 

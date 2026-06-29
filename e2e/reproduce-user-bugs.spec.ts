@@ -115,4 +115,88 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 		
 		expect(landedPath).toBe(discussionPath);
 	});
+
+	test('Bug 4: search page swipe back to home has preview card instead of loading chip', async ({ page }) => {
+		page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
+
+		// 1. Start at homepage
+		await page.goto('/');
+		await waitForHydration(page);
+
+		// 2. Go to search
+		await page.goto('/search?q=test');
+		await waitForHydration(page);
+
+		// 3. Start a swipe back (drag right) on the search viewport
+		const box = await page.locator('[data-search-scope-pager]').boundingBox();
+		if (!box) throw new Error('Search scope pager not found');
+
+		const startX = box.x + 50;
+		const startY = box.y + 150;
+		
+		await page.mouse.move(startX, startY);
+		await page.mouse.down();
+		
+		// Drag right by 120px to reveal Discussions tab preview
+		await page.mouse.move(startX + 120, startY, { steps: 5 });
+		await page.waitForTimeout(200);
+
+		// Assert that the preview section is visible and matches "discussions"
+		const leftPreview = page.locator('section[data-preview-tab="discussions"]');
+		await expect(leftPreview).toBeVisible();
+
+		// Assert that no loading overlay or loading chip is visible
+		const loadingOverlay = page.locator('.loading-overlay');
+		await expect(loadingOverlay).not.toBeVisible();
+
+		await page.mouse.up();
+	});
+
+	test('Bug 5: search page swipe left (forward out of bounds) is intercepted and does not show overlay', async ({ page }) => {
+		page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
+
+		// 1. Go to search
+		await page.goto('/search?q=test');
+		await waitForHydration(page);
+
+		// 2. Start a swipe left (drag left) on the search viewport
+		const box = await page.locator('[data-search-scope-pager]').boundingBox();
+		if (!box) throw new Error('Search scope pager not found');
+
+		const startX = box.x + box.width - 50;
+		const startY = box.y + 150;
+
+		await page.mouse.move(startX, startY);
+		await page.mouse.down();
+
+		// Drag left by 120px (out of bounds since there is no right panel)
+		await page.mouse.move(startX - 120, startY, { steps: 5 });
+		await page.waitForTimeout(200);
+
+		// Assert that no loading overlay is visible
+		const loadingOverlay = page.locator('.loading-overlay');
+		await expect(loadingOverlay).not.toBeVisible();
+
+		await page.mouse.up();
+	});
+
+	test('Bug 6: direct navigate to search -> swipe back -> no duplicate header morph animation', async ({ page }) => {
+		page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
+
+		// 1. Directly go to search
+		await page.goto('/search?q=test');
+		await waitForHydration(page);
+
+		// 2. Swipe back using the robust CDP touch helper
+		await swipeBack(page);
+		
+		// 3. Verify that it successfully lands on the homepage '/'
+		await page.waitForURL('/');
+		const landedPath = new URL(page.url()).pathname;
+		expect(landedPath).toBe('/');
+
+		// Verify that the header track style is back to translateX(0%) without residual offsets
+		const transform = await page.locator('header .flex.w-\\[200\\%\\]').evaluate(el => el.style.transform);
+		expect(transform).toBe('translateX(0%)');
+	});
 });

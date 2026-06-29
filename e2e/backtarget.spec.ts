@@ -89,18 +89,19 @@ for (const sc of [...A_GROUP, ...B_GROUP]) {
 // card-scaling target-page pill), not the old spinner + localized loading text.
 // Triggered by landing directly on a global route (init sets activeTab=0; home
 // is never visited so its cache is cold), so the back-preview's DiscussionsPanel
-// renders its !data fallback.
+// falls back to SvelteKit layout data.
 //
-// Asserted structurally (chip present, spinner markup absent) - locale-free, so
+// Asserted structurally (discussions present, spinner markup absent) - locale-free, so
 // it does not hardcode the t.common.loading string and holds under any locale.
-test('Bug2: empty-cache panel shows the LoadingChip, not the spinner fallback', async ({ page, context }) => {
+test('Bug2: cold-cache panel falls back to layout data, rendering discussions instead of spinner', async ({ page, context }) => {
 	await prepareContext(context);
 	await page.goto('/bookmarks');
 	await waitForHydration(page);
 	await page.waitForTimeout(500);
-	const chipCount = await page.locator('.loading-chip').count();
+
+	const discussionsCount = await page.locator('a[href^="/discussion/"]').count();
 	const spinnerCount = await page.locator('.loading.loading-spinner').count();
-	expect(chipCount, 'the shared LoadingChip should render for the cold-cache panel').toBeGreaterThan(0);
+	expect(discussionsCount, 'discussions must render from layout data').toBeGreaterThan(0);
 	expect(spinnerCount, 'the old spinner must be gone').toBe(0);
 });
 
@@ -172,7 +173,7 @@ test('Bug3: deep-page back-swipe animates the top tab pill gradually', async ({ 
 	expect(large, 'expansion must keep growing').toBeGreaterThan(mid);
 });
 
-test('Bug4: global page (search) back-swipe shows the loading chip overlay and limits drag distance', async ({ page, context }) => {
+test('Bug4: global page (search) back-swipe shows the Discussions preview panel instead of loading chip', async ({ page, context }) => {
 	await prepareContext(context);
 	await page.goto('/search');
 	await waitForHydration(page);
@@ -198,11 +199,12 @@ test('Bug4: global page (search) back-swipe shows the loading chip overlay and l
 	await page.waitForTimeout(100);
 
 	const metrics = await page.evaluate(() => {
+		const preview = document.querySelector('section[data-preview-tab="discussions"]') as HTMLElement | null;
 		const overlay = document.querySelector('.loading-overlay') as HTMLElement | null;
 		return {
-			hasOverlay: !!overlay,
-			overlayWidth: overlay ? overlay.offsetWidth : 0,
-			hasChip: !!overlay?.querySelector('.loading-chip')
+			hasPreview: !!preview,
+			isPreviewVisible: preview ? window.getComputedStyle(preview).display !== 'none' : false,
+			hasOverlay: !!overlay
 		};
 	});
 
@@ -214,9 +216,9 @@ test('Bug4: global page (search) back-swipe shows the loading chip overlay and l
 	});
 	await client.detach();
 
-	expect(metrics.hasOverlay, 'the loading overlay must be visible during the swipe').toBe(true);
-	expect(metrics.overlayWidth, 'the overlay width must be damped/restricted').toBeLessThan(120);
-	expect(metrics.hasChip, 'the LoadingChip must be present inside the overlay').toBe(true);
+	expect(metrics.hasPreview, 'the discussions preview section must exist').toBe(true);
+	expect(metrics.isPreviewVisible, 'the discussions preview section must be visible').toBe(true);
+	expect(metrics.hasOverlay, 'no loading overlay should be visible').toBe(false);
 });
 
 

@@ -315,7 +315,7 @@
 				// The bar slide + hamburger<->back-arrow morph use the full progress
 				// (0 = full back arrow at rest, 1 once committed toward the tab root);
 				// the pill intentionally lags behind it (pillProgress above).
-				backMorph: progress
+				backMorph: Math.min(1, progress / 0.2)
 			});
 		} else if (committed && targetIdx >= 0) {
 			// Gesture committed, navigation in flight: HOLD the pill at the target
@@ -331,6 +331,16 @@
 		}
 	});
 
+	const visualDragOffset = $derived<number | null>(
+		dragOffset === null
+			? null
+			: swipeNeedsLoadingAtStart
+				? dragOffset
+				: swipeDirection === 'right'
+					? Math.max(0, dragOffset - W * 0.2) / 0.8
+					: Math.min(0, dragOffset + W * 0.2) / 0.8
+	);
+
 	const trackTranslateX = $derived<string>(
 		!isMobile
 			? '0px'
@@ -339,11 +349,11 @@
 					? `${swipeDirection === 'left' ? -W : W}px`
 					: isPendingNavigation
 						? `${swipeDirection === 'left' ? -maxDrag : maxDrag}px`
-						: dragOffset !== null
-							? `${dragOffset}px`
+						: visualDragOffset !== null
+							? `${visualDragOffset}px`
 							: '0px'
-				: dragOffset !== null
-					? `calc(-${ACTIVE * STEP_PERCENT}% + ${dragOffset}px)`
+				: visualDragOffset !== null
+					? `calc(-${ACTIVE * STEP_PERCENT}% + ${visualDragOffset}px)`
 					: `-${snapIndex * STEP_PERCENT}%`
 	);
 
