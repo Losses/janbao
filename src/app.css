@@ -328,11 +328,18 @@ header nav {
 		background-color: var(--color-base-100);
 		border-bottom: 1px solid var(--color-base-300);
 	}
-	/* The search scope pager fills its GesturePageLayout centre card: give that
-	   card a definite height only when it contains the pager, so each scope panel
-	   (height:100% overflow-y:auto) becomes a scroller and the active panel can
-	   drive hide-on-scroll via the scroll-chrome override. */
+	/* The search scope pager fills its GesturePageLayout centre card. Give that
+	   card a definite height + NO padding (the scope panels carry their own via
+	   .scroll-pane) so each panel (height:100% overflow-y:auto) becomes a scroller
+	   and the active panel drives hide-on-scroll via the scroll-chrome override. */
 	html.fixed-viewport .gpl-card:has([data-search-scope-pager]) {
 		height: 100%;
+		padding: 0;
+	}
+	/* The centre .detail-scroll-pane normally reserves header height + bottom
+	   space; on /search the active scope panel is itself a .scroll-pane that
+	   owns both, so reset the pane here to avoid a double header offset. */
+	html.fixed-viewport .detail-scroll-pane:has([data-search-scope-pager]) {
+		padding: 0;
 	}
 }

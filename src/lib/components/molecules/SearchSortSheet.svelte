@@ -45,24 +45,28 @@
 </script>
 
 {#if open}
-	<div class="modal modal-open" role="dialog" aria-modal="true" aria-labelledby="search-sort-title">
+	<div class="modal modal-open" role="dialog" aria-modal="true" aria-label={tSearch.sortBy}>
 		<div class="modal-box">
-			<h3 id="search-sort-title" class="text-lg font-bold">{tSearch.sortBy}</h3>
-			<ul class="mt-2 divide-y divide-base-300">
+			<ul class="divide-y divide-base-300">
 				{#each options as o (o.value)}
 					<li>
 						<button
 							type="button"
-							class="flex w-full items-center justify-between px-1 py-3 text-left {sort === o.value
-								? 'text-accent'
-								: 'text-base-content'}"
+							class="flex w-full items-center gap-3 py-3 text-left text-base-content"
 							aria-current={sort === o.value ? 'true' : undefined}
 							onclick={() => choose(o.value)}
 						>
+							<span
+								class="flex size-5 shrink-0 items-center justify-center rounded-full border {sort ===
+								o.value
+									? 'border-base-content'
+									: 'border-base-content/40'}"
+							>
+								{#if sort === o.value}
+									<span class="size-2.5 rounded-full bg-base-content"></span>
+								{/if}
+							</span>
 							<span class="font-medium">{o.label}</span>
-							{#if sort === o.value}
-								<span class="text-accent">✓</span>
-							{/if}
 						</button>
 					</li>
 				{/each}

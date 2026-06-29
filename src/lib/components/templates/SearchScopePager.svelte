@@ -209,6 +209,8 @@
 	function fresh(scope: SearchScope): boolean {
 		return cache.isFresh(scope, data.query, data.sort);
 	}
+
+	const hasQuery = $derived(query.trim().length > 0);
 </script>
 
 <div
@@ -225,98 +227,90 @@
 		<section
 			bind:this={panelEls[0]}
 			data-scope-panel="discussions"
-			class="h-full overflow-y-auto"
+			class="scroll-pane h-full overflow-y-auto"
 			style="width: 25%; touch-action: pan-y pinch-zoom; -webkit-overflow-scrolling: touch;"
 		>
-			<div class="p-3">
-				{#if online.online && !fresh('discussions')}
-					<div class="flex justify-center py-10"><LoadingChip icon={mdiMagnify} /></div>
-				{:else}
-					<SearchResultsList
-						scope="discussions"
-						items={cache.discussions?.items ?? null}
-						{query}
-						page={cache.discussions?.page ?? 1}
-						totalPages={cache.discussions?.totalPages ?? 0}
-						total={cache.discussions?.total ?? 0}
-						online={online.online}
-						{t}
-						onPageChange={(p) => handlePage('discussions', p)}
-					/>
-				{/if}
-			</div>
+			{#if online.online && hasQuery && !fresh('discussions')}
+				<div class="flex justify-center py-10"><LoadingChip icon={mdiMagnify} /></div>
+			{:else}
+				<SearchResultsList
+					scope="discussions"
+					items={cache.discussions?.items ?? null}
+					{query}
+					page={cache.discussions?.page ?? 1}
+					totalPages={cache.discussions?.totalPages ?? 0}
+					total={cache.discussions?.total ?? 0}
+					online={online.online}
+					{t}
+					onPageChange={(p) => handlePage('discussions', p)}
+				/>
+			{/if}
 		</section>
 		<section
 			bind:this={panelEls[1]}
 			data-scope-panel="activities"
-			class="h-full overflow-y-auto"
+			class="scroll-pane h-full overflow-y-auto"
 			style="width: 25%; touch-action: pan-y pinch-zoom; -webkit-overflow-scrolling: touch;"
 		>
-			<div class="p-3">
-				{#if online.online && !fresh('activities')}
-					<div class="flex justify-center py-10"><LoadingChip icon={mdiMagnify} /></div>
-				{:else}
-					<SearchResultsList
-						scope="activities"
-						items={cache.activities?.items ?? null}
-						{query}
-						page={cache.activities?.page ?? 1}
-						totalPages={cache.activities?.totalPages ?? 0}
-						total={cache.activities?.total ?? 0}
-						online={online.online}
-						{t}
-						onPageChange={(p) => handlePage('activities', p)}
-					/>
-				{/if}
-			</div>
+			{#if online.online && hasQuery && !fresh('activities')}
+				<div class="flex justify-center py-10"><LoadingChip icon={mdiMagnify} /></div>
+			{:else}
+				<SearchResultsList
+					scope="activities"
+					items={cache.activities?.items ?? null}
+					{query}
+					page={cache.activities?.page ?? 1}
+					totalPages={cache.activities?.totalPages ?? 0}
+					total={cache.activities?.total ?? 0}
+					online={online.online}
+					{t}
+					onPageChange={(p) => handlePage('activities', p)}
+				/>
+			{/if}
 		</section>
 		<section
 			bind:this={panelEls[2]}
 			data-scope-panel="messages"
-			class="h-full overflow-y-auto"
+			class="scroll-pane h-full overflow-y-auto"
 			style="width: 25%; touch-action: pan-y pinch-zoom; -webkit-overflow-scrolling: touch;"
 		>
-			<div class="p-3">
-				{#if online.online && !fresh('messages')}
-					<div class="flex justify-center py-10"><LoadingChip icon={mdiMagnify} /></div>
-				{:else}
-					<SearchResultsList
-						scope="messages"
-						items={cache.messages?.items ?? null}
-						{query}
-						page={cache.messages?.page ?? 1}
-						totalPages={cache.messages?.totalPages ?? 0}
-						total={cache.messages?.total ?? 0}
-						online={online.online}
-						{t}
-						onPageChange={(p) => handlePage('messages', p)}
-					/>
-				{/if}
-			</div>
+			{#if online.online && hasQuery && !fresh('messages')}
+				<div class="flex justify-center py-10"><LoadingChip icon={mdiMagnify} /></div>
+			{:else}
+				<SearchResultsList
+					scope="messages"
+					items={cache.messages?.items ?? null}
+					{query}
+					page={cache.messages?.page ?? 1}
+					totalPages={cache.messages?.totalPages ?? 0}
+					total={cache.messages?.total ?? 0}
+					online={online.online}
+					{t}
+					onPageChange={(p) => handlePage('messages', p)}
+				/>
+			{/if}
 		</section>
 		<section
 			bind:this={panelEls[3]}
 			data-scope-panel="users"
-			class="h-full overflow-y-auto"
+			class="scroll-pane h-full overflow-y-auto"
 			style="width: 25%; touch-action: pan-y pinch-zoom; -webkit-overflow-scrolling: touch;"
 		>
-			<div class="p-3">
-				{#if online.online && !fresh('users')}
-					<div class="flex justify-center py-10"><LoadingChip icon={mdiMagnify} /></div>
-				{:else}
-					<SearchResultsList
-						scope="users"
-						items={cache.users?.items ?? null}
-						{query}
-						page={cache.users?.page ?? 1}
-						totalPages={cache.users?.totalPages ?? 0}
-						total={cache.users?.total ?? 0}
-						online={online.online}
-						{t}
-						onPageChange={(p) => handlePage('users', p)}
-					/>
-				{/if}
-			</div>
+			{#if online.online && hasQuery && !fresh('users')}
+				<div class="flex justify-center py-10"><LoadingChip icon={mdiMagnify} /></div>
+			{:else}
+				<SearchResultsList
+					scope="users"
+					items={cache.users?.items ?? null}
+					{query}
+					page={cache.users?.page ?? 1}
+					totalPages={cache.users?.totalPages ?? 0}
+					total={cache.users?.total ?? 0}
+					online={online.online}
+					{t}
+					onPageChange={(p) => handlePage('users', p)}
+				/>
+			{/if}
 		</section>
 	</div>
 </div>

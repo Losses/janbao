@@ -78,32 +78,56 @@
 		}`
 	);
 
-	// Search query input: bound to the URL `q`, debounced 250ms before navigating.
+	// Search query input. The field owns its value (bind:value); a debounced
+	// goto updates the URL. Composition (IME) is tracked so a search never fires
+	// mid-composition (which would force the unfinished candidate to commit and
+	// drop focus) and the field is never reset while the user is composing.
 	const urlQ = $derived(page.url.searchParams.get('q') ?? '');
 	let inputValue = $state(untrack(() => urlQ));
 	let lastUrlQ = untrack(() => urlQ);
+	let composing = $state(false);
 	let debounceId: ReturnType<typeof setTimeout> | 0 = 0;
+	// Sync from the URL (back/forward, deep link) only when NOT composing and the
+	// URL value genuinely differs from the field, so it never resets mid-typing.
 	$effect(() => {
-		if (urlQ !== lastUrlQ) {
+		if (composing) return;
+		if (urlQ !== lastUrlQ && urlQ !== inputValue) {
 			lastUrlQ = urlQ;
 			inputValue = urlQ;
 		}
 	});
 	function commitQuery(q: string): void {
+		if (composing) return;
 		const params = new SvelteURLSearchParams();
 		if (q) params.set('q', q);
 		params.set('scope', page.url.searchParams.get('scope') ?? 'discussions');
 		params.set('sort', page.url.searchParams.get('sort') ?? 'newest');
 		params.set('page', '1');
-		void goto(`/search?${params.toString()}`, { replaceState: true, noScroll: true });
+		void goto(`/search?${params.toString()}`, {
+			replaceState: true,
+			noScroll: true,
+			keepFocus: true
+		});
 	}
-	function onInput(event: Event): void {
-		inputValue = (event.currentTarget as HTMLInputElement).value;
+	function scheduleCommit(): void {
+		if (composing) return;
 		if (debounceId) clearTimeout(debounceId);
-		debounceId = setTimeout(() => commitQuery(inputValue), 250);
+		debounceId = setTimeout(() => commitQuery(inputValue), 400);
+	}
+	function onInput(): void {
+		// bind:value keeps inputValue in sync; just (re)schedule the search.
+		scheduleCommit();
+	}
+	function onCompositionStart(): void {
+		composing = true;
+	}
+	function onCompositionEnd(event: CompositionEvent): void {
+		composing = false;
+		inputValue = (event.currentTarget as HTMLInputElement).value;
+		scheduleCommit();
 	}
 	function onInputKeydown(event: KeyboardEvent): void {
-		if (event.key === 'Enter') {
+		if (event.key === 'Enter' && !composing) {
 			if (debounceId) clearTimeout(debounceId);
 			commitQuery(inputValue);
 		}
@@ -250,9 +274,11 @@
 					<div class="absolute inset-0 flex items-center gap-2 px-2" style={layerDownStyle}>
 						<input
 							bind:this={inputEl}
+							bind:value={inputValue}
 							type="text"
-							value={inputValue}
 							oninput={onInput}
+							oncompositionstart={onCompositionStart}
+							oncompositionend={onCompositionEnd}
 							onkeydown={onInputKeydown}
 							placeholder={t.search.placeholder}
 							class="input input-sm h-9 flex-1 border-0 bg-neutral-content/10 text-neutral-content placeholder:text-neutral-content/50 focus:outline-none"
