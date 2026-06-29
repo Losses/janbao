@@ -257,6 +257,9 @@ let navStoreInstance: NavigationStore;
 export function getNavigationStore(): NavigationStore {
 	if (!navStoreInstance) {
 		navStoreInstance = new NavigationStore();
+		if (typeof window !== 'undefined') {
+			(window as Window & { __navStore?: NavigationStore }).__navStore = navStoreInstance;
+		}
 	}
 	return navStoreInstance;
 }

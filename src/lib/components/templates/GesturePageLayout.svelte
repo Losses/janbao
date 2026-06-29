@@ -78,7 +78,9 @@
 
 	// Derived declarations
 	const hasLeft = $derived(!!left || (navStore.activeTab >= 0 && navStore.activeTab <= 2));
-	const resolvedLeftHref = $derived(leftHref ?? navStore.backTarget);
+	const resolvedLeftHref = $derived(
+		navStore.pendingNav ? navStore.pendingNav.href : (leftHref ?? navStore.backTarget)
+	);
 	// The left preview shows the tab list when back lands on the tab root. When
 	// the back target is elsewhere (e.g. a thread reached before /bookmarks) the
 	// target page is unmounted on this route so there is no DOM to preview - show
