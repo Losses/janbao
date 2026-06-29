@@ -114,7 +114,9 @@ export function getMobilePagerStore(): PagerStore {
 	if (globalMobilePagerFallback) {
 		return globalMobilePagerFallback;
 	}
-	throw new Error('MobilePagerStore context not initialized. Call initMobilePagerStore in +layout.svelte.');
+	throw new Error(
+		'MobilePagerStore context not initialized. Call initMobilePagerStore in +layout.svelte.'
+	);
 }
 
 export function initSearchPagerStore(): PagerStore {
@@ -137,5 +139,7 @@ export function getSearchPagerStore(): PagerStore {
 	if (globalSearchPagerFallback) {
 		return globalSearchPagerFallback;
 	}
-	throw new Error('SearchPagerStore context not initialized. Call initSearchPagerStore in +layout.svelte.');
+	throw new Error(
+		'SearchPagerStore context not initialized. Call initSearchPagerStore in +layout.svelte.'
+	);
 }

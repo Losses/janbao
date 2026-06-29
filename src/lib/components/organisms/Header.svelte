@@ -111,13 +111,18 @@
 
 	const morph = $derived(
 		dragging
-			? (isDeepToDeep ? 0 : (pager.backMorph ?? 0))
+			? isDeepToDeep
+				? 0
+				: (pager.backMorph ?? 0)
 			: settling
 				? settleAwaitTitle
-					? (currentHasTabs ? 1 : 0) * (1 - settleProgress) + (targetHasTabs ? 1 : 0) * settleProgress
+					? (currentHasTabs ? 1 : 0) * (1 - settleProgress) +
+						(targetHasTabs ? 1 : 0) * settleProgress
 					: settleTarget === 0
-						? (targetHasTabs ? 1 : 0) * settleProgress + (currentHasTabs ? 1 : 0) * (1 - settleProgress)
-						: (prevHasTabs ? 1 : 0) * (1 - settleProgress) + (currentHasTabs ? 1 : 0) * settleProgress
+						? (targetHasTabs ? 1 : 0) * settleProgress +
+							(currentHasTabs ? 1 : 0) * (1 - settleProgress)
+						: (prevHasTabs ? 1 : 0) * (1 - settleProgress) +
+							(currentHasTabs ? 1 : 0) * settleProgress
 				: currentHasTabs
 					? 1
 					: 0
@@ -159,8 +164,11 @@
 	// the settle just started (collapse-then-replay).
 	$effect.pre(() => {
 		if (dragging) return;
+		const pending = navStore.pendingNav;
 		const m = untrack(() => lastGestureMorph);
-		if (m <= GESTURE_MORPH_EPSILON) {
+		const hasPending = pending !== null;
+
+		if (m <= GESTURE_MORPH_EPSILON && !hasPending) {
 			// No preceding gesture / cancelled near origin: clear any stale settle so
 			// it can't stick. Skip the undo if this release was already consumed by
 			// the commit/cancel branch (the in-flight settle is owned by Effect D /
@@ -174,7 +182,7 @@
 			});
 			return;
 		}
-		const committed = untrack(() => navStore.pendingNav !== null);
+		const committed = hasPending;
 		untrack(() => {
 			const out = title;
 			const inc = navStore.backTarget ? (resolveDeepHeaderTitle(navStore.backTarget, t) ?? '') : '';

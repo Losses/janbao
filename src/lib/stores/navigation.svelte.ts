@@ -289,5 +289,7 @@ export function getNavigationStore(): NavigationStore {
 	if (globalNavStoreFallback) {
 		return globalNavStoreFallback;
 	}
-	throw new Error('NavigationStore context not initialized. Call initNavigationStore in +layout.svelte.');
+	throw new Error(
+		'NavigationStore context not initialized. Call initNavigationStore in +layout.svelte.'
+	);
 }
