@@ -138,5 +138,12 @@ test.describe('Swipe Back Preview Bug from Bookmarks to Inbox', () => {
 		expect(landedMetrics.htmlHasFixedViewport).toBe(false);
 		expect(landedMetrics.hasTitle).toBe(true);
 		expect(landedMetrics.titleDisplay).not.toBe('none');
+
+		// Assert that preview layout dimensions (paddings, widths, offsets) match landed page perfectly
+		expect(previewMetrics.paddingLeft).toBe(landedMetrics.paddingLeft);
+		expect(previewMetrics.paddingRight).toBe(landedMetrics.paddingRight);
+		expect(previewMetrics.paddingBottom).toBe(landedMetrics.paddingBottom);
+		expect(previewMetrics.childRect?.width).toBe(landedMetrics.childRect?.width);
+		expect(previewMetrics.childRect?.y).toBe(landedMetrics.childRect?.y);
 	});
 });
