@@ -283,4 +283,127 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 		// Verify we are back on the homepage
 		expect(new URL(page.url()).pathname).toBe('/');
 	});
+
+	test('Bug 10: navigate from /profile/settings to /profile/edit -> swipe back -> title slides and tabs do NOT show', async ({ page, context }) => {
+		page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
+
+		await prepareContext(context);
+		// 1. Go to home page
+		await page.goto('/');
+		await waitForHydration(page);
+
+		// Click the burger menu button in the header to open drawer
+		const menuBtn = page.locator('header button').first();
+		await expect(menuBtn).toBeVisible();
+		await menuBtn.click();
+		await page.waitForTimeout(300);
+
+		// Click "Settings" link inside drawer/sidebar (filter for the visible mobile drawer instance)
+		const settingsLink = page.locator('a[href="/profile/settings"]').filter({ visible: true }).first();
+		await expect(settingsLink).toBeVisible();
+		await settingsLink.click();
+		await page.waitForURL('/profile/settings');
+
+		// Assert title is "Settings"
+		const settingsTitle = page.locator('header span.w-full.truncate').first();
+		await expect(settingsTitle).toBeVisible();
+		const settingsText = await settingsTitle.innerText();
+		expect(settingsText.length).toBeGreaterThan(0);
+
+		// Click on "Edit Account" link (which goes to /profile/edit)
+		const editLink = page.locator('a[href="/profile/edit"]').first();
+		await expect(editLink).toBeVisible();
+		await editLink.click();
+		await page.waitForURL('/profile/edit');
+
+		// Wait 80ms (middle of the 200ms transition) to capture the animation in-flight
+		await page.waitForTimeout(80);
+
+		// Assert that BOTH title elements exist in the DOM during the transition
+		const titleLocators = page.locator('header span.w-full.truncate');
+		await expect(titleLocators).toHaveCount(2);
+
+		// Get the computed style matrix of the outgoing title (first one)
+		const outgoingDiv = page.locator('header span.w-full.truncate').first().locator('..');
+		const outgoingMatrix = await outgoingDiv.evaluate(el => window.getComputedStyle(el).transform);
+		
+		// Get the computed style matrix of the incoming title (second one)
+		const incomingDiv = page.locator('header span.w-full.truncate').nth(1).locator('..');
+		const incomingMatrix = await incomingDiv.evaluate(el => window.getComputedStyle(el).transform);
+
+		// Extract ty (6th element in matrix(1, 0, 0, 1, 0, ty))
+		const matchOut = outgoingMatrix.match(/matrix\([^,]+,\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*(-?\d+(?:\.\d+)?)\)/);
+		const matchIn = incomingMatrix.match(/matrix\([^,]+,\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*(-?\d+(?:\.\d+)?)\)/);
+
+		expect(matchOut).not.toBeNull();
+		expect(matchIn).not.toBeNull();
+
+		const tyOut = parseFloat(matchOut![1]);
+		const tyIn = parseFloat(matchIn![1]);
+
+		// At 80ms, outgoing should have moved up (height is 40px, so ty should be between -2px and -38px)
+		expect(tyOut).toBeLessThan(-2);
+		expect(tyOut).toBeGreaterThan(-38);
+
+		// At 80ms, incoming should have moved up (ty should be between 2px and 38px)
+		expect(tyIn).toBeLessThan(38);
+		expect(tyIn).toBeGreaterThan(2);
+
+		// Now simulate swipe back from /profile/edit to /profile/settings
+		const client = await page.context().newCDPSession(page);
+		await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+
+		const startX = 50;
+		const startY = 400;
+		const move = async (x: number) => {
+			await client.send('Input.dispatchTouchEvent', {
+				type: 'touchMove',
+				touchPoints: [{ x, y: startY, id: 1 }],
+				modifiers: 0,
+				timestamp: 0
+			});
+		};
+
+		await client.send('Input.dispatchTouchEvent', {
+			type: 'touchStart',
+			touchPoints: [{ x: startX, y: startY, id: 1 }],
+			modifiers: 0,
+			timestamp: 0
+		});
+		await page.waitForTimeout(50);
+
+		// Drag right to 200px
+		await move(200);
+		await page.waitForTimeout(100);
+
+		// Since both source and target are deep pages, tabs must remain at translateY(-100%)
+		const tabsTransform = await page.locator('header div.absolute.inset-0.flex.items-center.justify-center').first().evaluate(el => (el as HTMLElement).style.transform);
+		expect(tabsTransform).toContain('translateY(-100%)');
+
+		// End the touch
+		await client.send('Input.dispatchTouchEvent', {
+			type: 'touchEnd',
+			touchPoints: [{ x: 200, y: startY, id: 1 }],
+			modifiers: 0,
+			timestamp: 0
+		});
+
+		// Wait 50ms right after touch release (while navigation is in-flight) to check for container burst/down-sinking
+		await page.waitForTimeout(50);
+
+		// Get the computed style matrix of the title container (parent of the parent of the span)
+		const containerDiv = page.locator('header span.w-full.truncate').first().locator('..').locator('..');
+		const containerMatrix = await containerDiv.evaluate(el => window.getComputedStyle(el).transform);
+
+		const matchContainer = containerMatrix.match(/matrix\([^,]+,\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*(-?\d+(?:\.\d+)?)\)/);
+		expect(matchContainer).not.toBeNull();
+		const tyContainer = parseFloat(matchContainer![1]);
+
+		// The title container must NOT burst downward; it should remain close to 0px
+		expect(tyContainer).toBeLessThan(5);
+
+		// Wait for navigation back to settings
+		await page.waitForURL('/profile/settings');
+		expect(new URL(page.url()).pathname).toBe('/profile/settings');
+	});
 });

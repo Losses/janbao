@@ -299,12 +299,7 @@
 			isTransitioningOut ||
 			navStore.pendingNav !== null ||
 			navStore.navInFlight;
-		if (dragOffset !== null && targetIdx >= 0) {
-			// The bar slides back in on `backMorph` at the full drag progress, but
-			// the target tab pill lags: it stays collapsed while the bar is still
-			// mostly above the viewport (the first half of the drag) and only
-			// expands over the second half. Otherwise the pill finishes expanding
-			// while the bar is off-screen and the expansion is never visible.
+		if (dragOffset !== null) {
 			let progress = 0;
 			if (viewportWidth) {
 				const rawOffset = rawDragOffset ?? dragOffset;
@@ -314,27 +309,29 @@
 				}
 			}
 			const pillProgress =
-				Math.max(0, progress - PILL_EXPANSION_THRESHOLD) / (1 - PILL_EXPANSION_THRESHOLD);
+				targetIdx >= 0
+					? Math.max(0, progress - PILL_EXPANSION_THRESHOLD) / (1 - PILL_EXPANSION_THRESHOLD)
+					: 0;
 			pager.set({
-				fractionalIndex: fromIdx + (targetIdx - fromIdx) * pillProgress,
+				fractionalIndex: targetIdx >= 0 ? fromIdx + (targetIdx - fromIdx) * pillProgress : fromIdx,
 				dragging: true,
 				active: true,
-				// The bar slide + hamburger<->back-arrow morph use the full progress
-				// (0 = full back arrow at rest, 1 once committed toward the tab root);
-				// the pill intentionally lags behind it (pillProgress above).
 				backMorph: progress
 			});
-		} else if (committed && targetIdx >= 0) {
-			// Gesture committed, navigation in flight: HOLD the pill at the target
-			// (don't reset to fromIdx) so it doesn't collapse-then-re-expand before
-			// the destination page's pager takes over. dragging=false lets the CSS
-			// transition animate the final sliver into place.
-			pager.set({ fractionalIndex: targetIdx, dragging: false, active: true, backMorph: 1 });
+		} else if (committed) {
+			pager.set({
+				fractionalIndex: targetIdx >= 0 ? targetIdx : fromIdx,
+				dragging: false,
+				active: true,
+				backMorph: 1
+			});
 		} else {
-			// True rest (idle, or backing toward a non-tab route): release the pager
-			// so MobileTabBar falls back to the URL tab (-1 => no pill on a deep page).
-			// backMorph=0 keeps the Header in deep mode (full back arrow) at rest.
-			pager.set({ fractionalIndex: fromIdx, dragging: false, active: false, backMorph: 0 });
+			pager.set({
+				fractionalIndex: fromIdx,
+				dragging: false,
+				active: false,
+				backMorph: 0
+			});
 		}
 	});
 

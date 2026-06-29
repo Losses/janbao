@@ -18,7 +18,7 @@
 	 *
 	 * The SearchTabBar row clip-expands (max-height 0 → auto) rather than jumping.
 	 */
-	import { untrack } from 'svelte';
+	import { untrack, tick } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
@@ -32,6 +32,7 @@
 	import { isNavActive } from '$lib/utils/nav-active';
 	import { resolveDeepHeaderTitle } from '$lib/utils/deep-header-config';
 	import { resolveHeaderMode } from '$lib/utils/header-mode';
+	import { getCurrentTabIndex } from '$lib/utils/mobile-tabs';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getNavigationStore, backHandler } from '$lib/stores/navigation.svelte';
@@ -70,17 +71,89 @@
 		dragging || navStore.navInFlight ? 'none' : 'transform 200ms ease-out, opacity 200ms ease-out'
 	);
 
+	// Reactive state for dual-title transitions (deep to deep)
+	let displayedTitle = $state(title);
+	let prevTitle = $state('');
+	let titleTransitionActive = $state(false);
+	let titleDirection = $state<'forward' | 'back'>('forward');
+	let transitionProgress = $state(1);
+	let transitionTimeoutId: ReturnType<typeof setTimeout> | undefined;
+
+	$effect(() => {
+		const newTitle = title;
+		untrack(() => {
+			if (newTitle && newTitle !== displayedTitle) {
+				if (displayedTitle) {
+					prevTitle = displayedTitle;
+					displayedTitle = newTitle;
+					titleDirection = navStore.direction === 'back' ? 'back' : 'forward';
+					titleTransitionActive = true;
+					transitionProgress = 0;
+
+					if (transitionTimeoutId) clearTimeout(transitionTimeoutId);
+
+					void tick().then(() => {
+						if (typeof document !== 'undefined') {
+							void document.body.offsetHeight; // Force a layout repaint checkpoint
+						}
+						requestAnimationFrame(() => {
+							transitionProgress = 1;
+						});
+						// Set a safety timeout to clean up transition state
+						transitionTimeoutId = setTimeout(() => {
+							titleTransitionActive = false;
+						}, 250);
+					});
+				} else {
+					displayedTitle = newTitle;
+					titleTransitionActive = false;
+					if (transitionTimeoutId) clearTimeout(transitionTimeoutId);
+				}
+			} else if (!newTitle && !isDeep) {
+				// We transitioned back to a root page (not deep), so clear the title
+				displayedTitle = '';
+				titleTransitionActive = false;
+				if (transitionTimeoutId) clearTimeout(transitionTimeoutId);
+			}
+		});
+	});
+
+	function onPrevTransitionEnd() {
+		titleTransitionActive = false;
+		if (transitionTimeoutId) {
+			clearTimeout(transitionTimeoutId);
+			transitionTimeoutId = undefined;
+		}
+	}
+
+	const isDeepToDeepDrag = $derived(
+		dragging &&
+			getCurrentTabIndex(currentPath) === -1 &&
+			navStore.backTarget &&
+			getCurrentTabIndex(navStore.backTarget) === -1
+	);
+
+	const currentHasTabs = $derived(getCurrentTabIndex(currentPath) >= 0);
+	const targetHasTabs = $derived(
+		navStore.backTarget ? getCurrentTabIndex(navStore.backTarget) >= 0 : false
+	);
+
+	const tProgress = $derived(dragging ? morph : transitionProgress);
+	const titleTransition = $derived(dragging ? 'none' : 'transform 200ms ease-out');
+
 	// Root↔deep vertical morph: FROZEN in search mode so the tabs exit
 	// horizontally with the track, never float up.
 	const rootLayerStyle = $derived(
 		isSearch
 			? 'transform: none; opacity: 1;'
-			: `transform: translateY(${-(1 - morph) * 100}%); transition: ${slideT}; pointer-events: ${
-					morph > 0.5 ? 'auto' : 'none'
+			: `transform: translateY(${
+					!currentHasTabs && !(dragging && targetHasTabs) ? -100 : -(1 - morph) * 100
+				}%); transition: ${slideT}; pointer-events: ${
+					morph > 0.5 && targetHasTabs ? 'auto' : 'none'
 				}`
 	);
 	const layerDownStyle = $derived(
-		`transform: translateY(${morph * 100}%); transition: ${slideT}; pointer-events: ${
+		`transform: translateY(${(titleTransitionActive || isDeepToDeepDrag ? 0 : morph) * 100}%); transition: ${slideT}; pointer-events: ${
 			morph < 0.5 ? 'auto' : 'none'
 		}`
 	);
@@ -278,16 +351,79 @@
 						<div class="absolute inset-0 flex items-center justify-center" style={rootLayerStyle}>
 							<MobileTabBar {t} />
 						</div>
-						{#if isDeep}
-							<div
-								class="absolute inset-0 flex items-center justify-center px-2"
-								style={layerDownStyle}
-							>
-								<span class="w-full truncate text-center font-medium text-neutral-content"
-									>{title}</span
+						<div
+							class="absolute inset-0 flex items-center justify-center px-2 overflow-hidden"
+							style={layerDownStyle}
+						>
+							{#if dragging}
+								<!-- Swipe Transition (Gesture-driven) -->
+								{@const currentTitle =
+									page.data.headerTitle ?? resolveDeepHeaderTitle(currentPath, t) ?? ''}
+								{@const incomingTitle = navStore.backTarget
+									? (resolveDeepHeaderTitle(navStore.backTarget, t) ?? '')
+									: ''}
+
+								{#if incomingTitle && currentTitle}
+									<!-- Drag Outgoing Title -->
+									<div
+										class="absolute inset-0 flex items-center justify-center px-2"
+										style="transform: translateY({morph * 100}%); transition: none;"
+									>
+										<span class="w-full truncate text-center font-medium text-neutral-content">
+											{currentTitle}
+										</span>
+									</div>
+
+									<!-- Drag Incoming Title -->
+									<div
+										class="absolute inset-0 flex items-center justify-center px-2"
+										style="transform: translateY({-(1 - morph) * 100}%); transition: none;"
+									>
+										<span class="w-full truncate text-center font-medium text-neutral-content">
+											{incomingTitle}
+										</span>
+									</div>
+								{:else}
+									<div class="absolute inset-0 flex items-center justify-center px-2">
+										<span class="w-full truncate text-center font-medium text-neutral-content">
+											{currentTitle}
+										</span>
+									</div>
+								{/if}
+							{:else if titleTransitionActive}
+								<!-- Outgoing Title -->
+								<div
+									class="absolute inset-0 flex items-center justify-center px-2"
+									style="transform: translateY({(titleDirection === 'forward'
+										? -tProgress
+										: tProgress) * 100}%); transition: {titleTransition};"
+									ontransitionend={onPrevTransitionEnd}
 								>
-							</div>
-						{/if}
+									<span class="w-full truncate text-center font-medium text-neutral-content">
+										{prevTitle}
+									</span>
+								</div>
+
+								<!-- Incoming Title -->
+								<div
+									class="absolute inset-0 flex items-center justify-center px-2"
+									style="transform: translateY({(titleDirection === 'forward'
+										? 1 - tProgress
+										: -(1 - tProgress)) * 100}%); transition: {titleTransition};"
+								>
+									<span class="w-full truncate text-center font-medium text-neutral-content">
+										{displayedTitle}
+									</span>
+								</div>
+							{:else}
+								<!-- Static Title -->
+								<div class="absolute inset-0 flex items-center justify-center px-2">
+									<span class="w-full truncate text-center font-medium text-neutral-content">
+										{displayedTitle}
+									</span>
+								</div>
+							{/if}
+						</div>
 					</div>
 				</div>
 
