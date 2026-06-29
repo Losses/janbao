@@ -72,6 +72,7 @@
 	);
 
 	// Reactive state for dual-title transitions (deep to deep)
+	// svelte-ignore state_referenced_locally
 	let displayedTitle = $state(title);
 	let prevTitle = $state('');
 	let titleTransitionActive = $state(false);
@@ -86,7 +87,7 @@
 				if (displayedTitle) {
 					prevTitle = displayedTitle;
 					displayedTitle = newTitle;
-					titleDirection = navStore.direction === 'back' ? 'back' : 'forward';
+					titleDirection = navStore.direction === 'backward' ? 'back' : 'forward';
 					titleTransitionActive = true;
 					transitionProgress = 0;
 
@@ -126,17 +127,12 @@
 		}
 	}
 
-	const isDeepToDeepDrag = $derived(
-		dragging &&
-			getCurrentTabIndex(currentPath) === -1 &&
-			navStore.backTarget &&
-			getCurrentTabIndex(navStore.backTarget) === -1
-	);
-
 	const currentHasTabs = $derived(getCurrentTabIndex(currentPath) >= 0);
 	const targetHasTabs = $derived(
 		navStore.backTarget ? getCurrentTabIndex(navStore.backTarget) >= 0 : false
 	);
+
+	const isDeepToDeep = $derived(!currentHasTabs && !targetHasTabs);
 
 	const tProgress = $derived(dragging ? morph : transitionProgress);
 	const titleTransition = $derived(dragging ? 'none' : 'transform 200ms ease-out');
@@ -153,7 +149,7 @@
 				}`
 	);
 	const layerDownStyle = $derived(
-		`transform: translateY(${(titleTransitionActive || isDeepToDeepDrag ? 0 : morph) * 100}%); transition: ${slideT}; pointer-events: ${
+		`transform: translateY(${(titleTransitionActive || isDeepToDeep ? 0 : morph) * 100}%); transition: ${slideT}; pointer-events: ${
 			morph < 0.5 ? 'auto' : 'none'
 		}`
 	);
