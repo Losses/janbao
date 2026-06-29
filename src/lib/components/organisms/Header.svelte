@@ -109,24 +109,33 @@
 	});
 	const prevHasTabs = $derived(prevPath ? getCurrentTabIndex(prevPath) >= 0 : currentHasTabs);
 
-	const morph = $derived(
-		dragging
-			? isDeepToDeep
-				? 0
-				: (pager.backMorph ?? 0)
-			: settling
-				? settleAwaitTitle
-					? (currentHasTabs ? 1 : 0) * (1 - settleProgress) +
-						(targetHasTabs ? 1 : 0) * settleProgress
-					: settleTarget === 0
-						? (targetHasTabs ? 1 : 0) * settleProgress +
-							(currentHasTabs ? 1 : 0) * (1 - settleProgress)
-						: (prevHasTabs ? 1 : 0) * (1 - settleProgress) +
-							(currentHasTabs ? 1 : 0) * settleProgress
-				: currentHasTabs
-					? 1
-					: 0
-	);
+	const morph = $derived.by(() => {
+		// 1. Gesture dragging: follow finger progress directly (unless it is deep-to-deep transition, which has no morph)
+		if (dragging) {
+			return isDeepToDeep ? 0 : (pager.backMorph ?? 0);
+		}
+
+		// 2. Non-dragging animation settling phase (commit, cancel, or click transitions)
+		if (settling) {
+			const current = currentHasTabs ? 1 : 0;
+			const target = targetHasTabs ? 1 : 0;
+			const prev = prevHasTabs ? 1 : 0;
+
+			if (settleAwaitTitle) {
+				// Committed navigation in flight: transition from current page to target page
+				return current * (1 - settleProgress) + target * settleProgress;
+			}
+			if (settleTarget === 0) {
+				// Cancelled transition: slide the preview target page back to current page
+				return target * settleProgress + current * (1 - settleProgress);
+			}
+			// Regular click/popstate transitions: slide from previous page to current page
+			return prev * (1 - settleProgress) + current * settleProgress;
+		}
+
+		// 3. Resting idle state: determined solely by whether the current path has tabs (1 = tabs, 0 = deep page)
+		return currentHasTabs ? 1 : 0;
+	});
 
 	// Freeze the icon morph during a search transition so the hamburger does not
 	// morph into an arrow while it is sliding off-screen.
