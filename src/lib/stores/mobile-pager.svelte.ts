@@ -24,6 +24,8 @@
  * call holds its OWN closure-scoped `$state` so the two never cross-wire. The
  * instances are created once at module load and returned by the getters.
  */
+import { setContext, getContext } from 'svelte';
+
 interface PagerUpdate {
 	fractionalIndex: number;
 	dragging: boolean;
@@ -74,15 +76,66 @@ export function createPagerStore(): PagerStore {
 	};
 }
 
-const primaryPager = createPagerStore();
-const searchPager = createPagerStore();
+const MOBILE_PAGER_KEY = Symbol('MOBILE_PAGER');
+const SEARCH_PAGER_KEY = Symbol('SEARCH_PAGER');
 
-/** The primary tab pager store (MobileTabPager / GesturePageLayout ↔ Header / MobileTabBar). */
-export function getMobilePagerStore(): PagerStore {
-	return primaryPager;
+declare global {
+	interface Window {
+		__primaryPager?: PagerStore;
+		__searchPager?: PagerStore;
+	}
 }
 
-/** The search scope pager store (SearchScopePager ↔ SearchTabBar). */
+let globalMobilePagerFallback: PagerStore | undefined;
+let globalSearchPagerFallback: PagerStore | undefined;
+
+if (typeof window !== 'undefined') {
+	if (window.__primaryPager) globalMobilePagerFallback = window.__primaryPager;
+	if (window.__searchPager) globalSearchPagerFallback = window.__searchPager;
+}
+
+export function initMobilePagerStore(): PagerStore {
+	const store = createPagerStore();
+	setContext(MOBILE_PAGER_KEY, store);
+	if (typeof window !== 'undefined') {
+		globalMobilePagerFallback = store;
+		window.__primaryPager = store;
+	}
+	return store;
+}
+
+export function getMobilePagerStore(): PagerStore {
+	try {
+		const store = getContext<PagerStore>(MOBILE_PAGER_KEY);
+		if (store) return store;
+	} catch {
+		// fallback for outside component lifecycle calls
+	}
+	if (globalMobilePagerFallback) {
+		return globalMobilePagerFallback;
+	}
+	throw new Error('MobilePagerStore context not initialized. Call initMobilePagerStore in +layout.svelte.');
+}
+
+export function initSearchPagerStore(): PagerStore {
+	const store = createPagerStore();
+	setContext(SEARCH_PAGER_KEY, store);
+	if (typeof window !== 'undefined') {
+		globalSearchPagerFallback = store;
+		window.__searchPager = store;
+	}
+	return store;
+}
+
 export function getSearchPagerStore(): PagerStore {
-	return searchPager;
+	try {
+		const store = getContext<PagerStore>(SEARCH_PAGER_KEY);
+		if (store) return store;
+	} catch {
+		// fallback for outside component lifecycle calls
+	}
+	if (globalSearchPagerFallback) {
+		return globalSearchPagerFallback;
+	}
+	throw new Error('SearchPagerStore context not initialized. Call initSearchPagerStore in +layout.svelte.');
 }

@@ -18,7 +18,8 @@
 	import { getPageThemeStore } from '$lib/stores/page-theme.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { markEnterFromList, setReachedFromList } from '$lib/stores/thread-nav.svelte';
-	import { getNavigationStore } from '$lib/stores/navigation.svelte';
+	import { initNavigationStore } from '$lib/stores/navigation.svelte';
+	import { initMobilePagerStore, initSearchPagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getPageScrollStore, getCurrentScrollY } from '$lib/stores/page-scroll.svelte';
 
 	interface LayoutProps {
@@ -38,7 +39,9 @@
 	const editorPrefs = getEditorPrefsStore();
 	const uiPrefs = getUiPrefsStore();
 	const pageTheme = getPageThemeStore();
-	const navStore = getNavigationStore();
+	const navStore = initNavigationStore();
+	initMobilePagerStore();
+	initSearchPagerStore();
 	const pageScrollStore = getPageScrollStore();
 
 	// Hold the scroll-chrome header (and pin it visible on hash-enter) for

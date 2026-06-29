@@ -1,3 +1,4 @@
+import { setContext, getContext } from 'svelte';
 import { goto } from '$app/navigation';
 import { hopForHref, backSwipeShouldPopHistory } from '$lib/utils/history-nav';
 import {
@@ -252,14 +253,41 @@ class NavigationStore {
 	}
 }
 
-let navStoreInstance: NavigationStore;
+const NAV_STORE_KEY = Symbol('NAV_STORE');
+
+declare global {
+	interface Window {
+		__navStore?: NavigationStore;
+	}
+}
+
+let globalNavStoreFallback: NavigationStore | undefined;
+
+if (typeof window !== 'undefined') {
+	if (window.__navStore) {
+		globalNavStoreFallback = window.__navStore;
+	}
+}
+
+export function initNavigationStore(): NavigationStore {
+	const store = new NavigationStore();
+	setContext(NAV_STORE_KEY, store);
+	if (typeof window !== 'undefined') {
+		globalNavStoreFallback = store;
+		window.__navStore = store;
+	}
+	return store;
+}
 
 export function getNavigationStore(): NavigationStore {
-	if (!navStoreInstance) {
-		navStoreInstance = new NavigationStore();
-		if (typeof window !== 'undefined') {
-			(window as Window & { __navStore?: NavigationStore }).__navStore = navStoreInstance;
-		}
+	try {
+		const store = getContext<NavigationStore>(NAV_STORE_KEY);
+		if (store) return store;
+	} catch {
+		// fallback for outside component lifecycle calls
 	}
-	return navStoreInstance;
+	if (globalNavStoreFallback) {
+		return globalNavStoreFallback;
+	}
+	throw new Error('NavigationStore context not initialized. Call initNavigationStore in +layout.svelte.');
 }

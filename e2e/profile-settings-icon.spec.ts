@@ -113,4 +113,38 @@ test.describe('Profile Settings Drag & Cancel E2E Bugs', () => {
 			expect(Math.abs(targetTitleEl.y ?? 0), 'Target title must retreat back to off-screen').toBeGreaterThan(50);
 		}
 	});
+
+	// Bug 4: HMR regression test
+	test('Bug 4: navigation store singleton should be preserved across HMR reload', async ({ page }) => {
+		await page.goto('/profile/settings');
+		await waitForHydration(page);
+
+		// Click to Edit Profile
+		await page.locator('main a[href="/profile/edit"]').first().click();
+		await page.waitForURL('/profile/edit');
+		await page.waitForTimeout(500);
+
+		// Simulate Vite HMR by dynamically reloading the module
+		const targetBeforeReload = await page.evaluate(async () => {
+			const path = '/src/lib/stores/navigation.svelte.ts';
+			const mod = await import(path);
+			return mod.getNavigationStore().backTarget;
+		});
+
+		console.log('backTarget before HMR reload:', targetBeforeReload);
+		expect(targetBeforeReload).toBe('/profile/settings');
+
+		const targetAfterReload = await page.evaluate(async () => {
+			// Force reload module using cache-busting timestamp query
+			const timestamp = Date.now();
+			const path = `/src/lib/stores/navigation.svelte.ts?t=${timestamp}`;
+			const mod = await import(path);
+			return mod.getNavigationStore().backTarget;
+		});
+
+		console.log('backTarget after HMR reload:', targetAfterReload);
+
+		// If HMR leaks/resets, backTarget would revert to the default '/'
+		expect(targetAfterReload, 'backTarget must be preserved as settings path after HMR reload').toBe('/profile/settings');
+	});
 });
