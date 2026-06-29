@@ -125,23 +125,25 @@ test('REGRESSION: header tabs and title must not snap back and replay during bac
 	const log = await readHeaderLog(page);
 	expect(log.length, 'Sampler must have captured frames').toBeGreaterThan(20);
 
-	// Diagnose the transforms captured during release and settling
-	// Filter frames that occurred after the release but before landing.
-	// When we swipe back, path is /profile/settings until the navigation lands and changes location to /messages/inbox.
-	// During this "post-release, pre-land" phase, the bug manifests as rootTransform snapping to translateY(-100%)
-	// and titleTransform snapping to translateY(0%).
+	const rootSequence: number[] = [];
+	const titleSequence: number[] = [];
 	
-	let hasCapturedDrag = false;
-
-	console.log('TRANSFORM LOG SUMMARY:');
 	for (const frame of log) {
 		const rootTyMatch = frame.rootTransform.match(/translateY\((-?\d+(?:\.\d+)?)(%|px)\)/);
 		const titleTyMatch = frame.titleTransform.match(/translateY\((-?\d+(?:\.\d+)?)(%|px)\)/);
+		if (rootTyMatch) rootSequence.push(parseFloat(rootTyMatch[1]));
+		if (titleTyMatch) titleSequence.push(parseFloat(titleTyMatch[1]));
+	}
 
+	console.log('Root translateY sequence:', rootSequence.map(v => Math.round(v)).join(' -> '));
+	console.log('Title translateY sequence:', titleSequence.map(v => Math.round(v)).join(' -> '));
+
+	let hasCapturedDrag = false;
+	for (const frame of log) {
+		const rootTyMatch = frame.rootTransform.match(/translateY\((-?\d+(?:\.\d+)?)(%|px)\)/);
+		const titleTyMatch = frame.titleTransform.match(/translateY\((-?\d+(?:\.\d+)?)(%|px)\)/);
 		const rootTy = rootTyMatch ? parseFloat(rootTyMatch[1]) : 0;
 		const titleTy = titleTyMatch ? parseFloat(titleTyMatch[1]) : 0;
-
-		// We detect drag phase: title transform is pushed down (between 10% and 90%), root transform is sliding in (between -90% and -10%)
 		if (frame.path === '/profile/settings' && rootTy > -90 && rootTy < -10 && titleTy > 10 && titleTy < 90) {
 			hasCapturedDrag = true;
 		}
@@ -161,15 +163,7 @@ test('REGRESSION: header tabs and title must not snap back and replay during bac
 
 	// Let's check if the bug occurs by looking at the minimum and maximum translateY values in the transition sequence.
 	// Let's extract the sequence of translateY values during the transition.
-	const rootSequence: number[] = [];
-	const titleSequence: number[] = [];
-	
-	for (const frame of log) {
-		const rootTyMatch = frame.rootTransform.match(/translateY\((-?\d+(?:\.\d+)?)(%|px)\)/);
-		const titleTyMatch = frame.titleTransform.match(/translateY\((-?\d+(?:\.\d+)?)(%|px)\)/);
-		if (rootTyMatch) rootSequence.push(parseFloat(rootTyMatch[1]));
-		if (titleTyMatch) titleSequence.push(parseFloat(titleTyMatch[1]));
-	}
+
 
 	// We count the number of direction changes / reversals in these sequences.
 	// Or simply detect if after a drag has reached > -80 (closer to 0) for root, it goes back below -95 (snaps to -100%)

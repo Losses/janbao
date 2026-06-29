@@ -40,7 +40,6 @@
 	import {
 		HEADER_MORPH_THRESHOLD,
 		TITLE_CROSSFADE_MS,
-		SETTLE_SAFETY_MS,
 		GESTURE_MORPH_EPSILON
 	} from '$lib/utils/gesture-constants';
 	import { mdiMagnify, mdiFilterVariant } from '@mdi/js';
@@ -92,13 +91,18 @@
 	let settleAwaitTitle = $state(false); // commit holds settling until the nav lands (title === latchedIncoming); cancel/non-gesture end on the visual transition
 	let titleDirection = $state<TitleDirection>('forward');
 	let lastGestureMorph = $state(0); // per-frame latch while dragging (pager.backMorph has already jumped to 1/0 by the time dragging flips false)
+	// Idempotency flag for Effect B's CLEAR branch. The CLEAR branch (m ≤ epsilon)
+	// zeroes lastGestureMorph; a same-flush re-run of Effect B then reads m=0 and
+	// would re-enter CLEAR and undo the settle that the commit/cancel branch of
+	// this same release just started (collapse-then-replay). releaseConsumed marks
+	// a release already consumed by the commit/cancel branch so the CLEAR branch
+	// skips the undo on a same-flush re-run; the genuine no-gesture release (m=0 on
+	// the first run, flag never set) still clears. Reset on the next drag (Effect A)
+	// and in endSettle.
+	let releaseConsumed = $state(false);
 
 	const morph = $derived(
-		dragging
-			? (pager.backMorph ?? 0)
-			: settling
-				? settleProgress
-				: (currentHasTabs ? 1 : 0)
+		dragging ? (pager.backMorph ?? 0) : settling ? settleProgress : currentHasTabs ? 1 : 0
 	);
 
 	// Freeze the icon morph during a search transition so the hamburger does not
@@ -122,6 +126,7 @@
 		if (dragging)
 			untrack(() => {
 				lastGestureMorph = m;
+				releaseConsumed = false;
 			});
 	});
 
@@ -129,13 +134,21 @@
 	// `settling=true` is visible to the render in the same flush. `lastGestureMorph
 	// > 0` is the "just gestured" witness; `navStore.pendingNav !== null`
 	// distinguishes commit (GPL setPendingNav) from cancel.
+	//
+	// The CLEAR branch (m ≤ epsilon) skips the undo when this same release was
+	// already consumed by the commit/cancel branch: see releaseConsumed above. A
+	// same-flush re-run after CLEAR zeroed lastGestureMorph would otherwise undo
+	// the settle just started (collapse-then-replay).
 	$effect.pre(() => {
 		if (dragging) return;
 		const m = untrack(() => lastGestureMorph);
 		if (m <= GESTURE_MORPH_EPSILON) {
-			// No preceding gesture / cancelled near origin: clear any stale settle so it can't stick.
+			// No preceding gesture / cancelled near origin: clear any stale settle so
+			// it can't stick. Skip the undo if this release was already consumed by
+			// the commit/cancel branch (the in-flight settle is owned by Effect D /
+			// Effect C / the span transitionend).
 			untrack(() => {
-				if (settling) {
+				if (settling && !releaseConsumed) {
 					settling = false;
 					restTitle = title;
 				}
@@ -149,6 +162,7 @@
 			const inc = navStore.backTarget ? (resolveDeepHeaderTitle(navStore.backTarget, t) ?? '') : '';
 			if (!navStore.backTarget) {
 				lastGestureMorph = 0;
+				releaseConsumed = true;
 				return;
 			}
 			if (committed) {
@@ -167,6 +181,7 @@
 			titleDirection = 'back';
 			settling = true;
 			lastGestureMorph = 0;
+			releaseConsumed = true;
 		});
 		runSettleDriver();
 	});
@@ -191,7 +206,7 @@
 			// rapid back-to-back nav can't strand the header on a stale title.
 			let rearmed = false;
 			untrack(() => {
-				if (newTitle && newTitle !== latchedIncoming) {
+				if (newTitle && newTitle !== latchedIncoming && newTitle !== latchedOutgoing) {
 					latchedOutgoing = latchedIncoming;
 					latchedIncoming = newTitle;
 					settleTarget = 1;
@@ -223,6 +238,43 @@
 		if (untrack(() => settling)) runSettleDriver();
 	});
 
+	// D. Commit settle ends on nav-done. `$effect.pre` so endSettle's writes
+	// (settling=false, restTitle=title) are visible to the render in the same
+	// flush. Both `navStore.pendingNav` and `navStore.navInFlight` are read OUTSIDE
+	// untrack so this effect re-runs the moment either flips.
+	//
+	// pendingNav===null means executePendingNav already ran (it clears pendingNav
+	// before setting navInFlight). !navInFlight means the navigation completed
+	// (afterNavigate clears navInFlight, or goto.reject's .catch does). Both
+	// together = the dispatch happened AND the navigation landed, on any device
+	// speed. No latch, no wall-clock, no microtask-order dependency.
+	//
+	// settleAwaitTitle restricts this to commit settles; cancel / non-gesture
+	// (settleAwaitTitle=false) end on the span transitionend + the CSS-derived
+	// backstop in runSettleDriver and never enter this branch. navigateBackward
+	// is cancel-class here: it sets no pendingNav so Effect B's
+	// `committed = pendingNav !== null` is false -> settleAwaitTitle stays false.
+	//
+	// Load-bearing premise: a gesture-committed history.back() always has a real
+	// previous entry to pop (gestures route through hopForHref and dispatch via
+	// 'link', never a bare history.back() against a single-entry stack), so
+	// afterNavigate ALWAYS fires on a commit. If a future non-hop gesture path
+	// dispatches history.back() against a one-entry history, afterNavigate would
+	// not fire, navInFlight would stay true, and this effect would never end the
+	// settle; such a path must keep history.back() out of single-entry stacks.
+	$effect.pre(() => {
+		const pending = navStore.pendingNav;
+		const inFlight = navStore.navInFlight;
+		if (
+			untrack(() => settling) &&
+			untrack(() => settleAwaitTitle) &&
+			pending === null &&
+			!inFlight
+		) {
+			endSettle();
+		}
+	});
+
 	function runSettleDriver(): void {
 		if (settleRafId) cancelAnimationFrame(settleRafId);
 		if (settleTimeoutId) clearTimeout(settleTimeoutId);
@@ -234,18 +286,26 @@
 				settleProgress = settleTarget;
 			});
 		});
-		// Safety net only. A commit settle ends when the navigation lands (Effect C
-		// absorb); a cancel / non-gesture settle ends on the span transitionend. This
-		// timeout covers a dropped transitionend or a navigation that never lands.
-		settleTimeoutId = setTimeout(() => {
-			if (active) endSettle();
-		}, SETTLE_SAFETY_MS);
+		// Cancel / non-gesture settle backstop only. A commit settle
+		// (settleAwaitTitle) ends via Effect D on nav-done (pendingNav cleared AND
+		// navInFlight false) with NO timer: a device-dependent navigation-delay
+		// timer would race slow-device landings (timer fires first -> STATIC
+		// collapse -> landing re-triggers the crossfade = the replay bug). Cancel /
+		// non-gesture do not navigate, so no navigation-delay race exists; this
+		// timer is bound to the known CSS span duration and only covers a dropped
+		// span transitionend on those non-navigating branches.
+		if (!settleAwaitTitle) {
+			settleTimeoutId = setTimeout(() => {
+				if (active) endSettle();
+			}, TITLE_CROSSFADE_MS * 2);
+		}
 	}
 
 	function endSettle(): void {
 		if (!untrack(() => settling)) return; // idempotent
 		settling = false;
 		settleAwaitTitle = false;
+		releaseConsumed = false;
 		restTitle = untrack(() => title) || untrack(() => latchedIncoming);
 		if (settleRafId) {
 			cancelAnimationFrame(settleRafId);

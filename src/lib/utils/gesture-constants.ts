@@ -6,10 +6,11 @@ export const PILL_EXPANSION_THRESHOLD = 0.5; // 50% drag distance to begin activ
 // Deep-title crossfade (Header.svelte unified title state machine). The vertical
 // slide between outgoing/incoming titles on a drag-release or non-gesture nav.
 export const TITLE_CROSSFADE_MS = 200;
-// A commit settle ends when the navigation lands (title === latchedIncoming);
-// this timeout is only a safety net for a dropped transitionend or a navigation
-// that never lands. Cancel / non-gesture settles end on the span transitionend.
-export const SETTLE_SAFETY_MS = 1000;
+// GesturePageLayout track slide duration (Tailwind `duration-200`). Equals the
+// title crossfade so the GPL slide-out and the Header title crossfade play as
+// one handoff. The rAF-poll (reliable executePendingNav dispatch) resolves the
+// slide's actual completion against this duration.
+export const TRACK_TRANSITION_MS = TITLE_CROSSFADE_MS;
 // morph progress at or below this is "no meaningful gesture" (cancelled near the
 // origin, or no preceding drag). Effect B treats it as a non-settle release.
 export const GESTURE_MORPH_EPSILON = 0.001;

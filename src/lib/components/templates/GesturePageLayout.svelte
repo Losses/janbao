@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { preloadData, afterNavigate, beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
@@ -12,7 +12,11 @@
 	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
 	import { MOBILE_TABS, isPagerRoute, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
-	import { HEADER_MORPH_THRESHOLD, PILL_EXPANSION_THRESHOLD } from '$lib/utils/gesture-constants';
+	import {
+		HEADER_MORPH_THRESHOLD,
+		PILL_EXPANSION_THRESHOLD,
+		TRACK_TRANSITION_MS
+	} from '$lib/utils/gesture-constants';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 
@@ -257,6 +261,19 @@
 	// onTrackTransitionEnd).
 	let pendingCancel = $state(false);
 
+	// rAF-poll fallback for executePendingNav dispatch. transitionend is the fast
+	// path but can drop (interrupted transition, GPU race), stranding pendingNav so
+	// the nav-done signal in Header Effect D never fires and settle hangs. The poll
+	// resolves the slide's actual completion (computed transform m41 vs the target
+	// px) and dispatches when reached, falling back to a CSS-duration wall-clock
+	// cap. Mobile-only; desktop never slides. Named id so onDestroy/afterNavigate
+	// can cancel it deterministically.
+	let pendingNavRafId: number | undefined;
+	// Wall-clock cap = N x CSS duration. CSS-derived so device-independent; covers
+	// backgrounded-tab rAF throttling and target-detection edge cases.
+	const RAF_POLL_TIMEOUT_MS = TRACK_TRANSITION_MS * 4;
+	const RAF_POLL_TARGET_EPSILON_PX = 0.5;
+
 	$effect(() => {
 		if (leftEl && leftScrollTop > 0) {
 			leftEl.scrollTop = leftScrollTop;
@@ -485,6 +502,78 @@
 		}
 	}
 
+	// Resolve the slide's target translateX (px) ONCE at poll-start from the
+	// poll-start trackEl width + poll-start derived values. Capturing once matters:
+	// STEP_PERCENT / panelCount can flip mid-slide when afterNavigate clears
+	// swipeNeedsLoadingAtStart, which would flip the target if recomputed per frame.
+	// The three trackTranslateX formats at commit time:
+	//   same-panel:   `-${snapIndex * STEP_PERCENT}%`
+	//   chip dispatch (isTransitioningOut): `${swipeDirection === 'left' ? -W : W}px`
+	//   chip pending  (isPendingNavigation): `${swipeDirection === 'left' ? -maxDrag : maxDrag}px`
+	function resolvePendingNavTargetPx(el: HTMLElement): number {
+		const width = el.clientWidth;
+		const sign = swipeDirection === 'left' ? -1 : 1;
+		if (isTransitioningOut) {
+			return sign * width;
+		}
+		if (isPendingNavigation) {
+			return sign * maxDrag;
+		}
+		// same-panel: snapIndex * STEP_PERCENT in % of the track width; the track is
+		// panelCount panels wide so the % maps to (snapIndex / panelCount) * trackWidth.
+		return -((snapIndex * STEP_PERCENT) / 100) * width;
+	}
+
+	function startPendingNavPoll(): void {
+		if (!isMobile) return;
+		if (pendingNavRafId !== undefined) return; // already armed
+		const el = trackEl;
+		if (!el) return;
+		const targetPx = resolvePendingNavTargetPx(el);
+		const start = performance.now();
+		const tick = (): void => {
+			// (1) trackEl unmounted / concurrent nav took the element: clear the
+			// orphan pendingNav (a concurrent nav has taken over the destination; an
+			// orphan would keep Effect D's pendingNav===null guard false and hang),
+			// cancel, exit. The root afterNavigate already cleared navInFlight so
+			// Effect D can fire.
+			if (trackEl === null) {
+				navStore.clearPendingNav();
+				pendingNavRafId = undefined;
+				return;
+			}
+			const pending = navStore.pendingNav;
+			// (2) pendingNav cleared (transitionend fast-path or this poll already
+			// dispatched): cancel, exit.
+			if (pending === null) {
+				pendingNavRafId = undefined;
+				return;
+			}
+			// (3) navInFlight set (dispatch already happened): cancel, exit.
+			if (navStore.navInFlight) {
+				pendingNavRafId = undefined;
+				return;
+			}
+			// (4) wall-clock cap (CSS-derived; covers backgrounded-tab rAF throttle
+			// and target-detection edge cases): force dispatch, cancel, exit.
+			if (performance.now() - start > RAF_POLL_TIMEOUT_MS) {
+				navStore.executePendingNav();
+				pendingNavRafId = undefined;
+				return;
+			}
+			// (5) slide reached target (subpixel epsilon against live trackEl width):
+			// dispatch, cancel, exit.
+			const mtx = new DOMMatrix(getComputedStyle(trackEl).transform);
+			if (Math.abs(mtx.m41 - targetPx) <= RAF_POLL_TARGET_EPSILON_PX) {
+				navStore.executePendingNav();
+				pendingNavRafId = undefined;
+				return;
+			}
+			pendingNavRafId = requestAnimationFrame(tick);
+		};
+		pendingNavRafId = requestAnimationFrame(tick);
+	}
+
 	function onSwipeEnd(deltaX: number, velocity: number, reversed: boolean) {
 		// `reversed` = the finger rebounded from the drag's peak before lift-off
 		// (change of intent): return to the current panel instead of advancing.
@@ -511,6 +600,7 @@
 					// replace onto the fallback. Resolved at commit time because the
 					// dispatch (onTrackTransitionEnd) runs later, on transitionend.
 					navStore.setPendingNav(fallbackRoute, 'link');
+					startPendingNavPoll();
 					return;
 				}
 				const targetHref = swipeDirection === 'left' ? resolvedRightHref : resolvedLeftHref;
@@ -522,6 +612,7 @@
 						dragOffset = null;
 						rawDragOffset = null;
 						navStore.setPendingNav(targetHref, 'link');
+						startPendingNavPoll();
 					} else {
 						isPendingNavigation = true;
 						dragOffset = null;
@@ -532,6 +623,7 @@
 								isPendingNavigation = false;
 								isTransitioningOut = true;
 								navStore.setPendingNav(targetHref, 'link');
+								startPendingNavPoll();
 							});
 					}
 				}
@@ -558,6 +650,7 @@
 					if (hasLeft) {
 						snapIndex = leftIdx;
 						navStore.setPendingNav(resolvedLeftHref, 'link');
+						startPendingNavPoll();
 					} else {
 						navStore.navigateBackward(fallbackRoute);
 					}
@@ -567,6 +660,7 @@
 			} else if (committedRight) {
 				snapIndex = rightIdx;
 				navStore.setPendingNav(resolvedRightHref, 'link');
+				startPendingNavPoll();
 			} else {
 				snapIndex = ACTIVE;
 			}
@@ -650,6 +744,7 @@
 					isPendingNavigation = false;
 					isTransitioningOut = true;
 					navStore.setPendingNav(target, type);
+					startPendingNavPoll();
 				});
 			return;
 		}
@@ -679,19 +774,45 @@
 
 		// Save the target navigation details
 		navStore.setPendingNav(target, type);
+		startPendingNavPoll();
 	});
 
 	// Navigation completed (or this layout survived a same-route no-op): release
 	// the hold so the pill reflects the real URL tab again. For the normal away-
 	// nav this layout unmounts first and the flag dies with it.
 	afterNavigate(() => {
-		navStore.clearPendingNav();
+		// Symmetric cleanup with the poll's trackEl-null stop-condition: clear any
+		// surviving pendingNav BEFORE cancelling the rAF so a frame that already
+		// observes trackEl===null cannot strand an orphan pendingNav (which would
+		// keep Header Effect D's pendingNav===null guard false and hang settle).
+		if (navStore.pendingNav !== null) {
+			navStore.clearPendingNav();
+		}
+		if (pendingNavRafId !== undefined) {
+			cancelAnimationFrame(pendingNavRafId);
+			pendingNavRafId = undefined;
+		}
 		pendingCancel = false;
 		isTransitioningOut = false;
 		prefetchStarted = false;
 		swipeNeedsLoadingAtStart = false;
 		swipeDirection = null;
 		pendingTargetHref = null;
+	});
+
+	onDestroy(() => {
+		// Symmetric cleanup with afterNavigate + the poll's trackEl-null stop
+		// condition. Svelte may unmount this layout before the next rAF frame
+		// observes trackEl===null; cancelling the rAF alone would leave an orphan
+		// pendingNav that keeps Header Effect D's guard false and hangs settle.
+		// clearPendingNav is idempotent on null.
+		if (navStore.pendingNav !== null) {
+			navStore.clearPendingNav();
+		}
+		if (pendingNavRafId !== undefined) {
+			cancelAnimationFrame(pendingNavRafId);
+			pendingNavRafId = undefined;
+		}
 	});
 
 	onMount(() => {
