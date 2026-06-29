@@ -37,7 +37,12 @@
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getNavigationStore, backHandler } from '$lib/stores/navigation.svelte';
 	import { hopForHref } from '$lib/utils/history-nav';
-	import { HEADER_MORPH_THRESHOLD } from '$lib/utils/gesture-constants';
+	import {
+		HEADER_MORPH_THRESHOLD,
+		TITLE_CROSSFADE_MS,
+		SETTLE_SAFETY_MS,
+		GESTURE_MORPH_EPSILON
+	} from '$lib/utils/gesture-constants';
 	import { mdiMagnify, mdiFilterVariant } from '@mdi/js';
 	import type { SearchSort, SearchScope } from '$lib/types/search';
 	import type { VoidHandler } from '$lib/types/handlers';
@@ -109,7 +114,7 @@
 	$effect.pre(() => {
 		if (dragging) return;
 		const m = untrack(() => lastGestureMorph);
-		if (m <= 0.001) {
+		if (m <= GESTURE_MORPH_EPSILON) {
 			// No preceding gesture / cancelled near origin: clear any stale settle so it can't stick.
 			untrack(() => {
 				if (settling) {
@@ -216,7 +221,7 @@
 		// timeout covers a dropped transitionend or a navigation that never lands.
 		settleTimeoutId = setTimeout(() => {
 			if (active) endSettle();
-		}, 1000);
+		}, SETTLE_SAFETY_MS);
 	}
 
 	function endSettle(): void {
@@ -286,7 +291,7 @@
 						outgoing: latchedOutgoing,
 						incoming: latchedIncoming,
 						progress: settleProgress,
-						transition: 'transform 200ms ease-out',
+						transition: `transform ${TITLE_CROSSFADE_MS}ms ease-out`,
 						direction: titleDirection
 					}
 				: {
