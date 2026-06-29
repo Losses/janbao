@@ -13,10 +13,9 @@ import type {
 	UserSearchItem,
 	SearchSort
 } from '$lib/server/db/dao/search';
+import { SEARCH_SCOPES, type SearchScope } from '$lib/types/search';
+import { normalizeSearchSort } from '$lib/utils/search-sort';
 
-type SearchScope = 'discussions' | 'activities' | 'messages' | 'users';
-
-const SCOPES: SearchScope[] = ['discussions', 'activities', 'messages', 'users'];
 const SORTS: SearchSort[] = ['newest', 'oldest', 'relevance', 'replies'];
 
 interface SearchLoadData {
@@ -50,7 +49,7 @@ function emptyResult(query: string, scope: SearchScope, sort: SearchSort): Searc
 }
 
 function parseScope(value: string | null): SearchScope {
-	return SCOPES.includes(value as SearchScope) ? (value as SearchScope) : 'discussions';
+	return SEARCH_SCOPES.includes(value as SearchScope) ? (value as SearchScope) : 'discussions';
 }
 
 function parseSort(value: string | null): SearchSort {
@@ -64,7 +63,7 @@ export const load: PageServerLoad = async (event) => {
 
 	const q = event.url.searchParams.get('q') ?? '';
 	const scope = parseScope(event.url.searchParams.get('scope'));
-	const sort = parseSort(event.url.searchParams.get('sort'));
+	const sort = normalizeSearchSort(parseSort(event.url.searchParams.get('sort')), scope);
 	const pageParam = event.url.searchParams.get('page');
 	let page = pageParam ? parseInt(pageParam, 10) : 1;
 	if (isNaN(page) || page < 1) page = 1;

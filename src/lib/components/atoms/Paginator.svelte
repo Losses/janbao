@@ -3,8 +3,7 @@
 	 * Paginator Atom - Minimalist page navigation using text-link style.
 	 * Self-conditional rendering: renders nothing if totalPages <= 1.
 	 */
-	type PageChangeHandler = (page: number) => void;
-
+	import type { PageChangeHandler } from '$lib/types/handlers';
 	import type { TranslationDict } from '$lib/types/translation';
 
 	interface PaginatorProps {

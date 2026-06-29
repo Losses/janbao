@@ -26,7 +26,6 @@ interface DeepHeaderEntry {
 
 const ENTRIES: readonly DeepHeaderEntry[] = [
 	{ pattern: '/bookmarks', title: (t) => t.bookmark.myBookmarks },
-	{ pattern: '/search', title: (t) => t.search.title },
 	{ pattern: '/notifications', title: (t) => t.notification.title },
 	{ pattern: '/categories', title: (t) => t.nav.categories },
 	{ pattern: '/drafts', title: (t) => t.draft.myDrafts },

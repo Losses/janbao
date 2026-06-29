@@ -5,12 +5,12 @@ Workflow `wf_2732a3ae-4e1`. 5 independent role-less auditors. Result: **5/5 PASS
 ## Tally
 
 | Auditor | Verdict | Blocking | Concerns | Organic | Confidence |
-| --- | --- | --- | --- | --- | --- |
-| 1 | PASS | 0 | 3 | clean | high |
-| 2 | PASS | 0 | 3 | clean | high |
-| 3 | PASS | 0 | 3 | clean | high |
-| 4 | PASS | 0 | 2 | clean | high |
-| 5 | PASS | 0 | 3 | clean | high |
+| ------- | ------- | -------- | -------- | ------- | ---------- |
+| 1       | PASS    | 0        | 3        | clean   | high       |
+| 2       | PASS    | 0        | 3        | clean   | high       |
+| 3       | PASS    | 0        | 3        | clean   | high       |
+| 4       | PASS    | 0        | 2        | clean   | high       |
+| 5       | PASS    | 0        | 3        | clean   | high       |
 
 ## Verified-FIXED (all three round-3 blockers, against source)
 

@@ -24,11 +24,25 @@ import type { Action } from 'svelte/action';
 export type MoveHandler = (deltaX: number) => void;
 export type EndHandler = (deltaX: number, velocity: number, reversed: boolean) => void;
 export type DisabledGetter = () => boolean;
+export type ShouldClaimHandler = (dx: number, dy: number) => boolean;
 
 export interface SwipeParams {
 	onMove: MoveHandler;
 	onEnd: EndHandler;
 	disabled?: DisabledGetter;
+	/** Consulted in the deciding phase once a drag is horizontal and not
+	 *  ignorable. Return false to YIELD: reset to idle without claiming or
+	 *  stopping propagation, so the bubbled move reaches an ancestor detectSwipe
+	 *  which claims it instead (a nested pager at its boundary hands a leftward
+	 *  drag to the enclosing back-swipe surface). Default: always claim. */
+	shouldClaim?: ShouldClaimHandler;
+	/** When true, call event.stopImmediatePropagation() on every pointermove this
+	 *  action CLAIMS - the deciding→swipe transition move AND every steady-state
+	 *  swipe move - so an ancestor detectSwipe never re-enters deciding→swipe and
+	 *  races to setPointerCapture on the same bubbled touch. pointerup and
+	 *  pointercancel are NOT stopped, so the ancestor still receives them and
+	 *  resets to idle. */
+	exclusive?: boolean;
 }
 
 type SwipePhase = 'idle' | 'deciding' | 'swipe' | 'ignore';
@@ -403,6 +417,14 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 
 			if (absDx >= DEAD_ZONE && horizontal) {
 				if (!ignorable) {
+					if (params.shouldClaim && !params.shouldClaim(dx, dy)) {
+						// Yield: no neighbour exists in this drag direction (a nested
+						// pager at its boundary). Reset to idle WITHOUT claiming or
+						// stopping propagation so the move bubbles on to an ancestor
+						// detectSwipe, which claims it instead.
+						reset();
+						return;
+					}
 					phase = 'swipe';
 					try {
 						node.setPointerCapture(event.pointerId);
@@ -426,6 +448,15 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 			}
 		}
 		event.preventDefault();
+		if (params.exclusive) {
+			// Shield ancestor detectSwipe instances from this claimed move.
+			// stopImmediatePropagation is per-event, so calling it only at the claim
+			// moment is not enough: subsequent steady-state moves would still bubble
+			// to an ancestor stuck in 'deciding' and re-trigger the setPointerCapture
+			// race. Apply it on every swipe-phase move. pointerup/pointercancel are
+			// handled by onUp (not stopped) so the ancestor still receives them.
+			event.stopImmediatePropagation();
+		}
 		recordSample(samples, event.clientX, event.timeStamp);
 		params.onMove(dx);
 	}

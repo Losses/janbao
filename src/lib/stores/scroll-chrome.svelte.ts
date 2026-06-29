@@ -35,6 +35,12 @@ interface ScrollChromeStore {
 	 * never scrolls, so the store must listen to that container. Pass null on
 	 * unmount to revert to the window (the homepage / desktop scroll the window). */
 	setScrollContainer: SetScrollContainerHandler;
+	/** A nested scroller owner (a scope panel inside a pager) claims the scroll
+	 *  source: GesturePageLayout's single setScrollContainer $effect reads
+	 *  `override ?? centerEl`, so the override wins deterministically without a
+	 *  parent/child $effect ordering race. null clears it. */
+	setOverride: SetScrollContainerHandler;
+	readonly override: HTMLElement | null;
 	/** A navigation that will programmatically scroll the window (a hash-anchored
 	 * thread enter, or a swipe-back to the list) is starting: hold the header so
 	 * hide-on-scroll does not react to the intermediate top→position scroll.
@@ -70,6 +76,9 @@ let frozen = false;
 // GesturePageLayout routes), so evaluate() reads its scrollTop and the scroll
 // listener is attached to it. null = scroll the window (homepage / desktop).
 let containerEl: HTMLElement | null = null;
+// A nested scroller that claimed the scroll source. Read by GesturePageLayout's
+// sole setScrollContainer $effect as `override ?? centerEl`.
+let overrideEl = $state<HTMLElement | null>(null);
 
 /** Current scroll position from whichever element is the active scroll source. */
 function readY(): number {
@@ -169,6 +178,10 @@ function setScrollContainer(el: HTMLElement | null): void {
 	}
 }
 
+function setOverride(el: HTMLElement | null): void {
+	overrideEl = el;
+}
+
 function setHeaderHeight(height: number): void {
 	headerHeight = height;
 	if (translateY < -headerHeight) {
@@ -208,6 +221,10 @@ export function getScrollChromeStore(): ScrollChromeStore {
 		setHeaderHeight,
 		start,
 		setScrollContainer,
+		get override() {
+			return overrideEl;
+		},
+		setOverride,
 		holdThroughNavigation,
 		releaseNavigation,
 		show
