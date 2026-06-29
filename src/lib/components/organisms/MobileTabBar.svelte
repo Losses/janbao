@@ -79,7 +79,7 @@
 <nav class="flex items-center justify-center gap-1" aria-label={tNav['primary']}>
 	{#each MOBILE_TABS as item, i (item.href)}
 		{@const pillActive = isDeepSwipe
-			? (getDeepSwipePillProgress() >= 0.5 && pager.targetIndex === i)
+			? getDeepSwipePillProgress() >= 0.5 && pager.targetIndex === i
 			: Math.round(fractionalIndex) === i}
 		{@const branded = brandedFirstTab && item.labelKey === 'discussions'}
 		<a

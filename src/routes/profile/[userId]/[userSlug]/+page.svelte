@@ -1,6 +1,5 @@
 <script lang="ts">
 	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
-	import ProfileMenuPanel from '$lib/components/panels/ProfileMenuPanel.svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import ProfileHeader from '$lib/components/molecules/ProfileHeader.svelte';
@@ -13,7 +12,6 @@
 	import { mdiArrowRight } from '@mdi/js';
 	import type { PageData } from './$types';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
-	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 
 	interface PageProps {
 		data: PageData;
@@ -22,7 +20,6 @@
 	let { data }: PageProps = $props();
 
 	const online = getOnlineStore();
-	const navStore = getNavigationStore();
 
 	const t = $derived(data.t);
 	const profileT = $derived(t.profile);
@@ -41,13 +38,6 @@
 	let submitting = $state(false);
 
 	const targetUserSlug = $derived(generateSlug(targetUser.username));
-
-	const isBackToProfile = $derived(
-		targetUser &&
-			user &&
-			targetUser.id === user.id &&
-			(navStore.backTarget === '/profile' || navStore.backTarget?.startsWith('/profile/'))
-	);
 
 	function handleEditorChange(json: string) {
 		editorContent = json;
@@ -94,18 +84,8 @@
 	/>
 {/snippet}
 
-{#snippet leftPanel()}
-	{#if user && targetUser && targetUser.id === user.id}
-		<ProfileMenuPanel user={targetUser} {t} />
-	{/if}
-{/snippet}
-
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout
-		left={isBackToProfile ? leftPanel : undefined}
-		leftHref={isBackToProfile ? navStore.backTarget : undefined}
-		fallbackRoute="/"
-	>
+	<GesturePageLayout fallbackRoute="/">
 		<div class="space-y-3">
 			<!-- Profile Header -->
 			<ProfileHeader

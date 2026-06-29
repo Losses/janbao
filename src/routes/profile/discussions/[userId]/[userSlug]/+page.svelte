@@ -1,6 +1,5 @@
 <script lang="ts">
 	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
-	import ProfileMenuPanel from '$lib/components/panels/ProfileMenuPanel.svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import ProfileHeader from '$lib/components/molecules/ProfileHeader.svelte';
@@ -74,20 +73,8 @@
 	/>
 {/snippet}
 
-{#snippet leftPanel()}
-	{#if targetUser}
-		<ProfileMenuPanel user={targetUser} {t} />
-	{/if}
-{/snippet}
-
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout
-		left={leftPanel}
-		leftHref={targetUser && user && targetUser.id === user.id
-			? '/profile'
-			: `/profile/${targetUser.id}/${targetUserSlug}`}
-		fallbackRoute="/profile"
-	>
+	<GesturePageLayout fallbackRoute="/profile">
 		<div class="space-y-3">
 			<!-- Profile Header -->
 			<ProfileHeader

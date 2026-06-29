@@ -30,8 +30,6 @@
 	const user = $derived(data.user);
 	const directoryT = $derived(t.directory);
 
-
-
 	const groups = $derived<DirectoryGroup[]>(
 		user
 			? [

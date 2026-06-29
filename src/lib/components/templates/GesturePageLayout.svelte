@@ -16,46 +16,7 @@
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 
-	import ProfileMenuPanel from '$lib/components/panels/ProfileMenuPanel.svelte';
-	import SettingsMenuPanel from '$lib/components/panels/SettingsMenuPanel.svelte';
-	import AdminMenuPanel from '$lib/components/panels/AdminMenuPanel.svelte';
-	import TabDiscussionsPanel from '$lib/components/panels/TabDiscussionsPanel.svelte';
-	import TabActivityPanel from '$lib/components/panels/TabActivityPanel.svelte';
-	import TabMessagesPanel from '$lib/components/panels/TabMessagesPanel.svelte';
-
-	// Configuration-driven mapping of routes to their transition preview panels
-	const PREVIEW_PANELS = [
-		{
-			// Profile pages should preview the profile menu
-			match: (path: string) => path === '/profile' || /^\/profile\/\d+/.test(path),
-			component: ProfileMenuPanel
-		},
-		{
-			// Settings page should preview the settings directory
-			match: (path: string) => path === '/profile/settings',
-			component: SettingsMenuPanel
-		},
-		{
-			// Admin page should preview the admin menu
-			match: (path: string) => path === '/admin',
-			component: AdminMenuPanel
-		},
-		{
-			// Discussions tab root / subpages
-			match: (path: string) => path === '/' || path.startsWith('/discussion'),
-			component: TabDiscussionsPanel
-		},
-		{
-			// Activity tab root / subpages
-			match: (path: string) => path.startsWith('/activity'),
-			component: TabActivityPanel
-		},
-		{
-			// Messages tab root / subpages
-			match: (path: string) => path.startsWith('/messages'),
-			component: TabMessagesPanel
-		}
-	];
+	import { DEEP_ROUTES } from '$lib/utils/route-config';
 
 	interface Props {
 		children: Snippet;
@@ -101,8 +62,8 @@
 
 	function getPreviewPanel(path: string | null | undefined) {
 		if (!path) return null;
-		const match = PREVIEW_PANELS.find((p) => p.match(path));
-		return match ? match.component : (MOBILE_TABS[navStore.activeTab]?.panel ?? null);
+		const match = DEEP_ROUTES.find((r) => r.pattern.test(path));
+		return match?.previewPanel ?? MOBILE_TABS[navStore.activeTab]?.panel ?? null;
 	}
 
 	// State declarations
@@ -138,9 +99,28 @@
 		}
 	});
 
-	const resolvedLeftHref = $derived(
-		navStore.pendingNav ? navStore.pendingNav.href : (lockedLeftHref ?? leftHref ?? navStore.backTarget)
+	const currentRouteConfig = $derived(DEEP_ROUTES.find((r) => r.pattern.test(page.url.pathname)));
+
+	const resolvedLeftHref = $derived.by(() => {
+		if (navStore.pendingNav) return navStore.pendingNav.href;
+		const target = lockedLeftHref ?? leftHref ?? navStore.backTarget;
+		if (target === '/' && currentRouteConfig) {
+			return currentRouteConfig.getParent(page.url.pathname);
+		}
+		return target;
+	});
+
+	const backRouteConfig = $derived(
+		resolvedLeftHref ? DEEP_ROUTES.find((r) => r.pattern.test(resolvedLeftHref)) : null
 	);
+
+	const previewUser = $derived.by(() => {
+		if (resolvedLeftHref && backRouteConfig?.getPreviewProps) {
+			const customProps = backRouteConfig.getPreviewProps(page.data);
+			if (customProps.user) return customProps.user;
+		}
+		return page.data.user;
+	});
 	// The left preview shows the tab list when back lands on the tab root. When
 	// the back target is elsewhere (e.g. a thread reached before /bookmarks) the
 	// target page is unmounted on this route so there is no DOM to preview - show
@@ -826,7 +806,7 @@
 					{:else}
 						{@const PreviewPanel = getPreviewPanel(resolvedLeftHref)}
 						{#if PreviewPanel}
-							<PreviewPanel cache={listCache} t={page.data.t} user={page.data.user} />
+							<PreviewPanel cache={listCache} t={page.data.t} user={previewUser} />
 						{/if}
 					{/if}
 				</div>
