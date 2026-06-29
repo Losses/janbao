@@ -1,49 +1,49 @@
-# DV08-C00 — Implementation Journal
+# DV08-C00 - Implementation Journal
 
 Development log for the DV08 mobile `/search` redesign implementation. Spec: `docs/DV08-Plan.md` (5/5-audited). After implementation, a 5-agent role-less full audit (architecture + code quality) runs in a loop; each round's verdicts are recorded in `RV08-C00-Audit-##.md`. Work is "done" only when a round returns 5/5 unconditional accept.
 
 ## Phase map
 
-1. **Foundation** — `header-mode.ts`; `mobile-pager` factory (closure `$state`, `deepMorph`→`backMorph`, primary + search instances); `swipe.ts` `shouldClaim`+`exclusive`; `scroll-chrome` `override`.
-2. **Rename consumers** — `MobileTabBar`, `MobileTabPager`, `GesturePageLayout` (rename + `override ?? centerEl`), `Header` (3 layers, mode resolver).
-3. **New siblings** — `search-cache`; `SearchScopePager`; `SearchTabBar`; `SearchSortSheet`.
-4. **Route + CSS + cleanup** — `search/+page.server.ts` (sort normalize); `search/+page.svelte` (rewrite); `app.css` height rule; remove dead `resolveDeepHeaderTitle('/search')`.
-5. **Verify** — `bun run lint`, `bun run check`, `bun test`.
-6. **Audit loop** — 5-agent full audit → `RV08-C00-Audit-##.md` per round → loop until 5/5.
+1. **Foundation** - `header-mode.ts`; `mobile-pager` factory (closure `$state`, `deepMorph`→`backMorph`, primary + search instances); `swipe.ts` `shouldClaim`+`exclusive`; `scroll-chrome` `override`.
+2. **Rename consumers** - `MobileTabBar`, `MobileTabPager`, `GesturePageLayout` (rename + `override ?? centerEl`), `Header` (3 layers, mode resolver).
+3. **New siblings** - `search-cache`; `SearchScopePager`; `SearchTabBar`; `SearchSortSheet`.
+4. **Route + CSS + cleanup** - `search/+page.server.ts` (sort normalize); `search/+page.svelte` (rewrite); `app.css` height rule; remove dead `resolveDeepHeaderTitle('/search')`.
+5. **Verify** - `bun run lint`, `bun run check`, `bun test`.
+6. **Audit loop** - 5-agent full audit → `RV08-C00-Audit-##.md` per round → loop until 5/5.
 
 ## Log
 
-### Implementation — 2026-06-28
+### Implementation - 2026-06-28
 
 **Foundation**
 
-- `src/lib/utils/header-mode.ts` — `resolveHeaderMode(pathname): 'root'|'deep'|'search'` (mirrors `deep-header-config`).
-- `src/lib/stores/mobile-pager.svelte.ts` — refactored to `createPagerStore()` factory with closure-scoped `$state`; `deepMorph`→`backMorph`; `getMobilePagerStore` (primary) + `getSearchPagerStore` (search) return the two shared instances.
-- `src/lib/actions/swipe.ts` — `detectSwipe` gained `shouldClaim?(dx,dy)=>boolean` (yield when false: reset to idle, no claim, no stop-prop) and `exclusive?:boolean` (`stopImmediatePropagation` on every claimed pointermove — the claim transition move AND every steady-state swipe move; NOT on yield, NOT on pointerup). New named type `ShouldClaimHandler`.
-- `src/lib/stores/scroll-chrome.svelte.ts` — added reactive `override` + `setOverride`; GesturePageLayout's `centerEl` `$effect` is the sole `setScrollContainer` caller, registering `override ?? centerEl`.
+- `src/lib/utils/header-mode.ts` - `resolveHeaderMode(pathname): 'root'|'deep'|'search'` (mirrors `deep-header-config`).
+- `src/lib/stores/mobile-pager.svelte.ts` - refactored to `createPagerStore()` factory with closure-scoped `$state`; `deepMorph`→`backMorph`; `getMobilePagerStore` (primary) + `getSearchPagerStore` (search) return the two shared instances.
+- `src/lib/actions/swipe.ts` - `detectSwipe` gained `shouldClaim?(dx,dy)=>boolean` (yield when false: reset to idle, no claim, no stop-prop) and `exclusive?:boolean` (`stopImmediatePropagation` on every claimed pointermove - the claim transition move AND every steady-state swipe move; NOT on yield, NOT on pointerup). New named type `ShouldClaimHandler`.
+- `src/lib/stores/scroll-chrome.svelte.ts` - added reactive `override` + `setOverride`; GesturePageLayout's `centerEl` `$effect` is the sole `setScrollContainer` caller, registering `override ?? centerEl`.
 
 **Rename consumers**
 
-- `MobileTabPager.svelte`, `GesturePageLayout.svelte` — `deepMorph`→`backMorph` (5 `pager.set` sites in GPL). `MobileTabBar` needed no change (it never read `deepMorph`).
+- `MobileTabPager.svelte`, `GesturePageLayout.svelte` - `deepMorph`→`backMorph` (5 `pager.set` sites in GPL). `MobileTabBar` needed no change (it never read `deepMorph`).
 - `GesturePageLayout.svelte` centerEl `$effect` reads `scrollChrome.override ?? centerEl`.
-- `Header.svelte` — three modes via `resolveHeaderMode`; centre stacks rootLayer (MobileTabBar) / deepLayer (title) / searchLayer (input) cross-faded by `morph = backMorph ?? (mode==='root'?1:0)`; mode-gated left slot (hamburger / back-arrow / decorative magnifier) and right slot (search icon / filter); `SearchTabBar` as a second row in search mode; debounced `q` input; `SearchSortSheet` for the filter.
+- `Header.svelte` - three modes via `resolveHeaderMode`; centre stacks rootLayer (MobileTabBar) / deepLayer (title) / searchLayer (input) cross-faded by `morph = backMorph ?? (mode==='root'?1:0)`; mode-gated left slot (hamburger / back-arrow / decorative magnifier) and right slot (search icon / filter); `SearchTabBar` as a second row in search mode; debounced `q` input; `SearchSortSheet` for the filter.
 
 **New siblings**
 
-- `src/lib/stores/search-cache.svelte.ts` — per-scope cache keyed by `(scope, q, sort)`; typed getters/setters per scope; `isFresh(scope,q,sort)` for stale-miss.
-- `src/lib/components/templates/SearchScopePager.svelte` — 4-panel horizontal pager; `detectSwipe` with `shouldClaim` (yields a rightward drag at scope 0 to the ancestor back-swipe) + `exclusive`; active panel claims `scrollChrome.override`; publishes the search pager store; renders the 4 scope result lists + paginators from `search-cache`.
-- `src/lib/components/organisms/SearchTabBar.svelte` — 4 equal-width cells + stretchy underline; `dragDir` derived locally from `fractionalIndex` delta.
-- `src/lib/components/molecules/SearchSortSheet.svelte` — DaisyUI modal, flat sort list, no confirm button; `replies` only on discussions.
+- `src/lib/stores/search-cache.svelte.ts` - per-scope cache keyed by `(scope, q, sort)`; typed getters/setters per scope; `isFresh(scope,q,sort)` for stale-miss.
+- `src/lib/components/templates/SearchScopePager.svelte` - 4-panel horizontal pager; `detectSwipe` with `shouldClaim` (yields a rightward drag at scope 0 to the ancestor back-swipe) + `exclusive`; active panel claims `scrollChrome.override`; publishes the search pager store; renders the 4 scope result lists + paginators from `search-cache`.
+- `src/lib/components/organisms/SearchTabBar.svelte` - 4 equal-width cells + stretchy underline; `dragDir` derived locally from `fractionalIndex` delta.
+- `src/lib/components/molecules/SearchSortSheet.svelte` - DaisyUI modal, flat sort list, no confirm button; `replies` only on discussions.
 
 **Route + CSS + cleanup**
 
-- `src/routes/search/+page.server.ts` — imports shared `SearchScope`/`SEARCH_SCOPES`; `normalizeSort` (replies→newest off-discussions).
-- `src/routes/search/+page.svelte` — thin shell: `DualColumnLayout` > `GesturePageLayout` > `SearchScopePager`.
-- `src/app.css` — `html.fixed-viewport .gpl-card:has([data-search-scope-pager]) { height:100% }` (height chain).
-- `src/lib/utils/deep-header-config.ts` — removed the dead `/search` title entry.
-- `src/lib/types/search.ts` — shared `SearchScope`, `SearchSort`, `SEARCH_SCOPES`, `SearchData`.
+- `src/routes/search/+page.server.ts` - imports shared `SearchScope`/`SEARCH_SCOPES`; `normalizeSort` (replies→newest off-discussions).
+- `src/routes/search/+page.svelte` - thin shell: `DualColumnLayout` > `GesturePageLayout` > `SearchScopePager`.
+- `src/app.css` - `html.fixed-viewport .gpl-card:has([data-search-scope-pager]) { height:100% }` (height chain).
+- `src/lib/utils/deep-header-config.ts` - removed the dead `/search` title entry.
+- `src/lib/types/search.ts` - shared `SearchScope`, `SearchSort`, `SEARCH_SCOPES`, `SearchData`.
 
-**Verify** — `bun run check` 0 errors/0 warnings; `bun run lint` (prettier→eslint→similarity-ts) EXIT 0; `bun test src/` 146 pass / 0 fail. (The 11 `bun test` "failures" are e2e/ Playwright specs mis-run by bun's runner — unrelated.)
+**Verify** - `bun run check` 0 errors/0 warnings; `bun run lint` (prettier→eslint→similarity-ts) EXIT 0; `bun test src/` 146 pass / 0 fail. (The 11 `bun test` "failures" are e2e/ Playwright specs mis-run by bun's runner - unrelated.)
 
 **Known simplifications (for the audit to weigh)**
 
@@ -62,17 +62,31 @@ Development log for the DV08 mobile `/search` redesign implementation. Spec: `do
 
 **Test-infrastructure limitation (carried for the audit).** The repo's `bun:test` harness has no Svelte-runes loader and no DOM (the existing `swipe.test.ts` tests only pure exported functions). Verified: importing a `.svelte.ts` store and calling `$state` raises `ReferenceError: $state is not defined`. Therefore the §7 items that require executing runes or dispatching pointer events are not feasible without adding a new harness:
 
-- `createPagerStore()` two-instance independence — cannot run (`$state`); the guarantee is structural (closure-scoped `$state` per `createPagerStore()` call, two instances created at module load).
-- `SearchCacheStore` instance-level `isFresh` — cannot run (`$state`); the freshness LOGIC is covered by the pure `search-fresh.test.ts`.
-- `detectSwipe` `shouldClaim`/`exclusive` behavior — requires a DOM/pointer-event harness the repo does not have; the boundary handoff is verified by the audited multi-move trace (§4.2) and is the §6.1 CDP-touch e2e gate (not yet written).
-- Playwright e2e for the search gesture — not written (the e2e harness is heavy; see `e2e-playwright-nixos-gotchas`).
+- `createPagerStore()` two-instance independence - cannot run (`$state`); the guarantee is structural (closure-scoped `$state` per `createPagerStore()` call, two instances created at module load).
+- `SearchCacheStore` instance-level `isFresh` - cannot run (`$state`); the freshness LOGIC is covered by the pure `search-fresh.test.ts`.
+- `detectSwipe` `shouldClaim`/`exclusive` behavior - requires a DOM/pointer-event harness the repo does not have; the boundary handoff is verified by the audited multi-move trace (§4.2) and is the §6.1 CDP-touch e2e gate (not yet written).
+- Playwright e2e for the search gesture - not written (the e2e harness is heavy; see `e2e-playwright-nixos-gotchas`).
 
 Verify after revisions: `bun run check` 0/0; `bun run lint` EXIT 0; `bun test src/` 163 pass / 0 fail.
 
-### Round 2 audit — 5/5 ACCEPTABLE (FINAL)
+### Round 2 audit - 5/5 ACCEPTABLE (FINAL)
 
 `RV08-C00-Audit-02.md`. All five auditors returned `acceptable`, unconditional, `organicIntegration` = clean, high confidence. Both round-1 blockers verified FIXED; the test-infrastructure limitation ACCEPTED (structural guarantee / pure-logic coverage / code correctness verified against spec §4.2). Zero `/search`/`scope` tokens in the shared primitives; `deepMorph` fully purged.
 
 **Post-audit polish (round-2 non-blocking recommendations applied):** extracted `searchScopeLabel` to `src/lib/utils/search-label.ts` (consumed by DesktopSearch + SearchTabBar, removing the duplicate); aligned desktop `goto` with `noScroll: true`; fixed the `header-mode.test.ts` input to a path. Post-polish: `bun run check` 0/0; `bun run lint` EXIT 0; `bun test src/` 163 pass / 0 fail.
 
 **Outcome:** DV08 implementation complete and accepted (5/5 unconditional). Loop exit condition met.
+
+### Post-QA bug fixes (manual QA after Round 2) + Round 3 audit - 5/5 ACCEPTABLE
+
+Manual QA found 5 bugs; each fixed (root-caused, not patched) and re-audited:
+
+1. **Flickering chip on empty query** - `SearchScopePager` now gates the `LoadingChip` on `hasQuery` so an empty query reaches `EmptyState`; no cache/freshness flicker loop.
+2. **Input throttle + focus loss + forced CJK commit** - Header input switched to `bind:value` + `composing` (compositionstart/compositionend) gating `commit`/sync/Enter, a guarded URL-sync `$effect` (skipped while composing, only resets when `urlQ !== inputValue`), `keepFocus: true` on `goto`, and 400 ms debounce. No search fires mid-composition; the field is never reset mid-typing; the persistent Header keeps focus.
+3. **Sort sheet title + brand highlight** - removed the `<h3>`; selected option is a neutral radio circle (`border-base-content` / `bg-base-content` dot), no `text-accent`.
+4. **Double padding** - `app.css` `.gpl-card:has([data-search-scope-pager]) { padding: 0 }` + dropped the panel's inner `<div class="p-3">`; single padding layer (panel `scroll-pane` padding + rows' `pl-3`/`pr-2`).
+5. **Scroll locked to 0** - each scope panel gained the `scroll-pane` class (passes `GesturePageLayout`'s `forceZeroScroll` guard); `.detail-scroll-pane:has([data-search-scope-pager]) { padding: 0 }` avoids the double header offset.
+
+`RV08-C00-Audit-03.md`. All five returned `acceptable`, unconditional, organic=clean, high confidence - each QA fix verified correct with no regression. Verify: `bun run check` 0/0; `bun run lint` EXIT 0; `bun test src/` 163 pass / 0 fail.
+
+**Final outcome:** DV08 implementation complete and accepted (5/5 unconditional) after QA fixes. Loop exit condition met.
