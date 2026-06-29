@@ -125,13 +125,13 @@ async function readDeepTitle(page: Page): Promise<string> {
 // lands - the precondition for the replay. Inter-move yields (≈16ms) stretch
 // the drag over ~200ms so the rAF sampler reliably catches the in-drag
 // two-title state.
-async function swipeBackHalf(page: Page): Promise<void> {
+async function swipeBackBy(page: Page, fraction: number): Promise<void> {
 	const client = await page.context().newCDPSession(page);
 	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
 	const width = page.viewportSize()?.width ?? 393;
 	const y = 400;
 	const startX = Math.round(width * 0.3);
-	const endX = startX + Math.round(width * 0.5);
+	const endX = startX + Math.round(width * fraction);
 	const steps = 14;
 	const dispatch = (
 		type: 'touchStart' | 'touchMove' | 'touchEnd',
@@ -153,6 +153,16 @@ async function swipeBackHalf(page: Page): Promise<void> {
 	}
 	await dispatch('touchEnd', endX, 'touchReleased');
 	await client.detach();
+}
+
+/** Commit back-swipe: endX = startX + 0.5*width, past SWIPE_COMMIT (60). */
+async function swipeBackHalf(page: Page): Promise<void> {
+	return swipeBackBy(page, 0.5);
+}
+
+/** Cancel back-swipe: endX = startX + ~0.11*width (< 60px), below SWIPE_COMMIT. */
+async function swipeBackShort(page: Page): Promise<void> {
+	return swipeBackBy(page, 0.11);
 }
 
 // --- analysis --------------------------------------------------------------
@@ -292,4 +302,36 @@ test('REGRESSION: back-swipe commit must not collapse-then-replay the deep title
 			`collapseOnSource=${summary.collapseSeen}, replayOnDest=${summary.replaySeen}, ` +
 			`maxConcurrent=${summary.maxConcurrent}`
 	).toBe(0);
+});
+
+// CANCEL: a sub-threshold back-swipe releases without committing. The incoming
+// title must retreat smoothly (not vanish mid-retreat) and must not re-appear
+// (no replay, since no navigation lands). The page stays on /profile/edit.
+test('CANCEL: sub-threshold back-swipe retreats the incoming title with no replay', async ({
+	page
+}) => {
+	const { settingsTitle, editTitle } = await setupEditFromSettings(page);
+
+	await installTitleSampler(page);
+	await swipeBackShort(page);
+	// A cancelled gesture does not navigate; hold long enough to capture the
+	// retreat animation (~200ms) and confirm no late navigation.
+	await page.waitForTimeout(600);
+
+	expect(new URL(page.url()).pathname).toBe('/profile/edit');
+
+	const log = await readTitleLog(page);
+	const summary = summarizeIncoming(log, settingsTitle);
+	expect(
+		summary.cycles,
+		`incoming title "${settingsTitle}" re-appeared after retreating (unexpected replay on cancel). ` +
+			`presence sequence: [${summary.seq.join(', ')}]`
+	).toBe(0);
+	// The drag must have engaged (incoming visible at some point) for the retreat
+	// to be meaningful, and the header must end showing the source title.
+	expect(
+		log.some((f) => f.path === '/profile/edit' && f.spans.some((s) => s.text === settingsTitle)),
+		'precondition: the incoming title appeared during the cancelled drag'
+	).toBe(true);
+	expect(editTitle, 'sanity: edit title read').toBeTruthy();
 });

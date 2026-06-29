@@ -18,7 +18,7 @@
 	 *
 	 * The SearchTabBar row clip-expands (max-height 0 → auto) rather than jumping.
 	 */
-	import { untrack, tick } from 'svelte';
+	import { untrack, tick, onDestroy } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
@@ -71,61 +71,182 @@
 		dragging || navStore.navInFlight ? 'none' : 'transform 200ms ease-out, opacity 200ms ease-out'
 	);
 
-	// Reactive state for dual-title transitions (deep to deep)
+	// Unified title state machine. The deep-title layer renders from ONE model
+	// (`titleView` below): a single (outgoing, incoming, progress, transition,
+	// direction) tuple that is continuous across the gesture→event handoff: the
+	// in-flight crossfade holds through release and navigation landing, so the
+	// incoming title stays visible the whole way (no mid-transition vanish).
 	// svelte-ignore state_referenced_locally
-	let displayedTitle = $state(title);
-	let prevTitle = $state('');
-	let titleTransitionActive = $state(false);
-	let titleDirection = $state<'forward' | 'back'>('forward');
-	let transitionProgress = $state(1);
-	let transitionTimeoutId: ReturnType<typeof setTimeout> | undefined;
+	let restTitle = $state(title); // title shown at rest; updated to the arrived title at settle-end
+	let settling = $state(false); // any non-gesture crossfade (commit / cancel / click)
+	let latchedOutgoing = $state('');
+	let latchedIncoming = $state('');
+	let settleProgress = $state(1); // 0..1, CSS-transitioned during settling
+	let settleTarget = $state<0 | 1>(1); // commit / non-gesture → 1; cancel → 0
+	let settleAwaitTitle = $state(false); // commit holds settling until the nav lands (title === latchedIncoming); cancel/non-gesture end on the visual transition
+	let titleDirection = $state<TitleDirection>('forward');
+	let lastGestureMorph = $state(0); // per-frame latch while dragging (pager.backMorph has already jumped to 1/0 by the time dragging flips false)
+	let settleRafId: number | undefined;
+	let settleTimeoutId: ReturnType<typeof setTimeout> | undefined;
+	let active = true; // HMR/destroy guard (onDestroy sets false)
 
-	$effect(() => {
-		const newTitle = title;
-		untrack(() => {
-			if (newTitle && newTitle !== displayedTitle) {
-				if (displayedTitle) {
-					prevTitle = displayedTitle;
-					displayedTitle = newTitle;
-					titleDirection = navStore.direction === 'backward' ? 'back' : 'forward';
-					titleTransitionActive = true;
-					transitionProgress = 0;
-
-					if (transitionTimeoutId) clearTimeout(transitionTimeoutId);
-
-					void tick().then(() => {
-						if (typeof document !== 'undefined') {
-							void document.body.offsetHeight; // Force a layout repaint checkpoint
-						}
-						requestAnimationFrame(() => {
-							transitionProgress = 1;
-						});
-						// Set a safety timeout to clean up transition state
-						transitionTimeoutId = setTimeout(() => {
-							titleTransitionActive = false;
-						}, 250);
-					});
-				} else {
-					displayedTitle = newTitle;
-					titleTransitionActive = false;
-					if (transitionTimeoutId) clearTimeout(transitionTimeoutId);
-				}
-			} else if (!newTitle && !isDeep) {
-				// We transitioned back to a root page (not deep), so clear the title
-				displayedTitle = '';
-				titleTransitionActive = false;
-				if (transitionTimeoutId) clearTimeout(transitionTimeoutId);
-			}
-		});
+	// A. Gesture morph latch. `$effect.pre` so the write is visible to the render
+	// in the same flush. `morph` is read OUTSIDE untrack so the effect tracks it
+	// and runs every drag frame; on the release flush `dragging` is already false
+	// so `if (dragging)` skips the write and the last in-drag value M survives.
+	$effect.pre(() => {
+		const m = morph;
+		if (dragging)
+			untrack(() => {
+				lastGestureMorph = m;
+			});
 	});
 
-	function onPrevTransitionEnd() {
-		titleTransitionActive = false;
-		if (transitionTimeoutId) {
-			clearTimeout(transitionTimeoutId);
-			transitionTimeoutId = undefined;
+	// B. Release → settle. `$effect.pre` runs before the DOM update, so
+	// `settling=true` is visible to the render in the same flush. `lastGestureMorph
+	// > 0` is the "just gestured" witness; `navStore.pendingNav !== null`
+	// distinguishes commit (GPL setPendingNav) from cancel.
+	$effect.pre(() => {
+		if (dragging) return;
+		const m = untrack(() => lastGestureMorph);
+		if (m <= 0.001) {
+			// No preceding gesture / cancelled near origin: clear any stale settle so it can't stick.
+			untrack(() => {
+				if (settling) {
+					settling = false;
+					restTitle = title;
+				}
+				lastGestureMorph = 0;
+			});
+			return;
+		}
+		const committed = untrack(() => navStore.pendingNav !== null);
+		untrack(() => {
+			const out = title;
+			const inc = navStore.backTarget ? (resolveDeepHeaderTitle(navStore.backTarget, t) ?? '') : '';
+			if (!inc) {
+				lastGestureMorph = 0;
+				return;
+			}
+			if (committed) {
+				latchedOutgoing = out;
+				latchedIncoming = inc;
+				settleTarget = 1;
+				settleAwaitTitle = true; // hold the crossfade until the nav lands (title → inc)
+			} else {
+				// Cancel: the revealed title retreats, the current title stays.
+				latchedOutgoing = inc;
+				latchedIncoming = out;
+				settleTarget = 0;
+				settleAwaitTitle = false; // no nav: end on the visual transition
+			}
+			settleProgress = m; // continuity: begin the settle at the finger's release position
+			titleDirection = 'back';
+			settling = true;
+			lastGestureMorph = 0;
+		});
+		runSettleDriver();
+	});
+
+	// C. Title change. `$effect.pre` so the latch is visible to the render in the
+	// same flush. Absorb a title change that matches the in-flight settle (the
+	// committed nav landing); interrupt + re-arm toward a new title so a rapid
+	// back-to-back nav can't strand the header on a stale title.
+	$effect.pre(() => {
+		const newTitle = title;
+		if (untrack(() => dragging)) return;
+		if (untrack(() => settling)) {
+			if (untrack(() => newTitle === latchedIncoming)) {
+				// The awaited navigation landed. For a commit (`settleAwaitTitle`) this
+				// is the real end of the settle (the visual crossfade has been holding
+				// the incoming title centred); end it now so restTitle adopts the live
+				// title. Cancel / non-gesture settle end on the visual transition instead.
+				if (untrack(() => settleAwaitTitle)) endSettle();
+				return;
+			}
+			// A different title arrived mid-settle: interrupt + re-arm toward it so a
+			// rapid back-to-back nav can't strand the header on a stale title.
+			let rearmed = false;
+			untrack(() => {
+				if (newTitle && newTitle !== latchedIncoming) {
+					latchedOutgoing = latchedIncoming;
+					latchedIncoming = newTitle;
+					settleTarget = 1;
+					settleProgress = 0;
+					settleAwaitTitle = false; // the new title is already current; end on the visual transition
+					titleDirection = navStore.direction === 'backward' ? 'back' : 'forward';
+					rearmed = true;
+				}
+			});
+			if (rearmed) runSettleDriver();
+			return;
+		}
+		// idle: non-gesture title change (forward click / back button / popstate)
+		untrack(() => {
+			if (newTitle && newTitle !== restTitle) {
+				latchedOutgoing = restTitle;
+				latchedIncoming = newTitle;
+				settleTarget = 1;
+				settleProgress = 0;
+				settleAwaitTitle = false; // title is already current; end on the visual transition
+				titleDirection = navStore.direction === 'backward' ? 'back' : 'forward';
+				settling = true;
+			} else if (!newTitle && !isDeep) {
+				restTitle = '';
+			} else if (newTitle && restTitle === '') {
+				restTitle = newTitle;
+			}
+		});
+		if (untrack(() => settling)) runSettleDriver();
+	});
+
+	function runSettleDriver(): void {
+		if (settleRafId) cancelAnimationFrame(settleRafId);
+		if (settleTimeoutId) clearTimeout(settleTimeoutId);
+		void tick().then(() => {
+			if (!active) return;
+			if (typeof document !== 'undefined') void document.body.offsetHeight;
+			settleRafId = requestAnimationFrame(() => {
+				if (!active) return;
+				settleProgress = settleTarget;
+			});
+		});
+		// Safety net only. A commit settle ends when the navigation lands (Effect C
+		// absorb); a cancel / non-gesture settle ends on the span transitionend. This
+		// timeout covers a dropped transitionend or a navigation that never lands.
+		settleTimeoutId = setTimeout(() => {
+			if (active) endSettle();
+		}, 1000);
+	}
+
+	function endSettle(): void {
+		if (!untrack(() => settling)) return; // idempotent
+		settling = false;
+		settleAwaitTitle = false;
+		restTitle = untrack(() => title) || untrack(() => latchedIncoming);
+		if (settleRafId) {
+			cancelAnimationFrame(settleRafId);
+			settleRafId = undefined;
+		}
+		if (settleTimeoutId) {
+			clearTimeout(settleTimeoutId);
+			settleTimeoutId = undefined;
 		}
 	}
+
+	function onTitleSpanTransitionEnd(): void {
+		// A commit settle ignores the visual transitionend and waits for the
+		// navigation to land (Effect C absorb); cancel / non-gesture end here.
+		if (!untrack(() => settleAwaitTitle)) endSettle();
+	}
+
+	onDestroy(() => {
+		active = false;
+		if (browser) {
+			if (settleRafId) cancelAnimationFrame(settleRafId);
+			if (settleTimeoutId) clearTimeout(settleTimeoutId);
+		}
+	});
 
 	const currentHasTabs = $derived(getCurrentTabIndex(currentPath) >= 0);
 	const targetHasTabs = $derived(
@@ -134,8 +255,48 @@
 
 	const isDeepToDeep = $derived(!currentHasTabs && !targetHasTabs);
 
-	const tProgress = $derived(dragging ? morph : transitionProgress);
-	const titleTransition = $derived(dragging ? 'none' : 'transform 200ms ease-out');
+	type TitleDirection = 'forward' | 'back';
+
+	interface TitleView {
+		outgoing: string;
+		incoming: string;
+		progress: number;
+		transition: string;
+		direction: TitleDirection;
+	}
+
+	const currentTitle = $derived(title);
+	const backTitle = $derived(
+		navStore.backTarget ? (resolveDeepHeaderTitle(navStore.backTarget, t) ?? '') : ''
+	);
+	// One render model for every phase. The drag branch hardcodes direction
+	// 'back' (a back-swipe always slides the current title down and brings the
+	// back target in from above) so it never inherits a stale module titleDirection.
+	const titleView = $derived<TitleView>(
+		dragging && backTitle && currentTitle
+			? {
+					outgoing: currentTitle,
+					incoming: backTitle,
+					progress: morph,
+					transition: 'none',
+					direction: 'back'
+				}
+			: settling
+				? {
+						outgoing: latchedOutgoing,
+						incoming: latchedIncoming,
+						progress: settleProgress,
+						transition: 'transform 200ms ease-out',
+						direction: titleDirection
+					}
+				: {
+						outgoing: restTitle,
+						incoming: restTitle,
+						progress: 1,
+						transition: 'none',
+						direction: titleDirection
+					}
+	);
 
 	// Root↔deep vertical morph: FROZEN in search mode so the tabs exit
 	// horizontally with the track, never float up.
@@ -149,7 +310,7 @@
 				}`
 	);
 	const layerDownStyle = $derived(
-		`transform: translateY(${(titleTransitionActive || isDeepToDeep ? 0 : morph) * 100}%); transition: ${slideT}; pointer-events: ${
+		`transform: translateY(${(settling || isDeepToDeep ? 0 : morph) * 100}%); transition: ${slideT}; pointer-events: ${
 			morph < 0.5 ? 'auto' : 'none'
 		}`
 	);
@@ -351,71 +512,36 @@
 							class="absolute inset-0 flex items-center justify-center px-2 overflow-hidden"
 							style={layerDownStyle}
 						>
-							{#if dragging}
-								<!-- Swipe Transition (Gesture-driven) -->
-								{@const currentTitle =
-									page.data.headerTitle ?? resolveDeepHeaderTitle(currentPath, t) ?? ''}
-								{@const incomingTitle = navStore.backTarget
-									? (resolveDeepHeaderTitle(navStore.backTarget, t) ?? '')
-									: ''}
-
-								{#if incomingTitle && currentTitle}
-									<!-- Drag Outgoing Title -->
-									<div
-										class="absolute inset-0 flex items-center justify-center px-2"
-										style="transform: translateY({morph * 100}%); transition: none;"
-									>
-										<span class="w-full truncate text-center font-medium text-neutral-content">
-											{currentTitle}
-										</span>
-									</div>
-
-									<!-- Drag Incoming Title -->
-									<div
-										class="absolute inset-0 flex items-center justify-center px-2"
-										style="transform: translateY({-(1 - morph) * 100}%); transition: none;"
-									>
-										<span class="w-full truncate text-center font-medium text-neutral-content">
-											{incomingTitle}
-										</span>
-									</div>
-								{:else}
-									<div class="absolute inset-0 flex items-center justify-center px-2">
-										<span class="w-full truncate text-center font-medium text-neutral-content">
-											{currentTitle}
-										</span>
-									</div>
-								{/if}
-							{:else if titleTransitionActive}
-								<!-- Outgoing Title -->
-								<div
-									class="absolute inset-0 flex items-center justify-center px-2"
-									style="transform: translateY({(titleDirection === 'forward'
-										? -tProgress
-										: tProgress) * 100}%); transition: {titleTransition};"
-									ontransitionend={onPrevTransitionEnd}
-								>
+							{#if titleView.outgoing === titleView.incoming}
+								<!-- Static title (at rest) -->
+								<div class="absolute inset-0 flex items-center justify-center px-2">
 									<span class="w-full truncate text-center font-medium text-neutral-content">
-										{prevTitle}
-									</span>
-								</div>
-
-								<!-- Incoming Title -->
-								<div
-									class="absolute inset-0 flex items-center justify-center px-2"
-									style="transform: translateY({(titleDirection === 'forward'
-										? 1 - tProgress
-										: -(1 - tProgress)) * 100}%); transition: {titleTransition};"
-								>
-									<span class="w-full truncate text-center font-medium text-neutral-content">
-										{displayedTitle}
+										{titleView.incoming}
 									</span>
 								</div>
 							{:else}
-								<!-- Static Title -->
-								<div class="absolute inset-0 flex items-center justify-center px-2">
+								{@const fwd = titleView.direction === 'forward'}
+								<!-- Outgoing title -->
+								<div
+									class="absolute inset-0 flex items-center justify-center px-2"
+									style="transform: translateY({(fwd ? -titleView.progress : titleView.progress) *
+										100}%); transition: {titleView.transition};"
+									ontransitionend={onTitleSpanTransitionEnd}
+								>
 									<span class="w-full truncate text-center font-medium text-neutral-content">
-										{displayedTitle}
+										{titleView.outgoing}
+									</span>
+								</div>
+
+								<!-- Incoming title -->
+								<div
+									class="absolute inset-0 flex items-center justify-center px-2"
+									style="transform: translateY({(fwd
+										? 1 - titleView.progress
+										: -(1 - titleView.progress)) * 100}%); transition: {titleView.transition};"
+								>
+									<span class="w-full truncate text-center font-medium text-neutral-content">
+										{titleView.incoming}
 									</span>
 								</div>
 							{/if}
