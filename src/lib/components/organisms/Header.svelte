@@ -100,9 +100,27 @@
 	// the first run, flag never set) still clears. Reset on the next drag (Effect A)
 	// and in endSettle.
 	let releaseConsumed = $state(false);
+	let prevPath = $state('');
+	let lastPath = '';
+	$effect.pre(() => {
+		const path = currentPath;
+		prevPath = lastPath;
+		lastPath = path;
+	});
+	const prevHasTabs = $derived(prevPath ? getCurrentTabIndex(prevPath) >= 0 : currentHasTabs);
 
 	const morph = $derived(
-		dragging ? (pager.backMorph ?? 0) : settling ? settleProgress : currentHasTabs ? 1 : 0
+		dragging
+			? (pager.backMorph ?? 0)
+			: settling
+				? settleAwaitTitle
+					? (currentHasTabs ? 1 : 0) * (1 - settleProgress) + (targetHasTabs ? 1 : 0) * settleProgress
+					: settleTarget === 0
+						? (targetHasTabs ? 1 : 0) * settleProgress + (currentHasTabs ? 1 : 0) * (1 - settleProgress)
+						: (prevHasTabs ? 1 : 0) * (1 - settleProgress) + (currentHasTabs ? 1 : 0) * settleProgress
+				: currentHasTabs
+					? 1
+					: 0
 	);
 
 	// Freeze the icon morph during a search transition so the hamburger does not
