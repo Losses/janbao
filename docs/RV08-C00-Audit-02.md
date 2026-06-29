@@ -4,13 +4,13 @@ Workflow `wf_312c4267-b94`. 5 role-less full auditors (architecture + code quali
 
 ## Tally
 
-| Auditor | Verdict | Blocking | Concerns | Organic | Confidence |
-| --- | --- | --- | --- | --- | --- |
-| 1 | acceptable | 0 | 4 | clean | high |
-| 2 | acceptable | 0 | 4 | clean | high |
-| 3 | acceptable | 0 | 4 | clean | high |
-| 4 | acceptable | 0 | 4 | clean | high |
-| 5 | acceptable | 0 | 4 | clean | high |
+| Auditor | Verdict    | Blocking | Concerns | Organic | Confidence |
+| ------- | ---------- | -------- | -------- | ------- | ---------- |
+| 1       | acceptable | 0        | 4        | clean   | high       |
+| 2       | acceptable | 0        | 4        | clean   | high       |
+| 3       | acceptable | 0        | 4        | clean   | high       |
+| 4       | acceptable | 0        | 4        | clean   | high       |
+| 5       | acceptable | 0        | 4        | clean   | high       |
 
 ## Round-1 blockers — verified FIXED
 
@@ -20,6 +20,7 @@ Workflow `wf_312c4267-b94`. 5 role-less full auditors (architecture + code quali
 ## Test-infrastructure limitation — ACCEPTED (all 5)
 
 `bun:test` has no Svelte-runes loader and no DOM (the existing `swipe.test.ts` tests only pure exports; importing a `.svelte.ts` store raises `ReferenceError: $state is not defined`). The auditors accepted that:
+
 - `createPagerStore()` two-instance independence is structurally guaranteed (closure-scoped `$state` per call; two instances created at module load).
 - `SearchCacheStore.isFresh` LOGIC is covered by the pure `search-fresh.test.ts` (the store delegates to it).
 - `detectSwipe` `shouldClaim`/`exclusive` matches spec §4.2 exactly (yield resets to idle at `swipe.ts` without capture/stop-prop; `exclusive` `stopImmediatePropagation` fires on the claim-transition move AND every steady-state move, not on yield/pointerup) — auditable from the code.

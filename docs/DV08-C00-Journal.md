@@ -76,4 +76,3 @@ Verify after revisions: `bun run check` 0/0; `bun run lint` EXIT 0; `bun test sr
 **Post-audit polish (round-2 non-blocking recommendations applied):** extracted `searchScopeLabel` to `src/lib/utils/search-label.ts` (consumed by DesktopSearch + SearchTabBar, removing the duplicate); aligned desktop `goto` with `noScroll: true`; fixed the `header-mode.test.ts` input to a path. Post-polish: `bun run check` 0/0; `bun run lint` EXIT 0; `bun test src/` 163 pass / 0 fail.
 
 **Outcome:** DV08 implementation complete and accepted (5/5 unconditional). Loop exit condition met.
-
