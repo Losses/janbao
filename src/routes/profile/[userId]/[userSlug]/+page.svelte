@@ -13,6 +13,7 @@
 	import { mdiArrowRight } from '@mdi/js';
 	import type { PageData } from './$types';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
+	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 
 	interface PageProps {
 		data: PageData;
@@ -21,6 +22,7 @@
 	let { data }: PageProps = $props();
 
 	const online = getOnlineStore();
+	const navStore = getNavigationStore();
 
 	const t = $derived(data.t);
 	const profileT = $derived(t.profile);
@@ -39,6 +41,13 @@
 	let submitting = $state(false);
 
 	const targetUserSlug = $derived(generateSlug(targetUser.username));
+
+	const isBackToProfile = $derived(
+		targetUser &&
+			user &&
+			targetUser.id === user.id &&
+			(navStore.backTarget === '/profile' || navStore.backTarget?.startsWith('/profile/'))
+	);
 
 	function handleEditorChange(json: string) {
 		editorContent = json;
@@ -93,8 +102,8 @@
 
 <DualColumnLayout {sidebar} {user} {t}>
 	<GesturePageLayout
-		left={targetUser && user && targetUser.id === user.id ? leftPanel : undefined}
-		leftHref={targetUser && user && targetUser.id === user.id ? '/profile' : undefined}
+		left={isBackToProfile ? leftPanel : undefined}
+		leftHref={isBackToProfile ? navStore.backTarget : undefined}
 		fallbackRoute="/"
 	>
 		<div class="space-y-3">

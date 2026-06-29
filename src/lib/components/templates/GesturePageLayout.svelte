@@ -318,7 +318,8 @@
 					progress = Math.min(1, Math.max(0, val) / viewportWidth);
 				}
 			}
-			const pillProgress = Math.max(0, progress - PILL_EXPANSION_THRESHOLD) / (1 - PILL_EXPANSION_THRESHOLD);
+			const pillProgress =
+				Math.max(0, progress - PILL_EXPANSION_THRESHOLD) / (1 - PILL_EXPANSION_THRESHOLD);
 			pager.set({
 				fractionalIndex: fromIdx + (targetIdx - fromIdx) * pillProgress,
 				dragging: true,

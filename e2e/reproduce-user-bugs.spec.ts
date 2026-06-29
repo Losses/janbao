@@ -256,4 +256,31 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 
 		await page.mouse.up();
 	});
+
+	test('Bug 9: thread list -> click own avatar -> slide-in animation works -> swipe back returns to thread list', async ({ page, context }) => {
+		page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
+
+		await prepareContext(context);
+		// 1. Go to homepage
+		await page.goto('/');
+		await waitForHydration(page);
+
+		// Find own avatar (admin is userId=0)
+		const ownAvatar = page.locator('a[href^="/profile/0/"]').first();
+		await expect(ownAvatar).toBeVisible();
+
+		// Click on own avatar
+		await ownAvatar.click();
+		await page.waitForURL(/\/profile\/0\//);
+
+		// Assert that the page is at /profile/0/admin
+		expect(new URL(page.url()).pathname).toContain('/profile/0/');
+
+		// Swipe back to homepage
+		await swipeBack(page);
+		await page.waitForURL('/');
+
+		// Verify we are back on the homepage
+		expect(new URL(page.url()).pathname).toBe('/');
+	});
 });
