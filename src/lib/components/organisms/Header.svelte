@@ -111,7 +111,7 @@
 
 	const morph = $derived(
 		dragging
-			? (pager.backMorph ?? 0)
+			? (isDeepToDeep ? 0 : (pager.backMorph ?? 0))
 			: settling
 				? settleAwaitTitle
 					? (currentHasTabs ? 1 : 0) * (1 - settleProgress) + (targetHasTabs ? 1 : 0) * settleProgress
@@ -190,8 +190,8 @@
 				settleAwaitTitle = true; // hold the crossfade until the nav lands (title → inc)
 			} else {
 				// Cancel: the revealed title retreats, the current title stays.
-				latchedOutgoing = inc;
-				latchedIncoming = out;
+				latchedOutgoing = out;
+				latchedIncoming = inc;
 				settleTarget = 0;
 				settleAwaitTitle = false; // no nav: end on the visual transition
 			}
