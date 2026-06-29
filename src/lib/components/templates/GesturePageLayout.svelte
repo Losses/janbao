@@ -11,13 +11,8 @@
 	import type { Action } from 'svelte/action';
 	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
-	import {
-		MOBILE_TABS,
-		isPagerRoute,
-		getCurrentTabIndex,
-		HEADER_MORPH_THRESHOLD,
-		PILL_EXPANSION_THRESHOLD
-	} from '$lib/utils/mobile-tabs';
+	import { MOBILE_TABS, isPagerRoute, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
+	import { HEADER_MORPH_THRESHOLD, PILL_EXPANSION_THRESHOLD } from '$lib/utils/gesture-constants';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 

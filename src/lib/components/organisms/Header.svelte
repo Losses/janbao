@@ -85,8 +85,15 @@
 	);
 
 	// Root↔search horizontal track.
-	const searchProgress = $derived(isSearch ? 1 - (morph <= 0.2 ? 0 : (morph - 0.2) / 0.8) : 0);
-	const tabProgress = $derived(isSearch ? 1 - Math.min(1, morph / 0.2) : 0);
+	const searchProgress = $derived(
+		isSearch
+			? 1 -
+					(morph <= HEADER_MORPH_THRESHOLD
+						? 0
+						: (morph - HEADER_MORPH_THRESHOLD) / (1 - HEADER_MORPH_THRESHOLD))
+			: 0
+	);
+	const tabProgress = $derived(isSearch ? 1 - Math.min(1, morph / HEADER_MORPH_THRESHOLD) : 0);
 
 	const trackStyle = $derived(
 		`transform: translateX(${-(searchProgress * 50).toFixed(2)}%); transition: ${
