@@ -7,7 +7,7 @@
 	import { getPageScrollStore } from '$lib/stores/page-scroll.svelte';
 	import { backHandler } from '$lib/stores/navigation.svelte';
 	import { detectSwipe } from '$lib/actions/swipe';
-	import { isTabRootPath } from '$lib/utils/history-nav';
+	import { isTabRootPath, previousEntryPathname } from '$lib/utils/history-nav';
 	import type { Action } from 'svelte/action';
 	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
@@ -108,7 +108,8 @@
 	const resolvedLeftHref = $derived.by(() => {
 		if (navStore.pendingNav) return navStore.pendingNav.href;
 		const target = lockedLeftHref ?? leftHref ?? navStore.backTarget;
-		if (target === '/' && currentRouteConfig) {
+		// 如果浏览器历史的上一页确实是 '/'，我们应该尊重真实的路由历史，而不使用 getParent 替换
+		if (target === '/' && currentRouteConfig && previousEntryPathname() !== '/') {
 			return currentRouteConfig.getParent(page.url.pathname);
 		}
 		return target;
@@ -143,8 +144,18 @@
 			? (MOBILE_TABS.find((tab) => tab.href === leftHref)?.labelKey ?? null)
 			: left
 				? null
-				: (MOBILE_TABS[navStore.activeTab]?.labelKey ?? null)
+				: backTargetIsTabRoot
+					? (MOBILE_TABS[navStore.activeTab]?.labelKey ?? null)
+					: null
 	);
+
+	const leftHasPreview = $derived.by(() => {
+		if (left) return true;
+		if (!resolvedLeftHref) return false;
+		if (backTargetIsTabRoot) return true;
+		const match = DEEP_ROUTES.find((r) => r.pattern.test(resolvedLeftHref));
+		return !!match?.previewPanel;
+	});
 	const rightPreviewTab = $derived(
 		rightHref ? (MOBILE_TABS.find((tab) => tab.href === rightHref)?.labelKey ?? null) : null
 	);
@@ -470,7 +481,7 @@
 				// can't-preview case (back target is not the tab root, so the target
 				// page's DOM is unmounted and there's nothing real to show): both go
 				// through the chip overlay path with its tanh damping + width animation.
-				swipeNeedsLoadingAtStart = leftNeedsLoading || (!left && !backTargetIsTabRoot);
+				swipeNeedsLoadingAtStart = leftNeedsLoading || !leftHasPreview;
 			} else if (swipeDirection === 'left') {
 				swipeNeedsLoadingAtStart = rightNeedsLoading;
 			} else {
@@ -599,7 +610,7 @@
 					// history.back() pops when a real previous entry exists, else
 					// replace onto the fallback. Resolved at commit time because the
 					// dispatch (onTrackTransitionEnd) runs later, on transitionend.
-					navStore.setPendingNav(fallbackRoute, 'link');
+					navStore.setPendingNav(resolvedLeftHref ?? fallbackRoute, 'link');
 					startPendingNavPoll();
 					return;
 				}

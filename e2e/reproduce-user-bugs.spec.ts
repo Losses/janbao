@@ -5,7 +5,8 @@ import {
 	swipeBack,
 	waitForHydration,
 	clickDiscussion,
-	waitForUrlNot
+	waitForUrlNot,
+	openSidebarAndGoto
 } from './helpers';
 
 test.describe('Reproduction of User Reported Navigation Bugs', () => {
@@ -453,4 +454,135 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 			timestamp: 0
 		});
 	});
+
+	test('Bug 12: navigate from /profile/settings to /profile/edit -> swipe back -> shows settings preview panel, not discussions loading chip', async ({ page, context }) => {
+		page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
+
+		await prepareContext(context);
+		// 1. Direct navigate to /profile/settings
+		await page.goto('/profile/settings');
+		await waitForHydration(page);
+
+		// 2. Click "Edit Account" to enter /profile/edit
+		const editLink = page.locator('a[href="/profile/edit"]').first();
+		await expect(editLink).toBeVisible();
+		await editLink.click();
+		await page.waitForURL('/profile/edit');
+
+		// 3. Start a swipe back (drag right)
+		const client = await page.context().newCDPSession(page);
+		await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+
+		const startX = 50;
+		const startY = 400;
+		const move = async (x: number) => {
+			await client.send('Input.dispatchTouchEvent', {
+				type: 'touchMove',
+				touchPoints: [{ x, y: startY, id: 1 }],
+				modifiers: 0,
+				timestamp: 0
+			});
+		};
+
+		await client.send('Input.dispatchTouchEvent', {
+			type: 'touchStart',
+			touchPoints: [{ x: startX, y: startY, id: 1 }],
+			modifiers: 0,
+			timestamp: 0
+		});
+		await page.waitForTimeout(50);
+
+		// Drag right to 180px
+		await move(180);
+		await page.waitForTimeout(100);
+
+		// Expect that the preview is SettingsMenuPanel (not discussions loading chip).
+		// So .loading-overlay should NOT be visible.
+		const loadingOverlay = page.locator('.loading-overlay');
+		await expect(loadingOverlay).not.toBeVisible();
+
+		// Instead, settings sidebar/menu panel should be visible
+		const leftSection = page.locator('section.scroll-pane').first();
+		await expect(leftSection).toBeVisible();
+		
+		// Assert that the preview tab attribute is null (non-tab list)
+		const previewTab = await leftSection.getAttribute('data-preview-tab');
+		expect(previewTab).toBeNull();
+
+		// Clean up touch
+		await client.send('Input.dispatchTouchEvent', {
+			type: 'touchEnd',
+			touchPoints: [{ x: 180, y: startY, id: 1 }],
+			modifiers: 0,
+			timestamp: 0
+		});
+
+		// Wait for navigation back to /profile/settings
+		await page.waitForURL('/profile/settings');
+		expect(new URL(page.url()).pathname).toBe('/profile/settings');
+	});
+
+	test('Bug 13: navigate from discussion detail -> /profile/edit -> swipe back -> respects route stack and returns to discussion detail', async ({ page, context }) => {
+		page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
+
+		await prepareContext(context);
+		// 1. Start at homepage
+		await page.goto('/');
+		await waitForHydration(page);
+
+		// 2. Click the first discussion to enter thread detail
+		await clickDiscussion(page, 0);
+		await page.waitForURL(/\/discussion\//);
+		await page.waitForSelector('.detail-scroll-pane');
+		const discussionPath = new URL(page.url()).pathname;
+		await page.waitForTimeout(500);
+
+		// 3. Navigate to /profile/edit using SPA goto (simulates a hyperlink in thread)
+		await openSidebarAndGoto(page, '/profile/edit');
+		await page.waitForURL('/profile/edit');
+
+		// 4. Swipe back (drag right)
+		const client = await page.context().newCDPSession(page);
+		await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+
+		const startX = 50;
+		const startY = 400;
+		const move = async (x: number) => {
+			await client.send('Input.dispatchTouchEvent', {
+				type: 'touchMove',
+				touchPoints: [{ x, y: startY, id: 1 }],
+				modifiers: 0,
+				timestamp: 0
+			});
+		};
+
+		await client.send('Input.dispatchTouchEvent', {
+			type: 'touchStart',
+			touchPoints: [{ x: startX, y: startY, id: 1 }],
+			modifiers: 0,
+			timestamp: 0
+		});
+		await page.waitForTimeout(50);
+
+		// Drag right to 180px (since discussion has no preview panel, it should show LoadingChip overlay)
+		await move(180);
+		await page.waitForTimeout(100);
+
+		// The loading overlay should be visible because there's no pre-rendered preview panel for /discussion/
+		const loadingOverlay = page.locator('.loading-overlay');
+		await expect(loadingOverlay).toBeVisible();
+
+		// Clean up touch
+		await client.send('Input.dispatchTouchEvent', {
+			type: 'touchEnd',
+			touchPoints: [{ x: 180, y: startY, id: 1 }],
+			modifiers: 0,
+			timestamp: 0
+		});
+
+		// Wait for navigation back to the originating discussion page
+		await page.waitForURL(new RegExp(discussionPath));
+		expect(new URL(page.url()).pathname).toBe(discussionPath);
+	});
 });
+
