@@ -46,7 +46,7 @@
 
 {#if open}
 	<div class="modal modal-open" role="dialog" aria-modal="true" aria-label={tSearch.sortBy}>
-		<div class="modal-box">
+		<div class="modal-box px-5 py-1">
 			<ul class="divide-y divide-base-300">
 				{#each options as o (o.value)}
 					<li>
