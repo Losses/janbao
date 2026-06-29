@@ -406,4 +406,51 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 		await page.waitForURL('/profile/settings');
 		expect(new URL(page.url()).pathname).toBe('/profile/settings');
 	});
+
+	test('Bug 11: direct URL entry to /profile/settings -> swipe back to home has populated discussions list instead of empty/loading card', async ({ page, context }) => {
+		await prepareContext(context);
+
+		// Direct navigation to settings (cold start)
+		await page.goto('/profile/settings');
+		await waitForHydration(page);
+
+		// Set up swipe touch simulation
+		const client = await page.context().newCDPSession(page);
+		await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+
+		const startX = 50;
+		const startY = 400;
+		const move = async (x: number) => {
+			await client.send('Input.dispatchTouchEvent', {
+				type: 'touchMove',
+				touchPoints: [{ x, y: startY, id: 1 }],
+				modifiers: 0,
+				timestamp: 0
+			});
+		};
+
+		await client.send('Input.dispatchTouchEvent', {
+			type: 'touchStart',
+			touchPoints: [{ x: startX, y: startY, id: 1 }],
+			modifiers: 0,
+			timestamp: 0
+		});
+		await page.waitForTimeout(50);
+
+		// Drag right to 200px
+		await move(200);
+		await page.waitForTimeout(100);
+
+		// Verify that the previewed discussions list has populated row items (not empty or loading)
+		const firstItem = page.locator('section[data-preview-tab="discussions"] a').first();
+		await expect(firstItem).toBeVisible();
+
+		// Clean up touch
+		await client.send('Input.dispatchTouchEvent', {
+			type: 'touchEnd',
+			touchPoints: [{ x: 200, y: startY, id: 1 }],
+			modifiers: 0,
+			timestamp: 0
+		});
+	});
 });

@@ -20,7 +20,7 @@
 	import ProfileMenuPanel from '$lib/components/panels/ProfileMenuPanel.svelte';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
-	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
+	import TabDiscussionsPanel from '$lib/components/panels/TabDiscussionsPanel.svelte';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -30,8 +30,6 @@
 	let { data }: PageProps = $props();
 	const navStore = getNavigationStore();
 	const listCache = getListCacheStore();
-
-	const cachedDiscussions = $derived(listCache.discussions?.items);
 
 	const t = $derived(data.t);
 	const profileT = $derived(t.profile);
@@ -123,14 +121,7 @@
 		{#if prevPath === '/profile'}
 			<ProfileMenuPanel {user} {t} />
 		{:else}
-			<DiscussionsPanel
-				discussions={cachedDiscussions}
-				currentPage={listCache.discussions?.page ?? 1}
-				totalPages={listCache.discussions?.totalPages ?? 1}
-				{t}
-				buildPageUrl={(page) => (page === 1 ? '/' : `/discussions/p${page}`)}
-				paginate={true}
-			/>
+			<TabDiscussionsPanel cache={listCache} {t} {user} />
 		{/if}
 	{/if}
 {/snippet}
