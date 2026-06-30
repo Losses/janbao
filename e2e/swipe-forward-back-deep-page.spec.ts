@@ -514,7 +514,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 	// back-preview (leftSnippet reads listCache.discussions) must still render the
 	// real list, not a bare loading chip. Pre-fix it was a chip (the cache is only
 	// seeded on the `/` route); the fix seeds it from the always-available layout
-	// load. This is the "讨论内页右拉直接拉出 chip" symptom.
+	// load. This is the "swiping back inside a thread pulls the chip straight out" symptom.
 	test('deep-linked thread back-preview shows the discussions list, not a cold-cache chip', async ({ page }) => {
 		// Grab a thread href, then FULL-RELOAD to it: a fresh document resets the
 		// list-cache singleton, reproducing the cold-cache state of a direct open.

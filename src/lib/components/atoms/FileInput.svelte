@@ -4,7 +4,7 @@
 	 * `.file-input`. The stock `<input type="file">` draws its "Choose file"
 	 * button through the browser-controlled `::file-selector-button`, so the
 	 * text follows the OS locale, not the app locale (e.g. the button keeps
-	 * showing "选择文件" even when the app is in English). This atom hides the
+	 * showing an OS-locale label even when the app is in English). This atom hides the
 	 * native input and renders a button (translated `label`) plus a filename box
 	 * (translated `placeholder` when empty), so the control tracks the app
 	 * language instead.

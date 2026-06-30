@@ -61,7 +61,7 @@ test.describe('Hamburger to Arrow back animation stutter bug', () => {
 		await page.waitForTimeout(500);
 
 		// Assertions:
-		// 1. During the transition, we must see both titles in DOM (outgoing "账号设置" and incoming "")
+		// 1. During the transition, we must see both titles in DOM (outgoing "Account settings" and incoming "")
 		const transitionFrame = states.find(s => s && s.titleTexts.length === 2);
 		expect(transitionFrame, 'Must have a transition frame where both outgoing and incoming titles exist').toBeDefined();
 		expect(transitionFrame.titleTexts).toContain('账号设置');

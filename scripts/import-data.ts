@@ -56,7 +56,7 @@ interface ParsedActivity {
 	recipientId: number | null;
 	// A system "who joined" activity. Members listed in joinMembers are folded
 	// into the activity_joins side table; contentHtml carries only the excerpt
-	// (e.g. "欢迎加入!").
+	// (e.g. "Welcome aboard!").
 	isJoined: boolean;
 	joinMembers: JoinedMemberRef[];
 }
@@ -788,7 +788,7 @@ function parseActivitiesHtml(html: string): ParsedActivity[] {
 
 		// Registration ("X and Y joined") is a system "who joined" activity. Its
 		// named users become activity_joins members on the source Activity id; the
-		// excerpt (e.g. "欢迎加入!") is kept as content for the joined render pipeline.
+		// excerpt (e.g. "Welcome aboard!") is kept as content for the joined render pipeline.
 		let topLevelAuthor: ProfileUserRef;
 		let recipientRef: ProfileUserRef | null;
 		let contentHtml: string;

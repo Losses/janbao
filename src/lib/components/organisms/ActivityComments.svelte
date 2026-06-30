@@ -41,7 +41,7 @@
 	// Comments are bundled by the page load (loadActivityPage), so local state is
 	// seeded from that prop and only refetched after a submit. There is no eager
 	// fetch on mount - the previous unconditional $effect fired a request for
-	// every row on the page and flashed "加载中" while it was in flight.
+	// every row on the page and flashed "Loading" while it was in flight.
 	// svelte-ignore state_referenced_locally
 	let comments = $state<ActivityCommentItem[]>(initialComments);
 	let commentContentJson = $state('');

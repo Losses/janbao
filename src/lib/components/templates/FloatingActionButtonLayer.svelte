@@ -68,14 +68,8 @@
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getActiveGestureTrack } from '$lib/stores/active-gesture-track.svelte';
-	import {
-		isOverlayRoute,
-		isComposeRoute,
-		isDiscussionsListRoute,
-		isMessagesListRoute,
-		sourceListKindForOverlayOrCompose
-	} from '$lib/utils/fab-routes';
-	import type { FabListKind } from '$lib/utils/fab-routes';
+	import { getRouteFabRule, FAB_KIND_CONFIGS } from '$lib/utils/route-config';
+	import type { FabListKind } from '$lib/utils/route-config';
 	import type { FabFamily } from '$lib/utils/fab-scale';
 	import { getCurrentTabIndex } from '$lib/utils/mobile-tabs';
 	import {
@@ -87,7 +81,6 @@
 		hideProgress,
 		translateYFromHideProgress
 	} from '$lib/utils/fab-scale';
-	import { mdiPlus, mdiEmailPlus } from '@mdi/js';
 	import type { TranslationDict } from '$lib/types/translation';
 
 	interface FloatingActionButtonLayerProps {
@@ -123,9 +116,6 @@
 	const FAB_HEIGHT_PX = 56;
 	const BOTTOM_CLEARANCE_PX = 16;
 
-	const DISCUSSIONS_TAB_INDEX = 0;
-	const MESSAGES_TAB_INDEX = 2;
-
 	// Wall-clock cap for the rAF sampler. Covers backgrounded-tab rAF
 	// throttling and the transitionend-missed edge. Family B's sampler is armed
 	// across the drag AND the snap (the thread-route GPL pins fractionalIndex
@@ -147,80 +137,41 @@
 		readonly family: 'list' | 'overlay' | 'compose';
 	}
 
-	interface ListBundle {
-		readonly href: string;
-		readonly label: string;
-		readonly icon: string;
-		readonly tabIndex: number;
-	}
-
-	/** The label/icon/href/tabIndex bundle for a given source list. */
-	function listBundle(kind: FabListKind): ListBundle {
-		if (kind === 'messages') {
-			return {
-				href: '/messages/new',
-				label: t.nav.messages ?? 'New message',
-				icon: mdiEmailPlus,
-				tabIndex: MESSAGES_TAB_INDEX
-			};
-		}
-		return {
-			href: '/post/discussion',
-			label: t.nav.discussions ?? 'New discussion',
-			icon: mdiPlus,
-			tabIndex: DISCUSSIONS_TAB_INDEX
-		};
-	}
-
 	/** Resolve which FAB (if any) the current route shows and which family owns
 	 *  its scale animation. Priority: overlay (Family B) -> compose (Family C) ->
 	 *  list (Family A rest) -> none. The atom stays mounted on overlay/compose
 	 *  routes so the scale-out/in runs across the route swap. */
 	const fabConfig = $derived.by<FabConfig | null>(() => {
-		const pathname = page.url.pathname;
-		if (isOverlayRoute(pathname)) {
-			const kind = sourceListKindForOverlayOrCompose(pathname);
-			if (!kind) return null;
-			return { kind, family: 'overlay', ...listBundle(kind) };
-		}
-		if (isComposeRoute(pathname)) {
-			const kind = sourceListKindForOverlayOrCompose(pathname);
-			if (!kind) return null;
-			return { kind, family: 'compose', ...listBundle(kind) };
-		}
-		if (pathname === '/activity') {
+		const rule = getRouteFabRule(page.url.pathname);
+		if (!rule || !rule.fab) return null;
+
+		if (rule.fab.kind === 'dynamic') {
 			if (pager.active && Math.abs(pager.fractionalIndex - 1) > 0.01) {
-				if (pager.fractionalIndex < 1) {
-					return {
-						kind: 'discussions' as const,
-						family: 'list',
-						...listBundle('discussions')
-					};
-				} else {
-					return {
-						kind: 'messages' as const,
-						family: 'list',
-						...listBundle('messages')
-					};
-				}
+				const resolvedKind: FabListKind = pager.fractionalIndex < 1 ? 'discussions' : 'messages';
+				const kindConfig = FAB_KIND_CONFIGS[resolvedKind];
+				return {
+					kind: resolvedKind,
+					family: rule.fab.family,
+					href: kindConfig.href,
+					label: kindConfig.label(t),
+					icon: kindConfig.icon,
+					tabIndex: kindConfig.tabIndex
+				};
 			}
 			return null;
 		}
-		if (isDiscussionsListRoute(pathname)) {
-			return {
-				kind: 'discussions' as const,
-				family: 'list',
-				...listBundle('discussions')
-			};
-		}
-		if (isMessagesListRoute(pathname)) {
-			return {
-				kind: 'messages' as const,
-				family: 'list',
-				...listBundle('messages')
-			};
-		}
-		return null;
+
+		if (rule.fab.kind === null) return null;
+
+		const kindConfig = FAB_KIND_CONFIGS[rule.fab.kind];
+		return {
+			kind: rule.fab.kind,
+			family: rule.fab.family,
+			href: kindConfig.href,
+			label: kindConfig.label(t),
+			icon: kindConfig.icon,
+			tabIndex: kindConfig.tabIndex
+		};
 	});
 
 	const track = $derived(activeGestureTrack.track);
@@ -410,9 +361,10 @@
 	//   - Family C (compose route): never armed (no sibling track exists).
 	$effect(() => {
 		const hasTrack = track !== null;
-		const hasCfg = fabConfig !== null;
-		const family = fabConfig?.family ?? null;
-		if (!hasTrack || !hasCfg) {
+		const rule = getRouteFabRule(page.url.pathname);
+		const hasCfg = rule !== null && rule.fab !== undefined && rule.fab.kind !== null;
+		const family = rule?.fab?.family ?? null;
+		if (!hasTrack || !hasCfg || family === null) {
 			stopSampler();
 			return;
 		}

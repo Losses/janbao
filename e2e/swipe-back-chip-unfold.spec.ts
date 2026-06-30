@@ -131,7 +131,7 @@ test('NEW BUG: back-swipe from bookmarks after entering via sidebar returns to d
 	await menuBtn.click();
 	await page.waitForTimeout(300);
 
-	// 4. Click "收藏" link inside the mobile drawer
+	// 4. Click the "Bookmarks" link inside the mobile drawer
 	const bookmarksLink = page.locator('a[href="/bookmarks"]').filter({ visible: true }).first();
 	await expect(bookmarksLink).toBeVisible();
 	await bookmarksLink.click();

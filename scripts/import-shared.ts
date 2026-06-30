@@ -116,7 +116,7 @@ export function parseProfileHtml(html: string): ParsedProfile {
 	);
 	const viewCount = visitsMatch ? parseInt(visitsMatch[1].replace(/,/g, '')) : null;
 
-	// Inviter: <dt class="Invited">邀请</dt><dd class="Invited"><a href="/profile/ID/slug">…</a></dd>
+	// Inviter: <dt class="Invited">Invited</dt><dd class="Invited"><a href="/profile/ID/slug">…</a></dd>
 	const inviterMatch = html.match(/<dd class="Invited">[\s\S]*?<a\s+href="\/profile\/(\d+)\//);
 	const inviterId = inviterMatch ? Number(inviterMatch[1]) : null;
 

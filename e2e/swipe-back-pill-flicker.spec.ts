@@ -22,8 +22,8 @@ import { prepareContext, swipeBack, openSidebarAndGoto, waitForHydration } from 
  *
  * Faithfulness: the back-swipe is a real CDP touch gesture (detectSwipe rejects
  * mouse), and /bookmarks is reached via the dev __e2eGoto hook - the same
- * beforeNavigate the drawer's 收藏 link ultimately fires - so the backTarget
- * precondition matches a real user opening the sidebar → 收藏 → swiping back.
+ * beforeNavigate the drawer's "Bookmarks" link ultimately fires - so the backTarget
+ * precondition matches a real user opening the sidebar → "Bookmarks" → swiping back.
  */
 
 interface PillSample {

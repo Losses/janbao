@@ -5,7 +5,7 @@ import {
 	isDiscussionsListRoute,
 	isMessagesListRoute,
 	sourceListKindForOverlayOrCompose
-} from './fab-routes';
+} from './route-config';
 
 describe('isOverlayRoute', () => {
 	test('thread routes', () => {

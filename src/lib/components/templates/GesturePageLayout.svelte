@@ -113,7 +113,7 @@
 	const resolvedLeftHref = $derived.by(() => {
 		if (navStore.pendingNav) return navStore.pendingNav.href;
 		const target = lockedLeftHref ?? leftHref ?? navStore.backTarget;
-		// 如果浏览器历史的上一页确实是 '/'，我们应该尊重真实的路由历史，而不使用 getParent 替换
+		// If the previous browser-history entry is genuinely '/', respect the real route history; do not substitute getParent here.
 		if (target === '/' && currentRouteConfig && previousEntryPathname() !== '/') {
 			return currentRouteConfig.getParent(page.url.pathname);
 		}

@@ -104,7 +104,7 @@
 		const anchorElementRect = anchorElement.getBoundingClientRect();
 		const editorScrollerRect = scrollerElem.getBoundingClientRect();
 
-		// Position below the text (往下窜一行)
+		// Position below the text (one line down)
 		let top = targetRect.bottom + verticalGap;
 		let left = targetRect.left - horizontalOffset;
 
