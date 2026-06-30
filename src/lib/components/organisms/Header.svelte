@@ -109,32 +109,53 @@
 	});
 	const prevHasTabs = $derived(prevPath ? getCurrentTabIndex(prevPath) >= 0 : currentHasTabs);
 
+	const isSettleMode = $derived.by(() => {
+		if (settling) return true;
+		// Transition frame for gesture release:
+		if (!dragging && lastGestureMorph > GESTURE_MORPH_EPSILON && !releaseConsumed) {
+			return true;
+		}
+		return false;
+	});
+
 	const morph = $derived.by(() => {
-		// 1. Gesture dragging: follow finger progress directly (unless it is deep-to-deep transition, which has no morph)
-		if (dragging) {
-			return isDeepToDeep ? 0 : (pager.backMorph ?? 0);
-		}
-
-		// 2. Non-dragging animation settling phase (commit, cancel, or click transitions)
-		if (settling) {
-			const current = currentHasTabs ? 1 : 0;
-			const target = targetHasTabs ? 1 : 0;
-			const prev = prevHasTabs ? 1 : 0;
-
-			if (settleAwaitTitle) {
-				// Committed navigation in flight: transition from current page to target page
-				return current * (1 - settleProgress) + target * settleProgress;
+		const res = (() => {
+			// 1. Gesture dragging: follow finger progress directly (unless it is deep-to-deep transition, which has no morph)
+			if (dragging) {
+				return isDeepToDeep ? 0 : (pager.backMorph ?? (currentHasTabs ? 1 : 0));
 			}
-			if (settleTarget === 0) {
-				// Cancelled transition: slide the preview target page back to current page
-				return target * settleProgress + current * (1 - settleProgress);
-			}
-			// Regular click/popstate transitions: slide from previous page to current page
-			return prev * (1 - settleProgress) + current * settleProgress;
-		}
 
-		// 3. Resting idle state: determined solely by whether the current path has tabs (1 = tabs, 0 = deep page)
-		return currentHasTabs ? 1 : 0;
+			// 2. Non-dragging animation settling phase (commit, cancel, or click transitions)
+			if (isSettleMode) {
+				const current = currentHasTabs ? 1 : 0;
+				const target = targetHasTabs ? 1 : 0;
+				const prev = prevHasTabs ? 1 : 0;
+
+				const progress = settling ? settleProgress : lastGestureMorph;
+				const isGesture = settling
+					? (settleAwaitTitle || settleTarget === 0)
+					: (lastGestureMorph > GESTURE_MORPH_EPSILON);
+
+				const awaitTitle = settling ? settleAwaitTitle : (isGesture && navStore.pendingNav !== null);
+				const targetZero = settling ? (settleTarget === 0) : (isGesture && navStore.pendingNav === null);
+
+				if (awaitTitle) {
+					// Committed navigation in flight: transition from current page to target page
+					return current * (1 - progress) + target * progress;
+				}
+				if (targetZero) {
+					// Cancelled transition: slide the preview target page back to current page
+					return target * progress + current * (1 - progress);
+				}
+				// Regular click/popstate transitions: slide from previous page to current page
+				return prev * (1 - progress) + current * progress;
+			}
+
+			// 3. Resting idle state: determined solely by whether the current path has tabs (1 = tabs, 0 = deep page)
+			return currentHasTabs ? 1 : 0;
+		})();
+
+		return res;
 	});
 
 	// Freeze the icon morph during a search transition so the hamburger does not
@@ -173,9 +194,11 @@
 	// the settle just started (collapse-then-replay).
 	$effect.pre(() => {
 		if (dragging) return;
+		if (untrack(() => releaseConsumed)) return;
 		const pending = navStore.pendingNav;
 		const m = untrack(() => lastGestureMorph);
 		const hasPending = pending !== null;
+
 
 		if (m <= GESTURE_MORPH_EPSILON && !hasPending) {
 			// No preceding gesture / cancelled near origin: clear any stale settle so
