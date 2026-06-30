@@ -81,8 +81,15 @@ export type FabFamily = 'list' | 'overlay' | 'compose';
  * Whether the family's FAB scale must be driven by the per-frame sampler WHILE
  * a drag is in progress (rather than by the live `pager.fractionalIndex`).
  *
- * Family A (list routes): false. The tab pager publishes a continuous
- * `fractionalIndex` during the drag, so the layer reads it directly.
+ * Family A (list routes): true. The tab pager publishes a continuous
+ * `fractionalIndex` DURING the drag, but on release `dragOffset -> null` makes
+ * it jump to the integer endpoint in one reactive flush while the track DOM
+ * keeps easing for 200ms. The live value is therefore a logical signal, not a
+ * visual one; reading it pops the scale to its endpoint in a single frame at
+ * release. Keeping the sampler armed across the drag lets it read the track
+ * `m41` every frame through BOTH the drag and the snap, so the scale is a
+ * continuous function of the track's visual position with no re-arm gap at
+ * release and no first-frame jump.
  *
  * Family B (overlay routes): true. A thread/conversation route's
  * GesturePageLayout publishes `fractionalIndex = centerTab` for the whole
@@ -97,6 +104,22 @@ export type FabFamily = 'list' | 'overlay' | 'compose';
  * transition eases the discrete swap).
  */
 export function familyNeedsSamplerDuringDrag(family: FabFamily): boolean {
+	return family === 'overlay' || family === 'list';
+}
+
+/**
+ * Whether the sampler reaches its resting target ONLY at sample 1 (the thread
+ * fully covers the list), as opposed to at any integer sample. Overlay routes
+ * rest at sample 1 ONLY: sample 0 (the list fully visible) is the forward-ENTER
+ * START, not rest, so treating it as rest would strand the sampler at sample 0
+ * mid-enter and flash the scale the next time it re-arms. List routes (a tab
+ * pager) rest at any integer tab index (0, 1, or 2). Compose has no sampler.
+ *
+ * Distinct from `familyNeedsSamplerDuringDrag` (an arming question): both list
+ * and overlay are sampler-driven during the drag, but only overlay's rest target
+ * is the single sample 1.
+ */
+export function familyRestsAtSampleOne(family: FabFamily): boolean {
 	return family === 'overlay';
 }
 

@@ -155,11 +155,12 @@ function assertSmoothRelease(
 	).toBeLessThan(0.2);
 }
 
-// Discussions FAB (tab 0), forward commit to Activity. A 120px swipe clears the
-// 60px commit threshold but stops the drag at scale ≈ 0.39 (> 0.30), so the drag
-// itself never enters the (0.05, 0.30) easing band - only a smooth release snap
-// would populate it. The release must ease 0.39 → 0 across the 200ms snap instead
-// of popping there in one frame.
+// Discussions FAB (tab 0), forward commit to Activity. The distance is 30.5% of
+// the viewport (120px on a 393px Pixel 5): it clears the 60px commit threshold but
+// stops the drag at fractionalIndex 0.305, i.e. scale 0.389 (> 0.30) invariant
+// across viewport widths, so the drag itself never enters the (0.05, 0.30) easing
+// band. The release must ease 0.39 down to 0 across the 200ms snap; a one-frame
+// pop to 0 is the failure.
 test('Family A forward: FAB eases out across the release snap (discussions -> activity)', async ({
 	page
 }) => {
@@ -167,7 +168,9 @@ test('Family A forward: FAB eases out across the release snap (discussions -> ac
 	await waitForHydration(page);
 	await page.waitForTimeout(300);
 
-	const capture = await captureFabScale(page, () => swipeExact(page, 120));
+	const width = page.viewportSize()?.width ?? 393;
+	const commitDist = Math.round(width * 0.305);
+	const capture = await captureFabScale(page, () => swipeExact(page, commitDist));
 
 	// Precondition: the FAB really did scale out during the drag and reached
 	// near-0 by the end of the window (the swipe committed). Without these the
@@ -188,11 +191,59 @@ test('Family A backward: FAB eases out across the release snap (messages -> acti
 	await waitForHydration(page);
 	await page.waitForTimeout(300);
 
+	const width = page.viewportSize()?.width ?? 393;
+	const commitDist = Math.round(width * 0.305);
 	// distance < 0 => rightward swipe => back to the previous tab (activity).
-	const capture = await captureFabScale(page, () => swipeExact(page, -120));
+	const capture = await captureFabScale(page, () => swipeExact(page, -commitDist));
 
 	expect(capture.maxScale, 'FAB must start at scale 1 on the messages list').toBeGreaterThan(0.9);
 	expect(capture.minScale, 'FAB must reach near-0 once the swipe commits').toBeLessThan(0.1);
 
 	assertSmoothRelease(capture, 0.05, 0.3, 0.2, 0.05);
+});
+
+/**
+ * Assert a scale-IN release (a cancelled swipe snapping back to its source tab)
+ * eased smoothly. The FAB scaled down during the drag (minScale < 0.9) and returned
+ * to rest (maxScale > 0.95), and no single frame leapt up from <0.90 to >0.95. A
+ * smooth ease crosses 0.95 starting from ~0.93 (prev > 0.90); the bug jumps from
+ * the drag value (<0.90) straight to 1.0 in one frame. The band-count check used
+ * for scale-OUT does not apply here: the drag already traversed (0.75, 0.95) on
+ * the way down, so only the single-frame upward leap distinguishes a pop from an
+ * ease.
+ */
+function assertSmoothScaleIn(capture: TrajectoryCapture): void {
+	expect(capture.minScale, 'drag must scale the FAB below 0.9').toBeLessThan(0.9);
+	expect(capture.maxScale, 'cancel must return the FAB to near 1').toBeGreaterThan(0.95);
+	let leap = 0;
+	for (let i = 1; i < capture.finiteScales.length; i++) {
+		const prev = capture.finiteScales[i - 1];
+		const curr = capture.finiteScales[i];
+		if (prev < 0.9 && curr > 0.95) {
+			leap = Math.max(leap, curr - prev);
+		}
+	}
+	expect(
+		leap,
+		`no single frame may leap from <0.90 to >0.95 on a cancel (got a ${leap.toFixed(2)} single-frame rise). scales=[${capture.finiteScales
+			.map((s) => s.toFixed(2))
+			.join(',')}]`
+	).toBeLessThan(0.2);
+}
+
+// Family A cancel: a sub-threshold swipe (50px, under the 60px SWIPE_COMMIT line)
+// snaps back to the source tab. The FAB scaled DOWN during the drag (to about
+// 0.69-0.77 across phone widths) and must ease back up to 1 across the 200ms snap;
+// the bug pops it back to 1 in one frame. Covers the scale-IN manifestation, which
+// the two commit tests (scale out to 0) do not exercise.
+test('Family A cancel: FAB eases back in across the release snap (discussions snap-back)', async ({
+	page
+}) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+
+	const capture = await captureFabScale(page, () => swipeExact(page, 50));
+
+	assertSmoothScaleIn(capture);
 });

@@ -78,6 +78,7 @@
 		pxToFraction,
 		listForegroundFromThreadCover,
 		familyNeedsSamplerDuringDrag,
+		familyRestsAtSampleOne,
 		hideProgress,
 		translateYFromHideProgress
 	} from '$lib/utils/fab-scale';
@@ -117,12 +118,11 @@
 	const BOTTOM_CLEARANCE_PX = 16;
 
 	// Wall-clock cap for the rAF sampler. Covers backgrounded-tab rAF
-	// throttling and the transitionend-missed edge. Family B's sampler is armed
-	// across the drag AND the snap (the thread-route GPL pins fractionalIndex
-	// during the drag), so the cap must span a full drag (~500ms) plus the snap
-	// (~300ms) plus margin for a backgrounded tab; 2000ms accommodates all
-	// three. Family A arms only for the snap window (the live fractionalIndex
-	// drives the drag) and never approaches the cap.
+	// throttling and the transitionend-missed edge. Families A and B both arm
+	// the sampler across the drag AND the snap (reading the track m41 every
+	// frame so the scale follows the CSS-eased track motion continuously), so
+	// the cap must span a full drag (~500ms) plus the snap (~300ms) plus margin
+	// for a backgrounded tab; 2000ms accommodates all three.
 	const SAMPLER_TIMEOUT_MS = 2000;
 	const SAMPLER_TARGET_EPSILON_PX = 0.5;
 
@@ -276,13 +276,11 @@
 				stopSampler();
 				return;
 			}
-			// A drag re-grabbed mid-snap. Family A hands off to the live
-			// `pager.fractionalIndex` (the tab pager publishes it continuously
-			// during drag); the sampler is not needed and would just race the
-			// $derived reading fractionalIndex. Family B does NOT get a live
-			// fractionalIndex during drag (the thread-route GPL pins it at
-			// `centerTab` for the whole drag), so the sampler must KEEP RUNNING
-			// to follow the finger 0 -> 1 / 1 -> 0 across the drag.
+			// A drag re-grabbed mid-snap. list and overlay are both sampler-driven
+			// during the drag (familyNeedsSamplerDuringDrag is true for both), so
+			// this guard never fires for them and the sampler keeps running to
+			// follow the finger. The branch is defensive for a future family that
+			// publishes a reliable live fractionalIndex through the snap.
 			if (pager.dragging && fabConfig !== null && !familyNeedsSamplerDuringDrag(fabConfig.family)) {
 				stopSampler();
 				return;
@@ -297,30 +295,24 @@
 				sampledFractionalIndex = sample;
 				samplerHasPublished = true;
 				// Reached the resting target (sub-pixel epsilon): stop. The resting
-				// $derived then drives scale from the route's known fraction.
+				// $derived then drives scale from the route's known fraction. Gated on
+				// `!pager.dragging` so a drag that starts on (or momentarily passes
+				// through) an integer sample cannot false-disarm the sampler; the drag
+				// keeps it running so it is live at release.
 				//
-				// The resting target differs per family:
-				//   - Family A (tab pager): any integer tab index is a resting
-				//     position (tab 0, 1, 2 at rest).
-				//   - Family B (overlay): ONLY sample 1 (thread fully covers the
-				//     list) is rest. Sample 0 (list fully visible) is the FORWARD-
-				//     ENTER START, not rest; treating it as rest would strand the
-				//     sampler at sample 0 mid-forward-enter, leaving a stale
-				//     sampledFractionalIndex = 0 that flashes scale 1 (via
-				//     listForegroundFromThreadCover(0) = 1) the next time the
-				//     sampler re-arms (e.g. at a back-swipe drag start).
-				//   - Family B drag: never epsilon-disarm (the drag passes through
-				//     integer samples mid-gesture); the drag-end handoff and the
-				//     wall-clock cap own its lifetime.
+				// The resting sample differs per family:
+				//   - Family B (overlay): ONLY sample 1 (thread fully covers the list)
+				//     is rest. Sample 0 (list fully visible) is the FORWARD-ENTER START,
+				//     not rest; treating it as rest would strand the sampler at sample 0
+				//     mid-forward-enter and flash the scale the next time it re-arms.
+				//   - Family A (tab pager): any integer tab index (0, 1, 2) is rest.
 				const isRestingTarget =
-					fabConfig !== null && familyNeedsSamplerDuringDrag(fabConfig.family)
-						? // Family B: rest only at sample 1 (thread covers), and only
-							// when no drag is in progress.
-							!pager.dragging &&
-							Math.abs(sample - 1) <= SAMPLER_TARGET_EPSILON_PX / (window.innerWidth || 1)
-						: // Family A: any integer tab index.
-							Math.abs(sample - Math.round(sample)) <=
-							SAMPLER_TARGET_EPSILON_PX / (window.innerWidth || 1);
+					fabConfig !== null &&
+					!pager.dragging &&
+					(familyRestsAtSampleOne(fabConfig.family)
+						? Math.abs(sample - 1) <= SAMPLER_TARGET_EPSILON_PX / (window.innerWidth || 1)
+						: Math.abs(sample - Math.round(sample)) <=
+							SAMPLER_TARGET_EPSILON_PX / (window.innerWidth || 1));
 				if (isRestingTarget) {
 					stopSampler();
 					return;
@@ -346,18 +338,18 @@
 	// (it only starts/stops the rAF), so it cannot loop (svelte-effect-fetch-loop).
 	//
 	// Arming rules per family:
-	//   - Family A (list route): arm when a track is bound, NO drag is in
-	//     progress, and no cross-tab chip-exit is forcing scale 0. The drag
-	//     itself drives the live pager.fractionalIndex (the tab pager publishes
-	//     it continuously); the sampler fills only the snap window between
-	//     commit and transitionend.
-	//   - Family B (overlay route): arm whenever a track is bound AND no
-	//     cross-tab chip-exit is active, INCLUDING during the drag and the
-	//     same-tab back-swipe commit snap. The thread-route GPL pins
-	//     `fractionalIndex = centerTab` for the whole drag, so the live value
-	//     cannot drive the scale; the sampler must read the actual track `m41`
-	//     each frame to follow the finger. The sampler also covers the
-	//     forward-enter snap (after the destination track binds).
+	//   - Families A and B (list and overlay routes): arm whenever a track is
+	//     bound AND no cross-tab chip-exit is active, INCLUDING during the drag
+	//     and the snap. The sampler reads the actual track `m41` each frame, so
+	//     the FAB scale follows the track's CSS-eased motion continuously. For
+	//     Family B the thread-route GPL pins `fractionalIndex = centerTab` for
+	//     the whole drag, so the live value cannot drive the scale at all; for
+	//     Family A the live `fractionalIndex` is continuous during the drag but
+	//     jumps to its integer endpoint on release while the track keeps easing,
+	//     so reading it would pop the scale to the endpoint in one frame. Keeping
+	//     the sampler armed across the drag for both families means it is already
+	//     running at release and transitions seamlessly into the snap (no re-arm
+	//     gap, no first-frame jump).
 	//   - Family C (compose route): never armed (no sibling track exists).
 	$effect(() => {
 		const hasTrack = track !== null;
@@ -459,22 +451,18 @@
 	);
 
 	/** Per-frame foreground fraction for the active FAB. The sampler output
-	 *  drives Family A during the snap window and Family B during BOTH the drag
-	 *  and the forward-enter snap (the thread-route GPL pins fractionalIndex at
-	 *  centerTab during drag, so the live value cannot drive the scale). The
-	 *  forward-nav holdover pins the fraction at 1 across the swap-to-overlay
-	 *  gap until the sampler publishes its first sample. At rest the route's
-	 *  known fraction (1 for a list, 0 for an overlay/compose route) supplies a
-	 *  stable value. */
+	 *  drives Family A and Family B across BOTH the drag and the snap (reading
+	 *  the track `m41` every frame), so the scale is a continuous function of the
+	 *  track's visual position and never reads the logical `pager.fractionalIndex`
+	 *  (which jumps to its integer endpoint on release while the track keeps
+	 *  easing). The forward-nav holdover pins the fraction at 1 across the
+	 *  swap-to-overlay gap until the sampler publishes its first sample. At rest
+	 *  the route's known fraction (1 for a list, 0 for an overlay/compose route)
+	 *  supplies a stable value. */
 	const foregroundFraction = $derived.by(() => {
 		const cfg = fabConfig;
 		if (cfg === null) return 0;
 		if (chipExitActive) return 0;
-		// Family A (list): the live pager.fractionalIndex is continuous 1:1 with
-		// the gesture during both drag and snap, so we drive it directly.
-		if (pager.active && cfg.family === 'list') {
-			return tabFraction(pager.fractionalIndex, cfg.tabIndex);
-		}
 		if (samplerActive && sampledFractionalIndex !== null) {
 			return fractionFromSample(sampledFractionalIndex, cfg);
 		}
@@ -508,9 +496,15 @@
 		) {
 			return fractionFromSample(sampledFractionalIndex, cfg);
 		}
-		// At rest: a list route's FAB is foreground (fraction 1); an overlay or
-		// compose route's source-list FAB is covered (fraction 0).
-		return cfg.family === 'list' ? 1 : 0;
+		// At rest the route's known logical position supplies a stable value (the
+		// sampler is disarmed, so pager.fractionalIndex holds the integer activeIndex
+		// and is not mid-jump). A list FAB rests at tabFraction of its tab vs the
+		// active tab: 1 when its own tab is foreground, 0 when another tab is (the
+		// source-list atom persists across a tab swap, so this is not always 1).
+		// An overlay/compose route's source-list FAB is covered at rest (0).
+		return cfg.family === 'list'
+			? tabFraction(pager.fractionalIndex, cfg.tabIndex)
+			: 0;
 	});
 
 	const scale = $derived(scaleFromFraction(foregroundFraction));

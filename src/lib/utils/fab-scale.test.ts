@@ -5,6 +5,7 @@ import {
 	pxToFraction,
 	listForegroundFromThreadCover,
 	familyNeedsSamplerDuringDrag,
+	familyRestsAtSampleOne,
 	hideProgress,
 	translateYFromHideProgress
 } from './fab-scale';
@@ -124,8 +125,8 @@ describe('listForegroundFromThreadCover', () => {
 });
 
 describe('familyNeedsSamplerDuringDrag', () => {
-	test('Family A (list) -> false (live fractionalIndex drives the drag)', () => {
-		expect(familyNeedsSamplerDuringDrag('list')).toBe(false);
+	test('Family A (list) -> true (live fractionalIndex jumps on release; sampler must cover drag + snap)', () => {
+		expect(familyNeedsSamplerDuringDrag('list')).toBe(true);
 	});
 
 	test('Family B (overlay) -> true (thread route pins fractionalIndex at centerTab)', () => {
@@ -136,10 +137,30 @@ describe('familyNeedsSamplerDuringDrag', () => {
 		expect(familyNeedsSamplerDuringDrag('compose')).toBe(false);
 	});
 
-	test('only the overlay family is sampler-driven during drag', () => {
+	test('list and overlay are sampler-driven during drag; compose is not', () => {
 		const families = ['list', 'overlay', 'compose'] as const;
 		const samplerDriven = families.filter(familyNeedsSamplerDuringDrag);
-		expect(samplerDriven).toEqual(['overlay']);
+		expect(samplerDriven).toEqual(['list', 'overlay']);
+	});
+});
+
+describe('familyRestsAtSampleOne', () => {
+	test('Family A (list) -> false (rests at any integer tab index)', () => {
+		expect(familyRestsAtSampleOne('list')).toBe(false);
+	});
+
+	test('Family B (overlay) -> true (rests only at threadCoverProgress 1)', () => {
+		expect(familyRestsAtSampleOne('overlay')).toBe(true);
+	});
+
+	test('Family C (compose) -> false (no sampler; value is irrelevant)', () => {
+		expect(familyRestsAtSampleOne('compose')).toBe(false);
+	});
+
+	test('only the overlay family rests at sample 1', () => {
+		const families = ['list', 'overlay', 'compose'] as const;
+		const restAtOne = families.filter(familyRestsAtSampleOne);
+		expect(restAtOne).toEqual(['overlay']);
 	});
 });
 
