@@ -17,7 +17,7 @@ import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 import TabDiscussionsPanel from '$lib/components/panels/TabDiscussionsPanel.svelte';
 import TabActivityPanel from '$lib/components/panels/TabActivityPanel.svelte';
 import TabMessagesPanel from '$lib/components/panels/TabMessagesPanel.svelte';
-import type { TabPanelWrapperProps, TabsLayoutData } from '$lib/types/tabs';
+import type { TabsLayoutData } from '$lib/types/tabs';
 
 export type { MobileTabLabelKey, PathMatcher } from './tab-config';
 
@@ -38,11 +38,11 @@ const TAB_DATA_CHECKS: Record<MobileTabLabelKey, TabDataCheck> = {
 	messages: (d) => (d.messages?.conversations.length ?? 0) > 0
 };
 
-// Each tab's list panel is a thin wrapper (TabDiscussionsPanel etc.) exposing a
-// UNIFIED props shape (TabPanelWrapperProps), so the panel slot is a single
-// concrete Component<TabPanelWrapperProps> - not a union of the heterogeneous
-// underlying Panels. The wrapper owns the cache -> Panel wiring.
-type TabListComponent = Component<TabPanelWrapperProps>;
+// Each tab's list panel is a thin wrapper (TabDiscussionsPanel etc.) that pulls
+// its cache/list data from the list-cache store and page data itself, so the
+// panel slot is a single prop-less Component - not a union of the heterogeneous
+// underlying Panels.
+type TabListComponent = Component;
 
 const TAB_LIST_COMPONENTS: Record<MobileTabLabelKey, TabListComponent> = {
 	discussions: TabDiscussionsPanel,

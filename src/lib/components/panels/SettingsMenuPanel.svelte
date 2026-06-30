@@ -1,5 +1,6 @@
 <!-- src/lib/components/panels/SettingsMenuPanel.svelte -->
 <script lang="ts">
+	import { page } from '$app/state';
 	import DirectoryGrid, {
 		type DirectoryGroup
 	} from '$lib/components/molecules/DirectoryGrid.svelte';
@@ -14,15 +15,9 @@
 		mdiFileDocumentEditOutline,
 		mdiPalette
 	} from '@mdi/js';
-	import type { UserInfoSummary } from '$lib/types/api';
-	import type { TranslationDict } from '$lib/types/translation';
 
-	interface Props {
-		user: UserInfoSummary;
-		t: TranslationDict;
-	}
-
-	let { user, t }: Props = $props();
+	const user = $derived(page.data.user);
+	const t = $derived(page.data.t);
 
 	const profileT = $derived(t.profile);
 	const directoryT = $derived(t.directory);

@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import type { TabPanelWrapperProps } from '$lib/types/tabs';
+	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 	import ActivityPanel from './ActivityPanel.svelte';
 
-	let { cache, t, user }: TabPanelWrapperProps = $props();
+	const cache = getListCacheStore();
+	const t = $derived(page.data.t);
+	const user = $derived(page.data.user);
 
 	const activities = $derived(cache.activity?.items ?? page.data.activity?.activities);
 	const currentPage = $derived(cache.activity?.page ?? page.data.activity?.page ?? 1);

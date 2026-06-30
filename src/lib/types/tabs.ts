@@ -7,9 +7,7 @@
  */
 import type { DiscussionListItem } from '$lib/server/db/dao/discussions';
 import type { ActivityPageResult } from '$lib/server/db/dao/activities';
-import type { ConversationListItem, UserInfoSummary } from '$lib/types/api';
-import type { TranslationDict } from '$lib/types/translation';
-import type { ListCacheStore } from '$lib/stores/list-cache.svelte';
+import type { ConversationListItem } from '$lib/types/api';
 
 export interface DiscussionsTabData {
 	discussions: DiscussionListItem[];
@@ -33,13 +31,3 @@ export interface TabsLayoutData {
 
 /** Builds the href for a given discussion-list page (1 -> "/", N -> "/discussions/pN"). */
 export type PageUrlBuilder = (page: number) => string;
-
-/** Unified props for the tab list-panel wrappers (TabDiscussionsPanel etc.) so
- * MOBILE_TABS can hold a single concrete `Component<TabPanelWrapperProps>`
- * rather than a union of the heterogeneous underlying Panels. Each wrapper owns
- * the cache -> Panel wiring (items, currentPage, totalPages, special props). */
-export interface TabPanelWrapperProps {
-	cache: ListCacheStore;
-	t: TranslationDict;
-	user: UserInfoSummary | null;
-}

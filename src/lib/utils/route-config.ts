@@ -7,7 +7,6 @@ import { mdiPlus, mdiEmailPlus } from '@mdi/js';
 import type { TranslationDict } from '$lib/types/translation';
 
 export type ParentRouteResolver = (path: string) => string;
-export type PreviewPropsResolver = (data: Record<string, unknown>) => Record<string, unknown>;
 
 export type FabListKind = 'discussions' | 'messages';
 
@@ -40,14 +39,14 @@ export interface FabRouteConfigMetadata {
 	readonly kind: FabListKind | 'dynamic' | null;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type SvelteComponentType = Component<any, any, any>;
+// Preview panels source their own data from the page store / list-cache store,
+// so the slot holds a prop-less Svelte component.
+export type SvelteComponentType = Component;
 
 export interface BaseRouteConfig {
 	readonly pattern: RegExp;
 	readonly getParent?: ParentRouteResolver;
 	readonly previewPanel?: SvelteComponentType;
-	readonly getPreviewProps?: PreviewPropsResolver;
 	readonly fab?: FabRouteConfigMetadata;
 }
 
@@ -68,13 +67,7 @@ export const ROUTE_CONFIGS: readonly BaseRouteConfig[] = [
 		// /profile/[userId]/[userSlug]
 		pattern: /^\/profile\/\d+\/[^/]+$/,
 		getParent: () => '/profile',
-		previewPanel: ProfileMenuPanel,
-		getPreviewProps: (data) => {
-			const payload = data.headerPayload as Record<string, unknown> | undefined;
-			return {
-				user: payload?.user ?? data.user
-			};
-		}
+		previewPanel: ProfileMenuPanel
 	},
 	{
 		// /profile/comments/[userId]/[userSlug]
@@ -83,10 +76,7 @@ export const ROUTE_CONFIGS: readonly BaseRouteConfig[] = [
 			const m = path.match(/^\/profile\/comments\/(\d+)\/([^/]+)/);
 			return m ? `/profile/${m[1]}/${m[2]}` : '/profile';
 		},
-		previewPanel: ProfileMenuPanel,
-		getPreviewProps: (data) => ({
-			user: data.targetUser ?? data.user
-		})
+		previewPanel: ProfileMenuPanel
 	},
 	{
 		// /profile/discussions/[userId]/[userSlug]
@@ -95,10 +85,7 @@ export const ROUTE_CONFIGS: readonly BaseRouteConfig[] = [
 			const m = path.match(/^\/profile\/discussions\/(\d+)\/([^/]+)/);
 			return m ? `/profile/${m[1]}/${m[2]}` : '/profile';
 		},
-		previewPanel: ProfileMenuPanel,
-		getPreviewProps: (data) => ({
-			user: data.targetUser ?? data.user
-		})
+		previewPanel: ProfileMenuPanel
 	},
 	{
 		// Sub-settings pages

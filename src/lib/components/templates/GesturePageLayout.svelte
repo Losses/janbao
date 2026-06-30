@@ -10,7 +10,6 @@
 	import { detectSwipe } from '$lib/actions/swipe';
 	import { isTabRootPath, previousEntryPathname } from '$lib/utils/history-nav';
 	import type { Action } from 'svelte/action';
-	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
 	import { MOBILE_TABS, isPagerRoute, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
 	import {
@@ -51,7 +50,6 @@
 
 	const navStore = getNavigationStore();
 	const pageScrollStore = getPageScrollStore();
-	const listCache = getListCacheStore();
 	const pager = getMobilePagerStore();
 	// On mobile this layout locks the document window (html.fixed-viewport) and
 	// scrolls the active panel inside `.detail-scroll-pane`; tell the shared
@@ -120,17 +118,6 @@
 		return target;
 	});
 
-	const backRouteConfig = $derived(
-		resolvedLeftHref ? DEEP_ROUTES.find((r) => r.pattern.test(resolvedLeftHref)) : null
-	);
-
-	const previewUser = $derived.by(() => {
-		if (resolvedLeftHref && backRouteConfig?.getPreviewProps) {
-			const customProps = backRouteConfig.getPreviewProps(page.data);
-			if (customProps.user) return customProps.user;
-		}
-		return page.data.user;
-	});
 	// The left preview shows the tab list when back lands on the tab root. When
 	// the back target is elsewhere (e.g. a thread reached before /bookmarks) the
 	// target page is unmounted on this route so there is no DOM to preview - show
@@ -959,7 +946,7 @@
 					{:else}
 						{@const PreviewPanel = getPreviewPanel(resolvedLeftHref)}
 						{#if PreviewPanel}
-							<PreviewPanel cache={listCache} t={page.data.t} user={previewUser} />
+							<PreviewPanel />
 						{/if}
 					{/if}
 				{:else}
@@ -969,7 +956,7 @@
 						{:else}
 							{@const PreviewPanel = getPreviewPanel(resolvedLeftHref)}
 							{#if PreviewPanel}
-								<PreviewPanel cache={listCache} t={page.data.t} user={previewUser} />
+								<PreviewPanel />
 							{/if}
 						{/if}
 					</div>
