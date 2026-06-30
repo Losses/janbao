@@ -2,37 +2,40 @@ import { test, expect, type Page } from '@playwright/test';
 import { prepareContext, waitForHydration } from './helpers';
 
 /**
- * Search entry/exit animation asymmetry.
+ * Search enter/exit animation - the spec and the one defect.
  *
- * The Header's root<->search transition is driven by a single `morph` value,
- * consumed by two piecewise functions of `morph` (HEADER_MORPH_THRESHOLD = 0.2):
+ * SPEC (one animation played forward and reverse - the scope-tab bar is
+ * attached to the search panel, so it arrives AFTER and leaves BEFORE the panel):
+ *   ENTER (tap search):  slide the track in, THEN expand the scope-tab bar.
+ *   EXIT  (back-swipe):  collapse the scope-tab bar, THEN slide the track out.
  *
- *   tabProgress    = isSearch ? 1 - min(1, morph / 0.2)          : 0   // SearchTabBar max-height
- *   searchProgress = isSearch ? 1 - clamp((morph-0.2)/0.8, 0, 1) : 0   // header track translateX
+ * Both directions are encoded in the SAME piecewise consumers of `morph`
+ * (HEADER_MORPH_THRESHOLD = 0.2):
+ *   tabProgress    (SearchTabBar max-height) over morph in [0, 0.2]
+ *   searchProgress (header track translateX) over morph in [0.2, 1]
+ * A continuous morph 0->1 collapses the tab first then slides; a continuous
+ * morph 1->0 slides first then expands the tab. Exact mirrors.
  *
- * These two occupy DISJOINT sub-ranges of morph: the scope-tab bar finishes its
- * whole collapse over morph in [0, 0.2], while the track slide does not even
- * start until morph = 0.2 and runs over [0.2, 1]. That sequencing is only
- * VISIBLE when `morph` is scrubbed continuously - which only the GESTURE path
- * does (GesturePageLayout writes pager.backMorph 0->1 with the finger).
+ * EXIT (back-swipe) animates `morph` continuously: GesturePageLayout writes
+ * pager.backMorph 0->1 with the finger, Header `morph` = backMorph. So the
+ * collapse-then-slide sequence plays. EXIT IS CORRECT - the reference.
  *
- * The TAP path does NOT scrub morph: /search has no deep title
- * (resolveDeepHeaderTitle('/search') === null) and its load returns no
- * `headerTitle`, so Header Effect C (title-change settle driver) never fires,
- * and `morph` simply JUMPS 1 -> 0 in one render when the SPA nav lands. The jump
- * hands every consumer its final value in the same flush, so each consumer's
- * independent CSS transition (`transform 200ms`, `max-height 200ms`, `left
- * 200ms`) fires together and they run in parallel.
+ * ENTER (tap) does NOT animate morph: /search has no deep title
+ * (resolveDeepHeaderTitle('/search') === null; the load returns no
+ * `headerTitle`), so Header Effect C (the title-change settle driver that
+ * interpolates morph on a tap) never fires, and `morph` JUMPS 1 -> 0 in one
+ * render. The jump hands every consumer its final value in the same flush, so
+ * each consumer's CSS transition (`transform 200ms`, `max-height 200ms`, `left
+ * 200ms`) fires together and the slide + expand run in PARALLEL - the intended
+ * slide-then-expand sequence is lost.
  *
- * Net effect (the reported divergence):
- *   - ENTER (tap search): scope-tab bar expand + track slide START TOGETHER (parallel).
- *   - EXIT  (back-swipe): scope-tab bar collapses to ~0 while the track is still
- *     at the search position (sequenced), then the track continues.
+ * SOLE DEFECT: the tap-enter path does not scrub morph as the exit does; it
+ * jumps 1->0 in one render. The exit proves the piecewise design is correct; the
+ * enter is the only broken half.
  *
- * These are two different mechanisms producing the enter vs the exit, NOT one
- * animation played forward/reverse. The tests below sample the header track
- * translateX + the scope-tab bar max-height (+ pager.backMorph) every frame and
- * assert both halves of the divergence, then assert they are not mirrors.
+ * The tests below assert the SPEC for both directions. EXIT is the green
+ * reference. ENTER asserts slide-before-expand and is currently RED, documenting
+ * the bug (it goes green once the tap-enter scrubs morph 1->0).
  */
 
 interface SearchHdrFrame {
@@ -160,87 +163,19 @@ async function slowSwipeBack(page: Page, startX: number, endX: number): Promise<
 	await client.detach();
 }
 
+/** Normalized progress of `vals` toward `peak`, in [0,1]. */
+function norm(vals: number[], peak: number): number[] {
+	return vals.map((v) => (peak > 0 ? Math.min(1, Math.max(0, v / peak)) : 0));
+}
+
 test.beforeEach(async ({ context }) => {
 	await prepareContext(context);
 });
 
-// --- ENTER (tap): scope-tab bar + track slide START TOGETHER (parallel) ------
-test('ENTER search via tap: scope-tab bar expand and track slide start in lockstep (parallel)', async ({
-	page
-}) => {
-	await page.goto('/');
-	await waitForHydration(page);
-
-	await installSearchHdrSampler(page, { windowMs: 2500, withContent: false });
-	await page.locator('header a[href="/search"][aria-label]').click();
-	await page.waitForURL('/search', { timeout: 8000 });
-	await page.waitForFunction(
-		(w) => (window as unknown as SearchHdrWindow).__searchHdr?.done === true,
-		{},
-		{ timeout: 6000 }
-	);
-
-	const frames = await readSearchHdrLog(page);
-	expect(frames.length, 'sampler must capture frames across the entry').toBeGreaterThan(20);
-
-	// Restrict to the entry transition: frames at/after the first frame on /search.
-	const searchFrames = frames.filter((f) => f.path === '/search');
-	expect(searchFrames.length, 'must capture frames after landing on /search').toBeGreaterThan(5);
-
-	const firstMoved = (key: (f: SearchHdrFrame) => number | null, origin: number): number => {
-		const i = searchFrames.findIndex((f) => {
-			const v = key(f);
-			return v !== null && Math.abs(v - origin) > 1;
-		});
-		return i >= 0 ? searchFrames[i].t : Number.POSITIVE_INFINITY;
-	};
-
-	// Origins on '/': trackTx=0, tabMaxH=0, btnLeft=rightmost. The three
-	// consumers should all leave their origin in the SAME render flush.
-	const trackStart = firstMoved((f) => f.trackTx, 0);
-	const tabStart = firstMoved((f) => f.tabMaxH, 0);
-	const btnStart = firstMoved((f) => f.btnLeft, searchFrames[0].btnLeft ?? 0);
-
-	console.log('ENTER start times (ms since sampler install):', {
-		trackStart,
-		tabStart,
-		btnStart
-	});
-
-	// Parallel start: all three consumers begin within one render of each other.
-	// 60ms = ~4 rAF frames of slack for the SPA-nav flush + first paint.
-	expect(Math.abs(trackStart - tabStart), 'track and scope-tab bar must start together').toBeLessThan(
-		60
-	);
-	expect(Math.abs(trackStart - btnStart), 'track and search button must start together').toBeLessThan(
-		60
-	);
-
-	// Lockstep progress: at the frame where the scope-tab bar is half-expanded,
-	// the track must also be roughly half-slid (their normalized progress tracks
-	// within ~25%). This is the hallmark of "one shared jump driving parallel CSS
-	// transitions with identical 200ms ease-out timing".
-	const peakTab = Math.max(
-		...searchFrames.map((f) => f.tabMaxH ?? 0)
-	);
-	const peakTrack = Math.max(
-		...searchFrames.map((f) => Math.abs(f.trackTx ?? 0))
-	);
-	expect(peakTab, 'scope-tab bar must expand during entry').toBeGreaterThan(20);
-	expect(peakTrack, 'header track must slide during entry').toBeGreaterThan(100);
-
-	const halfTabFrame = searchFrames.find((f) => (f.tabMaxH ?? 0) >= peakTab * 0.45);
-	expect(halfTabFrame, 'must capture the scope-tab bar at ~half expansion').toBeTruthy();
-	if (halfTabFrame) {
-		const tabNorm = (halfTabFrame.tabMaxH ?? 0) / peakTab;
-		const trackNorm = Math.abs(halfTabFrame.trackTx ?? 0) / peakTrack;
-		console.log('ENTER lockstep at half-tab:', { tabNorm, trackNorm });
-		expect(Math.abs(tabNorm - trackNorm), 'normalized progress must be lockstep').toBeLessThan(0.3);
-	}
-});
-
-// --- EXIT (back-swipe): scope-tab bar collapses BEFORE the track slides ------
-test('EXIT search via back-swipe: scope-tab bar collapses to ~0 while the track is still at the search position (sequenced)', async ({
+// --- EXIT (back-swipe): collapse the scope-tab bar, THEN slide (REFERENCE) ---
+// Currently correct: morph is scrubbed 0->1 by pager.backMorph, so tabProgress
+// (morph [0,0.2]) finishes before searchProgress (morph [0.2,1]) starts.
+test('EXIT search via back-swipe: scope-tab bar collapses to ~0 while the track is still at the search position (reference, correct)', async ({
 	page
 }) => {
 	await page.goto('/');
@@ -280,18 +215,12 @@ test('EXIT search via back-swipe: scope-tab bar collapses to ~0 while the track 
 	const frames = await readSearchHdrLog(page);
 	expect(frames.length, 'sampler must capture frames across the swipe').toBeGreaterThan(30);
 
-	// The divergence window: frames during the drag where backMorph has entered
-	// (0.15, 0.55) - past the 0.2 threshold where tabProgress has saturated but
-	// searchProgress has only just begun to move.
-	const peakTrack = Math.max(
-		...frames.map((f) => Math.abs(f.trackTx ?? 0))
-	);
+	const peakTrack = Math.max(...frames.map((f) => Math.abs(f.trackTx ?? 0)));
 	const peakTab = Math.max(...frames.map((f) => f.tabMaxH ?? 0));
 
-	// Sequencing proof: there must exist a drag frame where the scope-tab bar is
-	// essentially collapsed (<=15% of peak) but the header track has barely moved
-	// from its search position (still >=60% of peak). That state is impossible if
-	// the exit were the reverse of the (lockstep) enter.
+	// Collapse-before-slide: a drag frame where the scope-tab bar is essentially
+	// collapsed (<=15% of peak) but the header track is still at the search
+	// position (>=60% of peak). backMorph in (0.15, 0.6) = the threshold window.
 	const desyncFrame = frames.find((f) => {
 		const morph = f.backMorph;
 		if (morph === null || morph < 0.15 || morph > 0.6) return false;
@@ -301,7 +230,7 @@ test('EXIT search via back-swipe: scope-tab bar collapses to ~0 while the track 
 	});
 
 	console.log(
-		'EXIT desync (scope-tab collapsed while track held):',
+		'EXIT collapse-before-slide:',
 		desyncFrame
 			? `t=${desyncFrame.t}ms morph=${desyncFrame.backMorph?.toFixed(2)} tabNorm=${((desyncFrame.tabMaxH ?? 0) / peakTab).toFixed(2)} trackNorm=${(Math.abs(desyncFrame.trackTx ?? 0) / peakTrack).toFixed(2)}`
 			: 'NOT FOUND'
@@ -310,20 +239,71 @@ test('EXIT search via back-swipe: scope-tab bar collapses to ~0 while the track 
 	expect(desyncFrame, 'scope-tab bar must collapse before the track slides back').toBeTruthy();
 });
 
-// --- The divergence itself: enter is NOT the mirror of exit ------------------
-test('DIVIDER: enter is lockstep but exit is sequenced (not one animation forward/reverse)', async ({
+// --- ENTER (tap): slide the track in, THEN expand the scope-tab bar (SPEC) ---
+// Currently RED: morph JUMPS 1->0 (no title -> Effect C settle never fires for
+// /search), so the track slide and the scope-tab bar expand fire their CSS
+// transitions in parallel and there is NO frame where the track has slid but
+// the scope-tab bar has not yet expanded. Goes green once the tap-enter scrubs
+// morph 1->0.
+test('ENTER search via tap: track slides in BEFORE the scope-tab bar expands (spec; currently red - parallel)', async ({
 	page
 }) => {
-	// Re-derive a compact summary from both transitions in one place so the
-	// report has a single side-by-side comparison. The two halves are exercised
-	// by the tests above; this test recomputes the two key timings and asserts
-	// they differ in character (parallel start vs sequenced completion).
+	await page.goto('/');
+	await waitForHydration(page);
 
+	await installSearchHdrSampler(page, { windowMs: 2500, withContent: false });
+	await page.locator('header a[href="/search"][aria-label]').click();
+	await page.waitForURL('/search', { timeout: 8000 });
+	await page.waitForFunction(
+		(w) => (window as unknown as SearchHdrWindow).__searchHdr?.done === true,
+		{},
+		{ timeout: 6000 }
+	);
+
+	const frames = await readSearchHdrLog(page);
+	expect(frames.length, 'sampler must capture frames across the entry').toBeGreaterThan(20);
+
+	// Restrict to the entry transition: frames at/after landing on /search.
+	const searchFrames = frames.filter((f) => f.path === '/search');
+	expect(searchFrames.length, 'must capture frames after landing on /search').toBeGreaterThan(5);
+
+	const peakTrack = Math.max(...searchFrames.map((f) => Math.abs(f.trackTx ?? 0)));
+	const peakTab = Math.max(...searchFrames.map((f) => f.tabMaxH ?? 0));
+	expect(peakTrack, 'header track must slide during entry').toBeGreaterThan(100);
+	expect(peakTab, 'scope-tab bar must expand during entry').toBeGreaterThan(20);
+
+	// Slide-before-expand: a frame where the track has substantially slid
+	// (>=60% of peak) but the scope-tab bar has barely expanded (<=15% of peak).
+	// Under the bug (parallel CSS transitions off a morph jump) the two progress
+	// values are ~equal at every frame, so no such frame exists.
+	const slideFirstFrame = searchFrames.find((f) => {
+		const trackNorm = peakTrack > 0 ? Math.abs(f.trackTx ?? 0) / peakTrack : 0;
+		const tabNorm = peakTab > 0 ? (f.tabMaxH ?? 0) / peakTab : 0;
+		return trackNorm >= 0.6 && tabNorm <= 0.15;
+	});
+
+	console.log(
+		'ENTER slide-before-expand:',
+		slideFirstFrame
+			? `t=${slideFirstFrame.t}ms trackNorm=${(Math.abs(slideFirstFrame.trackTx ?? 0) / peakTrack).toFixed(2)} tabNorm=${((slideFirstFrame.tabMaxH ?? 0) / peakTab).toFixed(2)}`
+			: 'NOT FOUND (parallel - bug)'
+	);
+
+	expect(
+		slideFirstFrame,
+		'track must slide in before the scope-tab bar expands (currently parallel = bug)'
+	).toBeTruthy();
+});
+
+// --- MIRROR: enter is slide-first AND exit is collapse-first (one animation) ---
+test('MIRROR: enter slides-then-expands and exit collapses-then-slides (one animation forward/reverse)', async ({
+	page
+}) => {
 	await page.goto('/');
 	await waitForHydration(page);
 
 	// ENTER sample.
-	await installSearchHdrSampler(page, { windowMs: 2000, withContent: false });
+	await installSearchHdrSampler(page, { windowMs: 2500, withContent: false });
 	await page.locator('header a[href="/search"][aria-label]').click();
 	await page.waitForURL('/search', { timeout: 8000 });
 	await page.waitForFunction(
@@ -331,12 +311,13 @@ test('DIVIDER: enter is lockstep but exit is sequenced (not one animation forwar
 		{ timeout: 6000 }
 	);
 	const enterFrames = (await readSearchHdrLog(page)).filter((f) => f.path === '/search');
-	const enterTrackStart = enterFrames.find((f) => Math.abs(f.trackTx ?? 0) > 1)?.t ?? null;
-	const enterTabStart = enterFrames.find((f) => (f.tabMaxH ?? 0) > 1)?.t ?? null;
-	const enterStartGap =
-		enterTrackStart !== null && enterTabStart !== null
-			? Math.abs(enterTrackStart - enterTabStart)
-			: null;
+	const enterPeakTrack = Math.max(...enterFrames.map((f) => Math.abs(f.trackTx ?? 0)));
+	const enterPeakTab = Math.max(...enterFrames.map((f) => f.tabMaxH ?? 0));
+	const enterSlideFirst = enterFrames.some((f) => {
+		const trackNorm = enterPeakTrack > 0 ? Math.abs(f.trackTx ?? 0) / enterPeakTrack : 0;
+		const tabNorm = enterPeakTab > 0 ? (f.tabMaxH ?? 0) / enterPeakTab : 0;
+		return trackNorm >= 0.6 && tabNorm <= 0.15;
+	});
 
 	// EXIT sample.
 	await page.waitForTimeout(300);
@@ -350,30 +331,18 @@ test('DIVIDER: enter is lockstep but exit is sequenced (not one animation forwar
 		{ timeout: 6000 }
 	);
 	const exitFrames = await readSearchHdrLog(page);
-	const peakTab = Math.max(...exitFrames.map((f) => f.tabMaxH ?? 0));
-	const peakTrack = Math.max(...exitFrames.map((f) => Math.abs(f.trackTx ?? 0)));
-	// On exit, the scope-tab bar reaches <=15% of peak while the track is still
-	// >=60% of peak - the order they COMPLETE is reversed relative to a mirror.
-	const exitDesync = exitFrames.some((f) => {
+	const exitPeakTrack = Math.max(...exitFrames.map((f) => Math.abs(f.trackTx ?? 0)));
+	const exitPeakTab = Math.max(...exitFrames.map((f) => f.tabMaxH ?? 0));
+	const exitCollapseFirst = exitFrames.some((f) => {
 		const m = f.backMorph;
 		if (m === null || m < 0.15 || m > 0.6) return false;
-		const tabNorm = peakTab > 0 ? (f.tabMaxH ?? 0) / peakTab : 0;
-		const trackNorm = peakTrack > 0 ? Math.abs(f.trackTx ?? 0) / peakTrack : 0;
+		const tabNorm = exitPeakTab > 0 ? (f.tabMaxH ?? 0) / exitPeakTab : 0;
+		const trackNorm = exitPeakTrack > 0 ? Math.abs(f.trackTx ?? 0) / exitPeakTrack : 0;
 		return tabNorm <= 0.15 && trackNorm >= 0.6;
 	});
 
-	console.log('DIVERGENCE SUMMARY:', {
-		enterStartGapMs: enterStartGap,
-		enterParallel: (enterStartGap ?? 999) < 60,
-		exitSequenced: exitDesync
-	});
+	console.log('MIRROR SUMMARY:', { enterSlideFirst, exitCollapseFirst });
 
-	expect(enterStartGap, 'enter must start in lockstep').not.toBeNull();
-	expect((enterStartGap ?? 999) < 60, 'enter: track and scope-tab bar start together').toBe(true);
-	expect(exitDesync, 'exit: scope-tab bar collapses before the track slides').toBe(true);
-	// The two characters are mutually exclusive for a single reversible animation.
-	expect(
-		(enterStartGap ?? 999) < 60 && exitDesync,
-		'enter is parallel AND exit is sequenced => not one animation forward/reverse'
-	).toBe(true);
+	expect(exitCollapseFirst, 'exit: scope-tab bar collapses before the track slides').toBe(true);
+	expect(enterSlideFirst, 'enter: track slides before the scope-tab bar expands').toBe(true);
 });

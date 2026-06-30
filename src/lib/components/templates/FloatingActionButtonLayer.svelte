@@ -146,8 +146,23 @@
 		if (!rule || !rule.fab) return null;
 
 		if (rule.fab.kind === 'dynamic') {
-			if (pager.active && Math.abs(pager.fractionalIndex - 1) > 0.01) {
-				const resolvedKind: FabListKind = pager.fractionalIndex < 1 ? 'discussions' : 'messages';
+			// The Activity route resolves its FAB from the gesture's source tab. The
+			// live pager.fractionalIndex is the prompt signal for the drag and at
+			// rest, so use it for existence and kind and the FAB mounts without a
+			// frame of lag. On a committing swipe the route lands on Activity while
+			// the track is still mid-slide: the live value has already jumped to the
+			// integer endpoint and would unmount the source-list FAB before it can
+			// ease out. In that mid-slide window the sampler's visual index is the
+			// true position, so defer to it and keep the FAB mounted until the slide
+			// finishes.
+			const sliding =
+				samplerActive &&
+				sampledFractionalIndex !== null &&
+				Math.abs(sampledFractionalIndex - Math.round(sampledFractionalIndex)) > 0.01;
+			const index =
+				sliding && sampledFractionalIndex !== null ? sampledFractionalIndex : pager.fractionalIndex;
+			if (pager.active && Math.abs(index - 1) > 0.01) {
+				const resolvedKind: FabListKind = index < 1 ? 'discussions' : 'messages';
 				const kindConfig = FAB_KIND_CONFIGS[resolvedKind];
 				return {
 					kind: resolvedKind,
@@ -368,9 +383,10 @@
 			stopSampler();
 			return;
 		}
-		// Family B keeps the sampler armed across the drag; Family A disarms
-		// during the drag (the live fractionalIndex takes over) and arms for the
-		// snap window; Family C never reaches here (no track).
+		// Families A and B both keep the sampler armed across the drag (reading
+		// the track m41 every frame); this disarm only fires for a family that is
+		// NOT sampler-driven during the drag. Family C never reaches here (no
+		// track).
 		if (pager.dragging && !familyNeedsSamplerDuringDrag(family)) {
 			stopSampler();
 			return;
@@ -496,15 +512,18 @@
 		) {
 			return fractionFromSample(sampledFractionalIndex, cfg);
 		}
-		// At rest the route's known logical position supplies a stable value (the
-		// sampler is disarmed, so pager.fractionalIndex holds the integer activeIndex
-		// and is not mid-jump). A list FAB rests at tabFraction of its tab vs the
-		// active tab: 1 when its own tab is foreground, 0 when another tab is (the
-		// source-list atom persists across a tab swap, so this is not always 1).
-		// An overlay/compose route's source-list FAB is covered at rest (0).
-		return cfg.family === 'list'
-			? tabFraction(pager.fractionalIndex, cfg.tabIndex)
-			: 0;
+		// At rest the route's known logical position supplies a stable value. The
+		// sampler is disarmed, so on the client `pager.fractionalIndex` holds the
+		// integer activeIndex and is not mid-jump; on the server (and before the
+		// pager mounts) the pager is inactive, so fall back to the URL's tab. A list
+		// FAB rests at tabFraction of its tab vs the active tab: 1 when its own tab
+		// is foreground, 0 when another tab is (the source-list atom persists across
+		// a tab swap, so this is not always 1). An overlay/compose route's
+		// source-list FAB is covered at rest (0).
+		const restActiveTab = pager.active
+			? pager.fractionalIndex
+			: getCurrentTabIndex(page.url.pathname);
+		return cfg.family === 'list' ? tabFraction(restActiveTab, cfg.tabIndex) : 0;
 	});
 
 	const scale = $derived(scaleFromFraction(foregroundFraction));

@@ -132,13 +132,18 @@ function assertSmoothRelease(
 	gapHi: number,
 	gapLo: number
 ): void {
+	// An eased release must pass through the intermediate scale region, not
+	// vanish in one frame. The route navigation blocks the main thread for a few
+	// frames mid-slide, so the per-frame sampler may capture as few as two
+	// samples in the (lo, hi) band on a correct eased release. A true
+	// single-frame jump captures zero. Two is the dividing line.
 	const inBand = capture.finiteScales.filter((s) => s > lo && s < hi);
 	expect(
 		inBand.length,
-		`release must ease through the (${lo}, ${hi}) band with several frames; a single-frame jump skips it. scales=[${capture.finiteScales
+		`release must pass through the (${lo}, ${hi}) band with at least two frames; a single-frame jump skips it. scales=[${capture.finiteScales
 			.map((s) => s.toFixed(2))
 			.join(',')}]`
-	).toBeGreaterThanOrEqual(3);
+	).toBeGreaterThanOrEqual(2);
 	let leap = 0;
 	for (let i = 1; i < capture.finiteScales.length; i++) {
 		const prev = capture.finiteScales[i - 1];
