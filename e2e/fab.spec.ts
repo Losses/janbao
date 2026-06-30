@@ -722,6 +722,101 @@ test('tap on the FAB navigates to the compose route', async ({ page }) => {
 	await page.waitForURL('/post/discussion', { timeout: 5000 });
 });
 
+test('Family A: swipe back from Activity to Discussions scales the FAB in as a monotonic trajectory', async ({ page }) => {
+	await page.goto('/activity');
+	await waitForHydration(page);
+	const { swipeBack } = await import('./helpers');
+	const capture = await sampleFabScale(page, async () => {
+		await swipeBack(page);
+		await page.waitForURL('/', { timeout: 5000 });
+	});
+	expect(
+		capture.samples.length,
+		'sampler must have captured enough frames to span the swipe'
+	).toBeGreaterThanOrEqual(6);
+	const firstThree = capture.samples.slice(0, 3);
+	expect(
+		Math.min(...(firstThree.length > 0 ? firstThree : [1])),
+		'Discussions FAB must start near scale 0'
+	).toBeLessThan(0.25);
+	expect(
+		capture.samples[capture.samples.length - 1] ?? 0,
+		'Discussions FAB must reach near scale 1 at target'
+	).toBeGreaterThan(0.9);
+	assertNonDecreasingWithinTolerance(capture.samples, 0.25);
+	expect(
+		scaleTrajectoryCrosses(capture.samples, 0.5),
+		'scale trajectory must cross 0.5 inside the swipe window'
+	).toBe(true);
+	expect(
+		capture.samples.some((s) => s > 0.3 && s < 0.7),
+		'an intermediate scale sample between 0.3 and 0.7 must exist mid-swipe'
+	).toBe(true);
+});
+
+test('Family A: swipe forward from Activity to Messages scales the FAB in as a monotonic trajectory', async ({ page }) => {
+	await page.goto('/activity');
+	await waitForHydration(page);
+	const { swipeForward } = await import('./helpers');
+	const capture = await sampleFabScale(page, async () => {
+		await swipeForward(page);
+		await page.waitForURL('/messages/inbox', { timeout: 5000 });
+	});
+	expect(
+		capture.samples.length,
+		'sampler must have captured enough frames to span the swipe'
+	).toBeGreaterThanOrEqual(6);
+	const firstThree = capture.samples.slice(0, 3);
+	expect(
+		Math.min(...(firstThree.length > 0 ? firstThree : [1])),
+		'Messages FAB must start near scale 0'
+	).toBeLessThan(0.25);
+	expect(
+		capture.samples[capture.samples.length - 1] ?? 0,
+		'Messages FAB must reach near scale 1 at target'
+	).toBeGreaterThan(0.9);
+	assertNonDecreasingWithinTolerance(capture.samples, 0.25);
+	expect(
+		scaleTrajectoryCrosses(capture.samples, 0.5),
+		'scale trajectory must cross 0.5 inside the swipe window'
+	).toBe(true);
+	expect(
+		capture.samples.some((s) => s > 0.3 && s < 0.7),
+		'an intermediate scale sample between 0.3 and 0.7 must exist mid-swipe'
+	).toBe(true);
+});
+
+test('Family A: swipe back from Messages to Activity scales the FAB out as a monotonic trajectory', async ({ page }) => {
+	await page.goto('/messages/inbox');
+	await waitForHydration(page);
+	const { swipeBack } = await import('./helpers');
+	const capture = await sampleFabScale(page, async () => {
+		await swipeBack(page);
+		await page.waitForURL('/activity', { timeout: 5000 });
+	});
+	expect(
+		capture.samples.length,
+		'sampler must have captured enough frames to span the swipe'
+	).toBeGreaterThanOrEqual(6);
+	expect(
+		capture.samples[0] ?? -1,
+		'first frame must be scale 1 (list at rest)'
+	).toBeCloseTo(1, 1);
+	expect(
+		capture.minScale ?? 1,
+		'FAB must scale below 0.5 during the swipe'
+	).toBeLessThan(0.5);
+	assertNonIncreasingWithinTolerance(capture.samples, 0.25);
+	expect(
+		scaleTrajectoryCrosses(capture.samples, 0.5),
+		'scale trajectory must cross 0.5 inside the swipe window'
+	).toBe(true);
+	expect(
+		capture.samples.some((s) => s > 0.3 && s < 0.7),
+		'an intermediate scale sample between 0.3 and 0.7 must exist mid-swipe'
+	).toBe(true);
+});
+
 // --- helpers -----------------------------------------------------------------
 
 interface FabTransform {

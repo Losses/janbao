@@ -188,6 +188,24 @@
 			if (!kind) return null;
 			return { kind, family: 'compose', ...listBundle(kind) };
 		}
+		if (pathname === '/activity') {
+			if (pager.active && Math.abs(pager.fractionalIndex - 1) > 0.01) {
+				if (pager.fractionalIndex < 1) {
+					return {
+						kind: 'discussions' as const,
+						family: 'list',
+						...listBundle('discussions')
+					};
+				} else {
+					return {
+						kind: 'messages' as const,
+						family: 'list',
+						...listBundle('messages')
+					};
+				}
+			}
+			return null;
+		}
 		if (isDiscussionsListRoute(pathname)) {
 			return {
 				kind: 'discussions' as const,
@@ -268,6 +286,11 @@
 		if (panelWidth <= 0) return null;
 		try {
 			const m41 = new DOMMatrix(getComputedStyle(el).transform).m41;
+			const cfg = fabConfig;
+			if (cfg && cfg.family === 'list') {
+				// Family A: range [0, 2] for the three tabs
+				return Math.max(0, Math.min(2, -m41 / panelWidth));
+			}
 			return pxToFraction(m41, panelWidth);
 		} catch {
 			return null;
@@ -387,8 +410,9 @@
 	//   - Family C (compose route): never armed (no sibling track exists).
 	$effect(() => {
 		const hasTrack = track !== null;
-		const cfg = fabConfig;
-		if (!hasTrack || cfg === null) {
+		const hasCfg = fabConfig !== null;
+		const family = fabConfig?.family ?? null;
+		if (!hasTrack || !hasCfg) {
 			stopSampler();
 			return;
 		}
@@ -403,7 +427,7 @@
 		// Family B keeps the sampler armed across the drag; Family A disarms
 		// during the drag (the live fractionalIndex takes over) and arms for the
 		// snap window; Family C never reaches here (no track).
-		if (pager.dragging && !familyNeedsSamplerDuringDrag(cfg.family)) {
+		if (pager.dragging && !familyNeedsSamplerDuringDrag(family)) {
 			stopSampler();
 			return;
 		}
@@ -494,12 +518,9 @@
 		const cfg = fabConfig;
 		if (cfg === null) return 0;
 		if (chipExitActive) return 0;
-		// Family A drag: the live pager.fractionalIndex is continuous 1:1 with
-		// the finger (the tab pager publishes it during drag). Family B does not
-		// take this branch: a thread route's drag pins fractionalIndex at
-		// centerTab, so the sampler (running during the drag for Family B) reads
-		// the actual track m41 below.
-		if (pager.dragging && !familyNeedsSamplerDuringDrag(cfg.family)) {
+		// Family A (list): the live pager.fractionalIndex is continuous 1:1 with
+		// the gesture during both drag and snap, so we drive it directly.
+		if (pager.active && cfg.family === 'list') {
 			return tabFraction(pager.fractionalIndex, cfg.tabIndex);
 		}
 		if (samplerActive && sampledFractionalIndex !== null) {
