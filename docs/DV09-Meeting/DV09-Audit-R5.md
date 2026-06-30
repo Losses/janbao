@@ -41,7 +41,7 @@ Result line: **5/5 PASS (FINAL, unconditional). Loop exit.**
 - **scroll-chrome active on list routes (§4.12.2).** `(tabs)/+layout.svelte:108` reads `window.scrollY`; `/`, `/activity`, `/messages/inbox` are not under `fixed-viewport`, so the default window scroll listener at `scroll-chrome.svelte.ts:145-146` fires and drives `translateY`. The FAB's `$derived` tracks.
 - **No bottom chrome (§4.12.6).** `MobileTabBar.svelte:79` is a `<nav>` row of pills rendered inside the Header at `Header.svelte:620`, not a bottom bar. `rg "fixed.*bottom|bottom-nav"` over `src` returns zero navigation-chrome hits. The FAB at `bottom-1rem right-1rem` slides off the viewport bottom edge into empty space; no sibling bottom chrome to reconcile z-index with.
 
-## Organic integration — CLEAN (all 5)
+## Organic integration - CLEAN (all 5)
 
 The audit gate is **"no FAB-named tokens (`fab` / `post` / `messages` / `discussions`) enter shared primitives"**, NOT "zero diff to `scroll-chrome.svelte.ts`". `headerHeight` is a general scroll-chrome field: the store docstring at `scroll-chrome.svelte.ts:9-11` describes it as "the current viewport's header height" attributed to Header's ResizeObserver, and `setHeaderHeight` (the writer, at `:185-190`) is already part of the public surface. Exposing the read parallels the existing `translateY` / `hidden` / `scrolling` / `override` getters. The one-line `get headerHeight()` getter adds zero FAB tokens. The prior path-1 "byte-identical `scroll-chrome.svelte.ts`" framing is correctly gone.
 
@@ -61,7 +61,7 @@ The new module store `active-gesture-track.svelte.ts` is named for the gesture c
 
 All 5 auditors grep'd for existing `scrollChrome.headerHeight` readers. Zero hits. The getter is purely additive read access on an already-internal `$state`; the `setHeaderHeight` writer at `:185-190` is unchanged and remains the sole writer. The reactive graph is: Header's `ResizeObserver` → `setHeaderHeight(h)` → closure `$state` write → FAB `$derived` re-runs. No other consumer of `headerHeight` is introduced or affected by the change.
 
-## §9 carried items — ACCEPTABLE-DEFERRAL (all 5)
+## §9 carried items - ACCEPTABLE-DEFERRAL (all 5)
 
 - **`size-14` owner-confirm before implementation.** FAB diameter `size-14` (56px) has no codebase precedent (`BookmarkButton.svelte:76` uses `btn-circle btn-sm`). Marked for designer confirmation before implementation; if a different diameter is specified, only the `size-*` class on the atom changes. The R4 `translateY` magnitude `fabHeight + bottomClearance` is computed FROM this diameter, so a diameter change updates the slide distance in lockstep (no separate tuning). Deferral acceptable because the rest of the plan is diameter-agnostic.
 - **Safe-area inset bottom (§4.12.6).** The repo has zero `env(safe-area-inset-bottom)` usage today (verified `rg "safe-area"` over `src` returns nothing). The resting `bottom: 1rem` and `bottomClearance = 1rem` may clip the iOS home indicator. Designer confirms whether `bottom` should be `calc(1rem + env(safe-area-inset-bottom))`; if so, both the resting offset and the slide distance update together. ACCEPTABLE-DEFERRAL.

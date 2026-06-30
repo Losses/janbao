@@ -23,7 +23,7 @@ Result line: **5/5 PASS (FINAL, unconditional). Loop exit.**
 - **§4.6 simplification.** Per-surface store dropped. One sampler writes a single `sampledFractionalIndex`; each FAB derives its own scale from that one source via the pure `tabFraction` / `pxToFraction` / `scaleFromFraction` functions in `fab-scale.ts`.
 - **Retarget sequencing.** The false "single-frame retarget" claim is replaced with the real sequencing: sampler arms when the module store's track becomes non-null, disarms when it goes null; during the no-track gap the scale holds its last value. A route swap that crosses the Family A→B boundary does not happen mid-gesture on the lost track (the gesture commits, then the route swaps).
 
-### Reactivity linchpin — VERIFIED via production precedent + empirical harness
+### Reactivity linchpin - VERIFIED via production precedent + empirical harness
 
 The reactive linchpin (closure `$state<HTMLElement | null>` inside a module-singleton getter, read inside a `$derived` in an ancestor component, tracks when a descendant writes) is VERIFIED two ways:
 
@@ -37,11 +37,11 @@ The reactive linchpin (closure `$state<HTMLElement | null>` inside a module-sing
 - **A/B/C forward-nav taxonomy.** Family A (tab swipe/tap, MobileTabPager track) source at `MobileTabPager.svelte:347` + `switchTo:167-178`. Family B (thread enter/exit, GesturePageLayout track) source at `GesturePageLayout.svelte:240-249,258,869-873` (snapIndex 0→ACTIVE via rAF, CSS `transition-transform duration-200`), `bind:this={trackEl}:918`. Family C (compose, no pager) source at `/post/discussion/+page.svelte` and `/messages/new/+page.svelte` (no GesturePageLayout import).
 - **OverlayLayer removal.** §3 rewritten against the real component graph; thread overlay = GesturePageLayout's center `.gpl-card`.
 
-## Organic integration — CLEAN (all 5)
+## Organic integration - CLEAN (all 5)
 
 `git diff` gate (§7): `swipe.ts`, `GesturePageLayout.svelte` (R2-revised), `MobileTabPager.svelte` (R2-revised), `navigation-logic.ts`, `navigation.svelte.ts`, `tab-config.ts`, `scroll-chrome.svelte.ts`, `Header.svelte`, `MobileTabBar.svelte`, `(tabs)/+layout.svelte`, `DualColumnLayout.svelte`, `+layout.server.ts` contain **zero** FAB-named tokens. The two shared primitives that DO receive edits (`MobileTabPager.svelte`, `GesturePageLayout.svelte`) gain ONLY `bind:this` / declaration / publication / clear lines, no `fab` / `post` / `messages` / `discussions` strings. `AppShell.svelte` gains ONE render line. The root `+layout.svelte` gains ONE `initActiveGestureTrack();` call alongside the existing inits. The new module store `active-gesture-track.svelte.ts` is named for the gesture surface, paralleling `scroll-chrome.svelte.ts`.
 
-## §9 carried items — ACCEPTABLE-DEFERRAL (all 5)
+## §9 carried items - ACCEPTABLE-DEFERRAL (all 5)
 
 - **`$effect.pre` / plain-`$effect` empirical e2e gate.** The arm/disarm effect is plain `$effect` (not `.pre`), the prescribed mitigation per memory `svelte-effect-pre-same-flush-rerun`. The plan correctly does NOT assert static safety; it marks empirical e2e verification as an implementation gate (the "remove the guard, run the e2e sampler" prescription). All five auditors accept the deferral with the gate intact.
 - **`size-14` owner-confirm-before-implementation.** FAB diameter `size-14` (56px) has no codebase precedent (`BookmarkButton.svelte:76` uses `btn-circle btn-sm`). Marked for designer confirmation before implementation; if a different diameter is specified, only the `size-*` class on the atom changes. Deferral acceptable because the rest of the plan is diameter-agnostic.

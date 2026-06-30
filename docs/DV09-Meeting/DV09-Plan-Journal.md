@@ -31,7 +31,7 @@ All five auditors returned `has-special-cases`, high confidence. Full detail: `D
 Convergent blockers:
 
 - **B1 (CRITICAL, 5/5).** `'activeGestureTrack'` Svelte context is directionally impossible. The FAB layer in AppShell is an ANCESTOR of `MobileTabPager` / `GesturePageLayout`; `getContext` walks the `.parent` chain upward only (`node_modules/svelte/types/index.d.ts:497,503,512`; `context.js`). `getContext('activeGestureTrack')` in AppShell returns `undefined` unconditionally. Every existing `setContext` in the repo is ancestor-owns (`+layout.svelte:118` `app:lang`; `mobile-pager.svelte.ts:99,124`; `navigation.svelte.ts:274`, all initialized from `+layout.svelte:42-44`). Zero precedent for descendant → ancestor. The §9 fallback ("read via `getContext` on each `afterNavigate` tick") is the same broken call (`setContext` captures at call time; the new route's `bind:this` fires after `afterNavigate`).
-- **B2 (HIGH, auditors 2, 5).** `MobileTabPager.svelte` has no `trackEl`. `grep bind:this` returns only `deepPreviewEl` (line 401); the line-347 track div has no binding; track style is a derived string (`trackStyle:132-136`). The "ONE line `setContext('activeGestureTrack', trackEl)`" instruction is unimplementable. `GesturePageLayout.svelte:250,918` does have `trackEl` + `bind:this` — single publication line holds there.
+- **B2 (HIGH, auditors 2, 5).** `MobileTabPager.svelte` has no `trackEl`. `grep bind:this` returns only `deepPreviewEl` (line 401); the line-347 track div has no binding; track style is a derived string (`trackStyle:132-136`). The "ONE line `setContext('activeGestureTrack', trackEl)`" instruction is unimplementable. `GesturePageLayout.svelte:250,918` does have `trackEl` + `bind:this` - single publication line holds there.
 - **B3 (HIGH, auditors 3, 5).** "General capability" framing is post-hoc. No plausible second consumer of `'activeGestureTrack'`; `GesturePageLayout.startPendingNavPoll:538-586` samples its own closure `trackEl`. The integration is FAB-only and should be owned honestly.
 
 Secondary (non-blocking, addressed in revision):
@@ -39,7 +39,7 @@ Secondary (non-blocking, addressed in revision):
 - **navInFlight gap (auditors 2, 5).** Cross-tab chip-exit contract must be `navStore.pendingNav !== null || navStore.navInFlight`; `executePendingNav:194` clears `pendingNav` and sets `navInFlight` before `afterNavigate` clears it. `GesturePageLayout.svelte:99-100,371-372` already uses the OR form. Layer short-circuits scale → 0 directly (not via `foregroundFraction`).
 - **Single-frame retarget claim is false (auditor 2 B3).** Replaced with explicit sequencing: sampler arms on store-becomes-non-null, disarms on null; during the no-track gap the scale holds its last value (route swap is not mid-gesture on the lost track).
 - **§4.6 two-writer over-specified (auditor 2).** One sampler feeds sampled `fractionalIndex`; per-FAB scale = `clamp(2 · tabFraction(sampledFractionalIndex, tabIndex) − 1, 0, 1)`. Per-surface store dropped.
-- **`$effect.pre` same-flush re-run (auditor 5).** Arm/disarm is plain `$effect`; verify empirically. UNVERIFIED — Round 3.
+- **`$effect.pre` same-flush re-run (auditor 5).** Arm/disarm is plain `$effect`; verify empirically. UNVERIFIED - Round 3.
 
 Revision decisions:
 
@@ -49,7 +49,7 @@ Revision decisions:
 - **Own the organic claim honestly.** [B3] Drop "general capability". State the integration as an audited one-paragraph publication of the track element to a shared module store, solely consumed by the FAB sampler. Audit gate: diff to each shared primitive contains ONLY `bind:this` / declaration / publication lines, with NO FAB-named tokens. DV08 clean = no feature-named tokens, not zero lines.
 - **navInFlight fix.** [navInFlight gap] Contract = `pendingNav !== null || navInFlight`; layer short-circuits scale → 0 directly.
 - **§4.6 simplification.** [B1-concern] One sampler, per-FAB derivation from sampled `fractionalIndex`; drop the per-surface store.
-- **§9 UNVERIFIED cleared.** Context reactivity moot (module store). Fixed-viewport drift reasoned via Header existence proof (`Header.svelte:568,572` same AppShell level, `sticky z-40`, no drift under `app.css:244-255`); portal fallback noted. `size-14` owner-confirm must resolve before plan approval. `$effect.pre` same-flush re-run UNVERIFIED — Round 3.
+- **§9 UNVERIFIED cleared.** Context reactivity moot (module store). Fixed-viewport drift reasoned via Header existence proof (`Header.svelte:568,572` same AppShell level, `sticky z-40`, no drift under `app.css:244-255`); portal fallback noted. `size-14` owner-confirm must resolve before plan approval. `$effect.pre` same-flush re-run UNVERIFIED - Round 3.
 
 ## Round 3 - 5/5 PASS (FINAL, unconditional). Loop exit.
 

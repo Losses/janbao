@@ -20,10 +20,10 @@ Result line: **0/5 PASS → revised.**
 
 The plan mounted `FloatingActionButtonLayer` from `(tabs)/+layout.svelte`. Verified against source: `(tabs)/` contains only `+page.svelte`, `activity/`, `messages/inbox/`. The four FAB-relevant destination routes are TOP-LEVEL, not under `(tabs)/`:
 
-- `/discussion/[discussionId]/[slug]/[[page=page]]/+page.svelte:1-3,907-918` — renders its OWN `<DualColumnLayout><GesturePageLayout centerTab={0}>`.
-- `/messages/[id]/[[page=page]]/+page.svelte:1-3,143-181` — renders its OWN `<DualColumnLayout><GesturePageLayout centerTab={2}>`.
-- `/post/discussion/+page.svelte:2,114-316` — top-level, NO GesturePageLayout.
-- `/messages/new/+page.svelte` — top-level, NO GesturePageLayout.
+- `/discussion/[discussionId]/[slug]/[[page=page]]/+page.svelte:1-3,907-918` - renders its OWN `<DualColumnLayout><GesturePageLayout centerTab={0}>`.
+- `/messages/[id]/[[page=page]]/+page.svelte:1-3,143-181` - renders its OWN `<DualColumnLayout><GesturePageLayout centerTab={2}>`.
+- `/post/discussion/+page.svelte:2,114-316` - top-level, NO GesturePageLayout.
+- `/messages/new/+page.svelte` - top-level, NO GesturePageLayout.
 
 `MobileTabPager` is imported and rendered ONLY by `(tabs)/+layout.svelte:22,129`. The memory note `mobile-thread-overlay-persistent-pager.md` is SUPERSEDED 2026-06-27 (`.mobile-tab-pager-viewport` is null on thread pages). Consequences the plan did not account for:
 
@@ -73,7 +73,7 @@ The "general capability" framing was post-hoc: only consumer is FAB. Either the 
 
 ## Verified-TRUE claims (carry forward)
 
-`initMobilePagerStore` runs in root layout and sets `globalMobilePagerFallback`; `getMobilePagerStore` is reachable from AppShell without `getContext`; AppShell mounts Header specifically to survive cross-branch nav; Header uses CSS-only mobile gating (`md:` breakpoints), no JS `isMobile`; root layout server computes `isMobile` from UA (`+layout.server.ts:40,112`); `html.fixed-viewport` locks html/body via `position: fixed` (`app.css:244-255`) — a `position: fixed` FAB descendant of AppShell still anchors to the viewport under this lock; `startPendingNavPoll` (GesturePageLayout.svelte:538-586) is the existing rAF-on-track-transform pattern (`RAF_POLL_TIMEOUT_MS = TRACK_TRANSITION_MS * 4 = 800ms`, samples `getComputedStyle(trackEl).transform` m41 each tick); thread route GesturePageLayout runs a 200ms enter animation (snapIndex 0→ACTIVE via single rAF, CSS transition animates the track); compose routes have no pager; `data-no-swipe` marker (swipe.ts:73) is the gesture-yield mechanism; MobileTabBar active pill `bg-neutral-content/15 text-accent` (MobileTabBar.svelte:91); ActionBar wrapper `bg-neutral text-neutral-content shadow-md` (Header.svelte:572); `--color-accent: #ffee88`, `--color-neutral: #111`, `--color-accent-content: #111` (app.css).
+`initMobilePagerStore` runs in root layout and sets `globalMobilePagerFallback`; `getMobilePagerStore` is reachable from AppShell without `getContext`; AppShell mounts Header specifically to survive cross-branch nav; Header uses CSS-only mobile gating (`md:` breakpoints), no JS `isMobile`; root layout server computes `isMobile` from UA (`+layout.server.ts:40,112`); `html.fixed-viewport` locks html/body via `position: fixed` (`app.css:244-255`) - a `position: fixed` FAB descendant of AppShell still anchors to the viewport under this lock; `startPendingNavPoll` (GesturePageLayout.svelte:538-586) is the existing rAF-on-track-transform pattern (`RAF_POLL_TIMEOUT_MS = TRACK_TRANSITION_MS * 4 = 800ms`, samples `getComputedStyle(trackEl).transform` m41 each tick); thread route GesturePageLayout runs a 200ms enter animation (snapIndex 0→ACTIVE via single rAF, CSS transition animates the track); compose routes have no pager; `data-no-swipe` marker (swipe.ts:73) is the gesture-yield mechanism; MobileTabBar active pill `bg-neutral-content/15 text-accent` (MobileTabBar.svelte:91); ActionBar wrapper `bg-neutral text-neutral-content shadow-md` (Header.svelte:572); `--color-accent: #ffee88`, `--color-neutral: #111`, `--color-accent-content: #111` (app.css).
 
 ## Revision decisions
 
