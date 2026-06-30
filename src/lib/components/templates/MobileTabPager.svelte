@@ -24,13 +24,18 @@
 	 * the URL) so there is no race mid-transition. The paginator is shown only on
 	 * the active panel.
 	 */
-	import { onMount, untrack } from 'svelte';
+	import { onMount, onDestroy, untrack } from 'svelte';
+	import { browser } from '$app/environment';
 	import { page } from '$app/state';
 	import type { Action } from 'svelte/action';
 	import { detectSwipe } from '$lib/actions/swipe';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
+	import {
+		setActiveGestureTrack,
+		clearActiveGestureTrack
+	} from '$lib/stores/active-gesture-track.svelte';
 	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
 	import { backSwipeShouldPopHistory } from '$lib/utils/history-nav';
 	import { getDeepPageSnapshotStore } from '$lib/stores/deep-page-snapshot.svelte';
@@ -69,6 +74,11 @@
 	// motion (NOT a separate width-clip animation).
 	let showDeepPreview = $state(false);
 	let deepPreviewEl = $state<HTMLElement | null>(null);
+	// The horizontal track element. Published to the active-gesture-track store
+	// so an ancestor can sample its transform during the snap CSS transition
+	// (the AppShell gesture-surface consumer reads it to derive a continuous
+	// fraction across the transition). Bound below on the track div.
+	let trackEl = $state<HTMLElement | null>(null);
 	// px width of the back chip overlay during a back-swipe toward a DEEP page
 	// when no cached snapshot is available; null at rest.
 	let backChipReveal = $state<number | null>(null);
@@ -100,6 +110,19 @@
 	onMount(() => {
 		pager.set({ fractionalIndex: activeIndex, dragging: false, active: true, backMorph: null });
 		return () => pager.set({ fractionalIndex: 0, dragging: false, active: false, backMorph: null });
+	});
+	// Publish the bound track element to the active-gesture-track store. Re-runs
+	// when trackEl binds/unbinds (HMR, remount). Cleared in onDestroy.
+	$effect(() => {
+		if (trackEl) setActiveGestureTrack(trackEl);
+	});
+	onDestroy(() => {
+		// onDestroy runs during SSR render. clearActiveGestureTrack only nulls
+		// $state (no DOM touch) and trackEl === null on SSR short-circuits the
+		// branch, but the guard mirrors the active-gesture-track consumer contract
+		// (svelte-ondestroy-runs-in-ssr memory) and the AppShell layer's pattern.
+		if (!browser) return;
+		if (trackEl) clearActiveGestureTrack();
 	});
 
 	// Sync from the URL for deep links + browser back/forward. Writes activeIndex
@@ -344,7 +367,11 @@
 	use:detectSwipe={{ onMove: swipeMove, onEnd: swipeEnd }}
 	use:measureViewportWidth
 >
-	<div class="flex w-[300%] items-start transition-transform duration-200" style={trackStyle}>
+	<div
+		class="flex w-[300%] items-start transition-transform duration-200"
+		style={trackStyle}
+		bind:this={trackEl}
+	>
 		<section
 			class="w-1/3 shrink-0 p-3"
 			data-tab-panel={MOBILE_TABS[0].labelKey}

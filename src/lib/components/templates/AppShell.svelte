@@ -16,6 +16,7 @@
 	import { page } from '$app/state';
 	import type { Snippet } from 'svelte';
 	import Header from '$lib/components/organisms/Header.svelte';
+	import FloatingActionButtonLayer from '$lib/components/templates/FloatingActionButtonLayer.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getDrawerStore } from '$lib/stores/drawer.svelte';
 	import { resolveDeepHeaderTitle } from '$lib/utils/deep-header-config';
@@ -55,5 +56,6 @@
 
 <div class="flex min-h-screen flex-col" class:appbar-title={appbarHasTitle}>
 	<Header {t} onToggleDrawer={drawer.toggle} />
+	<FloatingActionButtonLayer {t} />
 	<div class="flex min-w-0 flex-1 flex-col app-shell-content">{@render children()}</div>
 </div>

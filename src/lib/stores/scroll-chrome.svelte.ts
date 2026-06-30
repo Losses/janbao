@@ -24,6 +24,7 @@ type SetScrollContainerHandler = (el: HTMLElement | null) => void;
 interface ScrollChromeStore {
 	readonly hidden: boolean;
 	readonly translateY: number;
+	readonly headerHeight: number;
 	readonly scrolling: boolean;
 	setHeaderHeight: SetHeaderHeightHandler;
 	start: VoidHandler;
@@ -214,6 +215,9 @@ export function getScrollChromeStore(): ScrollChromeStore {
 		},
 		get translateY() {
 			return translateY;
+		},
+		get headerHeight() {
+			return headerHeight;
 		},
 		get scrolling() {
 			return scrolling;

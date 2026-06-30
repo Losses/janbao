@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { onMount, onDestroy } from 'svelte';
+	import { browser } from '$app/environment';
 	import { preloadData, afterNavigate, beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
@@ -19,6 +20,10 @@
 	} from '$lib/utils/gesture-constants';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
+	import {
+		setActiveGestureTrack,
+		clearActiveGestureTrack
+	} from '$lib/stores/active-gesture-track.svelte';
 
 	import { DEEP_ROUTES } from '$lib/utils/route-config';
 
@@ -248,6 +253,12 @@
 
 	const isEntering = shouldAnimateEnter();
 	let trackEl = $state<HTMLElement | null>(null);
+	// Publish the bound track element to the active-gesture-track store so the
+	// ancestor that samples the active gesture track can follow the enter /
+	// swipe CSS transition. Cleared in onDestroy below.
+	$effect(() => {
+		if (trackEl) setActiveGestureTrack(trackEl);
+	});
 	let transitionEnabled = $state(true);
 	// svelte-ignore state_referenced_locally
 	// Start at 0 (the list-preview frame) only when the slide-in will actually
@@ -812,6 +823,13 @@
 	});
 
 	onDestroy(() => {
+		// onDestroy runs during SSR render. The teardown below touches the
+		// navigation store, cancels a rAF id, and clears the active-gesture-track
+		// publication; all are no-ops on the server (trackEl === null, no rAF id,
+		// no pendingNav) but the guard mirrors the active-gesture-track consumer
+		// contract (svelte-ondestroy-runs-in-ssr memory) and the AppShell layer's
+		// pattern.
+		if (!browser) return;
 		// Symmetric cleanup with afterNavigate + the poll's trackEl-null stop
 		// condition. Svelte may unmount this layout before the next rAF frame
 		// observes trackEl===null; cancelling the rAF alone would leave an orphan
@@ -824,6 +842,9 @@
 			cancelAnimationFrame(pendingNavRafId);
 			pendingNavRafId = undefined;
 		}
+		// Release the active-gesture-track publication so an ancestor sampler
+		// stops reading a now-unmounted element.
+		if (trackEl) clearActiveGestureTrack();
 	});
 
 	onMount(() => {

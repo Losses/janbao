@@ -20,6 +20,7 @@
 	import { markEnterFromList, setReachedFromList } from '$lib/stores/thread-nav.svelte';
 	import { initNavigationStore } from '$lib/stores/navigation.svelte';
 	import { initMobilePagerStore, initSearchPagerStore } from '$lib/stores/mobile-pager.svelte';
+	import { initActiveGestureTrack } from '$lib/stores/active-gesture-track.svelte';
 	import { getPageScrollStore, getCurrentScrollY } from '$lib/stores/page-scroll.svelte';
 
 	interface LayoutProps {
@@ -42,6 +43,7 @@
 	const navStore = initNavigationStore();
 	initMobilePagerStore();
 	initSearchPagerStore();
+	initActiveGestureTrack();
 	const pageScrollStore = getPageScrollStore();
 
 	// Hold the scroll-chrome header (and pin it visible on hash-enter) for
