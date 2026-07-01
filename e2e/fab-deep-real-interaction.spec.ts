@@ -179,7 +179,7 @@ async function swipeRightReverseRight(page: import('@playwright/test').Page): Pr
 	await client.detach();
 }
 
-async function openDrawerAndClickBookmarks(page: import('@playwright.test').Page): Promise<void> {
+async function openDrawerAndClickBookmarks(page: import('@playwright/test').Page): Promise<void> {
 	await page.locator('header button').first().click();
 	await page.waitForTimeout(250);
 	await page.locator('a[href="/bookmarks"]').filter({ visible: true }).first().click();
