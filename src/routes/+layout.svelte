@@ -22,6 +22,7 @@
 	import { initMobilePagerStore, initSearchPagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { initActiveGestureTrack } from '$lib/stores/active-gesture-track.svelte';
 	import { getPageScrollStore, getCurrentScrollY } from '$lib/stores/page-scroll.svelte';
+	import { isTabRootPath } from '$lib/utils/history-nav';
 
 	interface LayoutProps {
 		data: LayoutData;
@@ -61,7 +62,7 @@
 			| PopStateEvent
 			| null
 			| undefined;
-		if (from) {
+		if (from && !isTabRootPath(from.url.pathname)) {
 			pageScrollStore.capture(from.url.pathname, getCurrentScrollY());
 		}
 		if (to && from) {

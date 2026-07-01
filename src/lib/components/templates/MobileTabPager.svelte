@@ -31,6 +31,8 @@
 	import { detectSwipe } from '$lib/actions/swipe';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
+	import { getPageScrollStore } from '$lib/stores/page-scroll.svelte';
+	import { viewportLock } from '$lib/stores/viewport-lock.svelte';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import {
 		setActiveGestureTrack,
@@ -91,6 +93,11 @@
 	const pager = getMobilePagerStore();
 	const deepPageSnapshot = getDeepPageSnapshotStore();
 	const navStore = getNavigationStore();
+	const scrollChrome = getScrollChromeStore();
+	const pageScrollStore = getPageScrollStore();
+	let section0El = $state<HTMLElement | null>(null);
+	let section1El = $state<HTMLElement | null>(null);
+	let section2El = $state<HTMLElement | null>(null);
 	let viewportWidth = $state(0);
 	$effect(() => {
 		pager.set({
@@ -107,7 +114,30 @@
 			deepPreviewEl.scrollTop = deepPageSnapshot.scrollTop;
 		}
 	});
+	// Per-panel scroll restore + hide-on-scroll registration. Re-runs when
+	// activeIndex changes (tab switch) or the section element binds. Restores the
+	// active panel's saved scroll from pageScrollStore (sync + rAF, mirrors
+	// GesturePageLayout :286-296 to avoid a top-flash on remount) and registers it
+	// as the scroll-chrome source (hide-on-scroll reads this panel).
+	$effect(() => {
+		const el = activeIndex === 0 ? section0El : activeIndex === 1 ? section1El : section2El;
+		if (!el) return;
+		const saved = pageScrollStore.get(MOBILE_TABS[activeIndex].href);
+		if (saved > 0) {
+			el.scrollTop = saved;
+			requestAnimationFrame(() => {
+				const current =
+					activeIndex === 0 ? section0El : activeIndex === 1 ? section1El : section2El;
+				if (current === el) el.scrollTop = saved;
+			});
+		}
+		scrollChrome.setScrollContainer(el);
+	});
 	onMount(() => {
+		viewportLock.acquire();
+		const initialEl =
+			activeIndex === 0 ? section0El : activeIndex === 1 ? section1El : section2El;
+		if (initialEl) scrollChrome.setScrollContainer(initialEl);
 		pager.set({ fractionalIndex: activeIndex, dragging: false, active: true, backMorph: null });
 		return () => pager.set({ fractionalIndex: 0, dragging: false, active: false, backMorph: null });
 	});
@@ -122,6 +152,8 @@
 		// branch, but the guard mirrors the active-gesture-track consumer contract
 		// (svelte-ondestroy-runs-in-ssr memory) and the AppShell layer's pattern.
 		if (!browser) return;
+		viewportLock.release();
+		scrollChrome.setScrollContainer(null);
 		if (trackEl) clearActiveGestureTrack();
 	});
 
@@ -189,14 +221,7 @@
 	}
 	function switchTo(index: number): void {
 		activeIndex = index;
-		if (typeof window !== 'undefined') {
-			window.scrollTo(0, 0);
-		}
-		// Show the header so it animates down in sync with the snap - the
-		// neighbor's translateY goes from scrollY→0 while the header fills
-		// the gap, giving a coordinated slide instead of a content jump.
 		getScrollChromeStore().show();
-		// Hop to the target tab via the navigation coordinator
 		navStore.navigateForward(MOBILE_TABS[index].href);
 	}
 	/**
@@ -209,9 +234,6 @@
 	 * keys off the shared tab config), so it covers every deep page.
 	 */
 	function switchBackward(): void {
-		if (typeof window !== 'undefined') {
-			window.scrollTo(0, 0);
-		}
 		getScrollChromeStore().show();
 
 		const targetIndex = activeIndex - 1;
@@ -292,60 +314,16 @@
 	// Home pagination inside the pager targets the standalone /discussions/pN route.
 	const buildPageUrl: PageUrlBuilder = (p) => (p === 1 ? '/' : `/discussions/p${p}`);
 
-	// Size the viewport to the ACTIVE panel. A flex track would otherwise stretch
-	// every section to the tallest panel (Activity, with its composer), leaving a
-	// large blank gap under shorter tabs. `items-start` keeps each section at its
-	// natural height; each reports it via ResizeObserver and the viewport follows
-	// the active one (height changes instantly - no transition, to avoid
-	// animating the surrounding content container on every tab switch).
-	let panelHeights = $state<number[]>([0, 0, 0]);
-	const viewportHeight = $derived(panelHeights[activeIndex]);
-
-	// Neighbour vertical alignment: tracks window.scrollY (updated on scroll in
-	// measureViewportWidth). It MUST equal scrollY so a neighbour stays at a fixed
-	// screen position while the window scrolls - that is what makes the horizontal
-	// swipe + committed scrollTo(0,0) seamless. Auto-scroll inflating it is
-	// expected and harmless (neighbours clipped off-screen, self-heal on commit).
-	let neighborOffset = $state(0);
-
+	// Screen-height viewport under fixed-viewport: each panel is a full-height
+	// .scroll-pane scroller (the height model GesturePageLayout uses). No
+	// per-panel height measurement — the viewport is constant screen height.
 	const viewportStyle = $derived(
-		`touch-action: pan-y pinch-zoom; flex: 1 0 auto${viewportHeight ? `; height: ${viewportHeight}px` : ''}`
+		'touch-action: pan-y pinch-zoom; height: 100%; overflow: clip; position: relative'
 	);
-	const measureTab: Action<HTMLElement, number> = (node, index) => {
-		const update = () => {
-			panelHeights[index] = node.offsetHeight;
-		};
-		update();
-		const ro = new ResizeObserver(update);
-		ro.observe(node);
-		return { destroy: () => ro.disconnect() };
-	};
 	// The viewport's width = one panel width, used to normalise dragOffset into a
 	// fractional tab offset for the indicator.
 	const measureViewportWidth: Action<HTMLElement> = (node) => {
-		let scrollRaf = 0;
-		const updateAll = () => {
-			scrollRaf = 0;
-			viewportWidth = node.clientWidth;
-			// Clamped >= 0 (ignore negative scrollY from overscroll). See the
-			// neighborOffset declaration for why this must track window.scrollY.
-			neighborOffset = Math.max(0, window.scrollY);
-		};
-		const onScroll = () => {
-			if (!scrollRaf) scrollRaf = requestAnimationFrame(updateAll);
-		};
-		// The pager viewport is overflow:hidden but still a programmatic scroll
-		// container; force its internal scroll back to 0,0 so a stray
-		// scrollIntoView / native hash scroll cannot lock the page on an anchor
-		// (the user cannot reset overflow:hidden scroll).
-		const resetViewportScroll = () => {
-			if (node.scrollTop !== 0) node.scrollTop = 0;
-			if (node.scrollLeft !== 0) node.scrollLeft = 0;
-		};
-		updateAll();
-		resetViewportScroll();
-		window.addEventListener('scroll', onScroll, { passive: true });
-		node.addEventListener('scroll', resetViewportScroll, { passive: true });
+		viewportWidth = node.clientWidth;
 		const ro = new ResizeObserver(() => {
 			viewportWidth = node.clientWidth;
 		});
@@ -353,30 +331,29 @@
 		return {
 			destroy: () => {
 				ro.disconnect();
-				window.removeEventListener('scroll', onScroll);
-				node.removeEventListener('scroll', resetViewportScroll);
-				if (scrollRaf) cancelAnimationFrame(scrollRaf);
 			}
 		};
 	};
 </script>
 
 <div
-	class="mobile-tab-pager-viewport overflow-hidden"
+	class="mobile-tab-pager-viewport"
 	style={viewportStyle}
 	use:detectSwipe={{ onMove: swipeMove, onEnd: swipeEnd }}
 	use:measureViewportWidth
 >
 	<div
-		class="flex w-[300%] items-start transition-transform duration-200"
+		class="flex w-[300%] items-start h-full transition-transform duration-200"
 		style={trackStyle}
 		bind:this={trackEl}
 	>
 		<section
-			class="w-1/3 shrink-0 p-3"
+			class="scroll-pane h-full w-1/3 shrink-0"
 			data-tab-panel={MOBILE_TABS[0].labelKey}
-			style={`transform: translateY(${activeIndex === 0 ? 0 : neighborOffset}px)`}
-			use:measureTab={0}
+			data-preview-tab={MOBILE_TABS[0].labelKey}
+			style="overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y pinch-zoom;"
+			bind:this={section0El}
+			onscroll={(e) => pageScrollStore.capture(MOBILE_TABS[0].href, e.currentTarget.scrollTop)}
 		>
 			<DiscussionsPanel
 				discussions={home.discussions}
@@ -388,10 +365,12 @@
 			/>
 		</section>
 		<section
-			class="w-1/3 shrink-0 p-3"
+			class="scroll-pane h-full w-1/3 shrink-0"
 			data-tab-panel={MOBILE_TABS[1].labelKey}
-			style={`transform: translateY(${activeIndex === 1 ? 0 : neighborOffset}px)`}
-			use:measureTab={1}
+			data-preview-tab={MOBILE_TABS[1].labelKey}
+			style="overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y pinch-zoom;"
+			bind:this={section1El}
+			onscroll={(e) => pageScrollStore.capture(MOBILE_TABS[1].href, e.currentTarget.scrollTop)}
 		>
 			<ActivityPanel
 				activities={activity.activities}
@@ -405,10 +384,12 @@
 			/>
 		</section>
 		<section
-			class="w-1/3 shrink-0 p-3"
+			class="scroll-pane h-full w-1/3 shrink-0"
 			data-tab-panel={MOBILE_TABS[2].labelKey}
-			style={`transform: translateY(${activeIndex === 2 ? 0 : neighborOffset}px)`}
-			use:measureTab={2}
+			data-preview-tab={MOBILE_TABS[2].labelKey}
+			style="overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y pinch-zoom;"
+			bind:this={section2El}
+			onscroll={(e) => pageScrollStore.capture(MOBILE_TABS[2].href, e.currentTarget.scrollTop)}
 		>
 			<MessagesPanel
 				conversations={messages.conversations}
@@ -426,8 +407,8 @@
 			<div
 				data-deep-preview
 				bind:this={deepPreviewEl}
-				class="absolute left-0 z-10 w-1/3 overflow-y-auto scroll-pane gpl-preview-pane"
-				style={`top: calc(-1 * var(--header-height, 0px)); height: ${typeof window !== 'undefined' ? window.innerHeight : 844}px;`}
+				class="absolute left-0 z-10 w-1/3 overflow-y-auto scroll-pane"
+				style="top: 0; height: 100%;"
 			>
 				<div class="gpl-card">
 					{#if deepPageSnapshot.snippet}
@@ -451,18 +432,6 @@
 </div>
 
 <style>
-	/* Mirror the html.fixed-viewport-gated layout rules from app.css so the
-	   preview renders identically without needing the html class (the pager
-	   route does not add it). */
-	.gpl-preview-pane {
-		background-color: var(--color-base-200);
-		padding-top: var(--header-height, 0px);
-		padding-bottom: 1.5rem;
-	}
-	.gpl-preview-pane > .gpl-card {
-		background-color: var(--color-base-100);
-		border-bottom: 1px solid var(--color-base-300);
-	}
 	/* The back-to-deep-page overlay: covers from the left edge, growing with the
 	   drag, hosting the shared LoadingChip back affordance. */
 	.back-chip-overlay {

@@ -28,7 +28,6 @@
 	import { writeThread, passthroughEnabledFor } from '$lib/offline/passthrough';
 	import type { ThreadPassthroughInput } from '$lib/offline/passthrough';
 	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
-	import { getListScrollStore } from '$lib/stores/list-scroll.svelte';
 	import { getDeepPageSnapshotStore } from '$lib/stores/deep-page-snapshot.svelte';
 	import { isTabRootPath } from '$lib/utils/history-nav';
 	import type { PageData } from './$types';
@@ -47,10 +46,8 @@
 	let { data }: PageProps = $props();
 
 	const listCache = getListCacheStore();
-	const listScroll = getListScrollStore();
 	const deepPageSnapshot = getDeepPageSnapshotStore();
 
-	let listScrollTop = $state(listScroll.captured);
 	let detailScrollTop = $state(0);
 	// True when SvelteKit's snapshot.restore fired for this mount (a popstate
 	// back/forward). When set, the user's saved scroll position is already
@@ -59,7 +56,6 @@
 
 	export const snapshot = {
 		capture: () => ({
-			listScrollTop,
 			detailScrollTop:
 				typeof document !== 'undefined'
 					? ((document.querySelector('.detail-scroll-pane') as HTMLElement | null)?.scrollTop ??
@@ -67,7 +63,6 @@
 					: detailScrollTop
 		}),
 		restore: (value) => {
-			listScrollTop = value.listScrollTop;
 			detailScrollTop = value.detailScrollTop;
 			snapshotRestored = true;
 		}

@@ -170,25 +170,26 @@ test.describe('Tab-swipe preview height mismatch (activity <-> messages)', () =>
 				`activity.clipBelowVp=${backClipPx}px`
 		);
 
-		// The preview during a swipe should faithfully match the page the user
-		// will land on. Both assertions FAIL today (the bug): the viewport is
-		// pinned to the SOURCE panel's height instead of accommodating the
-		// destination being revealed.
-		expect(
-			duringForward.vpHeight,
-			'forward: the messages preview should match the landed messages page, not the taller activity source'
-		).toBe(landedMessages.vpHeight);
+		// Under the unified scroll-pane model every panel is a full-height
+		// scroller (offsetHeight === viewport clientHeight). The defect (a preview
+		// pinned to the source panel's height, clipping or gapping the neighbour)
+		// is eliminated: mid-drag and landed panels are all screen-height boxes
+		// that scroll internally.
+		expect(duringForward.panels.messages.offH).toBe(duringForward.vpHeight);
+		expect(duringBack.panels.activity.offH).toBe(duringBack.vpHeight);
+		expect(duringForward.vpHeight).toBe(landedMessages.vpHeight);
+		expect(duringBack.vpHeight).toBe(landedActivity.vpHeight);
 
-		expect(
-			duringBack.vpHeight,
-			'back: the activity preview should match the landed activity page, not the shorter messages source'
-		).toBe(landedActivity.vpHeight);
-
-		// The taller activity neighbour must be fully visible while revealed -
-		// its bottom edge must not drop below the viewport (content cut off).
-		expect(
-			duringBack.panels.activity.bottom,
-			'back: the activity neighbour must not be clipped below the viewport'
-		).toBeLessThanOrEqual((duringBack.vpRect?.bottom ?? 0) + 1);
+		// The activity panel's tall content must be reachable by internal scroll
+		// (not clipped by a shorter viewport). Probe on the landed activity page.
+		const activityReachable = await page.evaluate(() => {
+			const el = document.querySelector(
+				'section[data-tab-panel="activity"]'
+			) as HTMLElement | null;
+			if (!el) return false;
+			el.scrollTo(0, el.scrollHeight);
+			return el.scrollTop > 0;
+		});
+		expect(activityReachable, 'activity content is reachable by internal scroll').toBe(true);
 	});
 });

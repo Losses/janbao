@@ -479,7 +479,12 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		const threadHref = await page.locator('a[href^="/discussion/"]').first().getAttribute('href');
 		if (!threadHref) throw new Error('no discussion link');
 		const remembered = 600;
-		await page.evaluate((y) => window.scrollTo(0, y), remembered);
+		await page.evaluate((y) => {
+			const panel = document.querySelector(
+				'section[data-tab-panel="discussions"]'
+			) as HTMLElement | null;
+			if (panel) panel.scrollTop = y;
+		}, remembered);
 		await page.waitForTimeout(200);
 
 		// Navigate via the SPA goto hook (no scroll-into-view), so the list
@@ -493,12 +498,15 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		await swipeBack(page);
 		await page.waitForFunction(() => location.pathname === '/', null, { timeout: 5000 });
 
-		// The SvelteKit snapshot + $effect must restore the scroll BEFORE the first
-		// visible paint (no top-flash). Sample every ~30ms; must reach the
-		// remembered position within ~2 frames.
+		// The pager's per-panel pageScrollStore $effect must restore the panel's
+		// scrollTop BEFORE the first visible paint (no top-flash). Sample every
+		// ~30ms; must reach the remembered position within ~2 frames.
 		const framesToRestore = await page.evaluate(async (y) => {
 			for (let i = 0; i < 20; i++) {
-				if (Math.abs(window.scrollY - y) < 5) return i;
+				const panel = document.querySelector(
+					'section[data-tab-panel="discussions"]'
+				) as HTMLElement | null;
+				if (panel && Math.abs(panel.scrollTop - y) < 5) return i;
 				await new Promise((r) => setTimeout(r, 30));
 			}
 			return 20;

@@ -674,12 +674,16 @@ test('scroll-hide: FAB translateY follows the Header hide-on-scroll', async ({ p
 			return m ? Number(m[1]) : 0;
 		};
 		const initial = readTy();
-		// Scroll down past the Header hide threshold. The list scrolls the window.
-		window.scrollTo(0, 600);
+		// Scroll the active panel (the pager's discussions section) past the
+		// Header hide threshold.
+		const panel = document.querySelector(
+			'section[data-tab-panel="discussions"]'
+		) as HTMLElement;
+		panel.scrollTo(0, 600);
 		await afterFrame();
 		const down = readTy();
 		// Scroll back to top: the FAB returns to translateY(0).
-		window.scrollTo(0, 0);
+		panel.scrollTo(0, 0);
 		await afterFrame();
 		const up = readTy();
 		return { initial, down, up };
@@ -703,9 +707,12 @@ test('pointer-events: FAB is non-interactive when scroll-hidden', async ({ page 
 			new Promise<void>((resolve) =>
 				requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
 			).then(() => sleep(160));
-		// Scroll well past the Header threshold so the FAB is fully translated
-		// off-screen (hideProgress >= 0.99 -> pointer-events: none).
-		window.scrollTo(0, 1200);
+		// Scroll the active panel well past the Header threshold so the FAB is
+		// fully translated off-screen (hideProgress >= 0.99 -> pointer-events: none).
+		const panel = document.querySelector(
+			'section[data-tab-panel="discussions"]'
+		) as HTMLElement;
+		panel.scrollTo(0, 1200);
 		await afterFrame();
 		const fab = document.querySelector('[data-testid="fab"]') as HTMLElement | null;
 		if (!fab) return 'no-fab';

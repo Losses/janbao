@@ -19,6 +19,7 @@
 	} from '$lib/utils/gesture-constants';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
+	import { viewportLock } from '$lib/stores/viewport-lock.svelte';
 	import {
 		setActiveGestureTrack,
 		clearActiveGestureTrack
@@ -324,13 +325,16 @@
 	// binds/unbinds; the cleanup reverts the store to the window on unmount.
 	$effect(() => {
 		if (!isMobile || !centerEl) return;
-		// Sole setScrollContainer caller. Reads `override ?? centerEl` so a nested
+		// One of two setScrollContainer callers (GPL here, MobileTabPager on tab
+		// routes — never co-mounted). Reads `override ?? centerEl` so a nested
 		// scroller owner (a scope panel inside a pager, which sets the override)
 		// wins deterministically: this effect re-runs when the override changes,
-		// regardless of parent/child $effect flush order.
+		// regardless of parent/child $effect flush order. The cleanup uses
+		// releaseContainer (conditional) so a stale teardown during a route swap
+		// never clobbers the destination's freshly-set container.
 		const el = scrollChrome.override ?? centerEl;
 		scrollChrome.setScrollContainer(el);
-		return () => scrollChrome.setScrollContainer(null);
+		return () => scrollChrome.releaseContainer(el);
 	});
 
 	$effect(() => {
@@ -858,12 +862,16 @@
 		if (trackEl) clearActiveGestureTrack();
 	});
 
+	let held = false;
 	onMount(() => {
 		const mq = window.matchMedia(MOBILE_BREAKPOINT);
 		const sync = () => {
 			isMobile = mq.matches;
 			if (isMobile) {
-				document.documentElement.classList.add('fixed-viewport');
+				if (!held) {
+					viewportLock.acquire();
+					held = true;
+				}
 				// Reset any parent element's scroll that might have been changed by browser's native anchor scrolling
 				// before fixed-viewport locked the scroll.
 				window.scrollTo(0, 0);
@@ -874,7 +882,10 @@
 					parent = parent.parentElement;
 				}
 			} else {
-				document.documentElement.classList.remove('fixed-viewport');
+				if (held) {
+					viewportLock.release();
+					held = false;
+				}
 			}
 		};
 		sync();
@@ -908,7 +919,10 @@
 		return () => {
 			mq.removeEventListener('change', sync);
 			window.removeEventListener('scroll', forceZeroScroll, true);
-			document.documentElement.classList.remove('fixed-viewport');
+			if (held) {
+				viewportLock.release();
+				held = false;
+			}
 			if (enterRaf) cancelAnimationFrame(enterRaf);
 			pager.set({ fractionalIndex: 0, dragging: false, active: false, backMorph: null });
 		};

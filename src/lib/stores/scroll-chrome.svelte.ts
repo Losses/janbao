@@ -20,6 +20,7 @@ import type { VoidHandler } from '$lib/types/handlers';
 type SetHeaderHeightHandler = (height: number) => void;
 type HoldNavigationHandler = (pinVisible: boolean) => void;
 type SetScrollContainerHandler = (el: HTMLElement | null) => void;
+type ReleaseContainerHandler = (el: HTMLElement | null) => void;
 
 interface ScrollChromeStore {
 	readonly hidden: boolean;
@@ -36,8 +37,15 @@ interface ScrollChromeStore {
 	 * never scrolls, so the store must listen to that container. Pass null on
 	 * unmount to revert to the window (the homepage / desktop scroll the window). */
 	setScrollContainer: SetScrollContainerHandler;
+	/** Conditionally release the scroll container: clear it ONLY if `el` is still
+	 *  the active container. Used in $effect cleanups so a stale teardown (from a
+	 *  route-layout that has already yielded to the destination) never clobbers a
+	 *  fresh owner that mounted in the same SPA swap. The destination's mount
+	 *  re-sets the container via setScrollContainer, so the identity guard makes
+	 *  the handoff self-healing regardless of mount/destroy ordering. */
+	releaseContainer: ReleaseContainerHandler;
 	/** A nested scroller owner (a scope panel inside a pager) claims the scroll
-	 *  source: GesturePageLayout's single setScrollContainer $effect reads
+	 *  source: GesturePageLayout's setScrollContainer $effect reads
 	 *  `override ?? centerEl`, so the override wins deterministically without a
 	 *  parent/child $effect ordering race. null clears it. */
 	setOverride: SetScrollContainerHandler;
@@ -179,6 +187,10 @@ function setScrollContainer(el: HTMLElement | null): void {
 	}
 }
 
+function releaseContainer(el: HTMLElement | null): void {
+	if (containerEl === el) setScrollContainer(null);
+}
+
 function setOverride(el: HTMLElement | null): void {
 	overrideEl = el;
 }
@@ -225,6 +237,7 @@ export function getScrollChromeStore(): ScrollChromeStore {
 		setHeaderHeight,
 		start,
 		setScrollContainer,
+		releaseContainer,
 		get override() {
 			return overrideEl;
 		},

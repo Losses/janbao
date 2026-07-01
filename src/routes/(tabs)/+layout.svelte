@@ -25,7 +25,6 @@
 	import MessagesSidebar from '$lib/components/panels/MessagesSidebar.svelte';
 	import { getCurrentTabIndex } from '$lib/utils/mobile-tabs';
 	import { getDrawerStore } from '$lib/stores/drawer.svelte';
-	import { getListScrollStore } from '$lib/stores/list-scroll.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 	import type { LayoutData } from './$types';
@@ -96,18 +95,6 @@
 	const t = $derived(data.t);
 	const user = $derived(data.user);
 
-	// Remember the discussions-list scroll when leaving `/` for a thread, and
-	// restore it when returning (covers swipe-back, which pops history via
-	// history.back when the thread was reached from the list, else a goto). The
-	// header is held for the swipe-back nav (see root +layout.svelte) so it does
-	// not react to the restore scroll; release the hold here (pinning the header
-	// visible) once the position is set.
-	const listScroll = getListScrollStore();
-	beforeNavigate(({ to }) => {
-		if (to?.url.pathname.startsWith('/discussion')) {
-			listScroll.capture(window.scrollY);
-		}
-	});
 	afterNavigate(({ to }) => {
 		if (to?.url.pathname === '/') {
 			getScrollChromeStore().releaseNavigation();
