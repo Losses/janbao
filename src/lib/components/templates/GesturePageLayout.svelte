@@ -339,10 +339,20 @@
 			// Page centered on a tab (e.g. a thread / messages conversation): drive
 			// the pill between centerTab and the optional rightTab as the user drags.
 			let progressVal: number;
+			// FAB cover progress: how much the source list is revealed. Only a
+			// back-swipe (swipeDirection === 'right') reveals the list, so the
+			// forward-swipe toward rightTab keeps cover 0. Direction-aware over the
+			// unclamped rawDragOffset so the FAB tracks the finger (and a reversal)
+			// across the full 0..1 range.
+			let cover = 0;
 			if (dragOffset !== null && viewportWidth) {
 				const dragProgress = Math.max(0, Math.min(1, -dragOffset / viewportWidth));
 				progressVal =
 					rightTab !== undefined ? centerTab + dragProgress * (rightTab - centerTab) : centerTab;
+				if (swipeDirection === 'right') {
+					const rawOffset = rawDragOffset ?? dragOffset;
+					cover = rawOffset !== null ? Math.min(1, Math.max(0, rawOffset / viewportWidth)) : 0;
+				}
 			} else {
 				const rightPanelIdx = hasRight && !swipeNeedsLoadingAtStart ? panelCount - 1 : -1;
 				progressVal = snapIndex === rightPanelIdx && rightTab !== undefined ? rightTab : centerTab;
@@ -352,7 +362,8 @@
 				dragging: dragOffset !== null,
 				active: true,
 				backMorph: null,
-				targetIndex: null
+				targetIndex: null,
+				coverProgress: cover
 			});
 			return;
 		}
@@ -386,7 +397,8 @@
 				dragging: true,
 				active: true,
 				backMorph: progress,
-				targetIndex: targetIdx >= 0 ? targetIdx : null
+				targetIndex: targetIdx >= 0 ? targetIdx : null,
+				coverProgress: progress
 			});
 		} else if (committed) {
 			pager.set({
@@ -394,7 +406,8 @@
 				dragging: false,
 				active: true,
 				backMorph: 1,
-				targetIndex: targetIdx >= 0 ? targetIdx : null
+				targetIndex: targetIdx >= 0 ? targetIdx : null,
+				coverProgress: 1
 			});
 		} else {
 			pager.set({
@@ -402,7 +415,8 @@
 				dragging: false,
 				active: false,
 				backMorph: 0,
-				targetIndex: null
+				targetIndex: null,
+				coverProgress: 0
 			});
 		}
 	});

@@ -32,12 +32,17 @@ interface PagerUpdate {
 	active: boolean;
 	backMorph: number | null;
 	targetIndex?: number | null;
+	/** FAB-only overlay cover progress 0..1 (null = not published; the FAB falls
+	 * back to its resting fraction). Optional so non-GPL writers (MobileTabPager,
+	 * SearchScopePager) compile without touching it. */
+	coverProgress?: number | null;
 }
 
 type SetPagerFn = (update: PagerUpdate) => void;
 
 interface PagerStore extends PagerUpdate {
 	targetIndex: number | null;
+	coverProgress: number | null;
 	set: SetPagerFn;
 }
 
@@ -47,6 +52,7 @@ export function createPagerStore(): PagerStore {
 	let active = $state(false);
 	let backMorph = $state<number | null>(null);
 	let targetIndex = $state<number | null>(null);
+	let coverProgress = $state<number | null>(null);
 
 	function set(update: PagerUpdate): void {
 		fractionalIndex = update.fractionalIndex;
@@ -54,6 +60,7 @@ export function createPagerStore(): PagerStore {
 		active = update.active;
 		backMorph = update.backMorph;
 		targetIndex = update.targetIndex !== undefined ? update.targetIndex : null;
+		coverProgress = update.coverProgress ?? null;
 	}
 
 	return {
@@ -71,6 +78,9 @@ export function createPagerStore(): PagerStore {
 		},
 		get targetIndex() {
 			return targetIndex;
+		},
+		get coverProgress() {
+			return coverProgress;
 		},
 		set
 	};

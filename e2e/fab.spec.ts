@@ -163,12 +163,14 @@ test.describe('SSR style serialization: FAB transform resolves in the server ren
 	 * Assert the family-specific class-string classification for the FAB atom:
 	 *   - list:      pointer-events-none ABSENT, fab-transition ABSENT
 	 *   - overlay:   pointer-events-none PRESENT, fab-transition ABSENT
-	 *   - compose:   pointer-events-none PRESENT, fab-transition PRESENT
+	 *   - compose:   pointer-events-none PRESENT, fab-transition ABSENT
 	 *   - error page scale 0: pointer-events-none PRESENT, fab-transition ABSENT
-	 * (the error-page render rests the overlay family at scale 0 with no
-	 * transition). The overlay-vs-compose distinction is what a scale-only
-	 * assertion cannot see: both rest at scale 0 but only the compose family
-	 * enables the CSS transition class.
+	 * The fab-transition class is armed only during a family swap
+	 * (discreteNavInFlight), not on a deep-link SSR render, so every family
+	 * rests WITHOUT the class. The pointer-events-none gate (scale < 0.01) is
+	 * what a scale-only assertion cannot see: overlay/compose/error rest at
+	 * scale 0 and must be non-interactive; list rests at scale 1 and is
+	 * interactive.
 	 */
 	function expectFamilyClass(cls: string | null, family: SsrFabFamily): void {
 		expect(cls, 'FAB atom must carry a class string in SSR').not.toBeNull();
@@ -185,8 +187,12 @@ test.describe('SSR style serialization: FAB transform resolves in the server ren
 				expect(hasTransition, 'overlay/error FAB must NOT enable fab-transition').toBe(false);
 				break;
 			case 'compose':
+				// Compose rests at scale 0 (pointer-events-none). The fab-transition
+				// class is armed only during a family swap (discreteNavInFlight), not
+				// on a deep-link SSR render, so a deep-linked compose route does NOT
+				// carry the class at rest.
 				expect(hasPe, 'compose FAB at scale 0 must be pointer-events-none').toBe(true);
-				expect(hasTransition, 'compose FAB must enable fab-transition').toBe(true);
+				expect(hasTransition, 'compose FAB must NOT enable fab-transition at SSR rest').toBe(false);
 				break;
 		}
 	}

@@ -1,0 +1,292 @@
+import { test, expect } from '@playwright/test';
+import { prepareContext, waitForHydration } from './helpers';
+
+/**
+ * FAB deep-page boundary: REAL-interaction reproduction spec.
+ *
+ * The synthetic-nav spec (fab-deep-page-boundary.spec.ts) passed on these paths
+ * because __e2eGoto and the synchronous CDP swipeBack compress the navigation
+ * into the commit snap, hiding that the FAB does not actually follow the gesture
+ * or animate on click nav. This spec drives the THREE real interaction paths a
+ * user performs - drawer link tap, realistic-speed edge swipe, back-arrow tap -
+ * and asserts a smooth, gesture-synchronized, multi-frame animation for each.
+ * All three FAIL on the current code, surfacing the reported defects:
+ *
+ *   A. drawer `/` -> `/bookmarks`: the FAB holds at scale 1 through the mount,
+ *      then drops in ~2 intermediate frames (a late fast fade, perceived as a
+ *      jump) instead of a smooth sustained scale-out.
+ *   B. realistic back-swipe `/bookmarks` -> `/`: the FAB stays at scale 0 for
+ *      the entire finger drag (it does not follow the finger) and only moves at
+ *      the commit snap - the sampler is not driving it during the drag.
+ *   C. back-arrow tap `/bookmarks` -> `/`: the FAB jumps 0 -> 1 with zero
+ *      intermediate frames; a click nav has no track motion to sample and the
+ *      overlay family enables no CSS transition, so there is no animation path.
+ *
+ * Frame capture is rAF-resolution in-browser, tagged with the live pathname so
+ * case B can distinguish drag-time (pathname still /bookmarks) from commit-time.
+ */
+
+test.beforeEach(async ({ context }) => {
+	await prepareContext(context);
+});
+
+interface Frame {
+	present: boolean;
+	scale: number | null;
+	path: string;
+	t: number;
+}
+
+async function capture(
+	page: import('@playwright/test').Page,
+	trigger: () => Promise<void>,
+	settleMs = 900
+): Promise<Frame[]> {
+	const buf: Frame[] = [];
+	try {
+		await page.exposeBinding('__pushFabR', async (_s, v: Frame) => buf.push(v));
+	} catch {
+		/* reused across specs in one worker */
+	}
+	// rAF sampler installed on every future document (addInitScript) AND on the
+	// current document (evaluate). Armed via a window flag the trigger flips.
+	const probe = (): void => {
+		const w = window as unknown as { __fabR?: boolean; __rafT0?: number };
+		const tick = (): void => {
+			if (w.__fabR) {
+				const fab = document.querySelector('[data-testid="fab"]');
+				let present = false;
+				let scale: number | null = null;
+				if (fab) {
+					present = true;
+					const m = getComputedStyle(fab).transform || '';
+					const p = m.match(/matrix(?:3d)?\(([^)]+)\)/);
+					if (p) scale = Number(p[1].split(',')[0]);
+					else if (m === 'none') scale = 0;
+				}
+				const t0 = (w.__rafT0 ??= performance.now());
+				(window as unknown as { __pushFabR?: (v: Frame) => void }).__pushFabR?.({
+					present,
+					scale,
+					path: location.pathname,
+					t: performance.now() - t0
+				});
+			}
+			requestAnimationFrame(tick);
+		};
+		requestAnimationFrame(tick);
+	};
+	await page.addInitScript(probe);
+	await page.evaluate(probe);
+	await page.evaluate(() => {
+		const w = window as unknown as { __fabR?: boolean; __rafT0?: number };
+		w.__rafT0 = performance.now();
+		w.__fabR = true;
+	});
+	await new Promise((r) => setTimeout(r, 120));
+	await trigger();
+	await new Promise((r) => setTimeout(r, settleMs));
+	await page.evaluate(() => {
+		(window as unknown as { __fabR?: boolean }).__fabR = false;
+	});
+	return buf;
+}
+
+function scales(frames: Frame[]): number[] {
+	return frames.filter((f) => f.present && f.scale !== null).map((f) => f.scale as number);
+}
+
+function dump(label: string, frames: Frame[]): string {
+	const traj = frames
+		.map((f) => `${f.present ? (f.scale ?? NaN).toFixed(2) : '·'}@${f.path === '/bookmarks' ? 'b' : '/'}`)
+		.join(' ');
+	return `${label} frames=${frames.length} traj=${traj}`;
+}
+
+/** Realistic-speed rightward edge swipe (~30ms per step), like a real finger. */
+async function realisticSwipeBack(page: import('@playwright/test').Page): Promise<void> {
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+	const width = page.viewportSize()?.width ?? 393;
+	const startX = Math.round(width * 0.2);
+	const endX = Math.round(width * 0.9);
+	const y = 400;
+	const steps = 20;
+	const dispatch = (
+		type: 'touchStart' | 'touchMove' | 'touchEnd',
+		x: number,
+		state: string,
+		ts: number
+	) =>
+		client.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: [{ state, x, y, id: 1 }] as unknown as never,
+			modifiers: 0,
+			timestamp: ts
+		});
+	const base = await page.evaluate(() => performance.now());
+	await dispatch('touchStart', startX, 'touchPressed', base);
+	for (let i = 1; i <= steps; i++) {
+		const x = Math.round(startX + (endX - startX) * (i / steps));
+		await dispatch('touchMove', x, 'touchMoved', base + i * 30);
+		await page.waitForTimeout(30);
+	}
+	await dispatch('touchEnd', endX, 'touchReleased', base + steps * 30 + 20);
+	await client.detach();
+}
+
+/** One continuous gesture with a direction reversal: drag right (FAB appears),
+ *  reverse left (FAB disappears), then drag right again to the commit edge.
+ *  Produces a single touchStart ... touchEnd sequence with a mid-gesture
+ *  reversal, matching "swipe, reverse, swipe back" as one user gesture. */
+async function swipeRightReverseRight(page: import('@playwright/test').Page): Promise<void> {
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+	const width = page.viewportSize()?.width ?? 393;
+	const startX = Math.round(width * 0.2);
+	const peakX = Math.round(width * 0.6);
+	const troughX = Math.round(width * 0.3);
+	const endX = Math.round(width * 0.9);
+	const y = 400;
+	const dispatch = (
+		type: 'touchStart' | 'touchMove' | 'touchEnd',
+		x: number,
+		state: string,
+		ts: number
+	) =>
+		client.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: [{ state, x, y, id: 1 }] as unknown as never,
+			modifiers: 0,
+			timestamp: ts
+		});
+	const base = await page.evaluate(() => performance.now());
+	let step = 0;
+	const seg = (from: number, to: number, n: number): Promise<void> =>
+		(async () => {
+			for (let i = 1; i <= n; i++) {
+				step += 1;
+				const x = Math.round(from + (to - from) * (i / n));
+				await dispatch('touchMove', x, 'touchMoved', base + step * 28);
+				await page.waitForTimeout(28);
+			}
+		})();
+	await dispatch('touchStart', startX, 'touchPressed', base);
+	await seg(startX, peakX, 6);
+	await seg(peakX, troughX, 5);
+	await seg(troughX, endX, 6);
+	await dispatch('touchEnd', endX, 'touchReleased', base + (step + 1) * 28 + 20);
+	await client.detach();
+}
+
+async function openDrawerAndClickBookmarks(page: import('@playwright.test').Page): Promise<void> {
+	await page.locator('header button').first().click();
+	await page.waitForTimeout(250);
+	await page.locator('a[href="/bookmarks"]').filter({ visible: true }).first().click();
+}
+
+// CASE A: drawer tap / -> /bookmarks. Correct behaviour: a smooth multi-frame
+// scale-out (>= 5 intermediate samples in (0.1, 0.9)). The defect produces ~2
+// intermediate samples after a long hold at scale 1 - a late fast drop.
+test('A forward drawer: `/` -> `/bookmarks` must scale the FAB out smoothly', async ({ page }) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	const frames = await capture(page, async () => {
+		await openDrawerAndClickBookmarks(page);
+		await page.waitForURL('/bookmarks', { timeout: 5000 });
+	});
+	const s = scales(frames);
+	const intermediate = s.filter((v) => v > 0.1 && v < 0.9);
+	expect(
+		intermediate.length,
+		`forward scale-out must be a smooth multi-frame ramp, not a late fast drop. ${dump('A', frames)}`
+	).toBeGreaterThanOrEqual(5);
+});
+
+// CASE C: back-arrow tap /bookmarks -> /. Correct behaviour: the FAB scales in
+// 0 -> 1 with intermediate samples (the click nav must still animate). The
+// defect jumps 0 -> 1 with ZERO intermediate samples.
+test('C back-arrow: `/bookmarks` -> `/` must animate the FAB in (no jump)', async ({ page }) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	await openDrawerAndClickBookmarks(page);
+	await page.waitForURL('/bookmarks', { timeout: 5000 });
+	await waitForHydration(page);
+	await page.waitForTimeout(400);
+	const frames = await capture(page, async () => {
+		await page.locator('header button').first().click();
+		await page.waitForURL('/', { timeout: 5000 });
+	});
+	const s = scales(frames);
+	const intermediate = s.filter((v) => v > 0.1 && v < 0.9);
+	expect(
+		intermediate.length,
+		`back-arrow must animate the FAB in (zero intermediate = a hard jump). ${dump('C', frames)}`
+	).toBeGreaterThanOrEqual(3);
+});
+
+// CASE B: realistic back-swipe /bookmarks -> /. Correct behaviour: the FAB
+// follows the FINGER during the drag - it must leave scale 0 and reach a mid
+// scale DURING the drag window (t <= 750ms; the drag itself is ~600ms). The
+// defect keeps the FAB at scale 0 through the entire drag; it only moves at the
+// commit snap, so no mid-scale frame exists during the drag itself.
+test('B realistic swipe: FAB must follow the finger during the drag', async ({ page }) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	await openDrawerAndClickBookmarks(page);
+	await page.waitForURL('/bookmarks', { timeout: 5000 });
+	await waitForHydration(page);
+	await page.waitForTimeout(400);
+	const frames = await capture(page, async () => {
+		await realisticSwipeBack(page);
+		await page.waitForURL('/', { timeout: 5000 }).catch(() => {});
+	}, 1100);
+	const during = frames.filter((f) => f.scale !== null && f.t <= 750);
+	const maxDuring = during.length ? Math.max(...during.map((f) => f.scale as number)) : 0;
+	expect(
+		maxDuring,
+		`FAB must scale up DURING the drag (t<=750ms, finger-follow), reaching >= 0.3; it stays at 0 through the drag and only moves at commit. ${dump(
+			'B',
+			frames
+		)}`
+	).toBeGreaterThanOrEqual(0.3);
+});
+
+// CASE D (reversal state bug): in ONE continuous gesture, swipe right (FAB
+// appears), reverse left (FAB disappears), then swipe right again to commit.
+// Correct behaviour: the FAB scale tracks the live track position throughout,
+// so it reappears on the second rightward leg (reaches >= 0.4 on the way back).
+// The defect: the scale is driven by sampler/holdover STATE, not the live
+// position, so a direction reversal leaves a stale latch and the FAB never
+// reappears on the second leg.
+test('D reversal: FAB must re-track after a direction reversal in one gesture', async ({ page }) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	await openDrawerAndClickBookmarks(page);
+	await page.waitForURL('/bookmarks', { timeout: 5000 });
+	await waitForHydration(page);
+	await page.waitForTimeout(400);
+	const frames = await capture(
+		page,
+		async () => {
+			await swipeRightReverseRight(page);
+			await page.waitForURL('/', { timeout: 5000 }).catch(() => {});
+		},
+		2200
+	);
+	// After the reversal trough, on the second rightward leg the FAB must scale
+	// up again (reach >= 0.4). The stale-state defect pins it low.
+	const s = scales(frames);
+	const maxScale = s.length ? Math.max(...s) : 0;
+	expect(
+		maxScale,
+		`FAB must re-track the position after a direction reversal (reach >= 0.4); stale state pins it low. ${dump(
+			'D',
+			frames
+		)}`
+	).toBeGreaterThanOrEqual(0.4);
+});
