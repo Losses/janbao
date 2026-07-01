@@ -14,14 +14,14 @@
 
 Result line: **5/5 PASS → plan approved for implementation.**
 
-## R2 blocker + majors — independently verified FIXED
+## R2 blocker + majors - independently verified FIXED
 
 - **B3 (centerTab sign).** `GesturePageLayout.svelte:343` `dragProgress = max(0, min(1, -dragOffset/W))` confirmed sign-broken for `swipeDirection === 'right'` (back-swipe, `dragOffset > 0`). v3 computes `coverProgress` from the deep branch's direction-aware normalization (`:374-377`, `val = swipeDirection === 'right' ? rawDragOffset : -rawDragOffset; clamp(val/W, 0, 1)`) on BOTH branches. Bug B now fixed on thread routes too.
 - **M1 (optional field).** `coverProgress?: number | null` on `PagerUpdate`; the 6 non-GPL `pager.set` call sites (MobileTabPager ×3, SearchScopePager ×3) + GPL reset (`:889`) compile untouched.
 - **M2 (arm-effect family gate).** The arm-effect (`:390-416`) gated `family === 'list'`; overlay never arms a no-op sampler.
 - **M3 (helper collapse).** `sampleFraction`/`fractionFromSample` collapse to list-only; `isRestingTarget` drops `familyRestsAtSampleOne`; `pxToFraction`/`listForegroundFromThreadCover`/`familyRestsAtSampleOne` have no remaining call sites in `src/`.
 - **M4 (fab-release-snap).** Added to the rewrite list (§7).
-- **M5 (double-clock gate).** `transitionEnabled = (!pager.dragging && !samplerActive) || (discreteNavInFlight && !samplerActive)` — the latch is `!samplerActive`-gated, so it cannot double-clock the Family A sampler on overlay→list back-swipe commit.
+- **M5 (double-clock gate).** `transitionEnabled = (!pager.dragging && !samplerActive) || (discreteNavInFlight && !samplerActive)` - the latch is `!samplerActive`-gated, so it cannot double-clock the Family A sampler on overlay→list back-swipe commit.
 - **M6 (stale-latch clear effect).** The new effect reads `navStore.navInFlight`; `handleAfterNavigate` (`navigation.svelte.ts:133`) reliably clears it after navigation. The 280 ms timer is the lost-navigation backstop.
 
 R1 blockers remain fixed: `coverProgress` has zero non-FAB consumers (grep); the atom keeps its combined `transform`.
@@ -49,7 +49,7 @@ R1 blockers remain fixed: `coverProgress` has zero non-FAB consumers (grep); the
 
 ## Organic verdict
 
-All five auditors return `has-special-cases`, consistent with R1/R2. The two pragmatic special-cases — the Family A sampler (second scale path, justified by MobileTabPager's release-jump) and the `discreteNavInFlight` timer latch — are honestly documented with a deferred-cleanup path (§4.5: MobileTabPager publishes a continuous snap-progress so Family A also drops the sampler). The overlay family is now a pure function of the live `coverProgress` signal (no sampler, no holdover, no gap-holdover). This is the approved tradeoff; no further convergence is blocked.
+All five auditors return `has-special-cases`, consistent with R1/R2. The two pragmatic special-cases - the Family A sampler (second scale path, justified by MobileTabPager's release-jump) and the `discreteNavInFlight` timer latch - are honestly documented with a deferred-cleanup path (§4.5: MobileTabPager publishes a continuous snap-progress so Family A also drops the sampler). The overlay family is now a pure function of the live `coverProgress` signal (no sampler, no holdover, no gap-holdover). This is the approved tradeoff; no further convergence is blocked.
 
 ## Approval
 

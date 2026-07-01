@@ -8,9 +8,9 @@ The FAB scale animation must be a continuous, stable function of the gesture/pag
 
 The implementation has THREE independent, unsynchronized signals controlling "which FAB is shown" and "what scale it is at":
 
-1. **URL** (`page.url.pathname` → `fabConfig.kind`) — swaps at SvelteKit nav timing (at the START of the slide, when the link is clicked). Determines `fabConfig.family`, `fabConfig.kind`, `fabConfig.tabIndex`.
-2. **Track position** (the sampler's `sampledFractionalIndex`, read from `getComputedStyle(track).transform.m41`) — continuous, reflects the actual visual position of the MobileTabPager / GesturePageLayout track. Updated every rAF frame.
-3. **CSS transition latch** (`discreteNavInFlight`, a 280ms timer) — fires on family swaps or presence changes, gates the atom's `transition: transform` class.
+1. **URL** (`page.url.pathname` → `fabConfig.kind`) - swaps at SvelteKit nav timing (at the START of the slide, when the link is clicked). Determines `fabConfig.family`, `fabConfig.kind`, `fabConfig.tabIndex`.
+2. **Track position** (the sampler's `sampledFractionalIndex`, read from `getComputedStyle(track).transform.m41`) - continuous, reflects the actual visual position of the MobileTabPager / GesturePageLayout track. Updated every rAF frame.
+3. **CSS transition latch** (`discreteNavInFlight`, a 280ms timer) - fires on family swaps or presence changes, gates the atom's `transition: transform` class.
 
 These three signals change at DIFFERENT TIMES:
 
@@ -21,7 +21,7 @@ These three signals change at DIFFERENT TIMES:
 The desync causes:
 
 - **Kind flicker**: the URL swap makes the atom switch to the incoming FAB (scale jumps to 0); the next frame, `listDisplayTab` (reading the track position, still near the outgoing tab) overrides back to the outgoing FAB (scale jumps back up). Two jumps in two frames = flicker.
-- **Disappear jump**: on a cross-FAB tab swap (messages→discussions), the URL swap at the start makes the atom show discussions immediately. The outgoing messages FAB never scales out — it's replaced instantly. The disappear is a single-frame leap.
+- **Disappear jump**: on a cross-FAB tab swap (messages→discussions), the URL swap at the start makes the atom show discussions immediately. The outgoing messages FAB never scales out - it's replaced instantly. The disappear is a single-frame leap.
 - **Instability**: the latch (`discreteNavInFlight`) and the `retainedConfig` / `listDisplayTab` overrides interact across repeated navigations, leaving stale state that suppresses or corrupts later animations.
 
 ## What was tried (and why each attempt failed)
@@ -29,10 +29,10 @@ The desync causes:
 1. **v2.1 (deep kind)**: atom unmounted on non-FAB routes. Jump on boundary.
 2. **DV10 coverProgress**: replaced the overlay sampler with `pager.coverProgress`. Fixed drag-following (bug B) but the logical-vs-visual gap (coverProgress jumps to endpoint at commit, not tracking the slide) caused the disappear-replay (bug H).
 3. **discreteNavInFlight latch + CSS transition**: tried to ease the URL-swap scale jump with a transition latch. The latch fires at the wrong time (same flush as URL swap = scale already changed before transition can catch it); switched to `$effect.pre` (fixes A/C timing) but introduces a TDZ (samplerActive referenced before init).
-4. **Always-on sampler**: removed the self-stop so the sampler catches tab-tap slides. Fixed re-arm but the sampler reads the track M41 (visual), while the kind is from the URL (logical) — the kind swaps at the URL change (start), the scale follows the track (delayed), creating a kind/scale mismatch.
+4. **Always-on sampler**: removed the self-stop so the sampler catches tab-tap slides. Fixed re-arm but the sampler reads the track M41 (visual), while the kind is from the URL (logical) - the kind swaps at the URL change (start), the scale follows the track (delayed), creating a kind/scale mismatch.
 5. **listDisplayTab override**: tried to make the kind follow the track position (foreground tab). But listDisplayTab overrides displayConfig AFTER the URL swap, causing a two-frame flicker (URL → incoming, then listDisplayTab → back to outgoing, then track crosses midpoint → incoming again).
 
-Each fix addressed one symptom while introducing another, because the root cause — three unsynchronized signals — was never resolved.
+Each fix addressed one symptom while introducing another, because the root cause - three unsynchronized signals - was never resolved.
 
 ## The question the audit must answer
 

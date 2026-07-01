@@ -20,9 +20,9 @@ Result line: **not 5/5 PASS → revised.**
 
 The plan §4.1 proposes the GPL `centerTab` branch publish `backMorph: dragProgress / 1 / 0` (currently `null`). Header consumes `pager.backMorph` for the deep-page morph: `Header.svelte:142-143` dragging branch is `pager.backMorph ?? (currentHasTabs ? 1 : 0)`, and `:498-506` reads `pager.backMorph ?? 0` for `titleView.progress`, `:191` for `iconProgress`, `:526-539` for `rootLayerStyle`/`layerDownStyle`.
 
-Thread routes (`/discussion/*`, `/messages/<id>`) resolve to Header `'root'` mode (`header-mode.ts:8-23`): the tab bar + hamburger + search-icon layout, with `getCurrentTabIndex('/discussion/123') === 0`. Header currently keeps `morph = 1` throughout a thread back-swipe because `backMorph` is `null` and the `??` falls back to `currentHasTabs ? 1 : 0 = 1`. Publishing non-null `backMorph = dragProgress` on thread routes makes `morph` drop from 1 toward 0 mid-swipe, which would raise the tab bar out of view (`rootLayerStyle translateY(-(1-morph)*100%)`), morph the hamburger into a back arrow (`iconProgress = 1-morph`), and crossfade the title — behavior thread routes never had and were not designed for (thread `backTarget` is not necessarily a tab root, so the deep-title settle semantics do not apply).
+Thread routes (`/discussion/*`, `/messages/<id>`) resolve to Header `'root'` mode (`header-mode.ts:8-23`): the tab bar + hamburger + search-icon layout, with `getCurrentTabIndex('/discussion/123') === 0`. Header currently keeps `morph = 1` throughout a thread back-swipe because `backMorph` is `null` and the `??` falls back to `currentHasTabs ? 1 : 0 = 1`. Publishing non-null `backMorph = dragProgress` on thread routes makes `morph` drop from 1 toward 0 mid-swipe, which would raise the tab bar out of view (`rootLayerStyle translateY(-(1-morph)*100%)`), morph the hamburger into a back arrow (`iconProgress = 1-morph`), and crossfade the title - behavior thread routes never had and were not designed for (thread `backTarget` is not necessarily a tab root, so the deep-title settle semantics do not apply).
 
-The plan §4.1/§8/§9 framed this only as a risk to verify, not as a fundamental signal conflict. The root issue: `backMorph` is overloaded — it is Header's deep-page morph signal AND the proposed FAB gesture signal, and on thread routes the two have incompatible semantics.
+The plan §4.1/§8/§9 framed this only as a risk to verify, not as a fundamental signal conflict. The root issue: `backMorph` is overloaded - it is Header's deep-page morph signal AND the proposed FAB gesture signal, and on thread routes the two have incompatible semantics.
 
 **Revision decision:** introduce a FAB-only live signal on the pager store (working name `coverProgress`), published by GPL on BOTH the centerTab and deep branches from the deadzone-free `rawDragOffset/viewportWidth` (the same computation the deep branch already uses for `backMorph`). Header does not read `coverProgress`; its `backMorph` consumption is unchanged (still `null` on thread routes). The FAB reads `pager.coverProgress` for the overlay family. This removes the overload and the Header regression entirely.
 
@@ -43,7 +43,7 @@ The plan §7 said only "samplers read `.scale`", treating this as a single-point
 
 ### M1 - `familyNeedsSamplerDuringDrag('overlay')` must flip to false (auditor 1 F5)
 
-`fab-scale.ts:106-108` returns `true` for `'overlay'`. The sampler arm effect (`FloatingActionButtonLayer.svelte:411`) uses it. If the overlay family switches to `coverProgress` and drops the sampler, `familyNeedsSamplerDuringDrag('overlay')` must become `false` (or the function reduced to `family === 'list'`), or the arm effect still starts the sampler for overlay. The plan §4.5 did not list this edit. **Revision:** §4.5 explicitly sets `familyNeedsSamplerDuringDrag` to list-only; `familyRestsAtSampleOne` is removed (only list remains, where it is always false — no information).
+`fab-scale.ts:106-108` returns `true` for `'overlay'`. The sampler arm effect (`FloatingActionButtonLayer.svelte:411`) uses it. If the overlay family switches to `coverProgress` and drops the sampler, `familyNeedsSamplerDuringDrag('overlay')` must become `false` (or the function reduced to `family === 'list'`), or the arm effect still starts the sampler for overlay. The plan §4.5 did not list this edit. **Revision:** §4.5 explicitly sets `familyNeedsSamplerDuringDrag` to list-only; `familyRestsAtSampleOne` is removed (only list remains, where it is always false - no information).
 
 ### M2 - `fab-scale.test.ts` not in the test-update list (auditor 5)
 
@@ -51,7 +51,7 @@ The plan §7 said only "samplers read `.scale`", treating this as a single-point
 
 ### M3 - `discreteNavInFlight` vs Family A sampler first-frame race, and the forward-enter mount gap (auditors 1 F3/F4)
 
-With the sampler removed for overlay, the `transitionEnabled` gate `!pager.dragging && !samplerActive` is clean for overlay (no sampler to arm on click nav). For Family A the sampler still arms on track bind. The revision must state: `startSampler` sets `samplerActive = true` synchronously at entry (`FloatingActionButtonLayer.svelte:301-302`), so the arm-effect flush already has `samplerActive = true` before the first render — no first-frame race where transition and sampler both drive. Forward-enter mount gap on a deep route: `coverProgress` is 0 at rest, but the route-swap `transitionEnabled` (now armed by `discreteNavInFlight` for overlay↔list) eases the 1→0 scale over 200 ms; no flash.
+With the sampler removed for overlay, the `transitionEnabled` gate `!pager.dragging && !samplerActive` is clean for overlay (no sampler to arm on click nav). For Family A the sampler still arms on track bind. The revision must state: `startSampler` sets `samplerActive = true` synchronously at entry (`FloatingActionButtonLayer.svelte:301-302`), so the arm-effect flush already has `samplerActive = true` before the first render - no first-frame race where transition and sampler both drive. Forward-enter mount gap on a deep route: `coverProgress` is 0 at rest, but the route-swap `transitionEnabled` (now armed by `discreteNavInFlight` for overlay↔list) eases the 1→0 scale over 200 ms; no flash.
 
 ## Minor findings (addressed in revision or noted)
 
@@ -63,13 +63,13 @@ With the sampler removed for overlay, the `transitionEnabled` gate `!pager.dragg
 
 ## Organic verdict
 
-All three returning auditors returned `has-special-cases`. The plan is a substantial move toward a pure-function drive (overlay reads a live signal, holdover removed, full-range curve), but it retains: the Family A sampler as a second scale path, the `discreteNavInFlight` timer-based latch (mirroring `familyCInFlight`), and — in the v1 draft — overloaded `backMorph` (a special-case that caused B1). The Round-1 revision removes the overload (FAB-only `coverProgress`) and keeps the two pragmatic special-cases (Family A sampler for snap continuity, the discrete-nav latch for mount-gap transition) with honest justification. A future cleanup (MobileTabPager publishes a continuous snap-progress so Family A also drops the sampler) remains out of scope.
+All three returning auditors returned `has-special-cases`. The plan is a substantial move toward a pure-function drive (overlay reads a live signal, holdover removed, full-range curve), but it retains: the Family A sampler as a second scale path, the `discreteNavInFlight` timer-based latch (mirroring `familyCInFlight`), and - in the v1 draft - overloaded `backMorph` (a special-case that caused B1). The Round-1 revision removes the overload (FAB-only `coverProgress`) and keeps the two pragmatic special-cases (Family A sampler for snap continuity, the discrete-nav latch for mount-gap transition) with honest justification. A future cleanup (MobileTabPager publishes a continuous snap-progress so Family A also drops the sampler) remains out of scope.
 
 ## Verified-TRUE facts carried forward
 
 - `GesturePageLayout.svelte:336-358` centerTab branch publishes `backMorph: null` (`:354`); the deep branch (`:359-407`) publishes `backMorph: progress` (`:388`), both computing progress from `rawDragOffset/viewportWidth` deadzone-free.
 - `Header.svelte:142-143` reads `pager.backMorph ?? (currentHasTabs ? 1 : 0)`; thread routes are `'root'` mode (`header-mode.ts:8-23`) and rely on `backMorph === null`.
 - `MobileTabBar.svelte:55-63` reads `backMorph` but is gated on `targetIndex !== null` (always null on centerTab), so it is safe.
-- `fab-scale.ts:37-39` `scaleFromFraction = clamp(2f-1, 0, 1)` — the 0.5 threshold is the direct cause of B/D and the fast-drop in A.
+- `fab-scale.ts:37-39` `scaleFromFraction = clamp(2f-1, 0, 1)` - the 0.5 threshold is the direct cause of B/D and the fast-drop in A.
 - `e2e/helpers.ts:swipeHorizontal` dispatches synchronous touchMoves with `timestamp: 0`, compressing drags; Family B back test passes because of this, hiding the thread-route defect.
 - `FloatingActionButton.svelte:70` combined `transform` binding is mirrored across the SSR tests, `readFabTransform`, and the trajectory samplers; splitting it is a multi-file test rewrite, not a single edit.

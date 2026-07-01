@@ -18,7 +18,7 @@
 
 Frame-level mechanism (all 5 independently traced):
 
-- Frame 0 (click/commit): URL swaps → `fabConfig.kind` flips to the incoming tab. Track m41 is still at the outgoing position (CSS transition hasn't started or is at 0%). `listDisplayTab` guard requires non-integer sample — but the stale value IS an integer — so the override doesn't fire. Atom renders incoming-kind at scale 0 for one frame.
+- Frame 0 (click/commit): URL swaps → `fabConfig.kind` flips to the incoming tab. Track m41 is still at the outgoing position (CSS transition hasn't started or is at 0%). `listDisplayTab` guard requires non-integer sample - but the stale value IS an integer - so the override doesn't fire. Atom renders incoming-kind at scale 0 for one frame.
 - Frame 1+: Track starts sliding (200ms CSS). Sampler reads the moving m41. `listDisplayTab` eventually fires (when sample becomes non-integer), overriding kind back to outgoing. Then at the midpoint, kind flips again to incoming. Three kind switches in 200ms = flicker.
 
 This mechanism produces all reported defects:
@@ -32,11 +32,11 @@ This mechanism produces all reported defects:
 
 **Kind AND scale must BOTH be pure functions of ONE continuous signal: the live visual track position (sampler m41).**
 
-- `kind` = the foreground tab at the sampled position. Swaps at the midpoint (sample = integer boundary), where `scaleFromFraction(2f-1)` guarantees scale 0 for both kinds — making the icon swap invisible.
+- `kind` = the foreground tab at the sampled position. Swaps at the midpoint (sample = integer boundary), where `scaleFromFraction(2f-1)` guarantees scale 0 for both kinds - making the icon swap invisible.
 - `scale` = `scaleFromFraction(tabFraction(sample, kindTab))`. Same sampler.
-- URL enters only as the **resting endpoint** (seed `kind` when sampler is at integer rest) and for mount gating / href / label — NOT during a transition.
+- URL enters only as the **resting endpoint** (seed `kind` when sampler is at integer rest) and for mount gating / href / label - NOT during a transition.
 - `coverProgress` must either become visual (track the CSS slide through commit, not jump to 1) or be replaced by the same sampler for Family B.
-- `discreteNavInFlight`, `listDisplayTab`, `chipExitActive`, `retainedConfig` kind-override — **delete**. They are patches over the missing single-source-of-truth.
+- `discreteNavInFlight`, `listDisplayTab`, `chipExitActive`, `retainedConfig` kind-override - **delete**. They are patches over the missing single-source-of-truth.
 - Family C (compose, no track) keeps the CSS transition as its isolated path.
 
 **Two implementation strategies emerged:**

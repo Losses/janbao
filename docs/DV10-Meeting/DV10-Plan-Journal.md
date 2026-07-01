@@ -8,7 +8,7 @@ Full detail: `DV10-Audit-R1.md`. Auditors 2 and 4 were rate-limited by the API m
 
 Convergent blockers:
 
-- **B1 (BLOCKING, auditors 1, 5).** Publishing `backMorph` on the GPL centerTab branch regresses Header's thread-route morph. Header reads `pager.backMorph ?? (currentHasTabs ? 1 : 0)` (`Header.svelte:142-143`); thread routes are `'root'` mode and rely on `backMorph === null` to keep `morph = 1`. A non-null thread `backMorph` would raise the tab bar, morph the hamburger, and crossfade the title mid-swipe. `backMorph` is overloaded — Header's deep-page morph AND the proposed FAB gesture signal.
+- **B1 (BLOCKING, auditors 1, 5).** Publishing `backMorph` on the GPL centerTab branch regresses Header's thread-route morph. Header reads `pager.backMorph ?? (currentHasTabs ? 1 : 0)` (`Header.svelte:142-143`); thread routes are `'root'` mode and rely on `backMorph === null` to keep `morph = 1`. A non-null thread `backMorph` would raise the tab bar, morph the hamburger, and crossfade the title mid-swipe. `backMorph` is overloaded - Header's deep-page morph AND the proposed FAB gesture signal.
 - **B2 (BLOCKING, auditor 1).** Splitting the atom `transform` into individual `scale`/`translate` properties breaks the SSR assertion block (`fab.spec.ts:117-290` regex-matches `transform: scale() translateY()`), `readFabTransform` (`:831` reads `fab.style.transform`), and every trajectory sampler that parses `getComputedStyle(fab).transform`. The plan underestimated this as a single-point edit.
 
 Revision decisions:
@@ -29,7 +29,7 @@ Full detail: `DV10-Audit-R2.md`. R1 blockers (B1 `backMorph` overload, B2 atom s
 
 Convergent blocker:
 
-- **B3 (BLOCKING, auditors 1-major, 3, 4, 5).** The centerTab branch's `dragProgress` (`GesturePageLayout.svelte:343`, `Math.max(0, Math.min(1, -dragOffset/viewportWidth))`) is sign-broken for `swipeDirection === 'right'` (back-swipe): `dragOffset > 0` clamps `-dragOffset` to 0, so `coverProgress` stayed 0 through the thread back-swipe — bug B unfixed on `/discussion/*` and `/messages/<id>`. The v2 claim "reuse the deep branch's computation" was false; the deep branch is direction-aware (`:374-377`), the centerTab variable is not.
+- **B3 (BLOCKING, auditors 1-major, 3, 4, 5).** The centerTab branch's `dragProgress` (`GesturePageLayout.svelte:343`, `Math.max(0, Math.min(1, -dragOffset/viewportWidth))`) is sign-broken for `swipeDirection === 'right'` (back-swipe): `dragOffset > 0` clamps `-dragOffset` to 0, so `coverProgress` stayed 0 through the thread back-swipe - bug B unfixed on `/discussion/*` and `/messages/<id>`. The v2 claim "reuse the deep branch's computation" was false; the deep branch is direction-aware (`:374-377`), the centerTab variable is not.
 
 Majors (M1–M6):
 

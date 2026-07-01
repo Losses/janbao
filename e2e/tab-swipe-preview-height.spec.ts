@@ -11,7 +11,7 @@ import { prepareContext, waitForHydration } from './helpers';
 //     messages page will be (blank gap under the shorter messages content).
 //   - back     messages(short) -> activity(tall): the taller activity neighbour
 //     is clipped at the source's short viewport height, so its bottom content
-//     (composer + lower feed items) is cut off — "preview shorter than the real
+//     (composer + lower feed items) is cut off - "preview shorter than the real
 //     Activity page, extra content all clipped".
 //
 // detectSwipe rejects pointerType 'mouse', so the gesture is driven via CDP
@@ -184,7 +184,7 @@ test.describe('Tab-swipe preview height mismatch (activity <-> messages)', () =>
 			'back: the activity preview should match the landed activity page, not the shorter messages source'
 		).toBe(landedActivity.vpHeight);
 
-		// The taller activity neighbour must be fully visible while revealed —
+		// The taller activity neighbour must be fully visible while revealed -
 		// its bottom edge must not drop below the viewport (content cut off).
 		expect(
 			duringBack.panels.activity.bottom,

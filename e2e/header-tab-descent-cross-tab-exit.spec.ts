@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { prepareContext, waitForHydration } from './helpers';
 
 /**
- * Header tab-descent regression spec — cross-tab exit boundary.
+ * Header tab-descent regression spec - cross-tab exit boundary.
  *
  * The mobile Header's tabs layer sits at translateY(-100%) on a deep page and
  * descends to translateY(0%) when the route returns to a tab route (the "Tab
@@ -28,13 +28,13 @@ import { prepareContext, waitForHydration } from './helpers';
  * so when the nav commits and `morph` flips to its tab-rest value (1), the
  * layer's transition is 'none' and the transform jumps -100% → 0% with no
  * animation (or, when the morph flip and the navInFlight render land in separate
- * paints on slower devices, a partial descent that then snaps — the reported
+ * paints on slower devices, a partial descent that then snaps - the reported
  * freeze-then-jump). The forward direction is unaffected because the tab route
  * does not mount GesturePageLayout, so the cross-tab exit / navInFlight path is
  * never entered and slideT stays '200ms'.
  *
  * Tests:
- *   - CALIBRATION (passes): documents the measured asymmetry — forward handoff
+ *   - CALIBRATION (passes): documents the measured asymmetry - forward handoff
  *     has many mid-air frames (smooth), back handoff has zero (jump), and the
  *     internal probe shows slideT === 'none' at the back landing flush.
  *   - DEFECT (fails on current code): asserts the back descent animates like the
@@ -175,7 +175,7 @@ function landings(snaps: HeaderSnap[], dir: 'in' | 'out'): LandingFlush[] {
 /** External computed-px documentary sequence across a path-change index:
  *  collapsed run-length encoding so a smooth descent reads as many small steps
  *  and a jump reads as one big step. Window-sensitive (rAF drops frames during
- *  the nav commit), so this is documentary only — assertions use `landings`. */
+ *  the nav commit), so this is documentary only - assertions use `landings`. */
 function externalSeq(frames: SettleFrame[], at: number): string {
 	const lo = Math.max(0, at - 2);
 	const hi = Math.min(frames.length, at + 22);

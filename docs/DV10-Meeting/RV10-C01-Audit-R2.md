@@ -14,7 +14,7 @@
 
 Result line: **5/5 ACCEPTABLE.**
 
-## R1 root cause — confirmed eliminated (5/5)
+## R1 root cause - confirmed eliminated (5/5)
 
 All five independently verified:
 - `effectiveKind` (FloatingActionButtonLayer.svelte:195-203) is the single source of truth for list-family kind during any transition.
@@ -23,7 +23,7 @@ All five independently verified:
 - The URL-swap frame cannot leak the incoming kind because `effectiveKind` ignores `fabConfig.kind` while the sampler is active.
 - Overlay/compose families are correctly isolated (static kind from URL, separate scale signal).
 
-## F1 — stale sampledFractionalIndex on re-arm (auditors 3, 5; non-blocking, fixed inline)
+## F1 - stale sampledFractionalIndex on re-arm (auditors 3, 5; non-blocking, fixed inline)
 
 After a cross-family roundtrip (list→overlay→list), the sampler re-arms but `sampledFractionalIndex` holds the previous family's stale value for one frame (before the first rAF tick writes a fresh sample). `effectiveKind` reads this stale value and renders the wrong kind at scale 1 for one frame.
 

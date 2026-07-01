@@ -6,8 +6,8 @@ import { prepareContext, waitForHydration } from './helpers';
  *
  * Symptom (reported): on mobile, on a deep page (e.g. /profile/settings "账号
  * 设置"), tapping a link to another deep page (e.g. /profile/edit "编辑资料")
- * plays a vertical title crossfade — the incoming title rises and the outgoing
- * title exits upward — but the animation is clipped to a box that is SMALLER
+ * plays a vertical title crossfade - the incoming title rises and the outgoing
+ * title exits upward - but the animation is clipped to a box that is SMALLER
  * than the App Bar (Action Bar). Text is cut at an invisible horizontal line
  * ~8px INSIDE the bar's top and bottom edges, so the two titles appear to push
  * each other inside a "window" that does not fill the bar.
@@ -31,11 +31,11 @@ import { prepareContext, waitForHydration } from './helpers';
  *   <div class="relative overflow-clip md:hidden">
  * which spans the full 56px bar. So the tab morph uses the bar's real bounding
  * box; only the title-text crossfade is confined to the inset h-10 slot. Two
- * different clip containers for two animations in the same bar — that is the
+ * different clip containers for two animations in the same bar - that is the
  * defect.
  *
  * Scope: affects EVERY deep→deep title crossfade (any nav between two titled
- * deep pages — /profile/*, /admin/*, /bookmarks↔/drafts, … ~24 deep routes in
+ * deep pages - /profile/*, /admin/*, /bookmarks↔/drafts, … ~24 deep routes in
  * deep-header-config.ts). It is NOT a single-route typo. It is isolated to the
  * title-crossfade animation: the root↔deep morph, the search morph and the tab
  * pill morph all clip against the full bar and are unaffected.
@@ -91,12 +91,12 @@ interface ClipCapture {
 	/** Furthest a title span reached above/below the bar during the crossfade. */
 	titleMinTop: number | null;
 	titleMaxBottom: number | null;
-	/** computed overflow of the tabs layer (rootLayerStyle) — 'visible' = full bar. */
+	/** computed overflow of the tabs layer (rootLayerStyle) - 'visible' = full bar. */
 	tabsOverflow: string | null;
-	/** computed overflow of the title layer (layerDownStyle) — 'hidden' = inset slot. */
+	/** computed overflow of the title layer (layerDownStyle) - 'hidden' = inset slot. */
 	clipOverflow: string | null;
 	/** True iff some crossfade frame had a title span whose rect lay in the inset
-	 * band (between the clip edge and the bar edge) — i.e. text was cut at the
+	 * band (between the clip edge and the bar edge) - i.e. text was cut at the
 	 * inset boundary, not the bar edge. */
 	spanCutAtInset: boolean;
 }

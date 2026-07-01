@@ -14,7 +14,7 @@
 
 Result line: **1/5 PASS → revised.**
 
-## R1 blockers — independently verified FIXED
+## R1 blockers - independently verified FIXED
 
 - **B1 (backMorph overload).** `coverProgress` is a new field; grep confirms zero consumers outside the FAB. Header reads `backMorph` only (`Header.svelte:143,206,503`), thread routes stay `'root'` mode with `backMorph === null`. MobileTabBar is gated on `targetIndex !== null` (centerTab publishes `null`). No Header regression.
 - **B2 (atom split).** The combined `style:transform={scale() translateY()}` binding (`FloatingActionButton.svelte:70`) and `.fab-transition` class (`:94`) are kept. The SSR regex (`fab.spec.ts:206`), `readFabTransform` (`:831`), and trajectory samplers (`fab-deep-real-interaction.spec.ts:62-65`) all parse the unchanged `transform`. No test breakage from the atom.
@@ -23,7 +23,7 @@ Result line: **1/5 PASS → revised.**
 
 ### B3 - centerTab `dragProgress` is sign-broken for rightward back-swipes; `coverProgress` stays 0 on thread routes, bug B unfixed (BLOCKING, auditors 1 major, 3, 4, 5)
 
-The plan §4.1 says the centerTab branch publishes `coverProgress = dragProgress`, claiming it is "the same deadzone-free drag progress the deep branch computes." It is not. `GesturePageLayout.svelte:343` computes `dragProgress = Math.max(0, Math.min(1, -dragOffset / viewportWidth))`. For a thread back-swipe (`/discussion/*`→`/`, `/messages/<id>`→inbox) `swipeDirection === 'right'`, `dragOffset > 0` (clamped at `:490`), so `-dragOffset < 0` and `dragProgress` is clamped to **0** through the entire drag. The deep branch (`:374-377`) is direction-aware (`val = swipeDirection === 'right' ? rawOffset : -rawOffset`); the centerTab branch is not. Result: `coverProgress = 0` through the thread back-swipe, `foregroundFraction = coverProgress ?? restingFraction = 0`, scale stays 0 — bug B reproduced unchanged on the two thread route families, which §2.3/§3.4 require fixed. The plan's own §7 thread-route trajectory test would FAIL.
+The plan §4.1 says the centerTab branch publishes `coverProgress = dragProgress`, claiming it is "the same deadzone-free drag progress the deep branch computes." It is not. `GesturePageLayout.svelte:343` computes `dragProgress = Math.max(0, Math.min(1, -dragOffset / viewportWidth))`. For a thread back-swipe (`/discussion/*`→`/`, `/messages/<id>`→inbox) `swipeDirection === 'right'`, `dragOffset > 0` (clamped at `:490`), so `-dragOffset < 0` and `dragProgress` is clamped to **0** through the entire drag. The deep branch (`:374-377`) is direction-aware (`val = swipeDirection === 'right' ? rawOffset : -rawOffset`); the centerTab branch is not. Result: `coverProgress = 0` through the thread back-swipe, `foregroundFraction = coverProgress ?? restingFraction = 0`, scale stays 0 - bug B reproduced unchanged on the two thread route families, which §2.3/§3.4 require fixed. The plan's own §7 thread-route trajectory test would FAIL.
 
 **Revision decision (v3 §4.1):** the centerTab branch computes `coverProgress` with the same direction-aware `rawDragOffset` normalization the deep branch uses (`swipeDirection === 'right' ? rawOffset : -rawOffset`, clamped 0..1), NOT the left-only `dragProgress` variable. This is a real computation, not a reuse.
 
@@ -58,7 +58,7 @@ The current `familyCInFlight` effect (`:225-249`) clears only on the next family
 - **`coverProgress` deadzone decoupling** (auditor 4 F1). `coverProgress` is deadzone-free (from `rawDragOffset`), but `visualDragOffset` (the visible track) has the 0.2 `HEADER_MORPH` deadzone. The FAB scales during the first 20% while the track is still. This mirrors Header's morph (Header also reads a deadzone-free signal and morphs in the deadzone), so it is consistent: the chrome (Header + FAB) responds first, the content slides after. **Decision:** keep `coverProgress` deadzone-free; document this as intentional chrome/content phasing. Not a blocker.
 - **centerTab "1 on commit" is unreachable** (auditor 4 F5, 5 m). The centerTab branch has no commit state (the URL leaves the thread route on commit, GPL unmounts). **Revision (v3 §4.1):** centerTab publishes `coverProgress = progress` during drag and `0` at rest; the "1 on commit" applies only to the deep branch.
 - **deep→deep swap pops the FAB** (auditor 4 F6). Both endpoints rest at scale 0, but the deep branch publishes `coverProgress → 1` mid-swap, so the FAB scales up then down. Header gates this with `isDeepToDeep ? 0`. **Revision (v3 §4.1):** note it; accept (both endpoints 0, the pop is symmetric and brief) OR gate `coverProgress` to 0 on deep→deep. Decision: accept and add an e2e asserting no persistent flash.
-- **`restingFraction` named but not defined** (auditor 5 m1). **Revision (v3 §4):** define it — overlay/compose = 0, list = `tabFraction(activeTab, tabIndex)`.
+- **`restingFraction` named but not defined** (auditor 5 m1). **Revision (v3 §4):** define it - overlay/compose = 0, list = `tabFraction(activeTab, tabIndex)`.
 - **Family A thresholds under the identity curve** (auditor 4 F8, 5 m2). **Revision (v3 §7):** state the new Family A mid-range expectation explicitly (tab-mid scale ~0.5).
 - **`sampledFractionalIndex` retained by the Activity `'dynamic'` fabConfig branch** (`:158-164`) (auditor 2 minor-4). **Revision (v3 §4.5):** note this is a retained Family A consumer.
 
@@ -69,7 +69,7 @@ All five auditors return `has-special-cases`. The plan is a real move toward a p
 ## Verified-TRUE facts carried forward
 
 - `GesturePageLayout.svelte:343` centerTab `dragProgress = max(0, min(1, -dragOffset/W))` is sign-broken for `swipeDirection === 'right'` (`dragOffset > 0` → clamped 0).
-- `GesturePageLayout.svelte:374-377` deep branch `val = swipeDirection === 'right' ? rawOffset : -rawOffset` is direction-aware — the correct reference computation.
+- `GesturePageLayout.svelte:374-377` deep branch `val = swipeDirection === 'right' ? rawOffset : -rawOffset` is direction-aware - the correct reference computation.
 - `mobile-pager.svelte.ts:33` `backMorph` is required on `PagerUpdate`; making `coverProgress` optional avoids the 6 call-site break.
 - `FloatingActionButtonLayer.svelte:390-416` arm-effect does not gate on family; only `:411` disarm-guard does, during drag.
 - `FloatingActionButtonLayer.svelte:281,294,348` are the call sites of the helpers §4.5 removes.
