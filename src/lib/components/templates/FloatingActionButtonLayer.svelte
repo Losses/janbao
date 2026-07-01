@@ -68,7 +68,7 @@
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getActiveGestureTrack } from '$lib/stores/active-gesture-track.svelte';
-	import { getRouteFabRule, FAB_KIND_CONFIGS } from '$lib/utils/route-config';
+	import { getRouteFabRule, FAB_KIND_CONFIGS, backTargetListKind } from '$lib/utils/route-config';
 	import type { FabListKind } from '$lib/utils/route-config';
 	import type { FabFamily } from '$lib/utils/fab-scale';
 	import { getCurrentTabIndex } from '$lib/utils/mobile-tabs';
@@ -174,6 +174,27 @@
 				};
 			}
 			return null;
+		}
+
+		if (rule.fab.kind === 'deep') {
+			// A non-FAB GesturePageLayout route (bookmarks, profile/*, search,
+			// notifications, admin/*). Resolve the source-list kind from the back
+			// target so the FAB scales toward the list the user came from. Returns
+			// family 'overlay' so the existing overlay sampler path drives the scale
+			// across the list<->deep boundary. This branch does not read
+			// pager.active, so the atom mounts (scale 0) at rest and in SSR. Must
+			// return before the static branch: FAB_KIND_CONFIGS indexes only the
+			// concrete list kinds, not the 'deep' sentinel.
+			const resolvedKind = backTargetListKind(navStore.backTarget);
+			const kindConfig = FAB_KIND_CONFIGS[resolvedKind];
+			return {
+				kind: resolvedKind,
+				family: rule.fab.family,
+				href: kindConfig.href,
+				label: kindConfig.label(t),
+				icon: kindConfig.icon,
+				tabIndex: kindConfig.tabIndex
+			};
 		}
 
 		if (rule.fab.kind === null) return null;

@@ -36,7 +36,7 @@ export const FAB_KIND_CONFIGS: Record<FabListKind, FabKindConfig> = {
 
 export interface FabRouteConfigMetadata {
 	readonly family: 'list' | 'overlay' | 'compose';
-	readonly kind: FabListKind | 'dynamic' | null;
+	readonly kind: FabListKind | 'dynamic' | 'deep' | null;
 }
 
 // Preview panels source their own data from the page store / list-cache store,
@@ -58,16 +58,37 @@ export type RouteConfig = BaseRouteConfig;
 
 export const ROUTE_CONFIGS: readonly BaseRouteConfig[] = [
 	// --- Deep Routes (Panel routes) ---
+	// Non-FAB GesturePageLayout routes carry fab: { family: 'overlay', kind: 'deep' }
+	// so the FAB atom stays mounted at scale 0 and the overlay-family sampler drives
+	// its scale across the list<->deep boundary. See docs/FAB-Deep-Boundary-Fix-Plan.md.
+	{
+		pattern: /^\/bookmarks$/,
+		fab: { family: 'overlay', kind: 'deep' }
+	},
+	{
+		pattern: /^\/search$/,
+		fab: { family: 'overlay', kind: 'deep' }
+	},
+	{
+		pattern: /^\/notifications$/,
+		fab: { family: 'overlay', kind: 'deep' }
+	},
+	{
+		pattern: /^\/profile$/,
+		fab: { family: 'overlay', kind: 'deep' }
+	},
 	{
 		pattern: /^\/profile\/settings$/,
 		getParent: () => '/',
-		previewPanel: SettingsMenuPanel
+		previewPanel: SettingsMenuPanel,
+		fab: { family: 'overlay', kind: 'deep' }
 	},
 	{
 		// /profile/[userId]/[userSlug]
 		pattern: /^\/profile\/\d+\/[^/]+$/,
 		getParent: () => '/profile',
-		previewPanel: ProfileMenuPanel
+		previewPanel: ProfileMenuPanel,
+		fab: { family: 'overlay', kind: 'deep' }
 	},
 	{
 		// /profile/comments/[userId]/[userSlug]
@@ -76,7 +97,8 @@ export const ROUTE_CONFIGS: readonly BaseRouteConfig[] = [
 			const m = path.match(/^\/profile\/comments\/(\d+)\/([^/]+)/);
 			return m ? `/profile/${m[1]}/${m[2]}` : '/profile';
 		},
-		previewPanel: ProfileMenuPanel
+		previewPanel: ProfileMenuPanel,
+		fab: { family: 'overlay', kind: 'deep' }
 	},
 	{
 		// /profile/discussions/[userId]/[userSlug]
@@ -85,32 +107,37 @@ export const ROUTE_CONFIGS: readonly BaseRouteConfig[] = [
 			const m = path.match(/^\/profile\/discussions\/(\d+)\/([^/]+)/);
 			return m ? `/profile/${m[1]}/${m[2]}` : '/profile';
 		},
-		previewPanel: ProfileMenuPanel
+		previewPanel: ProfileMenuPanel,
+		fab: { family: 'overlay', kind: 'deep' }
 	},
 	{
 		// Sub-settings pages
 		pattern:
 			/^\/profile\/(?:appearance|edit|editor|offlineReading|onlineNow|password|picture|preferences)$/,
 		getParent: () => '/profile/settings',
-		previewPanel: SettingsMenuPanel
+		previewPanel: SettingsMenuPanel,
+		fab: { family: 'overlay', kind: 'deep' }
 	},
 	{
 		// Invitations page
 		pattern: /^\/profile\/invitations$/,
 		getParent: () => '/profile',
-		previewPanel: ProfileMenuPanel
+		previewPanel: ProfileMenuPanel,
+		fab: { family: 'overlay', kind: 'deep' }
 	},
 	{
 		// Sub-admin pages
 		pattern: /^\/admin\/(?:backups|categories|maintenance|permissions|stats|user-groups)$/,
 		getParent: () => '/admin',
-		previewPanel: AdminMenuPanel
+		previewPanel: AdminMenuPanel,
+		fab: { family: 'overlay', kind: 'deep' }
 	},
 	{
 		// Admin main menu page
 		pattern: /^\/admin$/,
 		getParent: () => '/',
-		previewPanel: AdminMenuPanel
+		previewPanel: AdminMenuPanel,
+		fab: { family: 'overlay', kind: 'deep' }
 	},
 
 	// --- FAB Routes ---
@@ -152,10 +179,26 @@ export function getRouteFabRule(pathname: string): BaseRouteConfig | null {
 	return ROUTE_CONFIGS.find((r) => r.fab !== undefined && r.pattern.test(pathname)) ?? null;
 }
 
-/** Thread or conversation route (covers the list with an overlay). */
+/**
+ * Resolve the source-list kind for a `deep` route from its back target. The back
+ * target decides which list the FAB scales back toward: `/` -> discussions,
+ * `/messages/inbox` -> messages, anything else defaults to discussions. The back
+ * target string may carry a `?search` part (navigation-logic.ts returns pathname
+ * + search), so the comparison uses the pathname only.
+ */
+export function backTargetListKind(backTargetHref: string | null): FabListKind {
+	if (!backTargetHref) return 'discussions';
+	const queryIdx = backTargetHref.indexOf('?');
+	const pathname = queryIdx >= 0 ? backTargetHref.slice(0, queryIdx) : backTargetHref;
+	return pathname === '/messages/inbox' ? 'messages' : 'discussions';
+}
+
+/** Thread or conversation route (covers the list with an overlay). A `deep`
+ *  route reuses the overlay family for the FAB sampler but is not itself a
+ *  thread/conversation, so it is excluded here to keep the predicate's meaning. */
 export function isOverlayRoute(pathname: string): boolean {
 	const rule = getRouteFabRule(pathname);
-	return rule ? rule.fab?.family === 'overlay' : false;
+	return rule ? rule.fab?.family === 'overlay' && rule.fab?.kind !== 'deep' : false;
 }
 
 /** Compose route (no pager, no track to sample). */
@@ -173,7 +216,14 @@ export function isComposeRoute(pathname: string): boolean {
  */
 export function sourceListKindForOverlayOrCompose(pathname: string): FabListKind | null {
 	const rule = getRouteFabRule(pathname);
-	if (!rule || !rule.fab || rule.fab.family === 'list' || rule.fab.kind === 'dynamic') return null;
+	if (
+		!rule ||
+		!rule.fab ||
+		rule.fab.family === 'list' ||
+		rule.fab.kind === 'dynamic' ||
+		rule.fab.kind === 'deep'
+	)
+		return null;
 	return rule.fab.kind;
 }
 
