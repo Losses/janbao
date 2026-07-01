@@ -14,7 +14,7 @@
 
 Result line: **not 5/5 PASS → revised.**
 
-## The FAIL-driver (auditor 5 BLOCKING; auditors 1, 3, 4 MAJOR — same item)
+## The FAIL-driver (auditor 5 BLOCKING; auditors 1, 3, 4 MAJOR - same item)
 
 **§5's spec-rewrite bullet still references `.detail-scroll-pane` for the `/`-route e2e rewrites, but v14 removed `.detail-scroll-pane` from the pager.** The §5 bullet (written in v13) instructs rewriting the `fab.spec.ts`/`swipe-forward-back-deep-page.spec.ts` `/`-route assertions to "scroll the active `.detail-scroll-pane`." Under v14 there is no `.detail-scroll-pane` on `/` (`MobileTabPager.svelte` panels carry only `data-tab-panel`/`data-preview-tab`; `.detail-scroll-pane` is GPL's centre, present only on deep routes). An implementer following §5 literally selects `null`. §6.3/§6.4(b) (updated in v14) correctly use `section[data-tab-panel=<activeLabelKey>]`; the §5 bullet was not updated to match. (Author doc slip from the v13→v14 transition.)
 
