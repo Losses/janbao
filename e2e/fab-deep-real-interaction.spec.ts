@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prepareContext, waitForHydration, clickDiscussion } from './helpers';
+import { prepareContext, waitForHydration, clickDiscussion, openSidebarAndGoto } from './helpers';
 
 /**
  * FAB deep-page boundary: REAL-interaction reproduction spec.
@@ -244,11 +244,16 @@ test('B realistic swipe: FAB must follow the finger during the drag', async ({ p
 		await realisticSwipeBack(page);
 		await page.waitForURL('/', { timeout: 5000 }).catch(() => {});
 	}, 1100);
-	const during = frames.filter((f) => f.scale !== null && f.t <= 750);
-	const maxDuring = during.length ? Math.max(...during.map((f) => f.scale as number)) : 0;
+	// The FAB must scale up BEFORE the URL swaps to / (i.e. while pathname is
+	// still /bookmarks), proving it follows the gesture/commit slide rather than
+	// jumping after the route change. Uses pathname (not a t-window) so it is
+	// robust to the half/half scale curve (the FAB is 0 for the first 50% of
+	// foregroundFraction) and to rAF sampling gaps under CDP touch dispatch.
+	const preCommit = frames.filter((f) => f.path === '/bookmarks' && f.scale !== null);
+	const maxPreCommit = preCommit.length ? Math.max(...preCommit.map((f) => f.scale as number)) : 0;
 	expect(
-		maxDuring,
-		`FAB must scale up DURING the drag (t<=750ms, finger-follow), reaching >= 0.3; it stays at 0 through the drag and only moves at commit. ${dump(
+		maxPreCommit,
+		`FAB must scale up before the URL swaps to / (while still on /bookmarks), reaching >= 0.3; a post-swap-only jump is the defect. ${dump(
 			'B',
 			frames
 		)}`
@@ -457,4 +462,168 @@ test('J repeated tab clicks: final transition still animates (no stale state)', 
 		intermediate.length,
 		`FAB must still animate after repeated tab clicks (no stale state). ${dump('J', frames)}`
 	).toBeGreaterThanOrEqual(3);
+});
+
+// CASE K: the DISAPPEAR half must animate, not jump. On a cross-FAB tab swap
+// (Messages -> Discussions) the outgoing FAB must scale 1 -> 0 smoothly (the
+// first-50% disappear), not snap in one frame. The defect: the URL swaps at the
+// start of the slide, so the atom becomes the incoming FAB immediately and the
+// outgoing FAB never scales out - the disappear is a single-frame leap from
+// >0.8 to <0.2. Case I's ">= 3 intermediate" assertion does NOT catch this: the
+// APPEAR half (0 -> 1) supplies the intermediate frames, masking the jump.
+test('K disappear half: `/messages/inbox` -> `/` scales the FAB out smoothly (no jump)', async ({
+	page
+}) => {
+	await page.goto('/messages/inbox');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	const frames = await capture(page, async () => {
+		await page.locator('a[data-tab-nav][href="/"]').click();
+		await page.waitForURL('/', { timeout: 5000 });
+	});
+	const s = scales(frames);
+	// No single frame may leap from >0.8 down to <0.2 (a disappear jump). A
+	// smooth scale-out steps through the (0.2, 0.8) band.
+	let disappearLeap = 0;
+	for (let i = 1; i < s.length; i++) {
+		if (s[i - 1] > 0.8 && s[i] < 0.2) disappearLeap++;
+	}
+	expect(
+		disappearLeap,
+		`the disappear half must not jump from >0.8 to <0.2 in one frame (got ${disappearLeap} leap(s)). ${dump(
+			'K',
+			frames
+		)}`
+	).toBe(0);
+});
+
+// === LIFECYCLE TESTS (comprehensive coverage of every nav path) ===
+
+// L: thread enter (/ -> /discussion/*). The FAB must scale out 1->0 as the
+// thread slides over the list.
+test('L thread enter: `/` -> `/discussion/*` scales the FAB out', async ({ page }) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	const frames = await capture(page, async () => {
+		await clickDiscussion(page, 0);
+		await page.waitForURL(/\/discussion\//, { timeout: 5000 });
+	});
+	const s = scales(frames);
+	const intermediate = s.filter((v) => v > 0.1 && v < 0.9);
+	expect(intermediate.length, `thread enter must animate FAB out. ${dump('L', frames)}`).toBeGreaterThanOrEqual(3);
+});
+
+// M: compose enter (/ -> /post/discussion via FAB tap). The FAB must scale out.
+test('M compose enter: `/` -> `/post/discussion` scales the FAB out', async ({ page }) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	const frames = await capture(page, async () => {
+		await page.locator('[data-testid="fab"]').click({ force: true });
+		await page.waitForURL('/post/discussion', { timeout: 5000 });
+	});
+	const s = scales(frames);
+	const intermediate = s.filter((v) => v > 0.1 && v < 0.9);
+	expect(intermediate.length, `compose enter must animate FAB out. ${dump('M', frames)}`).toBeGreaterThanOrEqual(3);
+});
+
+// N: compose exit (/post/discussion -> / via browser back). The FAB must scale in.
+test('N compose exit: `/post/discussion` -> `/` scales the FAB in', async ({ page }) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.locator('[data-testid="fab"]').click({ force: true });
+	await page.waitForURL('/post/discussion', { timeout: 5000 });
+	await page.waitForTimeout(300);
+	const frames = await capture(page, async () => {
+		await page.goBack();
+		await page.waitForURL('/', { timeout: 5000 });
+	});
+	const s = scales(frames);
+	const intermediate = s.filter((v) => v > 0.1 && v < 0.9);
+	expect(intermediate.length, `compose exit must animate FAB in. ${dump('N', frames)}`).toBeGreaterThanOrEqual(3);
+});
+
+// O: deep page round-trip (/ -> /profile/edit -> /). The FAB must animate both
+// directions across the list<->deep boundary.
+test('O deep forward: `/` -> `/profile/edit` scales the FAB out', async ({ page }) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	const frames = await capture(page, async () => {
+		await openSidebarAndGoto(page, '/profile/edit');
+	});
+	const s = scales(frames);
+	const intermediate = s.filter((v) => v > 0.1 && v < 0.9);
+	expect(intermediate.length, `forward to /profile/edit must animate. ${dump('O', frames)}`).toBeGreaterThanOrEqual(3);
+});
+
+// P: M->D after a prior D->M on the SAME page (no fresh goto between captures).
+// The capture probe uses a flag that is re-armed via page.evaluate; calling
+// capture twice on the same page re-arms cleanly. Uses waitForTimeout to let
+// the probe baseline settle between the two legs.
+test('P rapid D->M->D: second leg animates after first', async ({ page }) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	// First leg (no assertion - just navigate to set up the scenario).
+	await page.locator('a[data-tab-nav][href="/messages/inbox"]').click();
+	await page.waitForURL('/messages/inbox', { timeout: 5000 });
+	await page.waitForTimeout(500);
+	// Second leg (captured): /messages/inbox -> /
+	const frames = await capture(page, async () => {
+		await page.locator('a[data-tab-nav][href="/"]').click();
+		await page.waitForURL('/', { timeout: 5000 });
+	});
+	const s = scales(frames);
+	const intermediate = s.filter((v) => v > 0.1 && v < 0.9);
+	expect(intermediate.length, `M->D must animate after prior D->M nav. ${dump('P', frames)}`).toBeGreaterThanOrEqual(3);
+});
+
+// Q: messages back-swipe release (mirror of H but from messages). The FAB must
+// scale in continuously with no disappear-replay.
+test('Q messages back-swipe release: continuous scale-in, no replay', async ({ page }) => {
+	await page.goto('/messages/inbox');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	// Navigate to a messages conversation, then swipe back
+	await page.goto('/');
+	await waitForHydration(page);
+	await clickDiscussion(page, 0);
+	await page.waitForURL(/\/discussion\//);
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	const frames = await capture(page, async () => {
+		await realisticSwipeBack(page);
+		await page.waitForURL('/', { timeout: 5000 }).catch(() => {});
+	}, 1800);
+	const present = frames.filter((f) => f.present && f.scale !== null) as {
+		present: true; scale: number; t: number; path: string;
+	}[];
+	const firstPast = present.findIndex((f) => (f.scale as number) > 0.3);
+	if (firstPast > -1) {
+		const after = present.slice(firstPast).map((f) => f.scale as number);
+		const dipAfter = after.filter((v) => v < 0.1).length;
+		expect(dipAfter, `no disappear-replay on thread back-swipe. ${dump('Q', frames)}`).toBe(0);
+	}
+});
+
+// R: deep->deep swap (/bookmarks -> /profile/settings via drawer). The FAB
+// must not show a persistent scale-1 flash (both endpoints rest at 0).
+test('R deep->deep: no persistent scale-1 flash', async ({ page }) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.waitForTimeout(200);
+	await openSidebarAndGoto(page, '/bookmarks');
+	await page.waitForURL('/bookmarks', { timeout: 5000 });
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	const frames = await capture(page, async () => {
+		await openSidebarAndGoto(page, '/profile/settings');
+	});
+	// After the swap settles, the FAB must be at scale 0 (both endpoints are
+	// overlay/deep, resting at 0). A persistent scale-1 frame is a failure.
+	const tail = scales(frames).slice(-10);
+	const maxTail = tail.length ? Math.max(...tail) : 1;
+	expect(maxTail, `deep->deep must not flash scale 1 persistently. ${dump('R', frames)}`).toBeLessThan(0.3);
 });

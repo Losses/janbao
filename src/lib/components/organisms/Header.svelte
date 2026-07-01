@@ -46,6 +46,7 @@
 	import type { SearchSort, SearchScope } from '$lib/types/search';
 	import type { VoidHandler } from '$lib/types/handlers';
 	import type { TranslationDict } from '$lib/types/translation';
+	import type { HeaderStateSnapshot } from '$lib/utils/header-probe';
 
 	interface HeaderProps {
 		t: TranslationDict;
@@ -537,6 +538,38 @@
 			morph < 0.5 ? 'auto' : 'none'
 		}`
 	);
+
+	// DEV-ONLY probe. Reads every morph-state dep so Svelte re-runs it on each
+	// flush they change, pushing a snapshot to window.__headerLog regardless of
+	// whether a paint fires between flushes. This captures the slideT/navInFlight
+	// values at the exact flush a tabs-layer jump is committed, which a rAF
+	// sampler misses when the navigation commit blocks the main thread for a few
+	// frames. Gated on DEV + browser so it never ships.
+	$effect(() => {
+		if (!import.meta.env.DEV || !browser) return;
+		if (!window.__headerLog) window.__headerLog = [];
+		const log = window.__headerLog;
+		const snap: HeaderStateSnapshot = {
+			t: performance.now(),
+			path: currentPath,
+			morph,
+			slideT,
+			rootLayerStyle,
+			settling,
+			settleProgress,
+			settleAwaitTitle,
+			lastGestureMorph,
+			currentHasTabs,
+			targetHasTabs,
+			prevHasTabs,
+			navInFlight: navStore.navInFlight,
+			pendingNav: navStore.pendingNav ? navStore.pendingNav.href : null,
+			dragging,
+			backMorph: pager.backMorph
+		};
+		log.push(snap);
+		if (log.length > 8000) log.shift();
+	});
 
 	// Root↔search horizontal track.
 	const searchProgress = $derived(

@@ -8,17 +8,27 @@ import {
 } from './fab-scale';
 
 describe('scaleFromFraction', () => {
-	test('identity over [0, 1] (FAB tracks the gesture across the full range)', () => {
+	test('f <= 0.5 -> 0 (disappear in the first half)', () => {
 		expect(scaleFromFraction(0)).toBe(0);
-		expect(scaleFromFraction(0.25)).toBe(0.25);
-		expect(scaleFromFraction(0.5)).toBe(0.5);
-		expect(scaleFromFraction(0.75)).toBe(0.75);
+		expect(scaleFromFraction(0.25)).toBe(0);
+		expect(scaleFromFraction(0.5)).toBe(0);
+	});
+
+	test('f >= 1 -> 1 (appear completes at full foreground)', () => {
+		expect(scaleFromFraction(1)).toBe(1);
+		expect(scaleFromFraction(1.5)).toBe(1);
+	});
+
+	test('linear 0 -> 1 over f in [0.5, 1]', () => {
+		expect(scaleFromFraction(0.5)).toBe(0);
+		expect(scaleFromFraction(0.625)).toBe(0.25);
+		expect(scaleFromFraction(0.75)).toBe(0.5);
+		expect(scaleFromFraction(0.875)).toBe(0.75);
 		expect(scaleFromFraction(1)).toBe(1);
 	});
 
-	test('clamps to [0, 1]', () => {
+	test('clamps negatives', () => {
 		expect(scaleFromFraction(-1)).toBe(0);
-		expect(scaleFromFraction(1.5)).toBe(1);
 	});
 });
 

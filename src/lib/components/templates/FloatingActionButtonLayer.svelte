@@ -191,7 +191,39 @@
 	$effect(() => {
 		if (fabConfig !== null) retainedConfig = fabConfig;
 	});
-	const displayConfig = $derived(fabConfig ?? retainedConfig);
+
+	// Kind follows the visual track position (the sampler's sample), NOT the URL.
+	// The URL swaps at click time (before the track moves); the sample lags by
+	// the CSS transition. Using the sample for kind means the kind swaps at the
+	// visual midpoint (scale 0 via 2f-1), not at the click, so no flicker. This
+	// is ALWAYS active (even at integer rest) so the URL-swap frame cannot leak
+	// the incoming kind before the track has crossed the midpoint.
+	const effectiveKind = $derived.by<FabKind>(() => {
+		if (samplerActive && sampledFractionalIndex !== null) {
+			return sampledFractionalIndex < 1 ? 'discussions' : 'messages';
+		}
+		// SSR / before sampler mounts: URL-derived kind.
+		return fabConfig?.kind ?? retainedConfig?.kind ?? null;
+	});
+
+	const displayConfig = $derived.by<FabConfig | null>(() => {
+		const cfg = fabConfig ?? retainedConfig;
+		if (cfg === null) return null;
+		// For the list family, effectiveKind (sampler-driven) is authoritative.
+		const kind = cfg.family === 'list' ? effectiveKind : cfg.kind;
+		if (kind !== null && kind !== cfg.kind) {
+			const kc = FAB_KIND_CONFIGS[kind];
+			return {
+				...cfg,
+				kind,
+				tabIndex: kc.tabIndex,
+				href: kc.href,
+				label: kc.label(t),
+				icon: kc.icon
+			};
+		}
+		return cfg;
+	});
 
 	// Latch `discreteNavInFlight` on any distinct family swap so the atom's CSS
 	// transition stays armed across the route swap (the 200ms ease must run on
