@@ -100,6 +100,24 @@
 	// the first run, flag never set) still clears. Reset on the next drag (Effect A)
 	// and in endSettle.
 	let releaseConsumed = $state(false);
+
+	// Root<->search tap transition: scrub `morph` continuously so the piecewise
+	// search consumers (tabProgress over morph [0,0.2], searchProgress over
+	// [0.2,1]) play as slide-then-expand on enter and collapse-then-slide on
+	// exit, mirroring the gesture's backMorph scrub. A root<->search tap has no
+	// title change (Effect C stays idle) and no gesture, so `morph` would
+	// otherwise jump between its rest values and the two consumers would fire
+	// their CSS transitions in parallel. While scrubbing, the search consumers
+	// drop their CSS transition (slideT / trackStyle / tabBarStyle /
+	// searchButtonStyle) so `morph` drives them 1:1, as a drag does.
+	let searchScrubbing = $state(false);
+	let searchScrubProgress = $state(0);
+	let searchScrubFrom = $state(0);
+	let searchScrubTo = $state(0);
+	let searchScrubRafId: number | undefined;
+	let prevHadTabs: boolean | null = null;
+	let prevSearchTitle: string | null = null;
+	let prevIsSearch: boolean | null = null;
 	let prevPath = $state('');
 	let lastPath = '';
 	$effect.pre(() => {
@@ -125,6 +143,14 @@
 				return isDeepToDeep ? 0 : (pager.backMorph ?? (currentHasTabs ? 1 : 0));
 			}
 
+			// 1b. Root<->search tap scrub: interpolate morph between the two rest
+			// values over ~200ms so the piecewise search consumers sequence. Without
+			// it they all fire their CSS transitions at once. See startSearchScrub.
+			if (searchScrubbing) {
+				const eased = 1 - (1 - searchScrubProgress) ** 3;
+				return searchScrubFrom + (searchScrubTo - searchScrubFrom) * eased;
+			}
+
 			// 2. Non-dragging animation settling phase (commit, cancel, or click transitions)
 			if (isSettleMode) {
 				const current = currentHasTabs ? 1 : 0;
@@ -133,11 +159,13 @@
 
 				const progress = settling ? settleProgress : lastGestureMorph;
 				const isGesture = settling
-					? (settleAwaitTitle || settleTarget === 0)
-					: (lastGestureMorph > GESTURE_MORPH_EPSILON);
+					? settleAwaitTitle || settleTarget === 0
+					: lastGestureMorph > GESTURE_MORPH_EPSILON;
 
-				const awaitTitle = settling ? settleAwaitTitle : (isGesture && navStore.pendingNav !== null);
-				const targetZero = settling ? (settleTarget === 0) : (isGesture && navStore.pendingNav === null);
+				const awaitTitle = settling ? settleAwaitTitle : isGesture && navStore.pendingNav !== null;
+				const targetZero = settling
+					? settleTarget === 0
+					: isGesture && navStore.pendingNav === null;
 
 				if (awaitTitle) {
 					// Committed navigation in flight: transition from current page to target page
@@ -162,7 +190,7 @@
 	// morph into an arrow while it is sliding off-screen.
 	const iconProgress = $derived(isSearch ? 0 : 1 - morph);
 	const slideT = $derived(
-		dragging || (navStore.navInFlight && !settling)
+		dragging || searchScrubbing || (navStore.navInFlight && !settling)
 			? 'none'
 			: 'transform 200ms ease-out, opacity 200ms ease-out'
 	);
@@ -198,7 +226,6 @@
 		const pending = navStore.pendingNav;
 		const m = untrack(() => lastGestureMorph);
 		const hasPending = pending !== null;
-
 
 		if (m <= GESTURE_MORPH_EPSILON && !hasPending) {
 			// No preceding gesture / cancelled near origin: clear any stale settle so
@@ -333,6 +360,63 @@
 		}
 	});
 
+	// E. Root<->search tap scrub trigger. Scrub `morph` between its two rest
+	// values only on a root<->search tap: currentHasTabs flips, isSearch flips
+	// (one side is /search), the title does not change (so Effect C's settle
+	// stays idle), and no gesture is in flight (a gesture scrubs via backMorph).
+	// Other currentHasTabs flips are left alone: root<->deep leaves isSearch
+	// unchanged, and search<->deep has no morph delta (startSearchScrub no-ops).
+	$effect.pre(() => {
+		const curTabs = currentHasTabs;
+		const curTitle = title;
+		const curIsSearch = isSearch;
+		if (prevHadTabs === null) {
+			prevHadTabs = curTabs;
+			prevSearchTitle = curTitle;
+			prevIsSearch = curIsSearch;
+			return;
+		}
+		const prevTabs = prevHadTabs;
+		const prevT = prevSearchTitle;
+		const prevS = prevIsSearch;
+		prevHadTabs = curTabs;
+		prevSearchTitle = curTitle;
+		prevIsSearch = curIsSearch;
+		if (curTabs === prevTabs) return;
+		if (curIsSearch === prevS) return; // only root<->search; root<->deep is unchanged
+		if (!browser) return;
+		if (curTitle !== prevT) return; // Effect C settle animates morph
+		if (untrack(() => dragging)) return; // gesture owns morph via backMorph
+		if (untrack(() => settling)) return; // a settle is in flight
+		if (untrack(() => lastGestureMorph) > GESTURE_MORPH_EPSILON) return;
+		startSearchScrub(prevTabs ? 1 : 0, curTabs ? 1 : 0);
+	});
+
+	function startSearchScrub(from: number, to: number): void {
+		if (searchScrubRafId !== undefined) {
+			cancelAnimationFrame(searchScrubRafId);
+			searchScrubRafId = undefined;
+		}
+		if (from === to) return; // no morph delta (search<->deep) -> nothing to scrub
+		searchScrubFrom = from;
+		searchScrubTo = to;
+		searchScrubProgress = 0;
+		searchScrubbing = true;
+		const startT = performance.now();
+		const tick = (): void => {
+			if (!searchScrubbing) return; // cancelled or interrupted
+			const t = Math.min(1, (performance.now() - startT) / TITLE_CROSSFADE_MS);
+			searchScrubProgress = t;
+			if (t >= 1) {
+				searchScrubbing = false;
+				searchScrubRafId = undefined;
+				return;
+			}
+			searchScrubRafId = requestAnimationFrame(tick);
+		};
+		searchScrubRafId = requestAnimationFrame(tick);
+	}
+
 	function runSettleDriver(): void {
 		if (settleRafId) cancelAnimationFrame(settleRafId);
 		if (settleTimeoutId) clearTimeout(settleTimeoutId);
@@ -386,6 +470,11 @@
 		if (browser) {
 			if (settleRafId) cancelAnimationFrame(settleRafId);
 			if (settleTimeoutId) clearTimeout(settleTimeoutId);
+			searchScrubbing = false;
+			if (searchScrubRafId !== undefined) {
+				cancelAnimationFrame(searchScrubRafId);
+				searchScrubRafId = undefined;
+			}
 		}
 	});
 
@@ -462,7 +551,7 @@
 
 	const trackStyle = $derived(
 		`transform: translateX(${-(searchProgress * 50).toFixed(2)}%); transition: ${
-			dragging || navStore.navInFlight ? 'none' : 'transform 200ms ease-out'
+			dragging || searchScrubbing || navStore.navInFlight ? 'none' : 'transform 200ms ease-out'
 		};`
 	);
 
@@ -474,14 +563,14 @@
 		`calc(${((1 - searchProgress) * 100).toFixed(2)}% - ${((1 - searchProgress) * 3).toFixed(2)}rem + ${(searchProgress * 0.5).toFixed(2)}rem)`
 	);
 	const searchButtonStyle = $derived(
-		`left: ${searchButtonLeft}; transition: ${dragging || navStore.navInFlight ? 'none' : 'left 200ms ease-out'};`
+		`left: ${searchButtonLeft}; transition: ${dragging || searchScrubbing || navStore.navInFlight ? 'none' : 'left 200ms ease-out'};`
 	);
 
 	// SearchTabBar row: clip-expand (max-height) driven by tabProgress so it
 	// gesture-syncs with the track and the search button.
 	const tabBarStyle = $derived(
 		`max-height: ${(tabProgress * 3).toFixed(2)}rem; transition: ${
-			dragging || navStore.navInFlight ? 'none' : 'max-height 200ms ease-out'
+			dragging || searchScrubbing || navStore.navInFlight ? 'none' : 'max-height 200ms ease-out'
 		};`
 	);
 

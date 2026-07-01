@@ -2,40 +2,34 @@ import { test, expect, type Page } from '@playwright/test';
 import { prepareContext, waitForHydration } from './helpers';
 
 /**
- * Search enter/exit animation - the spec and the one defect.
+ * Search enter/exit animation - one morph timeline played forward and reverse.
  *
- * SPEC (one animation played forward and reverse - the scope-tab bar is
- * attached to the search panel, so it arrives AFTER and leaves BEFORE the panel):
+ * SPEC (the scope-tab bar is attached to the search panel, so it arrives AFTER
+ * and leaves BEFORE the panel):
  *   ENTER (tap search):  slide the track in, THEN expand the scope-tab bar.
  *   EXIT  (back-swipe):  collapse the scope-tab bar, THEN slide the track out.
  *
- * Both directions are encoded in the SAME piecewise consumers of `morph`
+ * Both directions come from the SAME piecewise consumers of `morph`
  * (HEADER_MORPH_THRESHOLD = 0.2):
  *   tabProgress    (SearchTabBar max-height) over morph in [0, 0.2]
  *   searchProgress (header track translateX) over morph in [0.2, 1]
  * A continuous morph 0->1 collapses the tab first then slides; a continuous
- * morph 1->0 slides first then expands the tab. Exact mirrors.
+ * morph 1->0 slides first then expands the tab. The two are exact mirrors, so a
+ * single continuous morph timeline serves both directions.
  *
- * EXIT (back-swipe) animates `morph` continuously: GesturePageLayout writes
- * pager.backMorph 0->1 with the finger, Header `morph` = backMorph. So the
- * collapse-then-slide sequence plays. EXIT IS CORRECT - the reference.
+ * The gesture exit scrubs `morph` continuously: GesturePageLayout writes
+ * pager.backMorph 0->1 with the finger and Header `morph` reads it. The tap nav
+ * has no finger and no title change (/search has no deep title, so the
+ * title-settle driver stays idle), so Header.startSearchScrub drives the same
+ * timeline with a rAF (1->0 on enter, 0->1 on exit) over ~200ms. While it runs,
+ * the search consumers drop their CSS transition and follow `morph` 1:1, as a
+ * drag does.
  *
- * ENTER (tap) does NOT animate morph: /search has no deep title
- * (resolveDeepHeaderTitle('/search') === null; the load returns no
- * `headerTitle`), so Header Effect C (the title-change settle driver that
- * interpolates morph on a tap) never fires, and `morph` JUMPS 1 -> 0 in one
- * render. The jump hands every consumer its final value in the same flush, so
- * each consumer's CSS transition (`transform 200ms`, `max-height 200ms`, `left
- * 200ms`) fires together and the slide + expand run in PARALLEL - the intended
- * slide-then-expand sequence is lost.
- *
- * SOLE DEFECT: the tap-enter path does not scrub morph as the exit does; it
- * jumps 1->0 in one render. The exit proves the piecewise design is correct; the
- * enter is the only broken half.
- *
- * The tests below assert the SPEC for both directions. EXIT is the green
- * reference. ENTER asserts slide-before-expand and is currently RED, documenting
- * the bug (it goes green once the tap-enter scrubs morph 1->0).
+ * The tests sample the header track translateX + the SearchTabBar max-height
+ * (+ pager.backMorph) every frame and assert the spec for both directions:
+ * ENTER slides before it expands, EXIT collapses before it slides. A regression
+ * that reverts the tap-enter to a morph jump (no continuous scrub) makes the
+ * slide and expand run in parallel and fails the ENTER and MIRROR tests.
  */
 
 interface SearchHdrFrame {
@@ -240,12 +234,11 @@ test('EXIT search via back-swipe: scope-tab bar collapses to ~0 while the track 
 });
 
 // --- ENTER (tap): slide the track in, THEN expand the scope-tab bar (SPEC) ---
-// Currently RED: morph JUMPS 1->0 (no title -> Effect C settle never fires for
-// /search), so the track slide and the scope-tab bar expand fire their CSS
-// transitions in parallel and there is NO frame where the track has slid but
-// the scope-tab bar has not yet expanded. Goes green once the tap-enter scrubs
-// morph 1->0.
-test('ENTER search via tap: track slides in BEFORE the scope-tab bar expands (spec; currently red - parallel)', async ({
+// Guards the rAF scrub in Header.startSearchScrub. A regression that reverts
+// the tap-enter to a morph jump makes the track slide and the scope-tab bar
+// expand fire their CSS transitions in parallel, leaving no frame where the
+// track has slid but the scope-tab bar has not yet expanded.
+test('ENTER search via tap: track slides in BEFORE the scope-tab bar expands (spec: slide-then-expand)', async ({
 	page
 }) => {
 	await page.goto('/');
@@ -274,8 +267,8 @@ test('ENTER search via tap: track slides in BEFORE the scope-tab bar expands (sp
 
 	// Slide-before-expand: a frame where the track has substantially slid
 	// (>=60% of peak) but the scope-tab bar has barely expanded (<=15% of peak).
-	// Under the bug (parallel CSS transitions off a morph jump) the two progress
-	// values are ~equal at every frame, so no such frame exists.
+	// Under a regression to a morph jump the two progress values are ~equal at
+	// every frame, so no such frame exists.
 	const slideFirstFrame = searchFrames.find((f) => {
 		const trackNorm = peakTrack > 0 ? Math.abs(f.trackTx ?? 0) / peakTrack : 0;
 		const tabNorm = peakTab > 0 ? (f.tabMaxH ?? 0) / peakTab : 0;
@@ -286,12 +279,12 @@ test('ENTER search via tap: track slides in BEFORE the scope-tab bar expands (sp
 		'ENTER slide-before-expand:',
 		slideFirstFrame
 			? `t=${slideFirstFrame.t}ms trackNorm=${(Math.abs(slideFirstFrame.trackTx ?? 0) / peakTrack).toFixed(2)} tabNorm=${((slideFirstFrame.tabMaxH ?? 0) / peakTab).toFixed(2)}`
-			: 'NOT FOUND (parallel - bug)'
+			: 'NOT FOUND (parallel - regression)'
 	);
 
 	expect(
 		slideFirstFrame,
-		'track must slide in before the scope-tab bar expands (currently parallel = bug)'
+		'track must slide in before the scope-tab bar expands'
 	).toBeTruthy();
 });
 
