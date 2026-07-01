@@ -86,11 +86,6 @@
 	const FAB_HEIGHT_PX = 56;
 	const BOTTOM_CLEARANCE_PX = 16;
 
-	// Wall-clock cap for the Family A rAF sampler. Covers backgrounded-tab rAF
-	// throttling and the transitionend-missed edge across a full drag + snap.
-	const SAMPLER_TIMEOUT_MS = 2000;
-	const SAMPLER_TARGET_EPSILON_PX = 0.5;
-
 	// Family A sampler state. Declared before `fabConfig` because the Activity
 	// `'dynamic'` branch reads `samplerActive`/`sampledFractionalIndex`, and the
 	// family-swap `$effect.pre` (which runs before the first render) can trigger
@@ -99,7 +94,6 @@
 	let sampledFractionalIndex = $state<number | null>(null);
 	let samplerActive = $state(false);
 	let samplerRafId: number | undefined;
-	let samplerStart = 0;
 
 	type FabKind = 'discussions' | 'messages' | null;
 
@@ -184,18 +178,20 @@
 
 	const track = $derived(activeGestureTrack.track);
 
-	// Retain the last non-null FAB config so the atom stays mounted (and the
-	// Family A sampler can drive its scale out) when a tab tap lands on a route
-	// with no FAB (e.g. / -> /activity). Retention applies only while a discrete
-	// transition is in flight; at rest `displayConfig` falls back to the current
-	// `fabConfig`, so the atom unmounts on a no-FAB route (the "activity has no
-	// FAB" contract). On a deep-link SSR (no prior route, no transition)
-	// retainedConfig is null and unused, so no atom renders on no-FAB routes.
+	// Retain the last non-null FAB config so the atom stays mounted across every
+	// tab route, including ones with no FAB of their own (e.g. /activity). The
+	// Family A sampler then drives the scale continuously from the MobileTabPager
+	// track: tabFraction(track position, tabIndex) follows the slide, so a tab
+	// tap animates the FAB without any latch or timing dependency. A fresh
+	// deep-link to a no-FAB route has retainedConfig === null (no prior FAB
+	// seen), so the atom does not render there (the "activity has no FAB"
+	// contract holds on first load); once any FAB route has been visited the atom
+	// persists and the sampler carries the scale to 0 on no-FAB tabs.
 	let retainedConfig = $state<FabConfig | null>(null);
 	$effect(() => {
 		if (fabConfig !== null) retainedConfig = fabConfig;
 	});
-	const displayConfig = $derived(discreteNavInFlight ? (fabConfig ?? retainedConfig) : fabConfig);
+	const displayConfig = $derived(fabConfig ?? retainedConfig);
 
 	// Latch `discreteNavInFlight` on any distinct family swap so the atom's CSS
 	// transition stays armed across the route swap (the 200ms ease must run on
@@ -242,33 +238,23 @@
 		if (!browser) return;
 		if (samplerRafId !== undefined) return;
 		samplerActive = true;
-		samplerStart = performance.now();
+		// The sampler runs CONTINUOUSLY while a list-family track is bound. It does
+		// NOT self-stop at the resting integer: a tab TAP slides the track (CSS
+		// transition) without changing any arm-effect dependency (track element,
+		// family, dragging all stay the same), so a self-stopped sampler would never
+		// re-arm and the FAB would snap instead of following the slide. Reading the
+		// track transform every frame is one getComputedStyle on one element
+		// (mobile-only, list routes only) - cheap, and the only way to follow the
+		// visual track motion across drags, snaps, cancels, and tab taps uniformly.
 		const tick = (): void => {
 			// Track unmounted (route swap took it): disarm.
 			if (activeGestureTrack.track === null) {
 				stopSampler();
 				return;
 			}
-			// Wall-clock cap: stop sampling; the resting $derived takes over.
-			if (performance.now() - samplerStart > SAMPLER_TIMEOUT_MS) {
-				stopSampler();
-				return;
-			}
 			const sample = sampleFraction();
 			if (sample !== null) {
 				sampledFractionalIndex = sample;
-				// Reached an integer tab index (sub-pixel epsilon) at rest: stop.
-				// Gated on `!pager.dragging` so a drag that passes through an integer
-				// cannot false-disarm the sampler; the drag keeps it running so it is
-				// live at release.
-				const isRestingTarget =
-					!pager.dragging &&
-					Math.abs(sample - Math.round(sample)) <=
-						SAMPLER_TARGET_EPSILON_PX / (window.innerWidth || 1);
-				if (isRestingTarget) {
-					stopSampler();
-					return;
-				}
 			}
 			samplerRafId = requestAnimationFrame(tick);
 		};

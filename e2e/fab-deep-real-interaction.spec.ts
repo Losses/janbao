@@ -396,3 +396,65 @@ test('H thread back-swipe release: FAB scales in continuously, no disappear-repl
 		)}`
 	).toBe(0);
 });
+
+// CASE I: EXHAUSTIVE tab-pair navigation. Every one of the 6 ordered pairs
+// across Discussions (/), Activity (/activity), Messages (/messages/inbox)
+// must animate the FAB (>= 3 intermediate scale frames), not snap. Catches a
+// timing- or latch-dependent implementation that animates one pair but snaps
+// another.
+const TAB_PAIRS: ReadonlyArray<{ from: string; to: string; label: string }> = [
+	{ from: '/', to: '/activity', label: 'Discussions->Activity' },
+	{ from: '/activity', to: '/', label: 'Activity->Discussions' },
+	{ from: '/', to: '/messages/inbox', label: 'Discussions->Messages' },
+	{ from: '/messages/inbox', to: '/', label: 'Messages->Discussions' },
+	{ from: '/activity', to: '/messages/inbox', label: 'Activity->Messages' },
+	{ from: '/messages/inbox', to: '/activity', label: 'Messages->Activity' }
+];
+for (const pair of TAB_PAIRS) {
+	test(`I tab pair ${pair.label} animates the FAB`, async ({ page }) => {
+		await page.goto(pair.from);
+		await waitForHydration(page);
+		await page.waitForTimeout(300);
+		const frames = await capture(page, async () => {
+			await page.locator(`a[data-tab-nav][href="${pair.to}"]`).click();
+			await page.waitForURL(pair.to, { timeout: 5000 });
+		});
+		const s = scales(frames);
+		const intermediate = s.filter((v) => v > 0.1 && v < 0.9);
+		expect(
+			intermediate.length,
+			`tab nav ${pair.label} must animate the FAB (>= 3 intermediate frames), not snap. ${dump(
+				'I',
+				frames
+			)}`
+		).toBeGreaterThanOrEqual(3);
+	});
+}
+
+// CASE J: STABILITY under repeated rapid tab clicks. Click through the tabs
+// several times (D -> A -> M -> D -> A -> M), then assert the FINAL transition
+// still animates. Catches a latch/state-machine implementation that works on the
+// first click but leaves stale state that suppresses later animations ("click a
+// few times and the animation is gone").
+test('J repeated tab clicks: final transition still animates (no stale state)', async ({ page }) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	// Warm the state with several rapid tab clicks (no capture).
+	for (const href of ['/activity', '/messages/inbox', '/', '/activity', '/messages/inbox']) {
+		await page.locator(`a[data-tab-nav][href="${href}"]`).click();
+		await page.waitForURL(href, { timeout: 5000 });
+		await page.waitForTimeout(120);
+	}
+	// Now capture the final transition: Messages -> Discussions.
+	const frames = await capture(page, async () => {
+		await page.locator('a[data-tab-nav][href="/"]').click();
+		await page.waitForURL('/', { timeout: 5000 });
+	});
+	const s = scales(frames);
+	const intermediate = s.filter((v) => v > 0.1 && v < 0.9);
+	expect(
+		intermediate.length,
+		`FAB must still animate after repeated tab clicks (no stale state). ${dump('J', frames)}`
+	).toBeGreaterThanOrEqual(3);
+});

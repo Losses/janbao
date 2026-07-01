@@ -32,11 +32,16 @@ function clamp(value: number, range: ClampRange): number {
 }
 
 /**
- * foregroundFraction -> scale over the full [0,1] range. The FAB tracks the
- * live gesture position across the whole drag.
+ * foregroundFraction -> scale, symmetric half/half: the FAB disappears over the
+ * first 50% of foregroundFraction (1 -> 0) and appears over the last 50%
+ * (0 -> 1). This timing is what lets a cross-FAB tab swap (e.g. messages ->
+ * discussions) play the source FAB's disappear in the first half and the
+ * destination FAB's appear in the second half of the SAME transition, handing
+ * off through scale 0 at the midpoint. A curve that maps the full [0,1] range
+ * would lose this handoff and make the swap snap.
  */
 export function scaleFromFraction(fraction: number): number {
-	return clamp(fraction, SCALE_RANGE);
+	return clamp(2 * fraction - 1, SCALE_RANGE);
 }
 
 /**
