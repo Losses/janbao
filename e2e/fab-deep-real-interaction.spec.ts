@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prepareContext, waitForHydration } from './helpers';
+import { prepareContext, waitForHydration, clickDiscussion } from './helpers';
 
 /**
  * FAB deep-page boundary: REAL-interaction reproduction spec.
@@ -289,4 +289,110 @@ test('D reversal: FAB must re-track after a direction reversal in one gesture', 
 			frames
 		)}`
 	).toBeGreaterThanOrEqual(0.4);
+});
+
+// CASE E: tap the Activity tab from Discussions. The FAB must scale OUT (1->0)
+// smoothly, not vanish in one frame. The defect: the atom unmounts the instant
+// the route lands on /activity (no FAB there) with no scale-out.
+test('E tab tap: `/` -> `/activity` scales the FAB out (no instant vanish)', async ({ page }) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	const frames = await capture(page, async () => {
+		await page.locator('a[data-tab-nav][href="/activity"]').click();
+		await page.waitForURL('/activity', { timeout: 5000 });
+	});
+	const s = scales(frames);
+	const intermediate = s.filter((v) => v > 0.1 && v < 0.9);
+	expect(
+		intermediate.length,
+		`tab tap to Activity must scale the FAB out smoothly, not vanish. ${dump('E', frames)}`
+	).toBeGreaterThanOrEqual(3);
+});
+
+// CASE F: tap the Discussions tab from Activity. The FAB must scale IN (0->1)
+// smoothly, not appear at full size in one frame.
+test('F tab tap: `/activity` -> `/` scales the FAB in (no instant appear)', async ({ page }) => {
+	await page.goto('/activity');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	const frames = await capture(page, async () => {
+		await page.locator('a[data-tab-nav][href="/"]').click();
+		await page.waitForURL('/', { timeout: 5000 });
+	});
+	const s = scales(frames);
+	const intermediate = s.filter((v) => v > 0.1 && v < 0.9);
+	expect(
+		intermediate.length,
+		`tab tap to Discussions must scale the FAB in smoothly, not appear at full size. ${dump(
+			'F',
+			frames
+		)}`
+	).toBeGreaterThanOrEqual(3);
+});
+
+// CASE G: tap the Messages tab from Discussions. The FAB kind swaps
+// (discussions -> messages); it must shrink then grow (a dip below 0.5), not
+// stay pinned at 1.
+test('G tab tap: `/` -> `/messages/inbox` shrinks then grows the FAB', async ({ page }) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	const frames = await capture(page, async () => {
+		await page.locator('a[data-tab-nav][href="/messages/inbox"]').click();
+		await page.waitForURL('/messages/inbox', { timeout: 5000 });
+	});
+	const s = scales(frames);
+	const minScale = s.length ? Math.min(...s) : 1;
+	expect(
+		minScale,
+		`tab tap to Messages must shrink the FAB below 0.5 (kind swap dip), not pin at 1. ${dump(
+			'G',
+			frames
+		)}`
+	).toBeLessThan(0.5);
+});
+
+// CASE H: back-swipe from a thread, release mid-gesture (commit). The FAB must
+// scale in CONTINUOUSLY (0 -> 1) following the gesture and the commit slide,
+// with no disappear-then-replay. The defect: GPL onSwipeEnd clears dragOffset
+// BEFORE setting pendingNav, so for one frame coverProgress falls to its rest
+// value (0) and the FAB snaps to 0, then re-animates 0 -> 1 once pendingNav
+// lands - a discontinuity on the timeline.
+test('H thread back-swipe release: FAB scales in continuously, no disappear-replay', async ({ page }) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	await clickDiscussion(page, 0);
+	await page.waitForURL(/\/discussion\//);
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	const frames = await capture(
+		page,
+		async () => {
+			await realisticSwipeBack(page);
+			await page.waitForURL('/', { timeout: 5000 }).catch(() => {});
+		},
+		1800
+	);
+	// Once the FAB has scaled past 0.3, it must NOT drop below 0.1 again (that
+	// would be the disappear-replay discontinuity). Find the first frame past
+	// 0.3 and assert no later frame dips below 0.1.
+	const present = frames.filter((f) => f.present && f.scale !== null) as {
+		present: true;
+		scale: number;
+		t: number;
+		path: string;
+	}[];
+	const firstPast = present.findIndex((f) => (f.scale as number) > 0.3);
+	expect(firstPast, `FAB must scale past 0.3 during the swipe. ${dump('H', frames)}`).toBeGreaterThan(-1);
+	const after = present.slice(firstPast).map((f) => f.scale as number);
+	const dipAfter = after.filter((v) => v < 0.1).length;
+	expect(
+		dipAfter,
+		`FAB must not disappear (drop below 0.1) after reaching 0.3; the disappear-replay discontinuity. ${dump(
+			'H',
+			frames
+		)}`
+	).toBe(0);
 });

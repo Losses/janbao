@@ -184,6 +184,19 @@
 
 	const track = $derived(activeGestureTrack.track);
 
+	// Retain the last non-null FAB config so the atom stays mounted (and the
+	// Family A sampler can drive its scale out) when a tab tap lands on a route
+	// with no FAB (e.g. / -> /activity). Retention applies only while a discrete
+	// transition is in flight; at rest `displayConfig` falls back to the current
+	// `fabConfig`, so the atom unmounts on a no-FAB route (the "activity has no
+	// FAB" contract). On a deep-link SSR (no prior route, no transition)
+	// retainedConfig is null and unused, so no atom renders on no-FAB routes.
+	let retainedConfig = $state<FabConfig | null>(null);
+	$effect(() => {
+		if (fabConfig !== null) retainedConfig = fabConfig;
+	});
+	const displayConfig = $derived(discreteNavInFlight ? (fabConfig ?? retainedConfig) : fabConfig);
+
 	// Latch `discreteNavInFlight` on any distinct family swap so the atom's CSS
 	// transition stays armed across the route swap (the 200ms ease must run on
 	// both the source and destination route). A same-family swap (tab tap) does
@@ -195,7 +208,7 @@
 		const current = fabConfig?.family ?? null;
 		const prev = previousFamily;
 		previousFamily = current;
-		if (current !== null && prev !== null && prev !== current) {
+		if (prev !== current && (prev !== null || current !== null)) {
 			discreteNavInFlight = true;
 			if (discreteNavTimer !== undefined) clearTimeout(discreteNavTimer);
 			discreteNavTimer = setTimeout(() => {
@@ -330,7 +343,7 @@
 	 *  foreground). Family A reads the sampler; Family B reads `coverProgress`;
 	 *  Family C rests at 0. `chipExitActive` overrides to 0. */
 	const foregroundFraction = $derived.by(() => {
-		const cfg = fabConfig;
+		const cfg = displayConfig;
 		if (cfg === null) return 0;
 		if (chipExitActive) return 0;
 		if (cfg.family === 'list') {
@@ -376,15 +389,15 @@
 	);
 </script>
 
-{#if fabConfig !== null}
-	<div class="fab-layer z-35 md:hidden" data-fab-kind={fabConfig.kind}>
+{#if displayConfig !== null}
+	<div class="fab-layer z-35 md:hidden" data-fab-kind={displayConfig.kind}>
 		<FloatingActionButton
 			{scale}
 			translateY={fabTranslateY}
 			hideProgress={fabHideProgress}
-			href={fabConfig.href}
-			label={fabConfig.label}
-			icon={fabConfig.icon}
+			href={displayConfig.href}
+			label={displayConfig.label}
+			icon={displayConfig.icon}
 			{transitionEnabled}
 		/>
 	</div>

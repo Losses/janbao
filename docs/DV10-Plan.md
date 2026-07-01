@@ -1,6 +1,6 @@
 # DV10 - FAB Scale Drive-Model Rework
 
-**Status:** 5/5 PASS (FINAL), approved for implementation. Round 3. v3.1 amendment folds in the non-blocking convergent major (store `set()` body) and minor wording corrections from R3.
+**Status:** 5/5 PASS (FINAL) + IMPLEMENTED. All 8 interaction defects (A drawer forward, B back-swipe drag, C back-arrow, D reversal, E Discussion→Activity scale-out, F Activity→Discussion scale-in, G Discussion→Messages shrink-grow, H thread back-swipe release no-disappear-replay) fixed and covered by `e2e/fab-deep-real-interaction.spec.ts`. `bun run check` 0 errors; 200 unit tests pass; 45 fab e2e pass (Family A/B/C, SSR, scroll-hide, release-snap, deep-boundary, activity-no-FAB all green).
 **Scope:** Mobile only (`max-width: 767px`). Desktop unchanged.
 **HEAD at authoring:** `43317e6`.
 **Predecessor:** DV09 delivered the FAB. DV09's `scaleFromFraction = 2f − 1` 0.5 threshold and its rAG sampler over the computed track transform are the load-bearing causes of the four reported defects. DV10 supersedes the DV09 scale-drive model; DV09's placement (AppShell), route-config `deep` kind, scroll-hide `translateY`, and atom styling are unchanged.

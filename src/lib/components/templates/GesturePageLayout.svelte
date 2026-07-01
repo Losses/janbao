@@ -338,12 +338,19 @@
 		if (centerTab !== undefined) {
 			// Page centered on a tab (e.g. a thread / messages conversation): drive
 			// the pill between centerTab and the optional rightTab as the user drags.
+			const committed =
+				isPendingNavigation ||
+				isTransitioningOut ||
+				navStore.pendingNav !== null ||
+				navStore.navInFlight;
 			let progressVal: number;
 			// FAB cover progress: how much the source list is revealed. Only a
 			// back-swipe (swipeDirection === 'right') reveals the list, so the
 			// forward-swipe toward rightTab keeps cover 0. Direction-aware over the
 			// unclamped rawDragOffset so the FAB tracks the finger (and a reversal)
-			// across the full 0..1 range.
+			// across the full 0..1 range. On commit (drag released, nav pending) the
+			// list is being revealed fully, so cover continues to 1, easing the FAB
+			// toward scale 1 across the commit slide.
 			let cover = 0;
 			if (dragOffset !== null && viewportWidth) {
 				const dragProgress = Math.max(0, Math.min(1, -dragOffset / viewportWidth));
@@ -353,6 +360,9 @@
 					const rawOffset = rawDragOffset ?? dragOffset;
 					cover = rawOffset !== null ? Math.min(1, Math.max(0, rawOffset / viewportWidth)) : 0;
 				}
+			} else if (committed) {
+				progressVal = centerTab;
+				cover = 1;
 			} else {
 				const rightPanelIdx = hasRight && !swipeNeedsLoadingAtStart ? panelCount - 1 : -1;
 				progressVal = snapIndex === rightPanelIdx && rightTab !== undefined ? rightTab : centerTab;
