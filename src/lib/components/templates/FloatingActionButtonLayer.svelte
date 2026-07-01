@@ -295,6 +295,11 @@
 
 	function stopSampler(): void {
 		samplerActive = false;
+		// Clear the last sample so a re-arm (e.g. list -> overlay -> list
+		// roundtrip) does not read a stale value from the previous family for
+		// one frame before the first fresh rAF sample arrives. effectiveKind
+		// falls back to the URL-derived resting kind when the sample is null.
+		sampledFractionalIndex = null;
 		if (samplerRafId !== undefined) {
 			cancelAnimationFrame(samplerRafId);
 			samplerRafId = undefined;
