@@ -40,6 +40,37 @@ const noEmdash = {
 	}
 };
 
+// Treats any file as plain text so text-scan rules (no-emdash) can also run on
+// non-JS sources such as Markdown. The AST is an empty Program; the original
+// source stays on sourceCode.text, which is what the rules read.
+const plainTextParser = {
+	meta: {
+		name: 'plain-text-parser',
+		version: 1
+	},
+	parseForESLint(code) {
+		const lines = code.length === 0 ? [] : code.split('\n');
+		const endLine = Math.max(1, lines.length);
+		const endColumn = lines.length === 0 ? 0 : lines[lines.length - 1].length;
+		return {
+			ast: {
+				type: 'Program',
+				body: [],
+				sourceType: 'module',
+				comments: [],
+				tokens: [],
+				range: [0, code.length],
+				loc: {
+					start: { line: 1, column: 0 },
+					end: { line: endLine, column: endColumn }
+				}
+			},
+			services: {},
+			visitorKeys: { Program: [] }
+		};
+	}
+};
+
 export default defineConfig(
 	{
 		// E2E is test infrastructure driven by @playwright/test under node; it is
@@ -162,6 +193,20 @@ export default defineConfig(
 						'Do not use window.history directly in mobile gesture/pager components. Delegate to getNavigationStore() instead.'
 				}
 			]
+		}
+	},
+	{
+		// Markdown has no JS AST; parse it as plain text so the em-dash ban
+		// (and any future text-scan rule) covers docs too.
+		files: ['**/*.md'],
+		languageOptions: {
+			parser: plainTextParser
+		},
+		rules: {
+			'local/no-emdash': 'error',
+			// Markdown legitimately contains NBSP and other special whitespace;
+			// no-irregular-whitespace targets source code, so opt docs out.
+			'no-irregular-whitespace': 'off'
 		}
 	}
 );
