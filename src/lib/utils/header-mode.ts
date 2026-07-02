@@ -1,4 +1,4 @@
-import { getCurrentTabIndex } from '$lib/utils/mobile-tabs';
+import { getCurrentTabIndex } from '$lib/utils/route-config';
 
 /**
  * header-mode - the path-derived Header mode discriminator. Mirrors

@@ -3,8 +3,16 @@ import type { Component } from 'svelte';
 import ProfileMenuPanel from '$lib/components/panels/ProfileMenuPanel.svelte';
 import SettingsMenuPanel from '$lib/components/panels/SettingsMenuPanel.svelte';
 import AdminMenuPanel from '$lib/components/panels/AdminMenuPanel.svelte';
+import TabDiscussionsPanel from '$lib/components/panels/TabDiscussionsPanel.svelte';
+import TabActivityPanel from '$lib/components/panels/TabActivityPanel.svelte';
+import TabMessagesPanel from '$lib/components/panels/TabMessagesPanel.svelte';
 import { mdiPlus, mdiEmailPlus } from '@mdi/js';
 import type { TranslationDict } from '$lib/types/translation';
+import { MOBILE_TAB_DEFS, type TabDef, type MobileTabLabelKey } from './tab-config';
+import { getListCacheStore } from '$lib/stores/list-cache.svelte';
+import type { TabsLayoutData } from '$lib/types/tabs';
+
+export type { MobileTabLabelKey, PathMatcher } from './tab-config';
 
 export type ParentRouteResolver = (path: string) => string;
 
@@ -48,6 +56,10 @@ export interface BaseRouteConfig {
 	readonly getParent?: ParentRouteResolver;
 	readonly previewPanel?: SvelteComponentType;
 	readonly fab?: FabRouteConfigMetadata;
+	/** The module tab this route belongs to, for routes with no FAB of their own
+	 *  (the offline readers, the standalone discussions pagination route). FAB
+	 *  routes derive their tab from `fab.kind` instead. */
+	readonly tab?: MobileTabLabelKey;
 }
 
 export interface DeepRouteConfig extends BaseRouteConfig {
@@ -170,6 +182,23 @@ export const ROUTE_CONFIGS: readonly BaseRouteConfig[] = [
 	{
 		pattern: /^\/messages\/inbox$/,
 		fab: { family: 'list', kind: 'messages' }
+	},
+
+	// --- Tab-associated routes without a FAB ---
+	// These declare their module tab directly (no `fab`), so getRouteFabRule
+	// skips them (no FAB shown) but getRouteRule / getCurrentTabIndex resolve
+	// them onto their tab. Order matters: /offline/activity before /offline.
+	{
+		pattern: /^\/discussions\/p\d+$/,
+		tab: 'discussions'
+	},
+	{
+		pattern: /^\/offline\/activity/,
+		tab: 'activity'
+	},
+	{
+		pattern: /^\/offline/,
+		tab: 'discussions'
 	}
 ];
 
@@ -253,3 +282,85 @@ export function isMessagesListRoute(pathname: string): boolean {
 	const rule = getRouteFabRule(pathname);
 	return rule ? rule.fab?.family === 'list' && rule.fab?.kind === 'messages' : false;
 }
+
+// ---------------------------------------------------------------------------
+// Mobile tabs: the browser-side tier of tab knowledge.
+//
+// tab-config.ts is the pure source (tab order, hrefs, prefix matchers, data
+// keys); navigation-logic imports it for unit tests. Here we layer the
+// browser-only bits on top: the list-cache populated check (a $state store),
+// the list panel component, and the config-driven route->tab resolver. The
+// store is read lazily inside the closures, so importing this module (incl.
+// under bun:test) never instantiates it.
+
+/** First ROUTE_CONFIGS entry whose pattern matches, regardless of FAB. */
+function getRouteRule(pathname: string): BaseRouteConfig | null {
+	return ROUTE_CONFIGS.find((r) => r.pattern.test(pathname)) ?? null;
+}
+
+/** A FAB kind names its module tab; `dynamic` is the Activity tab. */
+function fabKindToLabelKey(
+	kind: FabRouteConfigMetadata['kind'] | undefined
+): MobileTabLabelKey | undefined {
+	if (kind === 'discussions' || kind === 'messages') return kind;
+	if (kind === 'dynamic') return 'activity';
+	return undefined;
+}
+
+/**
+ * Index of the module tab a pathname belongs to, or -1 when on no tab route.
+ * Config-driven: a route's explicit `tab` wins, otherwise its FAB kind names
+ * the tab, so the compose form /post/discussion (kind 'discussions'), the
+ * offline readers, and the standalone /discussions/pN route all resolve the
+ * same way as their tab root.
+ */
+export function getCurrentTabIndex(pathname: string): number {
+	const rule = getRouteRule(pathname);
+	const labelKey = rule?.tab ?? fabKindToLabelKey(rule?.fab?.kind);
+	if (!labelKey) return -1;
+	return MOBILE_TAB_DEFS.findIndex((tab) => tab.labelKey === labelKey);
+}
+
+/** True for the exact pager routes (where the MobileTabPager owns the swipe). */
+export function isPagerRoute(pathname: string): boolean {
+	return MOBILE_TAB_DEFS.some((tab) => tab.href === pathname);
+}
+
+// Each tab's list panel is a prop-less Component that pulls its data from the
+// list-cache store and page data itself.
+const TAB_LIST_PANELS: Record<MobileTabLabelKey, Component> = {
+	discussions: TabDiscussionsPanel,
+	activity: TabActivityPanel,
+	messages: TabMessagesPanel
+};
+
+type CacheCheckFn = () => boolean;
+type TabDataCheck = (data: Partial<TabsLayoutData>) => boolean;
+
+export interface MobileTab extends TabDef {
+	checkCache: CacheCheckFn;
+	/** A tab's list is available when the cache OR the root-layout data has items. */
+	hasData: TabDataCheck;
+	panel: Component;
+}
+
+/**
+ * Whether a tab's list is present in the root layout data. The root load
+ * eager-loads page 1 of every tab on every route, so a tab's list is available
+ * via `data` even on a deep page that never populated the list-cache store.
+ * Reads the tab's declared dataKey/listKey, so no per-tab switch lives here.
+ */
+function tabListPopulated(tab: TabDef, data: Partial<TabsLayoutData>): boolean {
+	const section = (data as Record<string, unknown>)[tab.dataKey] as
+		| Record<string, unknown[]>
+		| undefined;
+	const list = section?.[tab.listKey];
+	return list ? list.length > 0 : false;
+}
+
+export const MOBILE_TABS: readonly MobileTab[] = MOBILE_TAB_DEFS.map((tab) => ({
+	...tab,
+	checkCache: () => getListCacheStore().isPopulated(tab.labelKey),
+	hasData: (data) => getListCacheStore().isPopulated(tab.labelKey) || tabListPopulated(tab, data),
+	panel: TAB_LIST_PANELS[tab.labelKey]
+}));

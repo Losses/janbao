@@ -23,7 +23,7 @@
 	import DiscussionsSidebar from '$lib/components/panels/DiscussionsSidebar.svelte';
 	import ActivitySidebar from '$lib/components/panels/ActivitySidebar.svelte';
 	import MessagesSidebar from '$lib/components/panels/MessagesSidebar.svelte';
-	import { getCurrentTabIndex } from '$lib/utils/mobile-tabs';
+	import { getCurrentTabIndex } from '$lib/utils/route-config';
 	import { getDrawerStore } from '$lib/stores/drawer.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getListCacheStore } from '$lib/stores/list-cache.svelte';

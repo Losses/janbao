@@ -32,7 +32,7 @@
 	import { isNavActive } from '$lib/utils/nav-active';
 	import { resolveDeepHeaderTitle } from '$lib/utils/deep-header-config';
 	import { resolveHeaderMode } from '$lib/utils/header-mode';
-	import { getCurrentTabIndex } from '$lib/utils/mobile-tabs';
+	import { getCurrentTabIndex } from '$lib/utils/route-config';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getNavigationStore, backHandler } from '$lib/stores/navigation.svelte';

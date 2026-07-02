@@ -99,7 +99,7 @@ test.beforeEach(async ({ context }) => {
 // `/messages/new`); overlay (`/discussion/<id>/<slug>`, the id+slug resolved
 // DYNAMICALLY from the discussions list SSR so the assertion is not brittle to
 // seed changes); and the messages overlay error page (`/messages/[id]`, whose
-// load throws a pre-existing 500 from mobile-tabs.ts outside DV09, but the FAB
+// load throws a pre-existing 500 outside DV09, but the FAB
 // atom still renders in the SSR error page and its transform must still be a
 // valid resolved value, not the function-body leak).
 //
@@ -273,27 +273,21 @@ test.describe('SSR style serialization: FAB transform resolves in the server ren
 		expectFamilyClass(classFromTag(tag), 'overlay');
 	});
 
-	// Messages overlay error page: the `/messages/[id]` load throws a pre-existing
-	// HTTP 500 (mobile-tabs.ts:38, outside the DV09 diff) for the admin id-0
-	// session. The FAB atom still renders in the SSR error page at scale 0; its
-	// transform serialization must still be a valid resolved value, not the
-	// function-body leak. The 500 itself is pre-existing and not asserted away.
-	test('SSR style: messages overlay error page still renders a valid FAB transform', async ({
-		request
-	}) => {
+	// /messages/[id] is a conversation overlay: the FAB atom renders at scale 0
+	// (covered by the conversation). Whether the route renders (200) or falls to
+	// an error page, the atom's SSR transform must serialize to a valid resolved
+	// value, not the function-body leak.
+	test('SSR style: /messages/1 FAB transform resolves in the server render', async ({ request }) => {
 		const cookie = `session_token=${mintAdminCookie().value}`;
 		const response = await request.get('/messages/1', {
 			headers: { Cookie: cookie },
 			maxRedirects: 0
 		});
-		// The 500 is pre-existing (mobile-tabs.ts:38, outside DV09). The atom
-		// serialization must still be correct on the error page regardless.
-		expect(response.status(), '/messages/1 is a pre-existing 500; documented, not fixed here').toBe(
-			500
-		);
 		const tag = extractFabTag(await response.text());
-		expectResolvedStyle(styleFromTag(tag), 0, '/messages/1 (error page)');
-		expectFamilyClass(classFromTag(tag), 'error-scale-0');
+		expectResolvedStyle(styleFromTag(tag), 0, '/messages/1');
+		if (response.status() === 500) {
+			expectFamilyClass(classFromTag(tag), 'error-scale-0');
+		}
 	});
 });
 

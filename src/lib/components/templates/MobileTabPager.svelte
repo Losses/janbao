@@ -38,7 +38,7 @@
 		setActiveGestureTrack,
 		clearActiveGestureTrack
 	} from '$lib/stores/active-gesture-track.svelte';
-	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
+	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/route-config';
 	import { backSwipeShouldPopHistory } from '$lib/utils/history-nav';
 	import { getDeepPageSnapshotStore } from '$lib/stores/deep-page-snapshot.svelte';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';

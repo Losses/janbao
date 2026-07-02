@@ -11,7 +11,6 @@
 	import { isTabRootPath, previousEntryPathname } from '$lib/utils/history-nav';
 	import type { Action } from 'svelte/action';
 	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
-	import { MOBILE_TABS, isPagerRoute, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
 	import {
 		HEADER_MORPH_THRESHOLD,
 		PILL_EXPANSION_THRESHOLD,
@@ -25,7 +24,7 @@
 		clearActiveGestureTrack
 	} from '$lib/stores/active-gesture-track.svelte';
 
-	import { DEEP_ROUTES } from '$lib/utils/route-config';
+	import { MOBILE_TABS, isPagerRoute, getCurrentTabIndex, DEEP_ROUTES } from '$lib/utils/route-config';
 
 	interface Props {
 		children: Snippet;

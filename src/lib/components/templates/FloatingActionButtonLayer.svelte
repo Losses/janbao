@@ -45,10 +45,14 @@
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getActiveGestureTrack } from '$lib/stores/active-gesture-track.svelte';
-	import { getRouteFabRule, FAB_KIND_CONFIGS, backTargetListKind } from '$lib/utils/route-config';
+	import {
+		getRouteFabRule,
+		FAB_KIND_CONFIGS,
+		backTargetListKind,
+		getCurrentTabIndex
+	} from '$lib/utils/route-config';
 	import type { FabListKind } from '$lib/utils/route-config';
 	import type { FabFamily } from '$lib/utils/fab-scale';
-	import { getCurrentTabIndex } from '$lib/utils/mobile-tabs';
 	import {
 		scaleFromFraction,
 		tabFraction,

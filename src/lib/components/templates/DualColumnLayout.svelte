@@ -6,8 +6,12 @@
 	import { getDrawerStore } from '$lib/stores/drawer.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { captureSwipe, detectSwipe } from '$lib/actions/swipe';
-	import { MOBILE_TABS, getSwipeBaseline, isPagerRoute } from '$lib/utils/mobile-tabs';
-	import { isGesturePageLayoutRoute } from '$lib/utils/route-config';
+	import {
+		MOBILE_TABS,
+		getCurrentTabIndex,
+		isPagerRoute,
+		isGesturePageLayoutRoute
+	} from '$lib/utils/route-config';
 	import type { UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
@@ -108,7 +112,7 @@
 	// fires pointercancel).
 	const TAB_SWIPE_COMMIT = 60;
 	const TAB_SWIPE_MAX = 100; // px of finger-follow feedback on inner pages
-	const swipeBaseline = $derived(getSwipeBaseline(page.url.pathname));
+	const swipeBaseline = $derived(getCurrentTabIndex(page.url.pathname));
 	// Disabled wherever another gesture layer owns the horizontal drag: the
 	// MobileTabPager on pager routes, or a GesturePageLayout on every GPL route
 	// (thread, conversation, deep page, and the compose forms). Config-driven via

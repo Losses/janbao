@@ -4,7 +4,7 @@
 	import type { Snippet } from 'svelte';
 	import { setContext, onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { beforeNavigate, afterNavigate, goto } from '$app/navigation';
+	import { beforeNavigate, afterNavigate, goto, invalidate } from '$app/navigation';
 	import AppShell from '$lib/components/templates/AppShell.svelte';
 	import type { LayoutData } from './$types';
 	import { getBadgesStore } from '$lib/stores/badges.svelte';
@@ -23,6 +23,7 @@
 	import { initActiveGestureTrack } from '$lib/stores/active-gesture-track.svelte';
 	import { getPageScrollStore, getCurrentScrollY } from '$lib/stores/page-scroll.svelte';
 	import { isTabRootPath } from '$lib/utils/history-nav';
+	import { getListCacheStore, type ListCacheStore } from '$lib/stores/list-cache.svelte';
 
 	interface LayoutProps {
 		data: LayoutData;
@@ -31,8 +32,29 @@
 
 	/** Client-side navigation exposed to E2E (dev-only). See __e2eGoto below. */
 	type E2EGotoHandler = (href: string) => Promise<void>;
+	// E2E instrumentation for the list-cache staleness investigation (dev-only).
+	// The list-cache store is the swipe-back preview's data source, but it is
+	// written only from the (tabs) layout, path-gated to the three tab roots. A
+	// page.data refresh that fires anywhere else leaves the cache stale. These
+	// hooks let a test observe whether each cache setter actually fired.
+	type E2ECacheWriteKey = 'setDiscussions' | 'setActivity' | 'setMessages';
+	type E2ECacheSetter = (data: never) => void;
+	interface E2ECacheWrite {
+		key: E2ECacheWriteKey;
+		t: number;
+	}
+	interface E2ECacheSetterMap {
+		setDiscussions: E2ECacheSetter;
+		setActivity: E2ECacheSetter;
+		setMessages: E2ECacheSetter;
+	}
+	type E2EInvalidateBadgesHandler = () => Promise<void>;
 	interface E2EWindow extends Window {
 		__e2eGoto?: E2EGotoHandler;
+		__e2eListCache?: ListCacheStore;
+		__e2eCacheWrites?: E2ECacheWrite[];
+		__e2eInvalidateBadges?: E2EInvalidateBadgesHandler;
+		__e2eListCacheHooked?: boolean;
 	}
 
 	let { data, children }: LayoutProps = $props();
@@ -104,7 +126,32 @@
 	// via the drawer, whose open transition races in tests; goto is the exact
 	// SPA path the drawer link ultimately takes, without the timing surface.
 	if (import.meta.env.DEV && typeof window !== 'undefined') {
-		(window as E2EWindow).__e2eGoto = (href) => goto(href);
+		const w = window as E2EWindow;
+		w.__e2eGoto = (href) => goto(href);
+		// Wrap the list-cache setters once (HMR-safe via the hooked flag) so every
+		// cache write - from any caller of getListCacheStore(), including the
+		// (tabs) layout - appends to a log the staleness e2e reads. The wrapper is
+		// installed as an instance own-property that shadows the prototype method,
+		// so the shared singleton records every write regardless of caller.
+		if (!w.__e2eListCacheHooked) {
+			const store = getListCacheStore();
+			w.__e2eListCache = store;
+			const writes: E2ECacheWrite[] = [];
+			w.__e2eCacheWrites = writes;
+			const setters = store as unknown as E2ECacheSetterMap;
+			const wrap = (key: E2ECacheWriteKey): void => {
+				const orig = setters[key].bind(store);
+				setters[key] = (data) => {
+					writes.push({ key, t: performance.now() });
+					orig(data);
+				};
+			};
+			wrap('setDiscussions');
+			wrap('setActivity');
+			wrap('setMessages');
+			w.__e2eInvalidateBadges = () => invalidate('app:badges');
+			w.__e2eListCacheHooked = true;
+		}
 	}
 
 	// Auth routes render their own standalone layout and must NOT get the

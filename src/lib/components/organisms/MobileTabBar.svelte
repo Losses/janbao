@@ -16,7 +16,7 @@
 	import { getBadgesStore } from '$lib/stores/badges.svelte';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
-	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/mobile-tabs';
+	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/route-config';
 	import { hopForHref } from '$lib/utils/history-nav';
 	import { PILL_EXPANSION_THRESHOLD } from '$lib/utils/gesture-constants';
 	import type { TranslationDict } from '$lib/types/translation';
