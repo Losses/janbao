@@ -135,8 +135,7 @@
 	});
 	onMount(() => {
 		viewportLock.acquire();
-		const initialEl =
-			activeIndex === 0 ? section0El : activeIndex === 1 ? section1El : section2El;
+		const initialEl = activeIndex === 0 ? section0El : activeIndex === 1 ? section1El : section2El;
 		if (initialEl) scrollChrome.setScrollContainer(initialEl);
 		pager.set({ fractionalIndex: activeIndex, dragging: false, active: true, backMorph: null });
 		return () => pager.set({ fractionalIndex: 0, dragging: false, active: false, backMorph: null });
@@ -153,7 +152,9 @@
 		// (svelte-ondestroy-runs-in-ssr memory) and the AppShell layer's pattern.
 		if (!browser) return;
 		viewportLock.release();
-		scrollChrome.setScrollContainer(null);
+		scrollChrome.releaseContainer(
+			activeIndex === 0 ? section0El : activeIndex === 1 ? section1El : section2El
+		);
 		if (trackEl) clearActiveGestureTrack();
 	});
 
@@ -316,7 +317,7 @@
 
 	// Screen-height viewport under fixed-viewport: each panel is a full-height
 	// .scroll-pane scroller (the height model GesturePageLayout uses). No
-	// per-panel height measurement — the viewport is constant screen height.
+	// per-panel height measurement - the viewport is constant screen height.
 	const viewportStyle = $derived(
 		'touch-action: pan-y pinch-zoom; height: 100%; overflow: clip; position: relative'
 	);

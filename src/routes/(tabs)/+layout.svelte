@@ -16,7 +16,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { afterNavigate, beforeNavigate } from '$app/navigation';
+	import { afterNavigate } from '$app/navigation';
 	import type { Snippet } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import MobileTabPager from '$lib/components/templates/MobileTabPager.svelte';

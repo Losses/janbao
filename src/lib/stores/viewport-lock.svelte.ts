@@ -68,7 +68,14 @@ if (import.meta.hot) {
 	});
 }
 
-export const viewportLock: { acquire: () => void; release: () => void } = {
+import type { VoidHandler } from '$lib/types/handlers';
+
+interface ViewportLock {
+	acquire: VoidHandler;
+	release: VoidHandler;
+}
+
+export const viewportLock: ViewportLock = {
 	acquire,
 	release
 };

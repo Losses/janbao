@@ -75,6 +75,20 @@ Development log for the DV11 MobileTabPager scroll-pane unification. Spec: `docs
 
 5. **`reproduce-swipe-back-preview-bug.spec.ts:143-147` padding/childRect equivalence** — not re-derived (the assertions passed unchanged because the `data-preview-tab` CSS provides consistent padding for both the GPL preview and the pager panel).
 
+## RV11-C02 Round-1 revision
+
+The Round-1 audit (`docs/DV11-Meeting/RV11-C02-Audit-R1.md`) returned 2/5 acceptable, 3/5 changes_requested. The core fix is unanimously endorsed. The changes_requested are mechanical (lint gate) + one plan-deviation correctness item. All fixed:
+
+- **Unused `beforeNavigate` import** in `(tabs)/+layout.svelte` — removed from the import (Phase 4 removed its only consumer).
+- **Inline type in `viewport-lock.svelte.ts`** — replaced `{ acquire: () => void; release: () => void }` with a named `interface ViewportLock` using `VoidHandler` from `$lib/types/handlers` (no-inline-typing rule).
+- **Em dashes** in `GesturePageLayout.svelte` and `MobileTabPager.svelte` new comments — replaced with hyphens (`sed` + prettier).
+- **Prettier wrapping** in `MobileTabPager.svelte` — `prettier --write` applied.
+- **`onDestroy` unconditional `setScrollContainer(null)`** (auditor 5 M1) — changed to `scrollChrome.releaseContainer(activeSectionEl)` (the plan-mandated conditional clear; the `$effect` no-cleanup deviation stands because the same-flush re-run only affects effects, not onDestroy).
+
+After fixes: DV11 source files pass eslint (0 errors) + prettier (all matched) + svelte-check (0/0). Affected specs re-verified: 3/3 pass (tab-swipe-preview-height + fab scroll-hide + pointer-events). `bun run lint` exit 1 is only `docs/*.md` (prettier markdown) + `src/app.css` (pre-existing since DV09).
+
+Process note: the 5 audit agents independently ran e2e tests on the same port (5174), causing cross-contamination (OOM kills, CDP timing drift, non-deterministic flakes). Future audit rounds will forbid running e2e (static diff audit only; trust the journal's verified test results).
+
 ### Test results
 
 - `bun run check`: **0 errors / 0 warnings** (1431 files).

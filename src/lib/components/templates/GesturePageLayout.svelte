@@ -326,7 +326,7 @@
 	$effect(() => {
 		if (!isMobile || !centerEl) return;
 		// One of two setScrollContainer callers (GPL here, MobileTabPager on tab
-		// routes — never co-mounted). Reads `override ?? centerEl` so a nested
+		// routes - never co-mounted). Reads `override ?? centerEl` so a nested
 		// scroller owner (a scope panel inside a pager, which sets the override)
 		// wins deterministically: this effect re-runs when the override changes,
 		// regardless of parent/child $effect flush order. The cleanup uses
