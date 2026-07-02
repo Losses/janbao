@@ -349,54 +349,57 @@
 		<section
 			class="scroll-pane h-full w-1/3 shrink-0"
 			data-tab-panel={MOBILE_TABS[0].labelKey}
-			data-preview-tab={MOBILE_TABS[0].labelKey}
 			style="overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y pinch-zoom;"
 			bind:this={section0El}
 			onscroll={(e) => pageScrollStore.capture(MOBILE_TABS[0].href, e.currentTarget.scrollTop)}
 		>
-			<DiscussionsPanel
-				discussions={home.discussions}
-				currentPage={home.page}
-				totalPages={home.totalPages}
-				{t}
-				{buildPageUrl}
-				paginate={true}
-			/>
+			<div class="gpl-card">
+				<DiscussionsPanel
+					discussions={home.discussions}
+					currentPage={home.page}
+					totalPages={home.totalPages}
+					{t}
+					{buildPageUrl}
+					paginate={true}
+				/>
+			</div>
 		</section>
 		<section
 			class="scroll-pane h-full w-1/3 shrink-0"
 			data-tab-panel={MOBILE_TABS[1].labelKey}
-			data-preview-tab={MOBILE_TABS[1].labelKey}
 			style="overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y pinch-zoom;"
 			bind:this={section1El}
 			onscroll={(e) => pageScrollStore.capture(MOBILE_TABS[1].href, e.currentTarget.scrollTop)}
 		>
-			<ActivityPanel
-				activities={activity.activities}
-				currentPage={activity.page}
-				totalPages={activity.totalPages}
-				activityDraft={activity.activityDraft}
-				mentionedUsers={activity.mentionedUsers}
-				{t}
-				{user}
-				paginate={true}
-			/>
+			<div class="gpl-card">
+				<ActivityPanel
+					activities={activity.activities}
+					currentPage={activity.page}
+					totalPages={activity.totalPages}
+					activityDraft={activity.activityDraft}
+					mentionedUsers={activity.mentionedUsers}
+					{t}
+					{user}
+					paginate={true}
+				/>
+			</div>
 		</section>
 		<section
 			class="scroll-pane h-full w-1/3 shrink-0"
 			data-tab-panel={MOBILE_TABS[2].labelKey}
-			data-preview-tab={MOBILE_TABS[2].labelKey}
 			style="overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y pinch-zoom;"
 			bind:this={section2El}
 			onscroll={(e) => pageScrollStore.capture(MOBILE_TABS[2].href, e.currentTarget.scrollTop)}
 		>
-			<MessagesPanel
-				conversations={messages.conversations}
-				currentPage={messages.page}
-				totalPages={messages.totalPages}
-				{t}
-				paginate={true}
-			/>
+			<div class="gpl-card">
+				<MessagesPanel
+					conversations={messages.conversations}
+					currentPage={messages.page}
+					totalPages={messages.totalPages}
+					{t}
+					paginate={true}
+				/>
+			</div>
 		</section>
 		{#if showDeepPreview && deepPageSnapshot.data}
 			<!-- Real Svelte component rendering the cached thread DATA (not injected
