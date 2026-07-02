@@ -508,9 +508,8 @@ export async function captureExitPreview(
 				const cov = vw > 0 ? inter / vw : 0;
 				if (cov <= 0.4) continue;
 				// Identity: `data-tab-panel` (MobileTabPager + GesturePageLayout
-				// preview sections), or `data-preview-tab` (other sections).
-				const key = (s.getAttribute('data-tab-panel') ??
-					s.getAttribute('data-preview-tab')) as PreviewTab;
+				// preview sections).
+				const key = s.getAttribute('data-tab-panel') as PreviewTab;
 				if (!state.seen.includes(key)) state.seen.push(key);
 				if (cov > state.maxCov) {
 					state.maxCov = cov;

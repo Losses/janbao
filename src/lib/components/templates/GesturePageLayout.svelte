@@ -128,7 +128,7 @@
 	const hasRight = $derived(!!right);
 	const resolvedRightHref = $derived(rightHref);
 	// Identity (tab labelKey) of whatever the left/right preview panel actually
-	// renders, exposed as `data-preview-tab` so the exit-preview e2e can assert
+	// renders, exposed as `data-tab-panel` so the exit-preview e2e can assert
 	// "the revealed panel matches the tapped tab" without classifying DOM content
 	// (content markers collide across pages and miss non-tab sidebars). null means
 	// the panel is not a tab list; a wrong non-tab preview must still fail the test.

@@ -163,7 +163,6 @@ header nav {
 		display: none;
 	}
 	/* Do not hide the page title inside gesture preview/snapshot panels */
-	.appbar-title [data-preview-tab] .page-title,
 	.appbar-title [data-deep-preview] .page-title {
 		display: block;
 	}
@@ -328,16 +327,6 @@ header nav {
 		padding-bottom: 1.5rem;
 		padding-left: 0;
 		padding-right: 0;
-	}
-	/* Tab root preview panels (Discussions, Activity, Messages) must render flat white background and drop card spacing */
-	html.fixed-viewport .scroll-pane[data-preview-tab="discussions"],
-	html.fixed-viewport .scroll-pane[data-preview-tab="activity"],
-	html.fixed-viewport .scroll-pane[data-preview-tab="messages"] {
-		background-color: var(--color-base-100);
-		padding-top: calc(var(--header-height, 0px) + 0.75rem);
-		padding-bottom: 0.75rem;
-		padding-left: 0.75rem;
-		padding-right: 0.75rem;
 	}
 	html.fixed-viewport .gpl-card {
 		background-color: var(--color-base-100);
