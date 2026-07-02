@@ -4,13 +4,13 @@
 
 ## Tally
 
-| Auditor | Verdict | Blocking | Major | Minor |
-| ------- | ------- | -------- | ----- | ----- |
-| 1       | acceptable | 0 | 0 | 4 |
-| 2       | acceptable | 0 | 0 | 3 |
-| 3       | acceptable | 0 | 0 | 2 |
-| 4       | acceptable | 0 | 0 | 1 |
-| 5       | acceptable | 0 | 0 | 1 |
+| Auditor | Verdict    | Blocking | Major | Minor |
+| ------- | ---------- | -------- | ----- | ----- |
+| 1       | acceptable | 0        | 0     | 4     |
+| 2       | acceptable | 0        | 0     | 3     |
+| 3       | acceptable | 0        | 0     | 2     |
+| 4       | acceptable | 0        | 0     | 1     |
+| 5       | acceptable | 0        | 0     | 1     |
 
 Result line: **5/5 acceptable (FINAL).**
 

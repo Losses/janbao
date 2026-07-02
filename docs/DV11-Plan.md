@@ -17,6 +17,7 @@ Eliminate the reported defect (revealed tab neighbour clipped/gapped because the
 **Height model (one):** `html.fixed-viewport` + screen-height (`height: 100%; overflow: clip; position: relative; touch-action: pan-y pinch-zoom`) viewport + `h-full` track of `.scroll-pane` panels (`height: 100%; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y pinch-zoom`), the active panel also `.detail-scroll-pane`; per-panel `pageScrollStore`; the active panel drives hide-on-scroll. `app.css:333-341` already styles `.scroll-pane[data-preview-tab="discussions|activity|messages"]` (flat-white + header padding) - the tab surface is pre-provided, NO `.gpl-card`.
 
 **Ownership layer (shared):**
+
 - `viewport-lock` refcount module: closure `$state` counter, clamped at 0; `acquire()` adds `html.fixed-viewport` at 0→1; `release()` removes at 1→0. Each caller tracks its own per-instance `held` flag (acquire on `!held → mobile`, release on `held → desktop`, release on cleanup if `held`); the pager (mobile-only) uses plain mount/destroy. `import.meta.hot?.dispose` removes the class AND zeroes the counter.
 - `scrollChrome.releaseContainer(el)`: `if (containerEl === el) setContainer(null)`. Both layouts use it for cleanup; the destination's mount-`$effect` re-sets `containerEl` (self-heal). `setOverride` (the nested `/search` case) is UNCHANGED - separate slot, never co-mounted with the pager.
 
@@ -54,23 +55,30 @@ No edits to `swipe.ts`, `navigation*.ts`, `Header.svelte`, `MobileTabBar.svelte`
 ## 6. Tests
 
 ### 6.1 Height / clip (existing spec, flipped green, concrete metric)
+
 REPLACE the tautological `vpHeight`-equality assertions (`:177-185`, both sides become screen height post-fix) with: each section `clientHeight === viewport height` (full-height scroller); AND a concrete internal-scroll reachability probe - `el.scrollTo(0, el.scrollHeight); assert el.scrollTop > 0` on the dest section (its content is reachable by internal scroll, NOT clipped by a shorter viewport) - since the existing `panel()` helper only measures `offsetHeight`/`getBoundingClientRect`, which cannot prove reachability. The back case `duringBack.panels.activity.bottom` reaches the viewport bottom (activity scrolls internally). The reachability probe is the load-bearing post-fix assertion.
 
 ### 6.2 Per-panel + cross-route scroll restoration; tab-switch restores; no top-flash
+
 Scroll a tab panel, switch away and back → `scrollTop` restored (NOT reset to top), with NO transient wrong-panel jump mid-slide (the §4 index-derived key). Cross-route: scroll `/`, go to a thread, swipe back → discussions panel + thread GPL left preview restore from `pageScrollStore.get('/')` with NO top-flash (sync-first `$effect`).
 
 ### 6.3 Hide-on-scroll on the active tab panel
+
 Scroll the active panel (located via `section[data-tab-panel=<activeLabelKey>]`, NOT `.detail-scroll-pane`) → Header hides/reveals.
 
 ### 6.4 Ownership coordination across the swap (EMPIRICAL, observable)
+
 A `/`↔`/discussion` SPA nav, sampled every animation frame:
+
 - (a) **`html.fixed-viewport` no-flicker - ARBITRATED, not asserted.** The swap is two-sided; Svelte does not guarantee mount-before-destroy, so a 1→0→1 transient is possible. The sampler REPORTS whether the class is ever absent for a painted frame. IF it is, the mitigation is a microtask-deferred removal at 1→0 (re-check the counter is still 0 before removing). The plan does not assume no-flicker; the test decides.
 - (b) **Container is the destination's live panel - asserted via effect, scoped past the freeze.** Scroll the destination's active panel (located via its `data-tab-panel` attribute, NOT `.detail-scroll-pane`) AFTER `releaseNavigation` (the `/discussion`→`/` direction holds the Header via `holdThroughNavigation` until `(tabs)/+layout.svelte:113`; assert the forward `/`→`/discussion` direction, or the reverse after release) → the Header `translateY` responds.
 
 ### 6.5 `.appbar-title` never on tab roots
+
 `/`, `/activity`, `/messages/inbox` do not carry `.appbar-title` (so `app.css:166` is a no-op on tabs despite Activity/Messages panels containing `.page-title`).
 
 ### 6.6 Regression
+
 `fab.spec.ts`, `swipe-forward-back-deep-page.spec.ts`, `reproduce-swipe-back-preview-bug.spec.ts` (all rewritten per §5), `header-tab-descent-cross-tab-exit.spec.ts` (directly exercises the §6.4 swap - verify green), `tab-exit-preview.spec.ts`, `enter-animation.spec.ts`, tab-swipe/pill, and `[data-tab-panel]` sibling specs remain green. Because the pager's active panel does NOT carry `.detail-scroll-pane` (v14), the e2e samplers `captureEnterAnimation` and `captureExitPreview` (`helpers.ts:260/482`) - which locate the GPL track via `.detail-scroll-pane?.parentElement` - never latch a pager track; on `/` there is no `.detail-scroll-pane` (it appears only when GPL mounts on a deep route). So the R13 `captureEnterAnimation` collision and the v13 `captureExitPreview` collision are both eliminated by construction.
 
 ## 7. Risks

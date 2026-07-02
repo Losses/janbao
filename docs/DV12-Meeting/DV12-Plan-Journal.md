@@ -17,8 +17,8 @@ Convergent blockers:
 Revision decisions (R2):
 
 1. Primary mechanism → remove the whole `(navStore.navInFlight && !settling)` term from `slideT` (`Header.svelte:193-196`), becoming `dragging || searchScrubbing ? 'none' : 'transform 200ms ease-out, opacity 200ms ease-out'`. Branch-agnostic; Header-local; preserves the gesture-settle behavior (slideT stays `'200ms'` during settle, byte-identical).
-2. Drop §4.2 (`crossTabChip`/`lastExitChip` latch) — wrong branch, not branch-agnostic, shared-primitive leak.
-3. Drop §4.4 (settle-driven back-to-tab) — unnecessary; a `transform` transition runs on the compositor once started, so the headless main-thread block (caused by `'none'`, not a dropped transition) does not produce a partial snap.
+2. Drop §4.2 (`crossTabChip`/`lastExitChip` latch) - wrong branch, not branch-agnostic, shared-primitive leak.
+3. Drop §4.4 (settle-driven back-to-tab) - unnecessary; a `transform` transition runs on the compositor once started, so the headless main-thread block (caused by `'none'`, not a dropped transition) does not produce a partial snap.
 4. Files shrink to one: only `Header.svelte` changes (the `slideT` term). No shared primitive touched.
 5. Fix all citation drift.
 6. Empirical gate: run `e2e/header-tabs-replay.spec.ts` (and the full no-regression suite) with the term removed; the §4.3-vs-Variant-B decider.
@@ -38,7 +38,7 @@ All central claims VERIFIED 5/5: gesture-settle byte-identical (Auditor 1 suppli
 
 Revision decisions (R3):
 
-1. §5: admit the regression spec is Modified — the CALIBRATION back-landing `slideNone` assertion flips true → false and the test name updates asymmetry → symmetry (`navInFlight === true` stays; forward-landing + DEFECT unchanged).
+1. §5: admit the regression spec is Modified - the CALIBRATION back-landing `slideNone` assertion flips true → false and the test name updates asymmetry → symmetry (`navInFlight === true` stays; forward-landing + DEFECT unchanged).
 2. §2: citation `c2c7616` → `23d711b9` (git-blame-verified), with a note that the term's FAB-commit origin is incidental to Header's own layer.
 3. §3/§4/§9: `runSettleDriver:428` → `:429`.
 4. §6.2: tighten the no-double-animation reasoning to independent-transforms-on-different-elements.
@@ -54,6 +54,6 @@ All R2 fixes verified against source: §5/§7 CALIBRATION contradiction RESOLVED
 
 All central claims re-verified 5/5: gesture-settle byte-identical (Auditor 2's flush-by-flush proof: on the gesture path `settling=true` is held through the whole `navInFlight` window, so the term is dead code there); defect fixed on both branches across all 26 GPL routes; compositor immunity; completeness (no undesired-animation click path, including the non-obvious `/search → tab` case that resolves via Effect E's same-flush `searchScrub`); FAB-specs gate insurance-only (FAB reads `navInFlight` directly at `FloatingActionButtonLayer.svelte:362`, never Header's `slideT`).
 
-Carried-to-implementation notes (non-blocking, NOT re-audited — DV09 R5 precedent): (a) the CALIBRATION rewrite is the whole test name (incl. the "back descent suppresses it" mid-clause) + the file-header doc-comment (lines 19-43), not just the parenthetical — applied to §5 in the FINAL plan; (b) the `/search → /messages/inbox` same-flush-scrub completeness path is safe and non-obvious; (c) `opacity 200ms` in `slideT` is a pre-existing no-op; (d) `trackStyle`/`searchButtonStyle`/`tabBarStyle` keep their own `navInFlight` reads (documented, out of scope); (e) `FloatingActionButtonLayer` lives under `templates/`; (f) the DEFECT spec is a slideT-string check, trajectory covered by the separate audit-time probe gate.
+Carried-to-implementation notes (non-blocking, NOT re-audited - DV09 R5 precedent): (a) the CALIBRATION rewrite is the whole test name (incl. the "back descent suppresses it" mid-clause) + the file-header doc-comment (lines 19-43), not just the parenthetical - applied to §5 in the FINAL plan; (b) the `/search → /messages/inbox` same-flush-scrub completeness path is safe and non-obvious; (c) `opacity 200ms` in `slideT` is a pre-existing no-op; (d) `trackStyle`/`searchButtonStyle`/`tabBarStyle` keep their own `navInFlight` reads (documented, out of scope); (e) `FloatingActionButtonLayer` lives under `templates/`; (f) the DEFECT spec is a slideT-string check, trajectory covered by the separate audit-time probe gate.
 
 Loop exit condition met. Plan approved for implementation. Implementation changes ONLY `Header.svelte` (the `slideT` term removal) and `e2e/header-tab-descent-cross-tab-exit.spec.ts` (the CALIBRATION symmetry rewrite); no shared primitive touched. Proceeds under `DV12-C00-Journal.md` + `RV12-C00-Audit-##`, gated by `bun run check` 0/0, `bun run lint` exit 0, the §4.4 gesture-suite gate, and the no-regression suite (incl. FAB specs).

@@ -4,8 +4,8 @@
 
 ## Tally
 
-| Auditor | Verdict | Blocking | Major | Minor | Organic |
-| ------- | ------- | -------- | ----- | ----- | ------- |
+| Auditor | Verdict | Blocking | Major | Minor | Organic           |
+| ------- | ------- | -------- | ----- | ----- | ----------------- |
 | 1       | FAIL    | 1        | 4     | 4     | has-special-cases |
 | 2       | FAIL    | 2        | 4     | 4     | has-special-cases |
 | 3       | FAIL    | 2        | 4     | 3     | has-special-cases |

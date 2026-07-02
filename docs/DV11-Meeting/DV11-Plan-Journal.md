@@ -81,14 +81,14 @@ Full detail: `DV11-Audit-R5.md`. 2 PASS / 3 FAIL, all high confidence. The track
 
 ## Round 6 + rescoping decision (v6 → v7: unify onto the shared scroll-pane abstraction)
 
-Full detail: `DV11-Audit-R6.md`. 5/5 FAIL, all high confidence, clean (un-seered) prompt. The core architectural choice (constant screen-height viewport + per-panel internal scroll) is unanimously endorsed as correct and proven in GPL. v6 failed because it tried to *mimic* the GPL model while *denying* the cross-file edits the mimicry requires. Convergent blockers:
+Full detail: `DV11-Audit-R6.md`. 5/5 FAIL, all high confidence, clean (un-seered) prompt. The core architectural choice (constant screen-height viewport + per-panel internal scroll) is unanimously endorsed as correct and proven in GPL. v6 failed because it tried to _mimic_ the GPL model while _denying_ the cross-file edits the mimicry requires. Convergent blockers:
 
 - **Header occlusion.** Under `fixed-viewport` the Header is `position: fixed`; the plan's sections were `p-3` with no header-height inset and no `.scroll-pane` class → ~56 px of content hidden behind the overlay Header. The plan falsely claimed "no CSS edits / geometry unchanged."
 - **`getCurrentScrollY` clobber.** `page-scroll.svelte.ts:23-32` reads `.detail-scroll-pane` (absent on tab routes) → falls back to `window.scrollY` (0 under `fixed-viewport`); the root-layout `beforeNavigate` capture (`+layout.svelte:65`) overwrites `pageScrollStore[/<etc>]` with 0, breaking `/`↔`/discussion` scroll restore.
 - **`(tabs)` snapshot / dependent specs.** Removing the window-snapshot breaks desktop scroll restore; `fab.spec.ts` and `swipe-forward-back-deep-page.spec.ts` scroll `window` on `/` and break under the locked window.
 - **Track height + overlay anchor.** `height:100%` sections need an `h-full` track (GPL `:951`); the deep-preview overlay's `top: -header-height; height: innerHeight` mis-anchors under `fixed-viewport`.
 
-**Root insight (the user's critique, confirmed by the code):** the codebase has TWO content-height mechanisms with no shared abstraction. The `deep-page-snapshot.svelte.ts:6` docstring ("fixed-viewport-gated layout rules don't apply in the pager context") and the `MobileTabPager.svelte:454` scoped-CSS *mirror* of those rules prove the pager was deliberately built outside the scroll-pane abstraction. v1-v6 all bolted one model onto the other ("屎山叠屎山").
+**Root insight (the user's critique, confirmed by the code):** the codebase has TWO content-height mechanisms with no shared abstraction. The `deep-page-snapshot.svelte.ts:6` docstring ("fixed-viewport-gated layout rules don't apply in the pager context") and the `MobileTabPager.svelte:454` scoped-CSS _mirror_ of those rules prove the pager was deliberately built outside the scroll-pane abstraction. v1-v6 all bolted one model onto the other ("屎山叠屎山").
 
 **Rescoping decision (v7), author's call: unify, don't mimic.** Bring the pager INTO the one abstraction GPL already defines. The pager's three sections become `.scroll-pane[data-preview-tab=<key>] h-full` (the active one also `.detail-scroll-pane`, so `getCurrentScrollY` reads it), the route adds `fixed-viewport`, each panel captures/restores via `pageScrollStore` and the active one drives `scrollChrome.setScrollContainer`. `app.css:333-341` ALREADY styles `.scroll-pane[data-preview-tab="discussions|activity|messages"]` (flat-white + header-height padding) - the abstraction was ready for these panels; the pager just never used it. Delete the private model (`panelHeights`/`measureTab`/`neighborOffset`/content-height viewport/dead `window.scrollTo`) AND the `:454` CSS mirror. The R6 "entanglement" list (getCurrentScrollY, snapshot, fab/swipe-deep specs, overlay anchor, track height) is the unification surface, written explicitly in v7 §5 - not denied. Net: one height/scroll model in the whole codebase.
 
@@ -99,6 +99,7 @@ Verified-TRUE facts added (R6): `deep-page-snapshot.svelte.ts:6` + `MobileTabPag
 Full detail: `DV11-Audit-R7.md`. 5/5 FAIL, all high confidence. **First unanimous endorsement of the architecture:** the unification onto the single `fixed-viewport` + `.scroll-pane` + `pageScrollStore` + `setScrollContainer` height/scroll model is correct; no second height mechanism survives. v7 over-promised "one abstraction, no special-casing" - the failures are concrete edits plus one real coordination-design gap.
 
 Convergent blockers/majors:
+
 - **`.gpl-card` is wrong on tab panels** (auditors 1, 4, 5). GPL's own tab-root previews use NO `.gpl-card`; `app.css:333-341` `data-preview-tab` already supplies the flat-white surface + padding. `.gpl-card` double-pads and adds a border.
 - **Two owners of `html.fixed-viewport` and the `scrollChrome` container, no coordination** (auditors 2, 3, 4, 5). The pager and GPL both touch the globals; `/discussion` is a sibling route, so a `/`↔`/discussion` SPA swap races their mount/destroy. v7's "refcount or querySelector" was an unresolved either/or.
 - **Viewport missing `position: relative`** (auditors 1, 4) - the overlay anchor.
@@ -106,7 +107,7 @@ Convergent blockers/majors:
 - **`listScroll` is dead** (auditors 2, 3, 4) - v7 hedged ("verify and remove if dead").
 - **`data-tab-panel`→`data-preview-tab` rename breaks sibling specs** (auditor 3).
 
-**Root insight:** unifying the *height model* is necessary but not sufficient - the pager and GPL also both OWN the global `html.fixed-viewport` class and the `scrollChrome.containerEl` singleton, and two direct owners race across the route swap. v7 left that ownership duplicated.
+**Root insight:** unifying the _height model_ is necessary but not sufficient - the pager and GPL also both OWN the global `html.fixed-viewport` class and the `scrollChrome.containerEl` singleton, and two direct owners race across the route swap. v7 left that ownership duplicated.
 
 **Rescoping decision (v8): add the shared ownership layer.** Factor ownership into shared primitives so each layout is a CLIENT, not a competing owner: (a) a new `viewport-lock` refcount module (`acquire`/`release`, class present while any layout holds it - ordering-independent); (b) `scrollChrome.releaseContainer(el)` - a conditional clear used in cleanup instead of `setScrollContainer(null)`, so a stale teardown never clobbers the new owner. Both the pager and GPL use them (GPL's edit is behavior-preserving for its single-owner steady state). Tighten every concrete edit: tab panels are bare `.scroll-pane[data-preview-tab=<key>]` with NO `.gpl-card` (keep `data-tab-panel` too, so sibling specs don't break); active panel also `.detail-scroll-pane`; viewport `height:100%; overflow:clip; position:relative`; track `h-full`; keep `measureViewportWidth`'s `viewportWidth`, strip only `neighborOffset`/`resetViewportScroll`/window-scroll listener; fix the deep-preview overlay anchor; `listScroll` removed definitively (dead); surgical removal of only the `.gpl-preview-pane` mirror rules (keep `.back-chip-overlay`). The height model + ownership are now genuinely one abstraction.
 
@@ -117,6 +118,7 @@ Verified-TRUE facts added (R7): the unification holds for height/scroll (no seco
 Full detail: `DV11-Audit-R8.md`. 1 PASS / 4 FAIL, all high confidence. **Closest round:** the architecture AND the shared-ownership layer (refcount + `releaseContainer`) are endorsed (auditor 1 PASS). The FAILs are two mechanism gaps plus concrete-edit corrections.
 
 Convergent blockers:
+
 - **Refcount must cover GPL's resize-toggle** (auditors 3, 5). GPL toggles `fixed-viewport` in `sync()` on every `mq` change (it flips `isMobile`, does not unmount). Mount/destroy acquire/release underflows on a desktop GPL mount (release without acquire → counter negative → class never re-adds → the whole `fixed-viewport` CSS layer drops).
 - **Scroll-chrome ownership edge cases** (auditors 2, 4). Editing GPL's cleanup to `releaseContainer(centerEl)` interacts with the `/search` `setOverride` path (containerEl may be the override element). Resolution: at steady state one layout is mounted and its mount-effect re-sets containerEl, so a stale value self-heals - but this must be EMPIRICALLY pinned, not asserted.
 

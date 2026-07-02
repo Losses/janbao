@@ -4,19 +4,20 @@
 
 ## Tally
 
-| Auditor | Verdict | Blocking | Major | Minor | Organic |
-|---------|---------|----------|-------|-------|---------|
-| 1 | ACCEPTABLE | 0 | 0 | 1 | clean |
-| 2 | ACCEPTABLE | 0 | 0 | 3 | clean |
-| 3 | ACCEPTABLE | 0 | 1 (F1) | 2 | clean (with polish recommendation) |
-| 4 | ACCEPTABLE | 0 | 0 | 1 | clean |
-| 5 | ACCEPTABLE | 0 | 1 (F1) | 2 | clean |
+| Auditor | Verdict    | Blocking | Major  | Minor | Organic                            |
+| ------- | ---------- | -------- | ------ | ----- | ---------------------------------- |
+| 1       | ACCEPTABLE | 0        | 0      | 1     | clean                              |
+| 2       | ACCEPTABLE | 0        | 0      | 3     | clean                              |
+| 3       | ACCEPTABLE | 0        | 1 (F1) | 2     | clean (with polish recommendation) |
+| 4       | ACCEPTABLE | 0        | 0      | 1     | clean                              |
+| 5       | ACCEPTABLE | 0        | 1 (F1) | 2     | clean                              |
 
 Result line: **5/5 ACCEPTABLE.**
 
 ## R1 root cause - confirmed eliminated (5/5)
 
 All five independently verified:
+
 - `effectiveKind` (FloatingActionButtonLayer.svelte:195-203) is the single source of truth for list-family kind during any transition.
 - Kind and scale both derive from `sampledFractionalIndex` (the visual track position).
 - The kind swap happens at sample=1 (the midpoint), where `scaleFromFraction(2f-1)` guarantees scale 0 for both kinds.

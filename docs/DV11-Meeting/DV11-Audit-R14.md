@@ -4,12 +4,12 @@
 
 ## Tally
 
-| Auditor | Verdict | Blocking | Major | Minor | Organic |
-| ------- | ------- | -------- | ----- | ----- | ------- |
+| Auditor | Verdict | Blocking | Major | Minor | Organic           |
+| ------- | ------- | -------- | ----- | ----- | ----------------- |
 | 1       | PASS    | 0        | 2     | 4     | has-special-cases |
 | 2       | PASS    | 0        | 0     | 3     | has-special-cases |
 | 3       | PASS    | 0        | 1     | 3     | has-special-cases |
-| 4       | PASS    | 0        | 2     | 3     | clean   |
+| 4       | PASS    | 0        | 2     | 3     | clean             |
 | 5       | FAIL    | 1        | 1     | 3     | has-special-cases |
 
 Result line: **not 5/5 PASS → revised.**

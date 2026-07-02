@@ -4,11 +4,11 @@
 
 ## Tally
 
-| Auditor | Verdict | Blocking | Major | Minor | Organic |
-| ------- | ------- | -------- | ----- | ----- | ------- |
+| Auditor | Verdict | Blocking | Major | Minor | Organic           |
+| ------- | ------- | -------- | ----- | ----- | ----------------- |
 | 1       | FAIL    | 1        | 2     | 2     | has-special-cases |
-| 2       | FAIL    | 0        | 1     | 3     | clean   |
-| 3       | PASS    | 0        | 0     | 2     | clean   |
+| 2       | FAIL    | 0        | 1     | 3     | clean             |
+| 3       | PASS    | 0        | 0     | 2     | clean             |
 | 4       | FAIL    | 1        | 1     | 2     | has-special-cases |
 | 5       | FAIL    | 1        | 1     | 2     | has-special-cases |
 

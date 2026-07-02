@@ -4,13 +4,13 @@
 
 ## Tally
 
-| Auditor | Verdict | Organic |
-|---------|---------|---------|
-| 1 | UNACCEPTABLE | has-fundamental-architectural-flaw |
-| 2 | UNACCEPTABLE | has-fundamental-architectural-flaw |
-| 3 | UNACCEPTABLE | has-fundamental-architectural-flaw |
-| 4 | UNACCEPTABLE | has-fundamental-architectural-flaw |
-| 5 | UNACCEPTABLE | has-fundamental-architectural-flaw |
+| Auditor | Verdict      | Organic                            |
+| ------- | ------------ | ---------------------------------- |
+| 1       | UNACCEPTABLE | has-fundamental-architectural-flaw |
+| 2       | UNACCEPTABLE | has-fundamental-architectural-flaw |
+| 3       | UNACCEPTABLE | has-fundamental-architectural-flaw |
+| 4       | UNACCEPTABLE | has-fundamental-architectural-flaw |
+| 5       | UNACCEPTABLE | has-fundamental-architectural-flaw |
 
 ## Convergent root cause (5/5)
 
@@ -22,6 +22,7 @@ Frame-level mechanism (all 5 independently traced):
 - Frame 1+: Track starts sliding (200ms CSS). Sampler reads the moving m41. `listDisplayTab` eventually fires (when sample becomes non-integer), overriding kind back to outgoing. Then at the midpoint, kind flips again to incoming. Three kind switches in 200ms = flicker.
 
 This mechanism produces all reported defects:
+
 - **Kind flicker (messages→discussions)**: three kind switches (URL→listDisplayTab→midpoint).
 - **Disappear jump**: the outgoing FAB is replaced by the incoming at scale 0 instantly (URL frame), never scaling out.
 - **Repeated-click instability**: the latch state and override residuals accumulate across rapid navigations.
@@ -50,6 +51,7 @@ Both strategies converge on: one signal for kind+scale, URL demoted to resting/l
 ## Keep vs rewrite (5/5 consensus)
 
 **Keep:**
+
 - `fab-scale.ts` (pure math, `scaleFromFraction(2f-1)` encodes the correct handoff).
 - `FloatingActionButton.svelte` atom (single-transform, orthogonal, correct).
 - `active-gesture-track` store pattern.
@@ -59,6 +61,7 @@ Both strategies converge on: one signal for kind+scale, URL demoted to resting/l
 - MobileTabPager track geometry + CSS transition.
 
 **Rewrite:**
+
 - `FloatingActionButtonLayer.svelte` core: `fabConfig` URL-derived kind → resting-only; `displayConfig`/`listDisplayTab`/`retainedConfig` → single sampler-driven kind+scale derived; delete `discreteNavInFlight`, `chipExitActive` override, `foregroundFraction` family branching; sampler arms on ALL tracks (unify Family A + B signal source).
 - `GesturePageLayout.svelte` coverProgress publishing: stop jumping to logical endpoint at commit; either keep publishing visual position through the slide or let the sampler drive Family B too.
 - `MobileTabPager.switchTo` / `MobileTabBar.onclick`: route through a two-phase commit coordinator (extract from GesturePageLayout's beforeNavigate pattern) so the URL swap is deferred to the visual midpoint.

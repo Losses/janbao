@@ -4,13 +4,13 @@
 
 ## Tally
 
-| Auditor | Verdict | Blocking | Major | Minor | Organic |
-| ------- | ------- | -------- | ----- | ----- | ------- |
+| Auditor | Verdict | Blocking | Major | Minor | Organic           |
+| ------- | ------- | -------- | ----- | ----- | ----------------- |
 | 1       | PASS    | 0        | 2     | 4     | has-special-cases |
-| 2       | PASS    | 0        | 0     | 3     | clean   |
-| 3       | PASS    | 0        | 0     | 3     | clean   |
+| 2       | PASS    | 0        | 0     | 3     | clean             |
+| 3       | PASS    | 0        | 0     | 3     | clean             |
 | 4       | PASS    | 0        | 1     | 2     | has-special-cases |
-| 5       | PASS    | 0        | 0     | 3     | clean   |
+| 5       | PASS    | 0        | 0     | 3     | clean             |
 
 Result line: **5/5 PASS → plan approved for implementation.**
 

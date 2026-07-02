@@ -4,13 +4,13 @@
 
 ## Tally
 
-| Auditor | Verdict | Blocking | Major | Minor | Organic |
-| ------- | ------- | -------- | ----- | ----- | ------- |
-| 1       | acceptable | 0 | 0 | 3 | clean |
-| 2       | acceptable | 0 | 0 | 2 | clean |
-| 3       | changes_requested | 1 | 1 | 2 | clean |
-| 4       | changes_requested | 4 | 0 | 4 | clean |
-| 5       | changes_requested | 0 | 2 | 3 | clean |
+| Auditor | Verdict           | Blocking | Major | Minor | Organic |
+| ------- | ----------------- | -------- | ----- | ----- | ------- |
+| 1       | acceptable        | 0        | 0     | 3     | clean   |
+| 2       | acceptable        | 0        | 0     | 2     | clean   |
+| 3       | changes_requested | 1        | 1     | 2     | clean   |
+| 4       | changes_requested | 4        | 0     | 4     | clean   |
+| 5       | changes_requested | 0        | 2     | 3     | clean   |
 
 Result line: **not 5/5 acceptable → revised.**
 
