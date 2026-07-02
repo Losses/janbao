@@ -26,7 +26,7 @@ Implementation of the DV12 Header tab-descent fix (plan: `docs/DV12-Plan.md`, 5/
   - CALIBRATION: PASS. Back-landing flush `slideNone=false, navInFlight=true`; forward-landing `slideNone=false`. Symmetry documented.
   - DEFECT (6 cycles): PASS. Every back landing `slideNone=false` (the gate is never suppressed at a tab-root landing).
 - **§4.4 gesture gate** `e2e/header-tabs-replay.spec.ts`: PASS (after the probe rename; the collision above was the only blocker).
-- **No-regression + FAB insurance suite** (40 tests): all PASS - `tab-exit-preview` (6), `search-enter-exit-asymmetry` (3), `swipe-back-pill-flicker` (2), `enter-animation`, `fab-deep-real-interaction` (16), `fab-release-snap` (3). The FAB specs confirm the FAB is decoupled (it reads `navInFlight` directly at `FloatingActionButtonLayer.svelte:362`, never via Header's `slideT`).
+- **No-regression + FAB insurance suite** (40 tests): all PASS - `tab-exit-preview` (6), `search-enter-exit-asymmetry` (3), `swipe-back-pill-flicker` (2), `enter-animation`, `fab-deep-real-interaction` (16), `fab-release-snap` (3). The FAB specs confirm the FAB is decoupled (it reads `navInFlight` directly at `src/lib/components/templates/FloatingActionButtonLayer.svelte:362`, never via Header's `slideT`).
 
 ## Carried-to-implementation notes (from `DV12-Audit-R3.md`) disposition
 
