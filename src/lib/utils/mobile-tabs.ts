@@ -33,9 +33,9 @@ type CacheCheckFn = () => boolean;
 type TabDataCheck = (data: Partial<TabsLayoutData>) => boolean;
 
 const TAB_DATA_CHECKS: Record<MobileTabLabelKey, TabDataCheck> = {
-	discussions: (d) => (d.home?.discussions.length ?? 0) > 0,
-	activity: (d) => (d.activity?.activities.length ?? 0) > 0,
-	messages: (d) => (d.messages?.conversations.length ?? 0) > 0
+	discussions: (d) => (d.home?.discussions?.length ?? 0) > 0,
+	activity: (d) => (d.activity?.activities?.length ?? 0) > 0,
+	messages: (d) => (d.messages?.conversations?.length ?? 0) > 0
 };
 
 // Each tab's list panel is a thin wrapper (TabDiscussionsPanel etc.) that pulls
