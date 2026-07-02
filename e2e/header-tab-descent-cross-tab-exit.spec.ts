@@ -2,44 +2,34 @@ import { test, expect, type Page } from '@playwright/test';
 import { prepareContext, waitForHydration } from './helpers';
 
 /**
- * Header tab-descent regression spec - cross-tab exit boundary.
+ * Header tab-descent regression spec.
  *
  * The mobile Header's tabs layer sits at translateY(-100%) on a deep page and
  * descends to translateY(0%) when the route returns to a tab route (the "Tab
  * 下沉" animation). The descent is a CSS `transform 200ms ease-out` transition
  * on the layer; the value it animates toward is `morph`, derived in Header.svelte.
  *
+ * The layer transition (`slideT` in Header.svelte) suppresses only during a live
+ * drag or a root↔search tap scrub, where `morph` is driven 1:1 by the finger or
+ * the scrubber. It does not suppress during an in-flight navigation, so the
+ * back-to-tab landing descent animates the same way as the forward direction.
+ * This is branch-agnostic: both GesturePageLayout exit branches (same-panel slide
+ * and cross-tab chip) call setPendingNav → executePendingNav → navInFlight at the
+ * landing, and the tabs layer animates there in both.
+ *
  * The forward direction (tab route → deep page, e.g. /messages/inbox →
- * /bookmarks) animates smoothly. The BACK direction from a GesturePageLayout
- * deep page to a tab route (e.g. /bookmarks → /messages/inbox via the back
- * arrow) does NOT: the descent plays partially or not at all, then snaps to the
- * end. Users report it as "the tab descent animation freezes mid-way then jumps
- * to the end", intermittently.
- *
- * Root cause (confirmed by the internal per-flush probe in CALIBRATION):
- * GesturePageLayout's beforeNavigate intercepts the back nav, and because the
- * tab route is not one of the deep page's pre-rendered neighbour panels it takes
- * the CROSS-TAB EXIT path: cancel the SvelteKit nav, show a loading chip,
- * preload the target, then dispatch via navStore.executePendingNav(). That sets
- * `navInFlight = true` BEFORE the navigation lands. Header's layer transition is
- *
- *   slideT = (navInFlight && !settling) ? 'none' : 'transform 200ms ease-out'
- *
- * so when the nav commits and `morph` flips to its tab-rest value (1), the
- * layer's transition is 'none' and the transform jumps -100% → 0% with no
- * animation (or, when the morph flip and the navInFlight render land in separate
- * paints on slower devices, a partial descent that then snaps - the reported
- * freeze-then-jump). The forward direction is unaffected because the tab route
- * does not mount GesturePageLayout, so the cross-tab exit / navInFlight path is
- * never entered and slideT stays '200ms'.
+ * /bookmarks) animates the same way: the tab route does not mount
+ * GesturePageLayout, navInFlight is never set, and the Effect-C settle drives
+ * morph with the transition enabled.
  *
  * Tests:
- *   - CALIBRATION (passes): documents the measured asymmetry - forward handoff
- *     has many mid-air frames (smooth), back handoff has zero (jump), and the
- *     internal probe shows slideT === 'none' at the back landing flush.
- *   - DEFECT (fails on current code): asserts the back descent animates like the
- *     forward descent (mid-air frames present, no single-frame jump) and that
- *     slideT is NOT suppressed at the landing flush. Guards the fix.
+ *   - CALIBRATION: documents the symmetry - the forward and the back landing
+ *     flushes both keep the CSS transition (slideT !== 'none'), sampled via the
+ *     internal per-flush probe window.__headerMorphProbe. navInFlight is asserted set
+ *     at the back landing as a witness that the slideT gate is independent of
+ *     the navInFlight signal.
+ *   - DEFECT: across multiple messages↔bookmarks cycles the back landing flush
+ *     must keep the transition (the gate never suppresses at a tab-root landing).
  */
 
 test.beforeEach(async ({ context }) => {
@@ -73,7 +63,7 @@ interface HeaderSnap {
 }
 
 interface HeaderLogWindow extends Window {
-	__headerLog?: HeaderSnap[];
+	__headerMorphProbe?: HeaderSnap[];
 }
 
 const CAP = 8000;
@@ -131,7 +121,7 @@ async function stopAndRead(page: Page): Promise<SettleFrame[]> {
 async function readHeaderLog(page: Page): Promise<HeaderSnap[]> {
 	return page.evaluate(() => {
 		const w = window as unknown as HeaderLogWindow;
-		return w.__headerLog ?? [];
+		return w.__headerMorphProbe ?? [];
 	});
 }
 
@@ -217,7 +207,7 @@ test.setTimeout(150_000);
 
 const BACK_CYCLES = Number(process.env.BACK_CYCLES ?? 6);
 
-test('CALIBRATION: forward descent keeps its transition, back descent suppresses it (documents the asymmetry)', async ({
+test('CALIBRATION: forward and back descents both keep their transition (documents the symmetry)', async ({
 	page
 }) => {
 	await page.goto('/messages/inbox');
@@ -245,10 +235,13 @@ test('CALIBRATION: forward descent keeps its transition, back descent suppresses
 
 	expect(fwdLanding, 'forward landing flush captured').toBeDefined();
 	expect(backLanding, 'back landing flush captured').toBeDefined();
-	// Documented current behaviour:
+	// Symmetry: forward and back both keep the CSS transition at the landing
+	// flush. navInFlight is set at the back landing (the slideT gate does not
+	// read navInFlight; executePendingNav sets it regardless) - asserted as a
+	// witness that the gate is independent of the navInFlight signal.
 	expect((fwdLanding as LandingFlush).slideNone, 'forward landing keeps the transition').toBe(false);
-	expect((backLanding as LandingFlush).slideNone, 'back landing suppresses the transition').toBe(true);
-	expect((backLanding as LandingFlush).navInFlight, 'back landing has navInFlight set').toBe(true);
+	expect((backLanding as LandingFlush).slideNone, 'back landing keeps the transition').toBe(false);
+	expect((backLanding as LandingFlush).navInFlight, 'back landing sets navInFlight').toBe(true);
 });
 
 test(`DEFECT: back descent from a GesturePageLayout deep page to a tab route must not suppress the transition at landing (${BACK_CYCLES} cycles)`, async ({
@@ -278,13 +271,30 @@ test(`DEFECT: back descent from a GesturePageLayout deep page to a tab route mus
 
 	expect(backIn.length, 'captured a back landing flush per cycle').toBeGreaterThanOrEqual(BACK_CYCLES - 1);
 
-	// Desired behaviour (fails on current code): at the landing flush where the
-	// layer commits to tabs-visible, the transition must NOT be suppressed. The
-	// current cross-tab-exit path sets navInFlight before landing, which makes
-	// slideT 'none' at exactly this flush, so the descent cannot animate.
+	// The slideT gate must not suppress at a back-to-tab landing flush, so the
+	// descent animates. navInFlight is set at every GPL exit landing; the slideT
+	// gate does not read it (the CALIBRATION `navInFlight===true` witness confirms
+	// the signal is set at the landing).
 	const suppressed = backIn.filter((l) => l.slideNone);
 	expect(
 		suppressed.length,
 		`back landing must keep slideT animated (not 'none'). ${suppressed.length}/${backIn.length} landings suppressed the transition`
 	).toBe(0);
+
+	// Trajectory: the descent must animate through real intermediate computed
+	// translateY values, not a single-frame jump. The `slideNone` check above
+	// proves the transition is enabled (the string is not 'none'); this proves the
+	// tabs layer actually moved. A regression where slideT stays '200ms' but the
+	// transform commits in a single frame (zero intermediate delta) leaves zero
+	// values in the (-38, -2) px band and fails here. `installSampler` records the
+	// live m42 every animation frame.
+	const intermediatePx = new Set<number>();
+	for (const f of frames) {
+		const px = f.rootComputedPx;
+		if (px !== null && px > -38 && px < -2) intermediatePx.add(Math.round(px));
+	}
+	expect(
+		intermediatePx.size,
+		`back descent must animate through intermediate computed translateY values (not a single-frame jump). distinct intermediate px: ${[...intermediatePx].sort((a, b) => a - b).join(',')}`
+	).toBeGreaterThanOrEqual(4);
 });

@@ -2,54 +2,41 @@ import { test, expect, type Page } from '@playwright/test';
 import { prepareContext, waitForHydration } from './helpers';
 
 /**
- * Hamburger flashes to an arrow for a few frames on /search -> / BROWSER back.
+ * Regression guard: the hamburger icon stays a hamburger across a /search <->
+ * tab-root transition. The Header `iconProgress` feeds `BurgerArrowIcon` and is
+ * frozen during a search transition:
  *
- * Reproduction (user report): mobile, land on /, tap the search button (SPA nav
- * to /search), then press the browser's BACK button to return to /. Most of the
- * time the header is fine, but intermittently the hamburger icon plays its
- * arrow morph for a few milliseconds and immediately snaps back to a hamburger.
+ *   const iconProgress = $derived((isSearch || searchScrubbing) ? 0 : 1 - morph);
  *
- * Suspected data flow (verified empirically by the sampler below, not asserted
- * a priori):
+ * `morph` is a shared signal: it drives the root<->deep VERTICAL morph (the
+ * icon's actual domain, where 1 - morph turns the hamburger into a back arrow
+ * on a deep page) AND the root<->search HORIZONTAL tap scrub (branch 1b of the
+ * `morph` derivation, which sequences the search track / scope-tab bar / search
+ * button). The icon must be inert during the horizontal scrub, so `iconProgress`
+ * freezes to 0 (hamburger) whenever `isSearch` (search-mode rest) OR
+ * `searchScrubbing` (the tap scrub in flight) holds. Both endpoints of a
+ * root<->search transition rest the icon at the hamburger, so freezing at 0 is
+ * correct for both the enter and the exit direction.
  *
- *   click search  : /  --(pushState)-->  /search
- *     Header.mode flips root -> search; isSearch = true.
- *     Effect E (root<->search scrub trigger) sees currentHasTabs flip
- *     (true -> false) AND isSearch flip (false -> true) and calls
- *     startSearchScrub(prevTabs ? 1 : 0, curTabs ? 1 : 0) = startSearchScrub(1, 0).
- *     `morph` scrubs 1 -> 0 over ~200ms, but isSearch is already true so
- *     iconProgress = isSearch ? 0 : 1 - morph = 0 the whole way. No flash.
+ * Detection: `BurgerArrowIcon` renders `<svg><defs><mask id="burger-arrow">
+ * <g style="...rotate(Xdeg)...">`; that group's inline `rotate(Xdeg)` equals
+ * `180 * iconProgress`, a direct read-out of the value under test. The sampler
+ * records it every animation frame across the navigation and the tests assert it
+ * never leaves the hamburger band (<= 15deg) on the tab-root side.
  *
- *   browser back  : /search --(popstate)-->  /
- *     Header.mode flips search -> root; isSearch = false.
- *     Effect E sees currentHasTabs flip (false -> true) AND isSearch flip
- *     (true -> false) and calls startSearchScrub(0, 1). `morph` scrubs 0 -> 1.
- *     At scrub progress 0 morph = 0, so iconProgress = 1 - 0 = 1 = ARROW.
- *     iconProgress then decays 1 -> 0 as morph scrubs 0 -> 1 (~200ms).
- *     So for the first ~100ms+ of the back transition the icon's TARGET is the
- *     back arrow; the CSS `transform 200ms ease-out` transition on the SVG
- *     group turns that into a brief visible rotate-then-return: the flash.
- *
- * The bug is ASYMMETRIC: only the search -> root direction exposes iconProgress
- * to the scrub, because the forward direction forces iconProgress to 0 via the
- * `isSearch ? 0` short-circuit before the scrub can drive it. The ENTER test
- * below guards that asymmetry (forward must NOT flash); the DEFECT test below
- * reproduces the back-direction flash.
- *
- * Detection: the BurgerArrowIcon renders one `<svg><defs><mask id="burger-
- * arrow"><g style="...rotate(Xdeg)...">`. That group's inline `rotate(Xdeg)` IS
- * `180 * iconProgress` (p in the atom), so it is a direct read-out of the value
- * under test. We sample it every animation frame across the back navigation and
- * assert it never leaves the hamburger band (X ~= 0) while we are on /.
+ * Coverage: CALIBRATION (harness reach), REGRESSION (browser-back /search -> /),
+ * INTERMITTENCY (a fresh-load loop; the icon must stay down on EVERY iteration),
+ * ASYMMETRY (forward tap / -> /search), and DESTINATIONS (parametrized over the
+ * three tab roots /, /activity, /messages/inbox).
  */
 
 interface IconFrame {
 	t: number;
 	path: string;
-	/** Inline `rotate(Xdeg)` of the mask group = 180 * iconProgress (the TARGET).
+	/** Inline `rotate(Xdeg)` of the mask group = 180 * iconProgress (the target).
 	 * 0 = hamburger, 180 = back arrow. Null when the icon is not in the DOM. */
 	targetRot: number | null;
-	/** Computed (painted) rotation parsed from getComputedStyle's matrix - the
+	/** Computed (painted) rotation parsed from getComputedStyle's matrix, the
 	 * actual on-screen rotation mid-transition. Null when unreadable. */
 	paintedRot: number | null;
 	/** Header search track translateX (px). ~0 at a tab root, ~-half-viewport in
@@ -75,6 +62,7 @@ interface SamplerOpts {
 const GROUP_SELECTOR = 'header svg mask g';
 const TRACK_SELECTOR = 'header div.flex.w-\\[200\\%\\]';
 const SAMPLE_WINDOW_MS = 1800;
+const HAMBURGER_BAND_DEG = 15;
 
 async function installIconSampler(page: Page): Promise<void> {
 	await page.evaluate(
@@ -141,81 +129,75 @@ async function readIconLog(page: Page): Promise<IconFrame[]> {
 	});
 }
 
-/** Max icon target rotation (deg) observed on the root `/` after leaving /search. */
+/** Max icon target rotation (deg) observed on `destPath` across the log. */
 interface FlashSummary {
-	maxTargetOnRoot: number;
-	maxPaintedOnRoot: number;
+	maxTargetOnDest: number;
+	maxPaintedOnDest: number;
 	maxTargetOverall: number;
-	rootFrameCount: number;
-	/** First root frame whose target rotation left the hamburger band, if any. */
+	destFrameCount: number;
+	/** First dest frame whose target rotation left the hamburger band, if any. */
 	firstFlashT: number | null;
-	/** ms the target rotation stayed above 30deg on root (the visible flash span). */
+	/** ms the target rotation stayed above 30deg on dest (the visible flash span). */
 	flashSpanMs: number;
 }
 
-function summarizeFlash(log: IconFrame[]): FlashSummary {
-	let maxTargetOnRoot = 0;
-	let maxPaintedOnRoot = 0;
+function summarizeFlash(log: IconFrame[], destPath: string): FlashSummary {
+	let maxTargetOnDest = 0;
+	let maxPaintedOnDest = 0;
 	let maxTargetOverall = 0;
-	let rootFrameCount = 0;
+	let destFrameCount = 0;
 	let firstFlashT: number | null = null;
 	let lastFlashT: number | null = null;
 	for (const f of log) {
 		const t = f.targetRot ?? 0;
 		if (t > maxTargetOverall) maxTargetOverall = t;
-		if (f.path !== '/') continue;
-		rootFrameCount++;
-		if (t > maxTargetOnRoot) maxTargetOnRoot = t;
+		if (f.path !== destPath) continue;
+		destFrameCount++;
+		if (t > maxTargetOnDest) maxTargetOnDest = t;
 		const p = f.paintedRot ?? 0;
-		if (p > maxPaintedOnRoot) maxPaintedOnRoot = p;
+		if (p > maxPaintedOnDest) maxPaintedOnDest = p;
 		if (t > 30) {
 			if (firstFlashT === null) firstFlashT = f.t;
 			lastFlashT = f.t;
 		}
 	}
 	return {
-		maxTargetOnRoot,
-		maxPaintedOnRoot,
+		maxTargetOnDest,
+		maxPaintedOnDest,
 		maxTargetOverall,
-		rootFrameCount,
+		destFrameCount,
 		firstFlashT,
 		flashSpanMs: firstFlashT !== null && lastFlashT !== null ? lastFlashT - firstFlashT : 0
 	};
 }
 
-/** Hard-load / and wait for the SPA to be ready. */
-async function loadRoot(page: Page): Promise<void> {
-	await page.goto('/');
+/** Hard-load a tab root and wait for the SPA to be ready. */
+async function loadTabRoot(page: Page, href: string): Promise<void> {
+	await page.goto(href);
 	await waitForHydration(page);
 }
 
-/** SPA-navigate from / to /search (no hard reload). Assumes the page is on /. */
+/** SPA-navigate to /search via the header search button. Assumes a tab root. */
 async function enterSearch(page: Page): Promise<void> {
 	await page.locator('header a[href="/search"][aria-label]').click();
 	await page.waitForURL('**/search', { timeout: 8000 });
 	// Let the entry scrub + CSS transitions fully settle so the back nav starts
-	// from the steady search state (the realistic precondition for the flash).
+	// from the steady search state.
 	await page.waitForTimeout(450);
 }
 
 /**
- * Why a warm-up: the flash is gated by Effect E's `if (settling) return` guard.
- * A lingering deep-title settle (armed by the initial hard load) holds
- * `settling === true` at the FIRST back moment, which makes Effect E skip
- * `startSearchScrub` so `morph` never scrubs 0 -> 1 and the icon stays at
- * `iconProgress = 0` (hamburger) the whole way: NO flash, by accident. Once the
- * title state machine is idle (`settling === false`) the guard passes and every
- * /search -> / back scrubs `morph` 0 -> 1, driving `iconProgress` 1 -> 0: the
- * flash. This is the exact mechanism behind the user's "intermittent" report.
- * The warm-up runs one throwaway / -> /search -> back over SPA nav (no hard
- * reload, which would re-arm the masking settle) so the title state machine is
- * idle for the instrumented back that follows, making the defect reproducible
- * every run instead of only on the post-settle iterations.
+ * A warm-up back cycle from `destHref`. The title state machine can hold a
+ * settle across the first /search -> dest back (Effect E's `if (settling) return`
+ * guard then skips the scrub). Running one throwaway cycle over SPA nav (no hard
+ * reload) idles the state machine so the instrumented back exercises the scrub
+ * path deterministically. The invariant must hold on the first back AND on every
+ * subsequent back, so the INTERMITTENCY test (no warm-up) is the stricter guard.
  */
-async function warmUpOnce(page: Page): Promise<void> {
+async function warmUpFrom(page: Page, destHref: string): Promise<void> {
 	await enterSearch(page);
 	await page.goBack();
-	await page.waitForURL('**/', { timeout: 8000 });
+	await page.waitForURL(`**${destHref === '/' ? '/' : destHref}`, { timeout: 8000 });
 	await page.waitForTimeout(500);
 }
 
@@ -224,13 +206,13 @@ test.beforeEach(async ({ context }) => {
 });
 
 // CALIBRATION: prove the harness reaches /search, the browser back returns to /,
-// and the sampler caught frames on both pages. If this fails the defect
-// assertion below is meaningless (the back nav never landed, or the icon was
+// and the sampler caught frames on both pages. If this fails the regression
+// assertions below are meaningless (the back nav never landed, or the icon was
 // never sampled on /).
 test('CALIBRATION: / -> /search -> browser-back -> / reaches / with the icon sampler live', async ({
 	page
 }) => {
-	await loadRoot(page);
+	await loadTabRoot(page, '/');
 	await enterSearch(page);
 
 	await installIconSampler(page);
@@ -251,19 +233,15 @@ test('CALIBRATION: / -> /search -> browser-back -> / reaches / with the icon sam
 	expect(new URL(page.url()).pathname).toBe('/');
 });
 
-// DEFECT: on the browser back /search -> / the hamburger must STAY a hamburger.
-// It must not flash toward the back arrow. The icon target rotation (180 *
-// iconProgress) must remain in the hamburger band (<= 15deg) for every frame on
-// /. In the current build the search-scrub drives `morph` 0 -> 1 over ~200ms,
-// and `iconProgress = isSearch ? 0 : 1 - morph` follows it 1 -> 0, so the first
-// scrub frame paints `iconProgress = 1` (full arrow) and decays: the target
-// rotation peaks near 180deg. The warm-up idles the title state machine first so
-// the flash reproduces every run.
-test('DEFECT: browser-back /search -> / must not flash the hamburger into an arrow', async ({
+// REGRESSION: on the browser back /search -> / the hamburger must stay a
+// hamburger. The icon target rotation (180 * iconProgress) must remain in the
+// hamburger band (<= 15deg) for every frame on /. The warm-up idles the title
+// state machine first so the scrub path is exercised deterministically.
+test('REGRESSION: browser-back /search -> / keeps the hamburger down (no arrow flash)', async ({
 	page
 }) => {
-	await loadRoot(page);
-	await warmUpOnce(page);
+	await loadTabRoot(page, '/');
+	await warmUpFrom(page, '/');
 	await enterSearch(page);
 
 	await installIconSampler(page);
@@ -273,41 +251,39 @@ test('DEFECT: browser-back /search -> / must not flash the hamburger into an arr
 	await page.waitForTimeout(700);
 
 	const log = await readIconLog(page);
-	const s = summarizeFlash(log);
+	const s = summarizeFlash(log, '/');
 
 	console.log(
-		'BACK /search -> / flash summary:',
-		`maxTargetOnRoot=${s.maxTargetOnRoot.toFixed(1)}deg`,
-		`maxPaintedOnRoot=${s.maxPaintedOnRoot.toFixed(1)}deg`,
+		'BACK /search -> / summary:',
+		`maxTargetOnDest=${s.maxTargetOnDest.toFixed(1)}deg`,
+		`maxPaintedOnDest=${s.maxPaintedOnDest.toFixed(1)}deg`,
 		`flashSpan=${s.flashSpanMs}ms`,
-		`rootFrames=${s.rootFrameCount}`,
+		`destFrames=${s.destFrameCount}`,
 		s.firstFlashT !== null ? `firstFlash@${s.firstFlashT}ms` : 'noFlash'
 	);
 
 	expect(
-		s.rootFrameCount,
+		s.destFrameCount,
 		'precondition: the sampler captured the icon on / after the back'
 	).toBeGreaterThan(10);
 	expect(
-		s.maxTargetOnRoot,
-		`hamburger flashed to an arrow on /search -> / back. ` +
-			`maxTargetOnRoot=${s.maxTargetOnRoot.toFixed(1)}deg (180 = full arrow), ` +
-			`maxPaintedOnRoot=${s.maxPaintedOnRoot.toFixed(1)}deg, ` +
+		s.maxTargetOnDest,
+		`icon left the hamburger band on /search -> / back. ` +
+			`maxTargetOnDest=${s.maxTargetOnDest.toFixed(1)}deg (180 = full arrow), ` +
+			`maxPaintedOnDest=${s.maxPaintedOnDest.toFixed(1)}deg, ` +
 			`flashSpan=${s.flashSpanMs}ms. ` +
-			`The icon target rotation must stay in the hamburger band (<=15deg) the whole time.`
-	).toBeLessThanOrEqual(15);
+			`The icon target rotation must stay <= ${HAMBURGER_BAND_DEG}deg the whole time.`
+	).toBeLessThanOrEqual(HAMBURGER_BAND_DEG);
 });
 
-// INTERMITTENCY: the user reports the flash as intermittent. It is NOT random:
-// the first back after a fresh page load is masked by a lingering title settle
-// (see `warmUpOnce`), and every subsequent back flashes. Repeat the cycle from a
-// fresh load and the per-iteration array shows exactly that signature: iteration
-// 0 clean, iterations 1+ flash. A fix must bring every iteration into the
-// hamburger band.
-test('INTERMITTENCY: first back after load is masked, subsequent backs flash (reproduces the user report)', async ({
+// INTERMITTENCY: the icon must stay down on EVERY iteration of a fresh-load
+// loop, including the first back (which a lingering settle can make the scrub
+// skip). Repeat the cycle from a fresh load and assert every iteration stays in
+// the hamburger band.
+test('INTERMITTENCY: every /search -> / back in a fresh-load loop keeps the hamburger down', async ({
 	page
 }) => {
-	await loadRoot(page);
+	await loadTabRoot(page, '/');
 
 	const perIterMax: number[] = [];
 	const ITERS = 5;
@@ -319,28 +295,24 @@ test('INTERMITTENCY: first back after load is masked, subsequent backs flash (re
 		await page.waitForURL('**/', { timeout: 8000 });
 		await page.waitForTimeout(500);
 		const log = await readIconLog(page);
-		const s = summarizeFlash(log);
-		perIterMax.push(s.maxTargetOnRoot);
+		const s = summarizeFlash(log, '/');
+		perIterMax.push(s.maxTargetOnDest);
 	}
 
-	console.log('per-iteration maxTargetOnRoot (deg):', perIterMax.map((v) => v.toFixed(1)));
+	console.log('per-iteration maxTargetOnDest (deg):', perIterMax.map((v) => v.toFixed(1)));
 
 	expect(
-		perIterMax.every((v) => v <= 15),
-		`flash reproduced on ${perIterMax.filter((v) => v > 15).length}/${ITERS} iterations. ` +
-			`per-iter maxTargetOnRoot=${perIterMax.map((v) => v.toFixed(1)).join(', ')}deg`
+		perIterMax.every((v) => v <= HAMBURGER_BAND_DEG),
+		`icon left the band on ${perIterMax.filter((v) => v > HAMBURGER_BAND_DEG).length}/${ITERS} iterations. ` +
+			`per-iter maxTargetOnDest=${perIterMax.map((v) => v.toFixed(1)).join(', ')}deg`
 	).toBe(true);
 });
 
-// ASYMMETRY: the forward direction / -> /search must NOT flash. `isSearch`
-// flips true in the same flush as the scrub starts, so the `isSearch ? 0` short-
-// circuit forces `iconProgress = 0` before the scrub can drive it. This documents
-// that the defect is specific to the search -> root direction and guards the
-// forward side against a regression that symmetrises it.
-test('ASYMMETRY: forward tap / -> /search does NOT flash the hamburger (reference, correct)', async ({
-	page
-}) => {
-	await loadRoot(page);
+// ASYMMETRY: the forward direction / -> /search must keep the hamburger down.
+// `isSearch` flips true in the same flush as the scrub starts, so the freeze
+// holds the icon at 0 throughout. Guards the forward side.
+test('ASYMMETRY: forward tap / -> /search keeps the hamburger down', async ({ page }) => {
+	await loadTabRoot(page, '/');
 
 	await installIconSampler(page);
 	await enterSearch(page);
@@ -353,6 +325,48 @@ test('ASYMMETRY: forward tap / -> /search does NOT flash the hamburger (referenc
 
 	expect(
 		maxTarget,
-		`forward / -> /search must keep the icon a hamburger (<=15deg), got ${maxTarget.toFixed(1)}deg`
-	).toBeLessThanOrEqual(15);
+		`forward / -> /search must keep the icon a hamburger (<= ${HAMBURGER_BAND_DEG}deg), got ${maxTarget.toFixed(1)}deg`
+	).toBeLessThanOrEqual(HAMBURGER_BAND_DEG);
+});
+
+// DESTINATIONS: the freeze is destination-agnostic. Effect E fires the scrub on
+// any currentHasTabs flip paired with an isSearch flip, so /search -> /activity
+// and /search -> /messages/inbox traverse the same path as /search -> /. Each
+// tab root is exercised: land on it, enter search, browser-back, assert the icon
+// stays in the hamburger band on that destination.
+test.describe('DESTINATIONS: /search -> each tab root keeps the hamburger down', () => {
+	for (const dest of ['/activity', '/messages/inbox']) {
+		test(`REGRESSION: browser-back /search -> ${dest} keeps the hamburger down`, async ({
+			page
+		}) => {
+			await loadTabRoot(page, dest);
+			await warmUpFrom(page, dest);
+			await enterSearch(page);
+
+			await installIconSampler(page);
+			await page.goBack();
+			await page.waitForURL(`**${dest}`, { timeout: 8000 });
+			await page.waitForTimeout(700);
+
+			const log = await readIconLog(page);
+			const s = summarizeFlash(log, dest);
+
+			console.log(
+				`BACK /search -> ${dest} summary:`,
+				`maxTargetOnDest=${s.maxTargetOnDest.toFixed(1)}deg`,
+				`destFrames=${s.destFrameCount}`
+			);
+
+			expect(
+				s.destFrameCount,
+				`precondition: the sampler captured the icon on ${dest} after the back`
+			).toBeGreaterThan(10);
+			expect(
+				s.maxTargetOnDest,
+				`icon left the hamburger band on /search -> ${dest} back. ` +
+					`maxTargetOnDest=${s.maxTargetOnDest.toFixed(1)}deg. ` +
+					`The icon target rotation must stay <= ${HAMBURGER_BAND_DEG}deg.`
+			).toBeLessThanOrEqual(HAMBURGER_BAND_DEG);
+		});
+	}
 });
