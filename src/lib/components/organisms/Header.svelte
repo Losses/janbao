@@ -190,10 +190,18 @@
 	// Freeze the icon morph during a search transition so the hamburger does not
 	// morph into an arrow while it is sliding off-screen.
 	const iconProgress = $derived(isSearch ? 0 : 1 - morph);
+	// The layer transition is suppressed only during a live drag or a root↔search
+	// tap scrub, where `morph` is driven 1:1 by the finger / the scrubber and a CSS
+	// transition would fight it. It is not suppressed during an in-flight nav: the
+	// gesture path is owned by `settling` (Effect D holds settling=true through the
+	// navInFlight window, so the settle driver animates the morph), and on a
+	// click/tab-tap back-to-tab the morph rest value flips at the landing flush and
+	// must animate (the "Tab 下沉" descent). navInFlight is deliberately not part
+	// of the gate: it is set at every GPL exit landing (same-panel and cross-tab
+	// alike), so gating on it would suppress exactly the descent this layer exists
+	// to play. See docs/DV12-Plan.md.
 	const slideT = $derived(
-		dragging || searchScrubbing || (navStore.navInFlight && !settling)
-			? 'none'
-			: 'transform 200ms ease-out, opacity 200ms ease-out'
+		dragging || searchScrubbing ? 'none' : 'transform 200ms ease-out, opacity 200ms ease-out'
 	);
 	let settleRafId: number | undefined;
 	let settleTimeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -540,15 +548,15 @@
 	);
 
 	// DEV-ONLY probe. Reads every morph-state dep so Svelte re-runs it on each
-	// flush they change, pushing a snapshot to window.__headerLog regardless of
+	// flush they change, pushing a snapshot to window.__headerMorphProbe regardless of
 	// whether a paint fires between flushes. This captures the slideT/navInFlight
 	// values at the exact flush a tabs-layer jump is committed, which a rAF
 	// sampler misses when the navigation commit blocks the main thread for a few
 	// frames. Gated on DEV + browser so it never ships.
 	$effect(() => {
 		if (!import.meta.env.DEV || !browser) return;
-		if (!window.__headerLog) window.__headerLog = [];
-		const log = window.__headerLog;
+		if (!window.__headerMorphProbe) window.__headerMorphProbe = [];
+		const log = window.__headerMorphProbe;
 		const snap: HeaderStateSnapshot = {
 			t: performance.now(),
 			path: currentPath,
