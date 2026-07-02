@@ -1015,7 +1015,7 @@
 		{#if hasRight && isMobile && !swipeNeedsLoadingAtStart}
 			<section
 				bind:this={rightEl}
-				data-preview-tab={rightPreviewTab}
+				data-tab-panel={rightPreviewTab}
 				class="shrink-0 scroll-pane md:hidden"
 				style={rightStyle}
 				onscroll={(e) => {
@@ -1025,9 +1025,11 @@
 				}}
 			>
 				{#if isRightTargetTabRoot}
-					{#if right}
-						{@render right()}
-					{/if}
+					<div class="gpl-card">
+						{#if right}
+							{@render right()}
+						{/if}
+					</div>
 				{:else}
 					<div class="gpl-card">
 						{#if right}

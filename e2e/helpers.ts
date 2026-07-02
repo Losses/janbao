@@ -507,11 +507,10 @@ export async function captureExitPreview(
 				const inter = Math.max(0, Math.min(rect.right, vw) - Math.max(rect.left, 0));
 				const cov = vw > 0 ? inter / vw : 0;
 				if (cov <= 0.4) continue;
-				// Identity comes from the section's `data-preview-tab` attribute
-				// (set by GesturePageLayout), not from DOM content. null means the
-				// panel is not a tab list; record it so a wrong non-tab preview
-				// still fails the test (null !== any target tab).
-				const key = s.getAttribute('data-preview-tab') as PreviewTab;
+				// Identity: `data-tab-panel` (MobileTabPager + GesturePageLayout
+				// preview sections), or `data-preview-tab` (other sections).
+				const key = (s.getAttribute('data-tab-panel') ??
+					s.getAttribute('data-preview-tab')) as PreviewTab;
 				if (!state.seen.includes(key)) state.seen.push(key);
 				if (cov > state.maxCov) {
 					state.maxCov = cov;
