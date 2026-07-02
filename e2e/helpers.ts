@@ -550,3 +550,299 @@ export async function captureExitPreview(
 		};
 	});
 }
+
+// --- FAB route-transition capture -------------------------------------------
+// Samples `[data-testid="fab"]`'s computed scale and whether the
+// `.fab-transition` class is active, each frame for ~700ms across `trigger`.
+// The FAB atom binds `transform: scale(s) translateY(y)` and adds
+// `.fab-transition` (transform 200ms ease-out) only while
+// FloatingActionButtonLayer's `discreteNavInFlight` latch is armed, so a route
+// swap that eases the scale shows many distinct descending frames WITH the
+// class active; a snap shows a one-frame jump with the class absent. This is
+// the only behavioural signal that the FAB scale-out played (the FAB atom
+// carries no transitionend the test can await).
+
+interface FabFrame {
+	t: number;
+	scale: number;
+	tr: boolean;
+}
+interface FabSamplerWindow extends Window {
+	__fabFrames?: { frames: FabFrame[]; done: boolean };
+}
+
+export interface FabTransitionCapture {
+	animated: boolean;
+	transitionFrames: number;
+	delta: number;
+	firstScale: number | null;
+	lastScale: number | null;
+	sampleCount: number;
+}
+
+export async function captureFabTransition(
+	page: Page,
+	trigger: () => Promise<void>
+): Promise<FabTransitionCapture> {
+	await page.evaluate(() => {
+		const w = window as unknown as FabSamplerWindow;
+		const state = { frames: [] as FabFrame[], done: false };
+		w.__fabFrames = state;
+		const start = performance.now();
+		const tick = (): void => {
+			const el = document.querySelector('[data-testid="fab"]') as HTMLElement | null;
+			if (el) {
+				const m = getComputedStyle(el).transform.match(/matrix\(([^)]+)\)/);
+				const scale = m ? Number(m[1].split(',')[0]) : 1;
+				state.frames.push({
+					t: Math.round(performance.now() - start),
+					scale,
+					tr: el.classList.contains('fab-transition')
+				});
+			}
+			if (performance.now() - start > 700) {
+				state.done = true;
+				return;
+			}
+			requestAnimationFrame(tick);
+		};
+		requestAnimationFrame(tick);
+	});
+	await trigger();
+	await page.waitForFunction(
+		() => (window as unknown as FabSamplerWindow).__fabFrames?.done === true,
+		{ timeout: 5000 }
+	);
+	return page.evaluate(() => {
+		const f = (window as unknown as FabSamplerWindow).__fabFrames!.frames;
+		const scales = f.map((x) => x.scale).filter(Number.isFinite);
+		const delta = scales.length ? Math.max(...scales) - Math.min(...scales) : 0;
+		return {
+			animated: delta > 0.1,
+			transitionFrames: f.filter((x) => x.tr).length,
+			delta,
+			firstScale: scales[0] ?? null,
+			lastScale: scales[scales.length - 1] ?? null,
+			sampleCount: f.length
+		};
+	});
+}
+
+// --- MobileTabPager switch capture ------------------------------------------
+// Samples the pager track's m41 (px) plus the `data-tab-panel` of the section
+// covering the viewport centre, each frame across `trigger`. A clean tab switch
+// slides the track through intermediate m41 values and the centered-panel
+// sequence runs source -> neighbours -> target; a snap jumps m41 in one frame
+// and the centered panel flips source -> target with nothing between.
+
+interface PagerFrame {
+	t: number;
+	m41: number;
+	center: string | null;
+}
+interface PagerSamplerWindow extends Window {
+	__pagerFrames?: { frames: PagerFrame[]; done: boolean };
+}
+
+export interface PagerSwitchCapture {
+	animated: boolean;
+	delta: number;
+	seenPanels: (string | null)[];
+	firstPanel: string | null;
+	lastPanel: string | null;
+	sampleCount: number;
+}
+
+export async function capturePagerSwitch(
+	page: Page,
+	trigger: () => Promise<void>
+): Promise<PagerSwitchCapture> {
+	await page.evaluate(() => {
+		const w = window as unknown as PagerSamplerWindow;
+		const state = { frames: [] as PagerFrame[], done: false };
+		w.__pagerFrames = state;
+		const start = performance.now();
+		const centerPanel = (): string | null => {
+			const vw = window.innerWidth;
+			let best: string | null = null;
+			let bestCov = 0;
+			for (const s of Array.from(
+				document.querySelectorAll('.mobile-tab-pager-viewport section')
+			)) {
+				const r = (s as HTMLElement).getBoundingClientRect();
+				const cov = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
+				if (cov > bestCov) {
+					bestCov = cov;
+					best = s.getAttribute('data-tab-panel');
+				}
+			}
+			return best;
+		};
+		const tick = (): void => {
+			const track = document.querySelector('.mobile-tab-pager-viewport > div') as
+				| HTMLElement
+				| null;
+			if (track) {
+				let m41 = 0;
+				try {
+					m41 = new DOMMatrix(getComputedStyle(track).transform).m41;
+				} catch {
+					m41 = 0;
+				}
+				state.frames.push({
+					t: Math.round(performance.now() - start),
+					m41: Math.round(m41),
+					center: centerPanel()
+				});
+			}
+			if (performance.now() - start > 700) {
+				state.done = true;
+				return;
+			}
+			requestAnimationFrame(tick);
+		};
+		requestAnimationFrame(tick);
+	});
+	await trigger();
+	await page.waitForFunction(
+		() => (window as unknown as PagerSamplerWindow).__pagerFrames?.done === true,
+		{ timeout: 5000 }
+	);
+	return page.evaluate(() => {
+		const f = (window as unknown as PagerSamplerWindow).__pagerFrames!.frames;
+		const m41s = f.map((x) => x.m41);
+		const delta = m41s.length ? Math.max(...m41s) - Math.min(...m41s) : 0;
+		const seen: (string | null)[] = [];
+		for (const p of f.map((x) => x.center)) {
+			if (seen.length === 0 || seen[seen.length - 1] !== p) seen.push(p);
+		}
+		return {
+			animated: delta > 50,
+			delta,
+			seenPanels: seen,
+			firstPanel: f[0]?.center ?? null,
+			lastPanel: f[f.length - 1]?.center ?? null,
+			sampleCount: f.length
+		};
+	});
+}
+
+// --- GesturePageLayout track-presence capture ------------------------------
+// Polls `.detail-scroll-pane` (the GPL centre panel, present only when a
+// GesturePageLayout is mounted) each frame for ~700ms across `trigger`. The
+// push animation (shouldAnimateEnter) needs that track to slide, so a route
+// that never mounts a GPL (the compose routes /post/discussion, /messages/new,
+// which render DualColumnLayout only) records zero track frames = no push
+// animation. Contrasts with thread/deep routes where the track mounts and the
+// enter slide plays (use captureEnterAnimation for the slide magnitude there).
+
+interface GplTrackFrame {
+	t: number;
+	hasTrack: boolean;
+}
+interface GplTrackWindow extends Window {
+	__gplTrack?: { frames: GplTrackFrame[]; done: boolean };
+}
+
+export interface GplTrackPresenceCapture {
+	sampleCount: number;
+	trackFrames: number;
+	trackEverMounted: boolean;
+}
+
+export async function captureGplTrackPresence(
+	page: Page,
+	trigger: () => Promise<void>
+): Promise<GplTrackPresenceCapture> {
+	await page.evaluate(() => {
+		const w = window as unknown as GplTrackWindow;
+		w.__gplTrack = { frames: [], done: false };
+		const start = performance.now();
+		const tick = (): void => {
+			w.__gplTrack!.frames.push({
+				t: Math.round(performance.now() - start),
+				hasTrack: !!document.querySelector('.detail-scroll-pane')
+			});
+			if (performance.now() - start > 700) {
+				w.__gplTrack!.done = true;
+				return;
+			}
+			requestAnimationFrame(tick);
+		};
+		requestAnimationFrame(tick);
+	});
+	await trigger();
+	await page.waitForFunction(
+		() => (window as unknown as GplTrackWindow).__gplTrack?.done === true,
+		{ timeout: 5000 }
+	);
+	return page.evaluate(() => {
+		const f = (window as unknown as GplTrackWindow).__gplTrack!.frames;
+		const trackFrames = f.filter((x) => x.hasTrack).length;
+		return {
+			sampleCount: f.length,
+			trackFrames,
+			trackEverMounted: trackFrames > 0
+		};
+	});
+}
+
+// --- GPL back-swipe chip-mode capture ---------------------------------------
+// Drives a partial (held) rightward back-swipe via CDP touch from `startX` to
+// `endX`, holds one frame, snapshots whether GesturePageLayout entered chip
+// mode (the `.loading-overlay` with its tanh-clamped width + base-200 bg
+// stands in for an un-previewable back target), then releases. A real preview
+// renders a sibling `<section data-tab-panel>`; chip mode renders the overlay
+// with NO sibling section. The overlay width is clamped to ~0.3 * viewport by
+// the tanh damper, so a width well under the drag distance signals chip mode.
+
+export interface GplChipSwipeCapture {
+	chipMode: boolean;
+	overlayWidth: number;
+	overlayBg: string | null;
+	previewPanel: string | null;
+	chipText: string | null;
+	trackM41: number | null;
+}
+
+export async function captureGplBackSwipe(
+	page: Page,
+	startX = 120,
+	endX = 240
+): Promise<GplChipSwipeCapture> {
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', {
+		enabled: true,
+		maxTouchPoints: 5
+	});
+	const y = 400;
+	const disp = (type: 'touchStart' | 'touchMove' | 'touchEnd', x: number, state: string) =>
+		client.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: [{ state, x, y, id: 1 }] as unknown as never,
+			modifiers: 0,
+			timestamp: 0
+		});
+	await disp('touchStart', startX, 'touchPressed');
+	for (let x = startX + 15; x <= endX; x += 15) await disp('touchMove', x, 'touchMoved');
+	await page.waitForTimeout(250);
+	const snap = await page.evaluate(() => {
+		const centre = document.querySelector('.detail-scroll-pane');
+		const track = centre?.parentElement as HTMLElement | null;
+		const overlay = document.querySelector('.loading-overlay') as HTMLElement | null;
+		const leftSection = centre?.parentElement?.querySelector(
+			'section:not(.detail-scroll-pane)'
+		) as HTMLElement | null;
+		return {
+			chipMode: !!overlay,
+			overlayWidth: overlay ? Math.round(overlay.getBoundingClientRect().width) : 0,
+			overlayBg: overlay ? getComputedStyle(overlay).backgroundColor : null,
+			previewPanel: leftSection?.getAttribute('data-tab-panel') ?? null,
+			chipText: overlay?.querySelector('span')?.textContent ?? null,
+			trackM41: track ? Math.round(new DOMMatrix(getComputedStyle(track).transform).m41) : null
+		};
+	});
+	await disp('touchEnd', endX, 'touchReleased');
+	await client.detach();
+	return snap;
+}
