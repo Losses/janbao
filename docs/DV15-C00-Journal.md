@@ -103,9 +103,14 @@ similarity-ts at baseline.
 - `bun run check` (svelte-check + tsc): **0 errors / 0 warnings** (1430 files).
 - prettier / eslint / similarity-ts on the DV15 files: **clean**; similarity-ts at
   baseline (47 pairs, no new duplicate).
-- Header-neighbour regression sweep: **15/15 pass** (`header-tab-descent-cross-tab-exit`,
-  `header-tabs-replay`, `header-title-replay`, `search-back-hamburger-flash`,
-  `search-enter-exit-asymmetry`).
+- Header + gesture/pager/tab regression sweep: **58/58 pass across 11 specs** -
+  `header-tab-descent-cross-tab-exit`, `header-tabs-replay`, `header-title-replay`,
+  `search-back-hamburger-flash`, `search-enter-exit-asymmetry` (15), plus the
+  full gesture/pager/tab set `swipe-back-pill-flicker`, `tab-exit-preview`,
+  `enter-animation`, `backtarget`, `swipe-forward-back-deep-page`,
+  `tab-click-transition` (43). (The initial journal recorded only the 5-spec
+  Header-neighbour subset; the broader sweep was run after - the structural
+  change touches the whole settle state machine, so the full surface was swept.)
 
 ## Verify
 
