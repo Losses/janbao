@@ -38,11 +38,9 @@
 
 	const listCache = getListCacheStore();
 
-	// SvelteKit snapshot: capture/restore the list scroll position per-route.
-	// The restore callback sets a $state that an $effect applies: $effects run
-	// after render but before the browser paints, so the scroll is set BEFORE the
-	// user sees the top. This replaces the late afterNavigate restore (which fired
-	// after SvelteKit's own top-scroll, causing the ~90ms top-flash).
+	// SvelteKit snapshot: capture/restore the list scroll position per-route on
+	// desktop (the window scrolls there). Under fixed-viewport (mobile) the window
+	// is locked, so this is mobile-dead; MobileTabPager restores via pageScrollStore.
 	let restoredScrollY = $state(0);
 	export const snapshot = {
 		capture: () => (typeof window !== 'undefined' ? window.scrollY : 0),

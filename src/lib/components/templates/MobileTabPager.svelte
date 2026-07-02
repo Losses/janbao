@@ -152,9 +152,7 @@
 		// (svelte-ondestroy-runs-in-ssr memory) and the AppShell layer's pattern.
 		if (!browser) return;
 		viewportLock.release();
-		scrollChrome.releaseContainer(
-			activeIndex === 0 ? section0El : activeIndex === 1 ? section1El : section2El
-		);
+		scrollChrome.setScrollContainer(null);
 		if (trackEl) clearActiveGestureTrack();
 	});
 

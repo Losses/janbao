@@ -134,7 +134,7 @@ test.describe('Swipe Back Preview Bug from Bookmarks to Inbox', () => {
 
 		console.log('Landed metrics captured on /messages/inbox:', landedMetrics);
 
-		// Assert that fixed-viewport is removed after landing
+		// Assert that fixed-viewport is present after landing (the pager acquires it)
 		expect(landedMetrics.htmlHasFixedViewport).toBe(true);
 		expect(landedMetrics.hasTitle).toBe(true);
 		expect(landedMetrics.titleDisplay).not.toBe('none');

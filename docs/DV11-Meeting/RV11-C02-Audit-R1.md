@@ -18,9 +18,9 @@ Result line: **not 5/5 acceptable → revised.**
 
 All three changes_requested auditors flagged the same class: `bun run lint` exits 1 on DV11 source files.
 
-- **Unused `beforeNavigate` import** (`(tabs)/+layout.svelte`) — Phase 4 removed the capture block that consumed it but left the import. Fix: drop `beforeNavigate` from the import.
-- **Inline type in `viewport-lock.svelte.ts`** — `{ acquire: () => void; release: () => void }` violates the zero-tolerance no-inline-typing rule. Fix: named `interface ViewportLock` with `VoidHandler` from `$lib/types/handlers`.
-- **Em dashes in new comments** (`GesturePageLayout.svelte`, `MobileTabPager.svelte`) — banned by `local/no-emdash`. Fix: replace with hyphens.
+- **Unused `beforeNavigate` import** (`(tabs)/+layout.svelte`) - Phase 4 removed the capture block that consumed it but left the import. Fix: drop `beforeNavigate` from the import.
+- **Inline type in `viewport-lock.svelte.ts`** - `{ acquire: () => void; release: () => void }` violates the zero-tolerance no-inline-typing rule. Fix: named `interface ViewportLock` with `VoidHandler` from `$lib/types/handlers`.
+- **Em dashes in new comments** (`GesturePageLayout.svelte`, `MobileTabPager.svelte`) - banned by `local/no-emdash`. Fix: replace with hyphens.
 - **Prettier wrapping** (`MobileTabPager.svelte` `onMount` ternary). Fix: `prettier --write`.
 
 **All four fixed in this revision.** DV11 source files now pass eslint (0 errors) + prettier (all matched files) + svelte-check (0/0, 1431 files). The `bun run lint` exit 1 is only `docs/*.md` (prettier markdown) + `src/app.css` (pre-existing since DV09).
@@ -31,8 +31,8 @@ All three changes_requested auditors flagged the same class: `bun run lint` exit
 
 ## Convergent minors (non-blocking)
 
-- `deep-page-snapshot.svelte.ts:6` stale comment — deferred (cosmetic).
-- §6.4(a)/(b) empirical test pins not added — the proactive microtask-deferral structurally eliminates the flicker risk; the §6.4(b) SPA-swap is covered by `header-hide-on-scroll.spec.ts` (which auditor 2 confirmed passes on the deep page after SPA nav).
+- `deep-page-snapshot.svelte.ts:6` stale comment - deferred (cosmetic).
+- §6.4(a)/(b) empirical test pins not added - the proactive microtask-deferral structurally eliminates the flicker risk; the §6.4(b) SPA-swap is covered by `header-hide-on-scroll.spec.ts` (which auditor 2 confirmed passes on the deep page after SPA nav).
 - Stale spec narrative in `tab-swipe-preview-height.spec.ts` (the file's top comment describes the old model).
 - Redundant `setScrollContainer` in onMount (idempotent; harmless).
 

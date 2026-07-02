@@ -2,8 +2,8 @@
  * Caches the DATA (not rendered HTML) of the last-viewed deep page (a thread)
  * so the MobileTabPager can render a REAL Svelte component preview during a
  * back-swipe. This replaces the previous {@html} approach which failed because
- * Svelte's scoped CSS is removed from <head> when the page unmounts, and the
- * html.fixed-viewport-gated layout rules don't apply in the pager context.
+ * Svelte's scoped CSS is removed from <head> when the page unmounts (the pager
+ * acquires fixed-viewport via viewportLock, so those rules apply).
  *
  * Same singleton pattern as ListCacheStore. The data is the thread page's
  * PageData: plain serializable objects already loaded by +page.server.ts.

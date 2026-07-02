@@ -1,23 +1,17 @@
 import { test, expect } from '@playwright/test';
 import { prepareContext, waitForHydration } from './helpers';
 
-// MobileTabPager sizes its viewport to the ACTIVE panel's measured height
-// (`viewportHeight = panelHeights[activeIndex]`) and clips it with
-// `overflow-hidden`. `activeIndex` only changes on commit (swipeEnd →
-// switchTo), so DURING a drag the viewport is pinned to the SOURCE panel's
-// height while a neighbour of a DIFFERENT height is being revealed:
-//   - forward  activity(tall) -> messages(short): the revealed column is the
-//     source's tall height, so the preview is TALLER than the real landed
-//     messages page will be (blank gap under the shorter messages content).
-//   - back     messages(short) -> activity(tall): the taller activity neighbour
-//     is clipped at the source's short viewport height, so its bottom content
-//     (composer + lower feed items) is cut off - "preview shorter than the real
-//     Activity page, extra content all clipped".
+// MobileTabPager renders all three tabs as full-height `.scroll-pane` scrollers
+// under a screen-height viewport (`height:100%; overflow:clip`) acquired via
+// `viewportLock`. Each panel is independently scrollable; the preview during a
+// swipe matches the landed page exactly (same screen-height box). This spec
+// verifies: (a) all panels are full-height (offsetHeight === viewport height);
+// (b) the activity panel's tall content is reachable by internal scroll (not
+// clipped); (c) the viewport height is constant across swipe and landing.
 //
 // detectSwipe rejects pointerType 'mouse', so the gesture is driven via CDP
-// Input.dispatchTouchEvent (the same path helpers.swipeHorizontal uses). The
-// swipe is PAUSED mid-drag (no touchEnd yet) so the preview state is stable for
-// measurement; release() then completes the gesture.
+// Input.dispatchTouchEvent. The swipe is PAUSED mid-drag (no touchEnd yet) so
+// the preview state is stable for measurement; release() then completes it.
 
 interface PanelMetrics {
 	vpHeight: number;
