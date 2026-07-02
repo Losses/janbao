@@ -38,15 +38,9 @@
 	// page.data refresh that fires anywhere else leaves the cache stale. These
 	// hooks let a test observe whether each cache setter actually fired.
 	type E2ECacheWriteKey = 'setDiscussions' | 'setActivity' | 'setMessages';
-	type E2ECacheSetter = (data: never) => void;
 	interface E2ECacheWrite {
 		key: E2ECacheWriteKey;
 		t: number;
-	}
-	interface E2ECacheSetterMap {
-		setDiscussions: E2ECacheSetter;
-		setActivity: E2ECacheSetter;
-		setMessages: E2ECacheSetter;
 	}
 	type E2EInvalidateBadgesHandler = () => Promise<void>;
 	interface E2EWindow extends Window {
@@ -139,17 +133,28 @@
 			w.__e2eListCache = store;
 			const writes: E2ECacheWrite[] = [];
 			w.__e2eCacheWrites = writes;
-			const setters = store as unknown as E2ECacheSetterMap;
-			const wrap = (key: E2ECacheWriteKey): void => {
-				const orig = setters[key].bind(store);
-				setters[key] = (data) => {
-					writes.push({ key, t: performance.now() });
-					orig(data);
-				};
+			const recordWrite = (key: E2ECacheWriteKey): void => {
+				writes.push({ key, t: performance.now() });
 			};
-			wrap('setDiscussions');
-			wrap('setActivity');
-			wrap('setMessages');
+			// Shadow each list-cache setter with an instance own-property so
+			// every write from any caller of getListCacheStore() is logged.
+			// Wrap each setter by name to keep its original signature and avoid
+			// any type assertion.
+			const origSetDiscussions = store.setDiscussions.bind(store);
+			store.setDiscussions = (data) => {
+				recordWrite('setDiscussions');
+				origSetDiscussions(data);
+			};
+			const origSetActivity = store.setActivity.bind(store);
+			store.setActivity = (data) => {
+				recordWrite('setActivity');
+				origSetActivity(data);
+			};
+			const origSetMessages = store.setMessages.bind(store);
+			store.setMessages = (data) => {
+				recordWrite('setMessages');
+				origSetMessages(data);
+			};
 			w.__e2eInvalidateBadges = () => invalidate('app:badges');
 			w.__e2eListCacheHooked = true;
 		}

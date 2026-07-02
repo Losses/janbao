@@ -1,4 +1,4 @@
-# RV14-Plan-Audit-02 — Plan audit round 02
+# RV14-Plan-Audit-02 - Plan audit round 02
 
 Five independent open-ended auditors (fresh prompts, no round-1 context, read-only,
 no e2e, no git mutation) reviewed the revised `docs/DV14-Plan.md`.
@@ -26,11 +26,11 @@ None.
   is `DiscussionSearchItem[]`, incompatible with `DiscussionListItem[]`). The
   runtime gate `onTabRoot && page.data.discussions` does not narrow the union. If
   `bun run check` errors on `setDiscussions(page.data)`, resolve with a named cast
-  (`DiscussionsCacheInput`) or an explicit object — verify empirically at impl.
+  (`DiscussionsCacheInput`) or an explicit object - verify empirically at impl.
 - **§3.1 trigger framing (auditors 2, 3).** The PWA-return-to-foreground navigation
   is one speculative trigger; the concrete invalidate paths in prod are
   `invalidate('app:badges')` in `messages/[id]` afterNavigate and the `invalidateAll`
-  sites. Non-load-bearing — the plan's "regardless of trigger" caveat holds.
+  sites. Non-load-bearing - the plan's "regardless of trigger" caveat holds.
 - **§6 auth-routes wording (auditors 1, 3, 4).** `??` does not fall back on `[]`
   (only nullish); the empty-array write on `/entry/*` is moot (AppShell suppressed
   there). Also guests DO get real discussions (guest-readable); only activity and

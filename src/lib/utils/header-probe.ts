@@ -14,19 +14,36 @@
  * top-level `declare global` is rejected by svelte-check.
  */
 
+/**
+ * The committed transition's endpoint identity (titles + tab-ness), latched
+ * atomically at every settle arming. Defined here (not in Header.svelte) so the
+ * probe snapshot can type it and Header.svelte imports the one shared shape.
+ */
+export interface HeaderSettleTransition {
+	outgoingTitle: string;
+	incomingTitle: string;
+	outgoingHasTabs: boolean;
+	incomingHasTabs: boolean;
+}
+
 export interface HeaderStateSnapshot {
 	t: number;
 	path: string;
 	morph: number;
 	slideT: string;
 	rootLayerStyle: string;
+	layerDownStyle: string;
 	settling: boolean;
+	isSettleMode: boolean;
 	settleProgress: number;
 	settleAwaitTitle: boolean;
 	lastGestureMorph: number;
 	currentHasTabs: boolean;
 	targetHasTabs: boolean;
 	prevHasTabs: boolean;
+	latchedSettle: HeaderSettleTransition | null;
+	effectiveTabsOut: boolean;
+	effectiveTabsIn: boolean;
 	navInFlight: boolean;
 	pendingNav: string | null;
 	dragging: boolean;

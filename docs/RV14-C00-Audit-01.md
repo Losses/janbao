@@ -1,4 +1,4 @@
-# RV14-C00-Audit-01 — Implementation audit round 01
+# RV14-C00-Audit-01 - Implementation audit round 01
 
 Five independent open-ended auditors reviewed the C00 implementation (the actual
 `git diff`) against the approved plan and journal. Auditor 3 died on a terminal
@@ -38,7 +38,7 @@ None.
 - **Plan §6 auth-routes `??`-on-`[]` wording** (auditors 1, 3, 4): `??` does not
   fall back on `[]`. Documentation imprecision, no visible effect. Not adopted.
 - **Type-narrowing at root scope** (carried from plan round 2): confirmed
-  empirically — `bun run check` is 0/0; `setDiscussions(page.data)` type-checks.
+  empirically - `bun run check` is 0/0; `setDiscussions(page.data)` type-checks.
 
 ## Verified-clean (consensus)
 

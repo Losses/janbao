@@ -5,7 +5,7 @@
 The mobile swipe-back preview (and the thread-page sidebar) must reflect the
 latest server data on every route, including deep pages.
 
-Today the preview's data source — the `list-cache` singleton — is fed only on
+Today the preview's data source - the `list-cache` singleton - is fed only on
 the three tab roots. Any `page.data` refresh that fires on a deep page (an
 `invalidate`, or the implicit navigation that accompanies returning a PWA to the
 foreground) re-runs the root layout load and refreshes `page.data`, but never
@@ -30,7 +30,7 @@ cache.
 - The cache must never hold route-specific list data (search results, category or
   profile filters); only page-1-of-the-tab data (the eager-loaded `data.*`) or the
   active tab's own page-load data on its tab root.
-- The fix is centralized — one write site — so every `list-cache` reader is
+- The fix is centralized - one write site - so every `list-cache` reader is
   corrected together.
 
 ## 3. Architecture context (verified inventory)
@@ -59,8 +59,8 @@ defect must be fixed regardless of trigger.
   `#state.{discussions,activity,messages}`, written only via
   `setDiscussions` / `setActivity` / `setMessages`. It has no invalidation
   method.
-- READ by `MOBILE_TABS[tab].panel` (`src/lib/utils/route-config.ts:361-366` —
-  `MOBILE_TABS` and `TAB_LIST_PANELS`) — the `TabDiscussionsPanel` /
+- READ by `MOBILE_TABS[tab].panel` (`src/lib/utils/route-config.ts:361-366` -
+  `MOBILE_TABS` and `TAB_LIST_PANELS`) - the `TabDiscussionsPanel` /
   `TabActivityPanel` / `TabMessagesPanel` wrappers, each
   `$derived(cache.X?.items ?? page.data.X)` (cache first).
 - READ by the thread-page sidebar
@@ -73,7 +73,7 @@ defect must be fixed regardless of trigger.
   `search-cache` store (`getSearchCacheStore`), not `list-cache`; it is
   unaffected by this fix.
 
-### 3.3 The current write surface — the defect
+### 3.3 The current write surface - the defect
 
 `src/routes/(tabs)/+layout.svelte:52-60` runs an `$effect` that writes
 `list-cache`, but it is gated on `page.url.pathname ∈ {/, /activity,
@@ -149,7 +149,7 @@ $effect(() => {
 
 On a tab root the active tab's page-load data is written (preserving its `?page`
 pagination); the other two slots fall through to `data.*` page-1. On every other
-route — deep pages and the paginated `/discussions/pN` — only the `data.*`
+route - deep pages and the paginated `/discussions/pN` - only the `data.*`
 fallback is written, so the cache is fed everywhere (the fix) without being
 polluted by route-specific list data.
 
@@ -176,12 +176,12 @@ traffic than the route-gated original, but it is idempotent in content and cheap
 ### 4.4 Blast radius
 
 The fix is one write site. Every `list-cache` reader (§3.2) is corrected together
-— no per-reader edits. `MobileTabPager` (§3.4) is untouched. The write is always
+- no per-reader edits. `MobileTabPager` (§3.4) is untouched. The write is always
 page-1-of-the-tab (`data.*`), except on a tab root where the active tab's
 page-load data wins; the `isTabRootPath` gate guarantees no route-specific list
 data (search results, category/profile filters) enters the cache.
 
-### 4.5 Post-refresh back-swipe track-reveal anomaly (UNVERIFIED — out of scope for C00)
+### 4.5 Post-refresh back-swipe track-reveal anomaly (UNVERIFIED - out of scope for C00)
 
 `e2e/list-cache-stale-after-refresh.spec.ts` Test 3 records `peak m41 = 0` over
 73 frames when a back-swipe follows a refresh on a thread page: the gesture
@@ -194,13 +194,13 @@ cache-freshness fix.
 
 ## 5. Files
 
-- `src/routes/+layout.svelte` — ADD `const listCache = getListCacheStore();` at the
+- `src/routes/+layout.svelte` - ADD `const listCache = getListCacheStore();` at the
   script top level (next to the other store consts); ADD the cache-feeding
   `$effect` (§4.1). `getListCacheStore` and `isTabRootPath` are already imported
   here.
-- `src/routes/(tabs)/+layout.svelte` — REMOVE the cache `$effect` (lines 52-60),
+- `src/routes/(tabs)/+layout.svelte` - REMOVE the cache `$effect` (lines 52-60),
   the `getListCacheStore` import (line 29), and the `listCache` const (line 39).
-- `e2e/list-cache-stale-after-refresh.spec.ts` — no change. Test 1 and Test 2
+- `e2e/list-cache-stale-after-refresh.spec.ts` - no change. Test 1 and Test 2
   flip green; Test 3 is unchanged.
 
 ## 6. Edge cases & risks
@@ -234,16 +234,16 @@ cache-freshness fix.
   eager-loaded `data.X`. This matches the current `(tabs)` behavior exactly
   (preview and landing read the same array, so they still match); it is not a
   regression.
-- **Effect loop.** None — the effect writes to a store it does not read.
+- **Effect loop.** None - the effect writes to a store it does not read.
 - **First paint / SSR.** Effects are client-only; the cache was already
   client-only; panels fall back to `data` / `page.data` on SSR.
 
 ## 7. Testing plan
 
 - `e2e/list-cache-stale-after-refresh.spec.ts`:
-  - Test 1 (on a tab root, a refresh rewrites all three caches) — flips green.
-  - Test 2 (on a deep page, a refresh rewrites all three caches) — flips green.
-  - Test 3 (post-refresh back-swipe navigation guard) — stays green.
+  - Test 1 (on a tab root, a refresh rewrites all three caches) - flips green.
+  - Test 2 (on a deep page, a refresh rewrites all three caches) - flips green.
+  - Test 3 (post-refresh back-swipe navigation guard) - stays green.
 - No new unit test: the fix is an `$effect` over `$state` (runes) code, which
   `bun:test` cannot load (memory `bun-test-no-runes-loader`); e2e is the correct
   level.

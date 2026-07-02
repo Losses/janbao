@@ -2,7 +2,7 @@
 
 ## Phase map
 
-- Plan: `docs/DV14-Plan.md` — 5/5 PASS over 2 rounds (`RV14-Plan-Audit-01`,
+- Plan: `docs/DV14-Plan.md` - 5/5 PASS over 2 rounds (`RV14-Plan-Audit-01`,
   `RV14-Plan-Audit-02`).
 - Implementation: C00 (this cycle).
 - Impl audit: `RV14-C00-Audit-NN`.

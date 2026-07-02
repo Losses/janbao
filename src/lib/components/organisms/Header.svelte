@@ -46,7 +46,7 @@
 	import type { SearchSort, SearchScope } from '$lib/types/search';
 	import type { VoidHandler } from '$lib/types/handlers';
 	import type { TranslationDict } from '$lib/types/translation';
-	import type { HeaderStateSnapshot } from '$lib/utils/header-probe';
+	import type { HeaderSettleTransition, HeaderStateSnapshot } from '$lib/utils/header-probe';
 
 	interface HeaderProps {
 		t: TranslationDict;
@@ -85,11 +85,17 @@
 	// svelte-ignore state_referenced_locally
 	let restTitle = $state(title); // title shown at rest; updated to the arrived title at settle-end
 	let settling = $state(false); // any non-gesture crossfade (commit / cancel / click)
-	let latchedOutgoing = $state('');
-	let latchedIncoming = $state('');
+	// The committed transition's endpoint identity (titles + tab-ness), latched
+	// atomically at every settle arming (Effect B gesture, Effect C idle click,
+	// Effect C re-arm) and read by titleView, the morph settle arm, and the layer
+	// styles during a settle. null at rest (consumers fall back to live values).
+	// Invariant: latchedSettle !== null ⇔ settling === true (every arming writes
+	// both together; endSettle + Effect B CLEAR clear both together). Shape
+	// HeaderSettleTransition is imported from $lib/utils/header-probe.
+	let latchedSettle = $state<HeaderSettleTransition | null>(null);
 	let settleProgress = $state(1); // 0..1, CSS-transitioned during settling
 	let settleTarget = $state<0 | 1>(1); // commit / non-gesture → 1; cancel → 0
-	let settleAwaitTitle = $state(false); // commit holds settling until the nav lands (title === latchedIncoming); cancel/non-gesture end on the visual transition
+	let settleAwaitTitle = $state(false); // commit holds settling until the nav lands (title === latchedSettle.incomingTitle); cancel/non-gesture end on the visual transition
 	let titleDirection = $state<TitleDirection>('forward');
 	let lastGestureMorph = $state(0); // per-frame latch while dragging (pager.backMorph has already jumped to 1/0 by the time dragging flips false)
 	// Idempotency flag for Effect B's CLEAR branch. The CLEAR branch (m ≤ epsilon)
@@ -152,33 +158,24 @@
 				return searchScrubFrom + (searchScrubTo - searchScrubFrom) * eased;
 			}
 
-			// 2. Non-dragging animation settling phase (commit, cancel, or click transitions)
-			if (isSettleMode) {
-				const current = currentHasTabs ? 1 : 0;
-				const target = targetHasTabs ? 1 : 0;
-				const prev = prevHasTabs ? 1 : 0;
-
+			// 2. Settling phase (gesture commit/cancel, or click/popstate). Endpoint
+			// identity comes solely from the latched record (armed at Effect B for
+			// gestures, Effect C idle for clicks, Effect C re-arm for rapid
+			// back-to-back). The three sub-arms collapse to one interpolation; they
+			// differ only in the (outgoing, incoming) mapping (in the record) and the
+			// settleProgress direction (settleTarget: 1 commit/click, 0 cancel).
+			if (isSettleMode && latchedSettle) {
+				const outgoing = latchedSettle.outgoingHasTabs ? 1 : 0;
+				const incoming = latchedSettle.incomingHasTabs ? 1 : 0;
+				// m-continuity: actual continuity comes from settleProgress = m set in
+				// the same Effect B flush as the record; the lastGestureMorph arm is
+				// unreachable under the arming invariant (latchedSettle !== null ⇒
+				// settling) but kept for formula-shape parity.
 				const progress = settling ? settleProgress : lastGestureMorph;
-				const isGesture = settling
-					? settleAwaitTitle || settleTarget === 0
-					: lastGestureMorph > GESTURE_MORPH_EPSILON;
-
-				const awaitTitle = settling ? settleAwaitTitle : isGesture && navStore.pendingNav !== null;
-				const targetZero = settling
-					? settleTarget === 0
-					: isGesture && navStore.pendingNav === null;
-
-				if (awaitTitle) {
-					// Committed navigation in flight: transition from current page to target page
-					return current * (1 - progress) + target * progress;
-				}
-				if (targetZero) {
-					// Cancelled transition: slide the preview target page back to current page
-					return target * progress + current * (1 - progress);
-				}
-				// Regular click/popstate transitions: slide from previous page to current page
-				return prev * (1 - progress) + current * progress;
+				return outgoing * (1 - progress) + incoming * progress;
 			}
+			// isSettleMode with a null record cannot render in normal operation (the
+			// arming same-flush invariant); fall through to the rest branch.
 
 			// 3. Resting idle state: determined solely by whether the current path has tabs (1 = tabs, 0 = deep page)
 			return currentHasTabs ? 1 : 0;
@@ -250,6 +247,7 @@
 				if (settling && !releaseConsumed) {
 					settling = false;
 					restTitle = title;
+					latchedSettle = null;
 				}
 				lastGestureMorph = 0;
 			});
@@ -258,21 +256,28 @@
 		const committed = hasPending;
 		untrack(() => {
 			const out = title;
-			const inc = navStore.backTarget ? (resolveDeepHeaderTitle(navStore.backTarget, t) ?? '') : '';
-			if (!navStore.backTarget) {
+			const back = navStore.backTarget;
+			if (!back) {
 				lastGestureMorph = 0;
 				releaseConsumed = true;
 				return;
 			}
+			const inc = resolveDeepHeaderTitle(back, t) ?? '';
+			// Latch the transition's endpoint identity atomically (outgoing = current
+			// page, incoming = reveal target), frozen at release so the beforeNavigate
+			// stack-pop (which flips the live backTarget to a tab on a deep→deep
+			// commit) cannot reach the settle.
+			latchedSettle = {
+				outgoingTitle: out,
+				incomingTitle: inc,
+				outgoingHasTabs: currentHasTabs,
+				incomingHasTabs: getCurrentTabIndex(back) >= 0
+			};
 			if (committed) {
-				latchedOutgoing = out;
-				latchedIncoming = inc;
 				settleTarget = 1;
 				settleAwaitTitle = true; // hold the crossfade until the nav lands (title → inc)
 			} else {
 				// Cancel: the revealed title retreats, the current title stays.
-				latchedOutgoing = out;
-				latchedIncoming = inc;
 				settleTarget = 0;
 				settleAwaitTitle = false; // no nav: end on the visual transition
 			}
@@ -293,7 +298,7 @@
 		const newTitle = title;
 		if (untrack(() => dragging)) return;
 		if (untrack(() => settling)) {
-			if (untrack(() => newTitle === latchedIncoming)) {
+			if (untrack(() => newTitle === (latchedSettle?.incomingTitle ?? ''))) {
 				// The awaited navigation landed. For a commit (`settleAwaitTitle`) this
 				// is the real end of the settle (the visual crossfade has been holding
 				// the incoming title centred); end it now so restTitle adopts the live
@@ -305,9 +310,22 @@
 			// rapid back-to-back nav can't strand the header on a stale title.
 			let rearmed = false;
 			untrack(() => {
-				if (newTitle && newTitle !== latchedIncoming && newTitle !== latchedOutgoing) {
-					latchedOutgoing = latchedIncoming;
-					latchedIncoming = newTitle;
+				const prev = latchedSettle;
+				if (
+					newTitle &&
+					prev &&
+					newTitle !== prev.incomingTitle &&
+					newTitle !== prev.outgoingTitle
+				) {
+					// Rotate the record: outgoing adopts the record's incoming title +
+					// tab-ness; incoming adopts the new title + its page (currentPath,
+					// already updated when the title change fires).
+					latchedSettle = {
+						outgoingTitle: prev.incomingTitle,
+						incomingTitle: newTitle,
+						outgoingHasTabs: prev.incomingHasTabs,
+						incomingHasTabs: currentHasTabs
+					};
 					settleTarget = 1;
 					settleProgress = 0;
 					settleAwaitTitle = false; // the new title is already current; end on the visual transition
@@ -321,8 +339,15 @@
 		// idle: non-gesture title change (forward click / back button / popstate)
 		untrack(() => {
 			if (newTitle && newTitle !== restTitle) {
-				latchedOutgoing = restTitle;
-				latchedIncoming = newTitle;
+				// Click / back-button / popstate: outgoing = the page being left
+				// (prevPath), incoming = the page being landed on (currentPath,
+				// already the destination when the title change fires).
+				latchedSettle = {
+					outgoingTitle: restTitle,
+					incomingTitle: newTitle,
+					outgoingHasTabs: prevHasTabs,
+					incomingHasTabs: currentHasTabs
+				};
 				settleTarget = 1;
 				settleProgress = 0;
 				settleAwaitTitle = false; // title is already current; end on the visual transition
@@ -459,10 +484,14 @@
 
 	function endSettle(): void {
 		if (!untrack(() => settling)) return; // idempotent
+		// restTitle reads the record BEFORE the clear (same synchronous tick as the
+		// settling=false + latchedSettle=null writes below, so a re-arm on a later
+		// flush can't deref null).
+		restTitle = untrack(() => title) || untrack(() => latchedSettle?.incomingTitle ?? '');
 		settling = false;
+		latchedSettle = null;
 		settleAwaitTitle = false;
 		releaseConsumed = false;
-		restTitle = untrack(() => title) || untrack(() => latchedIncoming);
 		if (settleRafId) {
 			cancelAnimationFrame(settleRafId);
 			settleRafId = undefined;
@@ -520,8 +549,8 @@
 				}
 			: settling
 				? {
-						outgoing: latchedOutgoing,
-						incoming: latchedIncoming,
+						outgoing: latchedSettle?.outgoingTitle ?? '',
+						incoming: latchedSettle?.incomingTitle ?? '',
 						progress: settleProgress,
 						transition: `transform ${TITLE_CROSSFADE_MS}ms ease-out`,
 						direction: titleDirection
@@ -535,19 +564,23 @@
 					}
 	);
 
+	// Hoisted endpoint-identity source for the layer styles AND the probe: the
+	// latched record during a settle (frozen), live at rest. Consuming the SAME
+	// derived here means a revert to live in either layer style is observable via
+	// effectiveTabsOut/In in the probe (the §7 source-attribution guard).
+	const tabsOut = $derived(latchedSettle ? latchedSettle.outgoingHasTabs : currentHasTabs);
+	const tabsIn = $derived(latchedSettle ? latchedSettle.incomingHasTabs : targetHasTabs);
 	// Root↔deep vertical morph: FROZEN in search mode so the tabs exit
 	// horizontally with the track, never float up.
 	const rootLayerStyle = $derived(
 		isSearch
 			? 'transform: none; opacity: 1;'
 			: `transform: translateY(${
-					!(currentHasTabs || targetHasTabs) ? -100 : -(1 - morph) * 100
-				}%); transition: ${slideT}; pointer-events: ${
-					morph > 0.5 && targetHasTabs ? 'auto' : 'none'
-				}`
+					!(tabsOut || tabsIn) ? -100 : -(1 - morph) * 100
+				}%); transition: ${slideT}; pointer-events: ${morph > 0.5 && tabsIn ? 'auto' : 'none'}`
 	);
 	const layerDownStyle = $derived(
-		`transform: translateY(${(isDeepToDeep ? 0 : morph) * 100}%); transition: ${slideT}; pointer-events: ${
+		`transform: translateY(${(!tabsOut && !tabsIn ? 0 : morph) * 100}%); transition: ${slideT}; pointer-events: ${
 			morph < 0.5 ? 'auto' : 'none'
 		}`
 	);
@@ -568,13 +601,18 @@
 			morph,
 			slideT,
 			rootLayerStyle,
+			layerDownStyle,
 			settling,
+			isSettleMode,
 			settleProgress,
 			settleAwaitTitle,
 			lastGestureMorph,
 			currentHasTabs,
 			targetHasTabs,
 			prevHasTabs,
+			latchedSettle,
+			effectiveTabsOut: tabsOut,
+			effectiveTabsIn: tabsIn,
 			navInFlight: navStore.navInFlight,
 			pendingNav: navStore.pendingNav ? navStore.pendingNav.href : null,
 			dragging,

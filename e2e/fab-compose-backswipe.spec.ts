@@ -26,7 +26,7 @@ import { prepareContext, waitForHydration, swipeBack, openSidebarAndGoto } from 
  * transition and never needs the live gesture signal. The drag is the only path
  * that needs the signal, so the compose branch's missing signal was never
  * exercised. fab-deep-page-boundary.spec.ts covers the drag back-swipe but only
- * for the overlay/deep routes (/bookmarks, /profile/edit, /search) — never the
+ * for the overlay/deep routes (/bookmarks, /profile/edit, /search) - never the
  * compose family.
  *
  * Discriminator: a per-frame {scale, pathname} probe across the gesture. The
@@ -57,7 +57,7 @@ interface BackSwipeCapture {
 	/** Max resolved scale among pre-swap present frames (NaN if none). The
 	 * gesture-follows-finger contract requires this to rise well above 0. */
 	maxPreSwapScale: number;
-	/** Pre-swap frames whose scale is strictly inside (0.1, 0.9) — a ramp, not a
+	/** Pre-swap frames whose scale is strictly inside (0.1, 0.9) - a ramp, not a
 	 * held-0 or a single pop. */
 	preSwapIntermediateCount: number;
 	/** Overall max resolved scale (proves the FAB eventually appears at all). */
@@ -189,7 +189,7 @@ test('CALIBRATION (overlay): `/bookmarks` -> `/` drag back-swipe scales the FAB 
 // asserts the CORRECT behaviour, so it throws on the current compose branch;
 // `test.fail` marks that throw expected, keeping the suite green while the
 // defect is open. Once the compose branch reads coverProgress the body stops
-// throwing and Playwright errors "passed but expected to fail" — the cue to
+// throwing and Playwright errors "passed but expected to fail" - the cue to
 // drop the `.fail` and keep this as a permanent regression guard.
 test.fail('DEFECT: `/post/discussion` -> `/` drag back-swipe must scale the FAB in before the swap', async ({
 	page
