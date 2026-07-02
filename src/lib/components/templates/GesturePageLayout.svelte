@@ -969,7 +969,7 @@
 		{#if hasLeft && isMobile && !swipeNeedsLoadingAtStart}
 			<section
 				bind:this={leftEl}
-				data-preview-tab={leftPreviewTab}
+				data-tab-panel={leftPreviewTab}
 				class="shrink-0 scroll-pane md:hidden"
 				style={leftStyle}
 				onscroll={(e) => {
@@ -979,14 +979,16 @@
 				}}
 			>
 				{#if isLeftTargetTabRoot}
-					{#if left}
-						{@render left()}
-					{:else}
-						{@const PreviewPanel = getPreviewPanel(resolvedLeftHref)}
-						{#if PreviewPanel}
-							<PreviewPanel />
+					<div class="gpl-card">
+						{#if left}
+							{@render left()}
+						{:else}
+							{@const PreviewPanel = getPreviewPanel(resolvedLeftHref)}
+							{#if PreviewPanel}
+								<PreviewPanel />
+							{/if}
 						{/if}
-					{/if}
+					</div>
 				{:else}
 					<div class="gpl-card">
 						{#if left}
