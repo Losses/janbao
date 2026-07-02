@@ -191,8 +191,8 @@
 	// root<->deep animation; `morph` is also driven as horizontal scrub progress
 	// (branch 1b) on root<->search taps, where the icon must stay a hamburger at
 	// both endpoints. Freeze on `isSearch` (search-mode rest) AND `searchScrubbing`
-	// (the tap scrub in flight). Outer parens mirror slideT's discriminant style.
-	const iconProgress = $derived((isSearch || searchScrubbing) ? 0 : 1 - morph);
+	// (the tap scrub in flight), mirroring slideT's in-flight discriminant.
+	const iconProgress = $derived(isSearch || searchScrubbing ? 0 : 1 - morph);
 	// The layer transition is suppressed only during a live drag or a root↔search
 	// tap scrub, where `morph` is driven 1:1 by the finger / the scrubber and a CSS
 	// transition would fight it. It is not suppressed during an in-flight nav: the
