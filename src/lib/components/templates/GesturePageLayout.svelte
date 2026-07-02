@@ -1051,7 +1051,7 @@
 		>
 			<LoadingChip
 				icon={targetTab?.icon}
-				label={targetTab ? page.data.t.nav[targetTab.labelKey] : undefined}
+				label={targetTab ? page.data.t.nav[targetTab.labelKey] : page.data.t.nav.back}
 				scale={chipScale}
 				expanded={!isCircle}
 				pulsing={isPendingNavigation}

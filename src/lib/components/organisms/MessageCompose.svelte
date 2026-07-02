@@ -9,6 +9,7 @@
 	 */
 	import { untrack } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import MentionChipInput from '$lib/components/organisms/MentionChipInput.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditorLazy.svelte';
@@ -115,82 +116,84 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-3">
-		<h1 class="page-title border-b border-base-300 pb-4">{messageT.composeTitle}</h1>
+	<GesturePageLayout centerTab={2} leftHref="/messages/inbox">
+		<div class="space-y-3">
+			<h1 class="page-title border-b border-base-300 pb-4">{messageT.composeTitle}</h1>
 
-		{#if errorMessage}
-			<div class="alert alert-warning" role="alert">{errorMessage}</div>
-		{/if}
+			{#if errorMessage}
+				<div class="alert alert-warning" role="alert">{errorMessage}</div>
+			{/if}
 
-		<div class="space-y-4">
-			<!-- Recipients -->
-			<div class="form-control">
-				<label class="label" for="recipients-input">
-					<span class="label-text font-medium">{messageT.recipients}</span>
-				</label>
-				<div id="recipients-input">
-					<MentionChipInput
-						excludeIds={selectedIds}
-						initialRecipients={prefillRecipient ? [prefillRecipient] : undefined}
-						onRecipientsChange={handleRecipientsChange}
-						disabled={sending || !online.online}
-						{t}
-					/>
-				</div>
-			</div>
-
-			<!-- Subject -->
-			<div class="form-control">
-				<label class="label" for="title-input">
-					<span class="label-text font-medium">{messageT.title}</span>
-				</label>
-				<input
-					id="title-input"
-					type="text"
-					class="input input-bordered w-full"
-					bind:value={title}
-					disabled={sending || !online.online}
-				/>
-			</div>
-
-			<!-- Content -->
-			<div class="form-control">
-				<label class="label" for="content-editor">
-					<span class="label-text font-medium">{messageT.content}</span>
-				</label>
-				<div id="content-editor">
-					{#key messageDraft}
-						<LexicalEditor
-							contextType="message"
-							contextId={0}
-							initialContent={messageDraft}
-							placeholder=""
-							disableImageUpload={true}
-							onContentChange={(json) => (content = json)}
-							onSubmit={send}
+			<div class="space-y-4">
+				<!-- Recipients -->
+				<div class="form-control">
+					<label class="label" for="recipients-input">
+						<span class="label-text font-medium">{messageT.recipients}</span>
+					</label>
+					<div id="recipients-input">
+						<MentionChipInput
+							excludeIds={selectedIds}
+							initialRecipients={prefillRecipient ? [prefillRecipient] : undefined}
+							onRecipientsChange={handleRecipientsChange}
+							disabled={sending || !online.online}
 							{t}
 						/>
-					{/key}
+					</div>
+				</div>
+
+				<!-- Subject -->
+				<div class="form-control">
+					<label class="label" for="title-input">
+						<span class="label-text font-medium">{messageT.title}</span>
+					</label>
+					<input
+						id="title-input"
+						type="text"
+						class="input input-bordered w-full"
+						bind:value={title}
+						disabled={sending || !online.online}
+					/>
+				</div>
+
+				<!-- Content -->
+				<div class="form-control">
+					<label class="label" for="content-editor">
+						<span class="label-text font-medium">{messageT.content}</span>
+					</label>
+					<div id="content-editor">
+						{#key messageDraft}
+							<LexicalEditor
+								contextType="message"
+								contextId={0}
+								initialContent={messageDraft}
+								placeholder=""
+								disableImageUpload={true}
+								onContentChange={(json) => (content = json)}
+								onSubmit={send}
+								{t}
+							/>
+						{/key}
+					</div>
+				</div>
+
+				<div class="flex justify-end">
+					<button
+						class="btn btn-primary"
+						onclick={send}
+						disabled={sending ||
+							recipients.length === 0 ||
+							!title.trim() ||
+							isLexicalEmpty(content) ||
+							content.length > MAX_CONTENT_SIZE ||
+							!online.online}
+					>
+						{#if sending}
+							<span class="loading loading-spinner loading-xs"></span>
+						{/if}
+						{messageT.send}
+					</button>
 				</div>
 			</div>
-
-			<div class="flex justify-end">
-				<button
-					class="btn btn-primary"
-					onclick={send}
-					disabled={sending ||
-						recipients.length === 0 ||
-						!title.trim() ||
-						isLexicalEmpty(content) ||
-						content.length > MAX_CONTENT_SIZE ||
-						!online.online}
-				>
-					{#if sending}
-						<span class="loading loading-spinner loading-xs"></span>
-					{/if}
-					{messageT.send}
-				</button>
-			</div>
 		</div>
-	</div>
+	</GesturePageLayout>
 </DualColumnLayout>

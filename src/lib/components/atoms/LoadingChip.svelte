@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { mdiArrowLeft } from '@mdi/js';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 
 	/**
@@ -33,7 +34,7 @@
 	}
 
 	let {
-		icon,
+		icon = mdiArrowLeft,
 		label,
 		scale = 1.15,
 		expanded = true,

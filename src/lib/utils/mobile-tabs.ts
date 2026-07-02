@@ -13,6 +13,7 @@
  */
 import type { Component } from 'svelte';
 import { MOBILE_TAB_DEFS, type TabDef, type MobileTabLabelKey } from './tab-config';
+import { getRouteFabRule } from './route-config';
 import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 import TabDiscussionsPanel from '$lib/components/panels/TabDiscussionsPanel.svelte';
 import TabActivityPanel from '$lib/components/panels/TabActivityPanel.svelte';
@@ -68,9 +69,21 @@ export const MOBILE_TABS: readonly MobileTab[] = MOBILE_TAB_DEFS.map((tab) => ({
 	panel: TAB_LIST_COMPONENTS[tab.labelKey]
 }));
 
-/** Index of the active tab for the given pathname, or -1 when on no tab route. */
+/**
+ * Index of the active tab for the given pathname, or -1 when on no tab route.
+ * Config-driven via the route's FAB kind (ROUTE_CONFIGS names each route's
+ * module: discussions / dynamic=activity / messages), so the compose form
+ * /post/discussion (kind 'discussions') resolves to the Discussions tab the
+ * same way /discussion/<id> does. The tab-config prefix matcher is only the
+ * fallback for list pagination routes that have no ROUTE_CONFIGS entry (e.g.
+ * /discussions/pN).
+ */
 export function getCurrentTabIndex(pathname: string): number {
-	return MOBILE_TABS.findIndex((tab) => tab.isActive(pathname));
+	const kind = getRouteFabRule(pathname)?.fab?.kind;
+	if (kind === 'discussions') return 0;
+	if (kind === 'dynamic') return 1;
+	if (kind === 'messages') return 2;
+	return MOBILE_TAB_DEFS.findIndex((tab) => tab.isActive(pathname));
 }
 
 /**

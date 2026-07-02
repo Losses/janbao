@@ -1,5 +1,6 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
+	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditorLazy.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
@@ -112,205 +113,207 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<div class="space-y-3 md:py-2">
-		<!-- Header -->
-		<div class="border-b border-base-300 pb-4">
-			<h1 class="page-title">
-				{t.sidebar.createDiscussion}
-			</h1>
-		</div>
+	<GesturePageLayout centerTab={0} leftHref="/">
+		<div class="space-y-3 md:py-2">
+			<!-- Header -->
+			<div class="border-b border-base-300 pb-4">
+				<h1 class="page-title">
+					{t.sidebar.createDiscussion}
+				</h1>
+			</div>
 
-		<!-- Main form -->
-		{#if categories.length > 0}
-			<form
-				method="POST"
-				action="?/publish"
-				bind:this={publishForm}
-				use:enhance={({ cancel }) => {
-					if (isSubmitting) {
-						cancel();
-						return;
-					}
-					isSubmitting = true;
-					return async ({ result }) => {
-						isSubmitting = false;
-						if (result.type === 'redirect') {
-							goto(result.location);
-						} else if (
-							result.type === 'success' &&
-							result.data &&
-							'success' in result.data &&
-							result.data.success === false
-						) {
-							alert(result.data.error || t.discussion.publishFailed);
-						} else if (result.type === 'failure') {
-							alert(result.data?.error || t.discussion.publishFailed);
+			<!-- Main form -->
+			{#if categories.length > 0}
+				<form
+					method="POST"
+					action="?/publish"
+					bind:this={publishForm}
+					use:enhance={({ cancel }) => {
+						if (isSubmitting) {
+							cancel();
+							return;
 						}
-					};
-				}}
-				class="space-y-4"
-			>
-				<!-- Title Input -->
-				<div class="form-control w-full">
-					<label class="label" for="title-input">
-						<span class="label-text font-bold text-base-content">{t.discussion.title}</span>
-					</label>
-					<input
-						id="title-input"
-						type="text"
-						name="title"
-						bind:value={title}
-						placeholder={t.discussion.titlePlaceholder}
-						class="input input-bordered w-full text-lg focus:input-primary"
-						required
-						disabled={isSubmitting || isPreview}
-					/>
-				</div>
-
-				<!-- Selectors row. When post themes are blocked the theme selector
-				     disappears and the category selector spans the full row. -->
-				<div class="grid grid-cols-1 {blockPostTheme ? '' : 'md:grid-cols-2'} gap-4">
-					<!-- Category Selector -->
+						isSubmitting = true;
+						return async ({ result }) => {
+							isSubmitting = false;
+							if (result.type === 'redirect') {
+								goto(result.location);
+							} else if (
+								result.type === 'success' &&
+								result.data &&
+								'success' in result.data &&
+								result.data.success === false
+							) {
+								alert(result.data.error || t.discussion.publishFailed);
+							} else if (result.type === 'failure') {
+								alert(result.data?.error || t.discussion.publishFailed);
+							}
+						};
+					}}
+					class="space-y-4"
+				>
+					<!-- Title Input -->
 					<div class="form-control w-full">
-						<label class="label" for="category-select">
-							<span class="label-text font-bold text-base-content">{t.discussion.category}</span>
+						<label class="label" for="title-input">
+							<span class="label-text font-bold text-base-content">{t.discussion.title}</span>
 						</label>
-						<select
-							id="category-select"
-							name="categorySlug"
-							bind:value={categorySlug}
-							class="select select-bordered w-full"
-							disabled={isSubmitting || isPreview}
+						<input
+							id="title-input"
+							type="text"
+							name="title"
+							bind:value={title}
+							placeholder={t.discussion.titlePlaceholder}
+							class="input input-bordered w-full text-lg focus:input-primary"
 							required
-						>
-							{#each categories as category (category.slug)}
-								<option value={category.slug}>{category.title}</option>
-							{/each}
-						</select>
+							disabled={isSubmitting || isPreview}
+						/>
 					</div>
 
-					{#if !blockPostTheme}
-						<!-- Theme Selector -->
+					<!-- Selectors row. When post themes are blocked the theme selector
+				     disappears and the category selector spans the full row. -->
+					<div class="grid grid-cols-1 {blockPostTheme ? '' : 'md:grid-cols-2'} gap-4">
+						<!-- Category Selector -->
 						<div class="form-control w-full">
-							<label class="label" for="theme-select">
-								<span class="label-text font-bold text-base-content font-medium">
-									{t.theme.customTheme}
-								</span>
+							<label class="label" for="category-select">
+								<span class="label-text font-bold text-base-content">{t.discussion.category}</span>
 							</label>
 							<select
-								id="theme-select"
-								name="themeName"
-								bind:value={themeName}
+								id="category-select"
+								name="categorySlug"
+								bind:value={categorySlug}
 								class="select select-bordered w-full"
 								disabled={isSubmitting || isPreview}
+								required
 							>
-								{#each themesList as th (th.value)}
-									<option value={th.value}>{th.label}</option>
+								{#each categories as category (category.slug)}
+									<option value={category.slug}>{category.title}</option>
 								{/each}
 							</select>
 						</div>
-					{/if}
-				</div>
 
-				<!-- Content Editor -->
-				<div class="form-control w-full">
-					<label class="label" for="editor-block">
-						<span class="label-text font-bold text-base-content">{t.discussion.content}</span>
-					</label>
-					<input type="hidden" name="contentJson" value={contentJson} />
-
-					<div class={isPreview ? 'hidden' : ''} id="editor-block">
-						{#key draftContent}
-							<LexicalEditor
-								contextType="discussion"
-								contextId={0}
-								initialContent={draftContent}
-								onContentChange={(json) => (contentJson = json)}
-								onSubmit={() => {
-									if (!isSubmitting && online.online) publishForm?.requestSubmit();
-								}}
-								placeholder={t.editor.placeholder}
-								{t}
-							/>
-						{/key}
-					</div>
-
-					{#if isPreview}
-						<div
-							class="border border-base-300 rounded-box p-5 bg-base-100 min-h-[200px] shadow-inner"
-						>
-							{#if contentJson}
-								<LexicalRenderer {contentJson} {t} />
-							{:else}
-								<p class="text-base-content/40 italic">{t.discussion.previewEmpty}</p>
-							{/if}
-						</div>
-					{/if}
-				</div>
-
-				<!-- Bottom Actions Row -->
-				<div
-					class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-base-300"
-				>
-					<!-- Left utilities -->
-					<div class="flex items-center gap-2">
-						<button
-							type="button"
-							onclick={() => (isPreview = !isPreview)}
-							class="btn btn-sm {isPreview ? 'btn-active' : 'btn-outline'}"
-							disabled={isSubmitting}
-						>
-							{t.editor.preview}
-						</button>
-
-						{#if !isPreview}
-							<button
-								type="button"
-								onclick={saveDraftManual}
-								class="btn btn-sm btn-ghost gap-2"
-								disabled={isLexicalEmpty(contentJson) ||
-									contentJson.length > MAX_CONTENT_SIZE ||
-									isSubmitting ||
-									isSavingManualDraft ||
-									!online.online}
-							>
-								{#if isSavingManualDraft}
-									<span class="loading loading-spinner loading-xs"></span>
-								{/if}
-								{t.editor.saveDraft}
-							</button>
-							{#if showSaveSuccess}
-								<span class="text-xs text-success font-medium transition-opacity duration-300">
-									{t.editor.saved}
-								</span>
-							{/if}
+						{#if !blockPostTheme}
+							<!-- Theme Selector -->
+							<div class="form-control w-full">
+								<label class="label" for="theme-select">
+									<span class="label-text font-bold text-base-content font-medium">
+										{t.theme.customTheme}
+									</span>
+								</label>
+								<select
+									id="theme-select"
+									name="themeName"
+									bind:value={themeName}
+									class="select select-bordered w-full"
+									disabled={isSubmitting || isPreview}
+								>
+									{#each themesList as th (th.value)}
+										<option value={th.value}>{th.label}</option>
+									{/each}
+								</select>
+							</div>
 						{/if}
 					</div>
 
-					<!-- Right submit -->
-					<div class="flex items-center gap-2">
-						<button
-							type="submit"
-							class="btn btn-primary"
-							disabled={!title.trim() ||
-								isLexicalEmpty(contentJson) ||
-								contentJson.length > MAX_CONTENT_SIZE ||
-								isSubmitting ||
-								isPreview ||
-								!online.online}
-						>
-							{#if isSubmitting}
-								<span class="loading loading-spinner loading-xs"></span>
-							{/if}
-							{t.editor.publish}
-						</button>
+					<!-- Content Editor -->
+					<div class="form-control w-full">
+						<label class="label" for="editor-block">
+							<span class="label-text font-bold text-base-content">{t.discussion.content}</span>
+						</label>
+						<input type="hidden" name="contentJson" value={contentJson} />
+
+						<div class={isPreview ? 'hidden' : ''} id="editor-block">
+							{#key draftContent}
+								<LexicalEditor
+									contextType="discussion"
+									contextId={0}
+									initialContent={draftContent}
+									onContentChange={(json) => (contentJson = json)}
+									onSubmit={() => {
+										if (!isSubmitting && online.online) publishForm?.requestSubmit();
+									}}
+									placeholder={t.editor.placeholder}
+									{t}
+								/>
+							{/key}
+						</div>
+
+						{#if isPreview}
+							<div
+								class="border border-base-300 rounded-box p-5 bg-base-100 min-h-[200px] shadow-inner"
+							>
+								{#if contentJson}
+									<LexicalRenderer {contentJson} {t} />
+								{:else}
+									<p class="text-base-content/40 italic">{t.discussion.previewEmpty}</p>
+								{/if}
+							</div>
+						{/if}
 					</div>
+
+					<!-- Bottom Actions Row -->
+					<div
+						class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-base-300"
+					>
+						<!-- Left utilities -->
+						<div class="flex items-center gap-2">
+							<button
+								type="button"
+								onclick={() => (isPreview = !isPreview)}
+								class="btn btn-sm {isPreview ? 'btn-active' : 'btn-outline'}"
+								disabled={isSubmitting}
+							>
+								{t.editor.preview}
+							</button>
+
+							{#if !isPreview}
+								<button
+									type="button"
+									onclick={saveDraftManual}
+									class="btn btn-sm btn-ghost gap-2"
+									disabled={isLexicalEmpty(contentJson) ||
+										contentJson.length > MAX_CONTENT_SIZE ||
+										isSubmitting ||
+										isSavingManualDraft ||
+										!online.online}
+								>
+									{#if isSavingManualDraft}
+										<span class="loading loading-spinner loading-xs"></span>
+									{/if}
+									{t.editor.saveDraft}
+								</button>
+								{#if showSaveSuccess}
+									<span class="text-xs text-success font-medium transition-opacity duration-300">
+										{t.editor.saved}
+									</span>
+								{/if}
+							{/if}
+						</div>
+
+						<!-- Right submit -->
+						<div class="flex items-center gap-2">
+							<button
+								type="submit"
+								class="btn btn-primary"
+								disabled={!title.trim() ||
+									isLexicalEmpty(contentJson) ||
+									contentJson.length > MAX_CONTENT_SIZE ||
+									isSubmitting ||
+									isPreview ||
+									!online.online}
+							>
+								{#if isSubmitting}
+									<span class="loading loading-spinner loading-xs"></span>
+								{/if}
+								{t.editor.publish}
+							</button>
+						</div>
+					</div>
+				</form>
+			{:else}
+				<div class="bg-base-200 p-6 text-center text-base-content/70 rounded-box">
+					{t.discussion.noPermission}
 				</div>
-			</form>
-		{:else}
-			<div class="bg-base-200 p-6 text-center text-base-content/70 rounded-box">
-				{t.discussion.noPermission}
-			</div>
-		{/if}
-	</div>
+			{/if}
+		</div>
+	</GesturePageLayout>
 </DualColumnLayout>

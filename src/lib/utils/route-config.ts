@@ -151,10 +151,12 @@ export const ROUTE_CONFIGS: readonly BaseRouteConfig[] = [
 	},
 	{
 		pattern: /^\/post\/discussion$/,
+		getParent: () => '/',
 		fab: { family: 'compose', kind: 'discussions' }
 	},
 	{
 		pattern: /^\/messages\/new$/,
+		getParent: () => '/messages/inbox',
 		fab: { family: 'compose', kind: 'messages' }
 	},
 	{
@@ -205,6 +207,19 @@ export function isOverlayRoute(pathname: string): boolean {
 export function isComposeRoute(pathname: string): boolean {
 	const rule = getRouteFabRule(pathname);
 	return rule ? rule.fab?.family === 'compose' : false;
+}
+
+/**
+ * A route whose +page.svelte mounts a GesturePageLayout, so it owns the
+ * horizontal gesture and DualColumnLayout's tab-swipe must yield to it. True
+ * for overlay routes (thread / conversation) and every deep route in
+ * DEEP_ROUTES, which (now that the compose forms carry getParent) includes the
+ * compose forms too: compose is a module child like a thread. Pager routes are
+ * not GPL-mounted (the MobileTabPager owns their gesture) and are excluded by
+ * the consumer's own isPagerRoute check.
+ */
+export function isGesturePageLayoutRoute(pathname: string): boolean {
+	return isOverlayRoute(pathname) || DEEP_ROUTES.some((r) => r.pattern.test(pathname));
 }
 
 /**
