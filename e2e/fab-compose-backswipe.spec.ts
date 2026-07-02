@@ -9,7 +9,7 @@ import { prepareContext, waitForHydration, swipeBack, openSidebarAndGoto } from 
  * back-swipe toward the list does NOT scale the FAB in with the finger the way a
  * tab swipe (Family A) or a settings/deep back-swipe (Family B overlay) does.
  * The FAB stays hidden for the whole gesture and only appears AFTER the route
- * commits to the list ("它在换完页面才出现").
+ * commits to the list.
  *
  * Mechanism: /post/discussion mounts the SAME <GesturePageLayout centerTab={0}
  * leftHref="/"> as a deep route, and that GPL publishes the SAME live
