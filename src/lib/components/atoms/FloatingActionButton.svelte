@@ -10,11 +10,11 @@
 	 * (FloatingActionButtonLayer); the atom is viewport-agnostic.
 	 *
 	 * CSS transition on `transform`: active only when `transitionEnabled` is true
-	 * (Family C compose route-swap, where no sibling track exists to sample).
-	 * Families A/B run a per-frame rAF sampler that follows the track's own
+	 * (the discrete list<->compose swap; during a drag compose reads `coverProgress` like overlay, so the transition handles only the non-drag swap).
+	 * Family A runs a per-frame rAF sampler that follows the track's own
 	 * CSS easing 1:1; enabling the atom's transition then would run a second
 	 * unsynchronized clock and double-animate. The layer therefore drives
-	 * `transitionEnabled = !samplerActive && !dragging && !holdover`.
+	 * `transitionEnabled = !pager.dragging && (discreteNavInFlight || pendingNav !== null)`.
 	 *
 	 * Visibility gates (both feed `pointer-events` and `aria-hidden`):
 	 *   - scale hidden: `scale < 0.01` (route-transition scale-out)

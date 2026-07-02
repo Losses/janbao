@@ -16,11 +16,14 @@
 	 *     deadzone-free) published by GesturePageLayout on both the centerTab and
 	 *     deep branches from the live `rawDragOffset`. The store signal drives
 	 *     the scale directly each frame.
-	 *   - Family C (compose): discrete resting fraction (0, covered). The
-	 *     discrete-nav CSS transition eases the list<->compose swap.
+	 *   - Family C (compose): like Family B, reads `pager.coverProgress`
+	 *     (GesturePageLayout publishes it on the centerTab branch). The
+	 *     discrete-nav CSS transition still eases the non-drag list<->compose swap.
 	 *
-	 * `scaleFromFraction` maps foregroundFraction 1:1 over [0,1], so the FAB
-	 * tracks the finger across the whole drag.
+	 * `scaleFromFraction` maps foregroundFraction over the second half of its
+	 * range (`clamp(2·f − 1, 0, 1)`): the FAB disappears over the first 50% of a
+	 * route transition and appears over the last 50%, tracking the finger across
+	 * the whole drag.
 	 *
 	 * Non-drag navigation (drawer tap, back arrow, forward enter, commit) is
 	 * eased by the atom's CSS transition. `discreteNavInFlight` latches on any
@@ -367,8 +370,8 @@
 	});
 
 	/** Per-family foreground fraction (0 = source list covered, 1 = fully
-	 *  foreground). Family A reads the sampler; Family B reads `coverProgress`;
-	 *  Family C rests at 0. `chipExitActive` overrides to 0. */
+	 *  foreground). Family A reads the sampler; Families B and C read
+	 *  `coverProgress`. `chipExitActive` overrides to 0. */
 	const foregroundFraction = $derived.by(() => {
 		const cfg = displayConfig;
 		if (cfg === null) return 0;
@@ -385,13 +388,15 @@
 				: getCurrentTabIndex(page.url.pathname);
 			return tabFraction(restActiveTab, cfg.tabIndex);
 		}
-		if (cfg.family === 'overlay') {
-			// Live coverProgress from the pager store. Resting (null) = 0.
-			return pager.coverProgress ?? 0;
-		}
-		// Family C (compose): covered at rest. The discrete-nav CSS transition
-		// eases the list<->compose swap.
-		return 0;
+		// Families B (overlay) and C (compose): both mount a GesturePageLayout
+		// that publishes `coverProgress` from the live `rawDragOffset`, so the
+		// FAB follows the finger across the drag and the commit slide. Resting
+		// (null server-side / pre-mount, 0 client-side) maps to 0; the discrete
+		// forward/back swap is eased by the `discreteNavInFlight` CSS latch.
+		// During a GPL chip-exit the source list is not revealed, so the GPL
+		// publishes 0 (gated on `swipeNeedsLoadingAtStart`) and the FAB hides
+		// under the LoadingChip.
+		return pager.coverProgress ?? 0;
 	});
 
 	const scale = $derived(scaleFromFraction(foregroundFraction));

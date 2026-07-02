@@ -2,40 +2,26 @@ import { test, expect } from '@playwright/test';
 import { prepareContext, waitForHydration, swipeBack, openSidebarAndGoto } from './helpers';
 
 /**
- * Compose-route DRAG back-swipe FAB regression.
+ * Compose-family FAB regression guards (DV16).
  *
- * Reported defect: on mobile, tapping the FAB to enter the compose page
- * (/post/discussion) animates the FAB out (forward nav is fine), but a DRAG
- * back-swipe toward the list does NOT scale the FAB in with the finger the way a
- * tab swipe (Family A) or a settings/deep back-swipe (Family B overlay) does.
- * The FAB stays hidden for the whole gesture and only appears AFTER the route
- * commits to the list.
+ * These specs guard two invariants of the FAB scale signal:
  *
- * Mechanism: /post/discussion mounts the SAME <GesturePageLayout centerTab={0}
- * leftHref="/"> as a deep route, and that GPL publishes the SAME live
- * pager.coverProgress (0..1 with the finger) during the back-swipe. The overlay
- * family reads pager.coverProgress directly, so its FAB follows the finger. The
- * compose family does not: FloatingActionButtonLayer's foregroundFraction
- * derivation hardcodes 0 for family === 'compose' and never reads coverProgress.
- * So during the drag the FAB scale is pinned at scaleFromFraction(0) = 0; only
- * when the route swaps to the list does the family become 'list' and the
- * discreteNavInFlight CSS latch ease the scale 0 -> 1 over 200ms AFTER the swap.
+ *  1. The compose family reads `pager.coverProgress` (like the overlay family),
+ *     so the FAB follows the finger during a drag back-swipe from a compose route
+ *     toward its source list, scaling in over the last 50% of the gesture.
+ *  2. The GesturePageLayout publishes `coverProgress = 0` during a cross-tab
+ *     chip-exit (`swipeNeedsLoadingAtStart`), so the FAB hides under the
+ *     LoadingChip.
  *
- * Why prior coverage missed it: fab.spec.ts "Family C back" drives the back via
- * page.goBack() (a discrete browser-back), which is eased by the atom's CSS
- * transition and never needs the live gesture signal. The drag is the only path
- * that needs the signal, so the compose branch's missing signal was never
- * exercised. fab-deep-page-boundary.spec.ts covers the drag back-swipe but only
- * for the overlay/deep routes (/bookmarks, /profile/edit, /search) - never the
- * compose family.
- *
- * Discriminator: a per-frame {scale, pathname} probe across the gesture. The
- * gesture is correct iff the FAB scale rises above threshold WHILE the URL is
- * still the source route (finger revealing the list / commit-slide playing,
- * before history lands on the list). The defect produces zero such pre-swap
- * frames: every frame on the compose route is scale ~0, and scale only rises
- * after pathname becomes the list. A matching overlay calibration proves the
- * probe + CDP gesture work for the family that DOES read coverProgress.
+ * Discriminator: a per-frame `{scale, pathname}` probe across the gesture. The
+ * back-swipe contract holds iff the FAB scale rises above threshold AND passes
+ * through an intermediate value WHILE the URL is still the compose route
+ * (pre-swap). The chip-exit contract holds iff the FAB scale stays below
+ * threshold for every frame the `.loading-overlay` is mounted. Both sample the
+ * resolved `getComputedStyle(fab).transform` (tautology-resistant) and key the
+ * window to live DOM state (the pathname / the overlay element), not to internal
+ * flags. A CALIBRATION spec on the overlay route `/bookmarks` proves the probe
+ * and the CDP gesture surface work for a family that already reads `coverProgress`.
  */
 
 test.beforeEach(async ({ context }) => {
@@ -155,8 +141,8 @@ function dump(c: BackSwipeCapture): string {
 
 // CALIBRATION: the deep overlay route /bookmarks reads pager.coverProgress, so a
 // drag back-swipe to / scales the FAB in DURING the gesture (before the URL
-// swaps). Proves the {scale,path} probe + CDP gesture work; isolates the compose
-// defect to the compose branch, not the harness.
+// swaps). Proves the {scale,path} probe + CDP gesture work; isolates a compose
+// regression to the compose branch, not the harness.
 test('CALIBRATION (overlay): `/bookmarks` -> `/` drag back-swipe scales the FAB in before the swap', async ({
 	page
 }) => {
@@ -170,10 +156,7 @@ test('CALIBRATION (overlay): `/bookmarks` -> `/` drag back-swipe scales the FAB 
 		await swipeBack(page);
 		await page.waitForURL('/', { timeout: 5000 });
 	});
-	expect(
-		capture.samples.length,
-		`probe must capture frames. ${dump(capture)}`
-	).toBeGreaterThan(0);
+	expect(capture.samples.length, `probe must capture frames. ${dump(capture)}`).toBeGreaterThan(0);
 	expect(capture.maxScale, `overlay FAB must eventually reach scale 1. ${dump(capture)}`).toBeGreaterThan(
 		0.9
 	);
@@ -181,17 +164,15 @@ test('CALIBRATION (overlay): `/bookmarks` -> `/` drag back-swipe scales the FAB 
 		capture.maxPreSwapScale,
 		`overlay FAB must scale in BEFORE the route swaps (follows the finger). ${dump(capture)}`
 	).toBeGreaterThan(0.3);
+	expect(
+		capture.preSwapIntermediateCount,
+		`overlay FAB must ramp (an intermediate sample in 0.1..0.9), not pop. ${dump(capture)}`
+	).toBeGreaterThan(0);
 });
 
-// DEFECT (regression guard, expected-fail while the defect is open): the
-// compose route /post/discussion ignores pager.coverProgress, so a drag
-// back-swipe keeps the FAB at scale 0 until history commits to /. The body
-// asserts the CORRECT behaviour, so it throws on the current compose branch;
-// `test.fail` marks that throw expected, keeping the suite green while the
-// defect is open. Once the compose branch reads coverProgress the body stops
-// throwing and Playwright errors "passed but expected to fail" - the cue to
-// drop the `.fail` and keep this as a permanent regression guard.
-test.fail('DEFECT: `/post/discussion` -> `/` drag back-swipe must scale the FAB in before the swap', async ({
+// Compose (discussions): the compose family reads pager.coverProgress, so a drag
+// back-swipe /post/discussion -> / scales the FAB in BEFORE the route swaps.
+test('compose `/post/discussion` -> `/` drag back-swipe scales the FAB in before the swap', async ({
 	page
 }) => {
 	await page.goto('/');
@@ -204,30 +185,23 @@ test.fail('DEFECT: `/post/discussion` -> `/` drag back-swipe must scale the FAB 
 		await swipeBack(page);
 		await page.waitForURL('/', { timeout: 5000 });
 	});
-	// Sanity: the FAB does eventually appear (the user sees it after the swap).
-	expect(
-		capture.samples.length,
-		`probe must capture frames. ${dump(capture)}`
-	).toBeGreaterThan(0);
-	expect(
-		capture.maxScale,
-		`FAB must eventually appear after the swap. ${dump(capture)}`
-	).toBeGreaterThan(0.9);
-	// The actual contract: the FAB follows the finger, so its scale must rise
-	// WHILE the URL is still /post/discussion (gesture + commit-slide window).
-	// The defect pins every pre-swap frame at scale 0.
+	expect(capture.samples.length, `probe must capture frames. ${dump(capture)}`).toBeGreaterThan(0);
+	expect(capture.maxScale, `FAB must eventually reach scale 1. ${dump(capture)}`).toBeGreaterThan(0.9);
 	expect(
 		capture.maxPreSwapScale,
 		`compose FAB must scale in BEFORE the route swaps to follow the gesture. ${dump(capture)}`
 	).toBeGreaterThan(0.3);
+	expect(
+		capture.preSwapIntermediateCount,
+		`compose FAB must ramp (an intermediate sample in 0.1..0.9), not pop. ${dump(capture)}`
+	).toBeGreaterThan(0);
 });
 
-// DEFECT (messages variant, expected-fail): /messages/new reaches the same
-// compose family via MessageCompose.svelte's <GesturePageLayout centerTab={2}
-// leftHref="/messages/inbox">, so the identical drag back-swipe defect hits the
-// messages source list too. Guards against a fix that lands the coverProgress
-// read on the discussions compose route only.
-test.fail('DEFECT (messages): `/messages/new` -> `/messages/inbox` drag back-swipe must scale the FAB in before the swap', async ({
+// Compose (messages): /messages/new reaches the same compose family via
+// MessageCompose.svelte's <GesturePageLayout centerTab={2} leftHref="/messages/inbox">.
+// Guards against a fix that lands the coverProgress read on the discussions
+// compose route only.
+test('compose (messages) `/messages/new` -> `/messages/inbox` drag back-swipe scales the FAB in before the swap', async ({
 	page
 }) => {
 	await page.goto('/messages/inbox');
@@ -240,16 +214,182 @@ test.fail('DEFECT (messages): `/messages/new` -> `/messages/inbox` drag back-swi
 		await swipeBack(page);
 		await page.waitForURL('/messages/inbox', { timeout: 5000 });
 	});
-	expect(
-		capture.samples.length,
-		`probe must capture frames. ${dump(capture)}`
-	).toBeGreaterThan(0);
-	expect(
-		capture.maxScale,
-		`FAB must eventually appear after the swap. ${dump(capture)}`
-	).toBeGreaterThan(0.9);
+	expect(capture.samples.length, `probe must capture frames. ${dump(capture)}`).toBeGreaterThan(0);
+	expect(capture.maxScale, `FAB must eventually reach scale 1. ${dump(capture)}`).toBeGreaterThan(0.9);
 	expect(
 		capture.maxPreSwapScale,
 		`messages compose FAB must scale in BEFORE the route swaps to follow the gesture. ${dump(capture)}`
 	).toBeGreaterThan(0.3);
+	expect(
+		capture.preSwapIntermediateCount,
+		`messages compose FAB must ramp (an intermediate sample in 0.1..0.9), not pop. ${dump(capture)}`
+	).toBeGreaterThan(0);
+});
+
+interface ChipFrame {
+	scale: number | null;
+	hasOverlay: boolean;
+}
+
+/**
+ * Cross-tab chip-exit guard: a drawer/tab tap from /post/discussion toward a
+ * different tab routes through the GesturePageLayout chip-exit path, which
+ * publishes coverProgress = 0 (gated on swipeNeedsLoadingAtStart). The FAB must
+ * stay hidden (scale ~0) for every frame the z-30 LoadingChip is mounted, not
+ * paint above it at scale 1.
+ *
+ * The probe keys the chip-exit window on the `.loading-overlay` DOM (not on
+ * pendingNav) so the post-preload window is sampled. The preload micro-task
+ * window itself is sub-frame for a warm target and is guarded structurally by
+ * the GPL gating (swipeNeedsLoadingAtStart is set alongside isPendingNavigation),
+ * not by a painted frame here.
+ */
+test('compose `/post/discussion` cross-tab chip-exit hides the FAB under the LoadingChip', async ({
+	page
+}) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	await page.locator('[data-testid="fab"]').click({ force: true });
+	await page.waitForURL('/post/discussion', { timeout: 5000 });
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+
+	const samples: ChipFrame[] = [];
+	try {
+		await page.exposeBinding('__pushChipFrame', async (_src, value: ChipFrame) => {
+			samples.push(value);
+		});
+	} catch {
+		/* already exposed on a reused page in the same worker */
+	}
+	const probe = (): void => {
+		const g = window as unknown as { __chipArmed?: boolean };
+		const tick = (): void => {
+			if (g.__chipArmed === true) {
+				const fab = document.querySelector('[data-testid="fab"]');
+				let scale: number | null = null;
+				if (fab) {
+					const m = getComputedStyle(fab).transform || '';
+					const paren = m.match(/matrix(?:3d)?\(([^)]+)\)/);
+					if (paren) {
+						const a = Number(paren[1].split(',')[0].trim());
+						if (!Number.isNaN(a)) scale = a;
+					} else if (m === 'none') {
+						scale = 0;
+					}
+				}
+				(window as unknown as { __pushChipFrame?: (v: ChipFrame) => void }).__pushChipFrame?.({
+					scale,
+					hasOverlay: !!document.querySelector('.loading-overlay')
+				});
+			}
+			requestAnimationFrame(tick);
+		};
+		requestAnimationFrame(tick);
+	};
+	await page.addInitScript(probe);
+	await page.evaluate(probe);
+	await page.evaluate((b) => {
+		(window as unknown as { __chipArmed?: boolean }).__chipArmed = b;
+	}, true);
+	// Cross-tab tap to a different tab triggers the GPL chip-exit path.
+	await openSidebarAndGoto(page, '/activity');
+	await page.waitForURL('/activity', { timeout: 5000 });
+	await page.waitForTimeout(500);
+	await page.evaluate((b) => {
+		(window as unknown as { __chipArmed?: boolean }).__chipArmed = b;
+	}, false);
+
+	const overlayFrames = samples.filter((s) => s.hasOverlay && s.scale !== null) as {
+		scale: number;
+		hasOverlay: boolean;
+	}[];
+	const overlayScales = overlayFrames.map((s) => s.scale);
+	const maxOverlayScale = overlayScales.length ? Math.max(...overlayScales) : NaN;
+	expect(
+		overlayFrames.length,
+		'the chip-exit must render the LoadingChip for at least one captured frame'
+	).toBeGreaterThan(0);
+	expect(
+		maxOverlayScale,
+		`FAB must stay hidden (scale < 0.1) under the LoadingChip during the cross-tab chip-exit. maxOverlayScale=${Number.isNaN(maxOverlayScale) ? 'NaN' : maxOverlayScale.toFixed(2)}`
+	).toBeLessThan(0.1);
+});
+
+// Overlay (deep branch) variant of the chip-exit guard. /bookmarks takes the GPL
+// deep branch (no centerTab); a cross-tab tap publishes coverProgress = 0 via the
+// deep committed publish point's swipeNeedsLoadingAtStart gate, so the overlay
+// FAB stays hidden under the chip. Covers the deep branch gating that the
+// compose (centerTab) test above does not reach.
+test('overlay `/bookmarks` cross-tab chip-exit hides the FAB under the LoadingChip', async ({
+	page
+}) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+	await openSidebarAndGoto(page, '/bookmarks');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+
+	const samples: ChipFrame[] = [];
+	try {
+		await page.exposeBinding('__pushChipFrame', async (_src, value: ChipFrame) => {
+			samples.push(value);
+		});
+	} catch {
+		/* already exposed on a reused page in the same worker */
+	}
+	const probe = (): void => {
+		const g = window as unknown as { __chipArmed?: boolean };
+		const tick = (): void => {
+			if (g.__chipArmed === true) {
+				const fab = document.querySelector('[data-testid="fab"]');
+				let scale: number | null = null;
+				if (fab) {
+					const m = getComputedStyle(fab).transform || '';
+					const paren = m.match(/matrix(?:3d)?\(([^)]+)\)/);
+					if (paren) {
+						const a = Number(paren[1].split(',')[0].trim());
+						if (!Number.isNaN(a)) scale = a;
+					} else if (m === 'none') {
+						scale = 0;
+					}
+				}
+				(window as unknown as { __pushChipFrame?: (v: ChipFrame) => void }).__pushChipFrame?.({
+					scale,
+					hasOverlay: !!document.querySelector('.loading-overlay')
+				});
+			}
+			requestAnimationFrame(tick);
+		};
+		requestAnimationFrame(tick);
+	};
+	await page.addInitScript(probe);
+	await page.evaluate(probe);
+	await page.evaluate((b) => {
+		(window as unknown as { __chipArmed?: boolean }).__chipArmed = b;
+	}, true);
+	// Cross-tab tap to a different tab triggers the GPL deep-branch chip-exit.
+	await openSidebarAndGoto(page, '/activity');
+	await page.waitForURL('/activity', { timeout: 5000 });
+	await page.waitForTimeout(500);
+	await page.evaluate((b) => {
+		(window as unknown as { __chipArmed?: boolean }).__chipArmed = b;
+	}, false);
+
+	const overlayFrames = samples.filter((s) => s.hasOverlay && s.scale !== null) as {
+		scale: number;
+		hasOverlay: boolean;
+	}[];
+	const overlayScales = overlayFrames.map((s) => s.scale);
+	const maxOverlayScale = overlayScales.length ? Math.max(...overlayScales) : NaN;
+	expect(
+		overlayFrames.length,
+		'the overlay chip-exit must render the LoadingChip for at least one captured frame'
+	).toBeGreaterThan(0);
+	expect(
+		maxOverlayScale,
+		`overlay FAB must stay hidden (scale < 0.1) under the LoadingChip during the cross-tab chip-exit (deep branch). maxOverlayScale=${Number.isNaN(maxOverlayScale) ? 'NaN' : maxOverlayScale.toFixed(2)}`
+	).toBeLessThan(0.1);
 });

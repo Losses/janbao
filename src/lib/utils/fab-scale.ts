@@ -7,8 +7,9 @@
  *
  *   - Route-transition driver: `s = scaleFromFraction(foregroundFraction)`.
  *     foregroundFraction is the live gesture/page progress 0..1 (1 = the
- *     source list is fully foreground, 0 = fully covered). scale maps it 1:1
- *     over the full range so the FAB follows the finger across the whole drag.
+ *     source list is fully foreground, 0 = fully covered). scale maps it over the second half of its range: the FAB disappears over the
+ *     first 50% of a transition and appears over the last 50%, tracking the finger
+ *     across the whole drag (see scaleFromFraction).
  *   - Scroll driver: `p = hideProgress(translateY, headerHeight)`,
  *     `y = p * (fabHeight + bottomClearance)`. Mirrors the Header's hide-on-scroll.
  *
@@ -66,9 +67,9 @@ export type FabFamily = 'list' | 'overlay' | 'compose';
  *
  * Only Family A (list / tab pager): the MobileTabPager `fractionalIndex` jumps
  * to its integer endpoint on release while the track keeps easing, so the
- * per-frame track read is the continuous signal across the snap. Family B
- * (overlay) reads the live `coverProgress` store signal directly (no sampler);
- * Family C (compose) eases its discrete swap via the atom CSS transition.
+ * per-frame track read is the continuous signal across the snap. Families B (overlay) and C (compose) both read the live `coverProgress` store
+ * signal directly (no sampler); the atom's CSS transition eases only their
+ * discrete (non-drag) swaps.
  */
 export function familyNeedsSamplerDuringDrag(family: FabFamily): boolean {
 	return family === 'list';

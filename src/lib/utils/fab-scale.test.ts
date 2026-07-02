@@ -72,7 +72,7 @@ describe('familyNeedsSamplerDuringDrag', () => {
 		expect(familyNeedsSamplerDuringDrag('overlay')).toBe(false);
 	});
 
-	test('Family C (compose) -> false (no sibling track to sample)', () => {
+	test('Family C (compose) -> false (reads live coverProgress, like overlay)', () => {
 		expect(familyNeedsSamplerDuringDrag('compose')).toBe(false);
 	});
 

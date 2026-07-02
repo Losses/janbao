@@ -32,8 +32,9 @@ interface PagerUpdate {
 	active: boolean;
 	backMorph: number | null;
 	targetIndex?: number | null;
-	/** FAB-only overlay cover progress 0..1 (null = not published; the FAB falls
-	 * back to its resting fraction). Optional so non-GPL writers (MobileTabPager,
+	/** source-list reveal progress 0..1, consumed by the FAB layer and published
+	 * by GesturePageLayout. null = not published, so the FAB falls back to its
+	 * resting fraction. Optional so non-GPL writers (MobileTabPager,
 	 * SearchScopePager) compile without touching it. */
 	coverProgress?: number | null;
 }

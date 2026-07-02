@@ -24,7 +24,12 @@
 		clearActiveGestureTrack
 	} from '$lib/stores/active-gesture-track.svelte';
 
-	import { MOBILE_TABS, isPagerRoute, getCurrentTabIndex, DEEP_ROUTES } from '$lib/utils/route-config';
+	import {
+		MOBILE_TABS,
+		isPagerRoute,
+		getCurrentTabIndex,
+		DEEP_ROUTES
+	} from '$lib/utils/route-config';
 
 	interface Props {
 		children: Snippet;
@@ -353,7 +358,9 @@
 			// unclamped rawDragOffset so the FAB tracks the finger (and a reversal)
 			// across the full 0..1 range. On commit (drag released, nav pending) the
 			// list is being revealed fully, so cover continues to 1, easing the FAB
-			// toward scale 1 across the commit slide.
+			// toward scale 1 across the commit slide. During a chip-exit
+			// (swipeNeedsLoadingAtStart) the LoadingChip stands in for the source list,
+			// so the published coverProgress is 0 (see the gate in the pager.set below).
 			let cover = 0;
 			if (dragOffset !== null && viewportWidth) {
 				const dragProgress = Math.max(0, Math.min(1, -dragOffset / viewportWidth));
@@ -376,7 +383,7 @@
 				active: true,
 				backMorph: null,
 				targetIndex: null,
-				coverProgress: cover
+				coverProgress: swipeNeedsLoadingAtStart ? 0 : cover
 			});
 			return;
 		}
@@ -384,7 +391,9 @@
 		// ...): the MobileTabBar would otherwise show no pill and snap only after
 		// navigation. Drive the pill ourselves so a back-swipe animates it from the
 		// current page's tab index (-1 = no pill) toward the back target's tab,
-		// tracking the finger like the 3-tab pager does.
+		// tracking the finger like the 3-tab pager does. coverProgress mirrors this
+		// progress (the FAB reads it), but is forced to 0 during a chip-exit
+		// (swipeNeedsLoadingAtStart) where the LoadingChip stands in for the source list.
 		const fromIdx = getCurrentTabIndex(page.url.pathname);
 		const targetIdx = resolvedLeftHref ? getCurrentTabIndex(resolvedLeftHref) : -1;
 		const committed =
@@ -411,7 +420,7 @@
 				active: true,
 				backMorph: progress,
 				targetIndex: targetIdx >= 0 ? targetIdx : null,
-				coverProgress: progress
+				coverProgress: swipeNeedsLoadingAtStart ? 0 : progress
 			});
 		} else if (committed) {
 			pager.set({
@@ -420,7 +429,7 @@
 				active: true,
 				backMorph: 1,
 				targetIndex: targetIdx >= 0 ? targetIdx : null,
-				coverProgress: 1
+				coverProgress: swipeNeedsLoadingAtStart ? 0 : 1
 			});
 		} else {
 			pager.set({

@@ -232,7 +232,8 @@ export function isOverlayRoute(pathname: string): boolean {
 	return rule ? rule.fab?.family === 'overlay' && rule.fab?.kind !== 'deep' : false;
 }
 
-/** Compose route (no pager, no track to sample). */
+/** Compose route (mounts a GesturePageLayout that publishes coverProgress; the
+ *  FAB reads it like the overlay family). */
 export function isComposeRoute(pathname: string): boolean {
 	const rule = getRouteFabRule(pathname);
 	return rule ? rule.fab?.family === 'compose' : false;
