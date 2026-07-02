@@ -129,6 +129,14 @@ async function readIconLog(page: Page): Promise<IconFrame[]> {
 	});
 }
 
+/** Wait for the sampler rAF loop to run its full window (sets `done = true`). */
+async function waitForIconSamplerDone(page: Page, timeoutMs = 3000): Promise<void> {
+	await page.waitForFunction(
+		() => (window as unknown as IconWindow).__iconLog?.done === true,
+		{ timeout: timeoutMs }
+	);
+}
+
 /** Max icon target rotation (deg) observed on `destPath` across the log. */
 interface FlashSummary {
 	maxTargetOnDest: number;
@@ -218,7 +226,7 @@ test('CALIBRATION: / -> /search -> browser-back -> / reaches / with the icon sam
 	await installIconSampler(page);
 	await page.goBack();
 	await page.waitForURL('**/', { timeout: 8000 });
-	await page.waitForTimeout(500);
+	await waitForIconSamplerDone(page);
 
 	const log = await readIconLog(page);
 	expect(log.length, 'sampler must capture frames across the back nav').toBeGreaterThan(20);
@@ -248,7 +256,7 @@ test('REGRESSION: browser-back /search -> / keeps the hamburger down (no arrow f
 	await page.goBack();
 	await page.waitForURL('**/', { timeout: 8000 });
 	// Capture through the ~200ms scrub + the CSS transition settle.
-	await page.waitForTimeout(700);
+	await waitForIconSamplerDone(page);
 
 	const log = await readIconLog(page);
 	const s = summarizeFlash(log, '/');
@@ -293,7 +301,7 @@ test('INTERMITTENCY: every /search -> / back in a fresh-load loop keeps the hamb
 		await installIconSampler(page);
 		await page.goBack();
 		await page.waitForURL('**/', { timeout: 8000 });
-		await page.waitForTimeout(500);
+		await waitForIconSamplerDone(page);
 		const log = await readIconLog(page);
 		const s = summarizeFlash(log, '/');
 		perIterMax.push(s.maxTargetOnDest);
@@ -346,7 +354,7 @@ test.describe('DESTINATIONS: /search -> each tab root keeps the hamburger down',
 			await installIconSampler(page);
 			await page.goBack();
 			await page.waitForURL(`**${dest}`, { timeout: 8000 });
-			await page.waitForTimeout(700);
+			await waitForIconSamplerDone(page);
 
 			const log = await readIconLog(page);
 			const s = summarizeFlash(log, dest);
@@ -370,3 +378,16 @@ test.describe('DESTINATIONS: /search -> each tab root keeps the hamburger down',
 		});
 	}
 });
+
+// No OVER-FREEZE e2e: a /search -> deep navigation within the ~200ms scrub
+// window is the theoretical trajectory where a lingering scrub could freeze the
+// icon at the hamburger on a deep page. Empirically (via `__headerMorphProbe`)
+// the deep-page load lands AFTER the scrub completes (`morph` is already 0 on
+// the first sampled frame), so `searchScrubbing` is false at landing and the
+// icon correctly shows the arrow. The over-freeze is therefore practically
+// unreachable through a real navigation, and a discriminator e2e cannot reliably
+// catch the scrub in flight. The `currentHasTabs` gate in the `iconProgress`
+// freeze (`isSearch || (searchScrubbing && currentHasTabs)`) is a defensive
+// correctness refinement: it is sound by static reasoning (deep pages have
+// `currentHasTabs === false`, so the scrub term does not freeze there) and is
+// verified not to regress the DV13 flash fix by the suite above.
