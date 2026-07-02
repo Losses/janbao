@@ -199,7 +199,7 @@ test('Bug4: global page (search) back-swipe shows the Discussions preview panel 
 	await page.waitForTimeout(100);
 
 	const metrics = await page.evaluate(() => {
-		const preview = document.querySelector('section[data-preview-tab="discussions"]') as HTMLElement | null;
+		const preview = document.querySelector('section[data-tab-panel="discussions"]') as HTMLElement | null;
 		const overlay = document.querySelector('.loading-overlay') as HTMLElement | null;
 		return {
 			hasPreview: !!preview,

@@ -163,6 +163,7 @@ header nav {
 		display: none;
 	}
 	/* Do not hide the page title inside gesture preview/snapshot panels */
+	.appbar-title [data-tab-panel] .page-title,
 	.appbar-title [data-deep-preview] .page-title {
 		display: block;
 	}

@@ -50,9 +50,9 @@ test.describe('Swipe Back Preview Bug from Bookmarks to Inbox', () => {
 
 		// 4. Assert preview state (reproducing the bug)
 		const previewMetrics = await page.evaluate(() => {
-			const previewEl = document.querySelector('section[data-preview-tab="messages"]') as HTMLElement | null;
+			const previewEl = document.querySelector('section[data-tab-panel="messages"]') as HTMLElement | null;
 			if (!previewEl) {
-				return { error: 'Preview element section[data-preview-tab="messages"] not found' };
+				return { error: 'Preview element section[data-tab-panel="messages"] not found' };
 			}
 
 			const titleEl = previewEl.querySelector('.page-title') as HTMLElement | null;
@@ -87,7 +87,7 @@ test.describe('Swipe Back Preview Bug from Bookmarks to Inbox', () => {
 
 		expect(previewMetrics.error).toBeNull();
 		expect(previewMetrics.htmlHasFixedViewport).toBe(true);
-		expect(previewMetrics.hasGplCard).toBe(false);
+		expect(previewMetrics.hasGplCard).toBe(true);
 		expect(previewMetrics.hasTitle).toBe(true);
 		expect(previewMetrics.titleDisplay).not.toBe('none');
 

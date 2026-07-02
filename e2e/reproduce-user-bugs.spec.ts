@@ -143,7 +143,7 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 		await page.waitForTimeout(200);
 
 		// Assert that the preview section is visible and matches "discussions"
-		const leftPreview = page.locator('section[data-preview-tab="discussions"]');
+		const leftPreview = page.locator('section[data-tab-panel="discussions"]');
 		await expect(leftPreview).toBeVisible();
 
 		// Assert that no loading overlay or loading chip is visible
@@ -223,7 +223,7 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 		await page.waitForTimeout(200);
 
 		// Assert that the preview section's discussion rows are visible (meaning layout fallback worked)
-		const row = page.locator('section[data-preview-tab="discussions"] a[href^="/discussion/"]').first();
+		const row = page.locator('section[data-tab-panel="discussions"] a[href^="/discussion/"]').first();
 		await expect(row).toBeVisible();
 
 		await page.mouse.up();
@@ -443,7 +443,7 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 		await page.waitForTimeout(100);
 
 		// Verify that the previewed discussions list has populated row items (not empty or loading)
-		const firstItem = page.locator('section[data-preview-tab="discussions"] a').first();
+		const firstItem = page.locator('section[data-tab-panel="discussions"] a').first();
 		await expect(firstItem).toBeVisible();
 
 		// Clean up touch
@@ -506,7 +506,7 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 		await expect(leftSection).toBeVisible();
 		
 		// Assert that the preview tab attribute is null (non-tab list)
-		const previewTab = await leftSection.getAttribute('data-preview-tab');
+		const previewTab = await leftSection.getAttribute('data-tab-panel');
 		expect(previewTab).toBeNull();
 
 		// Clean up touch

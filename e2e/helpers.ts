@@ -429,7 +429,7 @@ export interface ExitPreviewCapture {
 	animated: boolean;
 	delta: number;
 	sampleCount: number;
-	/** Distinct `data-preview-tab` values of non-centre panels that covered >40%
+	/** Distinct `data-tab-panel` values of non-centre panels that covered >40%
 	 * of the viewport during the slide, in first-seen order. A correct exit
 	 * contains only the target tab; a wrong tab list or a non-tab panel (null)
 	 * is a failure. */
@@ -457,7 +457,7 @@ interface ExitPreviewWindow extends Window {
  * `.detail-scroll-pane` (the thread/conversation centre panel); its parent track
  * holds the left/right preview `<section>`s side-by-side with the centre. Each
  * frame it measures every non-centre section's horizontal intersection with the
- * viewport and records the `data-preview-tab` attribute of any covering >40% of
+ * viewport and records the `data-tab-panel` attribute of any covering >40% of
  * the width. The attribute is set by GesturePageLayout to the rendered panel's
  * tab labelKey (or null when the panel is not a tab list), so detection does not
  * depend on DOM content - content markers collide across pages and cannot
