@@ -60,6 +60,7 @@
 	let { data, children }: LayoutProps = $props();
 
 	const badges = getBadgesStore();
+	const listCache = getListCacheStore();
 	const editorPrefs = getEditorPrefsStore();
 	const uiPrefs = getUiPrefsStore();
 	const pageTheme = getPageThemeStore();
@@ -129,10 +130,10 @@
 		const w = window as E2EWindow;
 		w.__e2eGoto = (href) => goto(href);
 		// Wrap the list-cache setters once (HMR-safe via the hooked flag) so every
-		// cache write - from any caller of getListCacheStore(), including the
-		// (tabs) layout - appends to a log the staleness e2e reads. The wrapper is
-		// installed as an instance own-property that shadows the prototype method,
-		// so the shared singleton records every write regardless of caller.
+		// cache write - from any caller of getListCacheStore() (the root-layout
+		// feeding effect) - appends to a log the staleness e2e reads. The wrapper
+		// is installed as an instance own-property that shadows the prototype
+		// method, so the shared singleton records every write regardless of caller.
 		if (!w.__e2eListCacheHooked) {
 			const store = getListCacheStore();
 			w.__e2eListCache = store;
@@ -183,6 +184,21 @@
 			unreadNotifications: data.unreadNotificationCount,
 			unreadMessages: data.unreadMessageCount
 		});
+	});
+
+	// Feed the swipe-back preview cache (list-cache) from the root layout data on
+	// every route. data.home/activity/messages are eager-loaded by +layout.server.ts
+	// on every route and refresh whenever the root load re-runs (invalidate), so a
+	// root-layout effect keeps every deep-page swipe-back preview in sync with
+	// page.data. The page-data preference is constrained to tab roots: elsewhere
+	// page.data.X may be a same-named but semantically different field (/search
+	// results, /category/*, /profile/*) that must NOT enter the shared cache, so
+	// only the eager-loaded data.* fallback is written there.
+	$effect(() => {
+		const onTabRoot = isTabRootPath(page.url.pathname);
+		listCache.setDiscussions(onTabRoot && page.data.discussions ? page.data : data.home);
+		listCache.setActivity(onTabRoot && page.data.activities ? page.data : data.activity);
+		listCache.setMessages(onTabRoot && page.data.conversations ? page.data : data.messages);
 	});
 
 	// Seed editor feature prefs from the session. The lazy editor chunk loads

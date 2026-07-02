@@ -26,7 +26,6 @@
 	import { getCurrentTabIndex } from '$lib/utils/route-config';
 	import { getDrawerStore } from '$lib/stores/drawer.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
-	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 	import type { LayoutData } from './$types';
 
 	interface TabsLayoutProps {
@@ -35,8 +34,6 @@
 	}
 
 	let { data, children }: TabsLayoutProps = $props();
-
-	const listCache = getListCacheStore();
 
 	// SvelteKit snapshot: capture/restore the list scroll position per-route on
 	// desktop (the window scrolls there). Under fixed-viewport (mobile) the window
@@ -48,16 +45,6 @@
 			restoredScrollY = value;
 		}
 	};
-
-	$effect(() => {
-		if (page.url.pathname === '/') {
-			listCache.setDiscussions(page.data.discussions ? page.data : data.home);
-		} else if (page.url.pathname === '/activity') {
-			listCache.setActivity(page.data.activities ? page.data : data.activity);
-		} else if (page.url.pathname === '/messages/inbox') {
-			listCache.setMessages(page.data.conversations ? page.data : data.messages);
-		}
-	});
 
 	$effect(() => {
 		if (restoredScrollY > 0 && typeof window !== 'undefined') {
