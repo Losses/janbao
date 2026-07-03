@@ -38,13 +38,16 @@
 		setActiveGestureTrack,
 		clearActiveGestureTrack
 	} from '$lib/stores/active-gesture-track.svelte';
+	import { getForwardEdgeStore } from '$lib/stores/forward-edge.svelte';
 	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/route-config';
+	import { resolveForwardTarget } from '$lib/utils/forward-edge';
 	import { backSwipeShouldPopHistory } from '$lib/utils/history-nav';
 	import { getDeepPageSnapshotStore } from '$lib/stores/deep-page-snapshot.svelte';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
 	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
 	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
+	import ForwardEdgeOverlay from '$lib/components/atoms/ForwardEdgeOverlay.svelte';
 	import { mdiArrowLeft } from '@mdi/js';
 	import type { PageUrlBuilder, TabsLayoutData } from '$lib/types/tabs';
 	import type { TranslationDict } from '$lib/types/translation';
@@ -91,6 +94,7 @@
 	// Tab routes are always root-mode for the Header, so backMorph stays null
 	// here (the morph is driven only by deep-page swipe-back in GesturePageLayout).
 	const pager = getMobilePagerStore();
+	const forwardEdge = getForwardEdgeStore();
 	const deepPageSnapshot = getDeepPageSnapshotStore();
 	const navStore = getNavigationStore();
 	const scrollChrome = getScrollChromeStore();
@@ -102,7 +106,7 @@
 	$effect(() => {
 		pager.set({
 			fractionalIndex: activeIndex - (dragOffset ?? 0) / (viewportWidth || 1),
-			dragging: dragOffset !== null || backChipReveal !== null,
+			dragging: dragOffset !== null || backChipReveal !== null || forwardEdge.reveal !== null,
 			active: true,
 			backMorph: null
 		});
@@ -135,6 +139,7 @@
 	});
 	onMount(() => {
 		viewportLock.acquire();
+		forwardEdge.reset();
 		const initialEl = activeIndex === 0 ? section0El : activeIndex === 1 ? section1El : section2El;
 		if (initialEl) scrollChrome.setScrollContainer(initialEl);
 		pager.set({ fractionalIndex: activeIndex, dragging: false, active: true, backMorph: null });
@@ -152,6 +157,7 @@
 		// (svelte-ondestroy-runs-in-ssr memory) and the AppShell layer's pattern.
 		if (!browser) return;
 		viewportLock.release();
+		forwardEdge.reset();
 		scrollChrome.setScrollContainer(null);
 		if (trackEl) clearActiveGestureTrack();
 	});
@@ -200,8 +206,9 @@
 	function swipeMove(deltaX: number): void {
 		// During a back-swipe toward a deep page:
 		// - If we have a cached snapshot, overlay the snapshot on section 0 and slide the track.
-		// - Otherwise, do not slide the track and show the shared back chip overlay instead.
+		// - Otherwise, do not slide the track; show the shared back chip overlay.
 		if (deltaX > 0 && backSwipeShouldPopHistory(activeIndex - 1)) {
+			forwardEdge.clearReveal();
 			if (deepPageSnapshot.hasSnapshot) {
 				showDeepPreview = true;
 				backChipReveal = null;
@@ -211,9 +218,17 @@
 				backChipReveal = Math.min(deltaX, window.innerWidth * 0.6);
 				dragOffset = null;
 			}
+		} else if (deltaX < 0 && resolveForwardTarget(activeIndex)?.kind === 'deep') {
+			// Forward edge toward a deep neighbour: grow the right-edge reveal, do
+			// not slide the track (mirrors the no-snapshot back-chip path above).
+			showDeepPreview = false;
+			backChipReveal = null;
+			forwardEdge.setReveal(Math.min(-deltaX, window.innerWidth * 0.6));
+			dragOffset = null;
 		} else {
 			showDeepPreview = false;
 			backChipReveal = null;
+			forwardEdge.clearReveal();
 			dragOffset = follow(deltaX);
 		}
 		getScrollChromeStore().show();
@@ -243,15 +258,24 @@
 		navStore.navigateBackward(MOBILE_TABS[targetIndex].href);
 	}
 	function swipeEnd(deltaX: number, velocity: number, reversed: boolean): void {
-		const last = MOBILE_TABS.length - 1;
 		const wasDeepPreview = showDeepPreview || backChipReveal !== null;
-		if (deltaX <= -SWIPE_COMMIT && activeIndex < last && !reversed) {
-			switchTo(activeIndex + 1);
+		if (deltaX <= -SWIPE_COMMIT && !reversed) {
+			// Forward commit, dispatched by the resolved target kind: a tab target
+			// switches to the next tab; a deep target commits to the tab's
+			// forwardDeepNeighbour.
+			const target = resolveForwardTarget(activeIndex);
+			if (target?.kind === 'tab') {
+				switchTo(target.index);
+			} else if (target?.kind === 'deep') {
+				forwardEdge.commit(target.href);
+			}
 			dragOffset = null;
 			showDeepPreview = false;
 			backChipReveal = null;
+			forwardEdge.clearReveal();
 		} else if (deltaX >= SWIPE_COMMIT && activeIndex > 0 && !reversed) {
 			if (wasDeepPreview) {
+				forwardEdge.clearReveal();
 				isTransitioningOut = true;
 				setTimeout(() => {
 					switchBackward();
@@ -261,11 +285,13 @@
 				dragOffset = null;
 				showDeepPreview = false;
 				backChipReveal = null;
+				forwardEdge.clearReveal();
 			}
 		} else {
 			dragOffset = null;
 			showDeepPreview = false;
 			backChipReveal = null;
+			forwardEdge.clearReveal();
 		}
 	}
 
@@ -431,6 +457,7 @@
 			<LoadingChip icon={mdiArrowLeft} scale={1} expanded={false} pulsing={false} dragging />
 		</div>
 	{/if}
+	<ForwardEdgeOverlay />
 </div>
 
 <style>

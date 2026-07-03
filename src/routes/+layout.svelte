@@ -21,6 +21,7 @@
 	import { initNavigationStore } from '$lib/stores/navigation.svelte';
 	import { initMobilePagerStore, initSearchPagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { initActiveGestureTrack } from '$lib/stores/active-gesture-track.svelte';
+	import { initForwardEdgeStore } from '$lib/stores/forward-edge.svelte';
 	import { getPageScrollStore, getCurrentScrollY } from '$lib/stores/page-scroll.svelte';
 	import { isTabRootPath } from '$lib/utils/history-nav';
 	import { getListCacheStore, type ListCacheStore } from '$lib/stores/list-cache.svelte';
@@ -62,6 +63,7 @@
 	initMobilePagerStore();
 	initSearchPagerStore();
 	initActiveGestureTrack();
+	initForwardEdgeStore();
 	const pageScrollStore = getPageScrollStore();
 
 	// Hold the scroll-chrome header (and pin it visible on hash-enter) for
