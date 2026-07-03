@@ -6,14 +6,14 @@ API error and was re-run as 3b; both count as one seat.
 
 ## Tally
 
-| Auditor | Verdict |
-| --- | --- |
-| 1 | PASS |
-| 2 | PASS |
+| Auditor       | Verdict      |
+| ------------- | ------------ |
+| 1             | PASS         |
+| 2             | PASS         |
 | 3 (API error) | re-run as 3b |
-| 3b | PASS |
-| 4 | PASS |
-| 5 | PASS |
+| 3b            | PASS         |
+| 4             | PASS         |
+| 5             | PASS         |
 
 **5/5 PASS → C00 round 1 PASS. Implementation accepted.**
 
@@ -28,7 +28,7 @@ None.
   longer a cache writer. Refreshed to name the current caller (the root-layout
   feeding effect). Also satisfies the no-history-comments rule.
 - **Misleading e2e titles** (auditor 3b): Test 1's (and, by parity, Test 2's)
-  `test(...)` title described the *defect* ("rewrites ONLY the current tab";
+  `test(...)` title described the _defect_ ("rewrites ONLY the current tab";
   "rewrites NO cache") rather than the behaviour the body asserts (all three
   rewrite). Renamed both to describe the fixed behaviour the bodies assert.
 - **Empty-array write on `/entry/*`**: `setDiscussions` guards on

@@ -93,7 +93,7 @@ Change the `iconProgress` freeze discriminant from the destination mode to "a se
 // (branch 1b) on root<->search taps, where the icon must stay a hamburger at
 // both endpoints. Freeze on `isSearch` (search-mode rest) AND `searchScrubbing`
 // (the tap scrub in flight). Outer parens mirror slideT's discriminant style.
-const iconProgress = $derived((isSearch || searchScrubbing) ? 0 : 1 - morph);
+const iconProgress = $derived(isSearch || searchScrubbing ? 0 : 1 - morph);
 ```
 
 Both endpoints of a root↔search transition have the icon at the hamburger: on a tab root, `morph = 1` -> `iconProgress = 0`; in search mode, `isSearch` -> `0`. Freezing at the literal `0` during the scrub is therefore exactly correct for both the enter and the exit direction.

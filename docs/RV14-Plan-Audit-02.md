@@ -6,12 +6,12 @@ no e2e, no git mutation) reviewed the revised `docs/DV14-Plan.md`.
 ## Tally
 
 | Auditor | Verdict |
-| --- | --- |
-| 1 | PASS |
-| 2 | PASS |
-| 3 | PASS |
-| 4 | PASS |
-| 5 | PASS |
+| ------- | ------- |
+| 1       | PASS    |
+| 2       | PASS    |
+| 3       | PASS    |
+| 4       | PASS    |
+| 5       | PASS    |
 
 **5/5 PASS → round 2 PASS. Plan approved for implementation.**
 

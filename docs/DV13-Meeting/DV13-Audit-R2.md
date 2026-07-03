@@ -4,13 +4,13 @@
 
 ## Tally
 
-| Auditor | Verdict            | Blocking | Concerns | Organic | Confidence |
-| ------- | ------------------ | -------- | -------- | ------- | ---------- |
-| 1       | PASS               | 0        | 2        | clean   | high       |
-| 2       | PASS               | 0        | 2        | clean   | high       |
-| 3       | PASS               | 0        | 3        | clean   | high (fix) / medium (A1 text) |
-| 4       | PASS               | 0        | 5        | clean   | high       |
-| 5       | has-special-cases  | 2        | 4        | clean   | high       |
+| Auditor | Verdict           | Blocking | Concerns | Organic | Confidence                    |
+| ------- | ----------------- | -------- | -------- | ------- | ----------------------------- |
+| 1       | PASS              | 0        | 2        | clean   | high                          |
+| 2       | PASS              | 0        | 2        | clean   | high                          |
+| 3       | PASS              | 0        | 3        | clean   | high (fix) / medium (A1 text) |
+| 4       | PASS              | 0        | 5        | clean   | high                          |
+| 5       | has-special-cases | 2        | 4        | clean   | high                          |
 
 ## Convergent endorsement (all 5)
 

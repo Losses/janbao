@@ -18,6 +18,7 @@ Development log for the DV17 search tap-enter/exit Page/track sync fix. Spec: `d
 **Phase 1 - `src/lib/stores/mobile-pager.svelte.ts`**: added the `tapMorph: number | null` field (optional on `PagerUpdate`, required on `PagerStore`), a closure `$state`, a `get tapMorph()` getter, a `SetTapMorphFn` type + `setTapMorph(value)` field-level setter, and the `set` preservation rule `update.tapMorph !== undefined ? update.tapMorph : tapMorph` (the drag `$effect`'s `pager.set` calls omit `tapMorph` and preserve an in-flight scrub).
 
 **Phase 2 - `src/lib/components/organisms/Header.svelte`** (DECOUPLE + publishers):
+
 - `searchProgress`/`tabProgress` now read `trackMorph = pager.tapMorph !== null ? pager.tapMorph : morph`, so the track/Tab group follows the tap signal pre-nav (exit) and post-nav (enter), with a `morph` fallback at rest and during the drag.
 - Effect E (`:408-432`) is RETAINED master-shaped: it still starts `startSearchScrub` (the morph scrub for the layer group - `rootLayerStyle`/`layerDownStyle`/`iconProgress` keep reading `morph`, so the Tab descent descent is preserved on enter, exit, and `/search → /activity`). It ADDITIONALLY starts the ENTER `tapMorph` rAF when `curIsSearch` (enter-only; the EXIT tapMorph is owned by the `beforeNavigate` below).
 - Added `startTapScrub(from, to, source, target)`: writes `pager.tapMorph` linearly over `TITLE_CROSSFADE_MS`, sets the start value synchronously (NB21/NB17), latches `scrubSource`/`scrubTarget`/`scrubTerminal`.

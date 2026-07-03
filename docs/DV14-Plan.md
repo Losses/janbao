@@ -133,17 +133,17 @@ and the effect, alongside the other seed effects:
 
 ```js
 $effect(() => {
-    // data.home/activity/messages are eager-loaded by +layout.server.ts on every
-    // route and refresh whenever the root load re-runs. Feeding list-cache here
-    // (not in the route-gated (tabs) layout) keeps the swipe-back preview in sync
-    // with page.data on deep pages too. The page-data preference is constrained to
-    // tab roots: elsewhere page.data.X may be a same-named but semantically
-    // different field (search results, category/profile filters) that must NOT
-    // enter the shared cache, so only the eager-loaded data.* fallback is used.
-    const onTabRoot = isTabRootPath(page.url.pathname);
-    listCache.setDiscussions(onTabRoot && page.data.discussions ? page.data : data.home);
-    listCache.setActivity(onTabRoot && page.data.activities ? page.data : data.activity);
-    listCache.setMessages(onTabRoot && page.data.conversations ? page.data : data.messages);
+	// data.home/activity/messages are eager-loaded by +layout.server.ts on every
+	// route and refresh whenever the root load re-runs. Feeding list-cache here
+	// (not in the route-gated (tabs) layout) keeps the swipe-back preview in sync
+	// with page.data on deep pages too. The page-data preference is constrained to
+	// tab roots: elsewhere page.data.X may be a same-named but semantically
+	// different field (search results, category/profile filters) that must NOT
+	// enter the shared cache, so only the eager-loaded data.* fallback is used.
+	const onTabRoot = isTabRootPath(page.url.pathname);
+	listCache.setDiscussions(onTabRoot && page.data.discussions ? page.data : data.home);
+	listCache.setActivity(onTabRoot && page.data.activities ? page.data : data.activity);
+	listCache.setMessages(onTabRoot && page.data.conversations ? page.data : data.messages);
 });
 ```
 
@@ -176,10 +176,11 @@ traffic than the route-gated original, but it is idempotent in content and cheap
 ### 4.4 Blast radius
 
 The fix is one write site. Every `list-cache` reader (§3.2) is corrected together
+
 - no per-reader edits. `MobileTabPager` (§3.4) is untouched. The write is always
-page-1-of-the-tab (`data.*`), except on a tab root where the active tab's
-page-load data wins; the `isTabRootPath` gate guarantees no route-specific list
-data (search results, category/profile filters) enters the cache.
+  page-1-of-the-tab (`data.*`), except on a tab root where the active tab's
+  page-load data wins; the `isTabRootPath` gate guarantees no route-specific list
+  data (search results, category/profile filters) enters the cache.
 
 ### 4.5 Post-refresh back-swipe track-reveal anomaly (UNVERIFIED - out of scope for C00)
 

@@ -90,4 +90,3 @@ re-verified after the cleanups. No code-behaviour change. **DV14-C00 COMPLETE at
   pre-existing OPEN-defect characterization specs failing.
 - The secondary post-refresh track-reveal anomaly (`peak m41 = 0`, Test 3) remains
   UNVERIFIED and out of scope; it is positional and independent of the data fix.
-

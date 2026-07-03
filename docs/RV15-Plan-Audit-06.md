@@ -24,11 +24,11 @@ All five independently confirmed the design. No blocking issues.
 - **N1 - the m-continuity bridge's `lastGestureMorph` arm is dead under the
   invariant (R6-2, R6-4, R6-5).** Inside `if (latchedSettle)`, `settling` is
   always true (the arming invariant), so `progress = settling ? settleProgress :
-  lastGestureMorph` always takes `settleProgress`. The actual m-continuity comes
+lastGestureMorph` always takes `settleProgress`. The actual m-continuity comes
   from `settleProgress = m` (`Header.svelte:285`) set in the same Effect B flush
   as the record. The bridge is retained harmlessly (formula-shape parity); during
   implementation, reframe its comment to "actual continuity from `settleProgress =
-  m` in the same `$effect.pre` flush; `lastGestureMorph` arm is unreachable under
+m` in the same `$effect.pre` flush; `lastGestureMorph` arm is unreachable under
   the arming invariant but kept for parity". (The memory `svelte-effect-pre-same-flush-rerun`
   is about spurious re-runs, not skipped runs - Effect B fires in the dragging-flip
   flush, so the sub-flush release window does not render.)
@@ -41,7 +41,7 @@ All five independently confirmed the design. No blocking issues.
   sub-branch (R6-4).** The idle branch (`:327-342`) has three sub-branches; the
   record arms only where `settling = true` is also set. Note this in implementation.
 - **N4 - bidirectional invariant left implicit (R6-2).** `settling=true ⇔
-  latchedSettle !== null`. State it explicitly in the journal so a future
+latchedSettle !== null`. State it explicitly in the journal so a future
   maintainer doesn't add a third path that flips `settling=false` without clearing
   the record.
 - **N5 - §7 preventive test scope (R6-1, R6-3, R6-5).** Honestly limited to

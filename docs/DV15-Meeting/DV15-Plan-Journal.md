@@ -27,10 +27,11 @@ commit preserved … Guarded by `header-tab-descent-cross-tab-exit.spec.ts`" was
 therefore unverified for the gesture path the fix actually depends on.
 
 **Revision:** added a PRESERVE test to `e2e/deep-to-deep-gesture-morph-spike.spec.ts`
+
 - a `swipeBack` from `/profile/settings` (GPL-mounted deep route, back target
-`/`) to `/`, asserting via `__headerMorphProbe` that `settling === true &&
+  `/`) to `/`, asserting via `__headerMorphProbe` that `settling === true &&
 morph >= 0.9` co-occur in the commit window and the tabs layer descends through
-real intermediate `translateY` px. Specified in Plan §5 and §7.
+  real intermediate `translateY` px. Specified in Plan §5 and §7.
 
 ### B2 - §4.1 / §6 contradicted on latch placement
 

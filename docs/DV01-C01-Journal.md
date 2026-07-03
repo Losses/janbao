@@ -149,14 +149,14 @@
 
 **Post-audit fixes applied:**
 
-| Fix                                 | Description                                                                                                                                         |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Header Logo icon removed            | Per user feedback: requirements demand simplicity, removed the Material Design book icon from Header, now plain text site name only                 |
-| Header Avatar + displayName removed | Per user feedback: original requirements don't ask for user avatar/name in header. Desktop header now only shows nav links + guest sign-in/register |
-| i18n: "Activity Square" → "Activity" | Per user feedback: "Activity is Activity", removed the modifier "Square". En: "Activity Square" → "Activity"                                                  |
-| i18n: added `nav.menu`              | Hamburger `aria-label` now uses i18n key instead of hardcoded English                                                                               |
-| Sidebar sticky removed              | Per user feedback: sidebar sticky positioning is an unnecessary design, removed `sticky top-*` from aside wrapper                                   |
-| Audit docs consolidated             | Per user feedback: all agent findings merged into single `RV01-C01-Audit-01.md`, individual agent docs deleted                                      |
+| Fix                                  | Description                                                                                                                                         |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Header Logo icon removed             | Per user feedback: requirements demand simplicity, removed the Material Design book icon from Header, now plain text site name only                 |
+| Header Avatar + displayName removed  | Per user feedback: original requirements don't ask for user avatar/name in header. Desktop header now only shows nav links + guest sign-in/register |
+| i18n: "Activity Square" → "Activity" | Per user feedback: "Activity is Activity", removed the modifier "Square". En: "Activity Square" → "Activity"                                        |
+| i18n: added `nav.menu`               | Hamburger `aria-label` now uses i18n key instead of hardcoded English                                                                               |
+| Sidebar sticky removed               | Per user feedback: sidebar sticky positioning is an unnecessary design, removed `sticky top-*` from aside wrapper                                   |
+| Audit docs consolidated              | Per user feedback: all agent findings merged into single `RV01-C01-Audit-01.md`, individual agent docs deleted                                      |
 
 **Final verification:**
 
