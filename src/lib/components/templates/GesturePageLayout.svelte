@@ -453,6 +453,16 @@
 					: Math.min(0, dragOffset + W * HEADER_MORPH_THRESHOLD) / (1 - HEADER_MORPH_THRESHOLD)
 	);
 
+	// DV17 tap-morph Page-slide headroom. The tap signal (pager.tapMorph) drives
+	// the track the same way visualDragOffset drives it on a drag, over the same
+	// morph [0.2, 1] segment, so the Page panel and the Header track move
+	// together on a root↔/search tap. null when no tap scrub is in flight (the
+	// drag path and rest fall through to visualDragOffset / snapIndex).
+	const tapVisualOffset = $derived<number | null>(
+		pager.tapMorph === null
+			? null
+			: W * Math.max(0, (pager.tapMorph - HEADER_MORPH_THRESHOLD) / (1 - HEADER_MORPH_THRESHOLD))
+	);
 	const trackTranslateX = $derived<string>(
 		!isMobile
 			? '0px'
@@ -464,15 +474,17 @@
 						: visualDragOffset !== null
 							? `${visualDragOffset}px`
 							: '0px'
-				: visualDragOffset !== null
-					? `calc(-${ACTIVE * STEP_PERCENT}% + ${visualDragOffset}px)`
-					: `-${snapIndex * STEP_PERCENT}%`
+				: tapVisualOffset !== null
+					? `calc(-${ACTIVE * STEP_PERCENT}% + ${tapVisualOffset}px)`
+					: visualDragOffset !== null
+						? `calc(-${ACTIVE * STEP_PERCENT}% + ${visualDragOffset}px)`
+						: `-${snapIndex * STEP_PERCENT}%`
 	);
 
 	const trackStyle = $derived(
 		!isMobile
 			? 'width: 100%; transform: none; display: block;'
-			: `width: ${panelCount * 100}%; transform: translateX(${trackTranslateX}); display: flex; height: 100%;${dragOffset !== null || !transitionEnabled ? ' transition: none !important;' : ''}`
+			: `width: ${panelCount * 100}%; transform: translateX(${trackTranslateX}); display: flex; height: 100%;${dragOffset !== null || !transitionEnabled || pager.tapMorph !== null ? ' transition: none !important;' : ''}`
 	);
 
 	const sectionWidth = $derived(`${100 / panelCount}%`);

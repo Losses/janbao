@@ -45,6 +45,8 @@ interface SearchHdrFrame {
 	backMorph: number | null;
 	/** GesturePageLayout (content) track translateX (px) - the page-change signal on /search. */
 	contentTx: number | null;
+	/** Header rootLayer translateY (px) - the MobileTabBar Tab descent descent signal (DV17 NB27). */
+	rootLayerY: number | null;
 }
 
 interface SearchHdrLog {
@@ -90,6 +92,8 @@ async function installSearchHdrSampler(page: Page, opts: SamplerOpts): Promise<v
 				document.querySelector('header a[href="/search"][aria-label]');
 			const contentEl = (): Element | null =>
 				withContent ? document.querySelector('.detail-scroll-pane')?.parentElement ?? null : null;
+			const rootLayerEl = (): Element | null =>
+				document.querySelector('header div.absolute.inset-0.flex.items-center.justify-center');
 			const start = performance.now();
 			const tick = (): void => {
 				const pp = (window as unknown as { __primaryPager?: { backMorph: number | null } })
@@ -107,7 +111,18 @@ async function installSearchHdrSampler(page: Page, opts: SamplerOpts): Promise<v
 						return el ? Math.round((el as HTMLElement).getBoundingClientRect().left) : null;
 					})(),
 					backMorph: pp ? pp.backMorph : null,
-					contentTx: txOf(contentEl())
+					contentTx: txOf(contentEl()),
+					rootLayerY: (() => {
+						const el = rootLayerEl();
+						if (!el) return null;
+						const tr = getComputedStyle(el).transform;
+						if (tr === 'none') return 0;
+						try {
+							return new DOMMatrix(tr).m42;
+						} catch {
+							return null;
+						}
+					})()
 				});
 				if (performance.now() - start > windowMs) {
 					log.done = true;
@@ -244,7 +259,7 @@ test('ENTER search via tap: track slides in BEFORE the scope-tab bar expands (sp
 	await page.goto('/');
 	await waitForHydration(page);
 
-	await installSearchHdrSampler(page, { windowMs: 2500, withContent: false });
+	await installSearchHdrSampler(page, { windowMs: 2500, withContent: true });
 	await page.locator('header a[href="/search"][aria-label]').click();
 	await page.waitForURL('/search', { timeout: 8000 });
 	await page.waitForFunction(
@@ -286,6 +301,115 @@ test('ENTER search via tap: track slides in BEFORE the scope-tab bar expands (sp
 		slideFirstFrame,
 		'track must slide in before the scope-tab bar expands'
 	).toBeTruthy();
+
+	// DV17 sync + CALIBRATION. The Header track and the Page panel both read
+	// pager.tapMorph, so they move together. Assert their normalized progress
+	// stays within a tight band across the active slide. CALIBRATION baseline:
+	// on master the Header track scrubs in ~83ms (cubic morph) while the Page
+	// panel CSS-slides over 200ms (snapIndex + duration-200), so
+	// |trackNorm - pageNorm| peaks near 0.5 mid-flight, failing the <0.2 band.
+	// DV17 drives both from the linear tapMorph, giving maxDelta ~0.000.
+	const peakContent = Math.max(...searchFrames.map((f) => Math.abs(f.contentTx ?? 0)));
+	const syncFrames = searchFrames.filter(
+		(f) => f.contentTx !== null && Math.abs(f.contentTx ?? 0) > peakContent * 0.1
+	);
+	const maxDelta = syncFrames.length
+		? Math.max(
+				...syncFrames.map((f) => {
+					const tn = peakTrack > 0 ? Math.abs(f.trackTx ?? 0) / peakTrack : 0;
+					const pn = peakContent > 0 ? Math.abs(f.contentTx ?? 0) / peakContent : 0;
+					return Math.abs(tn - pn);
+				})
+			)
+		: 1;
+	console.log('ENTER sync maxDelta:', maxDelta.toFixed(3), 'over', syncFrames.length, 'frames');
+	expect(maxDelta, 'Header track and Page panel must move in sync (DV17 tapMorph)').toBeLessThan(0.2);
+});
+
+// --- DV17 tap-EXIT (/search -> / via popstate): Header track and Page panel sync pre-nav ---
+test('DV17 tap-EXIT (/search -> /): Header track and Page panel move in sync pre-nav', async ({
+	page
+}) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.locator('header a[href="/search"][aria-label]').click();
+	await page.waitForURL('/search', { timeout: 8000 });
+	await page.waitForTimeout(400); // let the entry settle
+
+	await installSearchHdrSampler(page, { windowMs: 3000, withContent: true });
+	await page.goBack();
+	await page.waitForURL('/', { timeout: 8000 });
+	await page.waitForFunction(
+		() => (window as unknown as SearchHdrWindow).__searchHdr?.done === true,
+		{ timeout: 6000 }
+	);
+
+	const frames = await readSearchHdrLog(page);
+	// Pre-nav frames: still on /search (the GPL intercepts and animates before
+	// the URL flips). The Header track and the Page panel both read pager.tapMorph
+	// here and must move together.
+	const preNavFrames = frames.filter((f) => f.path === '/search' && f.contentTx !== null);
+	expect(preNavFrames.length, 'must capture pre-nav /search frames with content').toBeGreaterThan(5);
+
+	const peakTrack = Math.max(...preNavFrames.map((f) => Math.abs(f.trackTx ?? 0)));
+	const peakContent = Math.max(...preNavFrames.map((f) => Math.abs(f.contentTx ?? 0)));
+	const syncFrames = preNavFrames.filter((f) => Math.abs(f.contentTx ?? 0) > peakContent * 0.1);
+	const maxDelta = syncFrames.length
+		? Math.max(
+				...syncFrames.map((f) => {
+					const tn = peakTrack > 0 ? Math.abs(f.trackTx ?? 0) / peakTrack : 0;
+					const pn = peakContent > 0 ? Math.abs(f.contentTx ?? 0) / peakContent : 0;
+					return Math.abs(tn - pn);
+				})
+			)
+		: 1;
+	console.log('tap-EXIT sync maxDelta:', maxDelta.toFixed(3), 'over', syncFrames.length, 'frames');
+	expect(
+		maxDelta,
+		'Header track and Page panel must move in sync on tap-EXIT (DV17 tapMorph)'
+	).toBeLessThan(0.2);
+});
+
+// --- DV17 NB27: MobileTabBar translateY trajectory on tap-EXIT (single post-nav descent) ---
+test('DV17 NB27: MobileTabBar descends once post-nav on tap-EXIT (no pre-nav appear, no double)', async ({
+	page
+}) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.locator('header a[href="/search"][aria-label]').click();
+	await page.waitForURL('/search', { timeout: 8000 });
+	await page.waitForTimeout(400);
+
+	await installSearchHdrSampler(page, { windowMs: 3000, withContent: true });
+	await page.goBack();
+	await page.waitForURL('/', { timeout: 8000 });
+	await page.waitForFunction(
+		() => (window as unknown as SearchHdrWindow).__searchHdr?.done === true,
+		{ timeout: 6000 }
+	);
+
+	const frames = await readSearchHdrLog(page);
+	// Pre-nav (/search): isSearch=true freezes the rootLayer ('transform: none'),
+	// so rootLayerY stays 0. The MobileTabBar is covered by the search layer and
+	// never appears pre-nav. This also guards a regression that wired tapMorph
+	// into rootLayerStyle: pre-nav tapMorph variation would drive a descent here.
+	const preNav = frames.filter((f) => f.path === '/search' && f.rootLayerY !== null);
+	const preNavMin = preNav.length ? Math.min(...preNav.map((f) => f.rootLayerY ?? 0)) : 0;
+	console.log('NB27 pre-nav rootLayerY min:', preNavMin);
+	expect(
+		preNavMin,
+		'no pre-nav MobileTabBar descent (rootLayer frozen in search mode)'
+	).toBeGreaterThan(-10);
+
+	// Post-nav (/): the layer group reads master morph; the Effect B settle drives
+	// it to 1, so rootLayerStyle rests at translateY(0%) - MobileTabBar shown in
+	// place. Assert it rests at 0 with no stuck/negative value.
+	const postNav = frames.filter((f) => f.path === '/' && f.rootLayerY !== null);
+	const postNavMin = postNav.length ? Math.min(...postNav.map((f) => f.rootLayerY ?? 0)) : 0;
+	const lastY = postNav.length ? postNav[postNav.length - 1]?.rootLayerY ?? 0 : 0;
+	console.log('NB27 post-nav rootLayerY min:', postNavMin, 'last:', lastY);
+	expect(postNavMin, 'post-nav MobileTabBar rests at translateY 0 (no stuck)').toBeGreaterThan(-30);
+	expect(Math.abs(lastY), 'post-nav MobileTabBar settles at translateY 0').toBeLessThan(30);
 });
 
 // --- MIRROR: enter is slide-first AND exit is collapse-first (one animation) ---

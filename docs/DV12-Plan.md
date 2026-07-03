@@ -8,7 +8,7 @@
 
 ## 1. Goal
 
-The mobile Header tabs layer (`MobileTabBar` inside `Header.svelte`) sits at `translateY(-100%)` on a deep page and descends to `translateY(0%)` when the route returns to a tab route. This is the "Tab 下沉" animation, a CSS `transform 200ms ease-out` transition on the layer whose target is the derived `morph`.
+The mobile Header tabs layer (`MobileTabBar` inside `Header.svelte`) sits at `translateY(-100%)` on a deep page and descends to `translateY(0%)` when the route returns to a tab route. This is the "Tab descent" animation, a CSS `transform 200ms ease-out` transition on the layer whose target is the derived `morph`.
 
 The BACK direction from a `GesturePageLayout` deep page to a tab route (the back arrow; also any click/tab-tap back that routes through a GPL `beforeNavigate` exit) does not animate: the descent is suppressed at the navigation landing flush and the layer jumps `-100%` to `0%` in one commit (headless), or plays partially then snaps on slower devices (the reported intermittent "播放到一半卡住再跳到结尾"). The forward direction (tab route to deep page) animates smoothly.
 

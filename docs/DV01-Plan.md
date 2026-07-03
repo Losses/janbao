@@ -34,7 +34,7 @@ Based on a detailed audit of the repository, the following issues from the QA au
    - _Issue:_ `ActiveUsersWall.svelte` is only included in the new message sidebar, and is missing from all forum page sidebars (Home, Category, Discussion).
    - _Remediation:_ Include `ActiveUsersWall` in the default sidebar widget layout.
 
-5. **Redundant "首页" Title (QA #7):**
+5. **Redundant "Home" Title (QA #7):**
    - _Issue:_ The Home page (`src/routes/+page.svelte`) displays a redundant `<h1>{t.nav.home}</h1>` header banner.
    - _Remediation:_ Remove the redundant Home page title banner.
 
@@ -42,8 +42,8 @@ Based on a detailed audit of the repository, the following issues from the QA au
    - _Issue:_ Text mentions (e.g. `@username`) are saved as plain text. There is no mechanism to resolve these to display names (nicknames) and render them as Svelte chips.
    - _Remediation:_ Update backend load handlers to parse mentioned usernames, query their display names, and return a `mentionedUsers` map. Modify `LexicalRenderer.svelte` to replace plain-text mentions with styled inline badges/chips using the resolved display names.
 
-7. **Chinese-to-English translation of "动态" (QA #9):**
-   - _Issue:_ "动态" is translated as "Dynamics" in translation key `dynamics` and Svelte template references.
+7. **Mistranslation of the Chinese "Activities" term (QA #9):**
+   - _Issue:_ The Chinese term was translated as "Dynamics" in translation key `dynamics` and Svelte template references.
    - _Remediation:_ Rename translation keys from `"dynamics"` to `"activities"` in localization files, and refactor all Svelte templates referencing `profileT.dynamics` to use `profileT.activities`. Ensure that "Dynamic" is completely purged from codebase/database references related to activities to avoid historical debt.
 
 8. **Lexical Hyperlink Features (QA #10):**
@@ -64,7 +64,7 @@ Based on a detailed audit of the repository, the following issues from the QA au
 
 12. **OP Sticky / Unsticky Action & Permissions (QA #14):**
     - _Issue:_ There is no functional sticky/unsticky button, and users cannot change discussion sticky (`isPinned`) status.
-    - _Remediation:_ Add a "置顶" (Sticky) / "取消置顶" (Unsticky) link next to the "编辑" (Edit) button on the OP. Restrict visibility and capability strictly to users who have category-level `canDelete` permissions. Implement a `togglePin` SvelteKit server action on the discussion details page route.
+    - _Remediation:_ Add a Sticky / Unsticky link next to the Edit button on the OP. Restrict visibility and capability strictly to users who have category-level `canDelete` permissions. Implement a `togglePin` SvelteKit server action on the discussion details page route.
 
 ---
 
@@ -89,7 +89,7 @@ Based on a detailed audit of the repository, the following issues from the QA au
 - **Verification:**
   - Check that a sticky Header appears on all pages except `/entry/*`.
   - Validate that resizing the screen to mobile collapses the navigation and displays a hamburger button that opens the drawer.
-  - Confirm the word "首页" is removed from the top of the Home page stream.
+  - Confirm the word "Home" is removed from the top of the Home page stream.
   - Verify that profile pages show profile features, while settings pages show settings configuration menus.
   - Confirm that visiting another user's profile sidebar does not expose settings buttons or private mailbox links.
 
@@ -114,7 +114,7 @@ Based on a detailed audit of the repository, the following issues from the QA au
   - Update `src/lib/components/organisms/LexicalEditor.svelte` so that it immediately emits an initial `onContentChange` event with the `initialContent` JSON upon initialization. This synchronizes the parent page state variable (e.g. `contentJson`, `replyContent`, `editorContent`) immediately, enabling submit/publish buttons without requiring manual typing.
   - Apply this draft synchronization check across all four editors: Discussion Creator (`/post/discussion`), Message Composer (`/messages/new`), Activity square composer (`/activity`), and Reply Composer (`/discussion/*`).
   - Implement Sticky/Unsticky toggle actions:
-    - In `src/routes/discussion/[discussionId]/[slug]/[[page=page]]/+page.svelte`, add a "置顶" (Sticky) / "取消置顶" (Unsticky) action link on the OP metadata area.
+    - In `src/routes/discussion/[discussionId]/[slug]/[[page=page]]/+page.svelte`, add a Sticky / Unsticky action link on the OP metadata area.
     - Update the details page loader (`+page.server.ts`) to compute and return category `canDelete` permissions to the client-side Svelte page.
     - Render this toggle link only if the user has category-level `canDelete` permission.
     - Implement `togglePin` SvelteKit action inside `src/routes/discussion/[discussionId]/[slug]/[[page=page]]/+page.server.ts` to flip the discussion's `isPinned` column in the SQLite DB, validating permissions on the server.
@@ -181,9 +181,9 @@ Based on a detailed audit of the repository, the following issues from the QA au
 | **QA-04** | Create Discussion squished   | `src/routes/post/discussion/+page.svelte`                      | Cycle 3           | Content wraps in wide container rather than `max-w-md` SingleColumnLayout                       |
 | **QA-05** | New Message Draft block      | `src/routes/messages/new/+page.svelte`, `LexicalEditor.svelte` | Cycle 3           | Initializing with draft updates content state, enabling the Send button                         |
 | **QA-06** | Online Users Wall missing    | Svelte page layouts/sidebars                                   | Cycle 2           | `ActiveUsersWall` renders at the bottom of the sidebar on Home and other forum pages            |
-| **QA-07** | Redundant "首页" Title       | `src/routes/+page.svelte`                                      | Cycle 1           | Redundant Home page `<h1>` is removed, keeping stream start clean                               |
+| **QA-07** | Redundant "Home" Title       | `src/routes/+page.svelte`                                      | Cycle 1           | Redundant Home page `<h1>` is removed, keeping stream start clean                               |
 | **QA-08** | Mention display name Chip    | `LexicalRenderer.svelte`, server load handlers                 | Cycle 4           | `@username` resolves to user's display name and renders as a Chip                               |
-| **QA-09** | Mistranslation of "动态"     | `src/lib/i18n/en.json`, `zh-CN.json`, Svelte templates         | Cycle 4           | Translation key renamed to `"activities"`; Svelte templates refactored to `profileT.activities` |
+| **QA-09** | Mistranslation of "Activities" | `src/lib/i18n/en.json`, `zh-CN.json`, Svelte templates         | Cycle 4           | Translation key renamed to `"activities"`; Svelte templates refactored to `profileT.activities` |
 | **QA-10** | Hyperlink Auto-linking       | `LexicalEditor.svelte`                                         | Cycle 5           | Text URLs automatically parse into links; highlighted link creation works                       |
 | **QA-11** | Spoiler Inline Text Style    | `LexicalEditor.svelte`, `LexicalRenderer.svelte`, CSS          | Cycle 5           | Spoiler text has matching background/foreground; reveals on cursor hover                        |
 | **QA-12** | Monolithic Profile Sidebar   | Profile Svelte routes, menu lists                              | Cycle 1           | Settings pages render settings-only links; profile pages render profile-only links              |

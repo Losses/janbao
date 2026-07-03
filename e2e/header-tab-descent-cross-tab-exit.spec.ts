@@ -6,7 +6,7 @@ import { prepareContext, waitForHydration } from './helpers';
  *
  * The mobile Header's tabs layer sits at translateY(-100%) on a deep page and
  * descends to translateY(0%) when the route returns to a tab route (the "Tab
- * 下沉" animation). The descent is a CSS `transform 200ms ease-out` transition
+ * descent" animation). The descent is a CSS `transform 200ms ease-out` transition
  * on the layer; the value it animates toward is `morph`, derived in Header.svelte.
  *
  * The layer transition (`slideT` in Header.svelte) suppresses only during a live

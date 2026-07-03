@@ -20,7 +20,7 @@
 	 */
 	import { untrack, tick, onDestroy } from 'svelte';
 	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
+	import { beforeNavigate, goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import Logo from '$lib/components/atoms/Logo.svelte';
@@ -122,6 +122,15 @@
 	let searchScrubFrom = $state(0);
 	let searchScrubTo = $state(0);
 	let searchScrubRafId: number | undefined;
+	// DV17 tap-morph rAF state. tapMorph is written to the pager store and
+	// consumed by the track/Tab group (searchProgress/tabProgress) and the GPL
+	// Page-slide headroom; the layer group (rootLayerStyle/iconProgress) keeps
+	// reading the searchScrub morph scrub above. scrubSource/target/terminal
+	// latch the clear-watch condition.
+	let tapScrubRafId: number | undefined;
+	let scrubSource = $state('');
+	let scrubTarget = $state(false);
+	let scrubTerminal = $state(0);
 	let prevHadTabs: boolean | null = null;
 	let prevSearchTitle: string | null = null;
 	let prevIsSearch: boolean | null = null;
@@ -198,7 +207,7 @@
 	// gesture path is owned by `settling` (Effect D holds settling=true through the
 	// navInFlight window, so the settle driver animates the morph), and on a
 	// click/tab-tap back-to-tab the morph rest value flips at the landing flush and
-	// must animate (the "Tab 下沉" descent). navInFlight is deliberately not part
+	// must animate (the "Tab descent" descent). navInFlight is deliberately not part
 	// of the gate: it is set at every GPL exit landing (same-panel and cross-tab
 	// alike), so gating on it would suppress exactly the descent this layer exists
 	// to play. See docs/DV12-Plan.md.
@@ -429,6 +438,13 @@
 		if (untrack(() => settling)) return; // a settle is in flight
 		if (untrack(() => lastGestureMorph) > GESTURE_MORPH_EPSILON) return;
 		startSearchScrub(prevTabs ? 1 : 0, curTabs ? 1 : 0);
+		// DV17: ENTER tap-morph rAF drives the track/Tab group sync. curIsSearch
+		// gates it to enter; the EXIT tap-morph is owned by the beforeNavigate
+		// pre-nav publisher (Effect E fires post-nav, after the /search GPL
+		// consumer has unmounted).
+		if (curIsSearch) {
+			startTapScrub(prevTabs ? 1 : 0, curTabs ? 1 : 0, '/search', false);
+		}
 	});
 
 	function startSearchScrub(from: number, to: number): void {
@@ -454,6 +470,32 @@
 			searchScrubRafId = requestAnimationFrame(tick);
 		};
 		searchScrubRafId = requestAnimationFrame(tick);
+	}
+
+	// DV17 tap-morph rAF: writes pager.tapMorph linearly over TITLE_CROSSFADE_MS
+	// for the track/Tab group and the GPL Page-slide headroom. Sets the start
+	// value synchronously so the CSS gates see tapMorph !== null in the same
+	// flush. Latches scrubSource/target/terminal for the clear watch.
+	function startTapScrub(from: number, to: number, source: string, target: boolean): void {
+		if (tapScrubRafId !== undefined) {
+			cancelAnimationFrame(tapScrubRafId);
+			tapScrubRafId = undefined;
+		}
+		scrubSource = source;
+		scrubTarget = target;
+		scrubTerminal = to;
+		pager.setTapMorph(from);
+		const startT = performance.now();
+		const tick = (): void => {
+			const t = Math.min(1, (performance.now() - startT) / TITLE_CROSSFADE_MS);
+			pager.setTapMorph(from + (to - from) * t);
+			if (t >= 1) {
+				tapScrubRafId = undefined;
+				return;
+			}
+			tapScrubRafId = requestAnimationFrame(tick);
+		};
+		tapScrubRafId = requestAnimationFrame(tick);
 	}
 
 	function runSettleDriver(): void {
@@ -508,6 +550,49 @@
 		if (!untrack(() => settleAwaitTitle)) endSettle();
 	}
 
+	// DV17 EXIT tap-morph publisher (pre-nav). The /search GPL intercepts the
+	// navigation pre-nav and animates its CSS slide before page.url updates, so
+	// a post-nav publisher (Effect E) cannot reach it; publishing tapMorph here
+	// (pre-nav, while the /search GPL is still mounted) lets the GPL Page-slide
+	// headroom sync with the Header track. navInFlight short-circuits the
+	// executePendingNav redispatch; the pathname check is strict ('/') so
+	// /search -> /activity etc. do not arm.
+	beforeNavigate((navigation) => {
+		if (!browser) return;
+		if (navStore.navInFlight) return;
+		if (!isSearch) return;
+		const toPath = navigation.to?.url?.pathname ?? '';
+		if (toPath !== '/') return;
+		startTapScrub(0, 1, '/search', true);
+	});
+
+	// DV17 NB26 clear watch. Clears tapMorph (and cancels the orphan rAF) when
+	// the scrub has reached its terminal at the destination, OR immediately on
+	// any navigation away from the scrub source (mid-scrub redirect recovery).
+	$effect.pre(() => {
+		if (pager.tapMorph === null) return;
+		const atTerminal = Math.abs(pager.tapMorph - scrubTerminal) < 0.001;
+		if ((atTerminal && currentHasTabs === scrubTarget) || currentPath !== scrubSource) {
+			if (tapScrubRafId !== undefined) {
+				cancelAnimationFrame(tapScrubRafId);
+				tapScrubRafId = undefined;
+			}
+			pager.setTapMorph(null);
+		}
+	});
+
+	// DV17 NB13 drag-cancel: a drag mid-scrub cancels the tap-morph rAF so the
+	// post-settle morph returns the drag's rest, not a stale tap value.
+	$effect.pre(() => {
+		if (dragging && pager.tapMorph !== null) {
+			if (tapScrubRafId !== undefined) {
+				cancelAnimationFrame(tapScrubRafId);
+				tapScrubRafId = undefined;
+			}
+			pager.setTapMorph(null);
+		}
+	});
+
 	onDestroy(() => {
 		active = false;
 		if (browser) {
@@ -518,6 +603,11 @@
 				cancelAnimationFrame(searchScrubRafId);
 				searchScrubRafId = undefined;
 			}
+			if (tapScrubRafId !== undefined) {
+				cancelAnimationFrame(tapScrubRafId);
+				tapScrubRafId = undefined;
+			}
+			pager.setTapMorph(null);
 		}
 	});
 
@@ -623,19 +713,25 @@
 	});
 
 	// Root↔search horizontal track.
+	// DV17: the track/Tab group reads the tap-morph signal (pager.tapMorph)
+	// with a fallback to morph at rest and during a drag, so the tap drives the
+	// pre-nav exit sync while the layer group keeps reading master morph.
+	const trackMorph = $derived(pager.tapMorph !== null ? pager.tapMorph : morph);
 	const searchProgress = $derived(
 		isSearch
 			? 1 -
-					(morph <= HEADER_MORPH_THRESHOLD
+					(trackMorph <= HEADER_MORPH_THRESHOLD
 						? 0
-						: (morph - HEADER_MORPH_THRESHOLD) / (1 - HEADER_MORPH_THRESHOLD))
+						: (trackMorph - HEADER_MORPH_THRESHOLD) / (1 - HEADER_MORPH_THRESHOLD))
 			: 0
 	);
-	const tabProgress = $derived(isSearch ? 1 - Math.min(1, morph / HEADER_MORPH_THRESHOLD) : 0);
+	const tabProgress = $derived(isSearch ? 1 - Math.min(1, trackMorph / HEADER_MORPH_THRESHOLD) : 0);
 
 	const trackStyle = $derived(
 		`transform: translateX(${-(searchProgress * 50).toFixed(2)}%); transition: ${
-			dragging || searchScrubbing || navStore.navInFlight ? 'none' : 'transform 200ms ease-out'
+			dragging || searchScrubbing || pager.tapMorph !== null || navStore.navInFlight
+				? 'none'
+				: 'transform 200ms ease-out'
 		};`
 	);
 
@@ -647,14 +743,16 @@
 		`calc(${((1 - searchProgress) * 100).toFixed(2)}% - ${((1 - searchProgress) * 3).toFixed(2)}rem + ${(searchProgress * 0.5).toFixed(2)}rem)`
 	);
 	const searchButtonStyle = $derived(
-		`left: ${searchButtonLeft}; transition: ${dragging || searchScrubbing || navStore.navInFlight ? 'none' : 'left 200ms ease-out'};`
+		`left: ${searchButtonLeft}; transition: ${dragging || searchScrubbing || pager.tapMorph !== null || navStore.navInFlight ? 'none' : 'left 200ms ease-out'};`
 	);
 
 	// SearchTabBar row: clip-expand (max-height) driven by tabProgress so it
 	// gesture-syncs with the track and the search button.
 	const tabBarStyle = $derived(
 		`max-height: ${(tabProgress * 3).toFixed(2)}rem; transition: ${
-			dragging || searchScrubbing || navStore.navInFlight ? 'none' : 'max-height 200ms ease-out'
+			dragging || searchScrubbing || pager.tapMorph !== null || navStore.navInFlight
+				? 'none'
+				: 'max-height 200ms ease-out'
 		};`
 	);
 
