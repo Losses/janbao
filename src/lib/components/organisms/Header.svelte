@@ -802,7 +802,7 @@
 			<div class="flex w-[200%]" style={trackStyle}>
 				<!-- Panel 0: root/deep content (no search button here; the absolute
 				     <a> below covers the right area in root mode). -->
-				<div class="flex w-1/2 shrink-0 items-center px-2 py-2">
+				<div class="flex w-1/2 shrink-0 items-center overflow-hidden px-2 py-2">
 					<button
 						type="button"
 						class="flex size-10 shrink-0 items-center justify-center text-neutral-content/80 hover:bg-neutral-content/10 hover:text-neutral-content"
@@ -816,7 +816,7 @@
 							<MobileTabBar {t} />
 						</div>
 						<div
-							class="absolute inset-0 flex items-center justify-center px-2 overflow-hidden"
+							class="absolute inset-0 flex items-center justify-center px-2"
 							style={layerDownStyle}
 						>
 							{#if titleView.outgoing === titleView.incoming}

@@ -40,12 +40,12 @@ import { prepareContext, waitForHydration, openSidebarAndGoto } from './helpers'
  */
 
 // --- per-frame sampler of the deep-title layer -----------------------------
-// The deep-title container is the only `div.absolute.overflow-hidden` in the
-// header (the root tab layer lacks overflow-hidden; the SearchTabBar wrapper
-// lacks `absolute`). Its child `span.truncate.text-center` nodes ARE the title
-// spans - 2 while a crossfade is in flight (drag OR transition branch), 1 at
-// rest (static branch). Sampling their count + text per frame captures the
-// 2 -> 1 -> 2 collapse-and-replay signature directly.
+// The deep-title container is the title-slot child carrying `px-2`
+// (layerDownStyle); the sibling root tab layer lacks px-2. Its child
+// `span.truncate.text-center` nodes ARE the title spans - 2 while a crossfade
+// is in flight (drag OR transition branch), 1 at rest (static branch). Sampling
+// their count + text per frame captures the 2 -> 1 -> 2 collapse-and-replay
+// signature directly.
 
 interface TitleSpan {
 	text: string;
@@ -68,7 +68,7 @@ interface TitleSamplerWindow extends Window {
 	__titleLog?: TitleSamplerState;
 }
 
-const TITLE_SELECTOR = 'header div.absolute.overflow-hidden span.truncate.text-center';
+const TITLE_SELECTOR = 'header .relative.h-10.flex-1 > .px-2 span.truncate.text-center';
 // page.evaluate callbacks run in the browser and cannot close over Node-side
 // consts, so both values are passed in as the evaluate arg.
 const SAMPLE_WINDOW_MS = 1600;
