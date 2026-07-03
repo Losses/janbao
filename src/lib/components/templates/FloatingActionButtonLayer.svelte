@@ -259,7 +259,15 @@
 	// sampler is running. (State declared above, before `fabConfig`.)
 
 	/** Read the live Family A track m41 (px) and convert to the fractional tab
-	 *  index (0..2 for the three tabs). Returns null when there is no track. */
+	 *  index. Deliberately NOT clamped to [0,2]: at the first/last tab a void
+	 *  swipe rubber-bands the track (follow() applies a 0.4x factor), so the
+	 *  index briefly goes negative or past 2. The FAB must track that motion
+	 *  the same way the MobileTabBar pill does — the pill's closeness and the
+	 *  FAB's tabFraction share the formula 1 - |idx - tabIndex| over the
+	 *  unclamped fractionalIndex. tabFraction clamps the OUTPUT to [0,1], so
+	 *  an input clamp here would suppress only the boundary rubber-band and
+	 *  leave the FAB still while the pill moves. Returns null when there is
+	 *  no track. */
 	function sampleFraction(): number | null {
 		const el = track;
 		if (!el || !browser) return null;
@@ -267,7 +275,7 @@
 		if (panelWidth <= 0) return null;
 		try {
 			const m41 = new DOMMatrix(getComputedStyle(el).transform).m41;
-			return Math.max(0, Math.min(2, -m41 / panelWidth));
+			return -m41 / panelWidth;
 		} catch {
 			return null;
 		}
