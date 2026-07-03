@@ -262,7 +262,7 @@
 	 *  index. Deliberately NOT clamped to [0,2]: at the first/last tab a void
 	 *  swipe rubber-bands the track (follow() applies a 0.4x factor), so the
 	 *  index briefly goes negative or past 2. The FAB must track that motion
-	 *  the same way the MobileTabBar pill does — the pill's closeness and the
+	 *  the same way the MobileTabBar pill does: the pill's closeness and the
 	 *  FAB's tabFraction share the formula 1 - |idx - tabIndex| over the
 	 *  unclamped fractionalIndex. tabFraction clamps the OUTPUT to [0,1], so
 	 *  an input clamp here would suppress only the boundary rubber-band and
