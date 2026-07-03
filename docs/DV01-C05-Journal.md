@@ -86,8 +86,8 @@ Both use `!important` to override any inline styles, with `currentColor` matchin
 
 Added translation keys to both `en.json` and `zh-CN.json`:
 
-- `editor.highlight`: "Marker Highlight" / "荧光标记"
-- `editor.spoiler`: "Spoiler" / "剧透"
+- `editor.highlight`: "Marker Highlight" / "Marker Highlight"
+- `editor.spoiler`: "Spoiler" / "Spoiler"
 
 ### 1.7 Type Discipline
 

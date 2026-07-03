@@ -21,7 +21,7 @@ Replace the current mobile `/search` with a gesture-first search surface built f
 3. `?scope=` is retained (deep-linkable, shareable); the pager is a UX layer, URL drives `activeIndex`.
 4. Stretchy underline: the edge toward the drag direction (leading) reaches the target first; the trailing edge follows.
 
-Other: "整个 App Bar 向左推" = horizontal reflow of the header's internal layers (search icon right→left, input expanding), not a rigid translate. Search tabs continue the top bar color (`bg-neutral`), underline marks the active scope. Filter icon → modal, no confirm button, flat list of sort options.
+Other: "push the entire App Bar left" = horizontal reflow of the header's internal layers (search icon right→left, input expanding), not a rigid translate. Search tabs continue the top bar color (`bg-neutral`), underline marks the active scope. Filter icon → modal, no confirm button, flat list of sort options.
 
 ## 3. Architecture context (verified R1+R2)
 

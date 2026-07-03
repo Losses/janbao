@@ -52,7 +52,7 @@ The ActiveUsersWall component already existed in `src/lib/components/molecules/A
 
 **Modified:** `src/lib/i18n/zh-CN.json`
 
-- Added `"forum"` block with Chinese translations: `浏览`, `回复`, `最后回复`, `置顶`
+- Added `"forum"` block with Chinese translations: `Views`, `Replies`, `Last Reply`, `Sticky`
 
 This prevents `DiscussionRow.svelte` from falling back to hardcoded English strings. The component already reads from `t.forum.*` with English defaults - now it receives proper translations.
 

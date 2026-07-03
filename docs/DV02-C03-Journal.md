@@ -40,8 +40,8 @@
 
 **Modified:** `src/lib/i18n/en.json`, `src/lib/i18n/zh-CN.json`
 
-- Added `"comment"` key under the `common` dictionary to localize the comment text link (e.g. "Comment", "评论").
-- Added `"postNormalActivity"` key under the `profile` dictionary to localize the own-profile activity composer header (e.g. "Post an activity", "发布动态").
+- Added `"comment"` key under the `common` dictionary to localize the comment text link (e.g. "Comment", "Comment").
+- Added `"postNormalActivity"` key under the `profile` dictionary to localize the own-profile activity composer header (e.g. "Post an activity", "Post an activity").
 
 ---
 

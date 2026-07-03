@@ -43,8 +43,7 @@ full-audit agents (no roles), per [[dv04-audit-loop]]. Plan: DV06-Plan.md.
   the wrapper rejected (navigation correctly fell to cache) but the underlying fetch
   kept running. Replaced with `fetchWithTimeout` using `AbortController` so the
   network request is actually cancelled. (Agent B.)
-- **Half-width comma in zh-CN offline hint (`src/lib/i18n/zh-CN.json`).** `不,` ->
-  full-width `，`. (Agent C.)
+- **Half-width comma in zh-CN offline hint (`src/lib/i18n/zh-CN.json`).** `No,` used a half-width comma instead of a full-width one. (Agent C.)
 - **`cache.put` was fire-and-forget in `handleNavigate`.** Now awaited inside the
   same guard. (Agent E.)
 

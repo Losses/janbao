@@ -13,7 +13,7 @@
 
 ### MAJOR (fixed this round)
 
-- **C7-1 (Agents 1, 2, 3, 4, 5 - unanimous):** hardcoded Chinese dead-image string `图片已失效` in `LexicalRenderer.svelte` (the view path) and `DeadImageNode.ts` (the editor node) - English-locale users saw Chinese for imported dead images. Fix: added `img.deadImage` i18n key (en/zh); `LexicalRenderer` gained a `deadImageLabel` prop (English default) threaded from all 9 call sites; `DeadImageNode` reads a module-level label set by `LexicalEditor` via `setDeadImageLabel(t.img.deadImage)`.
+- **C7-1 (Agents 1, 2, 3, 4, 5 - unanimous):** hardcoded Chinese dead-image string `image expired` in `LexicalRenderer.svelte` (the view path) and `DeadImageNode.ts` (the editor node) - English-locale users saw Chinese for imported dead images. Fix: added `img.deadImage` i18n key (en/zh); `LexicalRenderer` gained a `deadImageLabel` prop (English default) threaded from all 9 call sites; `DeadImageNode` reads a module-level label set by `LexicalEditor` via `setDeadImageLabel(t.img.deadImage)`.
 - **C7-AVIF (Agent 1):** AVIF was advertised in the i18n (`avatarRequirements`), the `<input accept>` attributes, and the RichTextToolbar label, but `detectImageFormat` had no AVIF branch → AVIF uploads were rejected as `invalidType`. Fix: added AVIF magic-byte detection (ISOBMFF `ftyp` box + `avif`/`avis`/`mif1` brand) + `image/avif` MIME, so advertised AVIF support now works.
 
 ### MINOR (fixed this round)

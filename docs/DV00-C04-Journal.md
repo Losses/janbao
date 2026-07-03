@@ -102,7 +102,7 @@ All components and server-side code have been built strictly under TypeScript co
 |----|-------------|------------|
 | W-01 | ConfirmationModal backdrop hardcoded `aria-label="Close modal"` | Fixed: replaced with `{cancelLabel}` prop |
 | W-02 | ActivityRow delete button visibility only checks author/admin - missing recipient and parent author | Fixed: added `recipientId`, `resolvedAuthorId` checks to button visibility |
-| W-03 | Profile edit language selector hardcoded "English" / "简体中文" | Fixed: added `languageEnglish` / `languageChinese` i18n keys to both dictionaries |
+| W-03 | Profile edit language selector hardcoded "English" / "Simplified Chinese" | Fixed: added `languageEnglish` / `languageChinese` i18n keys to both dictionaries |
 | W-04 | 5 Svelte settings pages use inline type literal `$state<{ type: ... }>` | Fixed: extracted `FeedbackMessage` interface to `src/lib/types/api.ts` |
 | W-05 | `ProfileEditUpdates` and `PreferenceUpdates` duplicate `ProfileEditBody` and `ProfilePreferencesBody` | Fixed: removed local interfaces, use `Partial<ProfileEditBody>` and `Partial<ProfilePreferencesBody>` |
 

@@ -30,7 +30,7 @@ Turn offline reading from "whatever the front page happened to be" into a
 1. **Preferences are local** (client `localStorage`), not server-side. Offline
    cache is inherently per-device; prefs match. No DB columns, no API writes for
    prefs. Guests cannot enter the settings UI and cannot enable caching.
-2. **"最新" (latest) = `lastReplyAt`** ordering (matches the live homepage:
+2. **"Latest" = `lastReplyAt`** ordering (matches the live homepage:
    `isPinned DESC, lastReplyAt DESC`). Not `createdAt`.
 3. **Reply cap = 1000.** Depth `all`: if a thread has ≤ 1000 replies, cache every
    page; if > 1000, cache **first 250 + last 250** replies (= pages 1–5 and the
@@ -105,7 +105,7 @@ readableSlugs)` in `db/dao/sync.ts`. `GET /api/sync/content` accepts query param
   `discussion + opReply + replies + page + totalPages` from thread pages) to lean
   DTOs and upsert into IDB with reason `'read'` + `readUpdatedAt = now`, ensuring
   referenced authors land in the `users` store. **OP backfill:** when entry page >
-  1 and caching is on, fetch + cache the main post (主楼 = earliest reply). Online
+  1 and caching is on, fetch + cache the main post (main post = earliest reply). Online
   re-entry refreshes the cached thread from the already-fetched SSR load (active
   write-back). `/offline/[id]` renders arbitrary-range gaps from the manifest
   (replaces the single `partialGap` divider).

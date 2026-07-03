@@ -22,7 +22,7 @@
 
 **None actionable.** All five agents returned unconditional PASS. Two non-actionable observations recorded (out-of-scope / carry-over-class, not re-reported):
 
-- `LexicalRenderer.svelte` has a hardcoded Chinese string (`图片已失效`, dead-image fallback) - i18n debt on a cross-cutting component, deferred to **C07**.
+- `LexicalRenderer.svelte` has a hardcoded Chinese string (`image expired`, dead-image fallback) - i18n debt on a cross-cutting component, deferred to **C07**.
 - `themeName` is not server-validated against a DaisyUI allowlist; it is reflected only as a `data-theme` attribute (Svelte `setAttribute`, no script execution) - "an attacker breaks their own post's theme." Defense-in-depth; accepted.
 
 ## 3. Carry-overs (final, accepted for C02)

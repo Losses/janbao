@@ -108,9 +108,9 @@ totalPages, pageSize, commentCount)` per curated/front/bookmark
   - i18n keys added under `offline.reader.*` in BOTH `en.json` +
     `zh-CN.json` ([[i18n-duplicate-key-check]] - grepped first, no
     collision): `gapRange` ("Pages {start}-{end} not cached (about {count}
-    replies)" / "第 {start}-{end} 页未缓存（约 {count} 条回复）") and
+    replies)" / "Pages {start}-{end} not cached (about {count} replies)") and
     `gapSingle` ("Page {page} not cached (about {count} replies)" /
-    "第 {page} 页未缓存（约 {count} 条回复）"). The
+    "Page {page} not cached (about {count} replies)"). The
     `TranslationDict` is inferred from `en.json`, so the keys are typed
     end-to-end without a manual interface.
 

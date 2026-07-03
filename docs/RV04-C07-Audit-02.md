@@ -11,7 +11,7 @@
 
 ## 1. Final fix verification (all 5 agents)
 
-- **C7-1**: `图片已失效` hardcoded string fully i18n'd - `LexicalRenderer` `deadImageLabel` prop (English default) threaded from all 9 call sites; `DeadImageNode` module `deadImageLabel` + `setDeadImageLabel` set by `LexicalEditor`'s `$effect`; `img.deadImage` key in en + zh. No hardcoded Chinese literal remains (only the legitimate zh-CN translation value).
+- **C7-1**: `image expired` hardcoded string fully i18n'd - `LexicalRenderer` `deadImageLabel` prop (English default) threaded from all 9 call sites; `DeadImageNode` module `deadImageLabel` + `setDeadImageLabel` set by `LexicalEditor`'s `$effect`; `img.deadImage` key in en + zh. No hardcoded Chinese literal remains (only the legitimate zh-CN translation value).
 - **C7-AVIF**: `detectImageFormat` detects AVIF via ISOBMFF `ftyp` box + `avif`/`avis` brand (the `mif1` brand was tightened to exclude HEIC collision in Round 2 per Agent 1's note). `image/avif` MIME; advertised AVIF support now works end-to-end.
 - **C7-2**: `search.tooShortHint` dead key removed from en + zh.
 - **C7-5**: upload sniff accumulates up to 12 bytes across chunks before `detectImageFormat`.

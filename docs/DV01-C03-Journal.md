@@ -57,8 +57,8 @@
 
 **Modified:** `src/lib/i18n/zh-CN.json`
 
-- Added `discussion.sticky`: "置顶"
-- Added `discussion.unsticky`: "取消置顶"
+- Added `discussion.sticky`: "Sticky"
+- Added `discussion.unsticky`: "Unsticky"
 
 ---
 

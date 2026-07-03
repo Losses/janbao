@@ -14,7 +14,7 @@ Cycle 4 addresses three critical areas:
 
 1. **Guest Permission Fallback (QA #13):** Unauthenticated visitors were defaulting to `member` group permissions, giving them unintended write access. This cycle introduces a dedicated `guest` user group with read-only public access.
 2. **Mention Resolution & Chip Rendering (QA #8):** `@username` mentions in rich text content were displayed as plain text. This cycle adds server-side mention resolution and client-side chip rendering.
-3. **Translation Key Audit (QA #9):** Verified that "动态" was already correctly keyed as `"activities"` (not `"dynamics"`) in both i18n files. No refactoring was needed.
+3. **Translation Key Audit (QA #9):** Verified that "Activities" was already correctly keyed as `"activities"` (not `"dynamics"`) in both i18n files. No refactoring was needed.
 
 ---
 

@@ -30,7 +30,7 @@ Consolidated → [RV04-C07-Audit-01.md](./RV04-C07-Audit-01.md).
 
 **Issues found and fixed (Round 2 fixes):**
 
-- **MAJOR (5/5)** - Hardcoded Chinese dead-image string `图片已失效` in `LexicalRenderer.svelte` + `DeadImageNode.ts` (English users saw Chinese for imported dead images). Fix: `img.deadImage` i18n key (en/zh); `LexicalRenderer` `deadImageLabel` prop (English default) threaded from all 9 call sites; `DeadImageNode` reads a module label set by `LexicalEditor` via `setDeadImageLabel`.
+- **MAJOR (5/5)** - Hardcoded Chinese dead-image string `image expired` in `LexicalRenderer.svelte` + `DeadImageNode.ts` (English users saw Chinese for imported dead images). Fix: `img.deadImage` i18n key (en/zh); `LexicalRenderer` `deadImageLabel` prop (English default) threaded from all 9 call sites; `DeadImageNode` reads a module label set by `LexicalEditor` via `setDeadImageLabel`.
 - **MAJOR (Agent 1)** - AVIF advertised (i18n/`<input accept>`/toolbar) but `detectImageFormat` had no AVIF branch → AVIF uploads rejected. Fix: AVIF magic-byte detection (`ftyp` box + `avif`/`avis`/`mif1` brand) + `image/avif` MIME.
 - **MINOR (4)** - dead i18n key `search.tooShortHint`. Removed (en + zh).
 - **MINOR (2)** - upload type-sniff only on first chunk; sub-12-byte chunk mis-detected WebP/AVIF. Fix: accumulate up to 12 bytes into a sniff buffer before detecting.
