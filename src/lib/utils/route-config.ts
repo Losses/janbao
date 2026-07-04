@@ -99,8 +99,11 @@ export const FAB_KIND_CONFIGS: Record<FabListKind, FabKindConfig> = {
 // per-route rendering that the FAB layer needs; nothing here is a
 // concept the core `RouteData` record holds.
 
-/** The FAB sampler family. Consumed by the FAB layer only. */
-export type FabFamily = 'list' | 'overlay' | 'compose';
+// `FabFamily` is the canonical FAB-sampler family enum, owned by
+// `fab-scale.ts` (the FAB layer's pure scale maths). Imported here so
+// the consumer registry and the FAB layer share one type; adding a
+// family in either module requires updating the other.
+import type { FabFamily } from './fab-scale';
 
 /**
  * The dynamic FAB kind. `'dynamic'` is the Activity route's
@@ -315,10 +318,14 @@ export function backTargetListKind(backTargetHref: string | null): FabListKind {
  * the core record.
  *
  * Masked latent bug (deferred to Cycle 5): `/search`, `/bookmarks`,
- * `/profile`, `/admin`, `/notifications` and the sub-pages of the last
- * four mount a GPL but this function returns FALSE for them. The
- * function's answer set is preserved verbatim per the Cycle 1 spec;
- * Cycle 5 dissolves both the function and the bug.
+ * `/notifications`, and `/profile` mount a GPL but this function
+ * returns FALSE for them (they carry `kind: 'deep'`, failing the
+ * overlay branch, and have no declared `backParent`, failing the
+ * deep-route branch). Sub-pages of `/profile` and the entire
+ * `/admin/*` tree declare `backParent`, so they return TRUE; the
+ * latent-bug set is the four leaf routes only. The function's answer
+ * set is preserved verbatim per the Cycle 1 spec; Cycle 5 dissolves
+ * both the function and the bug.
  */
 export function isGesturePageLayoutRoute(pathname: string): boolean {
 	const attrs = getFabRouteAttributes(pathname);
@@ -392,8 +399,3 @@ export const MOBILE_TABS: readonly MobileTab[] = MOBILE_TAB_DEFS.map((tab) => ({
 	hasData: (data) => getListCacheStore().isPopulated(tab.labelKey) || tabListPopulated(tab, data),
 	panel: TAB_LIST_PANELS[tab.labelKey]
 }));
-
-// Re-export the core record lookup so consumers can read both files from
-// the same module surface if they choose.
-export { getRouteData, getRouteTag } from './route-data';
-export type { RouteData, RouteTag } from './route-data';

@@ -7,7 +7,7 @@ verification evidence, deviations). It does not perform confidence.
 ## Investigation (2026-07-04)
 
 Read in order: `docs/DV20-Plan.md` (§3, §4, §11, §13, §14),
-`docs/DV20-Meeting/DV20-Cycle-1-spec.md`, and the relevant history in
+`docs/DV20-Meeting/DV20-C01-spec.md`, and the relevant history in
 `docs/DV20-Meeting/DV20-Plan-Journal.md`.
 
 ### Current classification web
@@ -160,12 +160,12 @@ is not a per-route property.
 ### Migration-era data isGesturePageLayoutRoute reads
 
 To preserve the latent bug exactly (so Cycle 5 can fix it), the body of
-`isGesturePageLayoutRoute` continues to read "is thread/conversation"
-(from `FAB_ROUTE_ATTRIBUTES.family === 'overlay' && kind !== 'deep'`)
-OR "is in the legacy deep-route set" (a private `_DEEP_ROUTE_PARENTS`
-pattern list that mirrors today's `getParent`-defined routes). The
-function stays imperative; its data sources are reorganized but its
-answer set is byte-identical.
+`isGesturePageLayoutRoute` reads "is thread/conversation" (from
+`FAB_ROUTE_ATTRIBUTES.family === 'overlay' && kind !== 'deep'`) OR
+"is in the deep-route-parent set" (from
+`getRouteData(p).backParent !== undefined`). The function stays
+imperative; its data sources are the consumer FAB attrs and the core
+record, and its answer set is byte-identical to the pre-Cycle-1 form.
 
 ## Design decisions
 
@@ -201,11 +201,14 @@ answer set is byte-identical.
    render the tab bar (`headerMode === 'root'`); the tag-only
    derivation returns `'deep'`. The Cycle 1 spec's "behavior MUST be
    identical" rule overrides the §3 derived formula. Reverted to a
-   hybrid: the search branch reads the record's tag; the root/deep
-   branch still reads `getCurrentTabIndex` (which itself now reads
-   the tab-bar consumer config). The tag-only derivation lands when
-   the resolver takes over Header morph in a later cycle. This is
-   logged as a deviation; see Plan-Journal entry 2026-07-04 #6.
+   hybrid: the search branch uses a literal `/search` prefix check
+   (functionally equivalent to `tag === 'search'` since `/search` is
+   the only 'search'-tagged route today; the tag-derived form lands
+   in a later cycle); the root/deep branch still reads
+   `getCurrentTabIndex` (which itself now reads the tab-bar consumer
+   config). The tag-only derivation lands when the resolver takes
+   over Header morph in a later cycle. This is logged as a deviation;
+   see Plan-Journal entry 2026-07-04 #6.
 
 5. **FAB layer minimum-touch.** The FAB layer keeps its logic intact.
    The data-source reads change: where it read
@@ -257,8 +260,8 @@ New:
 
 - `src/lib/utils/route-data.ts`: the `RouteData` record, the
   `RouteTag` enum, the `BackParentResolver` type, the `ROUTE_ENTRIES`
-  registry, and the `getRouteData` / `getRouteTag` lookup. The single
-  source of truth for `tag`, `backParent`, `snapshotCapture`, `fab`.
+  registry, and the `getRouteData` lookup. The single source of truth
+  for `tag`, `backParent`, `snapshotCapture`, `fab`.
 - `src/lib/utils/route-data.test.ts`: 66 unit tests covering the
   record shape, tag assignments, fab visibility, snapshotCapture, and
   backParent (static and dynamic).
@@ -268,8 +271,8 @@ New:
   (`getCurrentTabIndex`, `isPagerRoute`,
   `isGesturePageLayoutRoute`'s answer set including the deferred
   latent bug, `backTargetListKind`, `getPreviewPanel`).
-- `docs/DV20-Cycle-1-Journal.md` (this file).
-- `docs/DV20-Meeting/DV20-Cycle-1-Plan-Journal.md`.
+- `docs/DV20-C01-Journal.md` (this file).
+- `docs/DV20-Meeting/DV20-C01-Plan-Journal.md`.
 
 Modified:
 
@@ -350,13 +353,13 @@ DAO row shapes, unrelated to this Cycle).
 $ bun test src/lib/utils/
 bun test v1.3.13 (bf2e2cec)
 
- 168 pass
+ 170 pass
  0 fail
- 758 expect() calls
-Ran 168 tests across 10 files. [88.00ms]
+ 762 expect() calls
+Ran 170 tests across 10 files. [76.00ms]
 ```
 
-Includes the 66 new `route-data.test.ts` tests and the 93 new
+Includes the 66 new `route-data.test.ts` tests and the new
 `route-config.test.ts` tests, plus the pre-existing
 `history-nav.test.ts` (unchanged) and `header-mode.test.ts`
 (unchanged).
@@ -365,10 +368,10 @@ Includes the 66 new `route-data.test.ts` tests and the 93 new
 
 ```
 $ bun test --pattern "*.test.ts" src
- 278 pass
+ 280 pass
  0 fail
- 1543 expect() calls
-Ran 278 tests across 20 files. [1.85s]
+ 1547 expect() calls
+Ran 280 tests across 20 files. [1.91s]
 ```
 
 All src tests pass; no regressions in any other module.
@@ -458,9 +461,11 @@ a future cycle to add `/offline/*` Header / swipe / FAB e2e specs.
   Received: "deep"
   ```
 
-  Reverted to the hybrid implementation (search branch reads the
-  record's tag; root/deep branch reads `getCurrentTabIndex`).
-  Documented as a deviation; see below.
+  Reverted to the hybrid implementation (search branch uses a literal
+  `/search` prefix check, functionally equivalent to `tag === 'search'`
+  since `/search` is the only 'search'-tagged route today; root/deep
+  branch reads `getCurrentTabIndex`). Documented as a deviation; see
+  below.
 
 - **Round 1 audit caught an offline-route regression (5/5 FAIL).** I
   narrowed `TAB_BAR_CONFIG`'s offline patterns from the broad prefix
@@ -485,7 +490,7 @@ a future cycle to add `/offline/*` Header / swipe / FAB e2e specs.
   `getCurrentTabIndex('/offline/<id>')`,
   `getCurrentTabIndex('/offline/bookmarks')`, and the corresponding
   `getTabBarPillTarget` calls, asserting the preserved answers.
-  Detailed in `docs/DV20-Meeting/DV20-Cycle-1-Audit-R1.md`.
+  Detailed in `docs/RV20-C01-Audit-01.md`.
 
 - **Round 2 audit passed 2/5; 3/5 PASS-WITH-CONCERNS flagged a
   duplication hazard.** Round 2 auditors B, C, D each flagged
@@ -501,21 +506,44 @@ a future cycle to add `/offline/*` Header / swipe / FAB e2e specs.
   Auditor C also flagged that the e2e flake on
   `swipe-forward-back-deep-page.spec.ts:285` was not documented per
   §12; added the documentation above. Detailed in
-  `docs/DV20-Meeting/DV20-Cycle-1-Audit-R2.md`.
+  `docs/RV20-C01-Audit-02.md`.
 
 ## Deviations
 
 1. **`backParent` coverage mirrors today's `getParent` set exactly;
    not extended to its full structural coverage.** Per the spec's
    "derive each by reading the route's actual mount and behavior" I
-   would set `backParent: '/'` on `/discussion/*`,
-   `backParent: '/messages/inbox'` on `/messages/<id>`, etc. Doing so
-   changes the answer set of `isGesturePageLayoutRoute` (which the
-   spec carves out as the single imperative exception) and changes
-   the `resolvedLeftHref` substitution in GPL. The spec's "behavior
-   MUST be identical" rule wins. Broadening backParent coverage is a
-   Cycle 5 concern (when the resolver and the new state machine take
-   over from `getParent`). Flagged for the architect.
+   considered setting `backParent: '/'` on `/discussion/*`,
+   `backParent: '/messages/inbox'` on `/messages/<id>`, etc. The
+   impact analysis is route-specific:
+
+   - For `/discussion/*` and `/messages/<id>`: `isGesturePageLayoutRoute`
+     already returns `true` via the overlay-non-deep branch
+     (`attrs.family === 'overlay' && attrs.kind !== 'deep'`), so
+     adding `backParent` does not flip it. The `resolvedLeftHref`
+     substitution in GPL also does not flip: it fires only when
+     `target === '/'`, and for `/messages/<id>` reached from
+     `/messages/inbox` the target is `/messages/inbox`, not `/`.
+     These two routes are in fact safe to extend in a future cycle.
+   - For `/bookmarks`, `/search`, `/notifications`, `/profile` (the
+     latent-bug four): `attrs.kind === 'deep'` fails the overlay
+     branch and `backParent === undefined` fails the deep-route
+     branch, so `isGesturePageLayoutRoute` returns `false` today.
+     Adding `backParent` would flip the answer to `true`, dissolving
+     the masked latent bug. The spec carves the function out as the
+     single imperative exception with answer-set preserved verbatim,
+     so the extension is gated on Cycle 5.
+
+   The conservative choice (mirror today's `getParent` set exactly)
+   is correct under the spec's "behavior MUST be identical" rule:
+   extending backParent to the latent-bug four would change
+   `isGesturePageLayoutRoute`'s answer set, which the spec forbids.
+   Extending to `/discussion/*` and `/messages/<id>` alone would be
+   safe in principle but would split the registry into "routes that
+   declare a structural parent" and "routes whose structural parent
+   is obvious but undeclared", which is a worse factoring than
+   mirroring today's set and broadening uniformly in Cycle 5.
+   Flagged for the architect.
 
 2. **`isTabRootPath` and `isPagerRoute` are NOT reduced to record
    reads.** The spec lists them among the classifiers to "remove or
@@ -565,11 +593,13 @@ a future cycle to add `/offline/*` Header / swipe / FAB e2e specs.
    `'deep'` for `/discussion/*`, `/messages/<id>`, `/post/discussion`,
    `/messages/new` where today's code returns `'root'` (these routes
    inherit the source list's pill via the FAB family/kind). The
-   hybrid implementation reads the record's tag for the search
-   branch and `getCurrentTabIndex` (now consumer-config-driven) for
-   the root/deep branch. The pure tag-only derivation lands in a
-   later cycle when the resolver takes over Header morph. Flagged
-   for the architect.
+   hybrid implementation uses a literal `/search` prefix check for
+   the search branch (functionally equivalent to `tag === 'search'`
+   since `/search` is the only 'search'-tagged route today) and
+   `getCurrentTabIndex` (now consumer-config-driven) for the
+   root/deep branch. The pure tag-only derivation lands in a later
+   cycle when the resolver takes over Header morph. Flagged for the
+   architect.
 
 ## Carried-to-future items
 

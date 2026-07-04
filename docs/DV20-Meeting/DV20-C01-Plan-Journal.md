@@ -66,8 +66,56 @@ how the CMA read it.
    `getCurrentTabIndex` returns 0 for thread routes (the FAB
    `kind === 'discussions'` resolves to the discussions tab), so the
    Header renders the tab bar on a thread. The pure tag derivation
-   loses that. I reverted to a hybrid: the search branch reads the
-   record's tag; the root/deep branch still reads `getCurrentTabIndex`
-   (which now reads the tab-bar consumer config). The pure tag-only
-   derivation lands when the resolver takes over Header morph.
-   Flagged for the architect.
+   loses that. I reverted to a hybrid: the search branch uses a
+   literal `/search` prefix check (functionally equivalent to
+   `tag === 'search'` since `/search` is the only 'search'-tagged
+   route today; the tag-derived form lands in a later cycle); the
+   root/deep branch still reads `getCurrentTabIndex` (which now reads
+   the tab-bar consumer config). The pure tag-only derivation lands
+   when the resolver takes over Header morph. Flagged for the
+   architect.
+
+## 2026-07-04, Round 5 (clarifications to entries #1 and #3)
+
+The Round 0 entries above record CMA1's initial reading. Rounds 2
+and 5 surfaced two factual inaccuracies in entries #1 and #3 that
+this section clarifies; the Round 0 text is left in place as the
+historical record of the initial reading.
+
+7. **Clarification to entry #1 (backParent extension impact).** The
+   Round 0 entry claimed extending `backParent` to `/discussion/*`
+   and `/messages/<id>` would change `isGesturePageLayoutRoute`'s
+   answer set and `resolvedLeftHref`'s substitution. Empirically
+   verified in R5: `/discussion/*` and `/messages/<id>` already
+   return TRUE via the overlay-non-deep branch
+   (`attrs.family === 'overlay' && attrs.kind !== 'deep'`), so
+   adding `backParent` does not flip `isGesturePageLayoutRoute`.
+   The `resolvedLeftHref` substitution also does not flip: it fires
+   only when `target === '/'`, and for `/messages/<id>` reached from
+   `/messages/inbox` the target is `/messages/inbox`, not `/`.
+   Only the latent-bug four (`/bookmarks`, `/search`,
+   `/notifications`, `/profile`) actually flip when `backParent` is
+   added (they fail both branches today). The conservative choice
+   documented in entry #1 (mirror today's `getParent` set) stands;
+   the reasoning is updated in the journal's deviation #1.
+
+8. **Clarification to entry #3 (`_DEEP_ROUTE_PARENTS` removed in
+   R2).** The Round 0 entry documented the `_DEEP_ROUTE_PARENTS`
+   pattern-list approach. R2's audit flagged that approach as a
+   duplication hazard (the pattern list duplicated the
+   `backParent`-declaring patterns in the core record). The R2 fix
+   replaced the pattern list with a direct core-record read
+   (`getRouteData(p).backParent !== undefined`). The function's
+   answer set is byte-identical (verified by the existing
+   `isGesturePageLayoutRoute` unit tests). The journal's
+   "Migration-era data isGesturePageLayoutRoute reads" section
+   documents the post-R2 form.
+
+9. **Latent-bug set clarification (R5).** The latent-bug set is the
+   four leaf routes `/search`, `/bookmarks`, `/notifications`,
+   `/profile` only. Sub-pages of `/profile` and the entire `/admin`
+   tree carry declared `backParent` and therefore return TRUE; they
+   are NOT in the latent-bug set. The R5 audit caught
+   documentation/commentary in `route-config.ts` and
+   `route-config.test.ts` that over-listed the bug set to include
+   `/admin` and the sub-pages; those have been corrected.

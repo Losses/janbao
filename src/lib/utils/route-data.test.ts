@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { getRouteData, getRouteTag } from './route-data';
+import { getRouteData } from './route-data';
 import type { RouteData, RouteTag } from './route-data';
 
 describe('getRouteData - tag assignments per §3 + §14.1 + Cycle 1 spec', () => {
@@ -53,7 +53,6 @@ describe('getRouteData - tag assignments per §3 + §14.1 + Cycle 1 spec', () =>
 	for (const { path, tag } of cases) {
 		test(`${path} → tag ${tag}`, () => {
 			expect(getRouteData(path).tag, `${path} should be tag ${tag}`).toBe(tag);
-			expect(getRouteTag(path), `${path} getRouteTag helper`).toBe(tag);
 		});
 	}
 });

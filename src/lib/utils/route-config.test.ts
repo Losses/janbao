@@ -192,10 +192,14 @@ describe('isPagerRoute - positional query over MOBILE_TAB_DEFS', () => {
 });
 
 describe('isGesturePageLayoutRoute - migration-era imperative (deferred to Cycle 5)', () => {
-	// The function's answer set is preserved verbatim per the Cycle 1 spec;
-	// the latent bug (TRUE answer for /search, /bookmarks, /profile, /admin,
-	// /notifications and the sub-pages of the last four) is NOT fixed in
-	// this cycle. Cycle 5 dissolves the function and the bug together.
+	// The function's answer set is preserved verbatim per the Cycle 1 spec.
+	// Masked latent bug: `/search`, `/bookmarks`, `/notifications`, and
+	// `/profile` mount a GPL but the function returns FALSE because they
+	// carry `kind: 'deep'` (failing the overlay branch) and have no
+	// declared `backParent` (failing the deep-route branch). Sub-pages
+	// of `/profile` and the `/admin/*` tree declare `backParent`, so
+	// they return TRUE; the latent-bug set is the four leaf routes only.
+	// Cycle 5 dissolves the function and the bug together.
 	test('true for thread / conversation routes (Family B overlay, non-deep kind)', () => {
 		expect(isGesturePageLayoutRoute('/discussion/123')).toBe(true);
 		expect(isGesturePageLayoutRoute('/discussion/123/slug/p1')).toBe(true);
@@ -214,12 +218,15 @@ describe('isGesturePageLayoutRoute - migration-era imperative (deferred to Cycle
 		expect(isGesturePageLayoutRoute('/post/discussion')).toBe(true);
 		expect(isGesturePageLayoutRoute('/messages/new')).toBe(true);
 	});
-	test('FALSE for non-FAB GPL routes (latent bug; deferred to Cycle 5)', () => {
-		// These routes DO mount a GPL today, but isGesturePageLayoutRoute
-		// returns false because they carry kind: 'deep' (failing the
-		// thread/conversation branch) and have no declared backParent
-		// (failing the deep-route-parent branch). The function stays
-		// imperative per the spec; the bug is preserved verbatim.
+	test('latent-bug leaf routes return FALSE; backParent-declaring sub-pages return TRUE', () => {
+		// `/search`, `/bookmarks`, `/notifications`, and `/profile` mount a
+		// GPL but the function returns FALSE: they carry `kind: 'deep'`
+		// (failing the overlay branch) and have no declared `backParent`
+		// (failing the deep-route branch). `/admin/user-groups` carries
+		// `backParent: '/admin'`, so the deep-route branch returns TRUE
+		// (no bug for sub-pages with declared parents). The function
+		// stays imperative per the spec; the leaf-route bug is preserved
+		// verbatim and deferred to Cycle 5.
 		expect(isGesturePageLayoutRoute('/search')).toBe(false);
 		expect(isGesturePageLayoutRoute('/bookmarks')).toBe(false);
 		expect(isGesturePageLayoutRoute('/notifications')).toBe(false);

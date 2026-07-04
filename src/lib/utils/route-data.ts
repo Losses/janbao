@@ -362,8 +362,3 @@ export function getRouteData(pathname: string): RouteData {
 		fab: entry.fab
 	};
 }
-
-/** Convenience: the tag for `pathname`. */
-export function getRouteTag(pathname: string): RouteTag {
-	return getRouteData(pathname).tag;
-}
