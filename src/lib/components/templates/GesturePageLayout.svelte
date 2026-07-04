@@ -28,8 +28,9 @@
 		MOBILE_TABS,
 		isPagerRoute,
 		getCurrentTabIndex,
-		DEEP_ROUTES
+		getPreviewPanel
 	} from '$lib/utils/route-config';
+	import { getRouteData } from '$lib/utils/route-data';
 
 	interface Props {
 		children: Snippet;
@@ -72,10 +73,9 @@
 	};
 	let isMobile = $state(getIsMobile());
 
-	function getPreviewPanel(path: string | null | undefined) {
+	function getPreviewPanelForPath(path: string | null | undefined) {
 		if (!path) return null;
-		const match = DEEP_ROUTES.find((r) => r.pattern.test(path));
-		return match?.previewPanel ?? MOBILE_TABS[navStore.activeTab]?.panel ?? null;
+		return getPreviewPanel(path) ?? MOBILE_TABS[navStore.activeTab]?.panel ?? null;
 	}
 
 	// State declarations
@@ -111,14 +111,14 @@
 		}
 	});
 
-	const currentRouteConfig = $derived(DEEP_ROUTES.find((r) => r.pattern.test(page.url.pathname)));
+	const currentRouteBackParent = $derived(getRouteData(page.url.pathname).backParent);
 
 	const resolvedLeftHref = $derived.by(() => {
 		if (navStore.pendingNav) return navStore.pendingNav.href;
 		const target = lockedLeftHref ?? leftHref ?? navStore.backTarget;
-		// If the previous browser-history entry is genuinely '/', respect the real route history; do not substitute getParent here.
-		if (target === '/' && currentRouteConfig && previousEntryPathname() !== '/') {
-			return currentRouteConfig.getParent(page.url.pathname);
+		// If the previous browser-history entry is genuinely '/', respect the real route history; do not substitute the structural parent here.
+		if (target === '/' && currentRouteBackParent && previousEntryPathname() !== '/') {
+			return currentRouteBackParent;
 		}
 		return target;
 	});
@@ -150,8 +150,7 @@
 		if (left) return true;
 		if (!resolvedLeftHref) return false;
 		if (backTargetIsTabRoot) return true;
-		const match = DEEP_ROUTES.find((r) => r.pattern.test(resolvedLeftHref));
-		return !!match?.previewPanel;
+		return getPreviewPanel(resolvedLeftHref) !== null;
 	});
 	const rightPreviewTab = $derived(
 		rightHref ? (MOBILE_TABS.find((tab) => tab.href === rightHref)?.labelKey ?? null) : null
@@ -631,9 +630,10 @@
 		pendingNavRafId = requestAnimationFrame(tick);
 	}
 
-	function onSwipeEnd(deltaX: number, velocity: number, reversed: boolean) {
+	function onSwipeEnd(deltaX: number, _velocity: number, reversed: boolean) {
 		// `reversed` = the finger rebounded from the drag's peak before lift-off
 		// (change of intent): return to the current panel instead of advancing.
+		// `_velocity` is reserved for Cycle 4's velocity-matched commit.
 		if (swipeNeedsLoadingAtStart) {
 			const maxDragDist = window.innerWidth * 0.3;
 			const dragDist = dragOffset !== null ? Math.abs(dragOffset) : 0;
@@ -1003,7 +1003,7 @@
 						{#if left}
 							{@render left()}
 						{:else}
-							{@const PreviewPanel = getPreviewPanel(resolvedLeftHref)}
+							{@const PreviewPanel = getPreviewPanelForPath(resolvedLeftHref)}
 							{#if PreviewPanel}
 								<PreviewPanel />
 							{/if}
@@ -1014,7 +1014,7 @@
 						{#if left}
 							{@render left()}
 						{:else}
-							{@const PreviewPanel = getPreviewPanel(resolvedLeftHref)}
+							{@const PreviewPanel = getPreviewPanelForPath(resolvedLeftHref)}
 							{#if PreviewPanel}
 								<PreviewPanel />
 							{/if}

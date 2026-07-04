@@ -40,9 +40,9 @@ Replace the imperative route-classification web with one `RouteData` record per 
 - The migrated classifier functions and/or their call sites.
 - Unit tests for the records and for the derived queries the consumers need (the CMA decides the test surface; `tab-config.ts` and `navigation-logic.ts` are already unit-tested under `bun:test`, follow that pattern).
 - The existing e2e suite passing unchanged (the CMA determines which specs are in-scope and pastes the evidence).
-- `docs/DV20-Cycle-1-Journal.md`: the implementation journal, recording what actually happened (files changed, decisions, deviations, failures, the real verification evidence pasted).
-- `docs/DV20-Meeting/DV20-Cycle-1-Audit-R{M}.md` per audit round (the role-less, hint-less audit results, 5/5 zero-concern at exit).
-- `docs/DV20-Meeting/DV20-Cycle-1-Plan-Journal.md`: append-only revision history of the CMA's spec interpretations across audit rounds.
+- `docs/DV20-C01-Journal.md`: the implementation journal, recording what actually happened (files changed, decisions, deviations, failures, the real verification evidence pasted).
+- `docs/RV20-C01-Audit-{MM}.md` per audit round (the role-less, hint-less audit results, 5/5 zero-concern at exit).
+- `docs/DV20-Meeting/DV20-C01-Plan-Journal.md`: append-only revision history of the CMA's spec interpretations across audit rounds.
 - A final report (the CMA's last message to the architect): files changed, audit tally per round against the zero-concern bar, verification evidence pasted, deviations, carried-to-future items.
 
 ## What the architect will check at review

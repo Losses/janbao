@@ -49,7 +49,7 @@
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getActiveGestureTrack } from '$lib/stores/active-gesture-track.svelte';
 	import {
-		getRouteFabRule,
+		getFabRouteAttributes,
 		FAB_KIND_CONFIGS,
 		backTargetListKind,
 		getCurrentTabIndex
@@ -117,10 +117,10 @@
 	 *  its scale animation. The atom stays mounted on overlay/compose routes so
 	 *  the scale-out/in runs across the route swap. */
 	const fabConfig = $derived.by<FabConfig | null>(() => {
-		const rule = getRouteFabRule(page.url.pathname);
-		if (!rule || !rule.fab) return null;
+		const attrs = getFabRouteAttributes(page.url.pathname);
+		if (!attrs) return null;
 
-		if (rule.fab.kind === 'dynamic') {
+		if (attrs.kind === 'dynamic') {
 			// The Activity route resolves its FAB from the gesture's source tab. The
 			// live pager.fractionalIndex is the prompt signal for the drag and at
 			// rest. On a committing swipe the route lands on Activity while the track
@@ -140,7 +140,7 @@
 				const kindConfig = FAB_KIND_CONFIGS[resolvedKind];
 				return {
 					kind: resolvedKind,
-					family: rule.fab.family,
+					family: attrs.family,
 					href: kindConfig.href,
 					label: kindConfig.label(t),
 					icon: kindConfig.icon,
@@ -150,7 +150,7 @@
 			return null;
 		}
 
-		if (rule.fab.kind === 'deep') {
+		if (attrs.kind === 'deep') {
 			// A non-FAB GesturePageLayout route (bookmarks, profile/*, search,
 			// notifications, admin/*). Resolve the source-list kind from the back
 			// target so the FAB scales toward the list the user came from. Family
@@ -162,7 +162,7 @@
 			const kindConfig = FAB_KIND_CONFIGS[resolvedKind];
 			return {
 				kind: resolvedKind,
-				family: rule.fab.family,
+				family: attrs.family,
 				href: kindConfig.href,
 				label: kindConfig.label(t),
 				icon: kindConfig.icon,
@@ -170,12 +170,12 @@
 			};
 		}
 
-		if (rule.fab.kind === null) return null;
+		if (attrs.kind === null) return null;
 
-		const kindConfig = FAB_KIND_CONFIGS[rule.fab.kind];
+		const kindConfig = FAB_KIND_CONFIGS[attrs.kind];
 		return {
-			kind: rule.fab.kind,
-			family: rule.fab.family,
+			kind: attrs.kind,
+			family: attrs.family,
 			href: kindConfig.href,
 			label: kindConfig.label(t),
 			icon: kindConfig.icon,
@@ -328,9 +328,9 @@
 	// (it only starts/stops the rAF), so it cannot loop (svelte-effect-fetch-loop).
 	$effect(() => {
 		const hasTrack = track !== null;
-		const rule = getRouteFabRule(page.url.pathname);
-		const hasCfg = rule !== null && rule.fab !== undefined && rule.fab.kind !== null;
-		const family = rule?.fab?.family ?? null;
+		const attrs = getFabRouteAttributes(page.url.pathname);
+		const hasCfg = attrs !== null && attrs.kind !== null;
+		const family = attrs?.family ?? null;
 		if (!hasTrack || !hasCfg || family !== 'list' || chipExitActive) {
 			stopSampler();
 			return;

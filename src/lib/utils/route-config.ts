@@ -1,4 +1,44 @@
 // src/lib/utils/route-config.ts
+/**
+ * route-config - the consumer-rendering configs that sit on top of the
+ * core `RouteData` record (in `route-data.ts`).
+ *
+ * Per `docs/DV20-Plan.md` §3 the core record holds only `tag`,
+ * `backParent`, `snapshotCapture`, and `fab`. Everything that the
+ * renderer (Layer 5), the FAB atom, the tab bar, or the deep-page
+ * preview reads lives here as a separate consumer config keyed by route
+ * pattern.
+ *
+ * The configs in this file:
+ *
+ *   - `FAB_KIND_CONFIGS`          the FAB icon / href / tabIndex per
+ *                                  concrete list kind (the rendering
+ *                                  details for `fab: true` routes).
+ *   - `FAB_ROUTE_ATTRIBUTES`      family + kind per route where the FAB
+ *                                  atom mounts (including Family B/C
+ *                                  routes that keep the atom at scale
+ *                                  0). Family enum is consumed by the
+ *                                  FAB layer's sampler selection; it
+ *                                  dissolves in Cycle 4's all-rAF
+ *                                  executor.
+ *   - `TAB_BAR_CONFIG`            the pill target per route (§3's
+ *                                  tab-bar consumer config).
+ *   - `PREVIEW_PANEL_CONFIG`      the back-preview snippet component
+ *                                  per route that captures one.
+ *
+ * `isGesturePageLayoutRoute` (the migration-era imperative exception
+ * the Cycle 1 spec carves out) reads the core `RouteData` registry
+ * directly via `getRouteData(p).backParent !== undefined` for its
+ * deep-route set, plus `FAB_ROUTE_ATTRIBUTES` for the
+ * thread/conversation check. Cycle 5 dissolves the function.
+ *
+ * The classifier functions below are either positional queries over
+ * `MOBILE_TAB_DEFS` (`isPagerRoute`), one-line reads of the consumer
+ * configs (`getCurrentTabIndex`), or non-route classifiers
+ * (`backTargetListKind` classifies a back-target string). The
+ * migration-era `isGesturePageLayoutRoute` stays imperative per the
+ * Cycle 1 spec; its body reads the consumer registries above.
+ */
 import type { Component } from 'svelte';
 import ProfileMenuPanel from '$lib/components/panels/ProfileMenuPanel.svelte';
 import SettingsMenuPanel from '$lib/components/panels/SettingsMenuPanel.svelte';
@@ -9,12 +49,18 @@ import TabMessagesPanel from '$lib/components/panels/TabMessagesPanel.svelte';
 import { mdiPlus, mdiEmailPlus } from '@mdi/js';
 import type { TranslationDict } from '$lib/types/translation';
 import { MOBILE_TAB_DEFS, type TabDef, type MobileTabLabelKey } from './tab-config';
+import { getRouteData } from './route-data';
 import { getListCacheStore } from '$lib/stores/list-cache.svelte';
 import type { TabsLayoutData } from '$lib/types/tabs';
 
 export type { MobileTabLabelKey, PathMatcher } from './tab-config';
 
-export type ParentRouteResolver = (path: string) => string;
+// ---------------------------------------------------------------------------
+// FAB icon/href config (§3 consumer config #1).
+//
+// The FAB's icon, label, href, and tabIndex per concrete list kind. The
+// resolver (Layer 3) reads only the core `fab` boolean; the FAB layer
+// reads this for rendering.
 
 export type FabListKind = 'discussions' | 'messages';
 
@@ -42,173 +88,206 @@ export const FAB_KIND_CONFIGS: Record<FabListKind, FabKindConfig> = {
 	}
 };
 
-export interface FabRouteConfigMetadata {
-	readonly family: 'list' | 'overlay' | 'compose';
-	readonly kind: FabListKind | 'dynamic' | 'deep' | null;
-}
+// ---------------------------------------------------------------------------
+// FAB route attributes (§3 consumer config #2; the family enum dissolves
+// in Cycle 4's all-rAF executor).
+//
+// `family` selects the FAB layer's sampler; `kind` selects the icon/href
+// (or `'dynamic'` for the Activity route's spatially-resolved FAB, or
+// `'deep'` for the non-FAB GPL routes whose atom stays mounted at scale
+// 0 across the list<->deep boundary). Together they preserve the
+// per-route rendering that the FAB layer needs; nothing here is a
+// concept the core `RouteData` record holds.
 
-// Preview panels source their own data from the page store / list-cache store,
-// so the slot holds a prop-less Svelte component.
-export type SvelteComponentType = Component;
+/** The FAB sampler family. Consumed by the FAB layer only. */
+export type FabFamily = 'list' | 'overlay' | 'compose';
 
-export interface BaseRouteConfig {
+/**
+ * The dynamic FAB kind. `'dynamic'` is the Activity route's
+ * spatially-resolved FAB; `'deep'` is the non-FAB GPL route sentinel
+ * that keeps the atom mounted at scale 0; `null` covers the static list
+ * FAB kinds (`'discussions'` / `'messages'`).
+ */
+export type FabRouteKind = FabListKind | 'dynamic' | 'deep' | null;
+
+export interface FabRouteAttributes {
 	readonly pattern: RegExp;
-	readonly getParent?: ParentRouteResolver;
-	readonly previewPanel?: SvelteComponentType;
-	readonly fab?: FabRouteConfigMetadata;
-	/** The module tab this route belongs to, for routes with no FAB of their own
-	 *  (the offline readers, the standalone discussions pagination route). FAB
-	 *  routes derive their tab from `fab.kind` instead. */
-	readonly tab?: MobileTabLabelKey;
+	readonly family: FabFamily;
+	readonly kind: FabRouteKind;
 }
 
-export interface DeepRouteConfig extends BaseRouteConfig {
-	readonly getParent: ParentRouteResolver;
-}
+/**
+ * Per-route FAB attributes. The atom mounts on every route in this
+ * table (Family B/C at scale 0). Routes absent from this table never
+ * mount the FAB atom directly; the FAB layer's `retainedConfig` keeps
+ * the most-recent FAB mounted across no-FAB routes.
+ */
+const FAB_ROUTE_ATTRIBUTES: readonly FabRouteAttributes[] = [
+	// Family A: list routes with a visible FAB at rest.
+	{ pattern: /^\/$/, family: 'list', kind: 'discussions' },
+	{ pattern: /^\/messages\/inbox$/, family: 'list', kind: 'messages' },
+	// Family A, dynamic kind: Activity's FAB resolves from the gesture source tab.
+	{ pattern: /^\/activity$/, family: 'list', kind: 'dynamic' },
 
-export type RouteConfig = BaseRouteConfig;
+	// Family B: thread / conversation (overlay on top of the source list).
+	{ pattern: /^\/discussion\//, family: 'overlay', kind: 'discussions' },
+	{ pattern: /^\/messages\/\d/, family: 'overlay', kind: 'messages' },
 
-export const ROUTE_CONFIGS: readonly BaseRouteConfig[] = [
-	// --- Deep Routes (Panel routes) ---
-	// Non-FAB GesturePageLayout routes carry fab: { family: 'overlay', kind: 'deep' }
-	// so the FAB atom stays mounted at scale 0 and the overlay-family sampler drives
-	// its scale across the list<->deep boundary. See docs/FAB-Deep-Boundary-Fix-Plan.md.
+	// Family C: compose forms (publish coverProgress for the FAB sampler).
+	{ pattern: /^\/post\/discussion$/, family: 'compose', kind: 'discussions' },
+	{ pattern: /^\/messages\/new$/, family: 'compose', kind: 'messages' },
+
+	// Family B 'deep': non-FAB GPL routes whose atom stays mounted at scale 0
+	// so the sampler drives the scale across the list<->deep boundary.
+	{ pattern: /^\/bookmarks$/, family: 'overlay', kind: 'deep' },
+	{ pattern: /^\/search$/, family: 'overlay', kind: 'deep' },
+	{ pattern: /^\/notifications$/, family: 'overlay', kind: 'deep' },
+	{ pattern: /^\/profile$/, family: 'overlay', kind: 'deep' },
+	{ pattern: /^\/profile\/settings$/, family: 'overlay', kind: 'deep' },
+	{ pattern: /^\/profile\/\d+\/[^/]+$/, family: 'overlay', kind: 'deep' },
+	{ pattern: /^\/profile\/comments\/\d+\/[^/]+$/, family: 'overlay', kind: 'deep' },
+	{ pattern: /^\/profile\/discussions\/\d+\/[^/]+$/, family: 'overlay', kind: 'deep' },
 	{
-		pattern: /^\/bookmarks$/,
-		fab: { family: 'overlay', kind: 'deep' }
-	},
-	{
-		pattern: /^\/search$/,
-		fab: { family: 'overlay', kind: 'deep' }
-	},
-	{
-		pattern: /^\/notifications$/,
-		fab: { family: 'overlay', kind: 'deep' }
-	},
-	{
-		pattern: /^\/profile$/,
-		fab: { family: 'overlay', kind: 'deep' }
-	},
-	{
-		pattern: /^\/profile\/settings$/,
-		getParent: () => '/',
-		previewPanel: SettingsMenuPanel,
-		fab: { family: 'overlay', kind: 'deep' }
-	},
-	{
-		// /profile/[userId]/[userSlug]
-		pattern: /^\/profile\/\d+\/[^/]+$/,
-		getParent: () => '/profile',
-		previewPanel: ProfileMenuPanel,
-		fab: { family: 'overlay', kind: 'deep' }
-	},
-	{
-		// /profile/comments/[userId]/[userSlug]
-		pattern: /^\/profile\/comments\/\d+\/[^/]+$/,
-		getParent: (path) => {
-			const m = path.match(/^\/profile\/comments\/(\d+)\/([^/]+)/);
-			return m ? `/profile/${m[1]}/${m[2]}` : '/profile';
-		},
-		previewPanel: ProfileMenuPanel,
-		fab: { family: 'overlay', kind: 'deep' }
-	},
-	{
-		// /profile/discussions/[userId]/[userSlug]
-		pattern: /^\/profile\/discussions\/\d+\/[^/]+$/,
-		getParent: (path) => {
-			const m = path.match(/^\/profile\/discussions\/(\d+)\/([^/]+)/);
-			return m ? `/profile/${m[1]}/${m[2]}` : '/profile';
-		},
-		previewPanel: ProfileMenuPanel,
-		fab: { family: 'overlay', kind: 'deep' }
-	},
-	{
-		// Sub-settings pages
 		pattern:
 			/^\/profile\/(?:appearance|edit|editor|offlineReading|onlineNow|password|picture|preferences)$/,
-		getParent: () => '/profile/settings',
-		previewPanel: SettingsMenuPanel,
-		fab: { family: 'overlay', kind: 'deep' }
+		family: 'overlay',
+		kind: 'deep'
 	},
+	{ pattern: /^\/profile\/invitations$/, family: 'overlay', kind: 'deep' },
+	{ pattern: /^\/admin$/, family: 'overlay', kind: 'deep' },
 	{
-		// Invitations page
-		pattern: /^\/profile\/invitations$/,
-		getParent: () => '/profile',
-		previewPanel: ProfileMenuPanel,
-		fab: { family: 'overlay', kind: 'deep' }
-	},
-	{
-		// Sub-admin pages
 		pattern: /^\/admin\/(?:backups|categories|maintenance|permissions|stats|user-groups)$/,
-		getParent: () => '/admin',
-		previewPanel: AdminMenuPanel,
-		fab: { family: 'overlay', kind: 'deep' }
-	},
-	{
-		// Admin main menu page
-		pattern: /^\/admin$/,
-		getParent: () => '/',
-		previewPanel: AdminMenuPanel,
-		fab: { family: 'overlay', kind: 'deep' }
-	},
-
-	// --- FAB Routes ---
-	{
-		pattern: /^\/discussion\//,
-		fab: { family: 'overlay', kind: 'discussions' }
-	},
-	{
-		pattern: /^\/messages\/\d/,
-		fab: { family: 'overlay', kind: 'messages' }
-	},
-	{
-		pattern: /^\/post\/discussion$/,
-		getParent: () => '/',
-		fab: { family: 'compose', kind: 'discussions' }
-	},
-	{
-		pattern: /^\/messages\/new$/,
-		getParent: () => '/messages/inbox',
-		fab: { family: 'compose', kind: 'messages' }
-	},
-	{
-		pattern: /^\/activity$/,
-		fab: { family: 'list', kind: 'dynamic' }
-	},
-	{
-		pattern: /^\/$/,
-		fab: { family: 'list', kind: 'discussions' }
-	},
-	{
-		pattern: /^\/messages\/inbox$/,
-		fab: { family: 'list', kind: 'messages' }
-	},
-
-	// --- Tab-associated routes without a FAB ---
-	// These declare their module tab directly (no `fab`), so getRouteFabRule
-	// skips them (no FAB shown) but getRouteRule / getCurrentTabIndex resolve
-	// them onto their tab. Order matters: /offline/activity before /offline.
-	{
-		pattern: /^\/discussions\/p\d+$/,
-		tab: 'discussions'
-	},
-	{
-		pattern: /^\/offline\/activity/,
-		tab: 'activity'
-	},
-	{
-		pattern: /^\/offline/,
-		tab: 'discussions'
+		family: 'overlay',
+		kind: 'deep'
 	}
 ];
 
-export const DEEP_ROUTES: readonly DeepRouteConfig[] = ROUTE_CONFIGS.filter(
-	(r): r is DeepRouteConfig => r.getParent !== undefined
-);
-
-export function getRouteFabRule(pathname: string): BaseRouteConfig | null {
-	return ROUTE_CONFIGS.find((r) => r.fab !== undefined && r.pattern.test(pathname)) ?? null;
+/**
+ * Lookup the FAB attributes for `pathname`. Returns `null` when the
+ * route does not mount the FAB atom directly.
+ */
+export function getFabRouteAttributes(pathname: string): FabRouteAttributes | null {
+	return FAB_ROUTE_ATTRIBUTES.find((r) => r.pattern.test(pathname)) ?? null;
 }
+
+// ---------------------------------------------------------------------------
+// Tab-bar pill target config (§3 consumer config #3).
+//
+// Per §3 the tab-bar config assigns each route a pill target
+// ('discussions' | 'activity' | 'messages' | 'active' | 'none'). The
+// 'active' value is the §3 rename of 'inherit': the route follows the
+// currently-active tab (the global routes /admin, /profile, /search,
+// /bookmarks, /notifications). For Cycle 1 'active' routes return -1
+// from `getCurrentTabIndex`, matching the current codebase; the
+// tab-bar consumer resolves 'active' to the live tab in a later cycle.
+
+export type TabBarPillTarget = 'discussions' | 'activity' | 'messages' | 'active' | 'none';
+
+export interface TabBarEntry {
+	readonly pattern: RegExp;
+	readonly pillTarget: Exclude<TabBarPillTarget, 'none'>;
+}
+
+const TAB_BAR_CONFIG: readonly TabBarEntry[] = [
+	// Spatial tab roots.
+	{ pattern: /^\/$/, pillTarget: 'discussions' },
+	{ pattern: /^\/activity$/, pillTarget: 'activity' },
+	{ pattern: /^\/messages\/inbox$/, pillTarget: 'messages' },
+
+	// Tab-internal pagination inherits its tab's pill.
+	{ pattern: /^\/discussions\/p\d+$/, pillTarget: 'discussions' },
+
+	// Offline tab mirrors. Prefix patterns (no `$`) so /offline/<id> and
+	// /offline/bookmarks inherit the discussions pill. Cycle 6 brings the
+	// offline detail routes into the gesture layer. Order matters:
+	// /offline/activity before /offline.
+	{ pattern: /^\/offline\/activity/, pillTarget: 'activity' },
+	{ pattern: /^\/offline/, pillTarget: 'discussions' },
+
+	// Thread / conversation / compose routes inherit their source tab's
+	// pill (their pill target mirrors the source list they overlay).
+	{ pattern: /^\/discussion\//, pillTarget: 'discussions' },
+	{ pattern: /^\/messages\/\d/, pillTarget: 'messages' },
+	{ pattern: /^\/post\/discussion$/, pillTarget: 'discussions' },
+	{ pattern: /^\/messages\/new$/, pillTarget: 'messages' },
+
+	// Global routes follow the active tab (the §3 'active' pill target).
+	{ pattern: /^\/admin/, pillTarget: 'active' },
+	{ pattern: /^\/profile/, pillTarget: 'active' },
+	{ pattern: /^\/search$/, pillTarget: 'active' },
+	{ pattern: /^\/bookmarks$/, pillTarget: 'active' },
+	{ pattern: /^\/notifications$/, pillTarget: 'active' }
+];
+
+/**
+ * Resolve the pill target for `pathname`. Routes absent from
+ * `TAB_BAR_CONFIG` resolve to `'none'` (no pill, no tab highlight).
+ */
+export function getTabBarPillTarget(pathname: string): TabBarPillTarget {
+	return TAB_BAR_CONFIG.find((e) => e.pattern.test(pathname))?.pillTarget ?? 'none';
+}
+
+// ---------------------------------------------------------------------------
+// Preview-panel config (§3 consumer config #4).
+//
+// The component rendered in the MobileTabPager's deep-preview slot when
+// a back-swipe targets a route that captures a snippet. Routes that
+// capture a snippet but render the source tab's panel (e.g. compose
+// forms) are absent here; the layer's fallback to
+// `MOBILE_TABS[activeTab].panel` covers them.
+//
+// Preview panels source their own data from the page store / list-cache
+// store, so the slot holds a prop-less Svelte component.
+export type SvelteComponentType = Component;
+
+export interface PreviewPanelEntry {
+	readonly pattern: RegExp;
+	readonly panel: SvelteComponentType;
+}
+
+const PREVIEW_PANEL_CONFIG: readonly PreviewPanelEntry[] = [
+	{ pattern: /^\/profile\/settings$/, panel: SettingsMenuPanel },
+	{ pattern: /^\/profile\/\d+\/[^/]+$/, panel: ProfileMenuPanel },
+	{ pattern: /^\/profile\/comments\/\d+\/[^/]+$/, panel: ProfileMenuPanel },
+	{ pattern: /^\/profile\/discussions\/\d+\/[^/]+$/, panel: ProfileMenuPanel },
+	{
+		pattern:
+			/^\/profile\/(?:appearance|edit|editor|offlineReading|onlineNow|password|picture|preferences)$/,
+		panel: SettingsMenuPanel
+	},
+	{ pattern: /^\/profile\/invitations$/, panel: ProfileMenuPanel },
+	{ pattern: /^\/admin$/, panel: AdminMenuPanel },
+	{
+		pattern: /^\/admin\/(?:backups|categories|maintenance|permissions|stats|user-groups)$/,
+		panel: AdminMenuPanel
+	}
+];
+
+/**
+ * Lookup the back-preview snippet component for `pathname`. Returns
+ * `null` when the route has no dedicated preview panel; the FAB layer
+ * falls back to the active tab's panel.
+ */
+export function getPreviewPanel(pathname: string): SvelteComponentType | null {
+	return PREVIEW_PANEL_CONFIG.find((e) => e.pattern.test(pathname))?.panel ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// `isGesturePageLayoutRoute` reads the deep-route-parent set directly from
+// the core `RouteData` registry (`backParent !== undefined`) rather than
+// maintaining a separate pattern list. This keeps the function's answer
+// set byte-stable without a duplication hazard: the set of routes that
+// declare a structural parent lives in one place (`route-data.ts`).
+
+// ---------------------------------------------------------------------------
+// Classifiers.
+//
+// Most of the classifier surface lives in the core `RouteData` record
+// or the consumer configs above. The remaining functions below are
+// positional queries (`isPagerRoute`), consumer-config reads
+// (`getCurrentTabIndex`), non-route classifiers (`backTargetListKind`),
+// and the migration-era `isGesturePageLayoutRoute` whose body the
+// Cycle 1 spec carves out as the single imperative exception.
 
 /**
  * Resolve the source-list kind for a `deep` route from its back target. The back
@@ -224,64 +303,46 @@ export function backTargetListKind(backTargetHref: string | null): FabListKind {
 	return pathname === '/messages/inbox' ? 'messages' : 'discussions';
 }
 
-/** Thread or conversation route (covers the list with an overlay). A `deep`
- *  route reuses the overlay family for the FAB sampler but is not itself a
- *  thread/conversation, so it is excluded here to keep the predicate's meaning. */
-export function isOverlayRoute(pathname: string): boolean {
-	const rule = getRouteFabRule(pathname);
-	return rule ? rule.fab?.family === 'overlay' && rule.fab?.kind !== 'deep' : false;
-}
-
-/** Compose route (mounts a GesturePageLayout that publishes coverProgress; the
- *  FAB reads it like the overlay family). */
-export function isComposeRoute(pathname: string): boolean {
-	const rule = getRouteFabRule(pathname);
-	return rule ? rule.fab?.family === 'compose' : false;
-}
-
 /**
  * A route whose +page.svelte mounts a GesturePageLayout, so it owns the
- * horizontal gesture and DualColumnLayout's tab-swipe must yield to it. True
- * for overlay routes (thread / conversation) and every deep route in
- * DEEP_ROUTES, which (now that the compose forms carry getParent) includes the
- * compose forms too: compose is a module child like a thread. Pager routes are
- * not GPL-mounted (the MobileTabPager owns their gesture) and are excluded by
- * the consumer's own isPagerRoute check.
+ * horizontal gesture and DualColumnLayout's tab-swipe must yield to it.
+ *
+ * PER THE CYCLE 1 SPEC this function is the single classifier that
+ * stays imperative: GPL ownership has no clean field in the target
+ * record (§3) and dissolves in Cycle 5. Its answer set is: TRUE for
+ * routes in Family-B `overlay` whose kind is not `'deep'` (i.e. threads
+ * and conversations) OR routes whose structural parent is declared in
+ * the core record.
+ *
+ * Masked latent bug (deferred to Cycle 5): `/search`, `/bookmarks`,
+ * `/profile`, `/admin`, `/notifications` and the sub-pages of the last
+ * four mount a GPL but this function returns FALSE for them. The
+ * function's answer set is preserved verbatim per the Cycle 1 spec;
+ * Cycle 5 dissolves both the function and the bug.
  */
 export function isGesturePageLayoutRoute(pathname: string): boolean {
-	return isOverlayRoute(pathname) || DEEP_ROUTES.some((r) => r.pattern.test(pathname));
+	const attrs = getFabRouteAttributes(pathname);
+	if (attrs && attrs.family === 'overlay' && attrs.kind !== 'deep') return true;
+	return getRouteData(pathname).backParent !== undefined;
+}
+
+/** True for the exact pager routes (where the MobileTabPager owns the swipe).
+ *  A positional query over `MOBILE_TAB_DEFS` (the spatial tab metadata),
+ *  not a per-route `RouteData` field. */
+export function isPagerRoute(pathname: string): boolean {
+	return MOBILE_TAB_DEFS.some((tab) => tab.href === pathname);
 }
 
 /**
- * The source-list FAB shown on an overlay or compose route (Family B/C). The
- * thread under `/discussion/*` and the compose form under `/post/discussion`
- * both originate from the discussions list; `/messages/<id>` and `/messages/new`
- * both originate from the messages inbox. Returns null when the route is
- * neither overlay nor compose (the layer resolves the list FAB directly).
+ * Index of the module tab a pathname belongs to, or -1 when on no tab route.
+ * Reads the tab-bar consumer config: a `'discussions'` / `'activity'` /
+ * `'messages'` pill target resolves to the matching tab index; any
+ * other pill target (`'active'`, `'none'`, or unmatched) returns -1.
  */
-export function sourceListKindForOverlayOrCompose(pathname: string): FabListKind | null {
-	const rule = getRouteFabRule(pathname);
-	if (
-		!rule ||
-		!rule.fab ||
-		rule.fab.family === 'list' ||
-		rule.fab.kind === 'dynamic' ||
-		rule.fab.kind === 'deep'
-	)
-		return null;
-	return rule.fab.kind;
-}
-
-/** Discussions list tab route. */
-export function isDiscussionsListRoute(pathname: string): boolean {
-	const rule = getRouteFabRule(pathname);
-	return rule ? rule.fab?.family === 'list' && rule.fab?.kind === 'discussions' : false;
-}
-
-/** Messages inbox tab route. */
-export function isMessagesListRoute(pathname: string): boolean {
-	const rule = getRouteFabRule(pathname);
-	return rule ? rule.fab?.family === 'list' && rule.fab?.kind === 'messages' : false;
+export function getCurrentTabIndex(pathname: string): number {
+	const pillTarget = getTabBarPillTarget(pathname);
+	if (pillTarget === 'active' || pillTarget === 'none') return -1;
+	return MOBILE_TAB_DEFS.findIndex((tab) => tab.labelKey === pillTarget);
 }
 
 // ---------------------------------------------------------------------------
@@ -290,42 +351,8 @@ export function isMessagesListRoute(pathname: string): boolean {
 // tab-config.ts is the pure source (tab order, hrefs, prefix matchers, data
 // keys); navigation-logic imports it for unit tests. Here we layer the
 // browser-only bits on top: the list-cache populated check (a $state store),
-// the list panel component, and the config-driven route->tab resolver. The
-// store is read lazily inside the closures, so importing this module (incl.
-// under bun:test) never instantiates it.
-
-/** First ROUTE_CONFIGS entry whose pattern matches, regardless of FAB. */
-function getRouteRule(pathname: string): BaseRouteConfig | null {
-	return ROUTE_CONFIGS.find((r) => r.pattern.test(pathname)) ?? null;
-}
-
-/** A FAB kind names its module tab; `dynamic` is the Activity tab. */
-function fabKindToLabelKey(
-	kind: FabRouteConfigMetadata['kind'] | undefined
-): MobileTabLabelKey | undefined {
-	if (kind === 'discussions' || kind === 'messages') return kind;
-	if (kind === 'dynamic') return 'activity';
-	return undefined;
-}
-
-/**
- * Index of the module tab a pathname belongs to, or -1 when on no tab route.
- * Config-driven: a route's explicit `tab` wins, otherwise its FAB kind names
- * the tab, so the compose form /post/discussion (kind 'discussions'), the
- * offline readers, and the standalone /discussions/pN route all resolve the
- * same way as their tab root.
- */
-export function getCurrentTabIndex(pathname: string): number {
-	const rule = getRouteRule(pathname);
-	const labelKey = rule?.tab ?? fabKindToLabelKey(rule?.fab?.kind);
-	if (!labelKey) return -1;
-	return MOBILE_TAB_DEFS.findIndex((tab) => tab.labelKey === labelKey);
-}
-
-/** True for the exact pager routes (where the MobileTabPager owns the swipe). */
-export function isPagerRoute(pathname: string): boolean {
-	return MOBILE_TAB_DEFS.some((tab) => tab.href === pathname);
-}
+// the list panel component. The store is read lazily inside the closures, so
+// importing this module (incl. under bun:test) never instantiates it.
 
 // Each tab's list panel is a prop-less Component that pulls its data from the
 // list-cache store and page data itself.
@@ -365,3 +392,8 @@ export const MOBILE_TABS: readonly MobileTab[] = MOBILE_TAB_DEFS.map((tab) => ({
 	hasData: (data) => getListCacheStore().isPopulated(tab.labelKey) || tabListPopulated(tab, data),
 	panel: TAB_LIST_PANELS[tab.labelKey]
 }));
+
+// Re-export the core record lookup so consumers can read both files from
+// the same module surface if they choose.
+export { getRouteData, getRouteTag } from './route-data';
+export type { RouteData, RouteTag } from './route-data';
