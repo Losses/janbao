@@ -44,13 +44,6 @@ export interface TabDef {
 	dataKey: string;
 	/** Field under dataKey holding the list items. */
 	listKey: string;
-	/**
-	 * Optional deep route the forward edge commits to when this tab is the last
-	 * primary tab. With this field set, a right-edge swipe past the tab enters
-	 * the route; without it, the edge rubber-bands. Set only on the rightmost
-	 * tab that should hand off to a deep page.
-	 */
-	forwardDeepNeighbour?: string;
 }
 
 interface TabDefData {
@@ -60,7 +53,6 @@ interface TabDefData {
 	prefixes: readonly string[];
 	dataKey: string;
 	listKey: string;
-	forwardDeepNeighbour?: string;
 }
 
 const RAW_TAB_DEFS: readonly TabDefData[] = [
@@ -86,8 +78,7 @@ const RAW_TAB_DEFS: readonly TabDefData[] = [
 		icon: mdiEmailOutline,
 		prefixes: ['/messages'],
 		dataKey: 'messages',
-		listKey: 'conversations',
-		forwardDeepNeighbour: '/search'
+		listKey: 'conversations'
 	}
 ];
 
@@ -99,8 +90,7 @@ export const MOBILE_TAB_DEFS: readonly TabDef[] = RAW_TAB_DEFS.map((tab) => ({
 	prefixes: tab.prefixes,
 	isActive: prefixMatcher(tab.prefixes),
 	dataKey: tab.dataKey,
-	listKey: tab.listKey,
-	forwardDeepNeighbour: tab.forwardDeepNeighbour
+	listKey: tab.listKey
 }));
 
 /**

@@ -232,8 +232,8 @@ test('title crossfade is clipped by the App Bar bounding box, not the inset h-10
 	).toBe(true);
 });
 
-// During the crossfade the visible title text must reach BOTH bar edges - top
-// near 0 and bottom near 56 - i.e. the animation fills the full bar height.
+// During the crossfade the visible title text must reach BOTH bar edges — top
+// near 0 and bottom near 56 — i.e. the animation fills the full bar height.
 test('forward crossfade fills the App Bar: visible title reaches top≈0 and bottom≈56', async ({
 	page
 }) => {
