@@ -113,7 +113,7 @@ export interface ThreadDiscussionShape {
 	slug: string;
 	categorySlug: string;
 	isPinned: boolean;
-	isBookmarked: number;
+	isBookmarked: boolean;
 }
 
 /** The reply fields the thread snapshot captures (OP + each reply). */

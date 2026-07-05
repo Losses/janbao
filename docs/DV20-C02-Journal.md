@@ -389,7 +389,7 @@ are the source of truth.
    coordinator, which will need to read the captured thread data to
    drive its transition plan. Flagged as carried-to-Cycle-3.
 
-4. **The `getCurrentScrollY` helper moved from `page-scroll.svelte.ts` to `src/lib/utils/get-current-scroll-y.ts`.
+4. **The `getCurrentScrollY` helper moved from
    `page-scroll.svelte.ts` to `src/lib/utils/get-current-scroll-y.ts`.**
    The store consolidation deleted `page-scroll.svelte.ts`; the
    helper is a browser-only utility, not part of the cache, so it

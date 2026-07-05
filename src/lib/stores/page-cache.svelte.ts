@@ -182,11 +182,3 @@ export function getPageCacheStore(): PageCacheStore {
 	}
 	return pageCacheInstance;
 }
-
-/**
- * Test-only: reset the singleton. Used by the unit suite so each test
- * gets a fresh store. NOT for use by application code.
- */
-export function __resetPageCacheStoreForTests(): void {
-	pageCacheInstance = undefined;
-}
