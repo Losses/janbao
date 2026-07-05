@@ -95,12 +95,15 @@ export interface TransitionPlan {
 }
 
 // ---------------------------------------------------------------------------
-// Route stack. The resolver reads the back-target from the stack's
-// previous entry (§6: "the back-target is always the route stack's
-// previous entry").
+// Route stack. Carried on `ResolverInput` for Cycle 5, when resolvers
+// may read the back-target directly. In Cycle 3 the back-target
+// derivation lives in the caller: it precomputes `direction` from the
+// stack and passes it (§6: "the back-target is always the route stack's
+// previous entry"). The Cycle-3 resolvers consume `direction` and do
+// not read `stack`.
 
 /** A single entry in the route stack. `tag` is carried alongside the
- *  pathname so the resolver does not need to re-classify. */
+ *  pathname so the caller does not need to re-classify. */
 export interface RouteStackEntry {
 	readonly pathname: string;
 	readonly search?: string;
@@ -108,10 +111,11 @@ export interface RouteStackEntry {
 }
 
 /** The flat route stack. The last entry is the current route; the
- *  entry at `length - 2` is the back-target. In Cycle 3 this shape is
- *  internal to the new pipeline (the orchestrator builds it from
- *  SvelteKit's navigation entries); Cycle 5 wires it to the live
- *  navigation history. */
+ *  entry at `length - 2` is the back-target. In Cycle 3 this type is
+ *  defined but no live stack is built (the wrapper is not yet wired to
+ *  SvelteKit); test fixtures construct sample stacks. Cycle 5 wires it
+ *  to the live navigation history and may have resolvers read it
+ *  directly. */
 export interface RouteStack {
 	readonly entries: readonly RouteStackEntry[];
 }
@@ -121,14 +125,17 @@ export interface RouteStack {
 
 /** The direction of the transition. 'forward' = a push (a new entry
  *  lands on top of the stack); 'backward' = a pop (the current entry
- *  leaves, the previous entry is revealed). */
+ *  leaves, the previous entry is revealed). The caller precomputes this
+ *  from the route stack; the resolvers read it instead of the stack. */
 export type TransitionDirection = 'forward' | 'backward';
 
 /** Input every resolver reads. The from/to route data, the from/to
- *  pathnames and tab indices, the gesture-start intent, the route
- *  stack, the viewport width, and the reduced-motion flag. All fields
- *  are locked at gesture start; the live parameters stream through the
- *  plan's `fab`/`header` functions. */
+ *  pathnames and tab indices, the gesture-start intent, the
+ *  caller-precomputed direction, the viewport width, and the
+ *  reduced-motion flag. The `stack` field is carried for Cycle 5 (see
+ *  above); Cycle-3 resolvers do not read it. All fields are locked at
+ *  gesture start; the live parameters stream through the plan's
+ *  `fab`/`header` functions. */
 export interface ResolverInput {
 	readonly intent: IntentState;
 	readonly stack: RouteStack;

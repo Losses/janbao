@@ -393,8 +393,68 @@ defect carried forward.
 
 ### 2026-07-05 - Unit tests written and run
 
-87 tests across the four pure-half suites, all passing on the first
-full run after the typo fix. Real outputs pasted under Verification.
+92 tests across the four pure-half suites, all passing. Real outputs
+pasted under Verification. (Initial run was 87; +2 R1 preventive tests
+for `land`-from-at-rest and `resolved`-from-committing, +1 R2
+preventive test for `pointercancel`-from-deciding, +1 R4 preventive
+test for the `reset`-from-intent race, +1 R4 preventive test for
+`interrupt` clearing the abandoned to-fields.)
+
+### 2026-07-05 - Audit-driven fixes (R1-R3)
+
+The architect ran three 2-auditor rounds against this cycle. Each round
+found code-level concerns; each was fixed before the next round. Full
+per-round detail in `docs/RV20-C03-Audit-{01..03}.md` (reconstructed
+post-hoc; the prior orchestrator ran the rounds but wrote no audit
+files at the time). Summary in `Failures` below. The fixes, all
+verified present in the current code:
+
+- `tabDetailResolver` (and every resolver) `titleCrossfade` follows
+  `clamp(progress, 0, 1)` (R1-C1, render bug).
+- `ResolvedTarget.via` narrowed to `'goto'` for Cycle 3, with a comment
+  that Cycle 5 discriminates real SvelteKit sources (R1-C2). Dead
+  `committed` branch deleted (R1-C4).
+- Dead `lerp` removed from `nav-resolvers.ts` (R1-C8).
+- `coordinator.hasAnySnippet` renamed `hasToSnippet` and narrowed to the
+  TO route specifically (R2-C3).
+- SSR docstring on `NavStateMachineOptions` corrected (R2-C4).
+- `'intent'` macro phase restored as the produced phase; `'resolving'`
+  reserved in the union for Cycle 5 async with a comment (R3).
+- Preventive tests added: `land`-from-at-rest (R1-C5),
+  `resolved`-from-committing (R1-C6), `pointercancel`-from-deciding
+  (R2-C2).
+
+### 2026-07-05 - `reset` guard narrowed (R3 regression, caught at R4)
+
+The R3 fix that restored `'intent'` also carried an over-broad guard on
+the `reset` case (`kind !== 'landing' && kind !== 'at-rest'`), which
+made `reset` a no-op from `transitioning` and broke the committed test
+`reset returns to at-rest and clears from/to`. The guard's intent was
+to protect the landing-microtask race (a new `intent` arriving between
+`land` and the wrapper's microtask must not be clobbered by the stale
+`reset`). Narrowed to `kind === 'intent'` - the only phase `reset` must
+protect - so `reset` from `transitioning` works again and the race is
+still defended. Preventive test `reset from intent is a no-op (protects
+the landing-microtask race)` added.
+
+### 2026-07-05 - R4 audit fixes (docstring + interrupt + stack comments)
+
+Three corrections from the R4 round (both auditors converged on the
+first two; auditor A raised the third as a code-comment concern under
+the v2 rule):
+
+- `MacroPhase` overview docstring rewritten to the real invariant: `on`
+  for `at-rest`/`landing`; `sub` and `plan` co-populated for
+  `transitioning`; all null for `intent`/`resolving`. The per-field
+  docstrings now say "Null otherwise" explicitly.
+- `interrupt` case now nulls `toPathname`/`toTag`/`direction` (FROM
+  preserved), mirroring the `intent`-from-at-rest and
+  `intent`-from-landing branches, so an `intent` phase never carries a
+  stale destination. Preventive test added.
+- `nav-resolvers.ts` stack docstrings corrected: `stack` is carried on
+  `ResolverInput` for Cycle 5 (when resolvers may read the back-target
+  directly); in Cycle 3 the caller precomputes `direction` from the
+  stack and the resolvers consume `direction`, not `stack`.
 
 ## Verification
 
@@ -408,28 +468,28 @@ src/lib/stores/nav-state-machine-logic.test.ts`
 ```
 bun test v1.3.13 (bf2e2cec)
 
- 87 pass
+ 92 pass
  0 fail
- 192 expect() calls
-Ran 87 tests across 4 files. [28ms]
+ 210 expect() calls
+Ran 92 tests across 4 files. [29ms]
 ```
 
 Per-file counts (each ran individually during development):
 
-- `nav-intent.test.ts`: 25 pass / 0 fail / 47 expect() calls
+- `nav-intent.test.ts`: 26 pass / 0 fail / 49 expect() calls
 - `nav-resolvers.test.ts`: 32 pass / 0 fail / 82 expect() calls
 - `nav-coordinator.test.ts`: 10 pass / 0 fail / 18 expect() calls
-- `nav-state-machine-logic.test.ts`: 20 pass / 0 fail / 45 expect() calls
+- `nav-state-machine-logic.test.ts`: 24 pass / 0 fail / 61 expect() calls
 
 ### All src/lib unit tests
 
 Command: `bun test src/lib`
 
 ```
- 393 pass
+ 398 pass
  0 fail
- 1769 expect() calls
-Ran 393 tests across 25 files. [1.73s]
+ 1787 expect() calls
+Ran 398 tests across 25 files. [2.09s]
 ```
 
 No regressions in the existing 306 tests across the rest of `src/lib`.
@@ -497,6 +557,77 @@ Cycle 1 contract, not a deviation.)
 - Cycle 5: with both consumers of `backParent` dissolved, remove the
   field from `RouteData` and the registry.
 - Cycle 6: bring `/offline/*` into the unified gesture layer.
+- Cycle 4/5 (wrapper hardening, R4 Observation B): `NavStateMachine.onLand`
+  schedules a `reset` microtask without canceling any prior pending one.
+  Unreachable today (`afterNavigate` fires once per navigation) and the
+  reducer is correct; revisit with a cancellation token once the wrapper
+  is wired to real SvelteKit events and exercisable by e2e.
+
+## Failures
+
+Per-round audit state lives in `docs/RV20-C03-Audit-{01..NN}.md` (one
+file per round the architect runs; R1-R3 reconstructed post-hoc because
+the prior orchestrator wrote none at the time, R4 onward real-time).
+This section summarizes; the files are the source of truth.
+
+- **Round 1 (architect, 2-auditor): 0/2 PASS.** Eight code-level
+  concerns: titleCrossfade reversal render bug (C1), `via` hardcoded
+  losing input-source distinction (C2), `resolving` phase declared but
+  unreachable (C3), dead `committed` branch / empty if-block (C4), two
+  missing preventive tests for `land`-from-at-rest and
+  `resolved`-from-committing (C5, C6), `onLand` microtask untestable
+  under `bun:test` (C7, nitpick), dead `lerp` (C8). All fixed except C7
+  (structural limitation of the runes-free test split). Detailed in
+  `docs/RV20-C03-Audit-01.md`.
+- **Round 2 (architect, 2-auditor): 0/2 PASS.** Four concerns: `'intent'`
+  left in the type but unreachable after R1's C3 fix (C1), missing
+  `pointercancel`-from-deciding test (C2), `hasAnySnippet` too coarse
+  (C3), misleading SSR docstring (C4). All fixed. Detailed in
+  `docs/RV20-C03-Audit-02.md`.
+- **Round 3 (architect, 2-auditor): PASS-WITH-CONCERNS / not converged.**
+  One blocking concern: `'intent'` had been removed from `MacroPhaseKind`
+  to fix R2-C1, violating the spec which mandates it. Restored `'intent'`
+  as the produced phase; `'resolving'` reserved for Cycle 5 async. The
+  R3 fix also introduced the `reset`-guard regression (caught and fixed
+  at R4). Detailed in `docs/RV20-C03-Audit-03.md`.
+- **Round 4 (architect, 2-auditor, v2 classification): 0/2 PASS.** Both
+  auditors PASS-WITH-CONCERNS, converging on the same two blocking
+  concerns: (a) the `MacroPhase` overview docstring was literally false
+  (claimed only one of `on`/`sub`/`plan` is populated, but
+  `transitioning` co-populates `sub` and `plan`); (b) `interrupt` left
+  the abandoned transition's `toPathname`/`toTag`/`direction` in place,
+  violating the contract the `intent` branches establish (the wrapper
+  exposes `toPathname` as a reactive getter, so a Cycle 5 `$derived`
+  would read a stale destination on a re-grab). Both fixed: docstring
+  rewritten to the real invariant; `interrupt` now nulls the to-fields
+  (FROM preserved). Auditor A also flagged the `stack`-usage code
+  comment as a concern (under v2, code comments stay concerns even
+  though journal prose is a nitpick): no Cycle-3 resolver reads
+  `input.stack`, they read the caller-precomputed `direction`; the
+  `nav-resolvers.ts` stack docstrings corrected. Preventive test
+  `interrupt clears the abandoned to-fields` added. Nitpicks N2/N3
+  (tested-but-unused `cancelled` branch; unused `liveOffset`) and
+  Observation B (wrapper `onLand` microtask cancellation) are
+  forward-looking, left as-is or carried to Cycle 4/5. Detailed in
+  `docs/RV20-C03-Audit-04.md`.
+- **Round 5 (architect, 2-auditor, v2 classification): 2/2 PASS.** Both
+  auditors PASS with zero concerns. This is the first clean round.
+  Auditor A verified shadow mode three ways (git diff, no `nav-*`
+  imports in existing gesture components, new layers imported only by
+  themselves + tests), the R4 `interrupt`/`reset` fixes with preventive
+  tests, resolver purity across all `(fromFab, toFab)` combinations,
+  the runes-free test split, and code-comment accuracy. Auditor B
+  verified the coordinator snapshot branch requires both
+  `toSnapshotCapture` AND `hasToSnippet` (R2-C3 narrowing), dispatch
+  bidirectional sharing, and reducer totality. Two nitpicks (both
+  fixed): the `bun test src/lib` count drift (397->398 after the R4
+  preventive test was added) and the R1 audit file's "87/87 after R1
+  fixes" reconstruction drift (corrected to 89/89). Detailed in
+  `docs/RV20-C03-Audit-05.md`.
+
+Consecutive pass votes: **2** (R5 was the first round with zero
+concerns from both auditors; R1-R4 each had at least one blocking
+concern).
 
 ## Coverage
 

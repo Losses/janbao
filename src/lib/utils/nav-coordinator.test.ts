@@ -23,7 +23,7 @@ interface BuildInput {
 	toSubKey?: string;
 	toSnapshotCapture?: boolean;
 	cacheHas?: CacheHasFn;
-	hasAnySnippet?: boolean;
+	hasToSnippet?: boolean;
 }
 
 function buildInput(opts: BuildInput = {}): CoordinatorInput {
@@ -33,7 +33,7 @@ function buildInput(opts: BuildInput = {}): CoordinatorInput {
 		toSubKey: opts.toSubKey,
 		toSnapshotCapture: opts.toSnapshotCapture ?? false,
 		cacheHas: opts.cacheHas ?? (() => false),
-		hasAnySnippet: opts.hasAnySnippet ?? false
+		hasToSnippet: opts.hasToSnippet ?? false
 	};
 }
 
@@ -67,7 +67,7 @@ describe('coordinator: direct-slide with deep preview', () => {
 			buildInput({
 				toPathname: '/discussion/123',
 				toSnapshotCapture: true,
-				hasAnySnippet: true,
+				hasToSnippet: true,
 				cacheHas: () => false
 			})
 		);
@@ -81,7 +81,7 @@ describe('coordinator: direct-slide with deep preview', () => {
 			buildInput({
 				toPathname: '/discussion/123',
 				toSnapshotCapture: true,
-				hasAnySnippet: false,
+				hasToSnippet: false,
 				cacheHas: () => false
 			})
 		);
@@ -94,7 +94,7 @@ describe('coordinator: direct-slide with deep preview', () => {
 			buildInput({
 				toPathname: '/bookmarks',
 				toSnapshotCapture: false,
-				hasAnySnippet: true,
+				hasToSnippet: true,
 				cacheHas: () => false
 			})
 		);
@@ -109,7 +109,7 @@ describe('coordinator: chip-exit on miss', () => {
 			buildInput({
 				toPathname: '/profile',
 				toSnapshotCapture: false,
-				hasAnySnippet: false,
+				hasToSnippet: false,
 				cacheHas: () => false
 			})
 		);
@@ -123,7 +123,7 @@ describe('coordinator: chip-exit on miss', () => {
 				toPathname: '/search',
 				toSubKey: 'users',
 				toSnapshotCapture: false,
-				hasAnySnippet: false,
+				hasToSnippet: false,
 				cacheHas: () => false
 			})
 		);
@@ -144,7 +144,7 @@ describe('coordinator: cache hit takes precedence over snapshot fallback', () =>
 			buildInput({
 				toPathname: '/discussion/123',
 				toSnapshotCapture: true,
-				hasAnySnippet: true,
+				hasToSnippet: true,
 				cacheHas: () => true
 			})
 		);

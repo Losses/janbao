@@ -154,6 +154,13 @@ describe('intent classifier: pointerup commits or cancels', () => {
 		const next = classify(idle, cancel(), OPTS, VW);
 		expect(next).toBe(idle);
 	});
+
+	test('pointercancel while deciding transitions to cancelled', () => {
+		let s = classify(initialIntentState(), down(100, 0), OPTS, VW);
+		expect(s.micro).toBe('deciding');
+		s = classify(s, cancel(), OPTS, VW);
+		expect(s.micro).toBe('cancelled');
+	});
 });
 
 describe('intent classifier: target-bearing intents', () => {

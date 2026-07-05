@@ -65,7 +65,7 @@ describe('reducer: at-rest -> intent -> resolved', () => {
 	test('intent from at-rest enters the intent phase and records from', () => {
 		const s0 = initialOrchestratorState('deep');
 		const s1 = reduce(s0, intentEvent(), NOW);
-		expect(s1.macro.kind).toBe('resolving');
+		expect(s1.macro.kind).toBe('intent');
 		expect(s1.fromPathname).toBe('/from');
 		expect(s1.fromTag).toBe('detail');
 		expect(s1.startedAt).toBe(NOW);
@@ -88,7 +88,7 @@ describe('reducer: at-rest -> intent -> resolved', () => {
 	test('intent from at-rest on a search route is allowed', () => {
 		const s0 = initialOrchestratorState('search');
 		const s1 = reduce(s0, intentEvent(), NOW);
-		expect(s1.macro.kind).toBe('resolving');
+		expect(s1.macro.kind).toBe('intent');
 	});
 
 	test('intent while transitioning is a no-op (use interrupt)', () => {
@@ -168,7 +168,7 @@ describe('reducer: interruption', () => {
 			},
 			NOW + 30
 		);
-		expect(s4.macro.kind).toBe('resolving');
+		expect(s4.macro.kind).toBe('intent');
 		expect(s4.activePlan).toBeNull();
 		expect(s4.lastIntent?.direction).toBe('left');
 	});
@@ -177,6 +177,21 @@ describe('reducer: interruption', () => {
 		const s0 = initialOrchestratorState('tab');
 		const s1 = reduce(s0, { type: 'interrupt', intent: initialIntentState() }, NOW);
 		expect(s1).toBe(s0);
+	});
+
+	test('interrupt clears the abandoned to-fields (no stale destination)', () => {
+		const s0 = initialOrchestratorState('deep');
+		const s1 = reduce(s0, intentEvent(), NOW);
+		const s2 = reduce(s1, resolvedEvent(), NOW + 10);
+		const s3 = reduce(s2, { type: 'commit' }, NOW + 20);
+		const s4 = reduce(s3, { type: 'interrupt', intent: initialIntentState() }, NOW + 30);
+		expect(s4.macro.kind).toBe('intent');
+		expect(s4.toPathname).toBeNull();
+		expect(s4.toTag).toBeNull();
+		expect(s4.direction).toBeNull();
+		// FROM survives: the user is still on the FROM page after a re-grab.
+		expect(s4.fromPathname).toBe('/from');
+		expect(s4.fromTag).toBe('detail');
 	});
 });
 
@@ -201,6 +216,22 @@ describe('reducer: landing and reset', () => {
 		expect(s3.fromPathname).toBeNull();
 		expect(s3.toPathname).toBeNull();
 		expect(s3.activePlan).toBeNull();
+	});
+
+	test('reset from intent is a no-op (protects the landing-microtask race)', () => {
+		// land -> landing; a new intent arrives before the microtask;
+		// the stale microtask then fires reset. The new intent must
+		// survive (reset is a no-op from `intent`).
+		const s0 = initialOrchestratorState('deep');
+		const s1 = reduce(s0, intentEvent(), NOW);
+		const s2 = reduce(s1, resolvedEvent(), NOW + 10);
+		const s3 = reduce(s2, { type: 'commit' }, NOW + 20);
+		const s4 = reduce(s3, { type: 'land', on: 'tab' }, NOW + 30);
+		const s5 = reduce(s4, intentEvent(), NOW + 40);
+		expect(s5.macro.kind).toBe('intent');
+		const s6 = reduce(s5, { type: 'reset', on: 'tab' }, NOW + 50);
+		expect(s6.macro.kind).toBe('intent');
+		expect(s6.toPathname).toBeNull();
 	});
 
 	test('atRestOnFor maps tags correctly', () => {

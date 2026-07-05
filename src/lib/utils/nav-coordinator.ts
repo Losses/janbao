@@ -18,9 +18,8 @@
  *     state.
  *   - When chip-exit, choose the preload pathname (the TO) so the
  *     orchestrator can call `PageCacheStore.ensure(pathname, subKey)`.
- *   - When the TO is a deep page that captured a snippet (Cycle 2's
- *     `getLatestWithSnippet` path), allow the slide to overlay the
- *     cached snippet (`useDeepPreview`).
+ *   - When the TO is a snapshot-capturing route whose own snippet is
+ *     cached, allow the slide to overlay it (`useDeepPreview`).
  *
  * Out of scope (Cycle 4/5): the actual rAF driving the slide, the
  * snippet rendering during the slide, and the SvelteKit
@@ -42,10 +41,11 @@ export interface CoordinatorInput {
 	readonly toSubKey: string | undefined;
 	readonly toSnapshotCapture: boolean;
 	readonly cacheHas: CacheHasFn;
-	/** True when the cache holds any entry with a snippet (Cycle 2's
-	 *  `findLatestWithSnippet`). The coordinator uses this to enable
-	 *  the deep-preview overlay path. */
-	readonly hasAnySnippet: boolean;
+	/** True when the cache holds a snippet for the TO route
+	 *  specifically (not just any snippet). The coordinator uses this
+	 *  to enable the deep-preview overlay path for snapshot-capturing
+	 *  routes whose own rendered content is cached. */
+	readonly hasToSnippet: boolean;
 }
 
 /** The strategy the orchestrator should follow. */
@@ -90,7 +90,7 @@ export function coordinate(input: CoordinatorInput): CoordinatorDecision {
 			useDeepPreview: false
 		};
 	}
-	if (input.toSnapshotCapture && input.hasAnySnippet) {
+	if (input.toSnapshotCapture && input.hasToSnippet) {
 		return {
 			strategy: 'direct-slide',
 			preloadPathname: null,

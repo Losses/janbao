@@ -43,9 +43,8 @@ import type { TransitionDirection, TransitionPlan } from '$lib/utils/nav-resolve
 export type NavClockFn = () => number;
 
 /** Constructor options. The clock is injectable for deterministic
- *  tests; the default uses `Date.now` in the browser and 0 during SSR
- *  (the wrapper is SSR-safe; the reducer is not called during SSR
- *  because no events arrive). */
+ *  tests; the default is `Date.now`. The wrapper is SSR-safe (no
+ *  events arrive during SSR so the reducer is never called). */
 export interface NavStateMachineOptions {
 	readonly now?: NavClockFn;
 	/** Initial at-rest surface. Defaults to 'tab' (the discussions

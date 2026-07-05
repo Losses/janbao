@@ -38,20 +38,27 @@ export type AtRestOn = 'tab' | 'deep' | 'search';
  *  cancelling, scrubbing. */
 export type TransitionSub = 'dragging' | 'committing' | 'cancelling' | 'scrubbing';
 
-/** Macro phase kind. Per §6. */
+/** Macro phase kind. Per §2/§6: at-rest, intent (classified, plan not
+ *  locked), resolving (reserved for Cycle 5 async resolution),
+ *  transitioning (animation in flight), landing. */
 export type MacroPhaseKind = 'at-rest' | 'intent' | 'resolving' | 'transitioning' | 'landing';
 
-/** The full macro phase record. Only one of `on` / `sub` / `plan` is
- *  populated for a given `kind`. Carrying the plan inside the phase
- *  record keeps the active plan authoritative for every consumer
- *  (§13.5: "the state machine is the only authority"). */
+/** The full macro phase record. `on` is populated for `at-rest` and
+ *  `landing` (the surface the machine rests on or is landing toward);
+ *  `sub` and `plan` are co-populated (both set together, or both null)
+ *  for `transitioning`; for `intent` and `resolving` all three fields
+ *  are null. Carrying the plan inside the phase record keeps the active
+ *  plan authoritative for every consumer (§13.5: "the state machine is
+ *  the only authority"). */
 export interface MacroPhase {
 	readonly kind: MacroPhaseKind;
-	/** Populated when `kind === 'at-rest'`. */
+	/** Populated when `kind === 'at-rest'` or `kind === 'landing'`
+	 *  (the destination surface). Null otherwise. */
 	readonly on: AtRestOn | null;
-	/** Populated when `kind === 'transitioning'`. */
+	/** Populated when `kind === 'transitioning'`. Null otherwise. */
 	readonly sub: TransitionSub | null;
-	/** Populated when `kind === 'transitioning'`. */
+	/** Populated when `kind === 'transitioning'` (alongside `sub`).
+	 *  Null otherwise. */
 	readonly plan: TransitionPlan | null;
 }
 
@@ -187,13 +194,13 @@ export function reduce(
 	switch (event.type) {
 		case 'intent': {
 			// A gesture-start intent arrives. From at-rest we enter
-			// `intent`; from `transitioning` this is folded into the
+			// `intent`; from transitioning this is folded into the
 			// active transition (treated as an interrupt by the
 			// `interrupt` event, not this one).
 			if (state.macro.kind === 'at-rest') {
 				return {
 					...state,
-					macro: { kind: 'resolving', on: null, sub: null, plan: null },
+					macro: { kind: 'intent', on: null, sub: null, plan: null },
 					fromPathname: event.from,
 					fromTag: event.fromTag,
 					toPathname: null,
@@ -207,7 +214,7 @@ export function reduce(
 				// A new intent arriving during landing re-enters intent.
 				return {
 					...state,
-					macro: { kind: 'resolving', on: null, sub: null, plan: null },
+					macro: { kind: 'intent', on: null, sub: null, plan: null },
 					fromPathname: event.from,
 					fromTag: event.fromTag,
 					toPathname: null,
@@ -222,7 +229,7 @@ export function reduce(
 		case 'resolved': {
 			// The resolver produced a plan. Move to `transitioning`
 			// with sub `dragging` (the gesture is live). Lock FROM/TO.
-			if (state.macro.kind !== 'resolving' && state.macro.kind !== 'transitioning') {
+			if (state.macro.kind !== 'intent' && state.macro.kind !== 'transitioning') {
 				return state;
 			}
 			const sub: TransitionSub =
@@ -279,12 +286,21 @@ export function reduce(
 		}
 		case 'interrupt': {
 			// §5 interruption: a new intent arrives mid-commit. Cancel
-			// the active commit and re-enter `intent`.
+			// the active commit and re-enter `intent`. FROM is unchanged
+			// (the user is still on the FROM page); TO/direction are
+			// abandoned and must be cleared so an `intent` phase never
+			// carries a stale destination (mirrors the intent-from-at-rest
+			// and intent-from-landing branches).
 			if (state.macro.kind !== 'transitioning') return state;
 			return {
 				...state,
-				macro: { kind: 'resolving', on: null, sub: null, plan: null },
+				macro: { kind: 'intent', on: null, sub: null, plan: null },
 				activePlan: null,
+				fromPathname: state.fromPathname,
+				fromTag: state.fromTag,
+				toPathname: null,
+				toTag: null,
+				direction: null,
 				lastIntent: event.intent,
 				startedAt: now
 			};
@@ -297,7 +313,16 @@ export function reduce(
 			};
 		}
 		case 'reset': {
-			// Reset to at-rest. Clears the active plan and from/to.
+			// Reset to at-rest. Fires from landing (the wrapper's
+			// microtask lands here) or at-rest (idempotent), and as a
+			// force-clear from any other phase. The one phase we DO NOT
+			// clobber is `intent`: if a new gesture arrived during the
+			// landing microtask window, the state moved landing -> intent,
+			// and the stale microtask's reset must not abort that new
+			// gesture.
+			if (state.macro.kind === 'intent') {
+				return state;
+			}
 			return {
 				...initialOrchestratorState(event.on),
 				// Preserve lastIntent for diagnostics; the next intent
