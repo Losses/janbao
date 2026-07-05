@@ -498,7 +498,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		await swipeBack(page);
 		await page.waitForFunction(() => location.pathname === '/', null, { timeout: 5000 });
 
-		// The pager's per-panel pageScrollStore $effect must restore the panel's
+		// The pager's per-panel pageCache $effect must restore the panel's
 		// scrollTop BEFORE the first visible paint (no top-flash). Sample every
 		// ~30ms; must reach the remembered position within ~2 frames.
 		const framesToRestore = await page.evaluate(async (y) => {
@@ -519,7 +519,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 
 	// --- Cold-cache back-preview. A user who opens / refreshes a thread directly
 	// has never visited the discussions list, so its cache is cold. The thread's
-	// back-preview (leftSnippet reads listCache.discussions) must still render the
+	// back-preview (leftSnippet reads pageCache) must still render the
 	// real list, not a bare loading chip. Pre-fix it was a chip (the cache is only
 	// seeded on the `/` route); the fix seeds it from the always-available layout
 	// load. This is the "swiping back inside a thread pulls the chip straight out" symptom.

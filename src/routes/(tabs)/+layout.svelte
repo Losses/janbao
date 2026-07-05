@@ -37,7 +37,7 @@
 
 	// SvelteKit snapshot: capture/restore the list scroll position per-route on
 	// desktop (the window scrolls there). Under fixed-viewport (mobile) the window
-	// is locked, so this is mobile-dead; MobileTabPager restores via pageScrollStore.
+	// is locked, so this is mobile-dead; MobileTabPager restores via pageCache.
 	let restoredScrollY = $state(0);
 	export const snapshot = {
 		capture: () => (typeof window !== 'undefined' ? window.scrollY : 0),

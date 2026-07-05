@@ -166,7 +166,7 @@ Step-by-step. Files changed (roles):
 - `src/lib/stores/deep-page-snapshot.svelte.ts` (DELETED).
 - `src/lib/stores/page-scroll.svelte.ts` (DELETED).
 - `src/lib/stores/search-cache.svelte.ts` (DELETED).
-- `src/lib/utils/getCurrentScrollY.ts` (NEW): the
+- `src/lib/utils/get-current-scroll-y.ts` (NEW): the
   `getCurrentScrollY` helper (was on `page-scroll.svelte.ts`); kept
   as a browser-only utility, not part of the cache.
 - `src/routes/+layout.svelte` (MIGRATED): seeds the three tab lists
@@ -177,7 +177,7 @@ Step-by-step. Files changed (roles):
   the discussions/activity list from the unified store in
   `leftSnippet`/`rightSnippet`.
 - `src/lib/components/templates/MobileTabPager.svelte` (MIGRATED):
-  reads the deep-page snapshot via `get(threadPathname)`; per-panel
+  reads the deep-page snapshot via `getLatestWithSnippet()`; per-panel
   scroll restore via `get(tab.href)?.scrollTop`.
 - `src/lib/components/templates/GesturePageLayout.svelte`
   (MIGRATED): scroll restore via `get(href)?.scrollTop`; captures
@@ -234,10 +234,10 @@ distinct from any existing type). The gate exits 0.
 $ bun test src/lib/stores/page-cache.test.ts src/lib/utils/search-fresh.test.ts
 bun test v1.3.13 (bf2e2cec)
 
- 28 pass
+ 30 pass
  0 fail
- 48 expect() calls
-Ran 28 tests across 2 files. [32.00ms]
+ 50 expect() calls
+Ran 30 tests across 2 files. [29.00ms]
 ```
 
 The 24 tests in `page-cache.test.ts` exercise:
@@ -256,7 +256,7 @@ The 24 tests in `page-cache.test.ts` exercise:
 - The pluggable-source contract (cache hit does not consult source;
   source miss falls through; claimed key is served and cached).
 
-The 4 `search-fresh.test.ts` tests verify the freshness helper still
+The 6 `search-fresh.test.ts` tests verify the freshness helper still
 works after its `SearchCacheEntrySource` fields became optional
 (so `PageCacheSource` is assignable to it).
 
@@ -267,10 +267,10 @@ $ bun test src/lib/stores/navigation-logic.test.ts src/lib/utils/route-config.te
             src/lib/utils/route-data.test.ts src/lib/utils/search-fresh.test.ts \
             src/lib/utils/history-nav.test.ts src/lib/utils/header-mode.test.ts \
             src/lib/utils/fab-scale.test.ts src/lib/actions/swipe.test.ts
- 179 pass
+ 181 pass
  0 fail
- 489 expect() calls
-Ran 179 tests across 8 files. [90.00ms]
+ 491 expect() calls
+Ran 181 tests across 8 files. [82.00ms]
 ```
 
 Sweeps the unit suites whose imports transitively touch the changed
@@ -314,13 +314,32 @@ existing e2e files (`swipe-forward-back-deep-page.spec.ts`,
 API: `__e2eListCache` → `__e2ePageCache`, and the cache-write log key
 changed from `'setDiscussions' | 'setActivity' | 'setMessages'` to
 the entry's pathname (`'/'`, `'/activity'`, `'/messages/inbox'`).
-The test's semantics are unchanged.
+The wrap now counts ALL captures (including scroll writes), broadening
+the signal beyond the old seed-effect-only count.
 
 ## Failures
 
-(None yet. Each audit round the architect runs will be recorded here
-by reference to the corresponding `docs/RV20-C02-Audit-{MM}.md`
-file.)
+- **Round 1 (architect, 2-auditor): 0/2 PASS.** Auditor A found a
+  critical defect: `SearchCacheEntrySource.q` vs
+  `PageCacheSource.query` field-name mismatch broke search freshness
+  (every entry stale, LoadingChip rendered forever). Auditor B found
+  secondary concerns (test coverage, journal accuracy, perf). Fixed:
+  `q` renamed to `query` in search-fresh.ts + test; two round-trip
+  preventive tests added. Detailed in `docs/RV20-C02-Audit-01.md`.
+
+- **Round 2 (architect, 2-auditor): 0/2 PASS.** Both found the
+  journal's pasted test counts stale (28 vs 30, 179 vs 181; the R1
+  fix added 2 tests but the journal wasn't refreshed). Also: the
+  Failures section said "(None yet)" despite R1 existing, stale
+  comments pointing at deleted stores, and storage/perf
+  characteristics undocumented. Being fixed in the R2-to-R3 sync.
+
+- **Round 3 (architect, 2-auditor): 0/2 PASS.** Both found the
+  journal's pasted test counts STILL stale (partial refresh: "30 pass"
+  updated but "Ran 28 tests" left stale, internally inconsistent).
+  Also Deviation 5's "semantics unchanged" still uncorrected. Fixed:
+  all four count fields refreshed verbatim; Deviation 5 corrected.
+  Detailed in `docs/RV20-C02-Audit-03.md`.
 
 ## Coverage
 
@@ -370,7 +389,7 @@ are the source of truth.
    coordinator, which will need to read the captured thread data to
    drive its transition plan. Flagged as carried-to-Cycle-3.
 
-4. **The `getCurrentScrollY` helper moved from
+4. **The `getCurrentScrollY` helper moved from `page-scroll.svelte.ts` to `src/lib/utils/get-current-scroll-y.ts`.
    `page-scroll.svelte.ts` to `src/lib/utils/get-current-scroll-y.ts`.**
    The store consolidation deleted `page-scroll.svelte.ts`; the
    helper is a browser-only utility, not part of the cache, so it
@@ -380,7 +399,11 @@ are the source of truth.
    setters.** `__e2eListCache` became `__e2ePageCache`; the log keys
    changed from `'setDiscussions' | 'setActivity' | 'setMessages'`
    to the tab-list pathnames (`'/'`, `'/activity'`, `'/messages/inbox'`).
-   The test's semantics are unchanged.
+   The wrap now counts ALL captures (including scroll writes from
+   onscroll handlers), not just the seed-effect writes the old named
+   setters counted. The assertion `countKey(after, '/') >
+countKey(before, '/')` still holds (the seed effect always writes
+   once), but the signal is broader than before.
 
 6. **The `search-fresh` helper's `SearchCacheEntrySource` fields
    became optional.** This lets `PageCacheSource` (which has optional
