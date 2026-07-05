@@ -42,6 +42,18 @@ unconditional PASS with zero concerns. Your final message IS the
 verdict.
 ```
 
+### Concern vs nitpick classification (binding)
+
+- **Nitpick (does NOT block PASS):** journal text accuracy. Pasted
+  number drift (e.g. "28 pass" in journal vs "30 pass" in reality),
+  deviation wording imprecision, internal-prose inconsistencies within
+  the journal. These are recorded as observations but do not reset the
+  convergence counter.
+- **Concern (DOES block PASS):** code correctness defects, behavior
+  changes, stale code COMMENTS (references to deleted modules,
+  misleading docstrings), missing test coverage for a real code path,
+  architecture violations. These reset the convergence counter.
+
 ### Per-round checklist (for the orchestrator, after each audit round)
 
 1. Write the audit file (`RV20-C0N-Audit-{MM}.md`).
