@@ -26,7 +26,7 @@ Replace the imperative route-classification web with one `RouteData` record per 
 - **Pure data relocation.** Do NOT touch gesture detection, animation timing, cache reads, or lifecycle hooks. Those are later Cycles. If a call site's behavior would change, that is a deviation to flag, not a change to make.
 - **No shortcuts.** Do not leave a classifier with its old imperative body "for now". Do not add a parallel classification path. The record is the single source of truth or the Cycle is not done.
 - **No git mutation.** Work in the working tree. No stash/checkout/reset/clean/switch/commit/push.
-- **Audit protocol (§11).** Five independent auditors per round, role-less and hint-less, to 5/5 unconditional PASS with zero concerns. PASS-with-concerns is not PASS.
+- **Audit protocol (§11, Protocol v2).** The orchestrator runs the audit (2-per-round, 5-vote convergence). Audits are role-less and hint-less. PASS-with-concerns is not PASS.
 
 ## Out of scope (do not touch)
 
@@ -41,7 +41,7 @@ Replace the imperative route-classification web with one `RouteData` record per 
 - Unit tests for the records and for the derived queries the consumers need (the CMA decides the test surface; `tab-config.ts` and `navigation-logic.ts` are already unit-tested under `bun:test`, follow that pattern).
 - The existing e2e suite passing unchanged (the CMA determines which specs are in-scope and pastes the evidence).
 - `docs/DV20-C01-Journal.md`: the implementation journal, recording what actually happened (files changed, decisions, deviations, failures, the real verification evidence pasted).
-- `docs/RV20-C01-Audit-{MM}.md` per audit round (the role-less, hint-less audit results, 5/5 zero-concern at exit).
+- `docs/RV20-C01-Audit-{MM}.md` per audit round (the role-less, hint-less audit results; 5-vote convergence at exit per Protocol v2).
 - `docs/DV20-Meeting/DV20-C01-Plan-Journal.md`: append-only revision history of the CMA's spec interpretations across audit rounds.
 - A final report (the CMA's last message to the architect): files changed, audit tally per round against the zero-concern bar, verification evidence pasted, deviations, carried-to-future items.
 
@@ -50,6 +50,6 @@ Replace the imperative route-classification web with one `RouteData` record per 
 - Is the record the single source of truth for the concepts it holds (no imperative classification body survives, except the deferred `isGesturePageLayoutRoute`)?
 - Does the record hold only target-clean fields (no stored `isSpatial`, `headerMode`, or `gestureOwner`; they are derived or deferred per §3)?
 - Is behavior identical (the e2e evidence)?
-- Did the audit reach 5/5 zero-concern with role-less, hint-less prompts (the architect will read the audit files)?
+- Did the audit reach 5 consecutive pass votes with role-less, hint-less prompts (the architect will read the audit files + Protocol v2)?
 - Is the journal honest (failures recorded, evidence pasted, no performed confidence)?
 - Are the values (§13) upheld?

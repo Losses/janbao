@@ -2,7 +2,7 @@
 
 Five independent auditors examined the live codebase (post-Round-1
 fixes) against `docs/DV20-Plan.md` §3, §4, §11, §13, §14 and
-`docs/DV20-Meeting/DV20-Cycle-1-spec.md`. The prompt was role-less and
+`docs/DV20-Meeting/DV20-C01-spec.md`. The prompt was role-less and
 hint-less.
 
 ## Tally

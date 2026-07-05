@@ -2,7 +2,7 @@
 
 Five independent auditors examined the live codebase against
 `docs/DV20-Plan.md` §3, §4, §11, §13, §14 and
-`docs/DV20-Meeting/DV20-Cycle-1-spec.md`. The prompt was role-less and
+`docs/DV20-Meeting/DV20-C01-spec.md`. The prompt was role-less and
 hint-less. The bar is 5/5 unconditional PASS with zero concerns.
 
 ## Tally
@@ -71,7 +71,7 @@ than catch it.
   prefix patterns for `/^\/admin/` and `/^\/profile/` but exact-match
   patterns for offline routes. The asymmetry enabled the regression
   above. Unifying the match style is a follow-up.
-- `docs/DV20-Cycle-1-Journal.md`'s "Verification evidence" claim of
+- `docs/DV20-C01-Journal.md`'s "Verification evidence" claim of
   "behavior identical" overstated the evidence: the e2e suite has no
   `/offline/*` coverage.
 

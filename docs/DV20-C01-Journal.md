@@ -473,7 +473,7 @@ a future cycle to add `/offline/*` Header / swipe / FAB e2e specs.
   files).
   The unit suite is 170 pass / 0 fail in `src/lib/utils/` and 280
   pass / 0 fail in `src/`.
-- **5/5 zero-concern audit**: NOT YET REACHED. The round-by-round
+- **5-vote convergence audit**: NOT YET REACHED. The round-by-round
   tallies (CMA-run R1-R5, architect-run R6 onward) are in
   `docs/RV20-C01-Audit-{01..NN}.md`; the code has been unanimously
   correct from R6 on, and each round's blocking findings were
@@ -649,6 +649,26 @@ a future cycle to add `/offline/*` Header / swipe / FAB e2e specs.
   present, the Coverage round-independent, and the "From R2 onwards"
   correction in place. Consecutive pass votes: 2 of 5. Detailed in
   `docs/RV20-C01-Audit-13.md`.
+
+- **Round 14 (architect, 2-auditor model, clean non-leading prompt):
+  0/2 PASS.** Both agreed the code is correct. The findings: a
+  meta-concern (the cycle's audit bar not yet reached, which is the
+  process state, not a code/journal defect) and a doc inconsistency
+  (the spec and anti-cheating bullets still referenced the old "5/5"
+  model while §11 was updated to 5-vote convergence). Fixed: all six
+  old-model references updated. Detailed in
+  `docs/RV20-C01-Audit-14.md`.
+
+- **Round 15 (architect, 2-auditor model, clean prompt): 0/2 PASS.**
+  Both agreed the code is correct. The findings: stale spec paths in
+  Audit-01/02 (pre-rename references), and the journal Coverage heading
+  still used old "5/5" wording. Fixed: paths updated, heading updated.
+  Detailed in `docs/RV20-C01-Audit-15.md`.
+
+- **Round 16 (architect, 2-auditor model, clean prompt): 2/2 PASS,
+  zero concerns.** The first clean 2/2 with a non-leading prompt.
+  Consecutive pass votes: 2 of 5. Detailed in
+  `docs/RV20-C01-Audit-16.md`.
 
 ## Deviations
 
