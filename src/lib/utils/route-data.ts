@@ -44,15 +44,22 @@ export interface RouteData {
 	/** Selects the resolver pair (§4). */
 	readonly tag: RouteTag;
 	/**
-	 * Structural parent in the site hierarchy. Used by the breadcrumb and
-	 * to resolve the left-preview panel. NOT the back-target (the
-	 * back-target is the entry behind the current one in the route
-	 * stack, per §6).
-	 *
-	 * `undefined` on routes whose structural parent is not part of this
-	 * registry (e.g. `/discussion/*`, `/messages/<id>`); broadening
-	 * coverage is a Cycle 5 concern, not a Cycle 1 data-relocation
-	 * concern.
+	 * TRANSITIONAL (migration-era). Must be removed when its consumers
+	 * dissolve; do NOT leave it standing as a permanent field. The route's
+	 * structural parent in the site hierarchy. It exists ONLY to feed two
+	 * transitional consumers during the migration; it has no clean target-
+	 * architecture use (the mobile app has no breadcrumb, and the preview
+	 * panel is `PREVIEW_PANEL_CONFIG`, not this field). Its two consumers
+	 * are both transitional:
+	 *   - `isGesturePageLayoutRoute` reads `backParent !== undefined` to
+	 *     mark the deep-route set; that classifier dissolves in Cycle 5
+	 *     when the state machine owns the gesture.
+	 *   - `GesturePageLayout.resolvedLeftHref` uses `backParent` for the
+	 *     "/" edge-case substitution; that dissolves in Cycle 3 when the
+	 *     back-target becomes always stack-based.
+	 * When BOTH consumers are gone (end of Cycle 5), remove this field
+	 * from the record and the registry. NOT the back-target (the
+	 * back-target is the route-stack entry behind the current one, §6).
 	 */
 	readonly backParent?: string;
 	/**
@@ -339,6 +346,7 @@ const ROUTE_ENTRIES: readonly RouteEntry[] = [
  */
 const DEFAULT_ROUTE_DATA: RouteData = {
 	tag: 'detail',
+	backParent: undefined,
 	snapshotCapture: false,
 	fab: false
 };

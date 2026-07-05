@@ -55,15 +55,23 @@ The orchestrator (Layer 1) and the intent classifier (Layer 2) are the macro and
 
 One record per route replaces the ~138 classifier call sites. The record is data, sourced from the route's actual mount and behavior.
 
-**Clarity principle (binding).** The `tag` is the single primary categorization; it selects the resolver pair. No stored field may duplicate the tag; anything that maps one-to-one to it is derived. The core record holds ONLY what the resolver (Layer 3) or coordinator (Layer 4) genuinely read. Consumer-rendering details (the FAB's icon, the tab-bar's pill target) live in their own consumer configs, not here.
+**Clarity principle (binding).** The `tag` is the single primary categorization; it selects the resolver pair. No stored field may duplicate the tag; anything that maps one-to-one to it is derived. The core record holds ONLY what the resolver (Layer 3) or coordinator (Layer 4) genuinely read. Consumer-rendering details (the FAB's icon, the tab-bar's pill target) live in their own consumer configs, not here. §3 describes the TARGET architecture; Cycle 1 is a behavior-preserving data-relocation step, so where a target-form derivation would change behavior (the pure-tag `headerMode` formula, full `backParent` coverage, dissolving the FAB family enum), Cycle 1 keeps the behavior-preserving intermediate and documents it as a deviation deferred to the noted cycle. Those deviations are intentional intermediate state, not defects.
 
 ```ts
 interface RouteData {
 	// The primary categorization. Selects the resolver pair (§4). A page's tag is
 	// the transition family it participates in, not a hierarchy level.
 	tag: 'tab' | 'detail' | 'search';
-	// Structural parent: the page's natural parent in the site hierarchy. Used for
-	// the breadcrumb and to resolve the left-preview panel. NOT the back-target.
+	// TRANSITIONAL (migration-era): remove when its consumers dissolve; do NOT
+	// leave it as a permanent field. The route's structural parent. It exists ONLY
+	// to feed two transitional consumers: `isGesturePageLayoutRoute` (reads
+	// `backParent !== undefined` to mark the deep-route set; dissolves in Cycle 5)
+	// and `GesturePageLayout.resolvedLeftHref` (the "/" edge-case substitution;
+	// dissolves in Cycle 3 when back-target becomes always stack-based). It has no
+	// clean target use (no breadcrumb; the preview panel is PREVIEW_PANEL_CONFIG).
+	// When both consumers are gone (end of Cycle 5), remove this field from the
+	// record and the registry. NOT the back-target (that is the route-stack entry
+	// behind the current one, §6).
 	backParent?: string;
 	// Whether the page captures its data + render snippet into the cache on leave.
 	// Read by the coordinator (Layer 4).
@@ -79,9 +87,10 @@ interface RouteData {
 // Derived (NOT stored; one source of truth):
 //   isSpatial(r)       = r.tag === 'tab'
 //   headerMode(r)      = r.tag === 'tab' ? 'root' : r.tag === 'search' ? 'search' : 'deep'
-//   centerTab(r)       = the tab whose href matches r.backParent
 //   spatialNeighbours  = positional: a tab's neighbours are its adjacent entries in
 //                        the tab order (the tag's metadata), not a per-route field.
+// (centerTab / pill target is a tab-bar consumer-config read, NOT a RouteData
+//  derivation; and `backParent` itself is transitional; see its field comment.)
 ```
 
 **Consumer configs (separate, keyed by route; NOT in the core record):**
@@ -99,7 +108,7 @@ interface RouteData {
 - `subPager`: removed. A nested pager (SearchScopePager) self-registers with the top-level gesture layer (the existing `shouldClaim` pattern); it is not a route-data field.
 - `forcedBackTarget`: removed. The back-target is always the route stack's previous entry (with `backParent` as a deep-link fallback). The "threads always back to their list" override (today's `leftHref` on threads) is dropped in favour of consistent stack-based back: a thread reached from its list backs to the list (the common case), and a thread reached from elsewhere backs to where the user came from.
 
-The discussions-detail and messages-detail pairs express their relationship via `backParent` pointing at their source tab root. Activity has no detail page because no deep route declares Activity as `backParent`. `/search` carries `tag: 'search'`; its Header mode is derived (`search`) and its navigation behavior is deep; its nested SearchScopePager self-registers.
+The discussions-detail and messages-detail pairs reach their source list via the tab-bar and FAB consumer configs (`pillTarget` + `fabKind`), not via `backParent`. `backParent` declares structural parents for the settings/admin/compose sub-trees (e.g. `/profile/settings → /profile`). Activity has no detail page because no deep route declares it as a structural parent. `/search` carries `tag: 'search'`; its Header mode is derived (`search`) and its navigation behavior is deep; its nested SearchScopePager self-registers.
 
 ## 4. Tag-pair resolvers
 
@@ -174,7 +183,7 @@ Macro phases (Layer 1): `at-rest-on-tab`, `at-rest-on-deep`, `intent`, `resolvin
 
 The phase record carries `(from, to, startTime, liveOffset, releaseVelocity, direction)` and is the sole input to every consumer. The four duplicated `committed` predicates, the three "where are we going" strings (`resolvedLeftHref`, `lockedLeftHref`, `pendingTargetHref`), the stealth `navInFlight = false` writer, and the overloaded `pager.dragging` semantics (research line 2) are eliminated: there is one `phase` and one resolved `from`/`to`.
 
-The back-target is always the route stack's previous entry, read at gesture start; there is no per-route override. `backParent` is a fallback used when the stack has no suitable previous entry (e.g. a deep-link landing) and for breadcrumb UI. `backSwipeShouldPopHistory` is deleted: a back-swipe always targets the stack's previous entry; the hop-vs-push decision is the generic `hopForHref` check, which already works for any page including `/search`.
+The back-target is always the route stack's previous entry, read at gesture start; there is no per-route override. (`backParent` is a separate transitional field, see §3; it feeds the `resolvedLeftHref` "/" edge-case substitution and `isGesturePageLayoutRoute`; it dissolves in Cycles 3 and 5 and is NOT a back-target fallback.) `backSwipeShouldPopHistory` is deleted: a back-swipe always targets the stack's previous entry; the hop-vs-push decision is the generic `hopForHref` check, which already works for any page including `/search`.
 
 ## 7. Unified cache: `PageCacheStore`
 
@@ -238,9 +247,9 @@ Execution is sliced into Cycles. Each Cycle is a discrete, auditable unit with i
 
 - **Cycle 1: Route DATA model + tag taxonomy.** Replace the ~138 classifier call sites with per-route `RouteData` records (§3). Add the tag values. Pure data refactor; the existing call sites become reads of the record. (No dependency. Low risk. Decouples downstream Cycles.)
 - **Cycle 2: Unified `PageCacheStore`.** Replace the four cache singletons with the unified store (§7). Migrate writers and readers. The store's read interface is data-source-agnostic (a pluggable source) so Cycle 6 can plug in IndexedDB for the offline routes. (No dependency. Medium risk.)
-- **Cycle 3: State machine core + tag-pair resolvers (Layers 1 to 4).** The orchestrator, intent classifier, resolver dispatch table, and coordinator. The resolvers produce plans but do not yet drive the DOM (the executor lands in Cycle 4). Validate the plans against the current behavior in a shadow/parallel mode. (Depends on Cycle 1. High risk. The core.)
+- **Cycle 3: State machine core + tag-pair resolvers (Layers 1 to 4).** The orchestrator, intent classifier, resolver dispatch table, and coordinator. The resolvers produce plans but do not yet drive the DOM (the executor lands in Cycle 4). Validate the plans against the current behavior in a shadow/parallel mode. With the back-target always stack-based, the `resolvedLeftHref` "/" edge-case substitution dissolves here; the first of `backParent`'s two consumers goes away. (Depends on Cycle 1. High risk. The core.)
 - **Cycle 4: All-rAF executor + velocity-matched commit (Layer 5).** The single rAF loop, the velocity-matched momentum integrator, interruption, reduced-motion. Delete the CSS transitions, the `setTimeout` alignment (three sites), and the dual DOM read-back. (Depends on Cycle 3. High risk.)
-- **Cycle 5: PageLifecycle contract + migration.** Roll the lifecycle hooks across all page types and both platforms; cut over from the old `MobileTabPager` / `GesturePageLayout` / `DualColumnLayout` to the new pipeline (state-driven track on mobile, sidebar + content on desktop), route-by-route, with full e2e at each step. (Depends on Cycles 1 to 4. Cross-cutting.)
+- **Cycle 5: PageLifecycle contract + migration.** Roll the lifecycle hooks across all page types and both platforms; cut over from the old `MobileTabPager` / `GesturePageLayout` / `DualColumnLayout` to the new pipeline (state-driven track on mobile, sidebar + content on desktop), route-by-route, with full e2e at each step. The state machine now owns the gesture, so `isGesturePageLayoutRoute` (and the latent `/search` bug) dissolve; the second of `backParent`'s consumers goes away. With both consumers gone, REMOVE `backParent` from `RouteData` and the registry in this Cycle (it is transitional; do not leave it standing). (Depends on Cycles 1 to 4. Cross-cutting.)
 - **Cycle 6: Offline unification.** Bring the `/offline/*` routes into the unified gesture/navigation/cache layer. Mount the state-driven track on the offline routes; plug IDB into the data-source-agnostic cache interface; give the offline routes `RouteData` records mirroring their online counterparts; remove DualColumnLayout from them. The offline list-to-detail transitions (`/offline` to `/offline/[id]`) use the gesture layer like online. (Depends on Cycles 1 to 5. Final.)
 
 Each Cycle is sequenced by default. Parallel execution is permitted only for Cycle pairs that are provably file-disjoint: the agents are unaware of each other, so parallel edits to the same file conflict silently. Given the gesture-owner files are touched by most Cycles, the default is sequence; the architect re-evaluates parallelism per pair only when a disjoint pair emerges.
@@ -251,7 +260,7 @@ For each Cycle, the architect spawns a CMA with: this macro document, the Cycle 
 
 **Documentation (DV09/RV09 convention, binding).** For Cycle N (1 to 6): the implementation journal is `docs/DV20-C0N-Journal.md` (at the `docs/` root); each audit round is `docs/RV20-C0N-Audit-{MM}.md` (at the `docs/` root, `RV` prefix, zero-padded round number); the Cycle spec is `docs/DV20-Meeting/DV20-C0N-spec.md`; the Cycle revision history is `docs/DV20-Meeting/DV20-C0N-Plan-Journal.md`. This matches DV09's `DV09-C00-Journal.md` / `RV09-C00-Audit-{NN}.md` (implementation artifacts at the root) and the `DV##-Meeting/` plan-phase folder. The journal records what actually happened, including failures; it does not perform confidence.
 
-**Multi-agent audit.** The CMA runs five independent auditors per round. The audit prompt is role-less and hint-less: no role assignment ("you are the X auditor" is forbidden); no named or suggested defects; no suggested verdict; no reference to "the fix" or to the journal's claims; no implication of what kind of problem to look for. The prompt is an open instruction to find any defect empirically against the live codebase, sampling real trajectories. This has failed before (role assignment and hinting steered auditors to false PASS); it is non-negotiable. The bar is 5/5 unconditional PASS with zero concerns. PASS with concerns is not PASS: any concern from any auditor blocks completion. The CMA must not cut the auditor count, must not declare 5/5 below 5/5, and must not invent a budget the spec did not set. The loop continues until 5/5 zero-concern.
+**Multi-agent audit (orchestrator-run, 2-per-round × 5-consecutive model).** The architect (orchestrator) runs the audit, not the CMA. Each round: 2 independent role-less, hint-less auditors. Fix any concern immediately. Loop until 5 CONSECUTIVE rounds of 2/2 unconditional PASS with zero concerns. This gives 10 total verifying traces at exit (more than a single 5/5 round) and tests that the code+journal is STABLE across rounds (not just correct in one snapshot). The audit prompt is role-less and hint-less: no role assignment, no named or suggested defects, no suggested verdict, no reference to "the fix" or to the journal's claims, no implication of what kind of problem to look for. PASS-with-concerns is not PASS; any concern resets the consecutive-PASS counter. The orchestrator independently verifies every CMA claim (re-runs `bun run check`, `bun test`, reads the audit files, cross-checks the journal numbers against actual outputs). The CMA does NOT run its own audit (conflict of interest; see [[cycle-manager-fabrication-under-pressure]] and [[sub-agent-audit-must-be-orchestrator-run]]).
 
 **Anti-cheating (non-negotiable).**
 

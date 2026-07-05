@@ -154,10 +154,12 @@ describe('getRouteData - backParent (structural parent)', () => {
 });
 
 describe('getRouteData - clarity principle (§3)', () => {
-	test('the record exposes exactly four fields', () => {
-		const rd: RouteData = getRouteData('/discussion/123');
-		const keys = Object.keys(rd).sort();
-		expect(keys).toEqual(['backParent', 'fab', 'snapshotCapture', 'tag']);
+	test('the record exposes exactly four fields (matched and unmatched routes)', () => {
+		const cases = ['/discussion/123', '/api/users', '/entry/signin', '/upload'];
+		for (const p of cases) {
+			const keys = Object.keys(getRouteData(p)).sort();
+			expect(keys, p).toEqual(['backParent', 'fab', 'snapshotCapture', 'tag']);
+		}
 	});
 	test('no migration-era fields leak into the record', () => {
 		const samples = [
@@ -168,7 +170,9 @@ describe('getRouteData - clarity principle (§3)', () => {
 			'/discussion/123',
 			'/messages/123',
 			'/profile/55/sunny',
-			'/admin'
+			'/admin',
+			'/api/users',
+			'/entry/signin'
 		];
 		const forbiddenKeys = [
 			'isSpatial',
