@@ -524,8 +524,9 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 	// seeded on the `/` route); the fix seeds it from the always-available layout
 	// load. This is the "swiping back inside a thread pulls the chip straight out" symptom.
 	test('deep-linked thread back-preview shows the discussions list, not a cold-cache chip', async ({ page }) => {
-		// Grab a thread href, then FULL-RELOAD to it: a fresh document resets the
-		// list-cache singleton, reproducing the cold-cache state of a direct open.
+		// Grab a thread href, then FULL-RELOAD to it: a fresh document resets
+		// the page-cache singleton, reproducing the cold-cache state of a
+		// direct open.
 		await page.goto('/');
 		await waitForHydration(page);
 		const threadHref = await page.locator('a[href^="/discussion/"]').first().getAttribute('href');

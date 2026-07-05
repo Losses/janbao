@@ -3,26 +3,31 @@ import { prepareContext, waitForHydration, openSidebarAndGoto, clickDiscussion }
 
 // Reproduces the PWA "return-to-foreground stale preview" defect.
 //
-// The mobile swipe-back preview sources its data from the list-cache store:
-// GesturePageLayout.getPreviewPanel falls back to MOBILE_TABS[tab].panel, which
-// is TabDiscussionsPanel / TabActivityPanel / TabMessagesPanel, and each reads
-// `cache.X ?? page.data.X` (cache first). That cache is written ONLY by the
-// (tabs) layout's $effect, and ONLY when the URL is exactly a tab root ('/',
-// '/activity', '/messages/inbox'). Deep pages ('/discussion/*', '/messages/[id]',
-// '/profile/*', ...) are top-level routes that do NOT mount the (tabs) layout.
+// The mobile swipe-back preview sources its data from the unified
+// page cache: GesturePageLayout.getPreviewPanel falls back to
+// MOBILE_TABS[tab].panel, which is TabDiscussionsPanel /
+// TabActivityPanel / TabMessagesPanel, and each reads `cache.get(href)?.data
+// ?? page.data.X` (cache first). The root-layout $effect seeds the
+// cache for every tab root on every route (deep pages included).
 //
-// Consequence: any page.data refresh that fires off a tab root re-runs the root
-// layout load (fresh page.data) but never writes the cache, so the preview keeps
-// rendering stale cache content while the freshly-navigated landing renders
-// fresh page.data. The refresh itself is any invalidate path; in production the
-// real one is invalidate('app:badges') (messages/[id] afterNavigate) plus the
-// several invalidateAll() call sites. Here the dev-only __e2eInvalidateBadges
-// hook drives the exact same root-load re-run, deterministically.
+// The defect this test guards against: a page.data refresh that fires
+// off a tab root re-runs the layout load but the cache-write effect
+// skips deep pages, so the preview renders stale content while the
+// freshly navigated landing renders fresh page.data. The refresh is
+// any invalidate path; in production the real one is
+// invalidate('app:badges') (messages/[id] afterNavigate) plus the
+// several invalidateAll() call sites. Here the dev-only
+// __e2eInvalidateBadges hook drives the exact same root-load re-run,
+// deterministically.
+//
+// The dev-only __e2eCacheWrites hook wraps `PageCacheStore.capture`
+// and logs every (pathname, subKey) write. The three tab-list entries
+// are keyed by `'/'`, `'/activity'`, `'/messages/inbox'`.
 
-type CacheKey = 'setDiscussions' | 'setActivity' | 'setMessages';
+type CacheKey = '/' | '/activity' | '/messages/inbox';
 
 interface CacheWrite {
-	key: CacheKey;
+	key: string;
 	t: number;
 }
 
@@ -105,9 +110,9 @@ test('on a tab root, a refresh rewrites all three tab caches', async ({
 	await openSidebarAndGoto(page, '/messages/inbox');
 
 	const before = await reads(page);
-	const dBefore = countKey(before, 'setDiscussions');
-	const aBefore = countKey(before, 'setActivity');
-	const mBefore = countKey(before, 'setMessages');
+	const dBefore = countKey(before, '/');
+	const aBefore = countKey(before, '/activity');
+	const mBefore = countKey(before, '/messages/inbox');
 	expect(mBefore, 'messages cache written on the messages tab root').toBeGreaterThan(0);
 
 	await refreshRootLoad(page);
@@ -116,18 +121,17 @@ test('on a tab root, a refresh rewrites all three tab caches', async ({
 	// Correct behavior: a refresh must refresh EVERY tab's preview cache, not
 	// only the visible one - otherwise the swipe-back previews for the other two
 	// tabs render stale content while their landings render fresh page.data.
-	// (This currently fails: only the current tab is rewritten, the other two go
-	// stale - the defect.)
 	expect(
-		countKey(after, 'setDiscussions'),
+		countKey(after, '/'),
 		'discussions cache refreshed on a refresh'
 	).toBeGreaterThan(dBefore);
-	expect(countKey(after, 'setActivity'), 'activity cache refreshed on a refresh').toBeGreaterThan(
+	expect(countKey(after, '/activity'), 'activity cache refreshed on a refresh').toBeGreaterThan(
 		aBefore
 	);
-	expect(countKey(after, 'setMessages'), 'messages cache refreshed on a refresh').toBeGreaterThan(
-		mBefore
-	);
+	expect(
+		countKey(after, '/messages/inbox'),
+		'messages cache refreshed on a refresh'
+	).toBeGreaterThan(mBefore);
 });
 
 test('on a deep page (/discussion/*), a refresh rewrites all three tab caches', async ({
@@ -145,30 +149,30 @@ test('on a deep page (/discussion/*), a refresh rewrites all three tab caches', 
 	await page.waitForTimeout(300);
 
 	const before = await reads(page);
-	const dBefore = countKey(before, 'setDiscussions');
-	const aBefore = countKey(before, 'setActivity');
-	const mBefore = countKey(before, 'setMessages');
+	const dBefore = countKey(before, '/');
+	const aBefore = countKey(before, '/activity');
+	const mBefore = countKey(before, '/messages/inbox');
 
-	// The root load re-runs (fresh page.data) but the (tabs) layout is not mounted
-	// here, so none of its cache-writing branches exist to fire.
+	// The root load re-runs (fresh page.data). The root-layout cache-write
+	// effect covers every route (deep pages included), so every tab entry
+	// is rewritten.
 	await refreshRootLoad(page);
 
 	const after = await reads(page);
 	// Correct behavior: a refresh must refresh the preview cache even on a deep
-	// page, so the back-swipe preview matches its landing. (This currently fails:
-	// the (tabs) layout is unmounted on a deep page, so no cache write fires at
-	// all and every tab's preview stays stale until the next tab-root visit.)
+	// page, so the back-swipe preview matches its landing.
 	expect(
-		countKey(after, 'setDiscussions'),
+		countKey(after, '/'),
 		'discussions cache refreshed even on a deep page'
 	).toBeGreaterThan(dBefore);
 	expect(
-		countKey(after, 'setActivity'),
+		countKey(after, '/activity'),
 		'activity cache refreshed even on a deep page'
 	).toBeGreaterThan(aBefore);
-	expect(countKey(after, 'setMessages'), 'messages cache refreshed even on a deep page').toBeGreaterThan(
-		mBefore
-	);
+	expect(
+		countKey(after, '/messages/inbox'),
+		'messages cache refreshed even on a deep page'
+	).toBeGreaterThan(mBefore);
 });
 
 test('characterize post-refresh back-swipe: the track must commit to / without a snap-back', async ({

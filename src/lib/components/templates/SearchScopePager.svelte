@@ -17,11 +17,12 @@
 	 * scroll-chrome source via `scrollChrome.setOverride` (GesturePageLayout's
 	 * single `setScrollContainer` $effect reads `override ?? centerEl`).
 	 *
-	 * Data: the `/search` load returns only the ACTIVE scope; `search-cache` holds
-	 * each visited scope's results keyed by `(scope, q, sort)` so a swipe back to a
-	 * visited scope shows them instantly, and a `q`/`sort` change is a stale-miss
-	 * (LoadingChip until the scope is re-activated). Result rendering itself is the
-	 * shared `SearchResultsList`.
+	 * Data: the `/search` load returns only the ACTIVE scope; the page cache
+	 * holds each visited scope's results keyed by `('/search', scope)` with
+	 * the source `(q, sort)` so a swipe back to a visited scope shows them
+	 * instantly, and a `q`/`sort` change is a stale-miss (LoadingChip until
+	 * the scope is re-activated). Result rendering itself is the shared
+	 * `SearchResultsList`.
 	 */
 	import { onMount, untrack } from 'svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
@@ -29,10 +30,12 @@
 	import type { Action } from 'svelte/action';
 	import { detectSwipe } from '$lib/actions/swipe';
 	import { getSearchPagerStore } from '$lib/stores/mobile-pager.svelte';
-	import { getSearchCacheStore } from '$lib/stores/search-cache.svelte';
+	import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import { SEARCH_SCOPES, type SearchData, type SearchScope } from '$lib/types/search';
+	import { isSearchEntryFresh } from '$lib/utils/search-fresh';
+	import type { SearchScopeCacheData } from '$lib/types/page-cache-shapes';
 	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
 	import SearchResultsList from '$lib/components/molecules/SearchResultsList.svelte';
 	import { mdiMagnify } from '@mdi/js';
@@ -44,7 +47,7 @@
 	let { data }: SearchScopePagerProps = $props();
 
 	const pager = getSearchPagerStore();
-	const cache = getSearchCacheStore();
+	const pageCache = getPageCacheStore();
 	const scrollChrome = getScrollChromeStore();
 	const online = getOnlineStore();
 
@@ -79,8 +82,9 @@
 		});
 	});
 
-	// Publish the active scope's loaded results to the cache (keyed by scope, with
-	// the source q/sort so a later change is detected as a stale-miss).
+	// Publish the active scope's loaded results to the cache (keyed by
+	// `/search` + scope, with the source q/sort so a later change is
+	// detected as a stale-miss by `isFresh`).
 	$effect(() => {
 		const base = {
 			page: data.page,
@@ -90,19 +94,24 @@
 			q: data.query,
 			sort: data.sort
 		};
-		switch (data.scope) {
-			case 'discussions':
-				if (data.discussions) cache.setDiscussions({ items: data.discussions, ...base });
-				break;
-			case 'activities':
-				if (data.activities) cache.setActivities({ items: data.activities, ...base });
-				break;
-			case 'messages':
-				if (data.messages) cache.setMessages({ items: data.messages, ...base });
-				break;
-			case 'users':
-				if (data.users) cache.setUsers({ items: data.users, ...base });
-				break;
+		const scope = data.scope;
+		const payload: SearchScopeCacheData | null = (() => {
+			switch (scope) {
+				case 'discussions':
+					return data.discussions ? { items: data.discussions, ...base } : null;
+				case 'activities':
+					return data.activities ? { items: data.activities, ...base } : null;
+				case 'messages':
+					return data.messages ? { items: data.messages, ...base } : null;
+				case 'users':
+					return data.users ? { items: data.users, ...base } : null;
+			}
+		})();
+		if (payload) {
+			pageCache.capture('/search', scope, {
+				data: payload,
+				source: { route: '/search', query: data.query, sort: data.sort, page: data.page }
+			});
 		}
 	});
 
@@ -207,10 +216,27 @@
 	};
 
 	function fresh(scope: SearchScope): boolean {
-		return cache.isFresh(scope, data.query, data.sort);
+		const entry = pageCache.get('/search', scope);
+		return isSearchEntryFresh(entry?.source ?? null, data.query, data.sort);
 	}
 
 	const hasQuery = $derived(query.trim().length > 0);
+
+	// Per-scope typed views over the page cache. Each is `null` when no
+	// entry has been captured for that scope, or when the entry's source
+	// does not match the current `(q, sort)` (the panel reloads).
+	const discussionsScope = $derived(
+		pageCache.get('/search', 'discussions')?.data as SearchScopeCacheData | null | undefined
+	);
+	const activitiesScope = $derived(
+		pageCache.get('/search', 'activities')?.data as SearchScopeCacheData | null | undefined
+	);
+	const messagesScope = $derived(
+		pageCache.get('/search', 'messages')?.data as SearchScopeCacheData | null | undefined
+	);
+	const usersScope = $derived(
+		pageCache.get('/search', 'users')?.data as SearchScopeCacheData | null | undefined
+	);
 </script>
 
 <div
@@ -236,11 +262,11 @@
 				{:else}
 					<SearchResultsList
 						scope="discussions"
-						items={cache.discussions?.items ?? null}
+						items={discussionsScope?.items ?? null}
 						{query}
-						page={cache.discussions?.page ?? 1}
-						totalPages={cache.discussions?.totalPages ?? 0}
-						total={cache.discussions?.total ?? 0}
+						page={discussionsScope?.page ?? 1}
+						totalPages={discussionsScope?.totalPages ?? 0}
+						total={discussionsScope?.total ?? 0}
 						online={online.online}
 						{t}
 						onPageChange={(p) => handlePage('discussions', p)}
@@ -260,11 +286,11 @@
 				{:else}
 					<SearchResultsList
 						scope="activities"
-						items={cache.activities?.items ?? null}
+						items={activitiesScope?.items ?? null}
 						{query}
-						page={cache.activities?.page ?? 1}
-						totalPages={cache.activities?.totalPages ?? 0}
-						total={cache.activities?.total ?? 0}
+						page={activitiesScope?.page ?? 1}
+						totalPages={activitiesScope?.totalPages ?? 0}
+						total={activitiesScope?.total ?? 0}
 						online={online.online}
 						{t}
 						onPageChange={(p) => handlePage('activities', p)}
@@ -284,11 +310,11 @@
 				{:else}
 					<SearchResultsList
 						scope="messages"
-						items={cache.messages?.items ?? null}
+						items={messagesScope?.items ?? null}
 						{query}
-						page={cache.messages?.page ?? 1}
-						totalPages={cache.messages?.totalPages ?? 0}
-						total={cache.messages?.total ?? 0}
+						page={messagesScope?.page ?? 1}
+						totalPages={messagesScope?.totalPages ?? 0}
+						total={messagesScope?.total ?? 0}
 						online={online.online}
 						{t}
 						onPageChange={(p) => handlePage('messages', p)}
@@ -308,11 +334,11 @@
 				{:else}
 					<SearchResultsList
 						scope="users"
-						items={cache.users?.items ?? null}
+						items={usersScope?.items ?? null}
 						{query}
-						page={cache.users?.page ?? 1}
-						totalPages={cache.users?.totalPages ?? 0}
-						total={cache.users?.total ?? 0}
+						page={usersScope?.page ?? 1}
+						totalPages={usersScope?.totalPages ?? 0}
+						total={usersScope?.total ?? 0}
 						online={online.online}
 						{t}
 						onPageChange={(p) => handlePage('users', p)}

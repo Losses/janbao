@@ -50,7 +50,7 @@ import { mdiPlus, mdiEmailPlus } from '@mdi/js';
 import type { TranslationDict } from '$lib/types/translation';
 import { MOBILE_TAB_DEFS, type TabDef, type MobileTabLabelKey } from './tab-config';
 import { getRouteData } from './route-data';
-import { getListCacheStore } from '$lib/stores/list-cache.svelte';
+import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
 import type { TabsLayoutData } from '$lib/types/tabs';
 
 export type { MobileTabLabelKey, PathMatcher } from './tab-config';
@@ -239,8 +239,8 @@ export function getTabBarPillTarget(pathname: string): TabBarPillTarget {
 // forms) are absent here; the layer's fallback to
 // `MOBILE_TABS[activeTab].panel` covers them.
 //
-// Preview panels source their own data from the page store / list-cache
-// store, so the slot holds a prop-less Svelte component.
+// Preview panels source their own data from the page store / page cache,
+// so the slot holds a prop-less Svelte component.
 export type SvelteComponentType = Component;
 
 export interface PreviewPanelEntry {
@@ -357,12 +357,12 @@ export function getCurrentTabIndex(pathname: string): number {
 //
 // tab-config.ts is the pure source (tab order, hrefs, prefix matchers, data
 // keys); navigation-logic imports it for unit tests. Here we layer the
-// browser-only bits on top: the list-cache populated check (a $state store),
+// browser-only bits on top: the page-cache populated check (a $state store),
 // the list panel component. The store is read lazily inside the closures, so
 // importing this module (incl. under bun:test) never instantiates it.
 
 // Each tab's list panel is a prop-less Component that pulls its data from the
-// list-cache store and page data itself.
+// page cache and page data itself.
 const TAB_LIST_PANELS: Record<MobileTabLabelKey, Component> = {
 	discussions: TabDiscussionsPanel,
 	activity: TabActivityPanel,
@@ -382,7 +382,7 @@ export interface MobileTab extends TabDef {
 /**
  * Whether a tab's list is present in the root layout data. The root load
  * eager-loads page 1 of every tab on every route, so a tab's list is available
- * via `data` even on a deep page that never populated the list-cache store.
+ * via `data` even on a deep page that never captured into the page cache.
  * Reads the tab's declared dataKey/listKey, so no per-tab switch lives here.
  */
 function tabListPopulated(tab: TabDef, data: Partial<TabsLayoutData>): boolean {
@@ -393,9 +393,27 @@ function tabListPopulated(tab: TabDef, data: Partial<TabsLayoutData>): boolean {
 	return list ? list.length > 0 : false;
 }
 
+/**
+ * Whether the page cache holds a populated list entry for `tab`. Reads
+ * the entry keyed by the tab's root href and inspects the same list
+ * field declared on the tab definition. The cache entry's `data` is
+ * opaque to the store; this consumer narrows via the tab's `listKey`
+ * (the route-keyed lookup guarantees the shape).
+ */
+function tabListCached(tab: TabDef): boolean {
+	const entry = getPageCacheStore().get(tab.href);
+	if (!entry?.data) return false;
+	// The cache entry's data is opaque (`unknown`); narrow it to a
+	// record of arrays so the tab's `listKey` field reads as a list.
+	const data = entry.data as Record<string, unknown[] | undefined> | null;
+	if (!data) return false;
+	const list = data[tab.listKey];
+	return list ? list.length > 0 : false;
+}
+
 export const MOBILE_TABS: readonly MobileTab[] = MOBILE_TAB_DEFS.map((tab) => ({
 	...tab,
-	checkCache: () => getListCacheStore().isPopulated(tab.labelKey),
-	hasData: (data) => getListCacheStore().isPopulated(tab.labelKey) || tabListPopulated(tab, data),
+	checkCache: () => tabListCached(tab),
+	hasData: (data) => tabListCached(tab) || tabListPopulated(tab, data),
 	panel: TAB_LIST_PANELS[tab.labelKey]
 }));

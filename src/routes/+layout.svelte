@@ -21,9 +21,9 @@
 	import { initNavigationStore } from '$lib/stores/navigation.svelte';
 	import { initMobilePagerStore, initSearchPagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { initActiveGestureTrack } from '$lib/stores/active-gesture-track.svelte';
-	import { getPageScrollStore, getCurrentScrollY } from '$lib/stores/page-scroll.svelte';
+	import { getPageCacheStore, type PageCacheStore } from '$lib/stores/page-cache.svelte';
+	import { getCurrentScrollY } from '$lib/utils/get-current-scroll-y';
 	import { isTabRootPath } from '$lib/utils/history-nav';
-	import { getListCacheStore, type ListCacheStore } from '$lib/stores/list-cache.svelte';
 
 	interface LayoutProps {
 		data: LayoutData;
@@ -32,12 +32,13 @@
 
 	/** Client-side navigation exposed to E2E (dev-only). See __e2eGoto below. */
 	type E2EGotoHandler = (href: string) => Promise<void>;
-	// E2E instrumentation for the list-cache staleness investigation (dev-only).
-	// The list-cache store is the swipe-back preview's data source, but it is
-	// written only from the (tabs) layout, path-gated to the three tab roots. A
-	// page.data refresh that fires anywhere else leaves the cache stale. These
-	// hooks let a test observe whether each cache setter actually fired.
-	type E2ECacheWriteKey = 'setDiscussions' | 'setActivity' | 'setMessages';
+	// E2E instrumentation for the page-cache staleness investigation (dev-only).
+	// The page cache is the swipe-back preview's data source. It is written
+	// from the root-layout effect for every tab root, and the staleness e2e
+	// needs to observe each write. These hooks wrap `capture` once and record
+	// every (pathname, subKey) write so the test can assert all three tab
+	// entries were refreshed.
+	type E2ECacheWriteKey = string;
 	interface E2ECacheWrite {
 		key: E2ECacheWriteKey;
 		t: number;
@@ -45,16 +46,16 @@
 	type E2EInvalidateBadgesHandler = () => Promise<void>;
 	interface E2EWindow extends Window {
 		__e2eGoto?: E2EGotoHandler;
-		__e2eListCache?: ListCacheStore;
+		__e2ePageCache?: PageCacheStore;
 		__e2eCacheWrites?: E2ECacheWrite[];
 		__e2eInvalidateBadges?: E2EInvalidateBadgesHandler;
-		__e2eListCacheHooked?: boolean;
+		__e2ePageCacheHooked?: boolean;
 	}
 
 	let { data, children }: LayoutProps = $props();
 
 	const badges = getBadgesStore();
-	const listCache = getListCacheStore();
+	const pageCache = getPageCacheStore();
 	const editorPrefs = getEditorPrefsStore();
 	const uiPrefs = getUiPrefsStore();
 	const pageTheme = getPageThemeStore();
@@ -62,7 +63,6 @@
 	initMobilePagerStore();
 	initSearchPagerStore();
 	initActiveGestureTrack();
-	const pageScrollStore = getPageScrollStore();
 
 	// Hold the scroll-chrome header (and pin it visible on hash-enter) for
 	// navigations where SvelteKit's scroll would otherwise make it twitch:
@@ -80,7 +80,7 @@
 			| null
 			| undefined;
 		if (from && !isTabRootPath(from.url.pathname)) {
-			pageScrollStore.capture(from.url.pathname, getCurrentScrollY());
+			pageCache.capture(from.url.pathname, undefined, { scrollTop: getCurrentScrollY() });
 		}
 		if (to && from) {
 			const isTabClick =
@@ -123,40 +123,27 @@
 	if (import.meta.env.DEV && typeof window !== 'undefined') {
 		const w = window as E2EWindow;
 		w.__e2eGoto = (href) => goto(href);
-		// Wrap the list-cache setters once (HMR-safe via the hooked flag) so every
-		// cache write - from any caller of getListCacheStore() (the root-layout
-		// feeding effect) - appends to a log the staleness e2e reads. The wrapper
-		// is installed as an instance own-property that shadows the prototype
-		// method, so the shared singleton records every write regardless of caller.
-		if (!w.__e2eListCacheHooked) {
-			const store = getListCacheStore();
-			w.__e2eListCache = store;
+		// Wrap the page-cache capture once (HMR-safe via the hooked flag) so
+		// every cache write, from any caller of getPageCacheStore(), appends
+		// to a log the staleness e2e reads. The wrapper is installed as an
+		// instance own-property that shadows the prototype method, so the
+		// shared singleton records every write regardless of caller. Each
+		// (pathname, subKey) pair is the log key.
+		if (!w.__e2ePageCacheHooked) {
+			const store = getPageCacheStore();
+			w.__e2ePageCache = store;
 			const writes: E2ECacheWrite[] = [];
 			w.__e2eCacheWrites = writes;
 			const recordWrite = (key: E2ECacheWriteKey): void => {
 				writes.push({ key, t: performance.now() });
 			};
-			// Shadow each list-cache setter with an instance own-property so
-			// every write from any caller of getListCacheStore() is logged.
-			// Wrap each setter by name to keep its original signature and avoid
-			// any type assertion.
-			const origSetDiscussions = store.setDiscussions.bind(store);
-			store.setDiscussions = (data) => {
-				recordWrite('setDiscussions');
-				origSetDiscussions(data);
-			};
-			const origSetActivity = store.setActivity.bind(store);
-			store.setActivity = (data) => {
-				recordWrite('setActivity');
-				origSetActivity(data);
-			};
-			const origSetMessages = store.setMessages.bind(store);
-			store.setMessages = (data) => {
-				recordWrite('setMessages');
-				origSetMessages(data);
+			const origCapture = store.capture.bind(store);
+			store.capture = (pathname, subKey, input) => {
+				recordWrite(subKey ? `${pathname}#${subKey}` : pathname);
+				origCapture(pathname, subKey, input);
 			};
 			w.__e2eInvalidateBadges = () => invalidate('app:badges');
-			w.__e2eListCacheHooked = true;
+			w.__e2ePageCacheHooked = true;
 		}
 	}
 
@@ -191,19 +178,55 @@
 		});
 	});
 
-	// Feed the swipe-back preview cache (list-cache) from the root layout data on
-	// every route. data.home/activity/messages are eager-loaded by +layout.server.ts
-	// on every route and refresh whenever the root load re-runs (invalidate), so a
-	// root-layout effect keeps every deep-page swipe-back preview in sync with
-	// page.data. The page-data preference is constrained to tab roots: elsewhere
-	// page.data.X may be a same-named but semantically different field (/search
-	// results, /category/*, /profile/*) that must NOT enter the shared cache, so
-	// only the eager-loaded data.* fallback is written there.
+	// Seed the page cache for the three tab roots from the root layout data
+	// on every route. data.home/activity/messages are eager-loaded by
+	// +layout.server.ts on every route and refresh whenever the root load
+	// re-runs (invalidate), so a root-layout effect keeps every deep-page
+	// swipe-back preview in sync with page.data. The page-data preference is
+	// constrained to tab roots: elsewhere page.data.X may be a same-named but
+	// semantically different field (/search results, /category/*, /profile/*)
+	// that must NOT enter the shared cache, so only the eager-loaded data.*
+	// fallback is written there.
 	$effect(() => {
 		const onTabRoot = isTabRootPath(page.url.pathname);
-		listCache.setDiscussions(onTabRoot && page.data.discussions ? page.data : data.home);
-		listCache.setActivity(onTabRoot && page.data.activities ? page.data : data.activity);
-		listCache.setMessages(onTabRoot && page.data.conversations ? page.data : data.messages);
+		const discussionsSource = onTabRoot && page.data.discussions ? page.data : data.home;
+		if (discussionsSource?.discussions) {
+			pageCache.capture('/', undefined, {
+				data: {
+					discussions: discussionsSource.discussions,
+					page: discussionsSource.page ?? 1,
+					totalPages: discussionsSource.totalPages ?? 1,
+					totalCount: discussionsSource.totalCount ?? 0
+				},
+				source: { route: '/', page: discussionsSource.page ?? 1 }
+			});
+		}
+		const activitySource = onTabRoot && page.data.activities ? page.data : data.activity;
+		if (activitySource?.activities) {
+			pageCache.capture('/activity', undefined, {
+				data: {
+					activities: activitySource.activities,
+					page: activitySource.page ?? 1,
+					totalPages: activitySource.totalPages ?? 1,
+					totalCount: activitySource.totalCount ?? 0,
+					activityDraft: activitySource.activityDraft,
+					mentionedUsers: activitySource.mentionedUsers
+				},
+				source: { route: '/activity', page: activitySource.page ?? 1 }
+			});
+		}
+		const messagesSource = onTabRoot && page.data.conversations ? page.data : data.messages;
+		if (messagesSource?.conversations) {
+			pageCache.capture('/messages/inbox', undefined, {
+				data: {
+					conversations: messagesSource.conversations,
+					page: messagesSource.page ?? 1,
+					totalPages: messagesSource.totalPages ?? 1,
+					totalCount: messagesSource.totalCount ?? 0
+				},
+				source: { route: '/messages/inbox', page: messagesSource.page ?? 1 }
+			});
+		}
 	});
 
 	// Seed editor feature prefs from the session. The lazy editor chunk loads

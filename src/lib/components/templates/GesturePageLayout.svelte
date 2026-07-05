@@ -5,7 +5,7 @@
 	import { preloadData, afterNavigate, beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
-	import { getPageScrollStore } from '$lib/stores/page-scroll.svelte';
+	import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
 	import { backHandler } from '$lib/stores/navigation.svelte';
 	import { detectSwipe } from '$lib/actions/swipe';
 	import { isTabRootPath, previousEntryPathname } from '$lib/utils/history-nav';
@@ -55,7 +55,7 @@
 	}: Props = $props();
 
 	const navStore = getNavigationStore();
-	const pageScrollStore = getPageScrollStore();
+	const pageCache = getPageCacheStore();
 	const pager = getMobilePagerStore();
 	// On mobile this layout locks the document window (html.fixed-viewport) and
 	// scrolls the active panel inside `.detail-scroll-pane`; tell the shared
@@ -225,13 +225,19 @@
 	const textMaxWidth = $derived(isCircle ? 0 : textProgress * 70);
 
 	let leftEl = $state<HTMLElement | null>(null);
-	const leftScrollTop = $derived(resolvedLeftHref ? pageScrollStore.get(resolvedLeftHref) : 0);
+	const leftScrollTop = $derived(
+		resolvedLeftHref ? (pageCache.get(resolvedLeftHref)?.scrollTop ?? 0) : 0
+	);
 
 	let rightEl = $state<HTMLElement | null>(null);
-	const rightScrollTop = $derived(resolvedRightHref ? pageScrollStore.get(resolvedRightHref) : 0);
+	const rightScrollTop = $derived(
+		resolvedRightHref ? (pageCache.get(resolvedRightHref)?.scrollTop ?? 0) : 0
+	);
 
 	let centerEl = $state<HTMLElement | null>(null);
-	const currentScrollTop = $derived(page.url.pathname ? pageScrollStore.get(page.url.pathname) : 0);
+	const currentScrollTop = $derived(
+		page.url.pathname ? (pageCache.get(page.url.pathname)?.scrollTop ?? 0) : 0
+	);
 
 	const shouldAnimateEnter = () => {
 		if (leftNeedsLoading) return false; // Never animate entry from loading swipe
@@ -994,7 +1000,9 @@
 				style={leftStyle}
 				onscroll={(e) => {
 					if (resolvedLeftHref && e.currentTarget.scrollTop > 0) {
-						pageScrollStore.capture(resolvedLeftHref, e.currentTarget.scrollTop);
+						pageCache.capture(resolvedLeftHref, undefined, {
+							scrollTop: e.currentTarget.scrollTop
+						});
 					}
 				}}
 			>
@@ -1040,7 +1048,9 @@
 				style={rightStyle}
 				onscroll={(e) => {
 					if (resolvedRightHref && e.currentTarget.scrollTop > 0) {
-						pageScrollStore.capture(resolvedRightHref, e.currentTarget.scrollTop);
+						pageCache.capture(resolvedRightHref, undefined, {
+							scrollTop: e.currentTarget.scrollTop
+						});
 					}
 				}}
 			>

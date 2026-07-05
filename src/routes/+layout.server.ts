@@ -115,7 +115,7 @@ export const load: LayoutServerLoad = async (event) => {
 		// every push subscription. Null when VAPID is not configured and we are not
 		// in a dev build; the client treats null as "push unavailable".
 		vapidPublicKey: getVapidPublicKeyBase64Url(platformEnv),
-		// The three tab lists (page 1), seeded into the list-cache store by
+		// The three tab lists (page 1), seeded into the page cache by
 		// +layout.svelte so deep pages have swipe-preview data.
 		home,
 		activity,

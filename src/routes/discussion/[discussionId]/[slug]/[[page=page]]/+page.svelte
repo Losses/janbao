@@ -27,8 +27,11 @@
 	import { getPageThemeStore } from '$lib/stores/page-theme.svelte';
 	import { writeThread, passthroughEnabledFor } from '$lib/offline/passthrough';
 	import type { ThreadPassthroughInput } from '$lib/offline/passthrough';
-	import { getListCacheStore } from '$lib/stores/list-cache.svelte';
-	import { getDeepPageSnapshotStore } from '$lib/stores/deep-page-snapshot.svelte';
+	import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
+	import type {
+		ActivityListCacheData,
+		DiscussionsListCacheData
+	} from '$lib/types/page-cache-shapes';
 	import { isTabRootPath } from '$lib/utils/history-nav';
 	import type { PageData } from './$types';
 
@@ -45,8 +48,7 @@
 
 	let { data }: PageProps = $props();
 
-	const listCache = getListCacheStore();
-	const deepPageSnapshot = getDeepPageSnapshotStore();
+	const pageCache = getPageCacheStore();
 
 	let detailScrollTop = $state(0);
 	// True when SvelteKit's snapshot.restore fired for this mount (a popstate
@@ -116,17 +118,8 @@
 		if (to && isTabRootPath(to.url.pathname) && typeof window !== 'undefined') {
 			const pane = document.querySelector('.detail-scroll-pane') as HTMLElement | null;
 			if (pane) {
-				console.log('[DEBUG CAPTURED SNAPSHOT]:', {
-					pathname: page.url.pathname,
-					currentPage: data.page,
-					totalPages: data.totalPages,
-					repliesCount: data.replies?.length,
-					canCreate: data.canCreate,
-					canUpdate: data.canUpdate,
-					canDelete: data.canDelete
-				});
-				deepPageSnapshot.capture(
-					{
+				pageCache.capture(page.url.pathname, undefined, {
+					data: {
 						pathname: page.url.pathname,
 						discussion: data.discussion,
 						opReply: data.opReply ?? null,
@@ -135,7 +128,6 @@
 						t: data.t,
 						user: data.user ?? null,
 						theme: data.theme ?? null,
-						scrollTop: pane.scrollTop,
 						canCreate: data.canCreate ?? false,
 						canUpdate: data.canUpdate ?? false,
 						canDelete: data.canDelete ?? false,
@@ -143,8 +135,10 @@
 						totalPages: data.totalPages ?? 1,
 						replyDraft: data.replyDraft ?? null
 					},
-					threadContentSnippet
-				);
+					snippet: threadContentSnippet,
+					scrollTop: pane.scrollTop,
+					source: { route: page.url.pathname }
+				});
 			}
 		}
 	});
@@ -555,22 +549,24 @@
 {/snippet}
 
 {#snippet leftSnippet()}
+	{@const cached = pageCache.get('/')?.data as DiscussionsListCacheData | undefined}
 	<DiscussionsPanel
-		discussions={listCache.discussions?.items ?? data.home?.discussions}
-		currentPage={listCache.discussions?.page ?? data.home?.page ?? 1}
-		totalPages={listCache.discussions?.totalPages ?? data.home?.totalPages ?? 1}
+		discussions={cached?.discussions ?? data.home?.discussions}
+		currentPage={cached?.page ?? data.home?.page ?? 1}
+		totalPages={cached?.totalPages ?? data.home?.totalPages ?? 1}
 		{t}
 		{buildPageUrl}
 		paginate={true}
 	/>
 {/snippet}
 {#snippet rightSnippet()}
+	{@const cached = pageCache.get('/activity')?.data as ActivityListCacheData | undefined}
 	<ActivityPanel
-		activities={listCache.activity?.items ?? data.activity?.activities ?? []}
-		currentPage={listCache.activity?.page ?? data.activity?.page ?? 1}
-		totalPages={listCache.activity?.totalPages ?? data.activity?.totalPages ?? 1}
-		activityDraft={listCache.activity?.activityDraft ?? data.activity?.activityDraft ?? null}
-		mentionedUsers={listCache.activity?.mentionedUsers ?? data.activity?.mentionedUsers ?? {}}
+		activities={cached?.activities ?? data.activity?.activities ?? []}
+		currentPage={cached?.page ?? data.activity?.page ?? 1}
+		totalPages={cached?.totalPages ?? data.activity?.totalPages ?? 1}
+		activityDraft={cached?.activityDraft ?? data.activity?.activityDraft ?? null}
+		mentionedUsers={cached?.mentionedUsers ?? data.activity?.mentionedUsers ?? {}}
 		{t}
 		{user}
 		paginate={true}

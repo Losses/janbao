@@ -31,7 +31,7 @@
 	import { detectSwipe } from '$lib/actions/swipe';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
-	import { getPageScrollStore } from '$lib/stores/page-scroll.svelte';
+	import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
 	import { viewportLock } from '$lib/stores/viewport-lock.svelte';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import {
@@ -40,7 +40,6 @@
 	} from '$lib/stores/active-gesture-track.svelte';
 	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/route-config';
 	import { backSwipeShouldPopHistory } from '$lib/utils/history-nav';
-	import { getDeepPageSnapshotStore } from '$lib/stores/deep-page-snapshot.svelte';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
 	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
@@ -91,14 +90,16 @@
 	// Tab routes are always root-mode for the Header, so backMorph stays null
 	// here (the morph is driven only by deep-page swipe-back in GesturePageLayout).
 	const pager = getMobilePagerStore();
-	const deepPageSnapshot = getDeepPageSnapshotStore();
+	const pageCache = getPageCacheStore();
 	const navStore = getNavigationStore();
 	const scrollChrome = getScrollChromeStore();
-	const pageScrollStore = getPageScrollStore();
 	let section0El = $state<HTMLElement | null>(null);
 	let section1El = $state<HTMLElement | null>(null);
 	let section2El = $state<HTMLElement | null>(null);
 	let viewportWidth = $state(0);
+	// The latest deep-page snapshot entry, read by the back-swipe preview
+	// overlay. `null` when no thread has been captured yet.
+	const deepPreviewEntry = $derived(pageCache.getLatestWithSnippet());
 	$effect(() => {
 		pager.set({
 			fractionalIndex: activeIndex - (dragOffset ?? 0) / (viewportWidth || 1),
@@ -111,18 +112,18 @@
 	// position so the preview shows the thread where the user left it.
 	$effect(() => {
 		if (deepPreviewEl && showDeepPreview) {
-			deepPreviewEl.scrollTop = deepPageSnapshot.scrollTop;
+			deepPreviewEl.scrollTop = pageCache.getLatestWithSnippet()?.scrollTop ?? 0;
 		}
 	});
 	// Per-panel scroll restore + hide-on-scroll registration. Re-runs when
 	// activeIndex changes (tab switch) or the section element binds. Restores the
-	// active panel's saved scroll from pageScrollStore (sync + rAF, mirrors
-	// GesturePageLayout :286-296 to avoid a top-flash on remount) and registers it
+	// active panel's saved scroll from the page cache (sync + rAF, mirrors
+	// GesturePageLayout to avoid a top-flash on remount) and registers it
 	// as the scroll-chrome source (hide-on-scroll reads this panel).
 	$effect(() => {
 		const el = activeIndex === 0 ? section0El : activeIndex === 1 ? section1El : section2El;
 		if (!el) return;
-		const saved = pageScrollStore.get(MOBILE_TABS[activeIndex].href);
+		const saved = pageCache.get(MOBILE_TABS[activeIndex].href)?.scrollTop ?? 0;
 		if (saved > 0) {
 			el.scrollTop = saved;
 			requestAnimationFrame(() => {
@@ -202,7 +203,7 @@
 		// - If we have a cached snapshot, overlay the snapshot on section 0 and slide the track.
 		// - Otherwise, do not slide the track and show the shared back chip overlay instead.
 		if (deltaX > 0 && backSwipeShouldPopHistory(activeIndex - 1)) {
-			if (deepPageSnapshot.hasSnapshot) {
+			if (pageCache.getLatestWithSnippet()) {
 				showDeepPreview = true;
 				backChipReveal = null;
 				dragOffset = follow(deltaX);
@@ -351,7 +352,10 @@
 			data-tab-panel={MOBILE_TABS[0].labelKey}
 			style="overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y pinch-zoom;"
 			bind:this={section0El}
-			onscroll={(e) => pageScrollStore.capture(MOBILE_TABS[0].href, e.currentTarget.scrollTop)}
+			onscroll={(e) =>
+				pageCache.capture(MOBILE_TABS[0].href, undefined, {
+					scrollTop: e.currentTarget.scrollTop
+				})}
 		>
 			<div class="gpl-card">
 				<DiscussionsPanel
@@ -369,7 +373,10 @@
 			data-tab-panel={MOBILE_TABS[1].labelKey}
 			style="overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y pinch-zoom;"
 			bind:this={section1El}
-			onscroll={(e) => pageScrollStore.capture(MOBILE_TABS[1].href, e.currentTarget.scrollTop)}
+			onscroll={(e) =>
+				pageCache.capture(MOBILE_TABS[1].href, undefined, {
+					scrollTop: e.currentTarget.scrollTop
+				})}
 		>
 			<div class="gpl-card">
 				<ActivityPanel
@@ -389,7 +396,10 @@
 			data-tab-panel={MOBILE_TABS[2].labelKey}
 			style="overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y pinch-zoom;"
 			bind:this={section2El}
-			onscroll={(e) => pageScrollStore.capture(MOBILE_TABS[2].href, e.currentTarget.scrollTop)}
+			onscroll={(e) =>
+				pageCache.capture(MOBILE_TABS[2].href, undefined, {
+					scrollTop: e.currentTarget.scrollTop
+				})}
 		>
 			<div class="gpl-card">
 				<MessagesPanel
@@ -401,7 +411,7 @@
 				/>
 			</div>
 		</section>
-		{#if showDeepPreview && deepPageSnapshot.data}
+		{#if showDeepPreview && deepPreviewEntry}
 			<!-- Real Svelte component rendering the cached thread DATA (not injected
 			     HTML). Uses the same atoms (DiscussionMetadata, LexicalRenderer) as
 			     the thread page, so scoped CSS applies correctly. Overlaid on
@@ -413,8 +423,8 @@
 				style="top: 0; height: 100%;"
 			>
 				<div class="gpl-card">
-					{#if deepPageSnapshot.snippet}
-						{@render deepPageSnapshot.snippet()}
+					{#if deepPreviewEntry.snippet}
+						{@render deepPreviewEntry.snippet()}
 					{/if}
 				</div>
 			</div>
