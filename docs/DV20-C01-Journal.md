@@ -670,6 +670,13 @@ a future cycle to add `/offline/*` Header / swipe / FAB e2e specs.
   Consecutive pass votes: 2 of 5. Detailed in
   `docs/RV20-C01-Audit-16.md`.
 
+- **Round 17 (architect, 2-auditor model, clean prompt): 1/2 PASS.**
+  Auditor A: PASS. Auditor B: PASS-WITH-CONCERNS (R13 audit file
+  claimed votes without acknowledging the leading-prompt invalidation
+  per §13.6). Fixed: R13 audit file amended. Per the no-gaps rule,
+  B's concern resets the counter to 0. Detailed in
+  `docs/RV20-C01-Audit-17.md`.
+
 ## Deviations
 
 1. **`backParent` coverage mirrors today's `getParent` set exactly;
