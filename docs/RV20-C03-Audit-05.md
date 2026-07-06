@@ -62,8 +62,10 @@ prior-round framing.
 ## State at end of R5
 
 92/92 unit tests pass across the four pure-half suites; `bun run check`
-0 errors / 0 warnings; `bun run lint` exit 0 (52 similar-type pairs, all
-pre-existing); `bun test src/lib` 398/0. Shadow mode preserved.
+0 errors / 0 warnings; `bun run lint` exit 0 (52 similar-type pairs; 3
+reference a `nav-*` type at >=90% and are transitory or test-fixture
+patterns, see the journal's lint section); `bun test src/lib` 398/0.
+Shadow mode preserved.
 
 Consecutive pass votes: **2** (R5 is the first round with zero concerns
 from both auditors; R1-R4 each carried at least one blocking concern).

@@ -9,8 +9,10 @@
  *
  * Pure. The cache lookup is injected as a `cacheHas` predicate so this
  * module is runes-free and unit-testable without the reactive store.
- * The orchestrator (Layer 1) wires the live `PageCacheStore.get` into
- * the predicate at runtime.
+ * In the integrated pipeline the orchestrator (Layer 1) wires the live
+ * `PageCacheStore.get` into the predicate; in Cycle 3 shadow mode
+ * `coordinate` is called only by its unit tests (Cycle 5 wires the
+ * orchestrator call).
  *
  * Responsibilities (§7 + §9):
  *
@@ -32,9 +34,12 @@
  *  `PageCacheStore.get(...) !== null`. */
 export type CacheHasFn = (pathname: string, subKey?: string) => boolean;
 
-/** Inputs the coordinator reads. The `toSnapshotCapture` field comes
- *  from `RouteData.snapshotCapture`; the `cacheHas` predicate is the
- *  live cache check. */
+/** Inputs to the coordinator. `coordinate()` reads `toPathname`,
+ *  `toSubKey`, `toSnapshotCapture`, `cacheHas`, and `hasToSnippet`;
+ *  `fromPathname` is carried for Cycle 4/5 (e.g. FROM invalidation on a
+ *  push) and is not read in Cycle 3. The `toSnapshotCapture` field
+ *  comes from `RouteData.snapshotCapture`; the `cacheHas` predicate is
+ *  the live cache check. */
 export interface CoordinatorInput {
 	readonly fromPathname: string;
 	readonly toPathname: string;
@@ -78,8 +83,9 @@ export interface CoordinatorDecision {
  *   - Otherwise, chip-exit: the orchestrator preloads the TO and the
  *     LoadingChip overlays the gesture until the data lands.
  *
- * The decision is pure; the orchestrator calls it once at gesture
- * start (FROM and TO are locked).
+ * The decision is pure. In the integrated pipeline the orchestrator
+ * calls it once at gesture start (FROM and TO are locked); in Cycle 3
+ * shadow mode it is exercised only by the unit suite.
  */
 export function coordinate(input: CoordinatorInput): CoordinatorDecision {
 	if (input.cacheHas(input.toPathname, input.toSubKey)) {

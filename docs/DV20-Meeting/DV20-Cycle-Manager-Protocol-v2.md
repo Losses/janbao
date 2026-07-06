@@ -44,15 +44,23 @@ verdict.
 
 ### Concern vs nitpick classification (binding)
 
-- **Nitpick (does NOT block PASS):** journal text accuracy. Pasted
-  number drift (e.g. "28 pass" in journal vs "30 pass" in reality),
-  deviation wording imprecision, internal-prose inconsistencies within
-  the journal. These are recorded as observations but do not reset the
-  convergence counter.
+- **Nitpick (does NOT block PASS):** documentation text accuracy in the
+  `.md` files ONLY (the journal, the audit files, the spec, the plan).
+  Pasted number drift (e.g. "28 pass" in journal vs "30 pass" in
+  reality), deviation wording imprecision, internal-prose
+  inconsistencies within a document. These are recorded as observations
+  but do not reset the convergence counter.
 - **Concern (DOES block PASS):** code correctness defects, behavior
-  changes, stale code COMMENTS (references to deleted modules,
-  misleading docstrings), missing test coverage for a real code path,
+  changes, ANY inaccurate code comment (in `.ts` / `.svelte.ts` /
+  `.test.ts` files), missing test coverage for a real code path,
   architecture violations. These reset the convergence counter.
+- **There is no borderline.** Code-comment accuracy is ALWAYS a
+  concern. A comment that overclaims, under-describes, or references
+  behavior the code does not have blocks PASS, even if the field it
+  describes is forward-plumbed for a later cycle (e.g. an input field
+  carried for Cycle 5 but unread in Cycle 3 whose docstring says
+  "inputs the coordinator reads"). Do NOT give borderline code-comment
+  drift the benefit of the doubt as a "nitpick" - fix the comment.
 
 ### Per-round checklist (for the orchestrator, after each audit round)
 

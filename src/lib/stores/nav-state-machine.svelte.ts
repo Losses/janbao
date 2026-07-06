@@ -173,8 +173,11 @@ export class NavStateMachine {
 		}
 	}
 
-	/** Reset to at-rest on a tag (used by the first-load landing and
-	 *  by the SSR initial render). */
+	/** Reset to at-rest on a tag. A public boundary with no Cycle-3
+	 *  caller: the first-load landing and the SSR initial render both
+	 *  use the constructor's `initialOn` directly, and `onLand`
+	 *  dispatches the reset event itself rather than calling this
+	 *  method. Cycle 5 may call this from the first-load/SSR wiring. */
 	reset(on: AtRestOn): void {
 		this.dispatch({ type: 'reset', on });
 	}

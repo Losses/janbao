@@ -5,9 +5,11 @@
  * Per `docs/DV20-Plan.md` §2 Layer 1 + §6: owns the macro state of a
  * navigation transition and the page lifecycle. Macro phases:
  * `at-rest`, `intent`, `resolving`, `transitioning` (carrying the
- * active resolver + sub-phase), `landing`. Owns interruption (a new
- * intent arriving mid-transition; a popstate; a failed preload) and
- * the SvelteKit interop boundary (§9).
+ * active resolver + sub-phase), `landing`. The Cycle 3 reducer models
+ * the interruption that arises in shadow mode (a new intent arriving
+ * mid-transition; §5); popstate-as-interruption and
+ * failed-preload-as-interruption are Cycle 5 additions, as is the
+ * SvelteKit interop wiring (§9).
  *
  * This module is the reducer; `nav-state-machine.svelte.ts` is the
  * thin `$state` wrapper that delegates every transition here. The
@@ -228,7 +230,9 @@ export function reduce(
 		}
 		case 'resolved': {
 			// The resolver produced a plan. Move to `transitioning`
-			// with sub `dragging` (the gesture is live). Lock FROM/TO.
+			// with sub `dragging` (the gesture is live); PRESERVE
+			// `committing` if re-resolved mid-commit (a committed
+			// transition that re-resolves stays committed). Lock FROM/TO.
 			if (state.macro.kind !== 'intent' && state.macro.kind !== 'transitioning') {
 				return state;
 			}
@@ -285,12 +289,13 @@ export function reduce(
 			};
 		}
 		case 'interrupt': {
-			// §5 interruption: a new intent arrives mid-commit. Cancel
-			// the active commit and re-enter `intent`. FROM is unchanged
-			// (the user is still on the FROM page); TO/direction are
-			// abandoned and must be cleared so an `intent` phase never
-			// carries a stale destination (mirrors the intent-from-at-rest
-			// and intent-from-landing branches).
+			// §5 interruption: a new intent arrives mid-transition, during
+			// any transitioning sub (dragging, committing, cancelling, or
+			// scrubbing). Cancel the in-flight transition and re-enter
+			// `intent`. FROM is unchanged (the user is still on the FROM
+			// page); TO/direction are abandoned and must be cleared so an
+			// `intent` phase never carries a stale destination (mirrors
+			// the intent-from-at-rest and intent-from-landing branches).
 			if (state.macro.kind !== 'transitioning') return state;
 			return {
 				...state,
@@ -347,7 +352,9 @@ export function isInFlight(state: OrchestratorState): boolean {
 }
 
 /** Convenience: is the active transition a commit (released past the
- *  threshold)? Used by the wrapper to schedule the post-commit land. */
+ *  threshold)? A Cycle-3-unused predicate: the wrapper's `onLand`
+ *  schedules the reset microtask unconditionally without consulting
+ *  this. Cycle 5 may use it to gate post-commit landing. */
 export function isCommitting(state: OrchestratorState): boolean {
 	return state.macro.kind === 'transitioning' && state.macro.sub === 'committing';
 }

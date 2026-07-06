@@ -7,15 +7,17 @@
  * continuous parameters (direction, live offset, live velocity).
  *
  * Pure (runes-free). No side effects, no DOM reads, no DOM writes. The
- * orchestrator (Layer 1, `nav-state-machine.svelte.ts`) subscribes to
- * the classified intent and publishes it downward to the resolver
- * (Layer 3).
+ * classifier is a pure reducer; in the integrated pipeline the
+ * orchestrator (Layer 1) calls `classify` and forwards the resulting
+ * intent to the resolver (Layer 3). In Cycle 3 shadow mode no caller
+ * consumes this module (Cycle 5 wires it).
  *
  * The classifier is a state machine over `(IntentState, IntentEvent)`.
  * Micro states per §6: `idle`, `deciding`, `drag-left`, `drag-right`,
  * `committed`, `cancelled`. The continuous parameters (`offset`,
- * `velocity`) live ON the state record; the orchestrator reads them
- * each frame as the live input streams.
+ * `velocity`) live ON the state record; the Cycle 4 executor will read
+ * them each frame as the live input streams (in Cycle 3 nothing
+ * consumes them).
  *
  * The 40px edge-dead-zone (matching the existing `detectSwipe` action)
  * is a parameter the caller supplies; this module does not read window
@@ -108,8 +110,10 @@ export interface IntentState {
 	readonly startX: number;
 	/** Gesture start time (ms, caller's clock). */
 	readonly startedAt: number;
-	/** True when the user reversed the drag past the start (a cancel
-	 *  hint). The resolver reads this to pick `progressDirection`. */
+	/** True when the user reversed the drag past the start. Read by the
+	 *  classifier's own pointerup case to choose the release `micro` (a
+	 *  reversal past the start cancels the gesture); the resolver then
+	 *  reads `micro`, not this flag, to pick `progressDirection`. */
 	readonly reversed: boolean;
 	/** Pathname for a tap/goto/popstate target. `null` while dragging. */
 	readonly target: string | null;
@@ -151,11 +155,12 @@ export const DEFAULT_CLASSIFIER_OPTIONS: IntentClassifierOptions = {
 	decideThresholdPx: DEFAULT_DECIDE_THRESHOLD_PX
 };
 
-/** A target the classifier can produce. The orchestrator matches this
- *  against the current route to compute the (from, to) pair.
- *  `via` is `'goto'` for all Cycle-3 shadow-mode navigations; Cycle 5
- *  will discriminate tap / popstate / hashchange when it wires the
- *  real SvelteKit event sources into the orchestrator. */
+/** A target the classifier can produce. In the integrated pipeline the
+ *  orchestrator matches this against the current route to compute the
+ *  (from, to) pair; in Cycle 3 shadow mode it is exercised only by the
+ *  unit suite. `via` is `'goto'` for all Cycle-3 shadow-mode
+ *  navigations; Cycle 5 will discriminate tap / popstate / hashchange
+ *  when it wires the real SvelteKit event sources into the orchestrator. */
 export interface ResolvedTarget {
 	readonly pathname: string;
 	readonly via: 'goto';
@@ -204,26 +209,32 @@ export function resolveDirection(deltaX: number, decideThresholdPx: number): Int
 
 /**
  * The intent classifier. Pure reducer: given the current state and an
- * event, returns the next state. The orchestrator applies external
- * side effects (SvelteKit navigation, rAF scheduling); this function
- * decides ONLY the next intent state.
+ * event, returns the next state. Side effects (SvelteKit navigation,
+ * rAF scheduling) live in the orchestrator/executor layers, not here;
+ * this function decides ONLY the next intent state.
  *
  * Behaves as follows:
  *
- *   - `pointerdown`: enters `deciding`. Records start X/time. If
- *      inside the edge reserve, stays in `idle` (the OS owns the
- *      gesture).
- *   - `pointermove`: in `deciding`, transitions to `drag-left`/
- *      `drag-right` once the offset exceeds the threshold. In a drag
- *      state, updates the offset/velocity/samples. Detects a reversal
- *      (sign flip past the start).
- *   - `pointerup`: in a drag state, transitions to `committed` (or
- *      `cancelled` if reversed and below the commit threshold). Freezes
+ *   - `pointerdown`: if inside the edge reserve, yields to the OS and
+ *      returns to `idle`. Otherwise enters `deciding`, recording the
+ *      start X/time and the first sample.
+ *   - `pointermove`: a no-op unless currently `deciding` or dragging.
+ *      In `deciding`, transitions to `drag-left`/`drag-right` once the
+ *      offset exceeds the threshold. In a drag state, updates the
+ *      offset/velocity/samples and detects a reversal (a sign flip
+ *      past the start).
+ *   - `pointerup`: a no-op unless currently dragging. From `deciding`
+ *      (the offset never reached the threshold) it returns to `idle`.
+ *      From a drag state it transitions to `committed`, or to
+ *      `cancelled` when the drag was reversed past the start. Freezes
  *      the release velocity.
- *   - `pointercancel`: transitions to `cancelled`.
- *   - `tap` / `goto` / `popstate` / `hashchange`: produces a target
- *      intent with `micro: 'committed'` and `target: pathname`. The
- *      orchestrator resolves this into a (from, to) pair.
+ *   - `pointercancel`: a no-op from `idle`; otherwise transitions to
+ *      `cancelled`.
+ *   - `tap` / `goto` / `popstate` / `hashchange`: a no-op when the
+ *      event carries no target; otherwise produces a target intent
+ *      with `micro: 'committed'` and `target: pathname`, which the
+ *      orchestrator will resolve into a (from, to) pair when the
+ *      pipeline is wired (Cycle 5).
  */
 export function classify(
 	state: IntentState,
@@ -317,8 +328,10 @@ export function classify(
 	}
 }
 
-/** Convenience: extract the target from an intent, if any. The
- *  orchestrator uses this to look up the destination's RouteData. */
+/** Convenience: extract the target from an intent, if any. In the
+ *  integrated pipeline the orchestrator uses this to look up the
+ *  destination's RouteData; in Cycle 3 shadow mode it is exercised
+ *  only by the unit suite. */
 export function intentTarget(intent: IntentState): ResolvedTarget | null {
 	if (intent.target === null) return null;
 	return { pathname: intent.target, via: 'goto' };

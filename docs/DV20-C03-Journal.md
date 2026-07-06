@@ -68,7 +68,8 @@ Four layers, all NEW files in shadow mode:
 - The back-target is always the route stack's previous entry (§6). No
   per-route override. The first consumer of `backParent`
   (`GesturePageLayout.resolvedLeftHref`) dissolves logically in this
-  cycle's design (the new resolver reads the stack directly); the
+  cycle's design (the new resolver's back-target derives from the
+  stack, not from `backParent`); the
   field itself stays in `RouteData` because the second consumer
   (`isGesturePageLayoutRoute`) does not dissolve until Cycle 5, so
   removing the field now would break Cycle 1's contract. This is a
@@ -93,10 +94,12 @@ Four layers, all NEW files in shadow mode:
    but those carry `(pathname, search)` and are keyed by tab. For
    Cycle 3's pure resolver input I define a flat `RouteStack` of
    `RouteStackEntry { pathname, search?, tag }` entries
-   (chronological; the last entry is current). The resolver reads
-   `entries[length - 2]` for the back-target. This shape is internal
-   to the new pipeline; Cycle 5 wires it to the real navigation
-   history.
+   (chronological; the last entry is current). In Cycle 3 the caller
+   precomputes `direction` (forward/backward) from `entries[length - 2]`
+   and passes it to the resolver; the resolver consumes `direction`, not
+   the stack. Cycle 5 may have resolvers read the stack directly. This
+   shape is internal to the new pipeline; Cycle 5 wires it to the real
+   navigation history.
 
 3. **Bidirectional pair sharing.** §4: "A bidirectional pair shares one
    resolver because the two directions are the same animation reversed."
@@ -393,12 +396,13 @@ defect carried forward.
 
 ### 2026-07-05 - Unit tests written and run
 
-92 tests across the four pure-half suites, all passing. Real outputs
+93 tests across the four pure-half suites, all passing. Real outputs
 pasted under Verification. (Initial run was 87; +2 R1 preventive tests
 for `land`-from-at-rest and `resolved`-from-committing, +1 R2
 preventive test for `pointercancel`-from-deciding, +1 R4 preventive
 test for the `reset`-from-intent race, +1 R4 preventive test for
-`interrupt` clearing the abandoned to-fields.)
+`interrupt` clearing the abandoned to-fields, +1 R7 preventive test
+for the `land`-then-`reset` wrapper-microtask flow.)
 
 ### 2026-07-05 - Audit-driven fixes (R1-R3)
 
@@ -456,6 +460,82 @@ the v2 rule):
   directly); in Cycle 3 the caller precomputes `direction` from the
   stack and the resolvers consume `direction`, not `stack`.
 
+### 2026-07-05 - R6 audit fixes (reversed docstring + test header + prose)
+
+Four corrections from the R6 round (one blocking concern per auditor,
+plus a borderline comment and a nitpick):
+
+- `IntentState.reversed` docstring (`nav-intent.ts`) rewritten: it is
+  read by the classifier's own pointerup case to choose the release
+  `micro`, and the resolver reads `micro` (not `reversed`) for
+  `progressDirection`. The prior wording claimed the resolver read
+  `reversed`, contradicting `progressDirectionFor`.
+- Test-suite header (`nav-state-machine-logic.test.ts`) now lists the
+  phase sequence the reducer actually produces
+  (at-rest -> intent -> transitioning -> landing) with a note that
+  `'resolving'` is reserved for Cycle 5 and never traversed.
+- Interrupt-reducer comment widened from "mid-commit" to
+  "mid-transition, during any transitioning sub" (the guard accepts
+  interrupt from dragging/committing/cancelling/scrubbing).
+- Journal lint section corrected: three of the 52 similar-type pairs DO
+  reference a `nav-*` type (`VelocitySample`/`PositionSample`/`Sample`,
+  transitory until Cycle 5; `BuildInput`/`CoordinatorInput` test
+  fixture). The gate still exits 0 (informational similar-pairs, not
+  type-duplicate errors).
+
+### 2026-07-05 - R7 audit fixes (classify docstring + CoordinatorInput + sweep)
+
+The owner clarified the v2 classification mid-R7: code-comment accuracy
+is ALWAYS a concern, never a borderline nitpick (only `.md` doc text is
+a nitpick). Recorded in
+`docs/DV20-Meeting/DV20-Cycle-Manager-Protocol-v2.md` and in memory.
+Two code-comment concerns fixed under the clarified rule:
+
+- `classify` behavior block (`nav-intent.ts`) rewritten: the `pointerup`
+  line claimed it cancels "if reversed and below the commit threshold,"
+  but the Layer 2 classifier cancels on `reversed` alone (no
+  commit-threshold concept; that lives in `swipe.ts`). The rewrite also
+  documents the no-op guards (`pointerup` from `deciding` returns to
+  `idle`; `pointercancel` from `idle`; targetless
+  `tap`/`goto`/`popstate`/`hashchange`).
+- `CoordinatorInput` docstring (`nav-coordinator.ts`) rewritten: names
+  exactly what `coordinate()` reads and states `fromPathname` is
+  carried for Cycle 4/5 and unread in Cycle 3 (was "Inputs the
+  coordinator reads").
+
+A grep-targeted sweep of the five layer files' aggregate docstrings
+found no further drift (the coordinator behavior block, the
+`tabTabResolver` tab-index read, the R4 stack docstrings, and the R6
+`reversed`/test-header fixes all hold). Added the `land`-then-`reset`
+test for the canonical wrapper-microtask flow.
+
+### 2026-07-05 - R8 audit fixes (resolved comment + isInFlight test + reset docstring)
+
+Three code-comment / test-accuracy concerns (auditor A found one,
+auditor B found two):
+
+- `resolved` case comment (`nav-state-machine-logic.ts`) now states
+  `dragging` is the default and `committing` is preserved on mid-commit
+  re-resolve (was "with sub `dragging`", under-describing the ternary).
+- `isInFlight` test rewritten and renamed to "every reachable
+  transitioning sub": it now branches to `cancelling` via
+  `cancel`-from-`dragging` (the prior `cancel`-from-`committing` step
+  was a no-op) and asserts each reachable sub's `macro.sub` value plus
+  `isInFlight === true`; `scrubbing` noted as unreachable in Cycle 3.
+- `reset()` method docstring (`nav-state-machine.svelte.ts`) rewritten:
+  it is a public boundary with no Cycle-3 caller (first-load/SSR use
+  the constructor's `initialOn`; `onLand` dispatches the reset event
+  directly); Cycle 5 may call it from the first-load/SSR wiring. Was
+  "used by the first-load landing and by the SSR initial render".
+
+Auditor A noted the R7 sweep grepped a fixed verb set and missed `used
+by`; I followed with a full read (not grep) of every method/case/
+interface/field docstring across the five files. The wrapper's `on*`
+methods describe their events without claiming callers, and their
+Cycle-3-unused status is documented at the block level
+(`nav-state-machine.svelte.ts:114-120`); `reset()` was the only
+outlier.
+
 ## Verification
 
 ### Unit tests (the four pure-half suites)
@@ -468,10 +548,10 @@ src/lib/stores/nav-state-machine-logic.test.ts`
 ```
 bun test v1.3.13 (bf2e2cec)
 
- 92 pass
+ 93 pass
  0 fail
- 210 expect() calls
-Ran 92 tests across 4 files. [29ms]
+ 217 expect() calls
+Ran 93 tests across 4 files. [40ms]
 ```
 
 Per-file counts (each ran individually during development):
@@ -479,17 +559,17 @@ Per-file counts (each ran individually during development):
 - `nav-intent.test.ts`: 26 pass / 0 fail / 49 expect() calls
 - `nav-resolvers.test.ts`: 32 pass / 0 fail / 82 expect() calls
 - `nav-coordinator.test.ts`: 10 pass / 0 fail / 18 expect() calls
-- `nav-state-machine-logic.test.ts`: 24 pass / 0 fail / 61 expect() calls
+- `nav-state-machine-logic.test.ts`: 25 pass / 0 fail / 68 expect() calls
 
 ### All src/lib unit tests
 
 Command: `bun test src/lib`
 
 ```
- 398 pass
+ 399 pass
  0 fail
- 1787 expect() calls
-Ran 398 tests across 25 files. [2.09s]
+ 1794 expect() calls
+Ran 399 tests across 25 files. [1.85s]
 ```
 
 No regressions in the existing 306 tests across the rest of `src/lib`.
@@ -517,14 +597,28 @@ Total similar type pairs found: 52
 ---EXIT 0
 ```
 
-The 52 similar-type pairs are pre-existing (none reference the new
-`nav-*` types at >=90% duplication). The new resolver functions
-`tabDetailResolver` / `tabSearchResolver` show 94.87% function-level
-similarity, which is informational only (per CLAUDE.md: "Function-level
-similarities are informational - auth guard patterns in API handlers
-are intentionally duplicated"). They share the cross-tag axis +
-buildFabPlan shape because they ARE the same animation family; the
-`header` plan body (the discriminating part) differs.
+The similarity-ts gate reports 52 similar-type pairs and exits 0 (type
+duplicates = 0; the 52 are informational similar-pairs, not gate
+failures). Three of the 52 DO reference a `nav-*` type at >=90%:
+
+- `VelocitySample` (`nav-intent.ts`) vs `PositionSample` (`swipe.ts`)
+  96%, and vs `Sample` (`swipe.test.ts`) 95%: the new Layer 2 intent
+  classifier and the existing `swipe.ts` action both track position+time
+  to compute a release velocity. This overlap is transitory; it
+  dissolves when Cycle 5 replaces `swipe.ts` with the unified pipeline.
+  Unifying now would couple the new pipeline to the old gesture code
+  and break shadow-mode isolation, so the duplication is held until the
+  cutover.
+- `BuildInput` (`nav-coordinator.test.ts`) vs `CoordinatorInput`
+  (`nav-coordinator.ts`) 92%: a test-fixture builder that mirrors its
+  input shape, not a duplication defect.
+
+The new resolver functions `tabDetailResolver` / `tabSearchResolver`
+show 94.87% function-level similarity, which is informational only (per
+CLAUDE.md: "Function-level similarities are informational - auth guard
+patterns in API handlers are intentionally duplicated"). They share the
+cross-tag axis + buildFabPlan shape because they ARE the same animation
+family; the `header` plan body (the discriminating part) differs.
 
 ### Shadow mode (no existing gesture component modified)
 
@@ -624,10 +718,90 @@ This section summarizes; the files are the source of truth.
   preventive test was added) and the R1 audit file's "87/87 after R1
   fixes" reconstruction drift (corrected to 89/89). Detailed in
   `docs/RV20-C03-Audit-05.md`.
+- **Round 6 (architect, 2-auditor, v2 classification): 0/2 PASS.** Both
+  auditors PASS-WITH-CONCERNS, each finding one independent code-comment
+  concern (different files). Auditor A: the `IntentState.reversed`
+  docstring claimed the resolver reads `reversed` for `progressDirection`,
+  but the resolver reads `intent.micro` and `reversed` is consumed only
+  by the classifier's pointerup case. Auditor B: the test-suite header
+  listed `resolving` in the produced phase sequence, but no Cycle-3
+  event produces it (reserved for Cycle 5). Both fixed: `reversed`
+  docstring rewritten to the classifier-internal role; test header now
+  lists the produced sequence (at-rest -> intent -> transitioning ->
+  landing). Auditor A also flagged the interrupt comment's breadth
+  ("mid-commit" -> "mid-transition, any sub"); tightened. Auditor B's
+  nitpick on the similar-pairs prose was accurate and also fixed: three
+  of the 52 pairs DO reference a `nav-*` type (VelocitySample/
+  PositionSample/Sample transitory until Cycle 5; BuildInput/
+  CoordinatorInput test-fixture); the journal's lint section now
+  enumerates them. Detailed in `docs/RV20-C03-Audit-06.md`.
+- **Round 7 (architect, 2-auditor, v2 classification): not clean.**
+  Mid-round the owner clarified the classification: code-comment
+  accuracy is ALWAYS a concern (no borderline), only `.md` doc text is
+  a nitpick. Under that rule R7 has two concerns. Auditor B (FAIL): the
+  `classify` docstring's `pointerup` line claimed a "commit threshold"
+  the Layer 2 classifier does not have (it cancels on `reversed` alone;
+  the threshold lives in `swipe.ts`). Auditor A returned PASS but had
+  misclassified `CoordinatorInput.fromPathname` ("Inputs the coordinator
+  reads" while unread) as a borderline nitpick; reclassified, it is a
+  concern. Both fixed: `classify` behavior block rewritten to match the
+  code (incl. the no-op guards); `CoordinatorInput` docstring now names
+  exactly what `coordinate()` reads and marks `fromPathname` carried for
+  Cycle 4/5. A grep-targeted sweep of the other aggregate docstrings
+  found no further drift. Added the `land`-then-`reset` test. Detailed
+  in `docs/RV20-C03-Audit-07.md`.
+- **Round 8 (architect, 2-auditor, v2 no-borderline classification):
+  0/2 PASS.** Three code-comment / test-accuracy concerns. Auditor A
+  (PASS-WITH-CONCERNS): `NavStateMachine.reset()` docstring claimed it
+  is "used by the first-load landing and by the SSR initial render" but
+  has zero production callers (those paths use the constructor's
+  `initialOn`; `onLand` dispatches reset directly). Auditor B (FAIL):
+  the `resolved` case comment said "with sub `dragging`" but the
+  ternary preserves `committing` on mid-commit re-resolve; and the
+  `isInFlight` test name claimed "every transitioning sub-phase" but
+  its `cancel` step ran from `committing` (a no-op), so `cancelling`
+  was never asserted. All fixed: resolved comment expanded; `isInFlight`
+  test rewritten to traverse `cancelling` via cancel-from-dragging and
+  assert each reachable sub; `reset()` docstring rewritten as a no-
+  Cycle-3-caller boundary. Auditor A correctly noted the R7 sweep
+  missed `used by` (fixed verb set); I followed with a full docstring
+  read across all five files. Detailed in `docs/RV20-C03-Audit-08.md`.
+- **Round 9 (architect, 2-auditor, v2 no-borderline): 0/2 PASS.** Four
+  concerns. Auditor A (FAIL): three module-level (top-of-file)
+  docstrings described Cycle 4/5 integration in the present tense
+  without a Cycle-3 qualifier - `nav-intent.ts` ("the orchestrator
+  subscribes..."), `nav-coordinator.ts` ("the orchestrator wires... at
+  runtime"), `nav-state-machine-logic.ts` ("owns interruption (a new
+  intent; a popstate; a failed preload)"). The R8 sweep covered
+  method/case/interface/field docstrings but not module-level. Auditor
+  B (FAIL): the test at `nav-state-machine-logic.test.ts:315` was named
+  "the plan set on resolved is the plan returned by land" but the body
+  never dispatches `land`. All fixed: the three module docstrings
+  qualified with Cycle-3 shadow-mode scope; the test renamed.
+  Proactively also fixed `nav-resolvers.ts` module docstring (same
+  present-tense integration claims, not flagged but same pattern). R9
+  read module-level docstrings across the five files (the category the
+  R8 sweep had missed); the function/interface levels were sampled, not
+  exhausted, which is why R10 still found function/interface drift.
+  Detailed in `docs/RV20-C03-Audit-09.md`.
+- **Round 10 (architect, 2-auditor, v2 no-borderline): split, not
+  clean.** Auditor A FAIL with five code-comment concerns; auditor B
+  PASS. A was the more thorough reader (B missed all five). Four
+  concerns were function/interface docstrings describing Cycle 4/5
+  integration in the present tense (`ResolvedTarget`,
+  `intentTarget`, `coordinate`, `isCommitting`); the fifth (C1) was a
+  factual import error the R9 proactive fix introduced (claimed the
+  orchestrator imports "only TransitionPlan" when the wrapper imports
+  `TransitionDirection` too). All five fixed. The post-R10 sweep then
+  grep-plus-read every function/interface docstring and fixed four
+  more unflagged current-use claims (`nav-intent.ts` "reads each
+  frame" / "applies side effects" / "resolves into a pair";
+  `progressDirectionFor`). Auditor B's nitpick (Design/Investigation
+  prose "reads `entries[length-2]`") was also corrected. Detailed in
+  `docs/RV20-C03-Audit-10.md`.
 
-Consecutive pass votes: **2** (R5 was the first round with zero
-concerns from both auditors; R1-R4 each had at least one blocking
-concern).
+Consecutive pass votes: **0** (R10 split; A's five concerns reset the
+counter).
 
 ## Coverage
 

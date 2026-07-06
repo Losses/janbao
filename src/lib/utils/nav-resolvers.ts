@@ -4,11 +4,13 @@
  * and the six tag-pair resolvers.
  *
  * Per `docs/DV20-Plan.md` §4: a pure function
- * `resolve(intent, stack, route-data) -> TransitionPlan`. The
- * orchestrator (Layer 1) selects the resolver by the (from-tag, to-tag)
- * pair of the current transition. Each pair has one resolver because
- * the two directions of a pair share one animation played forward or
- * in reverse.
+ * `resolve(input: ResolverInput) -> TransitionPlan` (the spec's
+ * conceptual `(intent, stack, route-data)` is bundled into
+ * `ResolverInput`). The orchestrator (Layer 1) selects the resolver by
+ * the (from-tag, to-tag) pair of the current transition. Each pair has
+ * one resolver because the two directions of a pair share one animation
+ * played forward or in reverse. In Cycle 3 shadow mode the dispatch is
+ * exercised by the unit suite; the orchestrator wires it in Cycle 5.
  *
  * Six pairs for three tags (`tab`, `detail`, `search`):
  *
@@ -29,8 +31,10 @@
  * resolved ONCE per gesture (FROM and TO locked at gesture start); the
  * live offset streams separately to the executor (Cycle 4).
  *
- * Pure (runes-free). Imported by the orchestrator and by its own unit
- * suite. No DOM reads or writes.
+ * Pure (runes-free). The orchestrator imports the `TransitionPlan` and
+ * `TransitionDirection` types from this module (the wrapper imports
+ * both; the reducer imports `TransitionPlan`); the dispatch itself is
+ * exercised by this module's own unit suite. No DOM reads or writes.
  */
 
 import type { RouteData, RouteTag } from './route-data';
@@ -216,9 +220,9 @@ function crossTagAxis(direction: TransitionDirection): PageTrackAxis {
 }
 
 /** progressDirection: 0 when the gesture will land on TO (commit); 1
- *  when the gesture was cancelled (snap back to FROM). The resolver
- *  reads `intent.micro` at gesture start; the orchestrator may pass a
- *  cancelled intent through to produce the retract plan. */
+ *  when the gesture was cancelled (snap back to FROM). Reads
+ *  `intent.micro`; a cancelled intent yields the retract plan. In
+ *  Cycle 3 shadow mode this is exercised only by the unit suite. */
 function progressDirectionFor(intent: IntentState): ProgressDirection {
 	return intent.micro === 'cancelled' ? 1 : 0;
 }

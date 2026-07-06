@@ -1,11 +1,13 @@
 // src/lib/stores/nav-state-machine-logic.test.ts
 /**
  * Unit suite for the Layer 1 orchestrator reducer
- * (nav-state-machine-logic.ts). Covers the macro phase transitions
- * (at-rest -> intent -> resolving -> transitioning -> landing),
- * interruption, cancellation, landing, and reset. The reducer is
- * total; the suite also asserts that out-of-sequence events are
- * no-ops.
+ * (nav-state-machine-logic.ts). Covers the macro phase transitions the
+ * reducer actually produces (at-rest -> intent -> transitioning ->
+ * landing); `'resolving'` is in `MacroPhaseKind` but reserved for Cycle
+ * 5, so no Cycle-3 event produces it and this suite never traverses it.
+ * Also covers interruption, cancellation, landing, and reset. The
+ * reducer is total; the suite also asserts that out-of-sequence events
+ * are no-ops.
  *
  * The reducer is pure so the suite runs under `bun:test` with no
  * Svelte runes loader.
@@ -248,6 +250,19 @@ describe('reducer: landing and reset', () => {
 		expect(s1.activePlan).toBeNull();
 	});
 
+	test('land then reset reaches at-rest (the wrapper microtask flow)', () => {
+		const s0 = initialOrchestratorState('deep');
+		const s1 = reduce(s0, intentEvent(), NOW);
+		const s2 = reduce(s1, resolvedEvent(), NOW + 10);
+		const s3 = reduce(s2, { type: 'commit' }, NOW + 20);
+		const s4 = reduce(s3, { type: 'land', on: 'tab' }, NOW + 30);
+		expect(s4.macro.kind).toBe('landing');
+		const s5 = reduce(s4, { type: 'reset', on: 'tab' }, NOW + 40);
+		expect(isAtRest(s5)).toBe(true);
+		expect(s5.macro.on).toBe('tab');
+		expect(s5.activePlan).toBeNull();
+	});
+
 	test('resolved from transitioning/committing preserves committing sub', () => {
 		const s0 = initialOrchestratorState('deep');
 		const s1 = reduce(s0, intentEvent(), NOW);
@@ -277,20 +292,27 @@ describe('reducer: totality (out-of-sequence events are no-ops)', () => {
 		expect(s4).toBe(s3);
 	});
 
-	test('isInFlight is true for every transitioning sub-phase', () => {
+	test('isInFlight is true for every reachable transitioning sub', () => {
+		// `scrubbing` is unreachable in Cycle 3 (no event produces it);
+		// the three reachable subs are dragging, committing, cancelling.
 		const s0 = initialOrchestratorState('deep');
 		const s1 = reduce(s0, intentEvent(), NOW);
 		const s2 = reduce(s1, resolvedEvent(), NOW + 10);
+		expect(s2.macro.sub).toBe('dragging');
 		expect(isInFlight(s2)).toBe(true);
 		const s3 = reduce(s2, { type: 'commit' }, NOW + 20);
+		expect(s3.macro.sub).toBe('committing');
 		expect(isInFlight(s3)).toBe(true);
-		const s4 = reduce(s3, { type: 'cancel' }, NOW + 30);
+		// cancelling is reached by cancel-from-dragging (cancel from
+		// committing is a no-op, so branch from s2, not s3).
+		const s4 = reduce(s2, { type: 'cancel' }, NOW + 30);
+		expect(s4.macro.sub).toBe('cancelling');
 		expect(isInFlight(s4)).toBe(true);
 	});
 });
 
 describe('reducer: plan carry-through', () => {
-	test('the plan set on resolved is the plan returned by land', () => {
+	test('the plan set on resolved is preserved through commit', () => {
 		const s0 = initialOrchestratorState('deep');
 		const s1 = reduce(s0, intentEvent(), NOW);
 		const s2 = reduce(s1, resolvedEvent(), NOW + 10);
