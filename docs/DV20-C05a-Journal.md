@@ -59,7 +59,7 @@ Plus unit tests for each, runnable under `bun:test`.
 - Cutting over `MobileTabPager` / `GesturePageLayout` / `swipe.ts` /
   `DualColumnLayout` to the unified state-driven track. That is 5b.
 - Refactoring the lifecycle-adjacent stores (`viewport-lock`,
-  `scroll-chrome`, `active-gesture-track`, `page-scroll`) into
+  `scroll-chrome`, `active-gesture-track`) into
   lifecycle hooks. That is 5b.
 - Removing `backParent` from `RouteData`. That is 5b.
 - The e2e suite that samples `getComputedStyle` trajectories. That is 5c.
@@ -157,7 +157,6 @@ No modification of:
 - `src/lib/stores/viewport-lock.svelte.ts`.
 - `src/lib/stores/scroll-chrome.svelte.ts`.
 - `src/lib/stores/active-gesture-track.svelte.ts`.
-- `src/lib/stores/page-scroll.svelte.ts` (if present).
 - `src/lib/utils/nav-dom-driver.ts` (the interface is unchanged).
 - `src/lib/stores/nav-executor.svelte.ts` (consumer is unchanged).
 - Any route or layout.
@@ -263,8 +262,8 @@ new files returns no matches. No route, layout, executor, or
 gesture-component file imports the new modules. The existing
 `MobileTabPager.svelte`, `GesturePageLayout.svelte`, `swipe.ts`,
 `DualColumnLayout`, and the lifecycle-adjacent stores
-(`viewport-lock`, `scroll-chrome`, `active-gesture-track`,
-`page-scroll`) are unchanged.
+(`viewport-lock`, `scroll-chrome`, `active-gesture-track`) are
+unchanged.
 
 ### Deviations from the spec
 
@@ -416,10 +415,45 @@ section summarizes; the files are the source of truth.
   fix I did an exhaustive end-to-end docstring read (not grep) of all
   three source files; every docstring is now accurate and Cycle-5a-
   qualified. Detailed in `docs/RV20-C05a-Audit-04.md`.
+- **Round 5 (architect, 2-auditor, v2 no-borderline): 2/2 PASS.** Both
+  auditors PASS with zero concerns - the first clean round, on the
+  post-R4 state (after the exhaustive end-to-end docstring read of all
+  three source files). Both verified all invariants and every R1-R4 fix
+  site. (R5 ran on a directive prompt that listed specific
+  comment-accuracy patterns to verify; the owner later flagged that as
+  narrowing - see R6.) Detailed in `docs/RV20-C05a-Audit-05.md`.
+- **Round 6 (architect, 2-auditor, v2 no-borderline, CLEAN prompt):
+  split.** First round with the clean protocol prompt (no `Verify X`
+  checklist, no defect-pattern hints), after the owner flagged the
+  R1-R5 prompts as narrowing. Auditor B PASS; auditor A FAIL with one
+  concern the directive prompts had downplayed: three `.ts` comments
+  listed `page-scroll` as a lifecycle-adjacent store for 5b to migrate,
+  but `page-scroll.svelte.ts` was deleted in Cycle 2 (unified into
+  `PageCacheStore`). R5-B had called this a non-blocking observation;
+  the clean-prompt R6-A correctly reclassified it as a blocking concern
+  (inaccurate `.ts` comment). Fixed: dropped `page-scroll` from all
+  three `.ts` parentheticals (the migrate list is the three existing
+  stores). The matching `.md` references (spec + journal) also
+  corrected; Plan §8 line 213 is the stale root and is flagged for the
+  architect. Detailed in `docs/RV20-C05a-Audit-06.md`.
+- **Round 7 (architect, 2-auditor, clean prompt): 2/2 PASS.** Both
+  auditors PASS with zero concerns - the first clean round on the new
+  streak (R6 broke R5's). Both flagged one identical `.md` nitpick: the
+  journal's "Shadow-mode check ... unchanged" enumeration (line 266)
+  still listed `page-scroll` - the R6 `replace_all` had dropped it from
+  single-line lists but missed this one (it was split across two lines).
+  Fixed. Both verified all invariants and all R1-R6 `.ts` fix sites
+  hold. Detailed in `docs/RV20-C05a-Audit-07.md`.
+- **Round 8 (architect, 2-auditor, clean prompt): 2/2 PASS.** Both
+  auditors PASS with zero concerns. Both re-read every docstring
+  end-to-end, verified all R1-R7 fix sites hold, no `page-scroll` in any
+  `.ts` file, all invariants, structural-typing assignability, spec
+  deliverables cross-check. Detailed in `docs/RV20-C05a-Audit-08.md`.
 
-Consecutive pass votes: **0** (R4 split by timing; A's concern reset the
-counter. The implementation invariants have been auditor-verified clean
-across R1-R4; the docstring surface is now exhaustively swept).
+Consecutive pass votes: **4** (R7 + R8; R6-A's `page-scroll` concern
+reset R5's earlier streak of 2. The implementation logic has been
+auditor-verified clean across R1-R8; the clean prompt is in use from R6
+on).
 
 ## Coverage bullets (round-independent)
 
@@ -483,7 +517,7 @@ Each bullet says what the suite covers; the per-round audit files at
   (`MobileTabPager.svelte`, `GesturePageLayout.svelte`) and the root
   layout. 5b.
 - Migrating the lifecycle-adjacent stores (`viewport-lock`,
-  `scroll-chrome`, `active-gesture-track`, `page-scroll`) to register
+  `scroll-chrome`, `active-gesture-track`) to register
   their html-singleton releases via `registerTeardown` and to construct
   an `HtmlSingletonClassController` each. 5b.
 - Wiring `LiveNavDomDriver` into the executor shell

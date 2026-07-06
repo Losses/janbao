@@ -11,7 +11,7 @@ Build the two NEW modules the cutover (5b) will plug in, in shadow mode:
 1. The `PageLifecycle` contract: the four-phase `mount` / `activate` / `deactivate` / `unmount` interface plus a layout-level controller that owns the phase transitions, the refcount-with-microtask-deferral pattern (the template for any `html`-level singleton, mirroring the existing `viewport-lock` refcount), and the SSR-teardown guard (so `unmount` is the single place html-singleton classes are removed, eliminating the `svelte-ondestroy-runs-in-ssr` trap at the source).
 2. The real `NavDomDriver` implementation: implements the Cycle-4 `NavDomDriver` interface (`write(NavVisualWrite)` + `prefersReducedMotion()`), proxying the live page-track / FAB / Header elements and reading `matchMedia('(prefers-reduced-motion: reduce)')`.
 
-Both are NEW files. The existing gesture components and the lifecycle-adjacent stores (`viewport-lock`, `scroll-chrome`, `active-gesture-track`, `page-scroll`) are NOT modified (their refactor into lifecycle hooks is 5b). The executor is NOT wired to the real driver (5b). Shadow mode.
+Both are NEW files. The existing gesture components and the lifecycle-adjacent stores (`viewport-lock`, `scroll-chrome`, `active-gesture-track`) are NOT modified (their refactor into lifecycle hooks is 5b). The executor is NOT wired to the real driver (5b). Shadow mode.
 
 ## Background
 
@@ -28,7 +28,7 @@ Both are NEW files. The existing gesture components and the lifecycle-adjacent s
 
 ## Constraints
 
-- **Shadow mode.** Do NOT wire the lifecycle or the real driver into any route, layout, or the executor. Do NOT modify `MobileTabPager.svelte`, `GesturePageLayout.svelte`, `swipe.ts`, `DualColumnLayout`, or the lifecycle-adjacent stores (`viewport-lock`, `scroll-chrome`, `active-gesture-track`, `page-scroll`). Those are 5b.
+- **Shadow mode.** Do NOT wire the lifecycle or the real driver into any route, layout, or the executor. Do NOT modify `MobileTabPager.svelte`, `GesturePageLayout.svelte`, `swipe.ts`, `DualColumnLayout`, or the lifecycle-adjacent stores (`viewport-lock`, `scroll-chrome`, `active-gesture-track`). Those are 5b.
 - **No behavior change.** The existing system is untouched. No e2e regressions.
 - **Testable under `bun:test`.** The lifecycle's phase machine is pure (or pure-half split); the live driver is tested with stub elements (object with a `style` bag) and an injectable element-resolver/matchMedia so no real DOM is required.
 - **The refcount-with-microtask-deferral invariant** (memory `viewport-lock-refcount-pattern`): an html-singleton class is added on the first ref and removed on a microtask after the last ref, so a same-tick remove+add does not flicker.

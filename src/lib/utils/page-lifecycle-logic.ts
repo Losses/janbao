@@ -20,8 +20,8 @@
  * The unit suite exercises the reducer, the refcount helper, and the
  * unmount planner directly. Cycle 5b wires the lifecycle into the
  * gesture components and migrates the lifecycle-adjacent stores
- * (`viewport-lock`, `scroll-chrome`, `active-gesture-track`,
- * `page-scroll`) to register their html-singleton releases here.
+ * (`viewport-lock`, `scroll-chrome`, `active-gesture-track`) to
+ * register their html-singleton releases here.
  */
 
 import type { VoidHandler } from '$lib/types/handlers';

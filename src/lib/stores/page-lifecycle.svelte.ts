@@ -23,8 +23,8 @@
  * the unit suite covers the pure half directly. Cycle 5b wires this
  * controller into the gesture components and migrates the
  * lifecycle-adjacent stores (`viewport-lock`, `scroll-chrome`,
- * `active-gesture-track`, `page-scroll`) to register their
- * html-singleton releases via `registerTeardown`.
+ * `active-gesture-track`) to register their html-singleton releases
+ * via `registerTeardown`.
  */
 
 import { browser } from '$app/environment';
@@ -118,9 +118,9 @@ export class PageLifecycleController {
 	 *  teardown registered here is SSR-safe without a per-call
 	 *  `if (!browser)` guard (memory: `svelte-ondestroy-runs-in-ssr`).
 	 *  In Cycle 5b the lifecycle-adjacent stores (`viewport-lock`,
-	 *  `scroll-chrome`, `active-gesture-track`, `page-scroll`) will
-	 *  each register their html-singleton release here; in Cycle 5a
-	 *  shadow mode no caller registers. */
+	 *  `scroll-chrome`, `active-gesture-track`) will each register
+	 *  their html-singleton release here; in Cycle 5a shadow mode no
+	 *  caller registers. */
 	registerTeardown(fn: VoidHandler): void {
 		this.#teardowns.push(fn);
 	}

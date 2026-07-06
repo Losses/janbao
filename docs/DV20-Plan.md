@@ -210,7 +210,7 @@ This dissolves the documented cache bugs at the class level: back-to-back thread
 
 A four-phase contract owned by the layout that mounts the gesture surface, honoured uniformly across tabs and deep pages: `mount` (SSR + hydrate; no listeners, no store writes), `activate` (DOM bound; acquire locks, publish the gesture track, register the scroll source), `deactivate` (navigation away committed; stop publishing; hold locks through the swap), `unmount` (release locks, cancel rAFs, clear cross-page publications).
 
-The lifecycle-adjacent stores (`viewport-lock`, `scroll-chrome`, `active-gesture-track`, `page-scroll`) become lifecycle hooks. The refcount-with-microtask-deferral pattern (already used by `viewport-lock`) is the template for any html-level singleton. SSR teardown guards move from per-call `if (!browser)` to the lifecycle module's `unmount`, eliminating the `svelte-ondestroy-runs-in-ssr` trap at the source.
+The lifecycle-adjacent stores (`viewport-lock`, `scroll-chrome`, `active-gesture-track`) become lifecycle hooks. The refcount-with-microtask-deferral pattern (already used by `viewport-lock`) is the template for any html-level singleton. SSR teardown guards move from per-call `if (!browser)` to the lifecycle module's `unmount`, eliminating the `svelte-ondestroy-runs-in-ssr` trap at the source.
 
 ## 9. SvelteKit interop, nested pagers, edge cases
 
