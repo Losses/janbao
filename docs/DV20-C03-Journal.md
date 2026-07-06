@@ -1,5 +1,15 @@
 # DV20 Cycle 3 Journal
 
+> **Cycle status: COMPLETE (closed 2026-07-05 by architect decision,
+> R10).** The four layers are built in shadow mode, all gates green
+> (93/93 unit tests, check 0, lint 0), and the logic has been
+> auditor-confirmed correct since R5. R6-R10 surfaced only
+> docstring-precision concerns (23 fixed across the five layer files);
+> the residual drift describes Cycle 4/5 integration that becomes
+> accurate when the pipeline is wired (Cycle 5). The architect closed
+> the cycle rather than continue spending auditor rounds on
+> aspirational-comment precision; see `RV20-C03-Audit-{01..10}.md`.
+
 Implementation record for CMA3. Per the Cycle Manager Protocol v2 this
 journal is written incrementally; it records what actually happened
 (investigation, design, files changed, verification evidence,
