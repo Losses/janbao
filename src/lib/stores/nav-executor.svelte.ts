@@ -40,6 +40,7 @@ import {
 	interrupt,
 	publishFrame,
 	sampleFrame,
+	shouldScheduleRaf,
 	startCommit,
 	type ExecutorState
 } from '$lib/utils/nav-executor-logic';
@@ -87,8 +88,9 @@ function defaultNow(): number {
 }
 
 /** The Layer 5 executor reactive shell. Holds the executor's
- *  `$state<ExecutorState>` and drives it from the orchestrator's
- *  phase events through the boundary methods. */
+ *  `$state<ExecutorState>`. In the integrated pipeline the orchestrator
+ *  drives it through the boundary methods; in Cycle 4 shadow mode the
+ *  boundary methods have no production caller (Cycle 5 wires them). */
 export class NavExecutor {
 	#state = $state<ExecutorState>(initialExecutorState());
 	#plan = $state<TransitionPlan | null>(null);
@@ -101,8 +103,10 @@ export class NavExecutor {
 		this.#now = opts.now ?? defaultNow;
 	}
 
-	/** Reactive read of the executor state record. Consumers read
-	 *  fields off this in a `$derived` to register as dependents. */
+	/** Reactive read of the executor state record. In the integrated
+	 *  pipeline consumers read fields off this in a `$derived` to
+	 *  register as dependents; in Cycle 4 shadow mode there is no
+	 *  consumer (Cycle 5 wires them). */
 	get state(): ExecutorState {
 		return this.#state;
 	}
@@ -113,8 +117,10 @@ export class NavExecutor {
 		return this.#plan;
 	}
 
-	/** Convenience reactive read of the current progress. Consumers
-	 *  that only care about progress read this in a `$derived`. */
+	/** Convenience reactive read of the current progress. In the
+	 *  integrated pipeline consumers that only care about progress read
+	 *  this in a `$derived`; in Cycle 4 shadow mode there is no
+	 *  consumer. */
 	get progress(): number {
 		return this.#state.progress;
 	}
@@ -205,12 +211,11 @@ export class NavExecutor {
 	// -----------------------------------------------------------------------
 	// Internal: rAF scheduling + publish.
 
-	/** Schedule the rAF if we are in the browser. The SSR gate is the
-	 *  `browser` flag from `$app/environment`; the rAF never runs
-	 *  during SSR. */
+	/** Schedule the rAF when `shouldScheduleRaf` permits. The SSR gate
+	 *  (the `browser` flag from `$app/environment`) and the single-flight
+	 *  guard live in that pure helper so they have unit coverage. */
 	#ensureRaf(): void {
-		if (!browser) return;
-		if (this.#rafId !== null) return;
+		if (!shouldScheduleRaf(browser, this.#rafId !== null)) return;
 		this.#rafId = requestAnimationFrame(this.#tick);
 	}
 

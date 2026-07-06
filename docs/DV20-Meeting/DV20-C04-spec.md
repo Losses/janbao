@@ -1,6 +1,6 @@
 # DV20 Cycle 4 Spec: All-rAF executor + velocity-matched commit (Layer 5)
 
-**Architect:** the document owner. **Executor:** the Cycle 4 Manager Agent (CMA4). **Protocol:** `docs/DV20-Meeting/DV20-Cycle-Manager-Protocol-v2.md` (v2, binding, no-borderline classification). **Status:** draft, awaiting architect sign-off on the scope question below before CMA4 starts.
+**Architect:** the document owner. **Executor:** the Cycle 4 Manager Agent (CMA4). **Protocol:** `docs/DV20-Meeting/DV20-Cycle-Manager-Protocol-v2.md` (v2, binding, no-borderline classification). **Status:** COMPLETE. Closed 2026-07-06 at R6 (2/2 PASS) after running past the architect's R5 floor: R3 (missing SSR-gate test) and R5 (missing `<= 0` branch tests) were substantive missing-test concerns, closed with extracted/injected helpers + tests; R6 confirmed both auditors clean on the post-fix state. The scope recommendation below (shadow mode) was followed. Per-round detail in `docs/RV20-C04-Audit-{01..06}.md`.
 
 ## Scope question (architect decides before CMA4 starts)
 

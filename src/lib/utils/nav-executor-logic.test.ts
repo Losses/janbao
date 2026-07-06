@@ -16,7 +16,9 @@
  *     settle to target).
  *   - Interruption handoff (no jump: visual continuity across
  *     interrupt -> new live drag).
- *   - SSR / idle no-ops: sampleFrame on idle state is a no-op;
+ *   - SSR + single-flight gate (`shouldScheduleRaf`): false in SSR and
+ *     when a rAF is already in flight.
+ *   - idle no-ops: sampleFrame on idle state is a no-op;
  *     initialExecutorState is idle.
  */
 
@@ -33,6 +35,7 @@ import {
 	interrupt,
 	publishFrame,
 	sampleFrame,
+	shouldScheduleRaf,
 	solveCommitDuration,
 	startCommit,
 	tickFrame,
@@ -252,6 +255,27 @@ describe('solveCommitDuration: velocity-to-duration mapping', () => {
 		// progressDirection = 0 (committing toward 1), current progress = 0.5,
 		// release velocity negative (moving leftward while committing rightward).
 		const result = solveCommitDuration(baseCommitInput({ releaseVelocityPxPerMs: -2 }), 0.5);
+		expect(result.durationMs).toBe(COMMIT_T_DEFAULT_MS);
+	});
+
+	test('progress already at target falls back to COMMIT_T_DEFAULT_MS (enforces the <= choice)', () => {
+		// progressDirection = 0 (commit, target = 1), currentProgress = 1
+		// (already at target): directionSign === 0, so the `<= 0` branch
+		// fires and routes to T_DEFAULT (300ms). The `<=` (not `<`) is
+		// load-bearing: `<` would let this fall through to the solve and
+		// clamp to T_MIN (100ms). This test pins the choice.
+		const result = solveCommitDuration(baseCommitInput({ releaseVelocityPxPerMs: 2 }), 1);
+		expect(result.durationMs).toBe(COMMIT_T_DEFAULT_MS);
+	});
+
+	test('reversed cancel velocity falls back to COMMIT_T_DEFAULT_MS', () => {
+		// progressDirection = 1 (cancel, target = 0), currentProgress = 0.5,
+		// release velocity positive (moving rightward while the cancel
+		// targets 0 = leftward): directionSign = -1, progressVelocity > 0,
+		// so directionSign * progressVelocity <= 0 fires. The branch is
+		// plan-agnostic; this mirrors the commit-direction reversal above.
+		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 1 });
+		const result = solveCommitDuration(baseCommitInput({ releaseVelocityPxPerMs: 2, plan }), 0.5);
 		expect(result.durationMs).toBe(COMMIT_T_DEFAULT_MS);
 	});
 
@@ -490,11 +514,15 @@ describe('interruption handoff (no jump)', () => {
 		expect(interrupt(live)).toBe(live);
 	});
 
-	test('visual continuity: visual at interrupt == visual at first new-drag frame', () => {
-		// The "no jump" guarantee: when the orchestrator hands the
-		// executor's interrupted progress back as the new drag's first
-		// progress, the visual is identical to the one published at
-		// the moment of interrupt.
+	test('page-track continuity at interrupt (no jump in the progress-driven consumer)', () => {
+		// The "no jump" guarantee for the progress-driven consumer:
+		// when the orchestrator hands the executor's interrupted
+		// progress back as the new drag's first progress, the page-track
+		// translate is identical to the one published at the moment of
+		// interrupt. FAB/Header consumers depend on liveOffset, which
+		// legitimately changes with the new drag (0 -> 25 here), so they
+		// are NOT part of this assertion; only the progress-driven page
+		// track is verified.
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
 		const driver = new MockNavDomDriver();
 		const state = startCommit(
@@ -518,9 +546,8 @@ describe('interruption handoff (no jump)', () => {
 		});
 		publishFrame(newDrag, plan, driver);
 		const visualAtNewDrag = driver.writes[driver.writes.length - 1];
-		// The page-track translate is the same; only the liveOffset
-		// difference shows up in the consumer functions (and the stub
-		// ignores liveOffset for the page track).
+		// The page-track translate is unchanged across the handoff (the
+		// liveOffset-driven FAB/Header consumers legitimately differ).
 		expect(visualAtNewDrag.pageTrack.translateX).toBeCloseTo(
 			visualAtInterrupt?.pageTrack.translateX ?? NaN,
 			5
@@ -555,5 +582,16 @@ describe('reduced-motion end-to-end', () => {
 		// phase idle: sampleFrame is a no-op, the shell would stop the rAF.
 		expect(next.phase).toBe('idle');
 		expect(sampleFrame(next, plan, 100).done).toBe(true);
+	});
+});
+
+describe('shouldScheduleRaf', () => {
+	test('schedules only in the browser with no rAF in flight', () => {
+		expect(shouldScheduleRaf(true, false)).toBe(true);
+		// single-flight: a rAF already in flight is not rescheduled.
+		expect(shouldScheduleRaf(true, true)).toBe(false);
+		// SSR: no requestAnimationFrame available.
+		expect(shouldScheduleRaf(false, false)).toBe(false);
+		expect(shouldScheduleRaf(false, true)).toBe(false);
 	});
 });

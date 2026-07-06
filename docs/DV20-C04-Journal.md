@@ -1,5 +1,14 @@
 # DV20 Cycle 4 Journal
 
+> **Cycle status: COMPLETE (closed 2026-07-06 at R6, 2/2 PASS).** The
+> five new Layer-5 files are built in shadow mode, all gates green
+> (43/43 unit tests, check 0, lint 0), and the implementation was
+> auditor-verified clean across R1-R6. The cycle ran past the
+> architect's R5 floor because R3 (missing SSR-gate test) and R5
+> (missing `<= 0` branch tests) were substantive missing-test concerns;
+> those were closed and R6 confirmed both auditors clean. Per-round
+> detail in `docs/RV20-C04-Audit-{01..06}.md`.
+
 Implementation record for CMA4. Per the Cycle Manager Protocol v2 this
 journal is written incrementally; it records what actually happened
 (investigation, design, files changed, verification evidence,
@@ -109,13 +118,12 @@ Layer 5 of the five-layer pipeline, NEW files in shadow mode:
    driver declares only `write` and `prefersReducedMotion`.
 5. **Phase kinds local to the executor.** The executor's pure state
    carries its own phase (`'idle' | 'live' | 'committing'`) which is a
-   strict subset of the orchestrator's sub-phases (`dragging`/
+   projection of the orchestrator's state, not a subset (`dragging`/
    `scrubbing` -> `'live'`, `committing`/`cancelling` -> `'committing'`;
    outside transitioning the executor rests at `'idle'`). The
    orchestrator's record stays the authority for the broader navigation;
    the executor's local phase tracks only what its rAF loop needs to
-   know (whether to sample a commit frame
-   or to idle).
+   know (whether to sample a commit frame or to idle).
 6. **No new eslint-disable, no `as any`, no `as unknown`.** All types
    are named interfaces or named union types per the project lint
    gate. No inline object type literals.
@@ -299,7 +307,7 @@ wrong-direction velocity fall back to `T_DEFAULT`. Reduced motion snaps
 
 ### 2026-07-05 - Pure-half unit suite built
 
-`src/lib/utils/nav-executor-logic.test.ts`: 33 tests across eight
+`src/lib/utils/nav-executor-logic.test.ts`: 36 tests across nine
 describe blocks: `buildVisual` (axis sign convention, FAB/Header
 pass-through), `initialExecutorState + applyDrag`, `solveCommitDuration`
 (velocity-to-duration mapping: near-zero fallback, fast < slow, clamp
@@ -353,27 +361,27 @@ src/lib/utils/nav-executor-logic.test.ts`
 ```
 bun test v1.3.13 (bf2e2cec)
 
- 40 pass
+ 43 pass
  0 fail
- 135 expect() calls
-Ran 40 tests across 2 files. [37.00ms]
+ 141 expect() calls
+Ran 43 tests across 2 files. [40ms]
 ```
 
 Per-file: `nav-dom-driver.test.ts` 7 pass / 0 fail; `nav-executor-
-logic.test.ts` 33 pass / 0 fail.
+logic.test.ts` 36 pass / 0 fail.
 
 ### All src/lib unit tests (regression check)
 
 Command: `bun test src/lib`
 
 ```
-439 pass
+442 pass
  0 fail
-1929 expect() calls
-Ran 439 tests across 27 files. [1.96s]
+1935 expect() calls
+Ran 442 tests across 27 files. [1.80s]
 ```
 
-399 pre-existing + 40 new = 439. No regressions in the existing suites.
+399 pre-existing + 43 new = 442. No regressions in the existing suites.
 
 ### Typecheck
 
@@ -503,9 +511,80 @@ architect's audit proceeds; the CMA does not run its own audit
   invariant, reduced-motion snap, interruption, SSR gate, no DOM
   read-back, shadow mode, all 18 Cycle-5 references qualified). Detailed
   in `docs/RV20-C04-Audit-02.md`.
+- **Round 3 (architect, 2-auditor, v2 no-borderline): 0/2 PASS.** Four
+  unique concerns. Three code-comment accuracy (auditor A: the wrong-
+  direction fallback comment said "the cancel" but the branch is plan-
+  agnostic; auditor B: the `state`/`progress` getter docstrings use
+  present-tense "Consumers read" with no Cycle-4 qualifier, and the test
+  header labelled the idle no-op as "SSR"). One substantive (auditor B):
+  the spec lists "SSR gate" as a unit-test deliverable but the gate
+  lived only in the reactive shell's `#ensureRaf` (untestable under
+  `bun:test`). Fixed all four; the SSR-gate fix extracted a pure
+  `shouldScheduleRaf(isBrowser, rafInFlight)` helper into the logic file
+  (mirroring `solveCommitDuration`'s extract-to-test pattern) and added
+  a four-case test. Auditor divergence: A read the SSR-gate gap as a
+  spec-internal nitpick; B read it as a blocking missing-deliverable
+  concern - B is binding (the spec explicitly lists it). The
+  implementation logic was again verified clean by both auditors.
+  Detailed in `docs/RV20-C04-Audit-03.md`.
+- **Round 4 (architect, 2-auditor, v2 no-borderline): 0/2 PASS.** Six
+  unique code-comment / test-name concerns (three per auditor, no
+  overlap), all in the docstring-precision class - no substantive logic
+  or test-coverage issues. Auditor A: `ExecutorPhase` ("strict subset" -
+  false, it is a projection), `ExecutorState` and `NavExecutor` class
+  docstrings (present-tense "consumers read" / "drives it from the
+  orchestrator"). Auditor B: the `interrupt` docstring (present-tense
+  "the orchestrator continues from here"); the `solveCommitDuration`
+  wrong-direction comment (under-described the `<= 0` branch - omitted
+  the `directionSign === 0` / already-at-target case and the
+  load-bearing `<=` vs `<` choice, verified empirically: progress at
+  target -> 300ms not 100ms); the "visual continuity" test name
+  (overclaimed - only `pageTrack.translateX` asserted). All six fixed.
+  Per the architect's directive the cycle runs to at least R5 (R3's
+  missing-test was "lethal"; no early closure). The implementation logic
+  was again verified clean by both auditors. Detailed in
+  `docs/RV20-C04-Audit-04.md`.
+- **Round 5 (architect, 2-auditor, v2 no-borderline): split, not
+  clean.** Auditor A PASS; auditor B FAIL with two missing-test
+  concerns. Both were gaps in coverage of the `solveCommitDuration`
+  `<= 0` branch that R4 had documented but not tested: the
+  already-at-target case (`directionSign === 0`, `deltaProgress === 0`)
+  and the reversed-cancel-velocity case (`progressDirection: 1` with
+  positive release velocity). The "load-bearing `<=`" doc claim was
+  unenforceable without a test (a `<=` -> `<` edit would silently route
+  at-target from `T_DEFAULT` 300ms to the solve's `T_MIN` 100ms). Added
+  both tests (`progress already at target ...`; `reversed cancel
+velocity ...`). Auditor divergence: A judged existing coverage
+  sufficient; B wanted the two explicit cases - B is binding under the
+  rigor directive (a documented load-bearing branch edge needs a pinning
+  test). The implementation logic was again verified clean. Detailed in
+  `docs/RV20-C04-Audit-05.md`.
+- **Round 6 (architect, 2-auditor, v2 no-borderline): 2/2 PASS.** Both
+  auditors PASS with zero concerns - the first clean round, on the
+  post-R5-fix state. Both explicitly verified the three trigger cases of
+  the `<= 0` branch are now pinned by tests, the integrator math
+  (auditor B probed it numerically), the structural invariant,
+  reduced-motion snap, interruption, the SSR + single-flight gate, no
+  DOM read-back, shadow mode, and every docstring accurate to Cycle-4
+  behavior. Detailed in `docs/RV20-C04-Audit-06.md`.
 
-Consecutive pass votes: **0** (R2 carried two code-comment concerns;
-the implementation logic has been auditor-verified clean since R1).
+Consecutive pass votes: **2** (R6 is the first round with zero concerns
+from both auditors; R1-R5 each carried at least one concern, with R3
+and R5 carrying substantive missing-test concerns).
+
+## Cycle closure (2026-07-06, R6)
+
+Cycle 4 is COMPLETE. The architect required running past R5 (R3's
+missing SSR-gate test was "lethal" - a substantive spec-deliverable
+gap, not docstring precision). The cycle ran to R6 and converged there:
+R5 surfaced two further missing tests (the `<= 0` branch's at-target
+and reversed-cancel cases, which R4 had documented but not tested);
+those were added, and R6 confirmed both auditors clean. The cycle
+closed on a genuine clean round (2/2 PASS) after the substantive gaps
+were closed - not on an early-close shortcut. The implementation logic
+was auditor-verified clean across R1-R6; the concerns that extended the
+loop were docstring precision (R1, R2, R4) plus the two substantive
+missing-test rounds (R3 SSR gate, R5 `<= 0` cases).
 
 ## Coverage
 

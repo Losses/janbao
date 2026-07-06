@@ -56,12 +56,16 @@ export const COMMIT_VELOCITY_CLAMP_PX_PER_MS = 5;
 // ---------------------------------------------------------------------------
 // Executor state.
 
-/** The executor's local phase. A strict subset of the orchestrator's
- *  sub-phases in `nav-state-machine-logic.ts`:
- *  - `'idle'`: no transition in flight OR reduced-motion snap OR
+/** The executor's local phase. A projection of the orchestrator's
+ *  state in `nav-state-machine-logic.ts` (NOT a subset - `'idle'` and
+ *  `'live'` are executor-only values; they do not exist in
+ *  `TransitionSub`):
+ *  - `'idle'`: no transition in flight, OR reduced-motion snap, OR
  *    post-interrupt handoff point.
- *  - `'live'`: the drag is live; each pointermove publishes directly.
- *  - `'committing'`: the commit rAF loop is integrating.
+ *  - `'live'`: the drag is live (orchestrator sub `dragging` or
+ *    `scrubbing`); each pointermove publishes directly.
+ *  - `'committing'`: the commit rAF loop is integrating (orchestrator
+ *    sub `committing` or `cancelling`).
  *
  *  The orchestrator's record stays the authority for the broader
  *  navigation; this local phase tracks only what the rAF loop needs to
@@ -97,7 +101,9 @@ export interface CommitStartInfo {
 }
 
 /** The executor's full state record. The reactive shell holds this as
- *  `$state`; the orchestrator and consumers read fields off it. */
+ *  `$state`. In the integrated pipeline the orchestrator and consumers
+ *  read fields off it; in Cycle 4 shadow mode there is no consumer
+ *  (Cycle 5 wires them). */
 export interface ExecutorState {
 	readonly phase: ExecutorPhase;
 	/** Current gesture progress in [0, 1]. 0 = FROM visible; 1 = TO
@@ -205,9 +211,14 @@ export function solveCommitDuration(input: CommitInput, currentProgress: number)
 		return { durationMs: COMMIT_T_DEFAULT_MS, progressVelocity, snapped: false };
 	}
 	// Velocity pointing away from target (e.g. user reversed then
-	// released): the constant-deceleration integral is not shaped for
-	// backward motion. Fall back to the default ease so the cancel
-	// still settles smoothly.
+	// released), OR the progress is already at the target
+	// (`directionSign === 0`, i.e. `deltaProgress === 0`): the
+	// constant-deceleration integral is not shaped for backward motion,
+	// and an already-at-target progress has no distance to integrate.
+	// Fall back to the default ease so the settle still plays smoothly
+	// (T_DEFAULT, not the solve's T_MIN clamp). The `<=` (not `<`) is
+	// load-bearing: it routes the already-at-target case to T_DEFAULT.
+	// Plan-agnostic: fires for either direction.
 	if (directionSign * progressVelocity <= 0) {
 		return { durationMs: COMMIT_T_DEFAULT_MS, progressVelocity, snapped: false };
 	}
@@ -268,12 +279,13 @@ export function startCommit(state: ExecutorState, input: CommitInput): ExecutorS
 /** Interrupt the in-flight commit. Per §5: a new intent arriving
  *  mid-commit cancels the rAF and hands off from the current visual
  *  state. The current `progress` IS the handoff point (no DOM
- *  read-back); the next `applyDrag` from the orchestrator continues
- *  from here.
+ *  read-back): in the integrated pipeline the next `applyDrag`
+ *  (Cycle-5 orchestrator wiring) continues from here; in Cycle 4 this
+ *  is exercised only by the unit suite.
  *
  *  Returns a state record with `phase: 'idle'`, the current progress
  *  preserved, and `commitStart: null`. The reactive shell stops the
- *  rAF; the next drag-start event re-enters the live phase. */
+ *  rAF; the next drag-start event (Cycle 5) re-enters the live phase. */
 export function interrupt(state: ExecutorState): ExecutorState {
 	if (state.phase !== 'committing') return state;
 	return {
@@ -391,4 +403,14 @@ export function tickFrame(
 	const sample = sampleFrame(state, plan, now);
 	publishFrame(sample.state, plan, driver);
 	return sample;
+}
+
+/** Whether the shell should schedule a rAF. Pure (testable under
+ *  `bun:test`): false in SSR (no `requestAnimationFrame` available) and
+ *  false when a rAF is already in flight (single-flight). The shell's
+ *  `#ensureRaf` calls this so the SSR + single-flight gate has unit
+ *  coverage even though the rAF scheduling itself lives in the
+ *  reactive shell. */
+export function shouldScheduleRaf(isBrowser: boolean, rafInFlight: boolean): boolean {
+	return isBrowser && !rafInFlight;
 }
