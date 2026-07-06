@@ -329,7 +329,8 @@ Re-read every docstring in every new file against the code, post-format
 and post-edit. Each comment describes current Cycle-5a behavior or is
 explicitly qualified with "In Cycle 5b". Specific items verified:
 
-- `PagePhase` field descriptions match `docs/DV20-Plan.md` §8 verbatim.
+- `PagePhase` field descriptions match `docs/DV20-Plan.md` §8's phase
+  semantics.
 - `reduce` arm descriptions match each `case` in the switch.
 - `acquireRef` / `releaseRef` / `settleRefcountRemoval` docstrings
   match each branch.
@@ -449,11 +450,17 @@ section summarizes; the files are the source of truth.
   end-to-end, verified all R1-R7 fix sites hold, no `page-scroll` in any
   `.ts` file, all invariants, structural-typing assignability, spec
   deliverables cross-check. Detailed in `docs/RV20-C05a-Audit-08.md`.
+- **Round 9 (architect, 1-auditor, clean prompt): PASS.** The 5th vote.
+  Zero concerns; all invariants, fix sites, and docstrings re-verified.
+  Detailed in `docs/RV20-C05a-Audit-09.md`.
 
-Consecutive pass votes: **4** (R7 + R8; R6-A's `page-scroll` concern
-reset R5's earlier streak of 2. The implementation logic has been
-auditor-verified clean across R1-R8; the clean prompt is in use from R6
-on).
+Consecutive pass votes: **5** (R7 + R8 + R9). Cycle 5a COMPLETE: closed
+on 5 consecutive pass votes under the clean protocol prompt. The
+implementation logic was auditor-verified clean across R1-R9; the
+concerns that extended the loop were docstring precision (R1-R5,
+directive prompts) and the `page-scroll`-in-`.ts`-comments factual error
+(R6, surfaced by the clean prompt); all resolved. The clean-prompt
+rounds (R6-R9) are the trustworthy convergence signal.
 
 ## Coverage bullets (round-independent)
 

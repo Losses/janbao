@@ -1,6 +1,6 @@
 # DV20 Cycle 5a Spec: PageLifecycle contract + real DOM driver
 
-**Architect:** the document owner. **Executor:** the Cycle 5a Manager Agent (CMA5a). **Protocol:** `docs/DV20-Meeting/DV20-Cycle-Manager-Protocol-v2.md` (v2, binding, no-borderline classification). **Status:** ready for CMA5a.
+**Architect:** the document owner. **Executor:** the Cycle 5a Manager Agent (CMA5a). **Protocol:** `docs/DV20-Meeting/DV20-Cycle-Manager-Protocol-v2.md` (v2, binding, no-borderline classification). **Status:** COMPLETE. Closed 2026-07-06 on 5 consecutive pass votes (R7 + R8 + R9) under the clean protocol prompt; the implementation logic was auditor-verified clean across R1-R9. The directive prompts used in R1-R5 had drifted into narrowing (a defect-pattern checklist); R6-R9 used the clean template and are the trustworthy convergence signal. Per-round detail in `docs/RV20-C05a-Audit-{01..09}.md`.
 
 This is the first sub-cycle of the Cycle 5 cutover, split (per architect decision 2026-07-06) into 5a (this - contract + real driver, shadow), 5b (route-by-route migration that modifies the existing gesture components), and 5c (e2e trajectory sampling).
 
