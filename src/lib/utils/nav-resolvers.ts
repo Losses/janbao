@@ -50,10 +50,19 @@ import type { IntentState } from './nav-intent';
  *  translates rightward (a neighbour from the left enters). */
 export type PageTrackAxis = 'left' | 'right';
 
-/** Structural page-track plan: which way to slide, and how far (px). */
+/** Structural page-track plan: which way to slide, and how far (px).
+ *
+ *  `restingTranslate` is the track's translateX (px) at progress=0. Most
+ *  plans leave it at 0 (a single-panel track where progress=0 means
+ *  translateX=0). The multi-panel pilot (Cycle 5b1) sets it to
+ *  `-viewportWidth / 2` so the centre panel (the right half of a
+ *  2-panel track) fills the viewport at rest. */
 export interface PageTrackPlan {
 	readonly axis: PageTrackAxis;
 	readonly distance: number;
+	/** The track's translateX at progress=0. Defaults to 0 when omitted;
+	 *  the executor's `buildVisual` reads it via `?? 0`. */
+	readonly restingTranslate?: number;
 }
 
 /** The FAB's per-frame visual state, returned by a plan's FAB function. */

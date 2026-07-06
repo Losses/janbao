@@ -2,7 +2,7 @@
 	import favicon from '$lib/assets/favicon.svg';
 	import '../app.css';
 	import type { Snippet } from 'svelte';
-	import { setContext, onMount } from 'svelte';
+	import { setContext, onMount, untrack } from 'svelte';
 	import { page } from '$app/state';
 	import { beforeNavigate, afterNavigate, goto, invalidate } from '$app/navigation';
 	import AppShell from '$lib/components/templates/AppShell.svelte';
@@ -24,6 +24,8 @@
 	import { getPageCacheStore, type PageCacheStore } from '$lib/stores/page-cache.svelte';
 	import { getCurrentScrollY } from '$lib/utils/get-current-scroll-y';
 	import { isTabRootPath } from '$lib/utils/history-nav';
+	import { isPilotTransition } from '$lib/utils/nav-pipeline-gate';
+	import { getNavPipelineOrchestrator } from '$lib/stores/nav-pipeline-orchestrator.svelte';
 
 	interface LayoutProps {
 		data: LayoutData;
@@ -82,6 +84,26 @@
 		if (from && !isTabRootPath(from.url.pathname)) {
 			pageCache.capture(from.url.pathname, undefined, { scrollTop: getCurrentScrollY() });
 		}
+		// The pilot orchestrator owns the transition when the source or
+		// destination is the pilot route. When it consumes the
+		// navigation (cancels + drives the slide plan via the executor),
+		// the root layout's navStore hooks are skipped for this
+		// navigation so they do not double-write navStore state.
+		const orchestrator = getNavPipelineOrchestrator();
+		if (
+			orchestrator !== null &&
+			isPilotTransition(from?.url.pathname ?? null, to?.url.pathname ?? null)
+		) {
+			const consumed = orchestrator.onSvelteKitBeforeNavigate({
+				from: from ? { url: { pathname: from.url.pathname, search: from.url.search } } : null,
+				to: to ? { url: { pathname: to.url.pathname, search: to.url.search } } : null,
+				type,
+				cancel: () => nav.cancel()
+			});
+			if (consumed) {
+				return;
+			}
+		}
 		if (to && from) {
 			const isTabClick =
 				event?.target instanceof Element && event.target.closest('[data-tab-nav]') !== null;
@@ -114,6 +136,12 @@
 
 	afterNavigate(() => {
 		navStore.handleAfterNavigate();
+		// Clear the pilot orchestrator's state on every navigation's
+		// landing (the orchestrator is a no-op when not pilot-mounted).
+		const orchestrator = getNavPipelineOrchestrator();
+		if (orchestrator !== null) {
+			orchestrator.onSvelteKitAfterNavigate();
+		}
 	});
 
 	// Dev-only E2E hook: a deterministic client-side navigation that fires the
@@ -190,43 +218,49 @@
 	$effect(() => {
 		const onTabRoot = isTabRootPath(page.url.pathname);
 		const discussionsSource = onTabRoot && page.data.discussions ? page.data : data.home;
-		if (discussionsSource?.discussions) {
-			pageCache.capture('/', undefined, {
-				data: {
-					discussions: discussionsSource.discussions,
-					page: discussionsSource.page ?? 1,
-					totalPages: discussionsSource.totalPages ?? 1,
-					totalCount: discussionsSource.totalCount ?? 0
-				},
-				source: { route: '/', page: discussionsSource.page ?? 1 }
-			});
-		}
 		const activitySource = onTabRoot && page.data.activities ? page.data : data.activity;
-		if (activitySource?.activities) {
-			pageCache.capture('/activity', undefined, {
-				data: {
-					activities: activitySource.activities,
-					page: activitySource.page ?? 1,
-					totalPages: activitySource.totalPages ?? 1,
-					totalCount: activitySource.totalCount ?? 0,
-					activityDraft: activitySource.activityDraft,
-					mentionedUsers: activitySource.mentionedUsers
-				},
-				source: { route: '/activity', page: activitySource.page ?? 1 }
-			});
-		}
 		const messagesSource = onTabRoot && page.data.conversations ? page.data : data.messages;
-		if (messagesSource?.conversations) {
-			pageCache.capture('/messages/inbox', undefined, {
-				data: {
-					conversations: messagesSource.conversations,
-					page: messagesSource.page ?? 1,
-					totalPages: messagesSource.totalPages ?? 1,
-					totalCount: messagesSource.totalCount ?? 0
-				},
-				source: { route: '/messages/inbox', page: messagesSource.page ?? 1 }
-			});
-		}
+		// The captures merge into the cache, which reads the cache's $state
+		// before writing it. Untrack the writes so this effect subscribes
+		// only to page.data (re-runs on navigation) and not to the cache
+		// (which would loop: effect_update_depth_exceeded).
+		untrack(() => {
+			if (discussionsSource?.discussions) {
+				pageCache.capture('/', undefined, {
+					data: {
+						discussions: discussionsSource.discussions,
+						page: discussionsSource.page ?? 1,
+						totalPages: discussionsSource.totalPages ?? 1,
+						totalCount: discussionsSource.totalCount ?? 0
+					},
+					source: { route: '/', page: discussionsSource.page ?? 1 }
+				});
+			}
+			if (activitySource?.activities) {
+				pageCache.capture('/activity', undefined, {
+					data: {
+						activities: activitySource.activities,
+						page: activitySource.page ?? 1,
+						totalPages: activitySource.totalPages ?? 1,
+						totalCount: activitySource.totalCount ?? 0,
+						activityDraft: activitySource.activityDraft,
+						mentionedUsers: activitySource.mentionedUsers
+					},
+					source: { route: '/activity', page: activitySource.page ?? 1 }
+				});
+			}
+			if (messagesSource?.conversations) {
+				pageCache.capture('/messages/inbox', undefined, {
+					data: {
+						conversations: messagesSource.conversations,
+						page: messagesSource.page ?? 1,
+						totalPages: messagesSource.totalPages ?? 1,
+						totalCount: messagesSource.totalCount ?? 0
+					},
+					source: { route: '/messages/inbox', page: messagesSource.page ?? 1 }
+				});
+			}
+		});
 	});
 
 	// Seed editor feature prefs from the session. The lazy editor chunk loads

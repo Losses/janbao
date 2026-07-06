@@ -349,11 +349,12 @@ export function sampleFrame(state: ExecutorState, plan: TransitionPlan, now: num
  *  functions. Pure: returns the visual; the reactive shell hands it to
  *  the driver.
  *
- *  The page-track translate: progress=0 leaves FROM centred
- *  (translateX = 0); progress=1 brings TO centred. For axis='left'
- *  the track translates leftward (negative translateX) as progress
- *  advances; for axis='right' it translates rightward (positive). The
- *  sign convention matches `PageTrackAxis` in `nav-resolvers.ts`
+ *  The page-track translate: progress=0 leaves FROM centred at
+ *  `restingTranslate` (default 0); progress=1 brings TO centred at
+ *  `restingTranslate + sign * distance`. For axis='left' the track
+ *  translates leftward (negative delta) as progress advances; for
+ *  axis='right' it translates rightward (positive delta). The sign
+ *  convention matches `PageTrackAxis` in `nav-resolvers.ts`
  *  ('left' = neighbour from the right enters = track moves left). */
 export function buildVisual(
 	plan: TransitionPlan,
@@ -363,7 +364,8 @@ export function buildVisual(
 	const fab = plan.fab(progress, liveOffset);
 	const header = plan.header(progress, liveOffset);
 	const sign = plan.pageTrack.axis === 'left' ? -1 : 1;
-	const translateX = sign * plan.pageTrack.distance * progress;
+	const base = plan.pageTrack.restingTranslate ?? 0;
+	const translateX = base + sign * plan.pageTrack.distance * progress;
 	return {
 		pageTrack: { translateX },
 		fab: { scale: fab.scale, translateY: fab.translateY, visible: fab.visible },

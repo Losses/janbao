@@ -58,6 +58,14 @@ import type { TransitionPlan } from '$lib/utils/nav-resolvers';
  *  item). */
 export type NavExecutorClockFn = () => number;
 
+/** Called once when a commit rAF reaches its target. The Cycle 5b1
+ *  orchestrator registers a callback here to dispatch the SvelteKit
+ *  navigation on a commit (or to land on FROM on a cancel). The callback
+ *  receives the plan's `progressDirection` (0 = commit, lands on TO;
+ *  1 = cancel, snaps back to FROM) so the orchestrator can dispatch
+ *  the right post-settle action. */
+export type NavExecutorSettleFn = (progressDirection: 0 | 1) => void;
+
 /** Constructor options for `NavExecutor`. */
 export interface NavExecutorOptions {
 	/** The driver the executor writes through. In Cycle 4 shadow mode
@@ -66,6 +74,11 @@ export interface NavExecutorOptions {
 	readonly driver: NavDomDriver;
 	/** Optional clock override for deterministic tests. */
 	readonly now?: NavExecutorClockFn;
+	/** Optional settle callback invoked once when a commit rAF reaches
+	 *  its target. Cycle 5b1 wires this to dispatch the post-commit
+	 *  SvelteKit navigation; absent in Cycle 4 shadow mode (no caller
+	 *  triggers a commit). */
+	readonly onSettle?: NavExecutorSettleFn;
 }
 
 /** Internal alias kept for the private field type. */
@@ -96,11 +109,14 @@ export class NavExecutor {
 	#plan = $state<TransitionPlan | null>(null);
 	readonly #driver: NavDomDriver;
 	readonly #now: ClockFn;
+	readonly #onSettle: NavExecutorSettleFn | null;
 	#rafId: number | null = null;
+	#settled = false;
 
 	constructor(opts: NavExecutorOptions) {
 		this.#driver = opts.driver;
 		this.#now = opts.now ?? defaultNow;
+		this.#onSettle = opts.onSettle ?? null;
 	}
 
 	/** Reactive read of the executor state record. In the integrated
@@ -150,9 +166,11 @@ export class NavExecutor {
 	 *  duration from the release velocity, publishes the first commit
 	 *  frame, and (for the momentum path) schedules the rAF. For
 	 *  reduced motion the snap path runs and the rAF is not
-	 *  scheduled. */
+	 *  scheduled. Resets the settle flag so the next settle fires
+	 *  exactly once per commit. */
 	onCommit(releaseVelocityPxPerMs: number): void {
 		if (this.#plan === null) return;
+		this.#settled = false;
 		const plan = this.#plan;
 		const reducedMotion = this.#driver.prefersReducedMotion();
 		const next = startCommit(this.#state, {
@@ -166,8 +184,10 @@ export class NavExecutor {
 		if (next.phase === 'committing') {
 			this.#ensureRaf();
 		} else {
-			// Snap path (reduced motion): no rAF needed.
+			// Snap path (reduced motion): the settle fires immediately;
+			// the rAF is not needed.
 			this.#stopRaf();
+			this.#fireSettle(plan.progressDirection);
 		}
 	}
 
@@ -228,7 +248,8 @@ export class NavExecutor {
 	}
 
 	/** The single rAF callback. Samples one commit frame, publishes
-	 *  it, and either reschedules or stops. */
+	 *  it, and either reschedules or stops. Fires the settle callback
+	 *  exactly once when the integrator reaches the target. */
 	#tick = (): void => {
 		this.#rafId = null;
 		const plan = this.#plan;
@@ -237,10 +258,23 @@ export class NavExecutor {
 		const sample = sampleFrame(this.#state, plan, this.#now());
 		this.#state = sample.state;
 		this.#publish();
-		if (!sample.done) {
+		if (sample.done) {
+			this.#fireSettle(plan.progressDirection);
+		} else {
 			this.#ensureRaf();
 		}
 	};
+
+	/** Fire the settle callback exactly once per commit. The `#settled`
+	 *  guard prevents double-firing if a second commit fires while the
+	 *  first's microtask settle is still pending; an interrupt also
+	 *  clears the rAF without firing settle (the cancel path lands via
+	 *  the orchestrator's `onCancel`). */
+	#fireSettle(progressDirection: 0 | 1): void {
+		if (this.#settled) return;
+		this.#settled = true;
+		this.#onSettle?.(progressDirection);
+	}
 
 	/** Build the visual from the current state and write it through
 	 *  the driver. The driver is the only DOM touchpoint; the shell
