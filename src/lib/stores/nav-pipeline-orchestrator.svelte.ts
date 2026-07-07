@@ -810,6 +810,10 @@ export class NavPipelineOrchestrator {
 		// Chip-exit when the target is a tab root that is NOT the
 		// pre-rendered leftHref (the pilot only pre-renders /messages/inbox).
 		const chipExit = isTabRootPath(toPathname) && toPathname !== inputs.backTarget;
+		// Capture the enter-animation state BEFORE clearing it, so the
+		// progress-matching fix below can use it (the flag is cleared
+		// here because this transition owns the flag's lifecycle now).
+		const wasEnterAnimation = this.#isEnterAnimation;
 		this.#pendingGesture = null;
 		this.#pendingTabExit = { target: to, svelteKitType: navigation.type, chipExit };
 		this.#navDispatchInFlight = false;
@@ -826,13 +830,29 @@ export class NavPipelineOrchestrator {
 			chipExit
 		};
 		this.#chipExitState = chipExit;
-		// Drive the executor: dragStart at progress 0, then commit with
-		// an explicit duration (`TAB_CLICK_COMMIT_MS`) matching the
-		// non-pilot routes' CSS `duration-200`. A tab-click is a
-		// discrete nav, not a finger release; the explicit duration
-		// keeps the pilot's exit animation consistent with the
-		// non-pilot routes' tab-exit.
-		this.#executor?.onDragStart(plan, 0, 0);
+		// Drive the executor: dragStart, then commit with an explicit
+		// duration (`TAB_CLICK_COMMIT_MS`) matching the non-pilot
+		// routes' CSS `duration-200`. A tab-click is a discrete nav,
+		// not a finger release; the explicit duration keeps the pilot's
+		// exit animation consistent with the non-pilot routes' tab-exit.
+		// When interrupting a forward-enter, compute the equivalent
+		// progress in the tab-click plan that matches the current visual
+		// position (the enter slides 0 to -W at progress 0 to 1; the
+		// tab-click slides -W to 0 at progress 0 to 1; so
+		// tabProgress = 1 - enterProgress). Without this, progress
+		// resets to 0 and the track jumps.
+		let startProgress = 0;
+		if (wasEnterAnimation) {
+			const enterProgress = this.#executor?.state.progress ?? 0;
+			startProgress = 1 - enterProgress;
+		} else if (this.#publication.inFlight && this.#publication.plan !== null) {
+			// A gesture commit is in flight; start the tab-exit from the
+			// current visual position. The back-swipe and tab-exit plans
+			// share geometry (axis, distance, restingTranslate), so the
+			// progress transfers directly without inversion.
+			startProgress = this.#executor?.state.progress ?? 0;
+		}
+		this.#executor?.onDragStart(plan, startProgress, 0);
 		this.#executor?.onCommit(0, TAB_CLICK_COMMIT_MS);
 		return true;
 	}

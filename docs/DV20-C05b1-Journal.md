@@ -975,8 +975,31 @@ reversed`; onCancel overrides progressDirection to 1. Added partial-
   transition-start path `onSvelteKitBeforeNavigate` was missed). Fixed:
   added `this.#isEnterAnimation = false;` in `onSvelteKitBeforeNavigate`.
   Detailed in `docs/RV20-C05b1-Audit-12.md`.
+- **Round 13 (architect, 2-auditor): split.** B PASS (zero concerns;
+  `#isEnterAnimation` lifecycle complete across all three
+  transition-start paths). A PASS-WITH-CONCERNS (missing e2e for
+  tab-click-during-forward-enter). Fixed: added "tab-click during
+  forward-enter interrupts cleanly and navigates" e2e (clicks
+  `[data-tab-nav][href="/messages/inbox"]` within the enter window;
+  asserts URL returns). 8/8 gesture e2e pass. Detailed in
+  `docs/RV20-C05b1-Audit-13.md`.
+- **Round 14 (architect, 2-auditor): split.** A PASS (zero concerns,
+  187 e2e green). B PASS-WITH-CONCERNS: tab-click-during-forward-enter
+  produces a track-transform jump (progress resets to 0, snapping the
+  track from mid-enter position to -W in one frame; GPL smoothly
+  reverses). Fixed: compute `startProgress = 1 - enterProgress` when
+  `#isEnterAnimation` is true, so the tab-click plan starts from the
+  visual position the enter left off at. Detailed in
+  `docs/RV20-C05b1-Audit-14.md`.
+- **Round 15 (architect, 2-auditor): 0/2 PASS.** Both FAIL on the
+  same defect: R14's `startProgress = 1 - enterProgress` fix was dead
+  code. Line 817 cleared `#isEnterAnimation` before line 840 read it;
+  the `if` was always false; `startProgress` was always 0; the track
+  still jumped on tab-click-during-enter. Fixed: captured into a local
+  `const wasEnterAnimation` BEFORE clearing, then used the local in the
+  conditional. Detailed in `docs/RV20-C05b1-Audit-15.md`.
 
-Consecutive pass votes: **0** (R1-R12 each carried concerns). The
+Consecutive pass votes: **0** (R1-R15 each carried concerns). The
 implementation logic + UNIFY invariant have been verified clean across
 all rounds; the concerns were GPL-behavior-fidelity gaps progressively
 caught and fixed by the e2e gate + the audit.

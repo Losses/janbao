@@ -559,4 +559,22 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		// The swipe should commit: URL returns to /messages/inbox.
 		await page.waitForURL('**/messages/inbox', { timeout: 5000 });
 	});
+
+	test('tab-click during forward-enter interrupts cleanly and navigates', async ({ page, context }) => {
+		await prepareContext(context);
+		await page.goto('/messages/inbox');
+		await waitForHydration(page);
+
+		// Click a conversation link to trigger the forward-enter.
+		await page.click('a[href^="/messages/"]:not([href="/messages/new"]):not([href="/messages/inbox"])');
+		await page.waitForURL(/\/messages\/\d+/);
+		// Do NOT wait out the enter animation; click a tab immediately.
+		// The enter animation is ~200ms; the tab-click must begin within
+		// that window to exercise the onSvelteKitBeforeNavigate interrupt
+		// path (the R12-B concern).
+		await page.click('[data-tab-nav][href="/messages/inbox"]');
+
+		// The tab-click should commit: URL returns to /messages/inbox.
+		await page.waitForURL('**/messages/inbox', { timeout: 5000 });
+	});
 });
