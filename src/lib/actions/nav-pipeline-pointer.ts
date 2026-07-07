@@ -78,11 +78,11 @@ function buildHandlers(
 		const x = c.startX + deltaX;
 		orchestrator.onPointerMove(x, c.startY);
 	};
-	const onEnd: EndHandler = (deltaX: number): void => {
+	const onEnd: EndHandler = (deltaX: number, velocity: number, reversed: boolean): void => {
 		const c = ctx();
 		if (c === null) return;
 		const x = c.startX + deltaX;
-		orchestrator.onPointerUp(x, c.startY);
+		orchestrator.onPointerUp(x, c.startY, velocity, reversed);
 	};
 	return { onMove, onEnd };
 }
@@ -129,7 +129,7 @@ export const navPipelinePointer: Action<HTMLElement, NavPipelinePointerParams> =
 		params.orchestrator.onPointerMove(x, ctx.startY);
 	};
 
-	const onEnd: EndHandler = (deltaX: number): void => {
+	const onEnd: EndHandler = (deltaX: number, velocity: number, reversed: boolean): void => {
 		const c = ctx;
 		ctx = null;
 		if (c === null) {
@@ -138,7 +138,14 @@ export const navPipelinePointer: Action<HTMLElement, NavPipelinePointerParams> =
 			return;
 		}
 		const x = c.startX + deltaX;
-		params.orchestrator.onPointerUp(x, c.startY);
+		// Forward detectSwipe's rebound-based `reversed` and
+		// trailing-window `velocity` to the orchestrator. These are
+		// the authoritative release signals (detectSwipe tracks the
+		// peak vs final position for rebound and a precise trailing
+		// sample window for velocity); the orchestrator uses them to
+		// override the classifier's own estimates so the release gate
+		// matches the non-pilot routes' commit/cancel decision.
+		params.orchestrator.onPointerUp(x, c.startY, velocity, reversed);
 	};
 
 	// Pre-bind a pointerdown listener so the action sees the absolute

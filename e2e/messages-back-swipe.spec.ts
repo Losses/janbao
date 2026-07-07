@@ -27,6 +27,10 @@ import {
 interface TrackFrame {
 	t: number;
 	m41: number;
+	/** FAB scale sampled from `[data-testid="fab"]`'s computed
+	 * `transform`. Null when the FAB atom is not in the DOM (e.g.
+	 * the route has unmounted). */
+	fabScale: number | null;
 }
 
 interface TrackSamplerWindow extends Window {
@@ -47,6 +51,10 @@ interface TrackSamplerCapture {
 	minM41: number;
 	/** Max m41 across all samples. */
 	maxM41: number;
+	/** FAB scale range across the in-flight samples. A transitioning
+	 * FAB produces a non-zero range; a frozen publication produces
+	 * zero. */
+	fabScaleDelta: number;
 	/** Sample count. */
 	sampleCount: number;
 }
@@ -82,9 +90,22 @@ async function capturePilotBackSwipe(
 					} catch {
 						m41 = 0;
 					}
+					// Sample the FAB atom's scale. The FAB layer reads
+					// `pager.coverProgress` reactively and writes the
+					// atom's `transform: scale(...)`. The e2e asserts
+					// the scale transitions during the commit slide so
+					// the FAB tracks the slide (rather than freezing
+					// at a stale value).
+					const fabEl = document.querySelector('[data-testid="fab"]');
+					let fabScale: number | null = null;
+					if (fabEl) {
+						const m = getComputedStyle(fabEl).transform.match(/matrix\(([^)]+)\)/);
+						fabScale = m ? Number(m[1].split(',')[0]) : 1;
+					}
 					w.__pilotSwipe!.frames.push({
 						t: Math.round(performance.now() - start),
-						m41: Math.round(m41)
+						m41: Math.round(m41),
+						fabScale
 					});
 				}
 			}
@@ -127,6 +148,13 @@ async function capturePilotBackSwipe(
 			}
 		}
 		const movingM41s = m41s.slice(firstMovingIdx);
+		// FAB scale range across the in-flight samples (the moving
+		// window). Null samples (FAB atom gone) are excluded.
+		const fabScales = f.slice(firstMovingIdx)
+			.map((x) => x.fabScale)
+			.filter((v): v is number => v !== null);
+		const fabScaleDelta =
+			fabScales.length > 0 ? Math.max(...fabScales) - Math.min(...fabScales) : 0;
 		return {
 			frames: f,
 			reversals,
@@ -134,6 +162,7 @@ async function capturePilotBackSwipe(
 			lastM41: m41s[m41s.length - 1] ?? null,
 			minM41: m41s.length ? Math.min(...m41s) : 0,
 			maxM41: m41s.length ? Math.max(...m41s) : 0,
+			fabScaleDelta,
 			sampleCount: f.length
 		};
 	});
@@ -172,6 +201,7 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 			lastM41: capture.lastM41,
 			minM41: capture.minM41,
 			maxM41: capture.maxM41,
+			fabScaleDelta: capture.fabScaleDelta,
 			sampleCount: capture.sampleCount,
 			consoleTail: consoleMessages.slice(-5)
 		});
@@ -204,5 +234,179 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 			capture.lastM41 ?? -Infinity,
 			`back-swipe must move the track rightward (first=${capture.firstM41}, last=${capture.lastM41})`
 		).toBeGreaterThan(capture.firstM41 ?? -Infinity);
+
+		// The FAB scale must transition during the slide. The pilot's
+		// back-swipe goes from `/messages/<id>` (FAB hidden, scale 0)
+		// to `/messages/inbox` (FAB shown, scale 1); the orchestrator
+		// publishes `coverProgress` each commit rAF tick so the FAB
+		// atom's scale ramps with the slide. A frozen publication
+		// (orchestrator not republishing during commit) leaves the
+		// scale stuck at its initial value (delta 0). The threshold
+		// is small (0.1) to allow for the FAB atom's own CSS easing
+		// while still catching a fully frozen publication.
+		expect(
+			capture.fabScaleDelta,
+			`FAB scale must transition during the slide (delta=${capture.fabScaleDelta}; ` +
+				`the orchestrator must republish to the pager store each commit rAF tick)`
+		).toBeGreaterThan(0.1);
+	});
+
+	test('partial swipe (< 60px) cancels and stays on the pilot route', async ({ page }) => {
+		await page.goto('/');
+		await waitForHydration(page);
+		await page.locator('a[data-tab-nav][href="/messages/inbox"]').click();
+		await page.waitForURL('/messages/inbox');
+		await page.waitForTimeout(200);
+		await page
+			.locator('a[href^="/messages/"]:not([href="/messages/inbox"]):not([href="/messages/new"])')
+			.first()
+			.click();
+		await page.waitForURL(/\/messages\/\d+/);
+		await page.waitForSelector('.detail-scroll-pane');
+		await page.waitForTimeout(500);
+
+		const pilotPath = page.url();
+		const client = await page.context().newCDPSession(page);
+		await client.send('Emulation.setTouchEmulationEnabled', {
+			enabled: true,
+			maxTouchPoints: 5
+		});
+		const y = 400;
+		const startX = 120;
+		const endX = 150;
+		const dispatch = (
+			type: 'touchStart' | 'touchMove' | 'touchEnd',
+			x: number,
+			state: string
+		) =>
+			client.send('Input.dispatchTouchEvent', {
+				type,
+				touchPoints: [{ state, x, y, id: 1 }] as unknown as never,
+				modifiers: 0,
+				timestamp: 0
+			});
+		await dispatch('touchStart', startX, 'touchPressed');
+		for (let i = 1; i <= 10; i++) {
+			const x = Math.round(startX + (endX - startX) * (i / 10));
+			await dispatch('touchMove', x, 'touchMoved');
+		}
+		await dispatch('touchEnd', endX, 'touchReleased');
+		await client.detach();
+		await page.waitForTimeout(500);
+
+		// The URL must NOT change (the gesture cancelled, no navigation).
+		expect(page.url(), 'partial swipe must not navigate').toBe(pilotPath);
+	});
+
+	test('reversed swipe (right then back past start) cancels and stays on the pilot route', async ({
+		page
+	}) => {
+		await page.goto('/');
+		await waitForHydration(page);
+		await page.locator('a[data-tab-nav][href="/messages/inbox"]').click();
+		await page.waitForURL('/messages/inbox');
+		await page.waitForTimeout(200);
+		await page
+			.locator('a[href^="/messages/"]:not([href="/messages/inbox"]):not([href="/messages/new"])')
+			.first()
+			.click();
+		await page.waitForURL(/\/messages\/\d+/);
+		await page.waitForSelector('.detail-scroll-pane');
+		await page.waitForTimeout(500);
+
+		const pilotPath = page.url();
+		const client = await page.context().newCDPSession(page);
+		await client.send('Emulation.setTouchEmulationEnabled', {
+			enabled: true,
+			maxTouchPoints: 5
+		});
+		const y = 400;
+		const startX = 120;
+		const peakX = 320;
+		const endX = 70;
+		const dispatch = (
+			type: 'touchStart' | 'touchMove' | 'touchEnd',
+			x: number,
+			state: string
+		) =>
+			client.send('Input.dispatchTouchEvent', {
+				type,
+				touchPoints: [{ state, x, y, id: 1 }] as unknown as never,
+				modifiers: 0,
+				timestamp: 0
+			});
+		await dispatch('touchStart', startX, 'touchPressed');
+		// Drag right past SWIPE_COMMIT (200px).
+		for (let x = startX + 20; x <= peakX; x += 20) {
+			await dispatch('touchMove', x, 'touchMoved');
+		}
+		// Reverse past start (offsetX < 0).
+		for (let x = peakX - 20; x >= endX; x -= 20) {
+			await dispatch('touchMove', x, 'touchMoved');
+		}
+		await dispatch('touchEnd', endX, 'touchReleased');
+		await client.detach();
+		await page.waitForTimeout(500);
+
+		// The URL must NOT change (the gesture reversed, no navigation).
+		expect(page.url(), 'reversed swipe must not navigate').toBe(pilotPath);
+	});
+
+	test('rebound swipe (right 200px then partial rebound to +130px, slow release) cancels', async ({
+		page
+	}) => {
+		await page.goto('/');
+		await waitForHydration(page);
+		await page.locator('a[data-tab-nav][href="/messages/inbox"]').click();
+		await page.waitForURL('/messages/inbox');
+		await page.waitForTimeout(200);
+		await page
+			.locator('a[href^="/messages/"]:not([href="/messages/inbox"]):not([href="/messages/new"])')
+			.first()
+			.click();
+		await page.waitForURL(/\/messages\/\d+/);
+		await page.waitForSelector('.detail-scroll-pane');
+		await page.waitForTimeout(500);
+
+		const pilotPath = page.url();
+		const client = await page.context().newCDPSession(page);
+		await client.send('Emulation.setTouchEmulationEnabled', {
+			enabled: true,
+			maxTouchPoints: 5
+		});
+		const y = 400;
+		const startX = 120;
+		const peakX = 320;
+		const endX = 250;
+		const dispatch = (
+			type: 'touchStart' | 'touchMove' | 'touchEnd',
+			x: number,
+			state: string
+		) =>
+			client.send('Input.dispatchTouchEvent', {
+				type,
+				touchPoints: [{ state, x, y, id: 1 }] as unknown as never,
+				modifiers: 0,
+				timestamp: 0
+			});
+		await dispatch('touchStart', startX, 'touchPressed');
+		// Drag right past SWIPE_COMMIT (200px).
+		for (let x = startX + 20; x <= peakX; x += 20) {
+			await dispatch('touchMove', x, 'touchMoved');
+		}
+		// Rebound partially (peak - final = 70px >= REBOUND_CANCEL_PX=25).
+		// Release slowly so no forward fling overrides the rebound gate.
+		for (let x = peakX - 10; x >= endX; x -= 10) {
+			await dispatch('touchMove', x, 'touchMoved');
+		}
+		await dispatch('touchEnd', endX, 'touchReleased');
+		await client.detach();
+		await page.waitForTimeout(500);
+
+		// The URL must NOT change. detectSwipe reports reversed=true
+		// (rebound=70 >= 25, no forward fling), so the orchestrator's
+		// gate cancels. The final offset (+130) is past SWIPE_COMMIT
+		// but the rebound-based reversed signal catches it.
+		expect(page.url(), 'rebound swipe must not navigate').toBe(pilotPath);
 	});
 });

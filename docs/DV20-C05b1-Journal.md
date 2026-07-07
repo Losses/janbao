@@ -477,6 +477,353 @@ The `tab-click-transition.spec.ts` test 3 ("clicking top tab bar item
 `delta: 196` initially (half-viewport, the wrong geometry) and after
 the fix `delta: 393` (full-viewport, correct).
 
+### Session 3 (2026-07-06): R1 audit concerns C1/C2/C3/C4/C5/C5-B fixed
+
+The architect-fixed `effect_update_depth_exceeded` (Session 1 blocker)
+landed via `untrack` on the cache-seeding `$effect`'s
+`pageCache.capture` calls. R1 then surfaced six concerns; this session
+fixes the four not already addressed in Session 2 + the two new ones.
+
+**C1 (CRITICAL, double-slide):** `#dispatchNav` used
+`queueMicrotask(cleanup)` on the `history.back()`/`history.forward()`
+paths. The orchestrator's `goto`/`history.back()` re-fires
+`beforeNavigate`; if the in-flight flag clears before that re-entry,
+the orchestrator re-processes its own dispatch as a new transition
+(cancels + drives a second slide plan). With `queueMicrotask`, the
+microtask drained BEFORE `popstate`'s macrotask, so the flag was
+already false on re-entry. R1-A verified: sample trajectory
+`[-393,...,-0,-393,-359,...,-0,-393,...]` showed 2-3 slides on a
+single gesture.
+
+Fix: removed the `setTimeout`-based cleanup entirely. The in-flight
+flag + a new `#dispatchTarget` field persist until the navigation
+lands; they are cleared in `#landAtRest` (called from
+`onSvelteKitAfterNavigate` on the destination route) or `unmount`
+(called from the host's `onDestroy` when the pilot route unmounts
+during the navigation). `onSvelteKitBeforeNavigate` checks BOTH the
+in-flight flag AND a target match (`to === #dispatchTarget`) so the
+orchestrator's own `goto`/`back` re-entry passes through regardless
+of timer/popstate ordering. For the `goto` path, `goto`'s promise
+resolves after the navigation lands so the `.finally` cleanup is
+safe. The `history.back`/`history.forward` paths have no promise to
+await, so they rely on the lifecycle hooks.
+
+**C4 (viewport-resize regression):** the orchestrator captured
+`viewportWidth`/`restingTranslate` once at `mount()` and never
+refreshed them. On a viewport resize (desktop <-> mobile, browser
+resize) the plan's `distance`/`restingTranslate` desynced from the
+inline style -> track jump + wrong drag-fraction.
+
+Fix: added `updateViewport(viewportWidth, restingTranslate)` on the
+orchestrator. The host's `ResizeObserver` calls it whenever the
+viewport's `clientWidth` changes. A transition already in flight
+keeps its locked plan (the slide continues to its settled
+translateX); only the next transition picks up the new width.
+
+**C5 (missing back-swipe gesture e2e):** added
+`e2e/messages-back-swipe.spec.ts`. Drives a real CDP touch gesture
+(`swipeBack` helper) on `/messages/<numeric>` through the new
+pipeline (`navPipelinePointer` -> orchestrator -> executor ->
+driver -> `goto`). Installs a rAF sampler over `.detail-scroll-pane`'s
+parent track; samples the `translateX` (m41) for 1.5s; asserts:
+
+- `delta > 200` (a slide actually ran)
+- `reversals === 0` (single monotonic slide, no double-slide)
+- `lastM41 > firstM41` (slide direction rightward, from `-W` toward 0)
+
+Also strengthened `e2e/tab-click-transition.spec.ts` to compute
+`reversals` and assert `reversals === 0` for the pilot's tab-click
+exit (the existing `delta>50` + `waitForURL` assertions let C1
+through). The new assertion guards against any failure mode that
+plays the slide more than once.
+
+**C5-B (tab-click slide-duration behavior change):** the orchestrator
+was using `executor.onCommit(0)` for tab-clicks, which fell back to
+the executor's `COMMIT_T_DEFAULT_MS = 300ms`. The non-pilot routes'
+CSS `duration-200` plays the same exit in 200ms, so the pilot's exit
+was visibly slower (300ms vs 200ms).
+
+Fix: added an optional `durationOverrideMs` to `CommitInput` and
+`NavExecutor.onCommit`. The orchestrator passes `TAB_CLICK_COMMIT_MS`
+(= `TRACK_TRANSITION_MS` = 200ms) on the tab-click commit path so the
+pilot's exit matches the non-pilot routes' CSS duration. Gesture
+commits leave the override undefined so the velocity-matched solver
+runs unchanged.
+
+**C2/C3 (stale `-W/2` comments):** updated to `-W`.
+
+Final e2e sweep (real, pasted verbatim):
+
+```
+$ bun run test:e2e -- e2e/messages-back-swipe.spec.ts \
+                    e2e/tab-click-transition.spec.ts \
+                    e2e/tab-exit-preview.spec.ts \
+                    e2e/fab.spec.ts \
+                    e2e/enter-animation.spec.ts \
+                    e2e/backtarget.spec.ts \
+                    e2e/header-tab-descent-cross-tab-exit.spec.ts \
+                    e2e/tab-history.spec.ts \
+                    --reporter=line
+Running 57 tests using 1 worker
+... (each test's animation capture logged)
+[57/57] e2e/tab-history.spec.ts:40:1 › toggling two tabs via swipe does not grow the history stack
+  57 passed (2.1m)
+```
+
+The new gesture e2e reports `reversals: 0` (single monotonic slide,
+no double-slide); `firstM41: -375, lastM41: -0, minM41: -393,
+maxM41: -0, sampleCount: 67` confirms the gesture's drag + commit
+played once from rest (-393) to full reveal (0).
+
+The strengthened tab-click-transition's pilot test reports
+`reversals: 0` with the trajectory `[-393, -393, -393, -393, -358,
+-298, -243, -195, -151, -113, -81, -54, -32, -16, -6, -1]`, a single
+monotonic 200ms slide (16 samples \* ~16ms ~= 256ms total, ~200ms for
+the moving phase).
+
+Unit tests (regression):
+
+```
+$ bun test src/lib/utils src/lib/stores
+ 423 pass
+ 0 fail
+ 1325 expect() calls
+Ran 423 tests across 20 files. [106.00ms]
+```
+
+### Session 4 (2026-07-06): R2-B audit concerns fixed (commit-phase pager publication gap)
+
+R2-A's `effect_update_depth_exceeded` in `SearchScopePager.svelte` was
+fixed by the architect (wrapped the `/search` capture in `untrack`,
+same pattern as the +layout fix). Not this cycle's work.
+
+**R2-B C1 (commit-phase pager publication gap):** the orchestrator
+published to the pager store ONLY during the live drag
+(`#publish(rawDragFraction)` called from `#interpretIntent` on each
+pointermove). During the commit rAF slide the executor ticked the
+track internally but had no callback to the orchestrator, so
+`pager.dragging` stayed stale and `coverProgress` / `backMorph` /
+`fractionalIndex` froze at their last live-drag values. Result: on
+the pilot, the FAB FREEZES at its last live-drag scale during the
+~100-600ms commit slide; for tab-clicks (which never have a live-drag
+phase) the orchestrator never published to the pager during the 200ms
+slide at all, so the FAB stayed at scale 0 the whole time.
+
+Fix: added an optional `onTick(progress, liveOffset)` callback to
+`NavExecutor`, fired after each commit rAF sample (`#tick`) and after
+the first commit frame in `onCommit`. The orchestrator registers an
+`onTick` handler (`#onExecutorTick`) that calls `#publish(progress)`
+to update `#publication.progress` and re-publish to the pager store
+each frame, so the FAB / Header / fractionalIndex track the slide
+during the commit phase (matching the live-drag phase's per-frame
+publication).
+
+**R2-B C2 (comment accuracy):** `NavPipelineHost.svelte:130-133`
+says the orchestrator publishes "on every drag-move / commit rAF
+tick." After the C1 fix this is accurate: drag-move publishes via
+`#interpretIntent`, commit rAF publishes via `#onExecutorTick`.
+
+**R2-B C3 (missing coverage):** extended
+`e2e/messages-back-swipe.spec.ts` to sample the FAB atom's computed
+`transform.scale` each frame alongside the track m41. Added
+`fabScaleDelta` to the capture (the range of FAB scale values across
+the in-flight window) and an assertion that
+`fabScaleDelta > 0.1`. A frozen publication (no `onTick`) produces
+`fabScaleDelta === 0`; a transitioning publication produces a
+non-zero delta. The assertion catches R2-B C1's regression signature.
+
+Final e2e sweep (real, pasted verbatim):
+
+```
+$ bun run test:e2e -- e2e/messages-back-swipe.spec.ts \
+                    e2e/tab-click-transition.spec.ts \
+                    e2e/tab-exit-preview.spec.ts \
+                    e2e/fab.spec.ts \
+                    e2e/reproduce-user-bugs.spec.ts \
+                    e2e/enter-animation.spec.ts \
+                    e2e/backtarget.spec.ts \
+                    e2e/tab-history.spec.ts \
+                    --reporter=line
+Running 68 tests using 1 worker
+... (each test's capture logged)
+[68/68] e2e/tab-history.spec.ts:40:1 › toggling two tabs via swipe does not grow the history stack
+  68 passed (2.5m)
+```
+
+The gesture e2e reports `reversals: 0, fabScaleDelta: 0.999998`;
+the FAB transitions from scale ~0 to scale ~1 during the commit slide
+(single monotonic slide, no double-slide, no frozen publication).
+
+Unit tests (regression):
+
+```
+$ bun test src/lib/utils src/lib/stores
+ 423 pass
+ 0 fail
+ 1325 expect() calls
+Ran 423 tests across 20 files. [119.00ms]
+```
+
+### Session 5 (2026-07-07): R3 audit concerns fixed (release-decision gate)
+
+**R3-B C1 (small-swipe commits) + R3-B C2 (reversed gestures commit):**
+both share a root cause: the orchestrator resolved the plan ONCE at
+gesture start (with the commit intent, `progressDirection=0`) and
+never applied GPL's `SWIPE_COMMIT` + reversal gate at release. A
+30px accidental drag navigated (the classifier emitted `committed`
+at the 10px decide threshold with no distance check); a reversed
+gesture also committed (the plan was never re-resolved with the
+cancelled intent, and `executor.onCancel` delegated to `onCommit`
+using the locked commit plan).
+
+Fix: added `SWIPE_COMMIT = 60` to `gesture-constants.ts` (the
+shared constant file; GPL defines its own local copy at
+`GesturePageLayout.svelte:275`). In the orchestrator's
+`#interpretIntent`, replaced the separate `committed` / `cancelled`
+branches with a unified release gate:
+
+```ts
+const shouldCommit = dragDistance >= SWIPE_COMMIT && !reversed;
+if (shouldCommit) {
+	executor.onCommit(intent.releaseVelocity);
+} else {
+	executor.onCancel(intent.releaseVelocity);
+}
+```
+
+Modified `executor.onCancel` to internally override the plan's
+`progressDirection` to 1 so the commit integrator targets FROM
+(progress 0, snap back) instead of TO (progress 1, commit). The plan
+was locked at gesture-start with `progressDirection=0` (commit);
+`onCancel` creates a shallow copy with `progressDirection: 1` before
+delegating to `onCommit`. This preserves the geometry (axis, distance,
+restingTranslate) while flipping the integration target.
+
+**R3-A C1 (stale docstring):** updated `#publish`'s docstring to
+describe the actual publication path: the orchestrator publishes
+inline via `#republishToPager` (not via the host's `$effect`, which
+only handles the at-rest reset); the parameter receives the RAW drag
+fraction from the live-drag path and the executor's current progress
+from the commit path (`#onExecutorTick`).
+
+**Coverage:** added two new test cases in
+`e2e/messages-back-swipe.spec.ts`:
+
+- "partial swipe (< 60px) cancels and stays on the pilot route":
+  drives a 30px rightward swipe (below SWIPE_COMMIT), asserts the URL
+  does NOT change (the gesture cancelled).
+- "reversed swipe (right then back past start) cancels and stays on
+  the pilot route": drives a 200px rightward swipe then reverses past
+  start (offsetX < 0), asserts the URL does NOT change.
+
+Final e2e sweep (real, pasted verbatim):
+
+```
+$ bun run test:e2e -- e2e/messages-back-swipe.spec.ts \
+                    e2e/tab-click-transition.spec.ts \
+                    e2e/tab-exit-preview.spec.ts \
+                    e2e/fab.spec.ts \
+                    e2e/reproduce-user-bugs.spec.ts \
+                    e2e/enter-animation.spec.ts \
+                    e2e/backtarget.spec.ts \
+                    e2e/tab-history.spec.ts \
+                    --reporter=line
+Running 70 tests using 1 worker
+  70 passed (2.4m)
+```
+
+Unit tests (regression):
+
+```
+$ bun test src/lib/utils src/lib/stores
+ 423 pass
+ 0 fail
+ 1325 expect() calls
+Ran 423 tests across 20 files. [110.00ms]
+```
+
+### Session 6 (2026-07-07): R4-A concern fixed (rebound-based reversed forwarding)
+
+**R4-A C1 (rebound-cancel divergence from GPL):**
+`navPipelinePointer.onEnd` accepted only `(deltaX: number)` and discarded
+detectSwipe's `velocity` and `reversed` signals. The orchestrator's
+classifier computed its own `reversed` based on offset-sign-crossing-zero,
+which is a different signal from detectSwipe's rebound-based `reversed`
+(peak minus final with a forward-fling gate). Result: a rebound gesture
+(drag right 200px, rebound to +130, release slowly) had `offsetX=+130`
+(stays positive), so the classifier's `reversed=false`, but detectSwipe's
+`reversed=true` (rebound=70 >= 25, no fling). GPL cancels; the pipeline
+committed and navigated.
+
+Fix: `navPipelinePointer.onEnd` now accepts the full `EndHandler`
+signature `(deltaX, velocity, reversed)` and forwards all three to
+`orchestrator.onPointerUp(x, y, velocity, reversed)`. The
+orchestrator's `onPointerUp` accepts optional `velocity` and `reversed`
+parameters; when provided, they override the classifier's own estimates
+after classification (so the classifier's state-machine transition runs
+normally, but the release gate sees detectSwipe's authoritative
+rebound-based `reversed` and trailing-window `velocity`). The release
+gate's comment was updated to reference "the rebound-based `reversed`
+signal forwarded from detectSwipe (the same source the non-pilot routes
+use)" instead of the inaccurate "matching GesturePageLayout" phrasing.
+
+The coordinator also fixed the `buildHandlers` test helper's `onEnd`
+signature (was `(deltaX)`, now `(deltaX, velocity, reversed)`).
+
+**Coverage:** added "rebound swipe" test case in
+`e2e/messages-back-swipe.spec.ts`: drives a CDP touch from startX=120
+to peakX=320 (+200px, past SWIPE_COMMIT), then rebounds to endX=250
+(+130px, rebound=70 >= 25), released slowly (no forward fling).
+Asserts the pilot stays on `/messages/[id]` (cancel, not commit).
+
+Final e2e sweep (real, pasted verbatim):
+
+```
+$ bun run test:e2e -- e2e/messages-back-swipe.spec.ts \
+                    e2e/tab-click-transition.spec.ts \
+                    e2e/tab-exit-preview.spec.ts \
+                    e2e/fab.spec.ts \
+                    e2e/reproduce-user-bugs.spec.ts \
+                    e2e/enter-animation.spec.ts \
+                    e2e/backtarget.spec.ts \
+                    e2e/tab-history.spec.ts \
+                    --reporter=line
+Running 71 tests using 1 worker
+  71 passed (2.5m)
+```
+
+Unit tests (regression):
+
+```
+$ bun test src/lib/utils src/lib/stores
+ 423 pass
+ 0 fail
+ 1325 expect() calls
+Ran 423 tests across 20 files. [111.00ms]
+```
+
+## Failures
+
+Per-round audit state lives in `docs/RV20-C05b1-Audit-{01..NN}.md`.
+
+- **Round 1 (architect, 2-auditor, clean prompt + e2e gate): 0/2 PASS.**
+  Both FAIL; six unique concerns. The most serious (auditor A, C1): the
+  `history.back()` path uses `queueMicrotask(cleanup)`, which drains
+  before `popstate`'s macrotask, so `#navDispatchInFlight` is false on
+  re-entry -> the orchestrator re-processes -> the slide plays TWICE on
+  the pilot's back-target (`/messages/inbox`). Empirically verified
+  (sampleCount 56 vs 24/23 for chip-exits; samples show 2-3 slides). The
+  existing e2e missed it (asserts `delta>50`, not replay). Both auditors
+  also flagged the stale `-W/2` comments (C2/C3), the viewport-resize
+  regression (C4), and the missing back-swipe gesture e2e (C5); the
+  gesture e2e would have caught C1. Auditor B also flagged the tab-click
+  slide-duration behavior change (300ms vs GPL's 200ms). C1 fix:
+  macrotask (`setTimeout`) instead of microtask. All six being fixed.
+  Detailed in `docs/RV20-C05b1-Audit-01.md`.
+
+Consecutive pass votes: **0** (R1 carried six concerns, incl. the
+serious C1 double-slide bug).
+
 ## Coverage bullets (round-independent)
 
 The pilot's transition correctness is verified by:

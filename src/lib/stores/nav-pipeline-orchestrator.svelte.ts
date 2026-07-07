@@ -65,7 +65,7 @@ import {
 } from '$lib/utils/nav-resolvers';
 import { getRouteData } from '$lib/utils/route-data';
 import { hopForHref, isTabRootPath } from '$lib/utils/history-nav';
-import { TRACK_TRANSITION_MS } from '$lib/utils/gesture-constants';
+import { TRACK_TRANSITION_MS, SWIPE_COMMIT } from '$lib/utils/gesture-constants';
 import type { RouteTag } from '$lib/utils/route-data';
 import type { TransitionPlan } from '$lib/utils/nav-resolvers';
 
@@ -309,7 +309,8 @@ export class NavPipelineOrchestrator {
 		this.#executor = new NavExecutor({
 			driver: this.#driver,
 			now: this.#clock,
-			onSettle: (progressDirection) => this.#onExecutorSettle(progressDirection)
+			onSettle: (progressDirection) => this.#onExecutorSettle(progressDirection),
+			onTick: (progress) => this.#onExecutorTick(progress)
 		});
 		this.#lifecycle.mount();
 		this.#lifecycle.activate();
@@ -391,9 +392,25 @@ export class NavPipelineOrchestrator {
 		this.forwardEvent('pointermove', x, y, null);
 	}
 
-	/** A pointerup arrived. */
-	onPointerUp(x: number, y: number): void {
-		this.forwardEvent('pointerup', x, y, null);
+	/** A pointerup arrived. When `velocity` and `reversed` are provided
+	 *  (from `detectSwipe`'s `EndHandler`), they override the
+	 *  classifier's own estimates: detectSwipe's rebound-based
+	 *  `reversed` (peak minus final, with a forward-fling gate) and
+	 *  trailing-window `velocity` are the authoritative release
+	 *  signals, matching the non-pilot routes' commit/cancel decision. */
+	onPointerUp(x: number, y: number, velocity?: number, reversed?: boolean): void {
+		const inputs = this.#mountInputs;
+		if (inputs === null) return;
+		const event: IntentEvent = { kind: 'pointerup', x, y, t: this.#clock(), target: null };
+		this.#intent = classify(this.#intent, event, this.#classifierOpts, inputs.viewportWidth);
+		// Override with detectSwipe's authoritative release signals.
+		if (velocity !== undefined) {
+			this.#intent = { ...this.#intent, releaseVelocity: velocity, velocity };
+		}
+		if (reversed !== undefined) {
+			this.#intent = { ...this.#intent, reversed };
+		}
+		this.#interpretIntent();
 	}
 
 	/** A pointercancel arrived. */
@@ -431,17 +448,23 @@ export class NavPipelineOrchestrator {
 			executor.onDragMove(trackProgress, intent.offset);
 			this.#publish(raw);
 		}
-		// Released.
-		if (intent.micro === 'committed') {
+		// Released: apply the commit-vs-cancel gate.
+		// The orchestrator resolves the plan ONCE at gesture start
+		// (progressDirection=0, commit). At release the orchestrator
+		// decides commit vs cancel based on drag distance + the
+		// rebound-based `reversed` signal forwarded from detectSwipe
+		// (the same source the non-pilot routes use): commit iff
+		// `dragDistance >= SWIPE_COMMIT && !reversed`.
+		if (intent.micro === 'committed' || intent.micro === 'cancelled') {
 			if (this.#pendingGesture !== null) {
-				executor.onCommit(intent.releaseVelocity);
-			}
-			this.#intent = initialIntentState();
-			return;
-		}
-		if (intent.micro === 'cancelled') {
-			if (this.#pendingGesture !== null) {
-				executor.onCancel(intent.releaseVelocity);
+				const dragDistance = Math.abs(intent.offset);
+				const reversed = intent.reversed;
+				const shouldCommit = dragDistance >= SWIPE_COMMIT && !reversed;
+				if (shouldCommit) {
+					executor.onCommit(intent.releaseVelocity);
+				} else {
+					executor.onCancel(intent.releaseVelocity);
+				}
 			}
 			this.#intent = initialIntentState();
 			return;
@@ -561,6 +584,16 @@ export class NavPipelineOrchestrator {
 
 	// -----------------------------------------------------------------------
 	// Settle: dispatch the navigation on a commit; land on a cancel.
+
+	/** Per-frame callback fired by the executor after each commit rAF
+	 *  sample. Publishes the executor's current progress so downstream
+	 *  consumers (the pager store, read by the FAB / Header /
+	 *  fractionalIndex layers) track the slide during the commit
+	 *  phase, matching the live-drag phase's per-frame publication. */
+	#onExecutorTick(progress: number): void {
+		if (this.#publication.plan === null) return;
+		this.#publish(progress);
+	}
 
 	#onExecutorSettle(progressDirection: 0 | 1): void {
 		const pendingGesture = this.#pendingGesture;
@@ -767,12 +800,15 @@ export class NavPipelineOrchestrator {
 		});
 	}
 
-	/** Internal: refresh the publication's progress. The host's $effect
-	 *  re-runs on each publication change and re-publishes to the pager
-	 *  store. The `rawDragFraction` is what FAB / Header consumers see
-	 *  (their consumer-side thresholds apply separately); the executor's
-	 *  own `progress` is the threshold-absorbed value that drives the
-	 *  track translate, which is a different value. */
+	/** Internal: refresh the publication's progress and re-publish to
+	 *  the pager store. Called from two paths: (1) the live-drag path
+	 *  (`#interpretIntent`) passes the RAW drag fraction (offsetX / W);
+	 *  (2) the commit path (`#onExecutorTick`) passes the executor's
+	 *  current progress. Both values drive `coverProgress` /
+	 *  `backMorph` / `fractionalIndex` via `#republishToPager`. The
+	 *  host's `$effect` only handles the at-rest reset (when
+	 *  `publication.plan` becomes null); the in-flight publication is
+	 *  the orchestrator's responsibility. */
 	#publish(rawDragFraction: number): void {
 		const current = this.#publication;
 		if (current.plan === null) return;

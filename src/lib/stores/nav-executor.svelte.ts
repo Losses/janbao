@@ -66,6 +66,16 @@ export type NavExecutorClockFn = () => number;
  *  the right post-settle action. */
 export type NavExecutorSettleFn = (progressDirection: 0 | 1) => void;
 
+/** Per-commit-frame callback. The executor fires this after each
+ *  commit rAF sample so the orchestrator can publish progress to
+ *  downstream consumers (the pager store, which the FAB / Header /
+ *  fractionalIndex layers read). Without this callback the
+ *  orchestrator's publication would freeze during the commit slide
+ *  (the live-drag path publishes via the orchestrator's
+ *  `#interpretIntent`, but the commit rAF is internal to the
+ *  executor). */
+export type NavExecutorTickFn = (progress: number, liveOffset: number) => void;
+
 /** Constructor options for `NavExecutor`. */
 export interface NavExecutorOptions {
 	/** The driver the executor writes through. In Cycle 4 shadow mode
@@ -79,6 +89,11 @@ export interface NavExecutorOptions {
 	 *  SvelteKit navigation; absent in Cycle 4 shadow mode (no caller
 	 *  triggers a commit). */
 	readonly onSettle?: NavExecutorSettleFn;
+	/** Optional per-frame callback fired after each commit rAF sample
+	 *  so the orchestrator can publish progress to its downstream
+	 *  consumers during the commit slide. Absent in Cycle 4 shadow
+	 *  mode. */
+	readonly onTick?: NavExecutorTickFn;
 }
 
 /** Internal alias kept for the private field type. */
@@ -110,6 +125,7 @@ export class NavExecutor {
 	readonly #driver: NavDomDriver;
 	readonly #now: ClockFn;
 	readonly #onSettle: NavExecutorSettleFn | null;
+	readonly #onTick: NavExecutorTickFn | null;
 	#rafId: number | null = null;
 	#settled = false;
 
@@ -117,6 +133,7 @@ export class NavExecutor {
 		this.#driver = opts.driver;
 		this.#now = opts.now ?? defaultNow;
 		this.#onSettle = opts.onSettle ?? null;
+		this.#onTick = opts.onTick ?? null;
 	}
 
 	/** Reactive read of the executor state record. In the integrated
@@ -188,6 +205,10 @@ export class NavExecutor {
 		});
 		this.#state = next;
 		this.#publish();
+		// Fire onTick so the orchestrator's publication (pager store,
+		// FAB / Header consumers) transitions seamlessly from the live
+		// drag phase to the commit phase at the same progress.
+		this.#onTick?.(next.progress, next.liveOffset);
 		if (next.phase === 'committing') {
 			this.#ensureRaf();
 		} else {
@@ -198,11 +219,16 @@ export class NavExecutor {
 		}
 	}
 
-	/** The drag released below the threshold. The plan's
-	 *  `progressDirection` carries the cancel-vs-commit distinction
-	 *  (a cancel plan plays the same momentum integral toward target
-	 *  0 instead of target 1), so this delegates to `onCommit`. */
+	/** The drag released below the commit threshold OR reversed past
+	 *  the start. Overrides the plan's `progressDirection` to 1 so
+	 *  the commit integrator targets FROM (progress 0, snap back)
+	 *  instead of TO (progress 1, commit). The plan was locked at
+	 *  gesture-start with the commit intent; the orchestrator's
+	 *  release gate (SWIPE_COMMIT + reversal) decides whether to
+	 *  call `onCommit` (target TO) or `onCancel` (target FROM). */
 	onCancel(releaseVelocityPxPerMs: number): void {
+		if (this.#plan === null) return;
+		this.#plan = { ...this.#plan, progressDirection: 1 };
 		this.onCommit(releaseVelocityPxPerMs);
 	}
 
@@ -255,8 +281,10 @@ export class NavExecutor {
 	}
 
 	/** The single rAF callback. Samples one commit frame, publishes
-	 *  it, and either reschedules or stops. Fires the settle callback
-	 *  exactly once when the integrator reaches the target. */
+	 *  it, fires `onTick` so the orchestrator can re-publish to its
+	 *  downstream consumers, and either reschedules or stops. Fires
+	 *  the settle callback exactly once when the integrator reaches
+	 *  the target. */
 	#tick = (): void => {
 		this.#rafId = null;
 		const plan = this.#plan;
@@ -265,6 +293,7 @@ export class NavExecutor {
 		const sample = sampleFrame(this.#state, plan, this.#now());
 		this.#state = sample.state;
 		this.#publish();
+		this.#onTick?.(sample.state.progress, sample.state.liveOffset);
 		if (sample.done) {
 			this.#fireSettle(plan.progressDirection);
 		} else {

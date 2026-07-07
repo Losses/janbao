@@ -108,9 +108,16 @@
 			}
 		})();
 		if (payload) {
-			pageCache.capture('/search', scope, {
-				data: payload,
-				source: { route: '/search', query: data.query, sort: data.sort, page: data.page }
+			// `capture` merges into the cache (a read+write of the cache's
+			// $state). Untrack it so this effect subscribes only to `data`
+			// (re-runs on navigation) and not to the cache (which would
+			// loop: effect_update_depth_exceeded). Same fix as the
+			// cache-seeding effect in src/routes/+layout.svelte.
+			untrack(() => {
+				pageCache.capture('/search', scope, {
+					data: payload,
+					source: { route: '/search', query: data.query, sort: data.sort, page: data.page }
+				});
 			});
 		}
 	});

@@ -2,6 +2,11 @@
 // Put here to avoid circular dependency chains between components and tabs configuration.
 export const HEADER_MORPH_THRESHOLD = 0.2; // 20% drag distance to complete Header morph / Tab collapse
 export const PILL_EXPANSION_THRESHOLD = 0.5; // 50% drag distance to begin active tab pill expansion
+// Minimum horizontal drag (px) for a swipe to commit (navigate to the
+// target). Below this the gesture cancels (snaps back to rest).
+// Consumer: GesturePageLayout's `onSwipeEnd` and the 5b1 pilot
+// orchestrator's release gate.
+export const SWIPE_COMMIT = 60;
 
 // Deep-title crossfade (Header.svelte unified title state machine). The vertical
 // slide between outgoing/incoming titles on a drag-release or non-gesture nav.
