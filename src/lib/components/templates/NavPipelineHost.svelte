@@ -159,11 +159,15 @@
 		sync();
 		mq.addEventListener('change', sync);
 
-		// ResizeObserver on the viewport so the orchestrator sees the
-		// current width (the plan's `distance` and `restingTranslate`
-		// both derive from it).
+		// ResizeObserver on the viewport so the host's reactive
+		// `viewportWidth` stays in sync with the live dimensions and
+		// propagates into the orchestrator's plan math (distance +
+		// restingTranslate) via `updateViewport`. Without this the plan
+		// would desync from the inline style on a resize.
 		const ro = new ResizeObserver(() => {
-			if (viewportEl) viewportWidth = viewportEl.clientWidth;
+			if (!viewportEl) return;
+			viewportWidth = viewportEl.clientWidth;
+			orchestrator.updateViewport(viewportEl.clientWidth, -viewportEl.clientWidth);
 		});
 		if (viewportEl) ro.observe(viewportEl);
 
@@ -267,7 +271,7 @@
 	// pager.coverProgress at 0).
 	// The track's resting transform. Always applied via the inline
 	// `style` attribute so the track stays at the centre-visible rest
-	// position (-W/2 px for the 2-panel layout) between transitions.
+	// position (-W px for the 2-panel layout) between transitions.
 	// The driver writes the same `transform` property via
 	// `style.setProperty` during a transition; the inline style and the
 	// driver write compose without conflict because the driver's value

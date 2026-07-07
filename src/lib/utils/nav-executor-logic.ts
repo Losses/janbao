@@ -165,6 +165,14 @@ export interface CommitInput {
 	readonly reducedMotion: boolean;
 	/** Commit-start timestamp (ms, caller's clock). */
 	readonly now: number;
+	/** Optional explicit duration (ms). When set, `solveCommitDuration`
+	 *  skips the velocity-matched solver and uses this duration
+	 *  directly. Cycle 5b1's orchestrator uses this for tab-click
+	 *  exits (a discrete nav, not a finger release) so the slide
+	 *  matches the 200ms duration of the non-pilot routes' CSS
+	 *  `duration-200`. Untyped for gesture commits (the velocity-matched
+	 *  solver runs). */
+	readonly durationOverrideMs?: number;
 }
 
 /** Internal helper: clamp a value to [lo, hi]. */
@@ -195,6 +203,11 @@ export function solveCommitDuration(input: CommitInput, currentProgress: number)
 		// the caller returns idle with progress = target.
 		return { durationMs: 0, progressVelocity: 0, snapped: true };
 	}
+	// Explicit duration override (Cycle 5b1's tab-click path): skip the
+	// velocity-matched solver and use the supplied duration directly.
+	// The integrator's `progressVelocity` is unused when the caller
+	// supplies a duration; pass through the velocity-derived value for
+	// diagnostic continuity only.
 	const distancePx = Math.max(Math.abs(input.plan.pageTrack.distance), 1);
 	const clampedVelPx = clamp(
 		input.releaseVelocityPxPerMs,
@@ -202,6 +215,13 @@ export function solveCommitDuration(input: CommitInput, currentProgress: number)
 		COMMIT_VELOCITY_CLAMP_PX_PER_MS
 	);
 	const progressVelocity = clampedVelPx / distancePx;
+	if (input.durationOverrideMs !== undefined) {
+		return {
+			durationMs: input.durationOverrideMs,
+			progressVelocity,
+			snapped: false
+		};
+	}
 	const target = input.plan.progressDirection === 0 ? 1 : 0;
 	const deltaProgress = Math.abs(target - currentProgress);
 	const directionSign = Math.sign(target - currentProgress);

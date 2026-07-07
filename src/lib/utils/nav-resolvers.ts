@@ -55,8 +55,9 @@ export type PageTrackAxis = 'left' | 'right';
  *  `restingTranslate` is the track's translateX (px) at progress=0. Most
  *  plans leave it at 0 (a single-panel track where progress=0 means
  *  translateX=0). The multi-panel pilot (Cycle 5b1) sets it to
- *  `-viewportWidth / 2` so the centre panel (the right half of a
- *  2-panel track) fills the viewport at rest. */
+ *  `-viewportWidth` so the centre panel (the right half of the 2*W
+ *  track) fills the viewport at rest and the left panel sits
+ *  off-screen. */
 export interface PageTrackPlan {
 	readonly axis: PageTrackAxis;
 	readonly distance: number;

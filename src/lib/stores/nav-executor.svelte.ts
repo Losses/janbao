@@ -167,8 +167,14 @@ export class NavExecutor {
 	 *  frame, and (for the momentum path) schedules the rAF. For
 	 *  reduced motion the snap path runs and the rAF is not
 	 *  scheduled. Resets the settle flag so the next settle fires
-	 *  exactly once per commit. */
-	onCommit(releaseVelocityPxPerMs: number): void {
+	 *  exactly once per commit.
+	 *
+	 *  `durationOverrideMs` (optional): skip the velocity-matched
+	 *  solver and use the supplied duration directly. Cycle 5b1's
+	 *  orchestrator uses this for tab-click exits so the slide matches
+	 *  the non-pilot routes' 200ms CSS duration; gesture commits leave
+	 *  it undefined so the velocity-matched solver runs. */
+	onCommit(releaseVelocityPxPerMs: number, durationOverrideMs?: number): void {
 		if (this.#plan === null) return;
 		this.#settled = false;
 		const plan = this.#plan;
@@ -177,7 +183,8 @@ export class NavExecutor {
 			releaseVelocityPxPerMs,
 			plan,
 			reducedMotion,
-			now: this.#now()
+			now: this.#now(),
+			durationOverrideMs
 		});
 		this.#state = next;
 		this.#publish();

@@ -41,7 +41,6 @@
 
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
-import { getNavigationStore } from '$lib/stores/navigation.svelte';
 import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
 import type { VoidHandler } from '$lib/types/handlers';
@@ -66,8 +65,16 @@ import {
 } from '$lib/utils/nav-resolvers';
 import { getRouteData } from '$lib/utils/route-data';
 import { hopForHref, isTabRootPath } from '$lib/utils/history-nav';
+import { TRACK_TRANSITION_MS } from '$lib/utils/gesture-constants';
 import type { RouteTag } from '$lib/utils/route-data';
 import type { TransitionPlan } from '$lib/utils/nav-resolvers';
+
+/** Commit duration for the pilot's tab-click exit. Matches the
+ *  non-pilot routes' CSS `transition-transform duration-200`
+ *  (`TRACK_TRANSITION_MS`) so the pilot's exit slide is
+ *  indistinguishable from a non-pilot GPL route's tab-exit. Gesture
+ *  commits use the velocity-matched solver instead. */
+const TAB_CLICK_COMMIT_MS = TRACK_TRANSITION_MS;
 
 /** The host's track / FAB / Header element refs as supplied to the
  *  driver each `write`. Mirrors the structural shape of
@@ -239,6 +246,12 @@ export class NavPipelineOrchestrator {
 	 *  re-entering beforeNavigate. Lets the orchestrator's
 	 *  beforeNavigate handler pass it through. */
 	#navDispatchInFlight = $state(false);
+	/** The most recent dispatch's target pathname. The robust
+	 *  pass-through check in `onSvelteKitBeforeNavigate`: matching
+	 *  the nav's `to` against the dispatched target catches the
+	 *  orchestrator's own `goto` / `history.back()` re-entry
+	 *  regardless of timer or popstate ordering. */
+	#dispatchTarget: string | null = null;
 	/** Reactive publication (the source of truth for the host's $effect
 	 *  that mirrors into the pager store). */
 	#publication = $state<OrchestratorPublication>(AT_REST_PUBLICATION);
@@ -308,6 +321,25 @@ export class NavPipelineOrchestrator {
 		this.#chipExitState = false;
 	}
 
+	/** Update the viewport dimensions on a host resize. The
+	 *  orchestrator captures `viewportWidth` / `restingTranslate` once
+	 *  at mount; on a viewport resize (e.g. desktop -> mobile, or
+	 *  browser resize) the host's ResizeObserver detects the new
+	 *  width and calls this so subsequent plan resolutions and
+	 *  drag-fraction computations use the live width. A transition
+	 *  that is already in flight keeps its locked plan (the slide
+	 *  continues to its settled translateX); only the NEXT transition
+	 *  picks up the new width. */
+	updateViewport(viewportWidth: number, restingTranslate: number): void {
+		const current = this.#mountInputs;
+		if (current === null) return;
+		this.#mountInputs = {
+			...current,
+			viewportWidth,
+			restingTranslate
+		};
+	}
+
 	/** Unmount: stop the rAF, drop the plan, run lifecycle teardowns.
 	 *  Idempotent. */
 	unmount(): void {
@@ -317,6 +349,7 @@ export class NavPipelineOrchestrator {
 		this.#pendingGesture = null;
 		this.#pendingTabExit = null;
 		this.#navDispatchInFlight = false;
+		this.#dispatchTarget = null;
 		this.#intent = initialIntentState();
 		this.#publication = AT_REST_PUBLICATION;
 		this.#lifecycle.deactivate();
@@ -562,27 +595,26 @@ export class NavPipelineOrchestrator {
 	 *  the in-flight flag lets that one pass. */
 	#dispatchNav(target: string): void {
 		this.#navDispatchInFlight = true;
-		const navStore = getNavigationStore();
-		navStore.navInFlight = true;
+		this.#dispatchTarget = target;
 		const hop = hopForHref(target);
-		const cleanup = (): void => {
-			this.#navDispatchInFlight = false;
-		};
+		// The in-flight flag + dispatch target persist until the
+		// navigation lands. They are cleared in `#landAtRest` (called
+		// from `onSvelteKitAfterNavigate` on the destination route)
+		// or `unmount` (called from the host's `onDestroy` when the
+		// pilot route unmounts during the navigation). For the `goto`
+		// path, `goto`'s promise resolves after the navigation lands
+		// so the `.finally` cleanup is safe; the `history.back` /
+		// `history.forward` paths have no promise to await, so they
+		// rely on the lifecycle hooks to clear.
 		if (hop === 'back') {
 			history.back();
-			// history.back() re-fires beforeNavigate asynchronously; clear
-			// the in-flight flag on the next macrotask so the back's
-			// beforeNavigate passes through.
-			queueMicrotask(cleanup);
 		} else if (hop === 'forward') {
 			history.forward();
-			queueMicrotask(cleanup);
 		} else {
-			void goto(target, { replaceState: false })
-				.catch(() => {
-					navStore.navInFlight = false;
-				})
-				.finally(cleanup);
+			void goto(target, { replaceState: false }).finally(() => {
+				this.#navDispatchInFlight = false;
+				this.#dispatchTarget = null;
+			});
 		}
 	}
 
@@ -592,6 +624,7 @@ export class NavPipelineOrchestrator {
 		this.#pendingGesture = null;
 		this.#pendingTabExit = null;
 		this.#navDispatchInFlight = false;
+		this.#dispatchTarget = null;
 		this.#executor?.onLand();
 		if (inputs !== null) {
 			this.#stateMachine.onLand(inputs.fromTag);
@@ -613,8 +646,15 @@ export class NavPipelineOrchestrator {
 		if (inputs === null) return false;
 		const from = navigation.from?.url.pathname ?? null;
 		const to = navigation.to?.url.pathname ?? null;
-		// The orchestrator's own goto re-entering: pass through.
+		// The orchestrator's own dispatch (goto / history.back /
+		// history.forward) re-entering beforeNavigate. Two checks: the
+		// in-flight flag (set at dispatch time) and a target match
+		// (catches the re-entry across timer / popstate ordering so
+		// the orchestrator never re-cancels its own nav).
 		if (this.#navDispatchInFlight) {
+			return false;
+		}
+		if (this.#dispatchTarget !== null && to === this.#dispatchTarget) {
 			return false;
 		}
 		// Only own transitions FROM the pilot route (a tab-click exit or
@@ -660,6 +700,7 @@ export class NavPipelineOrchestrator {
 		this.#pendingGesture = null;
 		this.#pendingTabExit = { target: to, svelteKitType: navigation.type, chipExit };
 		this.#navDispatchInFlight = false;
+		this.#dispatchTarget = null;
 		navigation.cancel();
 		this.#publication = {
 			plan,
@@ -671,12 +712,14 @@ export class NavPipelineOrchestrator {
 			chipExit
 		};
 		this.#chipExitState = chipExit;
-		// Drive the executor: dragStart at progress 0, then commit with a
-		// nominal release velocity (the tab-click is a discrete nav, not a
-		// finger release; the executor's velocity-matched commit falls
-		// back to the default ease for a near-zero velocity).
+		// Drive the executor: dragStart at progress 0, then commit with
+		// an explicit duration (`TAB_CLICK_COMMIT_MS`) matching the
+		// non-pilot routes' CSS `duration-200`. A tab-click is a
+		// discrete nav, not a finger release; the explicit duration
+		// keeps the pilot's exit animation consistent with the
+		// non-pilot routes' tab-exit.
 		this.#executor?.onDragStart(plan, 0, 0);
-		this.#executor?.onCommit(0);
+		this.#executor?.onCommit(0, TAB_CLICK_COMMIT_MS);
 		return true;
 	}
 

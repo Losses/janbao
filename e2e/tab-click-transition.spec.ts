@@ -89,9 +89,22 @@ async function captureExitAnimation(
 		const a = (window as unknown as AnimWindow).__exitAnim!;
 		const samples = a.samples;
 		const delta = samples.length > 0 ? Math.max(...samples) - Math.min(...samples) : 0;
+		// Direction-reversal count: a clean single-slide has 0
+		// reversals (the translateX moves in one direction for the
+		// whole transition). A transition that plays more than once
+		// produces at least 1 reversal.
+		let reversals = 0;
+		for (let i = 2; i < samples.length; i++) {
+			const d1 = samples[i - 1] - samples[i - 2];
+			const d2 = samples[i] - samples[i - 1];
+			if (d1 !== 0 && d2 !== 0 && Math.sign(d1) !== Math.sign(d2)) {
+				reversals++;
+			}
+		}
 		return {
 			animated: delta > 50, // Let's use a 50px threshold for animation
 			delta,
+			reversals,
 			sampleCount: samples.length,
 			samples
 		};
@@ -169,6 +182,18 @@ test.describe('Tab Click Exit Transitions', () => {
 
 		await page.waitForURL('/messages/inbox');
 		console.log('Messages tab click animation result:', anim);
-		expect(anim.animated, `Exit transition to messages tab should be animated, but got delta=${anim.delta} (samples: ${anim.samples.join(',')})`).toBe(true);
+		expect(
+			anim.animated,
+			`Exit transition to messages tab should be animated, but got delta=${anim.delta} (samples: ${anim.samples.join(',')})`
+		).toBe(true);
+		// The pilot's exit slide must play exactly once. The pipeline
+		// drives the slide via the executor + driver and dispatches the
+		// SvelteKit nav on settle; the assertion guards against any
+		// failure mode that plays the slide more than once (which
+		// would surface as 1+ direction reversals in the trajectory).
+		expect(
+			anim.reversals,
+			`Pilot exit slide must play exactly once (reversals=${anim.reversals}; samples: ${anim.samples.join(',')})`
+		).toBe(0);
 	});
 });
