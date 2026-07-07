@@ -76,7 +76,6 @@
 	let trackEl: HTMLElement | null = $state(null);
 	let leftEl: HTMLElement | null = $state(null);
 	let centerEl: HTMLElement | null = $state(null);
-	let viewportWidth = $state(0);
 
 	// The back-target's tab label (drives the chip icon/label and the
 	// exit preview's `data-tab-panel`).
@@ -103,10 +102,6 @@
 	// the transform inline via `style.setProperty`; the trackStyle
 	// carries the structural CSS only (no transform, no transition).
 	const panelCount = 2;
-	// The track's resting translate: -W so the centre panel (the right
-	// half of the 2-panel track) fills the viewport at rest and the
-	// left panel sits off-screen to the left.
-	const restingTranslate = $derived(-viewportWidth);
 
 	// Publish the bound track element to the active-gesture-track store
 	// so the existing FloatingActionButtonLayer's Family A sampler (if
@@ -166,7 +161,6 @@
 		// would desync from the inline style on a resize.
 		const ro = new ResizeObserver(() => {
 			if (!viewportEl) return;
-			viewportWidth = viewportEl.clientWidth;
 			orchestrator.updateViewport(viewportEl.clientWidth, -viewportEl.clientWidth);
 		});
 		if (viewportEl) ro.observe(viewportEl);
@@ -194,7 +188,8 @@
 			fromTag: fromData.tag,
 			toTag: toData.tag,
 			fromTabIndex: centerTab,
-			toTabIndex: getCurrentTabIndex(leftHref)
+			toTabIndex: getCurrentTabIndex(leftHref),
+			centerTab
 		});
 		setNavPipelineOrchestrator(orchestrator);
 
@@ -269,21 +264,11 @@
 	// filling the viewport (the FAB SSR style test asserts scale(0)
 	// which the resting state produces via the FAB layer reading
 	// pager.coverProgress at 0).
-	// The track's resting transform. Always applied via the inline
-	// `style` attribute so the track stays at the centre-visible rest
-	// position (-W px for the 2-panel layout) between transitions.
-	// The driver writes the same `transform` property via
-	// `style.setProperty` during a transition; the inline style and the
-	// driver write compose without conflict because the driver's value
-	// overrides the inline style's value at the same property key. The
-	// invariant: the track ALWAYS has a `transform` value applied
-	// (either the resting one from the inline style or the live one
-	// from the driver), never blank, so the centre panel never falls
-	// back to its default translateX(0) which would expose the left
-	// panel briefly during the orchestrator's first frame.
-	const initialTrackTransform = $derived(
-		!isMobile ? '' : `transform: translateX(${restingTranslate}px);`
-	);
+	// The track's resting transform: CSS `translateX(-50%)` so the
+	// centre panel fills the viewport at SSR, before the browser
+	// measures viewportWidth. The driver writes px-based transforms via
+	// `style.setProperty` after hydration, overriding this CSS value.
+	const initialTrackTransform = $derived(!isMobile ? '' : 'transform: translateX(-50%);');
 
 	// HEADER_MORPH_THRESHOLD is published via the plan's `header`
 	// function (the resolver's header plan reads progress in [0,1] and

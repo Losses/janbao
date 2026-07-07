@@ -15,11 +15,13 @@
 
 /** True iff `pathname` is the 5b1 pilot conversation-detail route.
  *
- *  Matches `/messages/<numeric id>` (with optional `/pN` page suffix
- *  and any hash/query). Per the C05b1 spec this is the SOLE route the
- *  new pipeline drives in this cycle. The pilot's deep-link target and
- *  the tab-click exit destination (`/messages/inbox`) are NOT pilot
- *  routes: they stay on the legacy mechanism in 5b1.
+ *  Matches `/messages/<numeric id>` with an optional single-segment
+ *  suffix (e.g. `/pN` page, or any other single path segment after
+ *  stripping a trailing `/pN` page segment). Per the C05b1 spec this
+ *  is the SOLE route the new pipeline drives in this cycle. The pilot's
+ *  deep-link target and the tab-click exit destination
+ *  (`/messages/inbox`) are NOT pilot routes: they stay on the legacy
+ *  mechanism in 5b1.
  */
 export function isNavPipelinePilotRoute(pathname: string): boolean {
 	// Strip any trailing `/pN` page segment so paged conversations

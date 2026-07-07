@@ -174,6 +174,13 @@ export interface PipelineMountInputs {
 	/** Index of the back-target in the tab-bar's pill order, or -1
 	 *  when TO is not a tab root. */
 	readonly toTabIndex: number;
+	/** The pilot's `centerTab` prop (the tab index the conversation
+	 *  page is centered on, e.g. 2 for messages). When set, the
+	 *  orchestrator publishes `backMorph: null, targetIndex: null,
+	 *  fractionalIndex: centerTab` (constant) to the pager store,
+	 *  matching the centerTab branch of GesturePageLayout. When
+	 *  undefined (deep routes in 5b2), the morph values apply. */
+	readonly centerTab?: number;
 }
 
 /** The orchestrator's published reactive state for downstream
@@ -339,6 +346,46 @@ export class NavPipelineOrchestrator {
 			viewportWidth,
 			restingTranslate
 		};
+	}
+
+	/** Play a forward enter-slide animation (left panel → centre
+	 *  panel). Called from the host's `onMount` when the pilot route
+	 *  is reached via a forward SPA navigation from the backTarget.
+	 *  The track starts at `translateX(0)` (left panel visible) and
+	 *  slides to `translateX(-W)` (centre visible) over ~200ms via
+	 *  the executor's rAF, matching the non-pilot routes' CSS
+	 *  `duration-200`. No navigation is dispatched on settle (the
+	 *  route has already landed). */
+	playEnterAnimation(): void {
+		const inputs = this.#mountInputs;
+		const executor = this.#executor;
+		if (inputs === null || executor === null) return;
+		const w = inputs.viewportWidth;
+		if (w <= 0) return;
+		const plan: TransitionPlan = {
+			pageTrack: {
+				axis: 'left',
+				distance: w,
+				restingTranslate: 0
+			},
+			fab: () => ({ scale: 0, translateY: 0, visible: false }),
+			header: () => ({ morph: 0, titleCrossfade: 0, translateY: 0 }),
+			progressDirection: 0,
+			commitPhysics: 'momentum'
+		};
+		this.#pendingGesture = null;
+		this.#pendingTabExit = null;
+		this.#publication = {
+			plan,
+			progress: 0,
+			inFlight: true,
+			fromPathname: inputs.backTarget,
+			toPathname: inputs.fromPathname,
+			direction: 'forward',
+			chipExit: false
+		};
+		executor.onDragStart(plan, 0, 0);
+		executor.onCommit(0, TAB_CLICK_COMMIT_MS);
 	}
 
 	/** Unmount: stop the rAF, drop the plan, run lifecycle teardowns.
@@ -586,13 +633,34 @@ export class NavPipelineOrchestrator {
 	// Settle: dispatch the navigation on a commit; land on a cancel.
 
 	/** Per-frame callback fired by the executor after each commit rAF
-	 *  sample. Publishes the executor's current progress so downstream
-	 *  consumers (the pager store, read by the FAB / Header /
-	 *  fractionalIndex layers) track the slide during the commit
-	 *  phase, matching the live-drag phase's per-frame publication. */
+	 *  sample. Converts the executor's threshold-absorbed progress
+	 *  back to the raw drag-fraction scale the live-drag path uses,
+	 *  so `coverProgress` / `backMorph` / `fractionalIndex` are
+	 *  continuous across the drag-to-commit boundary (no FAB-scale
+	 *  reversal at commit start). */
 	#onExecutorTick(progress: number): void {
 		if (this.#publication.plan === null) return;
-		this.#publish(progress);
+		// Skip the first tick when progress is still 0 (the commit hasn't
+		// started integrating). This happens for sub-morph-threshold
+		// releases (drag 60-78px, raw < 0.2, threshold-absorbed progress
+		// clamped to 0). Without this guard, #thresholdToRaw(0) returns 0,
+		// causing coverProgress to dip from the last live-drag raw (~0.15)
+		// to 0, then jump back up on the next tick. Skipping keeps the
+		// last live-drag publish until the executor's progress is > 0.
+		if (progress <= 0) return;
+		const raw = this.#thresholdToRaw(progress);
+		this.#publish(raw);
+	}
+
+	/** Reverse the threshold-absorbed progress mapping so the commit
+	 *  phase publishes on the same raw scale as the live-drag phase.
+	 *  Forward: `threshold = (raw - 0.2) / 0.8` (for raw > 0.2).
+	 *  Reverse: `raw = 0.2 + 0.8 * threshold` (for threshold > 0);
+	 *  `raw = 0` for threshold <= 0 (cancel end, FAB fully retracted). */
+	#thresholdToRaw(thresholdProgress: number): number {
+		const THRESHOLD = 0.2;
+		if (thresholdProgress <= 0) return 0;
+		return THRESHOLD + (1 - THRESHOLD) * thresholdProgress;
 	}
 
 	#onExecutorSettle(progressDirection: 0 | 1): void {
@@ -789,26 +857,28 @@ export class NavPipelineOrchestrator {
 	resetPagerStore(): void {
 		const pager = getMobilePagerStore();
 		const inputs = this.#mountInputs;
-		const fromIdx = inputs?.fromTabIndex ?? -1;
+		const centerTab = inputs?.centerTab;
 		pager.set({
-			fractionalIndex: fromIdx,
+			fractionalIndex: centerTab ?? inputs?.fromTabIndex ?? -1,
 			dragging: false,
 			active: false,
-			backMorph: 0,
+			backMorph: centerTab !== undefined ? null : 0,
 			targetIndex: null,
 			coverProgress: 0
 		});
 	}
 
 	/** Internal: refresh the publication's progress and re-publish to
-	 *  the pager store. Called from two paths: (1) the live-drag path
-	 *  (`#interpretIntent`) passes the RAW drag fraction (offsetX / W);
-	 *  (2) the commit path (`#onExecutorTick`) passes the executor's
-	 *  current progress. Both values drive `coverProgress` /
-	 *  `backMorph` / `fractionalIndex` via `#republishToPager`. The
-	 *  host's `$effect` only handles the at-rest reset (when
-	 *  `publication.plan` becomes null); the in-flight publication is
-	 *  the orchestrator's responsibility. */
+	 *  the pager store. Called from two paths, both passing a RAW drag
+	 *  fraction on the same scale: (1) the live-drag path
+	 *  (`#interpretIntent`) passes `offsetX / W` directly; (2) the
+	 *  commit path (`#onExecutorTick`) converts the executor's
+	 *  threshold-absorbed progress back to raw via
+	 *  `#thresholdToRaw` before calling this. Both values drive
+	 *  `coverProgress` / `backMorph` / `fractionalIndex` via
+	 *  `#republishToPager`. The host's `$effect` only handles the
+	 *  at-rest reset (when `publication.plan` becomes null); the
+	 *  in-flight publication is the orchestrator's responsibility. */
 	#publish(rawDragFraction: number): void {
 		const current = this.#publication;
 		if (current.plan === null) return;
@@ -816,10 +886,13 @@ export class NavPipelineOrchestrator {
 		this.#republishToPager(rawDragFraction);
 	}
 
-	/** Republish the current publication to the pager store. Splits the
-	 *  raw drag fraction into the three consumer fields: `coverProgress`
-	 *  drives the FAB scale (Family B reader), `backMorph` drives the
-	 *  Header morph, `fractionalIndex` drives the tab-bar pill. */
+	/** Republish the current publication to the pager store. In
+	 *  centerTab mode (pilot route), publishes `backMorph: null,
+	 *  targetIndex: null, fractionalIndex: centerTab` (constant) so
+	 *  the Header stays in back-arrow mode and the tab-bar pill stays
+	 *  highlighted at centerTab throughout the gesture, matching GPL's
+	 *  centerTab branch. `coverProgress` still drives the FAB scale
+	 *  from the raw drag fraction. */
 	#republishToPager(rawDragFraction: number): void {
 		const pager = getMobilePagerStore();
 		const publication = this.#publication;
@@ -828,23 +901,27 @@ export class NavPipelineOrchestrator {
 			return;
 		}
 		const inputs = this.#mountInputs;
+		const centerTab = inputs?.centerTab;
+		const coverProgress = publication.chipExit ? 0 : rawDragFraction;
+		if (centerTab !== undefined) {
+			pager.set({
+				fractionalIndex: centerTab,
+				dragging: publication.inFlight && !publication.chipExit,
+				active: true,
+				backMorph: null,
+				targetIndex: null,
+				coverProgress
+			});
+			return;
+		}
 		const fromIdx = inputs?.fromTabIndex ?? -1;
 		const toIdx = inputs?.toTabIndex ?? -1;
-		// fractionalIndex: interpolate between the fromTabIndex and the
-		// toTabIndex across the slide so the tab-bar pill tracks.
 		const fractionalIndex = fromIdx + (toIdx - fromIdx) * rawDragFraction;
-		// backMorph (Header consumer): the raw drag fraction published
-		// directly; the Header's own consumer-side threshold applies.
-		const backMorph = rawDragFraction;
-		// coverProgress (FAB Family B reader): the raw drag fraction.
-		// Forced to 0 during a chip-exit (the LoadingChip stands in for
-		// the source list).
-		const coverProgress = publication.chipExit ? 0 : rawDragFraction;
 		pager.set({
 			fractionalIndex,
 			dragging: publication.inFlight && !publication.chipExit,
 			active: true,
-			backMorph,
+			backMorph: rawDragFraction,
 			targetIndex: toIdx >= 0 ? toIdx : null,
 			coverProgress
 		});

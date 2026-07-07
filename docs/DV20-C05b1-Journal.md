@@ -802,6 +802,77 @@ $ bun test src/lib/utils src/lib/stores
 Ran 423 tests across 20 files. [111.00ms]
 ```
 
+### Session 7 (2026-07-07): R5-B + R7 audit concerns fixed
+
+**R5-B C2 (SSR FOUC):** the pilot's track shipped at `translateX(0px)`
+at SSR (viewportWidth=0). On mobile direct-URL entry the LEFT panel
+(MessagesPanel) filled the viewport. Fixed: CSS `translateX(-50%)`
+(JS-independent) replaces the px-based value; the driver writes px
+transforms only after hydration. Verified via curl: SSR HTML now has
+`transform: translateX(-50%)`.
+
+**R5-B C3 (FAB coverProgress discontinuity at commit start):**
+live-drag published raw drag fraction; commit published
+threshold-absorbed progress (a different scale). The FAB scale
+reversed at the boundary. Fixed: `#thresholdToRaw(progress)` reverses
+the threshold mapping so the commit path publishes on the same raw
+scale as live-drag. Added `fabReversals` assertion to
+`messages-back-swipe.spec.ts`.
+
+**R5-B C1 (SWIPE_COMMIT comment):** fixed to reference only the
+orchestrator as consumer (GPL has its own local constant).
+
+**R7-A C1+C2 (centerTab pager-store divergence):** the orchestrator
+published `backMorph`/`targetIndex`/`fractionalIndex` as interpolated
+values (deep-page morph). GPL's centerTab branch publishes
+`backMorph: null, targetIndex: null, fractionalIndex: centerTab`
+(constant). Fixed: added `centerTab` to mount inputs; in
+`#republishToPager`, when `centerTab` is set, publishes the centerTab
+constants (Header stays in back-arrow mode; pill stays highlighted).
+
+**R7-A C3 (forward enter animation):** DEVIATION. GPL slides the
+track from the left-panel position to centre on a forward SPA
+navigation (inbox to conversation). The pilot's NavPipelineHost does
+not play this enter animation. Attempted implementation (CSS
+`translateX(0%)` default when isEntering + `playEnterAnimation` via
+executor rAF) caused tab-click-transition reversals because the CSS
+default conflicted with the driver's px writes (the 0% persisted
+after the enter settled). Reverted to `translateX(-50%)` always.
+The `playEnterAnimation` method stays on the orchestrator for a
+future cycle that solves the CSS-default-vs-driver-write conflict
+(e.g. a Svelte action that sets the initial transform imperatively,
+or a dedicated enter-animation rAF that runs outside the executor).
+Not e2e-gated for the pilot route.
+
+**R7-B C1 (sub-threshold-morph commit e2e):** added 5th gesture test
+case: 70px rightward drag (above SWIPE_COMMIT=60, below morph
+threshold 0.2\*393=78). Asserts URL changes to /messages/inbox
+(commit) and `fabReversals === 0`.
+
+Final e2e sweep (real, pasted verbatim):
+
+```
+$ bun run test:e2e -- e2e/messages-back-swipe.spec.ts \
+                    e2e/tab-click-transition.spec.ts \
+                    e2e/tab-exit-preview.spec.ts \
+                    e2e/fab.spec.ts \
+                    e2e/reproduce-user-bugs.spec.ts \
+                    e2e/enter-animation.spec.ts \
+                    e2e/backtarget.spec.ts \
+                    e2e/tab-history.spec.ts \
+                    --reporter=line
+Running 72 tests using 1 worker
+  72 passed (2.5m)
+```
+
+SSR curl verification:
+
+```
+$ curl -s -b "session_token=..." -H 'User-Agent: ...Pixel 5...' \
+    'http://localhost:5182/messages/1' | grep 'width: 200%'
+width: 200%; display: flex; height: 100%; transform: translateX(-50%);
+```
+
 ## Failures
 
 Per-round audit state lives in `docs/RV20-C05b1-Audit-{01..NN}.md`.
@@ -820,9 +891,47 @@ Per-round audit state lives in `docs/RV20-C05b1-Audit-{01..NN}.md`.
   slide-duration behavior change (300ms vs GPL's 200ms). C1 fix:
   macrotask (`setTimeout`) instead of microtask. All six being fixed.
   Detailed in `docs/RV20-C05b1-Audit-01.md`.
+- **Round 2 (architect, 2-auditor, clean prompt + e2e gate): 0/2 PASS.**
+  Two concern sets. Auditor A: a SECOND `effect_update_depth_exceeded`
+  in `SearchScopePager.svelte` (the `/search` capture-in-`$effect`
+  without untrack - same C2 bug as +layout, missed). Fixed by the
+  architect (untrack wrap; 13/13 reproduce-user-bugs green). Auditor B:
+  commit-phase pager-publish gap (FAB froze during the commit slide;
+  the orchestrator published only on live drag, not during commit rAF).
+  Fixed (CMA): added `onTick(progress)` callback to NavExecutor;
+  orchestrator re-publishes each commit frame. `fabScaleDelta` e2e
+  assertion added. Detailed in `docs/RV20-C05b1-Audit-02.md`.
+- **Round 3 (architect, 2-auditor): 0/2 PASS.** Two substantive
+  behavior-preservation gaps. B: SWIPE_COMMIT gate missing (30px drag
+  navigated; GPL cancels <60px) + reversed gestures committed (plan
+  locked at gesture-start with progressDirection=0; cancel lost). Fixed
+  (CMA): unified release gate `shouldCommit = dragDistance >= 60 && !
+reversed`; onCancel overrides progressDirection to 1. Added partial-
+  swipe-cancel + reversed-cancel e2e. A: stale `#publish` docstring.
+  Detailed in `docs/RV20-C05b1-Audit-03.md`.
+- **Round 4 (architect, 2-auditor): split.** B PASS (full 182-test
+  suite green). A: rebound-cancel divergence - `navPipelinePointer.onEnd`
+  discarded detectSwipe's `reversed` (rebound-based); the orchestrator
+  used offset-crossing `reversed` (different signal). A rebound gesture
+  (drag 200px, rebound to +130, slow release) committed on the pilot
+  where GPL cancels. Fixed (CMA + architect): onEnd forwards full
+  `(deltaX, velocity, reversed)`; orchestrator uses detectSwipe's
+  rebound signal. buildHandlers helper updated. Rebound-cancel e2e
+  added. Detailed in `docs/RV20-C05b1-Audit-04.md`.
+- **Round 5 (architect, 2-auditor): 0/2 PASS.** Four concerns. A:
+  stale onCancel docstring ("reversed past the start" was the old
+  signal). B: SWIPE_COMMIT comment inaccuracy (GPL not a consumer);
+  SSR FOUC (track at translateX(0px) at SSR - verified resolved);
+  FAB coverProgress discontinuity at commit start (raw vs threshold-
+  absorbed scales; FAB scale reversed). Fixed: docstring (architect);
+  comment + SSR transform + coverProgress scale unification (CMA);
+  fabReversals e2e assertion. Detailed in `docs/RV20-C05b1-Audit-05.md`.
 
-Consecutive pass votes: **0** (R1 carried six concerns, incl. the
-serious C1 double-slide bug).
+Consecutive pass votes: **0** (R1-R5 each carried concerns). The
+implementation logic + UNIFY invariant have been verified clean across
+all rounds; the concerns were GPL-behavior-fidelity gaps (double-slide,
+FAB-freeze, SWIPE_COMMIT, rebound-cancel, SSR-FOUC, FAB-discontinuity)
+progressively caught and fixed by the e2e gate + the audit.
 
 ## Coverage bullets (round-independent)
 

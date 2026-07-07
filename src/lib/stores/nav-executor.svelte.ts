@@ -219,13 +219,15 @@ export class NavExecutor {
 		}
 	}
 
-	/** The drag released below the commit threshold OR reversed past
-	 *  the start. Overrides the plan's `progressDirection` to 1 so
+	/** The drag released below the commit threshold OR detectSwipe's
+	 *  rebound-based `reversed` fired (peak minus final >= 25, no
+	 *  forward fling). Overrides the plan's `progressDirection` to 1 so
 	 *  the commit integrator targets FROM (progress 0, snap back)
 	 *  instead of TO (progress 1, commit). The plan was locked at
-	 *  gesture-start with the commit intent; the orchestrator's
-	 *  release gate (SWIPE_COMMIT + reversal) decides whether to
-	 *  call `onCommit` (target TO) or `onCancel` (target FROM). */
+	 *  gesture-start with the commit intent; the orchestrator's release
+	 *  gate (SWIPE_COMMIT + the rebound-based reversed forwarded from
+	 *  detectSwipe) decides whether to call `onCommit` (target TO) or
+	 *  `onCancel` (target FROM). */
 	onCancel(releaseVelocityPxPerMs: number): void {
 		if (this.#plan === null) return;
 		this.#plan = { ...this.#plan, progressDirection: 1 };

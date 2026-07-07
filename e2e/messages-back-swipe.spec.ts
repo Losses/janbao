@@ -55,6 +55,11 @@ interface TrackSamplerCapture {
 	 * FAB produces a non-zero range; a frozen publication produces
 	 * zero. */
 	fabScaleDelta: number;
+	/** Direction reversals in the FAB scale trajectory. A continuous
+	 *  ramp (no backward jumps) has zero reversals. A coverProgress
+	 *  discontinuity at the drag-to-commit boundary produces at least
+	 *  one reversal. */
+	fabReversals: number;
 	/** Sample count. */
 	sampleCount: number;
 }
@@ -155,6 +160,16 @@ async function capturePilotBackSwipe(
 			.filter((v): v is number => v !== null);
 		const fabScaleDelta =
 			fabScales.length > 0 ? Math.max(...fabScales) - Math.min(...fabScales) : 0;
+		// FAB scale reversals: count direction flips (same algorithm as
+		// the track m41 reversals, applied to the FAB scale samples).
+		let fabReversals = 0;
+		for (let i = 2; i < fabScales.length; i++) {
+			const d1 = fabScales[i - 1] - fabScales[i - 2];
+			const d2 = fabScales[i] - fabScales[i - 1];
+			if (Math.abs(d1) > 0.01 && Math.abs(d2) > 0.01 && Math.sign(d1) !== Math.sign(d2)) {
+				fabReversals++;
+			}
+		}
 		return {
 			frames: f,
 			reversals,
@@ -163,6 +178,7 @@ async function capturePilotBackSwipe(
 			minM41: m41s.length ? Math.min(...m41s) : 0,
 			maxM41: m41s.length ? Math.max(...m41s) : 0,
 			fabScaleDelta,
+			fabReversals,
 			sampleCount: f.length
 		};
 	});
@@ -202,6 +218,7 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 			minM41: capture.minM41,
 			maxM41: capture.maxM41,
 			fabScaleDelta: capture.fabScaleDelta,
+			fabReversals: capture.fabReversals,
 			sampleCount: capture.sampleCount,
 			consoleTail: consoleMessages.slice(-5)
 		});
@@ -249,6 +266,16 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 			`FAB scale must transition during the slide (delta=${capture.fabScaleDelta}; ` +
 				`the orchestrator must republish to the pager store each commit rAF tick)`
 		).toBeGreaterThan(0.1);
+
+		// The FAB scale must ramp monotonically (no reversals). A
+		// coverProgress discontinuity at the drag-to-commit boundary
+		// (raw fraction vs threshold-absorbed progress) produces at
+		// least one FAB-scale reversal.
+		expect(
+			capture.fabReversals,
+			`FAB scale must ramp monotonically (reversals=${capture.fabReversals}; ` +
+				`coverProgress must be continuous across the drag-to-commit boundary)`
+		).toBe(0);
 	});
 
 	test('partial swipe (< 60px) cancels and stays on the pilot route', async ({ page }) => {
@@ -408,5 +435,74 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		// gate cancels. The final offset (+130) is past SWIPE_COMMIT
 		// but the rebound-based reversed signal catches it.
 		expect(page.url(), 'rebound swipe must not navigate').toBe(pilotPath);
+	});
+
+	test('sub-threshold-morph commit (70px drag, commits, raw < morph threshold)', async ({
+		page
+	}) => {
+		const consoleMessages = collectConsole(page);
+		await page.goto('/');
+		await waitForHydration(page);
+		await page.locator('a[data-tab-nav][href="/messages/inbox"]').click();
+		await page.waitForURL('/messages/inbox');
+		await page.waitForTimeout(200);
+		await page
+			.locator('a[href^="/messages/"]:not([href="/messages/inbox"]):not([href="/messages/new"])')
+			.first()
+			.click();
+		await page.waitForURL(/\/messages\/\d+/);
+		await page.waitForSelector('.detail-scroll-pane');
+		await page.waitForTimeout(500);
+
+		const capture: TrackSamplerCapture = await capturePilotBackSwipe(page, async () => {
+			// 70px rightward drag: above SWIPE_COMMIT (60) so it
+			// commits, but below the morph threshold (0.2 * 393 ≈ 78px)
+			// so the threshold-absorbed progress is 0 at release.
+			const client = await page.context().newCDPSession(page);
+			await client.send('Emulation.setTouchEmulationEnabled', {
+				enabled: true,
+				maxTouchPoints: 5
+			});
+			const y = 400;
+			const startX = 120;
+			const endX = 190;
+			const dispatch = (
+				type: 'touchStart' | 'touchMove' | 'touchEnd',
+				x: number,
+				state: string
+			) =>
+				client.send('Input.dispatchTouchEvent', {
+					type,
+					touchPoints: [{ state, x, y, id: 1 }] as unknown as never,
+					modifiers: 0,
+					timestamp: 0
+				});
+			await dispatch('touchStart', startX, 'touchPressed');
+			for (let i = 1; i <= 10; i++) {
+				const x = Math.round(startX + (endX - startX) * (i / 10));
+				await dispatch('touchMove', x, 'touchMoved');
+			}
+			await dispatch('touchEnd', endX, 'touchReleased');
+			await client.detach();
+		});
+
+		console.log('[pilot-sub-threshold] capture:', {
+			reversals: capture.reversals,
+			fabReversals: capture.fabReversals,
+			fabScaleDelta: capture.fabScaleDelta,
+			sampleCount: capture.sampleCount,
+			consoleTail: consoleMessages.slice(-5)
+		});
+
+		// Must commit (navigate to /messages/inbox).
+		expect(page.url(), '70px swipe must commit').toMatch(/\/messages\/inbox/);
+
+		// The FAB scale must not reverse at the drag-to-commit
+		// boundary (the thresholdToRaw guard handles raw < morph
+		// threshold without a backward jump in coverProgress).
+		expect(
+			capture.fabReversals,
+			`FAB scale must not reverse for sub-threshold commit (reversals=${capture.fabReversals})`
+		).toBe(0);
 	});
 });
