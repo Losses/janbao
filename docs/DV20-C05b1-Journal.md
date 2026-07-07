@@ -960,8 +960,23 @@ reversed`; onCancel overrides progressDirection to 1. Added partial-
   added `#isEnterAnimation` flag; `#republishToPager` forces coverProgress
   =0 during forward-enter, matching GPL's centerTab branch. Detailed in
   `docs/RV20-C05b1-Audit-10.md`.
+- **Round 11 (architect, 2-auditor): split.** A PASS-WITH-CONCERNS
+  (`dragging` published `true` during tab-click/forward-enter where GPL
+  publishes `false`; Header morph snapped at route swap). B FAIL (3:
+  `#isEnterAnimation` not cleared when gesture interrupts mid-enter;
+  missing gesture-during-enter e2e; docstring didn't mention
+  chip-exit/enter coverProgress overrides). Fixed: `dragging` gated on
+  `#pendingGesture !== null`; `#isEnterAnimation` cleared in
+  `#beginGesture`; new gesture-during-enter e2e; docstring updated.
+  Detailed in `docs/RV20-C05b1-Audit-11.md`.
+- **Round 12 (architect, 2-auditor): split.** A PASS (zero concerns,
+  116 e2e green). B PASS-WITH-CONCERNS (`#isEnterAnimation` not cleared
+  when a tab-click interrupts a forward-enter, the third
+  transition-start path `onSvelteKitBeforeNavigate` was missed). Fixed:
+  added `this.#isEnterAnimation = false;` in `onSvelteKitBeforeNavigate`.
+  Detailed in `docs/RV20-C05b1-Audit-12.md`.
 
-Consecutive pass votes: **0** (R1-R10 each carried concerns). The
+Consecutive pass votes: **0** (R1-R12 each carried concerns). The
 implementation logic + UNIFY invariant have been verified clean across
 all rounds; the concerns were GPL-behavior-fidelity gaps progressively
 caught and fixed by the e2e gate + the audit.

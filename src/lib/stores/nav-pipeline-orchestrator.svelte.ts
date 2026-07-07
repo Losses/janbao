@@ -814,6 +814,7 @@ export class NavPipelineOrchestrator {
 		this.#pendingTabExit = { target: to, svelteKitType: navigation.type, chipExit };
 		this.#navDispatchInFlight = false;
 		this.#dispatchTarget = null;
+		this.#isEnterAnimation = false;
 		navigation.cancel();
 		this.#publication = {
 			plan,
