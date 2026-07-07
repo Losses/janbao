@@ -249,6 +249,12 @@ export class NavPipelineOrchestrator {
 	 *  dispatch target + the chipExit flag (true when the target is
 	 *  not the pilot's pre-rendered leftHref). */
 	#pendingTabExit: PendingTabExit | null = null;
+	/** True while the forward-enter animation (playEnterAnimation) is
+	 *  active. Suppresses the coverProgress ramp in #republishToPager:
+	 *  during a forward-enter the source list is being COVERED (not
+	 *  revealed), so coverProgress stays 0, matching GPL's centerTab
+	 *  branch. */
+	#isEnterAnimation = false;
 	/** True when the orchestrator's own goto has fired and is
 	 *  re-entering beforeNavigate. Lets the orchestrator's
 	 *  beforeNavigate handler pass it through. */
@@ -375,6 +381,7 @@ export class NavPipelineOrchestrator {
 		};
 		this.#pendingGesture = null;
 		this.#pendingTabExit = null;
+		this.#isEnterAnimation = true;
 		this.#publication = {
 			plan,
 			progress: 0,
@@ -545,6 +552,10 @@ export class NavPipelineOrchestrator {
 
 	/** Lock FROM/TO and run the resolver + coordinator once. */
 	#beginGesture(inputs: PipelineMountInputs, intent: IntentState): void {
+		// A gesture starting mid-enter takes over the transition; clear
+		// the enter flag so coverProgress tracks the gesture (not pinned
+		// to 0 by the enter suppression).
+		this.#isEnterAnimation = false;
 		// Only a rightward back-swipe is a real gesture on the pilot.
 		if (intent.direction !== 'right') {
 			this.#pendingGesture = null;
@@ -726,6 +737,7 @@ export class NavPipelineOrchestrator {
 		this.#pendingTabExit = null;
 		this.#navDispatchInFlight = false;
 		this.#dispatchTarget = null;
+		this.#isEnterAnimation = false;
 		this.#executor?.onLand();
 		if (inputs !== null) {
 			this.#stateMachine.onLand(inputs.fromTag);
@@ -891,8 +903,11 @@ export class NavPipelineOrchestrator {
 	 *  targetIndex: null, fractionalIndex: centerTab` (constant) so
 	 *  the Header stays in back-arrow mode and the tab-bar pill stays
 	 *  highlighted at centerTab throughout the gesture, matching GPL's
-	 *  centerTab branch. `coverProgress` still drives the FAB scale
-	 *  from the raw drag fraction. */
+	 *  centerTab branch. `coverProgress` follows the raw drag fraction
+	 *  during a live gesture, but is forced to 0 during chip-exit
+	 *  (LoadingChip stands in for the source list) and during the
+	 *  forward-enter animation (the source list is being covered, not
+	 *  revealed). */
 	#republishToPager(rawDragFraction: number): void {
 		const pager = getMobilePagerStore();
 		const publication = this.#publication;
@@ -902,11 +917,11 @@ export class NavPipelineOrchestrator {
 		}
 		const inputs = this.#mountInputs;
 		const centerTab = inputs?.centerTab;
-		const coverProgress = publication.chipExit ? 0 : rawDragFraction;
+		const coverProgress = publication.chipExit || this.#isEnterAnimation ? 0 : rawDragFraction;
 		if (centerTab !== undefined) {
 			pager.set({
 				fractionalIndex: centerTab,
-				dragging: publication.inFlight && !publication.chipExit,
+				dragging: publication.inFlight && this.#pendingGesture !== null && !publication.chipExit,
 				active: true,
 				backMorph: null,
 				targetIndex: null,

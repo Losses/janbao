@@ -542,4 +542,21 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		const last = samples[samples.length - 1];
 		expect(Math.abs(last - first), `track should have slid during enter (first=${first}, last=${last})`).toBeGreaterThan(50);
 	});
+
+	test('back-swipe started during forward-enter interrupts cleanly and commits', async ({ page, context }) => {
+		await prepareContext(context);
+		await page.goto('/messages/inbox');
+		await waitForHydration(page);
+
+		// Click a conversation link to trigger the forward-enter.
+		await page.click('a[href^="/messages/"]:not([href="/messages/new"]):not([href="/messages/inbox"])');
+		await page.waitForURL(/\/messages\/\d+/);
+		// Do NOT wait out the enter animation; start the swipe immediately.
+		// The enter animation is ~200ms; the swipe must begin within
+		// that window to exercise the interrupt path.
+		await swipeBack(page);
+
+		// The swipe should commit: URL returns to /messages/inbox.
+		await page.waitForURL('**/messages/inbox', { timeout: 5000 });
+	});
 });

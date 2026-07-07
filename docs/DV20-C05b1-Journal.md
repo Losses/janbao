@@ -953,8 +953,15 @@ reversed`; onCancel overrides progressDirection to 1. Added partial-
   writer as gestures) + a deferred `requestAnimationFrame` to seed the
   initial transform + measure viewport. Detailed in
   `docs/RV20-C05b1-Audit-09.md`.
+- **Round 10 (architect, 2-auditor): split.** B PASS (full 185-test
+  suite green, zero concerns). A PASS-WITH-CONCERNS: `playEnterAnimation`
+  publishes coverProgress ramping 0.2->1.0 (wrong direction for forward-
+  enter; the list is being COVERED not revealed). Fixed (architect):
+  added `#isEnterAnimation` flag; `#republishToPager` forces coverProgress
+  =0 during forward-enter, matching GPL's centerTab branch. Detailed in
+  `docs/RV20-C05b1-Audit-10.md`.
 
-Consecutive pass votes: **0** (R1-R9 each carried concerns). The
+Consecutive pass votes: **0** (R1-R10 each carried concerns). The
 implementation logic + UNIFY invariant have been verified clean across
 all rounds; the concerns were GPL-behavior-fidelity gaps progressively
 caught and fixed by the e2e gate + the audit.
