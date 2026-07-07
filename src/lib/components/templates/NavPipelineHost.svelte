@@ -37,6 +37,7 @@
 	import { navPipelinePointer } from '$lib/actions/nav-pipeline-pointer';
 	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
 	import { HEADER_MORPH_THRESHOLD } from '$lib/utils/gesture-constants';
+	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 
 	interface NavPipelineHostProps {
 		/** The pilot route's back-target. The orchestrator resolves a
@@ -60,6 +61,20 @@
 		return window.matchMedia(MOBILE_BREAKPOINT).matches;
 	};
 	let isMobile = $state(getIsMobile());
+
+	// Forward enter animation: if this mount is a forward SPA navigation
+	// from `leftHref` (e.g. user tapped a conversation in /messages/inbox),
+	// slide the track from the left-panel position (translateX(0)) to the
+	// centre rest (translateX(-50%)) over ~200ms, matching GPL's
+	// `enterRaf`. Computed at script init (before render) via
+	// `navStore.activeStack` so there is no first-paint flash.
+	const navStore = getNavigationStore();
+	const shouldEnter: boolean = (() => {
+		if (!isMobile) return false;
+		const stack = navStore.activeStack;
+		if (stack.length < 2) return false;
+		return stack[stack.length - 2].pathname === leftHref;
+	})();
 
 	// Reactive read of the orchestrator's publication. The host's $effect
 	// (below) re-publishes to the pager store so the existing FAB / Header
@@ -193,6 +208,25 @@
 		});
 		setNavPipelineOrchestrator(orchestrator);
 
+		// Forward enter animation: if this mount is a forward SPA nav from
+		// leftHref, seed the track at translateX(0) (left panel visible)
+		// then drive the slide to rest via the executor's rAF. Deferred to
+		// the next rAF so the viewport has a measured clientWidth (the
+		// executor's plan needs distance > 0). Uses the SAME writer (the
+		// driver's setProperty) as gestures; a gesture starting mid-enter
+		// cleanly interrupts the enter. No CSS animation (no parallel
+		// mechanism; UNIFY invariant preserved).
+		if (shouldEnter && trackEl) {
+			trackEl.style.setProperty('transform', 'translateX(0px)');
+			requestAnimationFrame(() => {
+				const w = viewportEl?.clientWidth ?? 0;
+				if (w > 0) {
+					orchestrator.updateViewport(w, -w);
+					orchestrator.playEnterAnimation();
+				}
+			});
+		}
+
 		// Reset any parent element's scroll that might have been changed
 		// by browser's native anchor scrolling before fixed-viewport
 		// locked the scroll. Mirrors GPL's pattern.
@@ -286,6 +320,7 @@
 >
 	<div
 		bind:this={trackEl}
+		data-testid="nav-pipeline-track"
 		class={isMobile ? 'flex items-start h-full w-full' : 'h-full w-full'}
 		style={trackStyle + ' ' + initialTrackTransform}
 	>

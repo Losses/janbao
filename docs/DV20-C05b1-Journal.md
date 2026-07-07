@@ -926,12 +926,38 @@ reversed`; onCancel overrides progressDirection to 1. Added partial-
   absorbed scales; FAB scale reversed). Fixed: docstring (architect);
   comment + SSR transform + coverProgress scale unification (CMA);
   fabReversals e2e assertion. Detailed in `docs/RV20-C05b1-Audit-05.md`.
+- **Round 6 (architect, 2-auditor): split.** B PASS (full 182-test
+  suite). A: `navPipelinePointer.onEnd` discarded detectSwipe's
+  `velocity` and `reversed` (rebound-based); orchestrator used
+  offset-crossing `reversed`. Rebound gestures committed where GPL
+  cancels. Fixed: full `(deltaX, velocity, reversed)` forwarding +
+  rebound-cancel e2e. Detailed in `docs/RV20-C05b1-Audit-06.md`.
+- **Round 7 (architect, 2-auditor): 0/2 PASS.** A: stale onCancel
+  docstring. B: SWIPE_COMMIT comment inaccuracy; SSR FOUC (verified
+  resolved, ships translateX(-50%)); FAB coverProgress discontinuity
+  (raw vs threshold-absorbed scale; fixed via `#thresholdToRaw`
+  unification + fabReversals assertion). Detailed in
+  `docs/RV20-C05b1-Audit-07.md`.
+- **Round 8 (architect, 2-auditor): 0/2 PASS.** A: stale `#publish`
+  docstring + sub-morph-threshold commit discontinuity
+  (`#thresholdToRaw(0)=0` dips coverProgress; fixed: guard
+  `if (progress <= 0) return`). B: same docstring + regex comment
+  inaccuracy. Detailed in `docs/RV20-C05b1-Audit-08.md`.
+- **Round 9 (architect, 2-auditor): 0/2 PASS.** Both FAIL: the R8
+  forward-enter used CSS `@keyframes nav-host-enter` (a parallel
+  mechanism; during the 200ms active phase it overrides the driver's
+  `setProperty` writes, violating UNIFY + §13.3). The orchestrator's
+  `playEnterAnimation()` existed as dead code (the correct executor-rAF
+  path). Fixed (architect): removed the CSS keyframes entirely; the
+  forward-enter is now `playEnterAnimation()` (executor's rAF, same
+  writer as gestures) + a deferred `requestAnimationFrame` to seed the
+  initial transform + measure viewport. Detailed in
+  `docs/RV20-C05b1-Audit-09.md`.
 
-Consecutive pass votes: **0** (R1-R5 each carried concerns). The
+Consecutive pass votes: **0** (R1-R9 each carried concerns). The
 implementation logic + UNIFY invariant have been verified clean across
-all rounds; the concerns were GPL-behavior-fidelity gaps (double-slide,
-FAB-freeze, SWIPE_COMMIT, rebound-cancel, SSR-FOUC, FAB-discontinuity)
-progressively caught and fixed by the e2e gate + the audit.
+all rounds; the concerns were GPL-behavior-fidelity gaps progressively
+caught and fixed by the e2e gate + the audit.
 
 ## Coverage bullets (round-independent)
 

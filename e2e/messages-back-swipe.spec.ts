@@ -505,4 +505,41 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 			`FAB scale must not reverse for sub-threshold commit (reversals=${capture.fabReversals})`
 		).toBe(0);
 	});
+
+	test('forward enter from /messages/inbox slides the track into view', async ({ page, context }) => {
+		await prepareContext(context);
+		await page.goto('/messages/inbox');
+		await waitForHydration(page);
+
+		// Install a rAF sampler that captures the track's translateX from
+		// the moment it appears (the enter animation runs on mount).
+		await page.evaluate(() => {
+			(window as any).__enterSamples = [] as number[];
+			const sample = () => {
+				const track = document.querySelector('[data-testid="nav-pipeline-track"]');
+				if (track) {
+					const cs = getComputedStyle(track);
+					const m = new DOMMatrix(cs.transform);
+					(window as any).__enterSamples.push(m.m41);
+				}
+				requestAnimationFrame(sample);
+			};
+			requestAnimationFrame(sample);
+		});
+
+		// Click the first conversation link (forward SPA nav).
+		await page.click('a[href^="/messages/"]:not([href="/messages/new"]):not([href="/messages/inbox"])');
+		await page.waitForURL(/\/messages\/\d+/);
+		await page.waitForTimeout(300);
+
+		// Read the captured samples.
+		const samples = (await page.evaluate(() => (window as any).__enterSamples)) as number[];
+
+		// The enter animation should have captured multiple frames with
+		// movement (from ~0px at animation start to ~-W px at rest).
+		expect(samples.length, 'sampler should have captured frames').toBeGreaterThan(3);
+		const first = samples[0];
+		const last = samples[samples.length - 1];
+		expect(Math.abs(last - first), `track should have slid during enter (first=${first}, last=${last})`).toBeGreaterThan(50);
+	});
 });
