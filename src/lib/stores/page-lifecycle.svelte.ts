@@ -7,7 +7,7 @@
  * layout that mounts a gesture surface, registers html-singleton
  * teardowns (so `unmount` is the single SSR-safe teardown path), and
  * exposes the current phase reactively. In the integrated pipeline
- * consumers read that phase in a `$derived`; in Cycle 5a shadow mode
+ * consumers read that phase in a `$derived`; in 5b1
  * the controller is not constructed (no layout wires it), so no
  * consumer reads it.
  *
@@ -18,9 +18,9 @@
  * memory the runes loader is unavailable there, mirroring the
  * Cycle 2/3/4 split).
  *
- * In Cycle 5a shadow mode no Svelte component constructs this
+ * In 5b1 no Svelte component constructs this
  * controller and no lifecycle-adjacent store registers a teardown;
- * the unit suite covers the pure half directly. Cycle 5b wires this
+ * the unit suite covers the pure half directly. the orchestrator wires this
  * controller into the gesture components and migrates the
  * lifecycle-adjacent stores (`viewport-lock`, `scroll-chrome`,
  * `active-gesture-track`) to register their html-singleton releases
@@ -46,20 +46,20 @@ import type { VoidHandler } from '$lib/types/handlers';
  *  safe to wire to Svelte's `onDestroy` in 5b without re-introducing
  *  the SSR trap (memory: `svelte-ondestroy-runs-in-ssr`).
  *
- *  In Cycle 5a shadow mode no Svelte component constructs this; the
+ *  In 5b1 no Svelte component constructs this; the
  *  unit suite covers the pure `reduce` and `planUnmount` directly. */
 export class PageLifecycleController {
 	#state = $state<PageLifecycleState>(initialLifecycleState());
 	/** Teardowns registered by the lifecycle-adjacent stores. Each is
 	 *  typically a release callback for an html-singleton refcount
-	 *  (e.g. `() => htmlSingleton.release()`). In Cycle 5a shadow mode
+	 *  (e.g. `() => htmlSingleton.release()`). In 5b1
 	 *  this list stays empty (no store registers); the unit suite
 	 *  exercises `planUnmount` directly. */
 	#teardowns: VoidHandler[] = [];
 	/** The `browser` flag from `$app/environment`, captured at
 	 *  construction. Injectable so a future integration test can drive
 	 *  the SSR branch; the unit suite covers the pure `planUnmount`
-	 *  instead. In Cycle 5a shadow mode no caller constructs the
+	 *  instead. In 5b1 no caller constructs the
 	 *  controller, so this field is exercised by nothing; the integrated
 	 *  pipeline (Cycle 5b) will exercise it. */
 	readonly #isBrowser: boolean;
@@ -70,7 +70,7 @@ export class PageLifecycleController {
 
 	/** Reactive read of the current phase. In the integrated pipeline
 	 *  consumers read this in a `$derived` to register as dependents.
-	 *  In Cycle 5a shadow mode no consumer reads it. */
+	 *  In 5b1 the orchestrator does not read it (the publication is the authority). */
 	get phase(): PagePhase {
 		return this.#state.phase;
 	}
@@ -119,7 +119,7 @@ export class PageLifecycleController {
 	 *  `if (!browser)` guard (memory: `svelte-ondestroy-runs-in-ssr`).
 	 *  In Cycle 5b the lifecycle-adjacent stores (`viewport-lock`,
 	 *  `scroll-chrome`, `active-gesture-track`) will each register
-	 *  their html-singleton release here; in Cycle 5a shadow mode no
+	 *  their html-singleton release here; in 5b1 no
 	 *  caller registers. */
 	registerTeardown(fn: VoidHandler): void {
 		this.#teardowns.push(fn);

@@ -6,7 +6,7 @@
  * navigation transition and the page lifecycle. Macro phases:
  * `at-rest`, `intent`, `resolving`, `transitioning` (carrying the
  * active resolver + sub-phase), `landing`. The Cycle 3 reducer models
- * the interruption that arises in shadow mode (a new intent arriving
+ * the interruption (a new intent arriving
  * mid-transition; §5); popstate-as-interruption and
  * failed-preload-as-interruption are Cycle 5 additions, as is the
  * SvelteKit interop wiring (§9).

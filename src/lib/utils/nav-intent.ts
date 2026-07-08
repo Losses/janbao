@@ -7,27 +7,22 @@
  * continuous parameters (direction, live offset, live velocity).
  *
  * Pure (runes-free). No side effects, no DOM reads, no DOM writes. The
- * classifier is a pure reducer; in the integrated pipeline the
- * orchestrator (Layer 1) calls `classify` and forwards the resulting
- * intent to the resolver (Layer 3). In Cycle 3 shadow mode no caller
- * consumes this module (Cycle 5 wires it).
+ * classifier is a pure reducer; the orchestrator (5b1, Layer 1) calls
+ * `classify` and forwards the resulting intent to the resolver (Layer 3).
  *
  * The classifier is a state machine over `(IntentState, IntentEvent)`.
  * Micro states per §6: `idle`, `deciding`, `drag-left`, `drag-right`,
  * `committed`, `cancelled`. The continuous parameters (`offset`,
- * `velocity`) live ON the state record; the Cycle 4 executor will read
- * them each frame as the live input streams (in Cycle 3 nothing
- * consumes them).
+ * `velocity`) live ON the state record; the executor reads them each
+ * frame as the live input streams.
  *
  * The 40px edge-dead-zone (matching the existing `detectSwipe` action)
  * is a parameter the caller supplies; this module does not read window
  * dimensions or matchMedia. The caller also supplies the clock so unit
  * tests are deterministic.
  *
- * This module is imported by the reactive orchestrator, by its own
- * unit suite, and (in Cycle 5) by the wiring layer that bridges
- * `detectSwipe` events to `IntentEvent`. In Cycle 3 nothing consumes
- * it; it stands alone.
+ * This module is imported by the orchestrator, the pointer-bridge
+ * action (`nav-pipeline-pointer.ts`), and its own unit suite.
  */
 
 /** Edge-dead-zone: the 40px gutter (matching the existing `detectSwipe`
@@ -157,10 +152,8 @@ export const DEFAULT_CLASSIFIER_OPTIONS: IntentClassifierOptions = {
 
 /** A target the classifier can produce. In the integrated pipeline the
  *  orchestrator matches this against the current route to compute the
- *  (from, to) pair; in Cycle 3 shadow mode it is exercised only by the
- *  unit suite. `via` is `'goto'` for all Cycle-3 shadow-mode
- *  navigations; Cycle 5 will discriminate tap / popstate / hashchange
- *  when it wires the real SvelteKit event sources into the orchestrator. */
+ *  (from, to) pair. `via` is `'goto'` for programmatic navigations;
+ *  tap / popstate / hashchange discrimination is a future enhancement. */
 export interface ResolvedTarget {
 	readonly pathname: string;
 	readonly via: 'goto';
@@ -333,7 +326,7 @@ export function classify(
 
 /** Convenience: extract the target from an intent, if any. In the
  *  integrated pipeline the orchestrator uses this to look up the
- *  destination's RouteData; in Cycle 3 shadow mode it is exercised
+ *  destination's RouteData; in the integrated pipeline it is exercised
  *  only by the unit suite. */
 export function intentTarget(intent: IntentState): ResolvedTarget | null {
 	if (intent.target === null) return null;

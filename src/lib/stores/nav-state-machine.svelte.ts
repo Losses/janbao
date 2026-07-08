@@ -6,12 +6,13 @@
  * Per `docs/DV20-Plan.md` §2 Layer 1 + §9: the orchestrator owns the
  * macro state of a navigation transition and the SvelteKit interop
  * boundary. It does NOT touch the DOM (Cycle 4 owns that); it does NOT
- * replace the existing MobileTabPager or GesturePageLayout (Cycle 5
- * does the migration; this Cycle is shadow mode).
+ * replace the existing MobileTabPager or GesturePageLayout (the 5b2
+ * migration replaces them; this store models the macro phases the
+ * orchestrator dispatches to).
  *
  * The wrapper is a thin `$state` shell: every transition delegates to
  * the pure reducer so the reducer is the single source of truth for
- * the phase maths. Consumers (Cycle 5 wiring) read the state through
+ * the phase maths. The orchestrator reads the state through
  * `$derived` and register as dependents on the underlying `$state`.
  *
  * Module-singleton pattern, matching the other stores in this
@@ -20,8 +21,8 @@
  * a descendant sets, so we use a module singleton rather than
  * `getContext`/`setContext`.
  *
- * In Cycle 3 no consumer reads this store; it stands alone as the
- * state-machine authority the next cycle plugs into SvelteKit's
+ * This store stands alone as the state-machine authority; the
+ * orchestrator dispatches events to it from SvelteKit's
  * `beforeNavigate` / `afterNavigate` hooks.
  */
 

@@ -10,8 +10,8 @@
  * Pure. The cache lookup is injected as a `cacheHas` predicate so this
  * module is runes-free and unit-testable without the reactive store.
  * In the integrated pipeline the orchestrator (Layer 1) wires the live
- * `PageCacheStore.get` into the predicate; in Cycle 3 shadow mode
- * `coordinate` is called only by its unit tests (Cycle 5 wires the
+ * `PageCacheStore.get` into the predicate; in the integrated pipeline
+ * `coordinate` is called only by its unit tests (the orchestrator (5b1) wires the
  * orchestrator call).
  *
  * Responsibilities (§7 + §9):
@@ -83,9 +83,9 @@ export interface CoordinatorDecision {
  *   - Otherwise, chip-exit: the orchestrator preloads the TO and the
  *     LoadingChip overlays the gesture until the data lands.
  *
- * The decision is pure. In the integrated pipeline the orchestrator
- * calls it once at gesture start (FROM and TO are locked); in Cycle 3
- * shadow mode it is exercised only by the unit suite.
+ * The decision is pure. The orchestrator calls it once at gesture
+ * start (FROM and TO are locked); the unit suite also exercises it
+ * directly.
  */
 export function coordinate(input: CoordinatorInput): CoordinatorDecision {
 	if (input.cacheHas(input.toPathname, input.toSubKey)) {

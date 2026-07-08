@@ -9,7 +9,7 @@
  * `ResolverInput`). The orchestrator (Layer 1) selects the resolver by
  * the (from-tag, to-tag) pair of the current transition. Each pair has
  * one resolver because the two directions of a pair share one animation
- * played forward or in reverse. In Cycle 3 shadow mode the dispatch is
+ * played forward or in reverse. In the integrated pipeline the dispatch is
  * exercised by the unit suite; the orchestrator wires it in Cycle 5.
  *
  * Six pairs for three tags (`tab`, `detail`, `search`):
@@ -127,7 +127,7 @@ export interface RouteStackEntry {
 /** The flat route stack. The last entry is the current route; the
  *  entry at `length - 2` is the back-target. In Cycle 3 this type is
  *  defined but no live stack is built (the wrapper is not yet wired to
- *  SvelteKit); test fixtures construct sample stacks. Cycle 5 wires it
+ *  SvelteKit); test fixtures construct sample stacks. the orchestrator (5b1) wires it
  *  to the live navigation history and may have resolvers read it
  *  directly. */
 export interface RouteStack {
@@ -232,7 +232,7 @@ function crossTagAxis(direction: TransitionDirection): PageTrackAxis {
 /** progressDirection: 0 when the gesture will land on TO (commit); 1
  *  when the gesture was cancelled (snap back to FROM). Reads
  *  `intent.micro`; a cancelled intent yields the retract plan. In
- *  Cycle 3 shadow mode this is exercised only by the unit suite. */
+ *  integration this is exercised only by the unit suite. */
 function progressDirectionFor(intent: IntentState): ProgressDirection {
 	return intent.micro === 'cancelled' ? 1 : 0;
 }
