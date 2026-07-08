@@ -14,8 +14,6 @@
  *   - Reduced-motion snap (no integration; progress jumps to target).
  *   - Per-frame commit sample sequence (start, mid, end; monotonic;
  *     settle to target).
- *   - Interruption handoff (no jump: visual continuity across
- *     interrupt -> new live drag).
  *   - SSR + single-flight gate (`shouldScheduleRaf`): false in SSR and
  *     when a rAF is already in flight.
  *   - idle no-ops: sampleFrame on idle state is a no-op;
@@ -32,13 +30,14 @@ import {
 	applyDrag,
 	buildVisual,
 	initialExecutorState,
-	interrupt,
+	progressAtTranslateX,
 	publishFrame,
 	sampleFrame,
 	shouldScheduleRaf,
 	solveCommitDuration,
 	startCommit,
 	tickFrame,
+	trackTranslateX,
 	type CommitInput,
 	type ExecutorState
 } from './nav-executor-logic';
@@ -487,75 +486,6 @@ describe('publishFrame + tickFrame', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Interruption handoff (no jump).
-
-describe('interruption handoff (no jump)', () => {
-	test('interrupt preserves the current progress as the handoff point', () => {
-		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
-		const state = startCommit(
-			{ phase: 'live', progress: 0.2, liveOffset: 0, commitStart: null },
-			baseCommitInput({ releaseVelocityPxPerMs: 1, plan, now: 0 })
-		);
-		// Tick some frames; pick the progress at the midpoint.
-		const duration = state.commitStart?.durationMs ?? 0;
-		const mid = sampleFrame(state, plan, duration / 2).state;
-		expect(mid.phase).toBe('committing');
-		// Interrupt mid-commit.
-		const interrupted = interrupt(mid);
-		expect(interrupted.phase).toBe('idle');
-		expect(interrupted.progress).toBeCloseTo(mid.progress, 5);
-		expect(interrupted.commitStart).toBeNull();
-	});
-
-	test('interrupt from a non-committing state is a no-op', () => {
-		const idle = initialExecutorState();
-		expect(interrupt(idle)).toBe(idle);
-		const live: ExecutorState = { phase: 'live', progress: 0.4, liveOffset: 12, commitStart: null };
-		expect(interrupt(live)).toBe(live);
-	});
-
-	test('page-track continuity at interrupt (no jump in the progress-driven consumer)', () => {
-		// The "no jump" guarantee for the progress-driven consumer:
-		// when the orchestrator hands the executor's interrupted
-		// progress back as the new drag's first progress, the page-track
-		// translate is identical to the one published at the moment of
-		// interrupt. FAB/Header consumers depend on liveOffset, which
-		// legitimately changes with the new drag (0 -> 25 here), so they
-		// are NOT part of this assertion; only the progress-driven page
-		// track is verified.
-		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
-		const driver = new MockNavDomDriver();
-		const state = startCommit(
-			{ phase: 'live', progress: 0.2, liveOffset: 0, commitStart: null },
-			baseCommitInput({ releaseVelocityPxPerMs: 1, plan, now: 0 })
-		);
-		const duration = state.commitStart?.durationMs ?? 0;
-		// Tick to the midpoint and publish (this is the "moment of interrupt").
-		const midState = sampleFrame(state, plan, duration / 2).state;
-		publishFrame(midState, plan, driver);
-		const visualAtInterrupt = driver.lastWrite;
-		expect(visualAtInterrupt).toBeDefined();
-		// Interrupt.
-		const interrupted = interrupt(midState);
-		// The orchestrator hands the executor's interrupted progress
-		// back as the new drag's first progress (Cycle 5 wiring). The
-		// new applyDrag preserves progress.
-		const newDrag = applyDrag(interrupted, {
-			progress: interrupted.progress,
-			liveOffset: 25
-		});
-		publishFrame(newDrag, plan, driver);
-		const visualAtNewDrag = driver.writes[driver.writes.length - 1];
-		// The page-track translate is unchanged across the handoff (the
-		// liveOffset-driven FAB/Header consumers legitimately differ).
-		expect(visualAtNewDrag.pageTrack.translateX).toBeCloseTo(
-			visualAtInterrupt?.pageTrack.translateX ?? NaN,
-			5
-		);
-	});
-});
-
-// ---------------------------------------------------------------------------
 // Reduced-motion end-to-end through the executor (snap path).
 
 describe('reduced-motion end-to-end', () => {
@@ -593,5 +523,87 @@ describe('shouldScheduleRaf', () => {
 		// SSR: no requestAnimationFrame available.
 		expect(shouldScheduleRaf(false, false)).toBe(false);
 		expect(shouldScheduleRaf(false, true)).toBe(false);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Track geometry helpers (interrupt handoff). A new transition that
+// interrupts an in-flight one must start at the track's current visual
+// position. The handoff converts through the absolute translateX:
+// `trackTranslateX(runningPlan, currentProgress)` then
+// `progressAtTranslateX(newPlan, thatTx)`. This is the pure core of the
+// orchestrator's #startProgressFromCurrentVisual.
+
+describe('track geometry helpers (interrupt handoff)', () => {
+	// A minimal plan exercising only the page-track geometry; the fab /
+	// header consumer stubs are unused by the geometry helpers.
+	function trackPlan(
+		axis: 'left' | 'right',
+		distance: number,
+		restingTranslate: number
+	): TransitionPlan {
+		return {
+			pageTrack: { axis, distance, restingTranslate },
+			fab: () => ({ scale: 0, translateY: 0, visible: false }),
+			header: () => ({ morph: 0, titleCrossfade: 0, translateY: 0 }),
+			progressDirection: 0,
+			commitPhysics: 'momentum'
+		};
+	}
+
+	test('trackTranslateX matches buildVisual across axis + restingTranslate', () => {
+		const plans = [
+			trackPlan('left', 375, 0),
+			trackPlan('left', 375, -375),
+			trackPlan('right', 375, -375),
+			trackPlan('right', 200, 0)
+		];
+		for (const plan of plans) {
+			for (const progress of [0, 0.25, 0.5, 0.75, 1]) {
+				expect(trackTranslateX(plan, progress)).toBeCloseTo(
+					buildVisual(plan, progress, 0).pageTrack.translateX,
+					7
+				);
+			}
+		}
+	});
+
+	test('progressAtTranslateX is the inverse of trackTranslateX', () => {
+		const plans = [
+			trackPlan('left', 375, 0),
+			trackPlan('left', 375, -375),
+			trackPlan('right', 375, -375),
+			trackPlan('right', 200, 0)
+		];
+		for (const plan of plans) {
+			for (const progress of [0, 0.25, 0.5, 0.75, 1]) {
+				const tx = trackTranslateX(plan, progress);
+				expect(progressAtTranslateX(plan, tx)).toBeCloseTo(progress, 7);
+			}
+		}
+	});
+
+	test('forward-enter progress maps to back-swipe progress via absolute position', () => {
+		// The pilot's two plans share one track with opposite progress
+		// conventions: enter slides 0 -> -W (progress 0 -> 1); back-swipe
+		// slides -W -> 0 (progress 0 -> 1). An interrupt must start the
+		// back-swipe at the enter's current visual position.
+		const W = 393;
+		const enter = trackPlan('left', W, 0);
+		const backSwipe = trackPlan('right', W, -W);
+		// Enter at 0.4 sits at tx -0.4W -> back-swipe starts at 0.6.
+		expect(progressAtTranslateX(backSwipe, trackTranslateX(enter, 0.4))).toBeCloseTo(0.6, 7);
+		// Symmetric: back-swipe at 0.3 -> enter would resume at 0.7.
+		expect(progressAtTranslateX(enter, trackTranslateX(backSwipe, 0.3))).toBeCloseTo(0.7, 7);
+	});
+
+	test('progressAtTranslateX clamps when tx is outside the plan span', () => {
+		const plan = trackPlan('left', 375, 0); // travelled span [0, -375]
+		expect(progressAtTranslateX(plan, 100)).toBe(0); // above 0 -> progress 0
+		expect(progressAtTranslateX(plan, -500)).toBe(1); // below -375 -> progress 1
+	});
+
+	test('progressAtTranslateX returns 0 for a zero-distance plan', () => {
+		expect(progressAtTranslateX(trackPlan('left', 0, 0), 50)).toBe(0);
 	});
 });

@@ -294,29 +294,6 @@ export function startCommit(state: ExecutorState, input: CommitInput): ExecutorS
 }
 
 // ---------------------------------------------------------------------------
-// Interruption.
-
-/** Interrupt the in-flight commit. Per §5: a new intent arriving
- *  mid-commit cancels the rAF and hands off from the current visual
- *  state. The current `progress` IS the handoff point (no DOM
- *  read-back): in the integrated pipeline the next `applyDrag`
- *  (Cycle-5 orchestrator wiring) continues from here; in Cycle 4 this
- *  is exercised only by the unit suite.
- *
- *  Returns a state record with `phase: 'idle'`, the current progress
- *  preserved, and `commitStart: null`. The reactive shell stops the
- *  rAF; the next drag-start event (Cycle 5) re-enters the live phase. */
-export function interrupt(state: ExecutorState): ExecutorState {
-	if (state.phase !== 'committing') return state;
-	return {
-		phase: 'idle',
-		progress: state.progress,
-		liveOffset: state.liveOffset,
-		commitStart: null
-	};
-}
-
-// ---------------------------------------------------------------------------
 // Per-frame sampling.
 
 /** Result of one `sampleFrame` call. */
@@ -365,17 +342,48 @@ export function sampleFrame(state: ExecutorState, plan: TransitionPlan, now: num
 // ---------------------------------------------------------------------------
 // Visual building.
 
+/** The absolute page-track translateX for `plan` at `progress`. Pure.
+ *  Single source of truth for the track geometry: `buildVisual` and the
+ *  interrupt-handoff helper (`progressAtTranslateX`) both route through
+ *  here, so the visual the driver writes and the position the next
+ *  transition starts from can never drift apart.
+ *
+ *  progress=0 leaves FROM centred at `restingTranslate` (default 0);
+ *  progress=1 brings TO centred at `restingTranslate + sign * distance`.
+ *  axis='left' translates leftward (negative) as progress advances;
+ *  axis='right' translates rightward (positive). The sign convention
+ *  matches `PageTrackAxis` in `nav-resolvers.ts` ('left' = neighbour
+ *  from the right enters = track moves left). */
+export function trackTranslateX(plan: TransitionPlan, progress: number): number {
+	const sign = plan.pageTrack.axis === 'left' ? -1 : 1;
+	const base = plan.pageTrack.restingTranslate ?? 0;
+	return base + sign * plan.pageTrack.distance * progress;
+}
+
+/** Inverse of `trackTranslateX`: the progress in `plan` whose visual
+ *  position equals `tx`. Used to start a new transition from the
+ *  track's CURRENT visual position when one transition interrupts
+ *  another (a gesture or tab-click landing mid-enter, a tab-click
+ *  landing mid-commit). The handoff is geometry-driven: read the
+ *  running plan's current translateX via `trackTranslateX`, then invert
+ *  into the new plan's progress here. The "which animation is running"
+ *  information is the running plan's geometry (base / sign / distance),
+ *  read together with the executor's current progress.
+ *
+ *  Returns 0 when the plan covers zero distance (a degenerate plan with
+ *  no slide). Clamps to [0, 1] when `tx` falls outside the plan's
+ *  travelled span. */
+export function progressAtTranslateX(plan: TransitionPlan, tx: number): number {
+	const sign = plan.pageTrack.axis === 'left' ? -1 : 1;
+	const base = plan.pageTrack.restingTranslate ?? 0;
+	const span = sign * plan.pageTrack.distance;
+	if (span === 0) return 0;
+	return clamp((tx - base) / span, 0, 1);
+}
+
 /** Build the per-frame visual record by calling the plan's consumer
  *  functions. Pure: returns the visual; the reactive shell hands it to
- *  the driver.
- *
- *  The page-track translate: progress=0 leaves FROM centred at
- *  `restingTranslate` (default 0); progress=1 brings TO centred at
- *  `restingTranslate + sign * distance`. For axis='left' the track
- *  translates leftward (negative delta) as progress advances; for
- *  axis='right' it translates rightward (positive delta). The sign
- *  convention matches `PageTrackAxis` in `nav-resolvers.ts`
- *  ('left' = neighbour from the right enters = track moves left). */
+ *  the driver. */
 export function buildVisual(
 	plan: TransitionPlan,
 	progress: number,
@@ -383,9 +391,7 @@ export function buildVisual(
 ): NavVisualWrite {
 	const fab = plan.fab(progress, liveOffset);
 	const header = plan.header(progress, liveOffset);
-	const sign = plan.pageTrack.axis === 'left' ? -1 : 1;
-	const base = plan.pageTrack.restingTranslate ?? 0;
-	const translateX = base + sign * plan.pageTrack.distance * progress;
+	const translateX = trackTranslateX(plan, progress);
 	return {
 		pageTrack: { translateX },
 		fab: { scale: fab.scale, translateY: fab.translateY, visible: fab.visible },

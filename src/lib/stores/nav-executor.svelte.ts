@@ -19,9 +19,10 @@
  *   - Reduced motion snaps: the wrapper queries the driver once at
  *     commit start, passes the flag to `startCommit`, and skips the
  *     rAF when the snap path runs.
- *   - Interruption cancels the rAF; the wrapper's `onInterrupt`
- *     boundary method preserves the executor's current progress so
- *     the next drag event hands off with no jump.
+ *   - Interruption: a mid-commit drag-start calls `onDragStart` for the
+ *     new plan, which stops the rAF and resets the state inline. The
+ *     orchestrator reads the executor's current progress to compute the
+ *     new plan's start position (no jump, no DOM read-back).
  *   - SSR safety: the `browser` flag from `$app/environment` gates
  *     the rAF scheduler; the rAF never runs during SSR.
  *
@@ -37,7 +38,6 @@ import { browser } from '$app/environment';
 import {
 	applyDrag,
 	initialExecutorState,
-	interrupt,
 	publishFrame,
 	sampleFrame,
 	shouldScheduleRaf,
@@ -232,17 +232,6 @@ export class NavExecutor {
 		if (this.#plan === null) return;
 		this.#plan = { ...this.#plan, progressDirection: 1 };
 		this.onCommit(releaseVelocityPxPerMs);
-	}
-
-	/** A new intent arrived mid-commit (§5 interruption). Cancels the
-	 *  rAF, preserves the executor's current progress as the handoff
-	 *  point, and publishes one frame so the visual at the moment of
-	 *  interrupt is authoritative. The next `onDragStart` /
-	 *  `onDragMove` continues from this state with no jump. */
-	onInterrupt(): void {
-		this.#state = interrupt(this.#state);
-		this.#publish();
-		this.#stopRaf();
 	}
 
 	/** The navigation landed. Stops the rAF, clears the plan, and

@@ -8,8 +8,10 @@
  *      `onSvelteKitAfterNavigate` (called from `src/routes/+layout.svelte`'s
  *      hooks, gated by `isNavPipelinePilotRoute`).
  *   2. Pointer -> intent: `onPointerDown` / `onPointerMove` /
- *      `onPointerUp` / `onPointerCancel` (called from the
- *      `navPipelinePointer` Svelte action that wraps `detectSwipe`).
+ *      `onPointerUp` (called from the `navPipelinePointer` Svelte
+ *      action that wraps `detectSwipe`; a `pointercancel` is routed by
+ *      `detectSwipe` through its onUp listener, reaching the
+ *      orchestrator as `onPointerUp`).
  *   3. Executor + driver -> elements: `mount({ resolveElements, ... })`
  *      constructs a `LiveNavDomDriver` whose `resolveElements` reads the
  *      host's track `bind:this` plus the FAB / Header via DOM queries;
@@ -40,12 +42,13 @@
  */
 
 import { browser } from '$app/environment';
-import { goto } from '$app/navigation';
+import { goto, preloadData } from '$app/navigation';
 import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
 import type { VoidHandler } from '$lib/types/handlers';
 import { getNavStateMachine } from '$lib/stores/nav-state-machine.svelte';
 import { NavExecutor } from '$lib/stores/nav-executor.svelte';
+import { progressAtTranslateX, trackTranslateX } from '$lib/utils/nav-executor-logic';
 import { LiveNavDomDriver } from '$lib/utils/nav-dom-driver-live';
 import { PageLifecycleController } from '$lib/stores/page-lifecycle.svelte';
 import {
@@ -399,7 +402,10 @@ export class NavPipelineOrchestrator {
 			direction: 'forward',
 			chipExit: false
 		};
-		executor.onDragStart(plan, 0, 0);
+		// Start at the track's current visual position (0 at rest; the
+		// in-flight position if the enter interrupts another transition).
+		const startProgress = this.#startProgressFromCurrentVisual(plan);
+		executor.onDragStart(plan, startProgress, 0);
 		executor.onCommit(0, TAB_CLICK_COMMIT_MS);
 	}
 
@@ -473,11 +479,6 @@ export class NavPipelineOrchestrator {
 			this.#intent = { ...this.#intent, reversed };
 		}
 		this.#interpretIntent();
-	}
-
-	/** A pointercancel arrived. */
-	onPointerCancel(x: number, y: number): void {
-		this.forwardEvent('pointercancel', x, y, null);
 	}
 
 	/** Interpret the latest intent state and feed the orchestrator +
@@ -566,6 +567,26 @@ export class NavPipelineOrchestrator {
 		return Math.max(0, Math.min(1, (raw - THRESHOLD) / (1 - THRESHOLD)));
 	}
 
+	/** Compute the start progress for a new transition so its first
+	 *  frame matches the track's current visual position (interrupt
+	 *  handoff). Reads the executor's authoritative current progress and
+	 *  the running plan's geometry, converts through the absolute
+	 *  translateX (`trackTranslateX`), and inverts into the new plan's
+	 *  progress (`progressAtTranslateX`). Returns 0 when no transition
+	 *  is in flight (the executor has no active plan).
+	 *
+	 *  Called from every transition-start path so the new transition
+	 *  begins at the visual position the in-flight one currently
+	 *  occupies, whatever its geometry. */
+	#startProgressFromCurrentVisual(newPlan: TransitionPlan): number {
+		const executor = this.#executor;
+		if (executor === null) return 0;
+		const activePlan = executor.activePlan;
+		if (activePlan === null) return 0;
+		const tx = trackTranslateX(activePlan, executor.state.progress);
+		return progressAtTranslateX(newPlan, tx);
+	}
+
 	/** Lock FROM/TO and run the resolver + coordinator once. */
 	#beginGesture(inputs: PipelineMountInputs, intent: IntentState): void {
 		// Only a rightward back-swipe is a real gesture on the pilot.
@@ -576,12 +597,9 @@ export class NavPipelineOrchestrator {
 			this.#pendingGesture = null;
 			return;
 		}
-		// Capture the enter state BEFORE clearing it so the
-		// progress-matching logic can compute the equivalent start
-		// position (the enter slides 0 to -W at progress 0 to 1; the
-		// back-swipe slides -W to 0 at progress 0 to 1; so
-		// gestureProgress = 1 - enterProgress).
-		const wasEnter = this.#isEnterAnimation;
+		// A gesture now owns the publication: clear the enter flag so
+		// coverProgress follows the live drag fraction (it is forced to
+		// 0 only while #isEnterAnimation).
 		this.#isEnterAnimation = false;
 		this.#liveDragging = true;
 		const from = inputs.fromPathname;
@@ -589,6 +607,10 @@ export class NavPipelineOrchestrator {
 		const to = inputs.backTarget;
 		const toTag = inputs.toTag;
 		const direction: TransitionDirection = 'backward';
+		// A gesture claims the transition: drop any in-flight tab-click so
+		// #onExecutorSettle dispatches THIS gesture's target, not the
+		// tab-click's. The two pending slots are mutually exclusive.
+		this.#pendingTabExit = null;
 		this.#pendingGesture = { from, fromTag, to, toTag, direction };
 		const plan = this.#resolvePlan(inputs, intent, direction, to, toTag, inputs.toTabIndex);
 		// Coordinator: direct-slide if the TO is cached; chip-exit + preload otherwise.
@@ -617,13 +639,10 @@ export class NavPipelineOrchestrator {
 			chipExit
 		};
 		this.#chipExitState = chipExit;
-		// When interrupting a forward-enter, compute the equivalent
-		// progress so the track does not jump (the enter and back-swipe
-		// plans have mirrored geometry; gestureProgress = 1 - enterProgress).
-		let startProgress = 0;
-		if (wasEnter) {
-			startProgress = 1 - (this.#executor?.state.progress ?? 0);
-		}
+		// Start the gesture at the track's current visual position so an
+		// in-flight forward-enter or commit hands off with no jump. The
+		// geometry conversion is in #startProgressFromCurrentVisual.
+		const startProgress = this.#startProgressFromCurrentVisual(plan);
 		this.#executor?.onDragStart(plan, startProgress, intent.offset);
 	}
 
@@ -841,10 +860,12 @@ export class NavPipelineOrchestrator {
 		// Chip-exit when the target is a tab root that is NOT the
 		// pre-rendered leftHref (the pilot only pre-renders /messages/inbox).
 		const chipExit = isTabRootPath(toPathname) && toPathname !== inputs.backTarget;
-		// Capture the in-flight state BEFORE clearing / reassigning, so
-		// the progress-matching logic below can detect a prior transition.
-		const wasEnterAnimation = this.#isEnterAnimation;
-		const hadInFlightTransition = this.#publication.inFlight && this.#publication.plan !== null;
+		// Warm the target's data in parallel with the slide so the
+		// post-slide `goto` lands instantly (matches GPL's chip-exit
+		// preload; fire-and-forget so the slide never waits on it).
+		if (chipExit) {
+			void preloadData(to).catch(() => {});
+		}
 		this.#pendingGesture = null;
 		this.#pendingTabExit = { target: to, svelteKitType: navigation.type, chipExit };
 		this.#navDispatchInFlight = false;
@@ -866,20 +887,10 @@ export class NavPipelineOrchestrator {
 		// routes' CSS `duration-200`. A tab-click is a discrete nav,
 		// not a finger release; the explicit duration keeps the pilot's
 		// exit animation consistent with the non-pilot routes' tab-exit.
-		// When interrupting a forward-enter, compute the equivalent
-		// progress in the tab-click plan that matches the current visual
-		// position (the enter slides 0 to -W at progress 0 to 1; the
-		// tab-click slides -W to 0 at progress 0 to 1; so
-		// tabProgress = 1 - enterProgress). When interrupting a gesture
-		// commit, read the executor's progress directly (the back-swipe
-		// and tab-exit plans share geometry; no inversion needed).
-		let startProgress = 0;
-		if (wasEnterAnimation) {
-			const enterProgress = this.#executor?.state.progress ?? 0;
-			startProgress = 1 - enterProgress;
-		} else if (hadInFlightTransition) {
-			startProgress = this.#executor?.state.progress ?? 0;
-		}
+		// Start at the track's current visual position so an in-flight
+		// forward-enter or gesture commit hands off with no jump. The
+		// geometry conversion is in #startProgressFromCurrentVisual.
+		const startProgress = this.#startProgressFromCurrentVisual(plan);
 		this.#executor?.onDragStart(plan, startProgress, 0);
 		this.#executor?.onCommit(0, TAB_CLICK_COMMIT_MS);
 		return true;

@@ -651,4 +651,71 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		}
 		expect(reversals, `track should not reverse during interrupt (samples=${samples.slice(0, 10).join(',')})`).toBe(0);
 	});
+
+	test('gesture during tab-click commit dispatches the gesture target, not the tab target', async ({
+		page,
+		context
+	}) => {
+		await prepareContext(context);
+		await page.goto('/messages/inbox');
+		await waitForHydration(page);
+		await page.click('a[href^="/messages/"]:not([href="/messages/new"]):not([href="/messages/inbox"])');
+		await page.waitForURL(/\/messages\/\d+/);
+		await page.waitForTimeout(500);
+
+		// Tap a cross-tab target to start the tab-click chip-exit commit,
+		// then immediately drive a back-swipe DURING the tab-click's
+		// ~200ms commit window. The gesture must claim the transition
+		// (drop the stale pendingTabExit) and dispatch ITS back-target
+		// (/messages/inbox), not the tapped tab's target (/activity).
+		await page.click('[data-tab-nav][href="/activity"]');
+		await swipeBack(page);
+		await page.waitForURL('**/messages/inbox', { timeout: 5000 });
+
+		// The gesture won: we land on /messages/inbox (the gesture's
+		// back-target), NOT on /activity (the tab that was tapped and
+		// would have been dispatched by a stale pendingTabExit).
+		expect(page.url(), 'gesture during tab-click should dispatch the gesture target').toMatch(
+			/\/messages\/inbox/
+		);
+	});
+
+	test('chip-exit LoadingChip grows across the slide (progress-driven overlay)', async ({ page, context }) => {
+		await prepareContext(context);
+		await page.goto('/messages/inbox');
+		await waitForHydration(page);
+		await page.click('a[href^="/messages/"]:not([href="/messages/new"]):not([href="/messages/inbox"])');
+		await page.waitForURL(/\/messages\/\d+/);
+		await page.waitForTimeout(500);
+
+		// Sample the LoadingChip's inline `transform: scale(...)` across
+		// the chip-exit slide. The chip is driven by the executor's commit
+		// progress, so it grows from its start scale toward full size.
+		await page.evaluate(() => {
+			(window as any).__chipSamples = [] as number[];
+			const sample = (): void => {
+				const chip = document.querySelector('.loading-chip');
+				if (chip) {
+					const m = new DOMMatrix(getComputedStyle(chip).transform);
+					(window as any).__chipSamples.push(m.a);
+				}
+				requestAnimationFrame(sample);
+			};
+			requestAnimationFrame(sample);
+		});
+
+		// Tap a cross-tab target to start the chip-exit (LoadingChip shows).
+		await page.click('[data-tab-nav][href="/activity"]');
+		await page.waitForURL('**/activity', { timeout: 5000 });
+
+		const samples = (await page.evaluate(() => (window as any).__chipSamples)) as number[];
+		expect(samples.length, 'chip sampler should have captured frames').toBeGreaterThan(3);
+		const min = Math.min(...samples);
+		const max = Math.max(...samples);
+		// Progress-driven: the chip grows across the slide (non-zero range).
+		expect(
+			max - min,
+			`chip scale should change across the slide (samples=${samples.slice(0, 10).join(',')})`
+		).toBeGreaterThan(0.1);
+	});
 });

@@ -110,6 +110,14 @@
 	// `swipeNeedsLoadingAtStart && (dragOffset !== null ||
 	// isPendingNavigation || isTransitioningOut)` shape.
 	const chipVisible = $derived(chipExit && publication.inFlight);
+	// GPL drives the chip's grow + label reveal from the drag width; on
+	// the pilot's click-triggered chip-exit the executor's commit
+	// progress stands in for the drag, so the chip grows and its label
+	// reveals across the 200ms slide.
+	const chipProgress = $derived(chipExit ? Math.max(0, Math.min(1, publication.progress ?? 0)) : 0);
+	const chipScale = $derived(0.5 + chipProgress * 0.8);
+	const chipMaxWidth = $derived(36 + chipProgress * 94);
+	const chipTextMaxWidth = $derived(chipProgress * 70);
 
 	// The track's geometry. Replicates GPL's multi-panel layout: the
 	// track is `panelCount * 100%` wide, the panels are equal-width
@@ -361,13 +369,13 @@
 			<LoadingChip
 				icon={chipTargetTab?.icon}
 				label={chipTargetTab ? page.data.t.nav[chipTargetTab.labelKey] : page.data.t.nav.back}
-				scale={1.15}
+				scale={chipScale}
 				expanded={true}
 				pulsing={true}
 				dragging={false}
 				opacity={1}
-				maxWidth={130}
-				textMaxWidth={70}
+				maxWidth={chipMaxWidth}
+				textMaxWidth={chipTextMaxWidth}
 			/>
 		</div>
 	{/if}
