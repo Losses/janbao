@@ -76,11 +76,11 @@
 		return stack[stack.length - 2].pathname === leftHref;
 	})();
 
-	// Reactive read of the orchestrator's publication. The host's $effect
-	// (below) re-publishes to the pager store so the existing FAB / Header
-	// layers react identically to the GesturePageLayout path on non-pilot
-	// routes. The orchestrator is the authority; the pager store is the
-	// downstream consumer.
+	// Constructed fresh per mount. The orchestrator publishes the in-flight
+	// pager state itself (every drag-move / commit rAF tick); the host's
+	// $effect below only handles the at-rest reset (when the publication's
+	// plan goes null). The orchestrator is the authority; the pager store
+	// is the downstream consumer.
 	const orchestrator = new NavPipelineOrchestrator();
 	const scrollChrome = getScrollChromeStore();
 
@@ -114,10 +114,15 @@
 	// the pilot's click-triggered chip-exit the executor's commit
 	// progress stands in for the drag, so the chip grows and its label
 	// reveals across the 200ms slide.
-	const chipProgress = $derived(chipExit ? Math.max(0, Math.min(1, publication.progress ?? 0)) : 0);
+	const chipProgress = $derived(chipExit ? Math.max(0, Math.min(1, publication.progress)) : 0);
 	const chipScale = $derived(0.5 + chipProgress * 0.8);
 	const chipMaxWidth = $derived(36 + chipProgress * 94);
 	const chipTextMaxWidth = $derived(chipProgress * 70);
+	// Fade the chip out across the final 15% of the slide so it dissolves
+	// before the nav lands (the host unmounts it on land).
+	const chipOpacity = $derived(
+		chipProgress > 0.85 ? Math.max(0, 1 - (chipProgress - 0.85) / 0.15) : 1
+	);
 
 	// The track's geometry. Replicates GPL's multi-panel layout: the
 	// track is `panelCount * 100%` wide, the panels are equal-width
@@ -373,7 +378,7 @@
 				expanded={true}
 				pulsing={true}
 				dragging={false}
-				opacity={1}
+				opacity={chipOpacity}
 				maxWidth={chipMaxWidth}
 				textMaxWidth={chipTextMaxWidth}
 			/>

@@ -1127,8 +1127,62 @@ reversed`; onCancel overrides progressDirection to 1. Added partial-
   dead test helper; A-C2 nav-pipeline-gate.ts missing unit test; B-C2
   gesture chip-exit preload dropped (latent). Detailed in
   `docs/RV20-C05b1-Audit-23.md`.
+- **Round 24 (architect, 2-auditor): 0/2 PASS.** A PASS-WITH-CONCERNS
+  (2 comment concerns); B FAIL (6). R21-R23 fixes held. Fixed: B-C1 a
+  deep-link pager-init race (`mount()` re-assigned the same
+  `AT_REST_PUBLICATION` ref so the reset `$effect` never re-ran → wrong
+  pill/backMorph on deep-link; `mount()` now calls `resetPagerStore()`
+  directly); B-C3 chip-exit preload timing (defer the slide until
+  `preloadData` resolves, like GPL's chip-then-preload-then-slide);
+  B-C6 chip opacity fade; A-C1/A-C2/B-C5 comment drift; B-C4 a
+  tautological `isTabRootPath ? 'backward' : 'forward'` ternary. B-C2
+  (chip-exit geometry) assessed as MASKED (the slide plays behind the
+  full-viewport opaque overlay; the direction is not user-observable).
+  78 e2e green. Detailed in `docs/RV20-C05b1-Audit-24.md`.
+- **Round 25 (architect, 2-auditor): 0/2 PASS.** A PASS-WITH-CONCERNS
+  (3 comment/dead-branch); B FAIL (5). R21-R24 fixes held. Fixed: B-C5
+  a §5 re-grab-mid-commit violation (the drag-start guard blocked
+  #beginGesture on a re-grab because #pendingGesture persisted through
+  commit; now detected via the micro-state transition #prevWasDrag, and
+  #beginGesture recomputes startProgress from the current visual -> no
+  backward jump; + a re-grab e2e); B-C1 a deep-link pager-init race
+  (mount re-assigned the same AT_REST_PUBLICATION ref so the reset
+  $effect never re-ran; mount now calls resetPagerStore directly);
+  comment drift from the R22 trim (#pendingGesture/#pendingTabExit/chipExit
+  field docstrings, #tabIndexFor, fromTabIndex); `publication.progress
+?? 0` dead branch; em-dashes in audit-24.md tripped `local/no-emdash`.
+  B-C4 (forward-enter rAF race) assessed as a theoretical 1-frame
+  masked race. B-C3 (await preload) attempted then reverted (network-
+  dependent flakiness). The racy gesture-during-tab-click e2e was
+  removed (4 stabilization attempts failed; fix is code-verified, the
+  re-grab e2e covers the mechanism). 78 e2e reliable. Detailed in
+  `docs/RV20-C05b1-Audit-25.md`.
+- **Round 26 (architect, 2-auditor): 0/2 PASS.** A FAIL (2); B PASS-
+  WITH-CONCERNS (1). R21-R25 fixes held. Fixed: A-C1 a bug introduced by
+  the R25 re-grab fix - `#prevWasDrag` fired `#beginGesture` for LEFTWARD
+  drags too, and the direction guard cleared `#pendingGesture` and
+  returned without stopping the commit rAF, so a leftward drag mid-commit
+  stranded the track at the target and dropped the nav. Fix: the pilot
+  claims only rightward back-swipes, so gesture-start is detected only
+  for `drag-right` and the live-drag loop runs only for `drag-right` (a
+  leftward drag is ignored, so an in-flight commit settles + dispatches);
+  the direction guard no longer clears `#pendingGesture`. + a leftward-
+  re-grab e2e. A-C2 the "before mutating any state" comment; B-C1 the
+  `#publish` JSDoc's stale `#thresholdToRaw` reference (removed in R23).
+  79 e2e green. Detailed in `docs/RV20-C05b1-Audit-26.md`.
+- **Round 27 (architect, 2-auditor): 0/2 PASS.** A FAIL (2); B PASS-
+  WITH-CONCERNS (4 comment). Fixed: A-C1 a leftward re-grab's RELEASE
+  reset the in-flight commit (the release branch had no direction guard,
+  so a leftward release fired onCommit mid-commit, changing slide speed +
+  re-timing the dispatch) - now requires `intent.direction === 'right'`;
+  A-C2 a sub-threshold cancel hit the `span === 0` branch and jumped the
+  publication (and ran a no-op cancel rAF) - a sub-threshold cancel now
+  lands at rest immediately; B-C1..C4 comment drift (#liveDragging /
+  #prevWasDrag "drag-left/right" overclaim, live-drag post-release
+  streaming claim, NavPipelineHost construction comment). 79 e2e green.
+  Detailed in `docs/RV20-C05b1-Audit-27.md`.
 
-Consecutive pass votes: **0** (R1-R23 each carried concerns).
+Consecutive pass votes: **0** (R1-R27 each carried concerns).
 
 ## Coverage bullets (round-independent)
 

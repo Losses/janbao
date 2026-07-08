@@ -6,7 +6,7 @@
  *
  *   1. SvelteKit nav -> orchestrator: `onSvelteKitBeforeNavigate` /
  *      `onSvelteKitAfterNavigate` (called from `src/routes/+layout.svelte`'s
- *      hooks, gated by `isNavPipelinePilotRoute`).
+ *      hooks, gated by `isPilotTransition`).
  *   2. Pointer -> intent: `onPointerDown` / `onPointerMove` /
  *      `onPointerUp` (called from the `navPipelinePointer` Svelte
  *      action that wraps `detectSwipe`; a `pointercancel` is routed by
@@ -166,8 +166,9 @@ export interface PipelineMountInputs {
 	readonly fromTag: RouteTag;
 	/** The back-target's tag (`'tab'` for `/messages/inbox`). */
 	readonly toTag: RouteTag;
-	/** Index of the FROM route in the tab-bar's pill order, or -1
-	 *  when FROM is not a tab root. */
+	/** The tab-bar pill index the FROM route is associated with (the
+	 *  pilot passes its `centerTab` here so the pill animates from the
+	 *  pilot's tab); -1 when FROM has no tab association. */
 	readonly fromTabIndex: number;
 	/** Index of the back-target in the tab-bar's pill order, or -1
 	 *  when TO is not a tab root. */
@@ -197,8 +198,9 @@ export interface OrchestratorPublication {
 	readonly toPathname: string | null;
 	/** The transition direction. */
 	readonly direction: TransitionDirection | null;
-	/** True when the orchestrator is running a chip-exit (LoadingChip
-	 *  overlay shown; preload in flight). */
+	/** True for the whole duration of a chip-exit (LoadingChip overlay
+	 *  shown): from the preload through the slide to the post-slide
+	 *  dispatch, cleared on land. */
 	readonly chipExit: boolean;
 }
 
@@ -236,14 +238,14 @@ export class NavPipelineOrchestrator {
 	#classifierOpts: IntentClassifierOptions = DEFAULT_CLASSIFIER_OPTIONS;
 	readonly #clock: ClockFn;
 	#mountInputs: PipelineMountInputs | null = null;
-	/** A pending transition to drive once a gesture's intent is
-	 *  classified as a drag. Carries the locked FROM/TO/pathnames/tags
-	 *  so the resolver runs once per gesture. */
+	/** A pending back-swipe gesture. `to` is the commit-settle dispatch
+	 *  target; `startProgress` is the track's progress at gesture start,
+	 *  read by the live-drag loop. Null at rest and after settle. */
 	#pendingGesture: PendingGestureTransition | null = null;
 	/** A pending tab-click transition. The orchestrator cancelled the
-	 *  SvelteKit nav; once the commit rAF settles this carries the
-	 *  dispatch target + the chipExit flag (true when the target is
-	 *  not the pilot's pre-rendered leftHref). */
+	 *  SvelteKit nav; `target` is the dispatch target fired on
+	 *  commit-settle. The chip-exit variant is tracked on
+	 *  `#chipExitState` / `#publication.chipExit`. Null at rest. */
 	#pendingTabExit: PendingTabExit | null = null;
 	/** True while the forward-enter animation (playEnterAnimation) is
 	 *  active. Suppresses the coverProgress ramp in #republishToPager:
@@ -251,13 +253,14 @@ export class NavPipelineOrchestrator {
 	 *  revealed), so coverProgress stays 0, matching GPL's centerTab
 	 *  branch. */
 	#isEnterAnimation = false;
-	/** True only while the live pointer is actively dragging (micro is
-	 *  drag-left / drag-right). Set false on release (committed /
-	 *  cancelled). Controls the pager store's `dragging` field: GPL
-	 *  publishes `dragging: dragOffset !== null` which is true during
-	 *  live drag only, NOT during the commit slide (dragOffset is
-	 *  nulled on release). Matching this prevents the FAB / Header
-	 *  CSS transitions from being disabled during the commit slide. */
+	/** True only while the live pointer is actively dragging rightward
+	 *  (micro is drag-right; a leftward drag is not a claimed gesture).
+	 *  Set false on release (committed / cancelled). Controls the pager
+	 *  store's `dragging` field: GPL publishes `dragging: dragOffset !==
+	 *  null` which is true during live drag only, NOT during the commit
+	 *  slide (dragOffset is nulled on release). Matching this prevents
+	 *  the FAB / Header CSS transitions from being disabled during the
+	 *  commit slide. */
 	#liveDragging = false;
 	/** True when the orchestrator's own goto has fired and is
 	 *  re-entering beforeNavigate. Lets the orchestrator's
@@ -287,6 +290,11 @@ export class NavPipelineOrchestrator {
 	 *  mid-transition interrupt, sub-threshold release, tab-click /
 	 *  enter with no live drag). */
 	#commitStartRaw = 0;
+	/** True iff the previous #interpretIntent call was for a rightward
+	 *  drag (micro === drag-right). Used to detect a gesture start
+	 *  (micro transitions into drag-right), including a re-grab
+	 *  mid-commit. */
+	#prevWasDrag = false;
 
 	constructor(clock: ClockFn = defaultClock) {
 		this.#clock = clock;
@@ -345,6 +353,9 @@ export class NavPipelineOrchestrator {
 		// settles to the right surface.
 		this.#publication = AT_REST_PUBLICATION;
 		this.#chipExitState = false;
+		// Publish the at-rest pager state now that #mountInputs is set,
+		// independent of the host reset $effect's timing.
+		this.resetPagerStore();
 	}
 
 	/** Update the viewport dimensions on a host resize. The
@@ -485,28 +496,33 @@ export class NavPipelineOrchestrator {
 		const executor = this.#executor;
 		if (inputs === null || executor === null) return;
 		const intent = this.#intent;
+		// The pilot claims only RIGHTWARD back-swipes. A gesture starts
+		// when micro transitions into drag-right (a from-rest start or a
+		// re-grab mid-commit; §5: a new intent arriving mid-commit
+		// continues from the current visual position). A leftward drag is
+		// not a claimed gesture and is ignored entirely, so it cannot
+		// clear an in-flight commit's dispatch target or interfere with
+		// its settle.
+		const isRightDrag = intent.micro === 'drag-right';
+		const newDragStart = isRightDrag && !this.#prevWasDrag;
+		this.#prevWasDrag = isRightDrag;
 		// Deciding / idle: nothing to do.
 		if (intent.micro === 'idle' || intent.micro === 'deciding') {
 			return;
 		}
-		// A drag just started (micro first flipped to drag-left / drag-right).
-		// Lock FROM / TO and run the resolver once.
-		if (
-			this.#pendingGesture === null &&
-			(intent.micro === 'drag-left' || intent.micro === 'drag-right')
-		) {
+		if (newDragStart) {
 			this.#beginGesture(inputs, intent);
 		}
-		// During a drag (and after a release while we wait for settle),
-		// stream the live progress to the executor. The track continues
-		// from the gesture's start position: the threshold-absorbed
-		// fraction of the drag maps onto the REMAINING [startProgress, 1]
-		// window, so the first 20% of drag is absorbed AT the start
-		// position (not at 0) and the track never snaps back when a
-		// gesture begins mid-transition. The FAB / Header consumers see
-		// the RAW drag fraction (their consumer-side thresholds apply
-		// separately).
-		if (this.#pendingGesture !== null && this.#publication.plan !== null) {
+		// During a rightward drag, stream the live progress to the
+		// executor. (Post-release streaming is done by #onExecutorTick via
+		// the commit rAF, not this block.) The track continues from the
+		// gesture's start position: the threshold-absorbed fraction of the
+		// drag maps onto the REMAINING [startProgress, 1] window, so the
+		// first 20% of drag is absorbed AT the start position (not at 0)
+		// and the track never snaps back when a gesture begins mid-
+		// transition. The FAB / Header consumers see the RAW drag fraction
+		// (their consumer-side thresholds apply separately).
+		if (isRightDrag && this.#pendingGesture !== null && this.#publication.plan !== null) {
 			const raw = this.#rawDragFraction(intent, inputs);
 			const startProgress = this.#pendingGesture.startProgress;
 			const absorbed = this.#thresholdAbsorbedProgress(raw);
@@ -523,17 +539,29 @@ export class NavPipelineOrchestrator {
 		// `dragDistance >= SWIPE_COMMIT && !reversed`.
 		if (intent.micro === 'committed' || intent.micro === 'cancelled') {
 			this.#liveDragging = false;
-			if (this.#pendingGesture !== null) {
+			// Only a RIGHTWARD gesture's release ends a transition. A leftward
+			// drag is not claimed (filtered upstream); its release must not
+			// reset an in-flight commit (no onCommit / onCancel, no dispatch
+			// re-timing) - the commit continues and settles on its own.
+			if (this.#pendingGesture !== null && intent.direction === 'right') {
 				const dragDistance = Math.abs(intent.offset);
 				const reversed = intent.reversed;
 				const shouldCommit = dragDistance >= SWIPE_COMMIT && !reversed;
-				// Capture the live raw at release so the commit publication
-				// lerps continuously from it (#onExecutorTick).
-				this.#commitStartRaw = this.#publication.progress;
 				if (shouldCommit) {
+					// Capture the live raw at release so the commit publication
+					// lerps continuously from it (#onExecutorTick).
+					this.#commitStartRaw = this.#publication.progress;
 					executor.onCommit(intent.releaseVelocity);
-				} else {
+				} else if (executor.state.progress > 0) {
+					// Cancel with the track off-rest: animate it back.
+					this.#commitStartRaw = this.#publication.progress;
 					executor.onCancel(intent.releaseVelocity);
+				} else {
+					// Sub-threshold cancel: the track is already at rest (the
+					// drag was absorbed below the morph threshold), so there is
+					// nothing to animate back. Land at rest immediately (no
+					// no-op cancel rAF, no publication jump).
+					this.#landAtRest();
 				}
 			}
 			this.#intent = initialIntentState();
@@ -588,12 +616,9 @@ export class NavPipelineOrchestrator {
 
 	/** Lock FROM/TO and run the resolver + coordinator once. */
 	#beginGesture(inputs: PipelineMountInputs, intent: IntentState): void {
-		// Only a rightward back-swipe is a real gesture on the pilot.
-		// Check direction BEFORE mutating any state so a non-claimed
-		// leftward drag does not leak #isEnterAnimation/#liveDragging
-		// (which would corrupt the forward-enter's publication).
+		// Defensive: the pilot claims only rightward back-swipes (a
+		// leftward drag is filtered out before #beginGesture is called).
 		if (intent.direction !== 'right') {
-			this.#pendingGesture = null;
 			return;
 		}
 		// A gesture now owns the publication: clear the enter flag so
@@ -704,8 +729,8 @@ export class NavPipelineOrchestrator {
 	 *  / `chipProgress` / `fractionalIndex` continuous across the
 	 *  drag-to-commit boundary for every transition - a from-rest
 	 *  gesture, a mid-transition interrupt (startProgress > 0), a sub-
-	 *  threshold release, and a tab-click / enter with no live drag
-	 *  (#commitStartRaw = 0 -> the publication tracks the slide 1:1). */
+	 *  threshold release, and a tab-click / enter (#commitStartRaw = 0
+	 *  when no live drag preceded it). */
 	#onExecutorTick(progress: number): void {
 		if (this.#publication.plan === null) return;
 		const cs = this.#executor?.state.commitStart ?? null;
@@ -839,11 +864,11 @@ export class NavPipelineOrchestrator {
 		if (!isTabRootPath(to)) {
 			return false;
 		}
-		// A tab-click exit (or any other pilot -> non-pilot nav). Drive
+		// A tab-click exit (pilot -> tab-root). Drive
 		// the slide plan via the executor and dispatch on settle.
 		const toPathname = to;
 		const toTabIndex = this.#tabIndexFor(toPathname);
-		const direction: TransitionDirection = isTabRootPath(toPathname) ? 'backward' : 'forward';
+		const direction: TransitionDirection = 'backward';
 		// Synthesize a "tap" intent so the resolver produces a commit plan.
 		const intent = {
 			...initialIntentState(),
@@ -855,12 +880,6 @@ export class NavPipelineOrchestrator {
 		// Chip-exit when the target is a tab root that is NOT the
 		// pre-rendered leftHref (the pilot only pre-renders /messages/inbox).
 		const chipExit = isTabRootPath(toPathname) && toPathname !== inputs.backTarget;
-		// Warm the target's data in parallel with the slide so the
-		// post-slide `goto` lands instantly (matches GPL's chip-exit
-		// preload; fire-and-forget so the slide never waits on it).
-		if (chipExit) {
-			void preloadData(to).catch(() => {});
-		}
 		this.#pendingGesture = null;
 		this.#pendingTabExit = { target: to };
 		this.#navDispatchInFlight = false;
@@ -877,14 +896,18 @@ export class NavPipelineOrchestrator {
 			chipExit
 		};
 		this.#chipExitState = chipExit;
+		// Warm the target's data in parallel with the slide so the
+		// post-slide `goto` lands instantly; the slide is not blocked on
+		// the preload (the goto on settle awaits any in-flight preload
+		// before landing).
+		if (chipExit) {
+			void preloadData(to).catch(() => {});
+		}
 		// Drive the executor: dragStart, then commit with an explicit
 		// duration (`TAB_CLICK_COMMIT_MS`) matching the non-pilot
-		// routes' CSS `duration-200`. A tab-click is a discrete nav,
-		// not a finger release; the explicit duration keeps the pilot's
-		// exit animation consistent with the non-pilot routes' tab-exit.
-		// Start at the track's current visual position so an in-flight
-		// forward-enter or gesture commit hands off with no jump. The
-		// geometry conversion is in #startProgressFromCurrentVisual.
+		// routes' CSS `duration-200`. Start at the track's current visual
+		// position so an in-flight forward-enter or gesture commit hands
+		// off with no jump (#startProgressFromCurrentVisual).
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
 		this.#commitStartRaw = this.#publication.progress;
 		this.#executor?.onDragStart(plan, startProgress, 0);
@@ -907,9 +930,8 @@ export class NavPipelineOrchestrator {
 	}
 
 	#tabIndexFor(pathname: string): number {
-		// The fromTabIndex for the TO field; the resolver uses this
-		// only for {tab, tab} pairs (not relevant for the pilot's
-		// detail -> tab back-swipe). Default to -1 when not a tab root.
+		// The tab-bar pill index for `pathname` (the resolver's
+		// `toTabIndex`); -1 when it is not a tab root.
 		if (!isTabRootPath(pathname)) return -1;
 		const tabs = ['/', '/activity', '/messages/inbox'];
 		const idx = tabs.indexOf(pathname);
@@ -940,11 +962,10 @@ export class NavPipelineOrchestrator {
 	 *  the pager store. Called from two paths, both passing a RAW drag
 	 *  fraction on the same scale: (1) the live-drag path
 	 *  (`#interpretIntent`) passes `offsetX / W` directly; (2) the
-	 *  commit path (`#onExecutorTick`) converts the executor's
-	 *  threshold-absorbed progress back to raw via
-	 *  `#thresholdToRaw` before calling this. Both values drive
-	 *  `coverProgress` / `backMorph` / `fractionalIndex` via
-	 *  `#republishToPager`. The host's `$effect` only handles the
+	 *  commit path (`#onExecutorTick`) lerps from `#commitStartRaw`
+	 *  toward the target raw along the executor's eased fraction. Both
+	 *  values drive `coverProgress` / `backMorph` / `fractionalIndex`
+	 *  via `#republishToPager`. The host's `$effect` only handles the
 	 *  at-rest reset (when `publication.plan` becomes null); the
 	 *  in-flight publication is the orchestrator's responsibility. */
 	#publish(rawDragFraction: number): void {
