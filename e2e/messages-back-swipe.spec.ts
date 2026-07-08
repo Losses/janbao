@@ -548,16 +548,41 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		await page.goto('/messages/inbox');
 		await waitForHydration(page);
 
+		// Install a rAF sampler to capture the track trajectory across
+		// the forward-enter -> back-swipe interrupt boundary.
+		await page.evaluate(() => {
+			(window as any).__gestureEnterSamples = [] as number[];
+			const sample = () => {
+				const track = document.querySelector('[data-testid="nav-pipeline-track"]');
+				if (track) {
+					const m = new DOMMatrix(getComputedStyle(track).transform);
+					(window as any).__gestureEnterSamples.push(m.m41);
+				}
+				requestAnimationFrame(sample);
+			};
+			requestAnimationFrame(sample);
+		});
+
 		// Click a conversation link to trigger the forward-enter.
 		await page.click('a[href^="/messages/"]:not([href="/messages/new"]):not([href="/messages/inbox"])');
 		await page.waitForURL(/\/messages\/\d+/);
 		// Do NOT wait out the enter animation; start the swipe immediately.
-		// The enter animation is ~200ms; the swipe must begin within
-		// that window to exercise the interrupt path.
 		await swipeBack(page);
-
-		// The swipe should commit: URL returns to /messages/inbox.
 		await page.waitForURL('**/messages/inbox', { timeout: 5000 });
+
+		// Assert no backward jump (reversals = 0 across the interrupt).
+		const samples = (await page.evaluate(() => (window as any).__gestureEnterSamples)) as number[];
+		expect(samples.length, 'sampler should have captured frames').toBeGreaterThan(3);
+		let reversals = 0;
+		for (let i = 2; i < samples.length; i++) {
+			const prevDelta = samples[i - 1] - samples[i - 2];
+			const currDelta = samples[i] - samples[i - 1];
+			if (prevDelta * currDelta < 0) reversals++;
+		}
+		expect(
+			reversals,
+			`track should not reverse during gesture-during-enter interrupt (samples=${samples.slice(0, 10).join(',')})`
+		).toBe(0);
 	});
 
 	test('tab-click during forward-enter interrupts cleanly and navigates', async ({ page, context }) => {
@@ -576,5 +601,54 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 
 		// The tab-click should commit: URL returns to /messages/inbox.
 		await page.waitForURL('**/messages/inbox', { timeout: 5000 });
+	});
+
+	test('tab-click during gesture commit starts from current position (no backward jump)', async ({
+		page,
+		context
+	}) => {
+		await prepareContext(context);
+		await page.goto('/messages/inbox');
+		await waitForHydration(page);
+
+		// Click a conversation to land on the pilot.
+		await page.click('a[href^="/messages/"]:not([href="/messages/new"]):not([href="/messages/inbox"])');
+		await page.waitForURL(/\/messages\/\d+/);
+		await page.waitForTimeout(500);
+
+		// Install a rAF sampler to capture the track trajectory across
+		// the gesture commit -> tab-click interrupt boundary.
+		await page.evaluate(() => {
+			(window as any).__commitInterruptSamples = [] as number[];
+			const sample = () => {
+				const track = document.querySelector('[data-testid="nav-pipeline-track"]');
+				if (track) {
+					const m = new DOMMatrix(getComputedStyle(track).transform);
+					(window as any).__commitInterruptSamples.push(m.m41);
+				}
+				requestAnimationFrame(sample);
+			};
+			requestAnimationFrame(sample);
+		});
+
+		// Start a back-swipe and release past SWIPE_COMMIT to enter the
+		// commit phase, then immediately click a tab during the commit
+		// rAF window (~200ms). This exercises the R16/R17 fix: the
+		// tab-exit should start from the executor's current progress
+		// (mid-commit), not from 0 (which would snap the track backward).
+		await swipeBack(page);
+		await page.click('[data-tab-nav][href="/messages/inbox"]');
+		await page.waitForURL('**/messages/inbox', { timeout: 5000 });
+
+		// Assert no backward jump (reversals = 0 across the interrupt).
+		const samples = (await page.evaluate(() => (window as any).__commitInterruptSamples)) as number[];
+		expect(samples.length, 'sampler should have captured frames').toBeGreaterThan(3);
+		let reversals = 0;
+		for (let i = 2; i < samples.length; i++) {
+			const prevDelta = samples[i - 1] - samples[i - 2];
+			const currDelta = samples[i] - samples[i - 1];
+			if (prevDelta * currDelta < 0) reversals++;
+		}
+		expect(reversals, `track should not reverse during interrupt (samples=${samples.slice(0, 10).join(',')})`).toBe(0);
 	});
 });

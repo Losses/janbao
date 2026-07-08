@@ -255,6 +255,14 @@ export class NavPipelineOrchestrator {
 	 *  revealed), so coverProgress stays 0, matching GPL's centerTab
 	 *  branch. */
 	#isEnterAnimation = false;
+	/** True only while the live pointer is actively dragging (micro is
+	 *  drag-left / drag-right). Set false on release (committed /
+	 *  cancelled). Controls the pager store's `dragging` field: GPL
+	 *  publishes `dragging: dragOffset !== null` which is true during
+	 *  live drag only, NOT during the commit slide (dragOffset is
+	 *  nulled on release). Matching this prevents the FAB / Header
+	 *  CSS transitions from being disabled during the commit slide. */
+	#liveDragging = false;
 	/** True when the orchestrator's own goto has fired and is
 	 *  re-entering beforeNavigate. Lets the orchestrator's
 	 *  beforeNavigate handler pass it through. */
@@ -485,18 +493,25 @@ export class NavPipelineOrchestrator {
 		}
 		// A drag just started (micro first flipped to drag-left / drag-right).
 		// Lock FROM / TO and run the resolver once.
+		let gestureJustStarted = false;
 		if (
 			this.#pendingGesture === null &&
 			(intent.micro === 'drag-left' || intent.micro === 'drag-right')
 		) {
 			this.#beginGesture(inputs, intent);
+			gestureJustStarted = true;
 		}
 		// During a drag (and after a release while we wait for settle),
 		// stream the live progress to the executor. The TRACK sees the
 		// threshold-absorbed progress (so it stays at rest for the first
 		// 20% of drag); the FAB / Header consumers see the RAW drag
-		// fraction (their consumer-side thresholds apply separately).
-		if (this.#pendingGesture !== null && this.#publication.plan !== null) {
+		// fraction (their consumer-side thresholds apply separately). Skip the
+		// first onDragMove on the same event that started the gesture:
+		// #beginGesture already published the initial frame (with the
+		// startProgress for enter-interrupt), and the live finger offset at
+		// claim time (~10px dead zone) would compute trackProgress=0,
+		// overriding the startProgress and snapping the track.
+		if (this.#pendingGesture !== null && this.#publication.plan !== null && !gestureJustStarted) {
 			const raw = this.#rawDragFraction(intent, inputs);
 			const trackProgress = this.#thresholdAbsorbedProgress(raw);
 			executor.onDragMove(trackProgress, intent.offset);
@@ -510,6 +525,7 @@ export class NavPipelineOrchestrator {
 		// (the same source the non-pilot routes use): commit iff
 		// `dragDistance >= SWIPE_COMMIT && !reversed`.
 		if (intent.micro === 'committed' || intent.micro === 'cancelled') {
+			this.#liveDragging = false;
 			if (this.#pendingGesture !== null) {
 				const dragDistance = Math.abs(intent.offset);
 				const reversed = intent.reversed;
@@ -552,15 +568,22 @@ export class NavPipelineOrchestrator {
 
 	/** Lock FROM/TO and run the resolver + coordinator once. */
 	#beginGesture(inputs: PipelineMountInputs, intent: IntentState): void {
-		// A gesture starting mid-enter takes over the transition; clear
-		// the enter flag so coverProgress tracks the gesture (not pinned
-		// to 0 by the enter suppression).
-		this.#isEnterAnimation = false;
 		// Only a rightward back-swipe is a real gesture on the pilot.
+		// Check direction BEFORE mutating any state so a non-claimed
+		// leftward drag does not leak #isEnterAnimation/#liveDragging
+		// (which would corrupt the forward-enter's publication).
 		if (intent.direction !== 'right') {
 			this.#pendingGesture = null;
 			return;
 		}
+		// Capture the enter state BEFORE clearing it so the
+		// progress-matching logic can compute the equivalent start
+		// position (the enter slides 0 to -W at progress 0 to 1; the
+		// back-swipe slides -W to 0 at progress 0 to 1; so
+		// gestureProgress = 1 - enterProgress).
+		const wasEnter = this.#isEnterAnimation;
+		this.#isEnterAnimation = false;
+		this.#liveDragging = true;
 		const from = inputs.fromPathname;
 		const fromTag = inputs.fromTag;
 		const to = inputs.backTarget;
@@ -594,7 +617,14 @@ export class NavPipelineOrchestrator {
 			chipExit
 		};
 		this.#chipExitState = chipExit;
-		this.#executor?.onDragStart(plan, 0, intent.offset);
+		// When interrupting a forward-enter, compute the equivalent
+		// progress so the track does not jump (the enter and back-swipe
+		// plans have mirrored geometry; gestureProgress = 1 - enterProgress).
+		let startProgress = 0;
+		if (wasEnter) {
+			startProgress = 1 - (this.#executor?.state.progress ?? 0);
+		}
+		this.#executor?.onDragStart(plan, startProgress, intent.offset);
 	}
 
 	/** Resolve a transition plan for the locked FROM/TO/direction. */
@@ -738,6 +768,7 @@ export class NavPipelineOrchestrator {
 		this.#navDispatchInFlight = false;
 		this.#dispatchTarget = null;
 		this.#isEnterAnimation = false;
+		this.#liveDragging = false;
 		this.#executor?.onLand();
 		if (inputs !== null) {
 			this.#stateMachine.onLand(inputs.fromTag);
@@ -810,10 +841,10 @@ export class NavPipelineOrchestrator {
 		// Chip-exit when the target is a tab root that is NOT the
 		// pre-rendered leftHref (the pilot only pre-renders /messages/inbox).
 		const chipExit = isTabRootPath(toPathname) && toPathname !== inputs.backTarget;
-		// Capture the enter-animation state BEFORE clearing it, so the
-		// progress-matching fix below can use it (the flag is cleared
-		// here because this transition owns the flag's lifecycle now).
+		// Capture the in-flight state BEFORE clearing / reassigning, so
+		// the progress-matching logic below can detect a prior transition.
 		const wasEnterAnimation = this.#isEnterAnimation;
+		const hadInFlightTransition = this.#publication.inFlight && this.#publication.plan !== null;
 		this.#pendingGesture = null;
 		this.#pendingTabExit = { target: to, svelteKitType: navigation.type, chipExit };
 		this.#navDispatchInFlight = false;
@@ -839,17 +870,14 @@ export class NavPipelineOrchestrator {
 		// progress in the tab-click plan that matches the current visual
 		// position (the enter slides 0 to -W at progress 0 to 1; the
 		// tab-click slides -W to 0 at progress 0 to 1; so
-		// tabProgress = 1 - enterProgress). Without this, progress
-		// resets to 0 and the track jumps.
+		// tabProgress = 1 - enterProgress). When interrupting a gesture
+		// commit, read the executor's progress directly (the back-swipe
+		// and tab-exit plans share geometry; no inversion needed).
 		let startProgress = 0;
 		if (wasEnterAnimation) {
 			const enterProgress = this.#executor?.state.progress ?? 0;
 			startProgress = 1 - enterProgress;
-		} else if (this.#publication.inFlight && this.#publication.plan !== null) {
-			// A gesture commit is in flight; start the tab-exit from the
-			// current visual position. The back-swipe and tab-exit plans
-			// share geometry (axis, distance, restingTranslate), so the
-			// progress transfers directly without inversion.
+		} else if (hadInFlightTransition) {
 			startProgress = this.#executor?.state.progress ?? 0;
 		}
 		this.#executor?.onDragStart(plan, startProgress, 0);
@@ -942,7 +970,7 @@ export class NavPipelineOrchestrator {
 		if (centerTab !== undefined) {
 			pager.set({
 				fractionalIndex: centerTab,
-				dragging: publication.inFlight && this.#pendingGesture !== null && !publication.chipExit,
+				dragging: publication.inFlight && this.#liveDragging && !publication.chipExit,
 				active: true,
 				backMorph: null,
 				targetIndex: null,

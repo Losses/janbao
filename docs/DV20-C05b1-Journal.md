@@ -998,11 +998,41 @@ reversed`; onCancel overrides progressDirection to 1. Added partial-
   still jumped on tab-click-during-enter. Fixed: captured into a local
   `const wasEnterAnimation` BEFORE clearing, then used the local in the
   conditional. Detailed in `docs/RV20-C05b1-Audit-15.md`.
+- **Round 16 (architect, 2-auditor): split.** A PASS (zero concerns,
+  187 e2e green). B PASS-WITH-CONCERNS: tab-click-during-gesture-commit
+  resets `startProgress` to 0 (the `wasEnterAnimation` branch only
+  handles forward-enter, not gesture-commit). Pre-existing since Session 3. Fixed: added `else if (inFlight && plan !== null)` branch reading
+  the executor's current progress directly. Detailed in
+  `docs/RV20-C05b1-Audit-16.md`.
+- **Round 17 (architect, 2-auditor): 0/2 PASS.** Both PASS-WITH-CONCERNS:
+  the `else if` condition was tautological (read `#publication` AFTER
+  reassignment; always true), and no e2e covered tab-click-during-
+  gesture-commit. Fixed: captured `hadInFlightTransition` before
+  reassignment (correctly distinguishes from-rest vs in-flight); added
+  "tab-click during gesture commit" e2e. 9/9 gesture e2e pass.
+  Detailed in `docs/RV20-C05b1-Audit-17.md`.
+- **Round 18 (architect, 2-auditor): split.** A PASS (zero concerns).
+  B PASS-WITH-CONCERNS (2): test #9 lacked track-trajectory assertion;
+  `dragging` flag true during commit slide. Fixed: strengthened test #9
+  with rAF sampler + reversals assertion; added `#liveDragging` flag
+  (true only during live drag, false on release) matching GPL's
+  `dragOffset === null`. Detailed in `docs/RV20-C05b1-Audit-18.md`.
+- **Round 19 (architect, 2-auditor): A PASS-WITH-CONCERNS (2, fixed).
+  B pending.** A: `#beginGesture` mutated state before the direction
+  guard (leftward drag leaks); gesture-during-forward-enter resets
+  progress to 0 (R14 fix not mirrored in gesture path). Fixed: hoisted
+  direction guard; captured `wasEnter` before clearing, computed
+  `startProgress = 1 - executor.state.progress`; strengthened test 7
+  with rAF sampler + reversals. Detailed in
+  `docs/RV20-C05b1-Audit-19.md`. B PASS (zero concerns, 234 e2e green,
+  audited the post-fix state). R19 split (A's concern reset).
+- **Round 20 (architect, 2-auditor): 0/2 PASS.** Both found the same
+  defect: R19-A's `startProgress` fix was dead code (`onDragMove`
+  overrode it immediately). Fixed: `gestureJustStarted` flag skips the
+  first `onDragMove` on the same event as gesture-start. 9/9 gesture
+  e2e pass. Detailed in `docs/RV20-C05b1-Audit-20.md`.
 
-Consecutive pass votes: **0** (R1-R15 each carried concerns). The
-implementation logic + UNIFY invariant have been verified clean across
-all rounds; the concerns were GPL-behavior-fidelity gaps progressively
-caught and fixed by the e2e gate + the audit.
+Consecutive pass votes: **0** (R1-R20 each carried concerns).
 
 ## Coverage bullets (round-independent)
 
