@@ -1206,9 +1206,49 @@ reversed`; onCancel overrides progressDirection to 1. Added partial-
   code (set by every resolver, read by no production code - executor uses
   prefersReducedMotion directly); A-C3/B-C3 stale comments (nav-executor
   clock "Cycle 5 should/will", e2e thresholdToRaw ref). 80 e2e green.
-  Detailed in `docs/RV20-C05b1-Audit-29.md`.
+  Detailed in `docs/RV20-C05b1-Audit-29.md`. All five R29 concerns then
+  fixed with per-fix case enumeration (after the owner flagged a pattern
+  of fixing the reported case and missing the adjacent one): B-C2
+  #commitStartRaw captured before the publication reset; A-C1 desktop
+  resize (NavPipelineHost factors mount/unmount + a mounted flag;
+  sync() mounts/unmounts on platform flip, covers resize at-rest /
+  mid-gesture / mid-commit / desktop->mobile); B-C1 multi-touch
+  edge-zone (capture listener mirrors detectSwipe's EXACT edge check;
+  self-audit caught the isEdgeReserve `<=` vs detectSwipe `<` boundary
+  mismatch, single-sourced EDGE_DEAD_ZONE); A-C2 commitPhysics wired (the
+  executor reads plan.commitPhysics, not driver.prefersReducedMotion);
+  A-C3/B-C3 stale comments. 80 e2e green.
+- **Round 30 (architect, 2-auditor): 0/2 PASS.** A FAIL (5); B PASS-
+  WITH-CONCERNS (1). Fixed: A-C1 the classifier's `isEdgeReserve` used
+  `<=` while detectSwipe + the capture used `<` (R29 aligned two of
+  three) -> a pointer at exactly x=40 was claimed + recorded but killed
+  by the classifier (gesture silently dropped); aligned `isEdgeReserve`
+  to `<` / `>` (all three edge checks now agree, single-sourced via
+  EDGE_DEAD_ZONE). A-C2/A-C3 stale docstrings (isEdgeReserve "matching
+  detectSwipe", gesture-constants "different purpose"). A-C4
+  isPilotTransition overclaimed the deep-link landing flows through the
+  orchestrator (it does not - the singleton is null on cold deep-link).
+  A-C5 a preventive boundary test for isEdgeReserve (would have caught
+  A-C1). B-C1 the #liveDragging docstring overclaimed CSS transitions.
+  The edge-zone thread (R23 -> R29 -> R30) is CLOSED: all three checks
+  aligned + pinned by the boundary test. 80 e2e green. Detailed in
+  `docs/RV20-C05b1-Audit-30.md`.
+- **Round 31 (architect, 2-auditor): 0/2 PASS.** A PASS-WITH-CONCERNS
+  (3); B FAIL (1). Fixed: B-C1 the release gate used unsigned
+  `Math.abs(intent.offset)`, so a reversed-past-start release
+  (offset<0, |offset|>=60) committed where GPL's signed
+  `deltaX>=SWIPE_COMMIT` cancels (detectSwipe's rebound-based `reversed`
+  misses it when the release IS the drag min); gate now uses signed
+  `intent.offset >= SWIPE_COMMIT`; the reversed-swipe e2e strengthened
+  (endX 70 -> 40, offset=-80). A-C1 a stale R30 comment (isEdgeReserve
+  "<="). A-C2 a mobile-only resize after a transition left a stale px
+  transform (GPL's -50% scales; the px does not); the ResizeObserver
+  re-applies translateX(-50%) on resize when at-rest + mobile
+  (self-corrected twice via the e2e gate: the $effect version reversed
+  the track on commit-land; the unguarded ResizeObserver broke desktop).
+  80 e2e green. Detailed in `docs/RV20-C05b1-Audit-31.md`.
 
-Consecutive pass votes: **0** (R1-R29 each carried concerns).
+Consecutive pass votes: **0** (R1-R31 each carried concerns).
 
 ## Coverage bullets (round-independent)
 

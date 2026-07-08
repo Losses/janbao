@@ -61,6 +61,17 @@ describe('intent classifier: edge-dead-zone', () => {
 		expect(isEdgeReserve(VW - 10, VW, OPTS.edgeDeadZone)).toBe(true);
 		expect(isEdgeReserve(80, VW, OPTS.edgeDeadZone)).toBe(false);
 	});
+
+	test('isEdgeReserve boundary matches detectSwipe (strict <, not <=)', () => {
+		const { left, right } = OPTS.edgeDeadZone;
+		// x = deadZone is NOT edge: detectSwipe claims it, so the
+		// classifier must not kill it. An inclusive <= would diverge here.
+		expect(isEdgeReserve(left, VW, OPTS.edgeDeadZone)).toBe(false);
+		expect(isEdgeReserve(VW - right, VW, OPTS.edgeDeadZone)).toBe(false);
+		// One px inside the gutter IS edge.
+		expect(isEdgeReserve(left - 1, VW, OPTS.edgeDeadZone)).toBe(true);
+		expect(isEdgeReserve(VW - right + 1, VW, OPTS.edgeDeadZone)).toBe(true);
+	});
 });
 
 describe('intent classifier: pointerdown -> deciding', () => {

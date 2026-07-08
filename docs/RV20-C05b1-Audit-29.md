@@ -68,3 +68,50 @@ surface. The core gesture logic is solid and behavior-preserved on
 mobile; the remaining items are corner-case gaps + dead code + comments.
 
 Consecutive pass votes: **0** (R1-R29 each carried concerns).
+
+## Fixes landed (post-R29, with per-fix case enumeration)
+
+All five concerns fixed; the fixes enumerate their full case space first
+(this round, after the owner flagged a pattern of fixing the reported
+case and missing the adjacent one).
+
+- **B-C2 (tab-click interrupts gesture commit -> coverProgress jumps)**:
+  `#commitStartRaw` now captured from `#publication.progress` BEFORE the
+  publication reset (was after -> always 0).
+- **A-C1 (mobile -> desktop resize leaves the orchestrator active)**:
+  `NavPipelineHost` factors mount/unmount into functions + a `mounted`
+  flag; `sync()` (the matchMedia listener) mounts on the mobile side and
+  unmounts + clears the singleton + clears the track transform on the
+  desktop side. Covers: cold-start mobile/desktop, resize at-rest /
+  mid-gesture / mid-commit (unmount aborts, no dispatch) /
+  desktop->mobile (fresh mount). The forward-enter's deferred rAF is a
+  no-op after unmount (`#mountInputs` null).
+- **B-C1 (multi-touch edge-zone desync)**: the capture listener mirrors
+  `detectSwipe`'s EXACT edge check. Self-audit caught that the first
+  attempt reused the classifier's `isEdgeReserve` (`<=`, node.clientWidth),
+  which mismatches `detectSwipe` (`<` / `>`, `window.innerWidth`) at the
+  boundary - a pointer at exactly x=40 would be claimed by detectSwipe
+  but un-recorded, leaving a stale start X. Fixed by single-sourcing
+  `EDGE_DEAD_ZONE` (gesture-constants) used by both `detectSwipe` and the
+  capture listener. Case table: 1-finger non-edge/edge, 2-finger
+  non-edge+non-edge / non-edge+edge / edge+non-edge / edge+edge - all
+  correct (primary = the first non-edge pointer detectSwipe claims).
+- **A-C2 (`commitPhysics` dead code)**: the executor now reads
+  `plan.commitPhysics === 'snap'` instead of querying
+  `driver.prefersReducedMotion()`. Behavior-preserving (the resolver
+  baked the reduced-motion state into `commitPhysics` at gesture start);
+  fulfills Plan §4 ("commitPhysics selects the integrator") + §13.5
+  (consumers read the plan, not the DOM/driver). The driver's
+  `prefersReducedMotion` is still read - by the resolver at resolve time.
+- **A-C3 / B-C3 (stale comments)**: the executor's reduced-motion bullet
+  - clock docstrings ("Cycle 5 should/will") and the e2e
+    `#thresholdToRaw` reference reworded to current behavior.
+
+Gate outputs (real):
+
+```
+$ bun run check          0 errors / 0 warnings (1458 files)
+$ bun run lint           EXIT=0 (no em-dashes; 0 type duplicates)
+$ bun test src/lib/utils src/lib/stores    435 pass / 0 fail
+$ bun run test:e2e -- 8-spec mobile + desktop sweep    80 passed (2.8m)
+```

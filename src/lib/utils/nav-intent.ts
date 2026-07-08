@@ -191,10 +191,13 @@ export function estimateVelocity(samples: readonly VelocitySample[]): number {
 }
 
 /** Whether a pointerdown at `x` falls inside the OS edge-back reserve.
- *  The classifier ignores these so the OS gesture fires cleanly. */
+ *  Uses strict `<` / `>` to match `detectSwipe`'s edge check exactly -
+ *  an inclusive `<=` would diverge at the boundary (x = deadZone) and
+ *  kill a gesture `detectSwipe` claims. The classifier ignores these so
+ *  the OS gesture fires cleanly. */
 export function isEdgeReserve(x: number, viewportWidth: number, deadZone: EdgeDeadZone): boolean {
-	if (x <= deadZone.left) return true;
-	if (viewportWidth - x <= deadZone.right) return true;
+	if (x < deadZone.left) return true;
+	if (viewportWidth - x < deadZone.right) return true;
 	return false;
 }
 

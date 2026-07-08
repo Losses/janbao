@@ -258,9 +258,8 @@ export class NavPipelineOrchestrator {
 	 *  Set false on release (committed / cancelled). Controls the pager
 	 *  store's `dragging` field: GPL publishes `dragging: dragOffset !==
 	 *  null` which is true during live drag only, NOT during the commit
-	 *  slide (dragOffset is nulled on release). Matching this prevents
-	 *  the FAB / Header CSS transitions from being disabled during the
-	 *  commit slide. */
+	 *  slide (dragOffset is nulled on release). Matching this aligns the
+	 *  pilot's `dragging` field with GPL's. */
 	#liveDragging = false;
 	/** True when the orchestrator's own goto has fired and is
 	 *  re-entering beforeNavigate. Lets the orchestrator's
@@ -545,9 +544,16 @@ export class NavPipelineOrchestrator {
 			// reset an in-flight commit (no onCommit / onCancel, no dispatch
 			// re-timing) - the commit continues and settles on its own.
 			if (this.#pendingGesture !== null && intent.direction === 'right') {
-				const dragDistance = Math.abs(intent.offset);
+				// SIGNED offset: a rightward gesture commits only if the
+				// release position is rightward of the start by >=
+				// SWIPE_COMMIT. A reversed-past-start release (offset < 0)
+				// cancels even when |offset| >= SWIPE_COMMIT (the user
+				// changed their mind); detectSwipe's rebound-based
+				// `reversed` does not catch this when the release point IS
+				// the drag minimum (rebound = 0). Matches GPL's signed
+				// `deltaX >= SWIPE_COMMIT`.
 				const reversed = intent.reversed;
-				const shouldCommit = dragDistance >= SWIPE_COMMIT && !reversed;
+				const shouldCommit = intent.offset >= SWIPE_COMMIT && !reversed;
 				if (shouldCommit) {
 					// Capture the live raw at release so the commit publication
 					// lerps continuously from it (#onExecutorTick).

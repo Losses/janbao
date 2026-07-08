@@ -31,11 +31,12 @@ export function isNavPipelinePilotRoute(pathname: string): boolean {
 }
 
 /** True iff navigating from `from` to `to` is a transition the pilot
- *  orchestrator must own. The orchestrator takes ownership when EITHER
- *  endpoint is the pilot route: the back-swipe gesture (FROM pilot, TO
- *  `/messages/inbox`), the tab-click exit (FROM pilot, TO a tab root),
- *  and the deep-link landing (TO pilot) all flow through the
- *  orchestrator. */
+ *  orchestrator must own. The orchestrator takes ownership when the
+ *  FROM route is the pilot (the back-swipe gesture TO `/messages/inbox`
+ *  and the tab-click exit TO a tab root). The TO-pilot branch covers a
+ *  pilot-to-pilot SPA nav; a cold deep-link landing hits this gate
+ *  before NavPipelineHost mounts, so the orchestrator singleton is null
+ *  and the layout hook falls through to plain SvelteKit nav (no slide). */
 export function isPilotTransition(from: string | null, to: string | null): boolean {
 	if (from !== null && isNavPipelinePilotRoute(from)) return true;
 	if (to !== null && isNavPipelinePilotRoute(to)) return true;

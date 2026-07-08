@@ -350,7 +350,11 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		const y = 400;
 		const startX = 120;
 		const peakX = 320;
-		const endX = 70;
+		// Release past the start far enough that |offset| >= SWIPE_COMMIT
+		// (endX - startX = -80), so the test exercises the SIGNED offset
+		// gate (a release with abs(offset) >= 60 but offset < 0 must
+		// cancel, not commit).
+		const endX = 40;
 		const dispatch = (
 			type: 'touchStart' | 'touchMove' | 'touchEnd',
 			x: number,
@@ -498,8 +502,8 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		expect(page.url(), '70px swipe must commit').toMatch(/\/messages\/inbox/);
 
 		// The FAB scale must not reverse at the drag-to-commit
-		// boundary (the thresholdToRaw guard handles raw < morph
-		// threshold without a backward jump in coverProgress).
+		// boundary (#commitStartRaw lerps the publication from the
+		// live-drag raw so coverProgress does not jump backward).
 		expect(
 			capture.fabReversals,
 			`FAB scale must not reverse for sub-threshold commit (reversals=${capture.fabReversals})`

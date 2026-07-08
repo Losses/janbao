@@ -164,59 +164,27 @@
 	// teardowns. Idempotent mount so a re-mount (HMR, route swap) rebinds
 	// the element refs.
 	let held = false;
+	let orchestratorMounted = false;
 	onMount(() => {
 		const mq = window.matchMedia(MOBILE_BREAKPOINT);
-		const sync = (): void => {
-			isMobile = mq.matches;
-			if (isMobile) {
-				if (!held) {
-					viewportLock.acquire();
-					held = true;
-				}
-				window.scrollTo(0, 0);
-			} else if (held) {
-				viewportLock.release();
-				held = false;
-			}
-		};
-		sync();
-		mq.addEventListener('change', sync);
 
-		// ResizeObserver on the viewport so the host's reactive
-		// `viewportWidth` stays in sync with the live dimensions and
-		// propagates into the orchestrator's plan math (distance +
-		// restingTranslate) via `updateViewport`. Without this the plan
-		// would desync from the inline style on a resize.
-		const ro = new ResizeObserver(() => {
-			if (!viewportEl) return;
-			orchestrator.updateViewport(viewportEl.clientWidth, -viewportEl.clientWidth);
-		});
-		if (viewportEl) ro.observe(viewportEl);
-
-		// Resolve the from/to route tags + tab indices for the mount.
-		// The driver writes ONLY the track transform; the FAB and Header
-		// are owned by their existing layers (FloatingActionButtonLayer
-		// and Header), which read the pager store the orchestrator
-		// publishes to. Returning null for fab / header makes the driver
-		// skip those elements, avoiding a double-write race with the
-		// existing layers.
-		const fromPathname = page.url.pathname;
-		const fromData = getRouteData(fromPathname);
-		const toData = getRouteData(leftHref);
-		// The gesture pipeline is mobile-only (Plan §Scope: desktop
-		// navigates via plain SvelteKit nav). Mount + register the
-		// orchestrator only on mobile; on desktop the singleton stays
-		// null so the layout's beforeNavigate hook falls through to a
-		// normal navigation (no slide, no track transform writes).
-		if (isMobile) {
+		// The gesture pipeline is mobile-only (Plan §Scope). Mount +
+		// register the orchestrator on mobile; unmount + clear on desktop.
+		// Called both for the initial platform and on a mobile <-> desktop
+		// resize, so a session that crosses platforms does not leave the
+		// orchestrator active on desktop (where it would consume tab-clicks
+		// and write track transforms). On a mid-gesture/commit resize to
+		// desktop, unmount aborts the in-flight transition (stops the rAF,
+		// no dispatch) and clears the track transform.
+		const mountOrchestrator = (): void => {
+			if (orchestratorMounted || !trackEl || !viewportEl) return;
+			const fromPathname = page.url.pathname;
+			const fromData = getRouteData(fromPathname);
+			const toData = getRouteData(leftHref);
 			orchestrator.mount({
-				resolveElements: () => ({
-					pageTrack: trackEl,
-					fab: null,
-					header: null
-				}),
-				viewportWidth: viewportEl?.clientWidth ?? 0,
-				restingTranslate: -(viewportEl?.clientWidth ?? 0),
+				resolveElements: () => ({ pageTrack: trackEl, fab: null, header: null }),
+				viewportWidth: viewportEl.clientWidth,
+				restingTranslate: -viewportEl.clientWidth,
 				backTarget: leftHref,
 				fromPathname,
 				fromTag: fromData.tag,
@@ -226,16 +194,67 @@
 				centerTab
 			});
 			setNavPipelineOrchestrator(orchestrator);
-		}
+			orchestratorMounted = true;
+		};
+		const unmountOrchestrator = (): void => {
+			if (!orchestratorMounted) return;
+			orchestrator.unmount();
+			setNavPipelineOrchestrator(null);
+			// Clear any transform a gesture/commit wrote so the desktop
+			// track (which carries no inline transform) is not left
+			// off-screen.
+			if (trackEl) trackEl.style.transform = '';
+			orchestratorMounted = false;
+		};
 
-		// Forward enter animation: if this mount is a forward SPA nav from
-		// leftHref, seed the track at translateX(0) (left panel visible)
-		// then drive the slide to rest via the executor's rAF. Deferred to
-		// the next rAF so the viewport has a measured clientWidth (the
-		// executor's plan needs distance > 0). Uses the SAME writer (the
-		// driver's setProperty) as gestures; a gesture starting mid-enter
-		// cleanly interrupts the enter. No CSS animation (no parallel
-		// mechanism; UNIFY invariant preserved).
+		const sync = (): void => {
+			isMobile = mq.matches;
+			if (isMobile) {
+				if (!held) {
+					viewportLock.acquire();
+					held = true;
+				}
+				mountOrchestrator();
+				window.scrollTo(0, 0);
+			} else {
+				unmountOrchestrator();
+				if (held) {
+					viewportLock.release();
+					held = false;
+				}
+			}
+		};
+		sync();
+		mq.addEventListener('change', sync);
+
+		// ResizeObserver on the viewport so the host's reactive
+		// `viewportWidth` stays in sync with the live dimensions and
+		// propagates into the orchestrator's plan math (distance +
+		// restingTranslate) via `updateViewport`. On desktop the
+		// orchestrator is not mounted, so updateViewport is a no-op.
+		const ro = new ResizeObserver(() => {
+			if (!viewportEl) return;
+			const w = viewportEl.clientWidth;
+			orchestrator.updateViewport(w, -w);
+			// On a mobile-only resize (portrait <-> landscape, both
+			// <767px) AFTER a transition settled, re-apply the resting
+			// transform as a PERCENTAGE so it scales with the new width.
+			// The driver's last px write (translateX(-Wpx)) would
+			// otherwise stay stale (GPL uses -50% which scales). Only when
+			// at-rest; an in-flight transition keeps its locked plan and
+			// picks up the new width on the next transition.
+			if (isMobile && publication.plan === null && trackEl) {
+				trackEl.style.transform = 'translateX(-50%)';
+			}
+		});
+		if (viewportEl) ro.observe(viewportEl);
+
+		// Forward enter animation (initial mount only): if this mount is a
+		// forward SPA nav from leftHref, seed the track at translateX(0)
+		// (left panel visible) then drive the slide to rest via the
+		// executor's rAF. Deferred to the next rAF so the viewport has a
+		// measured clientWidth. Not replayed on a resize-remount (a resize
+		// is not a forward navigation).
 		if (isMobile && shouldEnter && trackEl) {
 			trackEl.style.setProperty('transform', 'translateX(0px)');
 			requestAnimationFrame(() => {
@@ -260,6 +279,7 @@
 		return () => {
 			mq.removeEventListener('change', sync);
 			ro.disconnect();
+			unmountOrchestrator();
 			if (held) {
 				viewportLock.release();
 				held = false;

@@ -16,8 +16,9 @@
  *   - The commit duration is velocity-matched, not hardcoded; the
  *     pure module's `startCommit` solves the duration from the
  *     release velocity and the remaining distance.
- *   - Reduced motion snaps: the wrapper queries the driver once at
- *     commit start, passes the flag to `startCommit`, and skips the
+ *   - Reduced motion snaps: the wrapper reads `plan.commitPhysics` at
+ *     commit start (resolved from the driver's reduced-motion state at
+ *     gesture start), passes the flag to `startCommit`, and skips the
  *     rAF when the snap path runs.
  *   - Interruption: a mid-commit drag-start calls `onDragStart` for the
  *     new plan, which stops the rAF and resets the state inline. The
@@ -52,9 +53,8 @@ import type { TransitionPlan } from '$lib/utils/nav-resolvers';
  *  `DOMHighResTimeStamp` relative to navigation start, NOT Unix epoch)
  *  and `Date.now()` as an SSR fallback that never executes (the rAF is
  *  browser-gated, so only the `performance.now()` branch runs). The two
- *  have different reference points; Cycle 5 should pick one shared time
- *  base across the rAF and the intent classifier (journal carried
- *  item). */
+ *  have different reference points; the orchestrator passes one shared
+ *  clock to both the executor and the intent classifier. */
 export type NavExecutorClockFn = () => number;
 
 /** Called once when a commit rAF reaches its target. The Cycle 5b1
@@ -105,8 +105,8 @@ type ClockFn = NavExecutorClockFn;
  *  dead code retained only as a fallback for a runtime without
  *  `performance`. The rAF is browser-gated regardless, so this clock
  *  only runs in the browser. The intent classifier (`nav-intent.ts`)
- *  accepts a caller-supplied clock; Cycle 5 wiring will choose a single
- *  source so the executor and the classifier share the same time base. */
+ *  accepts a caller-supplied clock; the orchestrator passes one shared
+ *  clock to both so they share the same time base. */
 function defaultNow(): number {
 	if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
 		return performance.now();
@@ -194,7 +194,11 @@ export class NavExecutor {
 		if (this.#plan === null) return;
 		this.#settled = false;
 		const plan = this.#plan;
-		const reducedMotion = this.#driver.prefersReducedMotion();
+		// The plan is the authority (§13.5: consumers read the plan, not
+		// the DOM/driver). `commitPhysics` was resolved at gesture start
+		// from the driver's reduced-motion state; 'snap' is the reduced-
+		// motion instant translate.
+		const reducedMotion = plan.commitPhysics === 'snap';
 		const next = startCommit(this.#state, {
 			releaseVelocityPxPerMs,
 			plan,

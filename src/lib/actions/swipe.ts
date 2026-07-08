@@ -15,6 +15,7 @@
  * follows a real drag so a swipe never double-fires as a tap.
  */
 import type { Action } from 'svelte/action';
+import { EDGE_DEAD_ZONE } from '$lib/utils/gesture-constants';
 
 // `onMove` fires per pointermove with the live displacement only; `onEnd` adds
 // `velocity` (release px/ms) and `reversed` (did the finger rebound from the
@@ -362,9 +363,12 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 			return;
 		}
 
-		// OS edge-swipe gesture collision guard (40px margin zone to match modern iOS/Android bezel-less native triggers)
-		const edgeDeadZone = 40;
-		if (event.clientX < edgeDeadZone || event.clientX > window.innerWidth - edgeDeadZone) {
+		// OS edge-swipe collision guard: reject a pointer in the edge
+		// gutter (EDGE_DEAD_ZONE px) so the app's back-swipe does not
+		// collide with the OS edge-back gesture. Shared with the 5b1
+		// pointer bridge's capture listener (which mirrors this exact
+		// check).
+		if (event.clientX < EDGE_DEAD_ZONE || event.clientX > window.innerWidth - EDGE_DEAD_ZONE) {
 			return;
 		}
 

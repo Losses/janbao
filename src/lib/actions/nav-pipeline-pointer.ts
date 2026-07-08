@@ -24,6 +24,7 @@
 import type { Action } from 'svelte/action';
 import { detectSwipe, type EndHandler, type MoveHandler } from './swipe';
 import type { NavPipelineOrchestrator } from '$lib/stores/nav-pipeline-orchestrator.svelte';
+import { EDGE_DEAD_ZONE } from '$lib/utils/gesture-constants';
 
 /** True when the bridge should be inert (desktop, or the host not yet
  *  mounted). The `detectSwipe` action's own `disabled` getter also
@@ -123,6 +124,15 @@ export const navPipelinePointer: Action<HTMLElement, NavPipelinePointerParams> =
 	const onPointerDownCapture = (event: PointerEvent): void => {
 		if (params.disabled()) return;
 		if (event.pointerType === 'mouse') return;
+		// Mirror detectSwipe's EXACT edge check (EDGE_DEAD_ZONE px, < / >,
+		// window.innerWidth) so the capture records as primary only a
+		// pointer detectSwipe will claim. All three edge checks -
+		// detectSwipe, this capture, and the classifier's isEdgeReserve -
+		// use the same strict operators via the single-sourced
+		// EDGE_DEAD_ZONE.
+		if (event.clientX < EDGE_DEAD_ZONE || event.clientX > window.innerWidth - EDGE_DEAD_ZONE) {
+			return;
+		}
 		// Ignore a secondary pointer once a primary owns the gesture, so
 		// it cannot overwrite the start position or reset the context.
 		if (primaryPointerId !== null && event.pointerId !== primaryPointerId) return;
