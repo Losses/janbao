@@ -286,9 +286,10 @@ export class NavPipelineOrchestrator {
 	 *  began. The commit-phase publication lerps from this value to the
 	 *  target (1 commit / 0 cancel) along the executor's eased fraction,
 	 *  so `coverProgress` / `chipProgress` stay continuous across the
-	 *  drag-to-commit boundary for every transition (gesture from rest,
-	 *  mid-transition interrupt, sub-threshold release, tab-click /
-	 *  enter with no live drag). */
+	 *  drag-to-commit boundary for every transition that starts a
+	 *  commit/cancel (gesture from rest, mid-transition interrupt,
+	 *  tab-click / enter with no live drag). A sub-threshold cancel
+	 *  lands at rest immediately and bypasses this. */
 	#commitStartRaw = 0;
 	/** True iff the previous #interpretIntent call was for a rightward
 	 *  drag (micro === drag-right). Used to detect a gesture start
@@ -560,7 +561,7 @@ export class NavPipelineOrchestrator {
 					// Sub-threshold cancel: the track is already at rest (the
 					// drag was absorbed below the morph threshold), so there is
 					// nothing to animate back. Land at rest immediately (no
-					// no-op cancel rAF, no publication jump).
+					// no-op cancel rAF).
 					this.#landAtRest();
 				}
 			}
@@ -727,10 +728,12 @@ export class NavPipelineOrchestrator {
 	 *  for a cancel) along the executor's eased fraction of the
 	 *  progressStart -> progressTarget span. This keeps `coverProgress`
 	 *  / `chipProgress` / `fractionalIndex` continuous across the
-	 *  drag-to-commit boundary for every transition - a from-rest
-	 *  gesture, a mid-transition interrupt (startProgress > 0), a sub-
-	 *  threshold release, and a tab-click / enter (#commitStartRaw = 0
-	 *  when no live drag preceded it). */
+	 *  drag-to-commit boundary for every transition that runs a
+	 *  commit/cancel rAF - a from-rest gesture, a mid-transition
+	 *  interrupt (startProgress > 0), and a tab-click / enter
+	 *  (#commitStartRaw = 0 when no live drag preceded it). A
+	 *  sub-threshold cancel lands at rest immediately and does not run
+	 *  this. */
 	#onExecutorTick(progress: number): void {
 		if (this.#publication.plan === null) return;
 		const cs = this.#executor?.state.commitStart ?? null;

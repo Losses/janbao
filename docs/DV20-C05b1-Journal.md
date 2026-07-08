@@ -1181,8 +1181,21 @@ reversed`; onCancel overrides progressDirection to 1. Added partial-
   #prevWasDrag "drag-left/right" overclaim, live-drag post-release
   streaming claim, NavPipelineHost construction comment). 79 e2e green.
   Detailed in `docs/RV20-C05b1-Audit-27.md`.
+- **Round 28 (architect, 2-auditor): 0/2 PASS.** A FAIL (2); B PASS-
+  WITH-CONCERNS (3 comment). Fixed: A-C2/B-C1/B-C2/B-C3 stale docstrings
+  that claimed commit-publication continuity for "sub-threshold release"
+  (the R27 A-C2 fix lands sub-threshold cancels immediately, bypassing
+  the commit publication). A-C1 is a SCOPE QUESTION deferred to the
+  owner: NavPipelineHost (the mobile gesture-track shell) renders on
+  desktop too, and the orchestrator consumes pilot -> tab-root
+  transitions with no mobile guard, so a desktop tab-click jumps + slides
+  the track (§Scope binds the gesture state machine to mobile-only).
+  Likely part of the broader "desktop rendering not done in 5b1" gap
+  (Cycle 5: sidebar+content on desktop). Not e2e-caught (suite is
+  mobile-only). The §5 interruption family appears converged (no new
+  edge this round). Detailed in `docs/RV20-C05b1-Audit-28.md`.
 
-Consecutive pass votes: **0** (R1-R27 each carried concerns).
+Consecutive pass votes: **0** (R1-R28 each carried concerns).
 
 ## Coverage bullets (round-independent)
 
