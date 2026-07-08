@@ -17,7 +17,8 @@
  *      host's track `bind:this` plus the FAB / Header via DOM queries;
  *      the executor writes the per-frame visual to those elements.
  *   4. Lifecycle: the host calls `mount` / `unmount` from its onMount /
- *      onDestroy; `registerTeardown` lists html-singleton releases.
+ *      onDestroy and releases the html-singletons (active-gesture-track,
+ *      viewport-lock) directly with a `browser` guard.
  *
  * Per the C05b1 spec's binding "UNIFY, DO NOT BRIDGE" constraint: for
  * the pilot route, this orchestrator is the SOLE transition mechanism
@@ -45,7 +46,6 @@ import { browser } from '$app/environment';
 import { goto, preloadData } from '$app/navigation';
 import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
-import type { VoidHandler } from '$lib/types/handlers';
 import { getNavStateMachine } from '$lib/stores/nav-state-machine.svelte';
 import { NavExecutor } from '$lib/stores/nav-executor.svelte';
 import { progressAtTranslateX, trackTranslateX } from '$lib/utils/nav-executor-logic';
@@ -73,9 +73,10 @@ import type { RouteTag } from '$lib/utils/route-data';
 import type { TransitionPlan } from '$lib/utils/nav-resolvers';
 
 /** Commit duration for the pilot's tab-click exit. Matches the
- *  non-pilot routes' CSS `transition-transform duration-200`
- *  (`TRACK_TRANSITION_MS`) so the pilot's exit slide is
- *  indistinguishable from a non-pilot GPL route's tab-exit. Gesture
+ *  non-pilot routes' CSS `transition-transform duration-200` duration
+ *  (`TRACK_TRANSITION_MS`); the easing is the executor's
+ *  constant-deceleration `s(u)=2u-u²`, not the CSS timing function, so
+ *  the slide is the same length under the unified all-rAF ease. Gesture
  *  commits use the velocity-matched solver instead. */
 const TAB_CLICK_COMMIT_MS = TRACK_TRANSITION_MS;
 
@@ -95,28 +96,22 @@ export interface PipelineElementRefs {
  *  up automatically. */
 export type PipelineElementResolver = () => PipelineElementRefs;
 
-/** A pending gesture transition (a back-swipe). Carries the locked
- *  FROM / TO / direction so the resolver runs once per gesture. */
+/** A pending gesture transition (a back-swipe). `to` is the
+ *  commit-settle dispatch target; `startProgress` is the track's
+ *  progress at gesture start, read by the live-drag loop to continue
+ *  from the current visual position (no snap back to 0). */
 interface PendingGestureTransition {
-	readonly from: string;
-	readonly fromTag: RouteTag;
 	readonly to: string;
-	readonly toTag: RouteTag;
-	readonly direction: TransitionDirection;
+	readonly startProgress: number;
 }
 
 /** A pending tab-click transition (any pilot -> tab-root nav the
  *  orchestrator cancelled in `onSvelteKitBeforeNavigate`). Carries
  *  the deferred dispatch target so commit-settle can fire the
- *  SvelteKit `goto`. The `chipExit` flag marks the cross-tab-exit
- *  variant (target is not the pilot's pre-rendered leftHref) where
- *  the LoadingChip overlay stands in for the un-pre-rendered
- *  sibling; non-chipExit (target IS the leftHref) plays a clean
- *  slide that reveals the pre-rendered panel. */
+ *  SvelteKit `goto`. The chip-exit variant is tracked separately on
+ *  `#chipExitState` / `#publication.chipExit`, which the host reads. */
 interface PendingTabExit {
 	readonly target: string;
-	readonly svelteKitType: string;
-	readonly chipExit: boolean;
 }
 
 /** A URL record subset the layout hook extracts from SvelteKit's
@@ -218,8 +213,6 @@ const AT_REST_PUBLICATION: OrchestratorPublication = {
 	chipExit: false
 };
 
-const NO_OP_PLAN: TransitionPlan | null = null;
-
 /** The clock function the intent classifier + executor use. */
 type ClockFn = () => number;
 
@@ -286,6 +279,14 @@ export class NavPipelineOrchestrator {
 	 *  underlying write, which left the left section in the DOM for the
 	 *  first ~3 rAF ticks of a chip-exit slide. */
 	#chipExitState = $state(false);
+	/** The raw drag-fraction published at the moment a commit / cancel
+	 *  began. The commit-phase publication lerps from this value to the
+	 *  target (1 commit / 0 cancel) along the executor's eased fraction,
+	 *  so `coverProgress` / `chipProgress` stay continuous across the
+	 *  drag-to-commit boundary for every transition (gesture from rest,
+	 *  mid-transition interrupt, sub-threshold release, tab-click /
+	 *  enter with no live drag). */
+	#commitStartRaw = 0;
 
 	constructor(clock: ClockFn = defaultClock) {
 		this.#clock = clock;
@@ -379,6 +380,10 @@ export class NavPipelineOrchestrator {
 		if (inputs === null || executor === null) return;
 		const w = inputs.viewportWidth;
 		if (w <= 0) return;
+		// If a gesture or tab-click started in the deferred rAF window
+		// between mount and this call, it owns the pilot now - skip the
+		// enter so the in-flight transition is not clobbered.
+		if (this.#pendingGesture !== null || this.#pendingTabExit !== null) return;
 		const plan: TransitionPlan = {
 			pageTrack: {
 				axis: 'left',
@@ -405,6 +410,7 @@ export class NavPipelineOrchestrator {
 		// Start at the track's current visual position (0 at rest; the
 		// in-flight position if the enter interrupts another transition).
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
+		this.#commitStartRaw = this.#publication.progress;
 		executor.onDragStart(plan, startProgress, 0);
 		executor.onCommit(0, TAB_CLICK_COMMIT_MS);
 	}
@@ -423,15 +429,6 @@ export class NavPipelineOrchestrator {
 		this.#publication = AT_REST_PUBLICATION;
 		this.#lifecycle.deactivate();
 		this.#lifecycle.unmount();
-	}
-
-	/** Register a teardown that runs once when the host unmounts in the
-	 *  browser (SSR-safe). The host migrates the html-singleton releases
-	 *  (`viewport-lock.release`, `clearActiveGestureTrack`,
-	 *  `scrollChrome.releaseContainer`) onto this so the lifecycle
-	 *  controller is the single teardown path. */
-	registerTeardown(fn: VoidHandler): void {
-		this.#lifecycle.registerTeardown(fn);
 	}
 
 	// -----------------------------------------------------------------------
@@ -494,27 +491,26 @@ export class NavPipelineOrchestrator {
 		}
 		// A drag just started (micro first flipped to drag-left / drag-right).
 		// Lock FROM / TO and run the resolver once.
-		let gestureJustStarted = false;
 		if (
 			this.#pendingGesture === null &&
 			(intent.micro === 'drag-left' || intent.micro === 'drag-right')
 		) {
 			this.#beginGesture(inputs, intent);
-			gestureJustStarted = true;
 		}
 		// During a drag (and after a release while we wait for settle),
-		// stream the live progress to the executor. The TRACK sees the
-		// threshold-absorbed progress (so it stays at rest for the first
-		// 20% of drag); the FAB / Header consumers see the RAW drag
-		// fraction (their consumer-side thresholds apply separately). Skip the
-		// first onDragMove on the same event that started the gesture:
-		// #beginGesture already published the initial frame (with the
-		// startProgress for enter-interrupt), and the live finger offset at
-		// claim time (~10px dead zone) would compute trackProgress=0,
-		// overriding the startProgress and snapping the track.
-		if (this.#pendingGesture !== null && this.#publication.plan !== null && !gestureJustStarted) {
+		// stream the live progress to the executor. The track continues
+		// from the gesture's start position: the threshold-absorbed
+		// fraction of the drag maps onto the REMAINING [startProgress, 1]
+		// window, so the first 20% of drag is absorbed AT the start
+		// position (not at 0) and the track never snaps back when a
+		// gesture begins mid-transition. The FAB / Header consumers see
+		// the RAW drag fraction (their consumer-side thresholds apply
+		// separately).
+		if (this.#pendingGesture !== null && this.#publication.plan !== null) {
 			const raw = this.#rawDragFraction(intent, inputs);
-			const trackProgress = this.#thresholdAbsorbedProgress(raw);
+			const startProgress = this.#pendingGesture.startProgress;
+			const absorbed = this.#thresholdAbsorbedProgress(raw);
+			const trackProgress = startProgress + absorbed * (1 - startProgress);
 			executor.onDragMove(trackProgress, intent.offset);
 			this.#publish(raw);
 		}
@@ -531,6 +527,9 @@ export class NavPipelineOrchestrator {
 				const dragDistance = Math.abs(intent.offset);
 				const reversed = intent.reversed;
 				const shouldCommit = dragDistance >= SWIPE_COMMIT && !reversed;
+				// Capture the live raw at release so the commit publication
+				// lerps continuously from it (#onExecutorTick).
+				this.#commitStartRaw = this.#publication.progress;
 				if (shouldCommit) {
 					executor.onCommit(intent.releaseVelocity);
 				} else {
@@ -611,8 +610,7 @@ export class NavPipelineOrchestrator {
 		// #onExecutorSettle dispatches THIS gesture's target, not the
 		// tab-click's. The two pending slots are mutually exclusive.
 		this.#pendingTabExit = null;
-		this.#pendingGesture = { from, fromTag, to, toTag, direction };
-		const plan = this.#resolvePlan(inputs, intent, direction, to, toTag, inputs.toTabIndex);
+		const plan = this.#resolvePlan(inputs, intent, direction, to, inputs.toTabIndex);
 		// Coordinator: direct-slide if the TO is cached; chip-exit + preload otherwise.
 		const cacheHas = (pathname: string, _subKey?: string): boolean => {
 			const cache = getPageCacheStore();
@@ -627,6 +625,11 @@ export class NavPipelineOrchestrator {
 			hasToSnippet: false
 		});
 		const chipExit = decision.strategy === 'chip-exit';
+		// Warm the back-target's data in parallel with the drag so a
+		// chip-exit commit lands instantly (matches GPL's mid-drag preload).
+		if (chipExit) {
+			void preloadData(to).catch(() => {});
+		}
 		this.#stateMachine.onIntent(intent, from, fromTag);
 		this.#stateMachine.onResolved(plan, from, to, fromTag, toTag, direction);
 		this.#publication = {
@@ -643,6 +646,7 @@ export class NavPipelineOrchestrator {
 		// in-flight forward-enter or commit hands off with no jump. The
 		// geometry conversion is in #startProgressFromCurrentVisual.
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
+		this.#pendingGesture = { to, startProgress };
 		this.#executor?.onDragStart(plan, startProgress, intent.offset);
 	}
 
@@ -652,7 +656,6 @@ export class NavPipelineOrchestrator {
 		intent: IntentState,
 		direction: TransitionDirection,
 		toPathname: string,
-		toTag: RouteTag,
 		toTabIndex: number
 	): TransitionPlan {
 		const fromData = getRouteData(inputs.fromPathname);
@@ -693,34 +696,27 @@ export class NavPipelineOrchestrator {
 	// Settle: dispatch the navigation on a commit; land on a cancel.
 
 	/** Per-frame callback fired by the executor after each commit rAF
-	 *  sample. Converts the executor's threshold-absorbed progress
-	 *  back to the raw drag-fraction scale the live-drag path uses,
-	 *  so `coverProgress` / `backMorph` / `fractionalIndex` are
-	 *  continuous across the drag-to-commit boundary (no FAB-scale
-	 *  reversal at commit start). */
+	 *  sample. Publishes a raw drag-fraction that is continuous with the
+	 *  live-drag publication: it lerps from `#commitStartRaw` (the raw
+	 *  captured at commit start) to the target raw (1 for a commit, 0
+	 *  for a cancel) along the executor's eased fraction of the
+	 *  progressStart -> progressTarget span. This keeps `coverProgress`
+	 *  / `chipProgress` / `fractionalIndex` continuous across the
+	 *  drag-to-commit boundary for every transition - a from-rest
+	 *  gesture, a mid-transition interrupt (startProgress > 0), a sub-
+	 *  threshold release, and a tab-click / enter with no live drag
+	 *  (#commitStartRaw = 0 -> the publication tracks the slide 1:1). */
 	#onExecutorTick(progress: number): void {
 		if (this.#publication.plan === null) return;
-		// Skip the first tick when progress is still 0 (the commit hasn't
-		// started integrating). This happens for sub-morph-threshold
-		// releases (drag 60-78px, raw < 0.2, threshold-absorbed progress
-		// clamped to 0). Without this guard, #thresholdToRaw(0) returns 0,
-		// causing coverProgress to dip from the last live-drag raw (~0.15)
-		// to 0, then jump back up on the next tick. Skipping keeps the
-		// last live-drag publish until the executor's progress is > 0.
-		if (progress <= 0) return;
-		const raw = this.#thresholdToRaw(progress);
+		const cs = this.#executor?.state.commitStart ?? null;
+		if (cs === null) {
+			this.#publish(progress);
+			return;
+		}
+		const span = cs.progressTarget - cs.progressStart;
+		const frac = span === 0 ? 1 : (progress - cs.progressStart) / span;
+		const raw = this.#commitStartRaw + (cs.progressTarget - this.#commitStartRaw) * frac;
 		this.#publish(raw);
-	}
-
-	/** Reverse the threshold-absorbed progress mapping so the commit
-	 *  phase publishes on the same raw scale as the live-drag phase.
-	 *  Forward: `threshold = (raw - 0.2) / 0.8` (for raw > 0.2).
-	 *  Reverse: `raw = 0.2 + 0.8 * threshold` (for threshold > 0);
-	 *  `raw = 0` for threshold <= 0 (cancel end, FAB fully retracted). */
-	#thresholdToRaw(thresholdProgress: number): number {
-		const THRESHOLD = 0.2;
-		if (thresholdProgress <= 0) return 0;
-		return THRESHOLD + (1 - THRESHOLD) * thresholdProgress;
 	}
 
 	#onExecutorSettle(progressDirection: 0 | 1): void {
@@ -846,7 +842,6 @@ export class NavPipelineOrchestrator {
 		// A tab-click exit (or any other pilot -> non-pilot nav). Drive
 		// the slide plan via the executor and dispatch on settle.
 		const toPathname = to;
-		const toTag = getRouteData(toPathname).tag;
 		const toTabIndex = this.#tabIndexFor(toPathname);
 		const direction: TransitionDirection = isTabRootPath(toPathname) ? 'backward' : 'forward';
 		// Synthesize a "tap" intent so the resolver produces a commit plan.
@@ -856,7 +851,7 @@ export class NavPipelineOrchestrator {
 			target: toPathname,
 			startedAt: this.#clock()
 		};
-		const plan = this.#resolvePlan(inputs, intent, direction, toPathname, toTag, toTabIndex);
+		const plan = this.#resolvePlan(inputs, intent, direction, toPathname, toTabIndex);
 		// Chip-exit when the target is a tab root that is NOT the
 		// pre-rendered leftHref (the pilot only pre-renders /messages/inbox).
 		const chipExit = isTabRootPath(toPathname) && toPathname !== inputs.backTarget;
@@ -867,7 +862,7 @@ export class NavPipelineOrchestrator {
 			void preloadData(to).catch(() => {});
 		}
 		this.#pendingGesture = null;
-		this.#pendingTabExit = { target: to, svelteKitType: navigation.type, chipExit };
+		this.#pendingTabExit = { target: to };
 		this.#navDispatchInFlight = false;
 		this.#dispatchTarget = null;
 		this.#isEnterAnimation = false;
@@ -891,6 +886,7 @@ export class NavPipelineOrchestrator {
 		// forward-enter or gesture commit hands off with no jump. The
 		// geometry conversion is in #startProgressFromCurrentVisual.
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
+		this.#commitStartRaw = this.#publication.progress;
 		this.#executor?.onDragStart(plan, startProgress, 0);
 		this.#executor?.onCommit(0, TAB_CLICK_COMMIT_MS);
 		return true;
@@ -1026,5 +1022,3 @@ export function setNavPipelineOrchestrator(orch: NavPipelineOrchestrator | null)
 export function __resetNavPipelineOrchestrator(): void {
 	active = null;
 }
-
-export { NO_OP_PLAN };

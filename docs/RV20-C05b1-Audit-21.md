@@ -181,4 +181,3 @@ $ bun run test:e2e -- messages-back-swipe tab-click-transition tab-exit-preview
 
 Consecutive pass votes: **0** (R21 carried concerns; R22 audits the
 post-fix state).
-

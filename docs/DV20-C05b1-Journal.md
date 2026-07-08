@@ -873,6 +873,70 @@ $ curl -s -b "session_token=..." -H 'User-Agent: ...Pixel 5...' \
 width: 200%; display: flex; height: 100%; transform: translateX(-50%);
 ```
 
+### Session 8 (2026-07-08): absolute-position startProgress helper + R21 audit + the five fixes
+
+The R14-R20 defect family (interrupt-continuity `startProgress`) was a
+design error, not a tuning shortfall: the orchestrator recomputed the
+interrupt start position in three separate transition-start paths
+(`#beginGesture`, `onSvelteKitBeforeNavigate`, the first `onDragMove`)
+with per-callsite `1 - progress` math and flags (`wasEnter`,
+`wasEnterAnimation`, `hadInFlightTransition`), each buggy in a different
+way. The executor was already designed for the handoff (`state.progress`
+is the authoritative current position; §5 no-DOM-read-back) - the
+orchestrator ignored that primitive and reinvented it.
+
+Replaced with one geometry-driven helper. Added `trackTranslateX` +
+`progressAtTranslateX` (pure, in `nav-executor-logic.ts`; `buildVisual`
+now routes through `trackTranslateX` so the visual and the handoff share
+one source). The orchestrator's `#startProgressFromCurrentVisual(newPlan)`
+reads `executor.activePlan` + `executor.state.progress`, converts through
+the absolute translateX, and inverts into the new plan's progress. All
+three transition-start paths call it. Deleted the `1 - progress` math and
+the three flags. The executor stays in progress space (the integrator
+and its 597-line suite are untouched); only the start-position
+computation changed.
+
+R21 (the first round on the helper): **0/2 PASS, five concerns** - a
+DIFFERENT set from the startProgress family (neither auditor flagged the
+interrupt geometry). Auditor A FAIL (4): C1 a gesture during a tab-click
+commit dispatched the tab's target (the two pending slots were not
+mutually exclusive); C2 `onPointerCancel` dead + its docstring; C3
+`NavExecutor.onInterrupt` dead + docstring; C4 the helper's own
+"every transition-start path" docstring (`playEnterAnimation` did not
+call it). Auditor B PASS-WITH-CONCERNS (1 + nitpick): C5 the chip-exit
+skipped `preloadData` and the overlay was static (spec §1 "indistinguishable"
+
+- Plan §9 "coordinator preloads"). All five verified by the architect.
+  Detailed in `docs/RV20-C05b1-Audit-21.md`.
+
+The five fixes (owner chose complete GPL alignment for C5):
+
+- **C1**: `#beginGesture` clears `#pendingTabExit` (mutual exclusion).
+  New e2e: gesture-during-tab-click-commit asserts the gesture's target
+  wins.
+- **C2**: removed `onPointerCancel`; docstring notes pointercancel
+  reaches `onPointerUp` via detectSwipe's onUp.
+- **C3**: removed `NavExecutor.onInterrupt` + pure `interrupt()` + 3
+  tests; fixed docstrings. State-machine `interrupt` reducer case
+  retained (Cycle-3 tested §6 modeling, separate layer).
+- **C4**: `playEnterAnimation` starts via `#startProgressFromCurrentVisual`.
+- **C5**: orchestrator fires `void preloadData(to).catch(() => {})` in
+  the chip-exit (verbatim GPL mirror); `NavPipelineHost` drives the
+  LoadingChip's scale/maxWidth/textMaxWidth from `publication.progress`
+  (the click-triggered analog of GPL's drag-driven chip morph). New e2e:
+  chip grows across the slide.
+
+Final gate (real, post-fix):
+
+```
+$ bun run check          0 errors / 0 warnings
+$ bun run lint           EXIT=0, prettier clean, 0 type duplicates
+$ bun test src/lib/utils src/lib/stores    425 pass / 0 fail
+$ bun run test:e2e -- messages-back-swipe tab-click-transition tab-exit-preview
+                    fab reproduce-user-bugs enter-animation backtarget tab-history
+  78 passed (2.7m)   (+2: gesture-during-tab-click, chip-grow)
+```
+
 ## Failures
 
 Per-round audit state lives in `docs/RV20-C05b1-Audit-{01..NN}.md`.
@@ -1031,8 +1095,40 @@ reversed`; onCancel overrides progressDirection to 1. Added partial-
   overrode it immediately). Fixed: `gestureJustStarted` flag skips the
   first `onDragMove` on the same event as gesture-start. 9/9 gesture
   e2e pass. Detailed in `docs/RV20-C05b1-Audit-20.md`.
+- **Round 21 (architect, 2-auditor, post helper-redesign): 0/2 PASS.**
+  The startProgress family is RESOLVED - neither auditor flagged the
+  interrupt geometry. Five DIFFERENT concerns: A(C1) a gesture during a
+  tab-click commit dispatched the tab's target (pending slots not
+  mutually exclusive); A(C2) `onPointerCancel` dead + docstring;
+  A(C3) `NavExecutor.onInterrupt` dead + docstring; A(C4) the helper's
+  "every path" docstring (playEnterAnimation didn't call it);
+  B(C5) chip-exit skipped preload + static overlay (spec §1
+  indistinguishable). All five fixed (C5 = complete GPL alignment per
+  owner: preload + progress-driven LoadingChip). 78 e2e green.
+  Detailed in `docs/RV20-C05b1-Audit-21.md`.
+- **Round 22 (architect, 2-auditor): 0/2 PASS.** R21 fixes HELD - no
+  re-flag. Five NEW concerns, the serious one A-C3 (the R14-R20 family):
+  the helper fixed the gesture's FIRST frame but the live-drag onDragMove
+  still reset progress to 0 via the threshold mapping, snapping the track
+  on the 2nd pointermove of a mid-transition gesture. Fixed by making the
+  live-drag continuity-aware (`startProgress + absorbed·(1 - startProgress)`;
+  `gestureJustStarted` removed as redundant). Also: dead pending-transition
+  fields trimmed (A-C1/B-C1), `NO_OP_PLAN` removed (B-C2), stale docstrings
+  fixed (A-C2 TAB_CLICK_COMMIT_MS, B-C3 executor file docstring), prettier
+  run on .md. 78 e2e green. Detailed in `docs/RV20-C05b1-Audit-22.md`.
+- **Round 23 (architect, 2-auditor): 0/2 PASS.** R21/R22 fixes HELD.
+  Seven new concerns: B-C1 the R22 continuity fix's own gap (the commit
+  publication `#thresholdToRaw` is the wrong inverse for startProgress>0
+  → coverProgress/chipProgress jump at the drag→commit boundary, and
+  the chip-exit tab-click chip "pops"); A-C3 multi-touch corrupts the
+  gesture (no pointerId guard, §9 violation); A-C5 playEnterAnimation
+  race clobbers an in-flight gesture in its 1-frame deferred window;
+  A-C1 registerTeardown dead + overclaiming docstrings; A-C4 buildHandlers
+  dead test helper; A-C2 nav-pipeline-gate.ts missing unit test; B-C2
+  gesture chip-exit preload dropped (latent). Detailed in
+  `docs/RV20-C05b1-Audit-23.md`.
 
-Consecutive pass votes: **0** (R1-R20 each carried concerns).
+Consecutive pass votes: **0** (R1-R23 each carried concerns).
 
 ## Coverage bullets (round-independent)
 

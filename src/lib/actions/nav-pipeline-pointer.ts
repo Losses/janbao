@@ -51,42 +51,6 @@ interface PointerContext {
 	readonly target: string | null;
 }
 
-/** Returns the current pointer context, or null when no gesture is in
- *  flight. */
-type PointerContextGetter = () => PointerContext | null;
-
-/** The move / end handlers `detectSwipe` calls back. Each handler
- *  reconstructs the absolute pointer X (the classifier takes absolute
- *  X, not deltas) and forwards the equivalent IntentEvent to the
- *  orchestrator. */
-interface SwipeHandlerPair {
-	readonly onMove: MoveHandler;
-	readonly onEnd: EndHandler;
-}
-
-/** Build the move / end handlers `detectSwipe` calls. Each handler
- *  reconstructs the absolute pointer X (the classifier takes absolute
- *  X, not deltas) and forwards the equivalent IntentEvent to the
- *  orchestrator. */
-function buildHandlers(
-	orchestrator: NavPipelineOrchestrator,
-	ctx: PointerContextGetter
-): SwipeHandlerPair {
-	const onMove: MoveHandler = (deltaX: number): void => {
-		const c = ctx();
-		if (c === null) return;
-		const x = c.startX + deltaX;
-		orchestrator.onPointerMove(x, c.startY);
-	};
-	const onEnd: EndHandler = (deltaX: number, velocity: number, reversed: boolean): void => {
-		const c = ctx();
-		if (c === null) return;
-		const x = c.startX + deltaX;
-		orchestrator.onPointerUp(x, c.startY, velocity, reversed);
-	};
-	return { onMove, onEnd };
-}
-
 /** Capture the target's distinguishing identifier (the data attributes
  *  the classifier might consult). Returns null when the target is not
  *  an Element. */
@@ -109,6 +73,10 @@ export const navPipelinePointer: Action<HTMLElement, NavPipelinePointerParams> =
 	let lastDownX = 0;
 	let lastDownY = 0;
 	let lastDownTarget: string | null = null;
+	// §9: single-gesture at a time. The primary pointer owns the gesture
+	// once its pointerdown is recorded; secondary pointerdowns are ignored
+	// until the primary is released.
+	let primaryPointerId: number | null = null;
 
 	const onMove: MoveHandler = (deltaX: number): void => {
 		if (ctx === null) {
@@ -155,13 +123,22 @@ export const navPipelinePointer: Action<HTMLElement, NavPipelinePointerParams> =
 	const onPointerDownCapture = (event: PointerEvent): void => {
 		if (params.disabled()) return;
 		if (event.pointerType === 'mouse') return;
+		// Ignore a secondary pointer once a primary owns the gesture, so
+		// it cannot overwrite the start position or reset the context.
+		if (primaryPointerId !== null && event.pointerId !== primaryPointerId) return;
+		primaryPointerId = event.pointerId;
 		lastDownX = event.clientX;
 		lastDownY = event.clientY;
 		lastDownTarget = describeTarget(event.target);
 		ctx = null;
 	};
+	const onPointerUpCapture = (event: PointerEvent): void => {
+		if (event.pointerId === primaryPointerId) primaryPointerId = null;
+	};
 
 	node.addEventListener('pointerdown', onPointerDownCapture, true);
+	node.addEventListener('pointerup', onPointerUpCapture, true);
+	node.addEventListener('pointercancel', onPointerUpCapture, true);
 
 	const swipeParams = {
 		onMove,
@@ -183,6 +160,8 @@ export const navPipelinePointer: Action<HTMLElement, NavPipelinePointerParams> =
 		},
 		destroy(): void {
 			node.removeEventListener('pointerdown', onPointerDownCapture, true);
+			node.removeEventListener('pointerup', onPointerUpCapture, true);
+			node.removeEventListener('pointercancel', onPointerUpCapture, true);
 			if (swipe && typeof swipe.destroy === 'function') {
 				swipe.destroy();
 			}
@@ -190,6 +169,4 @@ export const navPipelinePointer: Action<HTMLElement, NavPipelinePointerParams> =
 	};
 };
 
-// Helper exports for tests that want to drive the handler shape
-// directly without the Svelte action machinery.
-export { buildHandlers, describeTarget };
+export { describeTarget };

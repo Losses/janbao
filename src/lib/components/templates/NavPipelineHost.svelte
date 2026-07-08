@@ -258,8 +258,8 @@
 	onDestroy(() => {
 		if (!browser) return;
 		// Tear down: clear the active-gesture-track publication, release
-		// the viewport-lock, deactivate the orchestrator. The lifecycle
-		// controller is the single SSR-safe teardown path.
+		// the viewport-lock, deactivate the orchestrator. Each release is
+		// guarded by `browser` (onDestroy also runs in SSR).
 		if (trackEl) clearActiveGestureTrack();
 		if (held) {
 			viewportLock.release();

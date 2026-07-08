@@ -26,12 +26,11 @@
  *   - SSR safety: the `browser` flag from `$app/environment` gates
  *     the rAF scheduler; the rAF never runs during SSR.
  *
- * In Cycle 4 shadow mode the boundary methods (`onDragStart`,
- * `onDragMove`, `onCommit`, `onCancel`, `onInterrupt`, `onLand`) have
- * no production caller. The orchestrator (Cycle 5) wires them to the
- * state-machine events. The shell is exercised by the unit suite for
- * the pure half; the shell itself is not unit-tested under `bun:test`
- * (it uses `$state`).
+ * The boundary methods (`onDragStart`, `onDragMove`, `onCommit`,
+ * `onCancel`, `onLand`) are called by the orchestrator (Cycle 5b1),
+ * which drives them from the state-machine events. The shell is
+ * exercised by the unit suite for the pure half; the shell itself is
+ * not unit-tested under `bun:test` (it uses `$state`).
  */
 
 import { browser } from '$app/environment';
