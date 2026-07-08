@@ -794,4 +794,29 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 			/\/messages\/inbox/
 		);
 	});
+
+	test('desktop: the gesture pipeline is inert (no track transform, plain tab nav)', async ({
+		page,
+		context
+	}) => {
+		await prepareContext(context);
+		// Desktop-width viewport: matchMedia('(max-width: 767px)') is false,
+		// so isMobile is false and the orchestrator is not mounted. The
+		// gesture pipeline is mobile-only (Plan §Scope).
+		await page.setViewportSize({ width: 1280, height: 800 });
+		await page.goto('/messages/inbox');
+		await waitForHydration(page);
+		await page.click('a[href^="/messages/"]:not([href="/messages/new"]):not([href="/messages/inbox"])');
+		await page.waitForURL(/\/messages\/\d+/);
+		await page.waitForTimeout(500);
+
+		// The track element has NO inline transform (the orchestrator never
+		// wrote one on desktop - it is not mounted). This is the fix for the
+		// desktop tab-click slide: with no orchestrator, no transition is
+		// consumed, so any navigation is a plain SvelteKit nav.
+		const transform = await page.locator('[data-testid="nav-pipeline-track"]').evaluate(
+			(el) => getComputedStyle(el).transform
+		);
+		expect(transform, 'desktop track must have no transform').toBe('none');
+	});
 });

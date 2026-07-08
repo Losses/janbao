@@ -155,7 +155,7 @@
 	// only owns the at-rest reset (the in-flight publication is the
 	// orchestrator's responsibility).
 	$effect(() => {
-		if (publication.plan === null) {
+		if (isMobile && publication.plan === null) {
 			orchestrator.resetPagerStore();
 		}
 	});
@@ -203,23 +203,30 @@
 		const fromPathname = page.url.pathname;
 		const fromData = getRouteData(fromPathname);
 		const toData = getRouteData(leftHref);
-		orchestrator.mount({
-			resolveElements: () => ({
-				pageTrack: trackEl,
-				fab: null,
-				header: null
-			}),
-			viewportWidth: viewportEl?.clientWidth ?? 0,
-			restingTranslate: -(viewportEl?.clientWidth ?? 0),
-			backTarget: leftHref,
-			fromPathname,
-			fromTag: fromData.tag,
-			toTag: toData.tag,
-			fromTabIndex: centerTab,
-			toTabIndex: getCurrentTabIndex(leftHref),
-			centerTab
-		});
-		setNavPipelineOrchestrator(orchestrator);
+		// The gesture pipeline is mobile-only (Plan §Scope: desktop
+		// navigates via plain SvelteKit nav). Mount + register the
+		// orchestrator only on mobile; on desktop the singleton stays
+		// null so the layout's beforeNavigate hook falls through to a
+		// normal navigation (no slide, no track transform writes).
+		if (isMobile) {
+			orchestrator.mount({
+				resolveElements: () => ({
+					pageTrack: trackEl,
+					fab: null,
+					header: null
+				}),
+				viewportWidth: viewportEl?.clientWidth ?? 0,
+				restingTranslate: -(viewportEl?.clientWidth ?? 0),
+				backTarget: leftHref,
+				fromPathname,
+				fromTag: fromData.tag,
+				toTag: toData.tag,
+				fromTabIndex: centerTab,
+				toTabIndex: getCurrentTabIndex(leftHref),
+				centerTab
+			});
+			setNavPipelineOrchestrator(orchestrator);
+		}
 
 		// Forward enter animation: if this mount is a forward SPA nav from
 		// leftHref, seed the track at translateX(0) (left panel visible)
@@ -229,7 +236,7 @@
 		// driver's setProperty) as gestures; a gesture starting mid-enter
 		// cleanly interrupts the enter. No CSS animation (no parallel
 		// mechanism; UNIFY invariant preserved).
-		if (shouldEnter && trackEl) {
+		if (isMobile && shouldEnter && trackEl) {
 			trackEl.style.setProperty('transform', 'translateX(0px)');
 			requestAnimationFrame(() => {
 				const w = viewportEl?.clientWidth ?? 0;

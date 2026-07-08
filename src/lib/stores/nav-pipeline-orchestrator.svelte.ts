@@ -889,6 +889,10 @@ export class NavPipelineOrchestrator {
 		this.#dispatchTarget = null;
 		this.#isEnterAnimation = false;
 		navigation.cancel();
+		// Capture the in-flight raw BEFORE resetting the publication so a
+		// tab-click interrupting a gesture commit lerps coverProgress from
+		// the gesture's last raw (not from 0, which would reverse the FAB).
+		this.#commitStartRaw = this.#publication.progress;
 		this.#publication = {
 			plan,
 			progress: 0,
@@ -912,7 +916,6 @@ export class NavPipelineOrchestrator {
 		// position so an in-flight forward-enter or gesture commit hands
 		// off with no jump (#startProgressFromCurrentVisual).
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
-		this.#commitStartRaw = this.#publication.progress;
 		this.#executor?.onDragStart(plan, startProgress, 0);
 		this.#executor?.onCommit(0, TAB_CLICK_COMMIT_MS);
 		return true;

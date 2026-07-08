@@ -1185,17 +1185,30 @@ reversed`; onCancel overrides progressDirection to 1. Added partial-
   WITH-CONCERNS (3 comment). Fixed: A-C2/B-C1/B-C2/B-C3 stale docstrings
   that claimed commit-publication continuity for "sub-threshold release"
   (the R27 A-C2 fix lands sub-threshold cancels immediately, bypassing
-  the commit publication). A-C1 is a SCOPE QUESTION deferred to the
-  owner: NavPipelineHost (the mobile gesture-track shell) renders on
-  desktop too, and the orchestrator consumes pilot -> tab-root
-  transitions with no mobile guard, so a desktop tab-click jumps + slides
-  the track (§Scope binds the gesture state machine to mobile-only).
-  Likely part of the broader "desktop rendering not done in 5b1" gap
-  (Cycle 5: sidebar+content on desktop). Not e2e-caught (suite is
-  mobile-only). The §5 interruption family appears converged (no new
-  edge this round). Detailed in `docs/RV20-C05b1-Audit-28.md`.
+  the commit publication). A-C1 (desktop): the orchestrator was mounted
+  unconditionally so a desktop tab-click was consumed (track jump +
+  slide); fixed by mounting/registering the orchestrator only when
+  isMobile (plus gating the forward-enter block + the reset $effect on
+  isMobile) - on desktop the singleton stays null and the layout hook
+  falls through to plain nav. New desktop e2e (1280px viewport) asserts
+  the track has no inline transform on desktop. 80 e2e green. The §5
+  interruption family appears converged (no new edge this round).
+  Detailed in `docs/RV20-C05b1-Audit-28.md`.
+- **Round 29 (architect, 2-auditor): 0/2 PASS.** A FAIL (3); B PASS-
+  WITH-CONCERNS (3). The §5 interruption family stays converged (no new
+  interruption edge). Fixed: B-C2 a tab-click interrupting a gesture
+  commit jumped coverProgress (the #commitStartRaw capture was after the
+  publication reset -> 0; moved it before the reset). OPEN: A-C1 mobile
+  -> desktop resize leaves the orchestrator active (R28 fixed only
+  cold-start-desktop; the matchMedia listener doesn't unmount on the
+  desktop side); B-C1 multi-touch edge-zone desync (R23's primary-pointer
+  guard didn't check the 40px edge zone); A-C2 `commitPhysics` is dead
+  code (set by every resolver, read by no production code - executor uses
+  prefersReducedMotion directly); A-C3/B-C3 stale comments (nav-executor
+  clock "Cycle 5 should/will", e2e thresholdToRaw ref). 80 e2e green.
+  Detailed in `docs/RV20-C05b1-Audit-29.md`.
 
-Consecutive pass votes: **0** (R1-R28 each carried concerns).
+Consecutive pass votes: **0** (R1-R29 each carried concerns).
 
 ## Coverage bullets (round-independent)
 
