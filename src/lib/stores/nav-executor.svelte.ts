@@ -77,21 +77,18 @@ export type NavExecutorTickFn = (progress: number, liveOffset: number) => void;
 
 /** Constructor options for `NavExecutor`. */
 export interface NavExecutorOptions {
-	/** The driver the executor writes through. In Cycle 4 shadow mode
-	 *  the only implementation is `MockNavDomDriver`; Cycle 5 supplies
-	 *  a real driver that proxies through to the live DOM. */
+	/** The driver the executor writes through. The 5b1 orchestrator
+	 *  supplies a `LiveNavDomDriver`; unit tests use a `MockNavDomDriver`. */
 	readonly driver: NavDomDriver;
 	/** Optional clock override for deterministic tests. */
 	readonly now?: NavExecutorClockFn;
 	/** Optional settle callback invoked once when a commit rAF reaches
-	 *  its target. Cycle 5b1 wires this to dispatch the post-commit
-	 *  SvelteKit navigation; absent in Cycle 4 shadow mode (no caller
-	 *  triggers a commit). */
+	 *  its target. The 5b1 orchestrator wires this to dispatch the
+	 *  post-commit SvelteKit navigation. */
 	readonly onSettle?: NavExecutorSettleFn;
 	/** Optional per-frame callback fired after each commit rAF sample
 	 *  so the orchestrator can publish progress to its downstream
-	 *  consumers during the commit slide. Absent in Cycle 4 shadow
-	 *  mode. */
+	 *  consumers during the commit slide. */
 	readonly onTick?: NavExecutorTickFn;
 }
 
@@ -115,9 +112,8 @@ function defaultNow(): number {
 }
 
 /** The Layer 5 executor reactive shell. Holds the executor's
- *  `$state<ExecutorState>`. In the integrated pipeline the orchestrator
- *  drives it through the boundary methods; in Cycle 4 shadow mode the
- *  boundary methods have no production caller (Cycle 5 wires them). */
+ *  `$state<ExecutorState>`. The orchestrator (5b1) drives it through
+ *  the boundary methods. */
 export class NavExecutor {
 	#state = $state<ExecutorState>(initialExecutorState());
 	#plan = $state<TransitionPlan | null>(null);
@@ -135,10 +131,8 @@ export class NavExecutor {
 		this.#onTick = opts.onTick ?? null;
 	}
 
-	/** Reactive read of the executor state record. In the integrated
-	 *  pipeline consumers read fields off this in a `$derived` to
-	 *  register as dependents; in Cycle 4 shadow mode there is no
-	 *  consumer (Cycle 5 wires them). */
+	/** Reactive read of the executor state record. The orchestrator
+	 *  reads `progress` and `commitStart` off this. */
 	get state(): ExecutorState {
 		return this.#state;
 	}
@@ -149,18 +143,16 @@ export class NavExecutor {
 		return this.#plan;
 	}
 
-	/** Convenience reactive read of the current progress. In the
-	 *  integrated pipeline consumers that only care about progress read
-	 *  this in a `$derived`; in Cycle 4 shadow mode there is no
-	 *  consumer. */
+	/** Convenience reactive read of the current progress. The
+	 *  orchestrator reads this via `#startProgressFromCurrentVisual`. */
 	get progress(): number {
 		return this.#state.progress;
 	}
 
 	/** A gesture starts. Locks the plan and publishes the first live
-	 *  frame. Cycle 5 wiring: the orchestrator's drag-start event
-	 *  calls this with the resolved plan and the initial (progress,
-	 *  liveOffset) computed from the live intent. */
+	 *  frame. The orchestrator's drag-start event calls this with the
+	 *  resolved plan and the initial (progress, liveOffset) computed
+	 *  from the live intent. */
 	onDragStart(plan: TransitionPlan, progress: number, liveOffset: number): void {
 		this.#plan = plan;
 		this.#state = applyDrag(this.#state, { progress, liveOffset });

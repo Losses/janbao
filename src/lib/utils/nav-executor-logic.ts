@@ -16,10 +16,10 @@
  * current visual state with no jump. The executor publishes
  * authoritative state; there is no DOM read-back (§13.5).
  *
- * In Cycle 4 shadow mode this module is exercised by its own unit
- * suite (`nav-executor-logic.test.ts`) using a `MockNavDomDriver`.
- * The reactive shell wires the rAF loop; Cycle 5 connects the
- * orchestrator's phase events to the shell's boundary methods.
+ * This module is exercised by its own unit suite
+ * (`nav-executor-logic.test.ts`) using a `MockNavDomDriver`. The
+ * reactive shell wires the rAF loop; the orchestrator (5b1) connects
+ * its phase events to the shell's boundary methods.
  */
 
 import type { TransitionPlan } from './nav-resolvers';
@@ -91,19 +91,17 @@ export interface CommitStartInfo {
 	 *  `[COMMIT_T_MIN_MS, COMMIT_T_MAX_MS]`, or `COMMIT_T_DEFAULT_MS`
 	 *  for the near-zero / wrong-direction fallback. */
 	readonly durationMs: number;
-	/** Always `false` in Cycle 4. When reduced-motion is active at
+	/** Always `false` when non-null. When reduced-motion is active at
 	 *  commit start, `startCommit` takes the snap path and returns
 	 *  `commitStart: null`, so a non-null `CommitStartInfo` always
 	 *  reflects a momentum commit. The integrator does NOT read this
-	 *  field (it gates on `state.phase`); retained as a placeholder
-	 *  for a possible Cycle-5 diagnostic consumer. */
+	 *  field (it gates on `state.phase`); retained for diagnostics. */
 	readonly reducedMotion: boolean;
 }
 
 /** The executor's full state record. The reactive shell holds this as
- *  `$state`. In the integrated pipeline the orchestrator and consumers
- *  read fields off it; in Cycle 4 shadow mode there is no consumer
- *  (Cycle 5 wires them). */
+ *  `$state`. The orchestrator reads `progress` and `commitStart` off
+ *  it. */
 export interface ExecutorState {
 	readonly phase: ExecutorPhase;
 	/** Current gesture progress in [0, 1]. 0 = FROM visible; 1 = TO
@@ -117,8 +115,7 @@ export interface ExecutorState {
 }
 
 /** Initial state. The SSR render and the first-load landing both start
- *  here; no animation runs until a drag-start event arrives (Cycle 5
- *  wiring). */
+ *  here; no animation runs until a drag-start event arrives. */
 export function initialExecutorState(): ExecutorState {
 	return { phase: 'idle', progress: 0, liveOffset: 0, commitStart: null };
 }
@@ -126,8 +123,8 @@ export function initialExecutorState(): ExecutorState {
 // ---------------------------------------------------------------------------
 // Drag (live phase).
 
-/** Drag-update payload. The orchestrator (Cycle 5 wiring) computes
- *  `progress` from the live intent offset and the gesture distance. */
+/** Drag-update payload. The orchestrator computes `progress` from the
+ *  live intent offset and the gesture distance. */
 export interface DragUpdate {
 	readonly progress: number;
 	readonly liveOffset: number;

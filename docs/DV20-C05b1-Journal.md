@@ -1247,8 +1247,18 @@ reversed`; onCancel overrides progressDirection to 1. Added partial-
   (self-corrected twice via the e2e gate: the $effect version reversed
   the track on commit-land; the unguarded ResizeObserver broke desktop).
   80 e2e green. Detailed in `docs/RV20-C05b1-Audit-31.md`.
+- **Round 32 (architect, 2-auditor): 2/2 PASS.** The first clean round
+  since R1. Both auditors returned PASS with zero concerns. Auditor A:
+  "The implementation has converged." Auditor B: "Zero blocking
+  concerns. Correctly preserves GPL behavior." All R21-R31 fix families
+  held. Detailed in `docs/RV20-C05b1-Audit-32.md`.
+- **Round 33 (architect, 2-auditor): 1/2 PASS.** A PASS; B PASS-WITH-
+  CONCERNS (3 stale "Cycle 4 shadow mode" docstrings in nav-executor
+  files). Fixed: all 12 "Cycle 4 shadow mode" / "Cycle 5 wires"
+  references reworded to current 5b1 language. B's concerns reset the
+  counter. Detailed in `docs/RV20-C05b1-Audit-33.md`.
 
-Consecutive pass votes: **0** (R1-R31 each carried concerns).
+Consecutive pass votes: **0** (R33 B-concerns reset; R34 audits post-fix).
 
 ## Coverage bullets (round-independent)
 
