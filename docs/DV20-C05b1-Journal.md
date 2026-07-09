@@ -1274,8 +1274,19 @@ reversed`; onCancel overrides progressDirection to 1. Added partial-
     zero remaining stale refs). #chipExitPhase now guarded on chipExit.
     #liveDragging reset on tab-click. Detailed in
     `docs/RV20-C05b1-Audit-35.md`.
+- **Round 36 (architect, 2-auditor): 0/2 PASS.** 3 broken comments in
+  nav-dom-driver-live.ts (sed merge artifacts) + nav-pipeline-pointer.ts
+  (describeTarget). Fixed. Detailed in `docs/RV20-C05b1-Audit-36.md`.
+- **Round 37 (architect, 2-auditor): 0/2 PASS.** Accessibility bug
+  (playEnterAnimation hardcoded commitPhysics:'momentum', bypassing
+  reduced-motion snap) + page-lifecycle-logic.ts (11 stale refs, missed
+  - only the .svelte.ts was cleaned) + 3 test files + dead import +
+    magic number + comment drift. Fixed: accessibility restored;
+    page-lifecycle-logic.ts + 3 test files cleaned; HEADER_MORPH_THRESHOLD
+    single-sourced; release-gate comment corrected. 80 e2e green.
+    Detailed in `docs/RV20-C05b1-Audit-37.md`.
 
-Consecutive pass votes: **0** (R35 carried concerns; R36 audits post-fix).
+Consecutive pass votes: **0** (R37 carried concerns; R38 audits post-fix).
 
 ## Coverage bullets (round-independent)
 

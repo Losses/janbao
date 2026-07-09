@@ -68,7 +68,11 @@ import {
 } from '$lib/utils/nav-resolvers';
 import { getRouteData } from '$lib/utils/route-data';
 import { hopForHref, isTabRootPath } from '$lib/utils/history-nav';
-import { TRACK_TRANSITION_MS, SWIPE_COMMIT } from '$lib/utils/gesture-constants';
+import {
+	HEADER_MORPH_THRESHOLD,
+	SWIPE_COMMIT,
+	TRACK_TRANSITION_MS
+} from '$lib/utils/gesture-constants';
 import type { RouteTag } from '$lib/utils/route-data';
 import type { TransitionPlan } from '$lib/utils/nav-resolvers';
 
@@ -413,7 +417,7 @@ export class NavPipelineOrchestrator {
 			fab: () => ({ scale: 0, translateY: 0, visible: false }),
 			header: () => ({ morph: 0, titleCrossfade: 0, translateY: 0 }),
 			progressDirection: 0,
-			commitPhysics: 'momentum'
+			commitPhysics: this.#driver?.prefersReducedMotion() ? 'snap' : 'momentum'
 		};
 		this.#pendingGesture = null;
 		this.#pendingTabExit = null;
@@ -545,7 +549,7 @@ export class NavPipelineOrchestrator {
 		// decides commit vs cancel based on drag distance + the
 		// rebound-based `reversed` signal forwarded from detectSwipe
 		// (the same source the non-pilot routes use): commit iff
-		// `dragDistance >= SWIPE_COMMIT && !reversed`.
+		// `intent.offset >= SWIPE_COMMIT && !reversed` (signed offset).
 		if (intent.micro === 'committed' || intent.micro === 'cancelled') {
 			this.#liveDragging = false;
 			// Only a RIGHTWARD gesture's release ends a transition. A leftward
@@ -605,7 +609,7 @@ export class NavPipelineOrchestrator {
 	 *  drag is absorbed (the track stays at rest); above 20% the drag
 	 *  maps 1:1 onto the remaining [0, 1] window. */
 	#thresholdAbsorbedProgress(raw: number): number {
-		const THRESHOLD = 0.2;
+		const THRESHOLD = HEADER_MORPH_THRESHOLD;
 		if (raw <= THRESHOLD) return 0;
 		return Math.max(0, Math.min(1, (raw - THRESHOLD) / (1 - THRESHOLD)));
 	}

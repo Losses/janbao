@@ -1,9 +1,10 @@
 // src/lib/utils/nav-dom-driver-live.test.ts
 /**
- * Unit suite for the real `NavDomDriver` (Cycle 5a). Per the C05a spec
- * the driver is tested with stub elements (plain objects whose `style`
- * is a capturing bag) and an injectable element-resolver / matchMedia,
- * so no real DOM is required.
+ * Unit suite for the production `NavDomDriver` (`LiveNavDomDriver`,
+ * constructed by `nav-pipeline-orchestrator.svelte.ts`). The driver is
+ * tested with stub elements (plain objects whose `style` is a
+ * capturing bag) and an injectable element-resolver / matchMedia, so
+ * no real DOM is required.
  *
  * Coverage:
  *  - Write mapping: axis/progress -> translateX sign + magnitude; FAB

@@ -1,9 +1,10 @@
 // src/lib/utils/nav-dom-driver.test.ts
 /**
- * Unit suite for `MockNavDomDriver`. The mock is the only `NavDomDriver`
- * implementation in Cycle 4 shadow mode; the suite verifies its
- * recording semantics so the executor-logic suite can rely on them
- * without re-asserting. A real driver lands in Cycle 5.
+ * Unit suite for `MockNavDomDriver`. The mock is the test double used
+ * by the executor-logic suite; this suite verifies its recording
+ * semantics so the executor suite can rely on them without
+ * re-asserting. The production driver `LiveNavDomDriver` is covered by
+ * `nav-dom-driver-live.test.ts`.
  */
 
 import { describe, test, expect } from 'bun:test';

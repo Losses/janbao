@@ -52,9 +52,11 @@ interface PointerContext {
 	readonly target: string | null;
 }
 
-/** Capture the target's distinguishing identifier (the data attributes
- *  the classifier might consult). Returns null when the target is not
- *  an Element. */
+/** Return the `href` of the closest `[data-tab-nav]` ancestor, or null.
+ *  Forwarded as the intent event's `target` field. The classifier
+ *  ignores `target` for pointer events (drags); it is read only for
+ *  tap / goto / popstate / hashchange. Retained for future
+ *  classification. */
 function describeTarget(target: EventTarget | null): string | null {
 	if (!(target instanceof Element)) return null;
 	const tabNav = target.closest('[data-tab-nav]');

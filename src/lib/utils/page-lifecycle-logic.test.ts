@@ -1,6 +1,6 @@
 // src/lib/utils/page-lifecycle-logic.test.ts
 /**
- * Unit suite for the pure half of the Cycle-5a PageLifecycle module.
+ * Unit suite for the pure half of the PageLifecycle module.
  *
  * Coverage:
  *  - Lifecycle reducer totality (every transition defined; idempotency;
@@ -12,11 +12,10 @@
  *  - SSR unmount guard (`planUnmount` returns `runTeardowns: false`
  *    when isBrowser is false but the phase still transitions).
  *
- * Per the Cycle 5a spec the lifecycle's pure half MUST be unit-testable
- * under `bun:test` with no real DOM. The reactive shell
- * (`page-lifecycle.svelte.ts`) uses `$state` and is not loaded here
- * (memory: `bun-test-no-runes-loader`); the shell's logic is covered
- * by the pure helpers it delegates to.
+ * The lifecycle's pure half is unit-testable under `bun:test` with no
+ * real DOM. The reactive shell (`page-lifecycle.svelte.ts`) uses
+ * `$state` and is not loaded here (memory: `bun-test-no-runes-loader`);
+ * the shell's logic is covered by the pure helpers it delegates to.
  */
 
 import { describe, test, expect } from 'bun:test';

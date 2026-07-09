@@ -1,8 +1,7 @@
 // src/lib/utils/nav-dom-driver-live.ts
 /**
- * The real `NavDomDriver` for the Layer 5 executor . Per
- * `docs/DV20-Plan.md` §5 + §13.5 + the C05a spec: implements the
- * Cycle-4 `NavDomDriver` interface (`write(NavVisualWrite)` +
+ * The real `NavDomDriver` for the Layer 5 executor. Implements the
+ * `NavDomDriver` interface (`write(NavVisualWrite)` +
  * `prefersReducedMotion()`), proxying the live page-track / FAB /
  * Header element refs and reading
  * `matchMedia('(prefers-reduced-motion: reduce)')`.
@@ -21,14 +20,11 @@
  * `setProperty`), so the same driver accepts a real `HTMLElement` in
  * production and a capturing stub in tests.
  *
- * In 5b1 the driver is exercised only by its unit
- * suite. The executor's pure-logic half (`nav-executor-logic.ts`) is
- * exercised by `nav-executor-logic.test.ts` with a `MockNavDomDriver`
- * passed to its free functions (`applyDrag`, `publishFrame`, ...); the
- * reactive shell (`nav-executor.svelte.ts`) uses `$state` and is not
- * constructed under `bun:test` (see `bun-test-no-runes-loader`).
- * the orchestrator wires `LiveNavDomDriver` into the executor at the gesture
- * components.
+ * The orchestrator (5b1) constructs this driver in `mount()` and hands
+ * it to the `NavExecutor`, which writes through it every frame. Under
+ * `bun:test` the reactive shell (`nav-executor.svelte.ts`) is not
+ * constructed (it uses `$state`); the pure-logic half
+ * (`nav-executor-logic.ts`) is exercised with a `MockNavDomDriver`.
  */
 
 import type { NavDomDriver, NavVisualWrite } from './nav-dom-driver';
@@ -107,10 +103,8 @@ function defaultMatchMedia(query: string): LiveDriverMatchMediaResult {
  *  page-track / FAB / Header elements each frame and reads the
  *  reduced-motion media query.
  *
- *  In 5b1 this driver is exercised only by its unit
- *  suite; the executor shell (`nav-executor.svelte.ts`) is unchanged.
- *  the orchestrator wires this driver into the executor at the gesture
- *  components. */
+ *  The orchestrator constructs this driver and hands it to the
+ *  executor, which writes through it every frame. */
 export class LiveNavDomDriver implements NavDomDriver {
 	readonly #resolveElements: LiveDriverElementResolver;
 	readonly #matchMedia: LiveDriverMatchMedia;
@@ -140,13 +134,12 @@ export class LiveNavDomDriver implements NavDomDriver {
 		if (header) {
 			const h = visual.header;
 			header.style.setProperty('transform', `translateY(${h.translateY}px)`);
-			// CSS custom properties: the only way to set `--*` values from
-			// script. The driver writes the morph and titleCrossfade values
-			// here each frame. A Header consumer that reads these via
-			// `var(--header-morph)` / `var(--header-title-crossfade)` in its
-			// The header CSS variables are written here; the pilot's
-			// Header reads the pager store instead, so these writes
-			// are currently unused (a consumer could read them directly).
+			// CSS custom properties for a Header consumer that reads them
+			// via `var(--header-morph)` / `var(--header-title-crossfade)`.
+			// The pilot passes `header: null` in resolveElements so this
+			// block is unreachable for the pilot route (the Header reads
+			// the pager store instead). A future consumer that binds a
+			// header element would receive these writes.
 			header.style.setProperty('--header-morph', String(h.morph));
 			header.style.setProperty('--header-title-crossfade', String(h.titleCrossfade));
 		}

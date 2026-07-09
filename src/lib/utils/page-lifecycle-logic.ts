@@ -1,10 +1,10 @@
 // src/lib/utils/page-lifecycle-logic.ts
 /**
- * Pure (runes-free) half of the Cycle-5a PageLifecycle module. Per
- * `docs/DV20-Plan.md` §8 + the C05a spec: owns the four-phase page
- * lifecycle contract (`mount` / `activate` / `deactivate` / `unmount`)
- * as a total reducer, the refcount-with-microtask-deferral helper that
- * is the template for any html-singleton class (memory:
+ * Pure (runes-free) half of the PageLifecycle module. Per
+ * `docs/DV20-Plan.md` §8: owns the four-phase page lifecycle contract
+ * (`mount` / `activate` / `deactivate` / `unmount`) as a total
+ * reducer, the refcount-with-microtask-deferral helper that is the
+ * template for any html-singleton class (memory:
  * `viewport-lock-refcount-pattern`), and the SSR-safe `unmount`
  * planner that is the single teardown path (memory:
  * `svelte-ondestroy-runs-in-ssr`).
@@ -13,15 +13,18 @@
  * thin `$state` wrapper that delegates every transition to this
  * module so the totality has unit coverage under `bun:test` with no
  * Svelte runes loader (per the `bun-test-no-runes-loader` memory the
- * runes loader is unavailable there, mirroring the Cycle 2/3/4 split).
+ * runes loader is unavailable there).
  *
- * In Cycle 5a shadow mode no Svelte component drives these
- * transitions and no html-singleton is migrated to the new helper.
- * The unit suite exercises the reducer, the refcount helper, and the
- * unmount planner directly. Cycle 5b wires the lifecycle into the
- * gesture components and migrates the lifecycle-adjacent stores
- * (`viewport-lock`, `scroll-chrome`, `active-gesture-track`) to
- * register their html-singleton releases here.
+ * The orchestrator (`nav-pipeline-orchestrator.svelte.ts`) constructs
+ * a `PageLifecycleController(browser)` and calls `mount` / `activate`
+ * / `deactivate` / `unmount` from the pilot host's lifecycle hooks;
+ * every transition flows through `reduce` and `planUnmount` here, so
+ * the reducer is exercised by production. The lifecycle-adjacent
+ * html-singleton stores (`viewport-lock`, `scroll-chrome`,
+ * `active-gesture-track`) inline their own refcounts; the
+ * `HttpSingletonClassController` below is the canonical template a
+ * future consolidation would route them through, and is exercised by
+ * the unit suite.
  */
 
 import type { VoidHandler } from '$lib/types/handlers';
@@ -38,8 +41,9 @@ import type { VoidHandler } from '$lib/types/handlers';
  *  - `'inactive'`: navigation away committed; publishing stopped; locks
  *    held through the swap.
  *
- *  In Cycle 5a shadow mode no Svelte component drives these
- *  transitions; the unit suite exercises the reducer directly. */
+ *  Production transitions are driven by the orchestrator's
+ *  `PageLifecycleController`; the unit suite exercises the reducer
+ *  directly. */
 export type PagePhase = 'unmounted' | 'mounted' | 'active' | 'inactive';
 
 /** A lifecycle event. The reducer is total: every (state, event) pair
@@ -216,10 +220,7 @@ export interface MicrotaskScheduler {
  *  evergreen browsers and in the runtimes this project ships: Bun,
  *  Node 14+, Cloudflare Workers, workerd). The Promise fallback covers
  *  a hypothetical runtime without `queueMicrotask`. The bun:test
- *  suite exercises this default directly; in the integrated pipeline
- *  (Cycle 5b) `acquire` is called from Svelte effect callbacks, which
- *  do not run during SSR, so production scheduler activity is
- *  browser-only. */
+ *  suite exercises this default directly. */
 export const defaultMicrotaskScheduler: MicrotaskScheduler = {
 	queueMicrotask(fn: VoidHandler): void {
 		if (typeof queueMicrotask === 'function') {
@@ -232,11 +233,11 @@ export const defaultMicrotaskScheduler: MicrotaskScheduler = {
 
 /** Default applier. Writes to `document.documentElement.classList`.
  *  SSR-safe: no-ops when `document` is undefined so an acquire or
- *  release invoked outside the browser does not throw. In Cycle 5b
- *  the registered teardowns run only when `planUnmount` reports
- *  `runTeardowns: true`, so this `typeof document` gate is
- *  defense-in-depth: even if a release is invoked outside the unmount
- *  path, the applier stays safe. */
+ *  release invoked outside the browser does not throw. The registered
+ *  teardowns run only when `planUnmount` reports `runTeardowns: true`,
+ *  so this `typeof document` gate is defense-in-depth: even if a
+ *  release is invoked outside the unmount path, the applier stays
+ *  safe. */
 export const defaultHtmlClassApplier: HtmlClassApplier = {
 	addClass(cls: string): void {
 		if (typeof document === 'undefined') return;
@@ -253,11 +254,11 @@ export const defaultHtmlClassApplier: HtmlClassApplier = {
  *  removed on a microtask after the last ref, so a same-tick
  *  remove+add does not flicker.
  *
- *  In Cycle 5a shadow mode this controller is exercised only by the
- *  unit suite; the existing `viewport-lock.svelte.ts` keeps its inline
- *  refcount and is NOT modified. Cycle 5b migrates the
- *  lifecycle-adjacent stores to construct one of these per
- *  html-singleton class. */
+ *  The lifecycle-adjacent stores (`viewport-lock.svelte.ts`,
+ *  `scroll-chrome`, `active-gesture-track`) inline their own refcounts
+ *  and do not construct this controller; this is the canonical
+ *  template a future consolidation would route them through, and is
+ *  exercised by the unit suite. */
 export class HtmlSingletonClassController {
 	#state: RefcountState = initialRefcountState();
 	readonly #className: string;
@@ -301,10 +302,8 @@ export class HtmlSingletonClassController {
 		}
 	}
 
-	/** Test-only: the current ref count. In Cycle 5a the controller is
-	 *  constructed only by the unit suite, which asserts `count` to
-	 *  verify acquire/release pairs; the integrated pipeline (Cycle 5b)
-	 *  will not read this field. */
+	/** Test-only: the current ref count. The unit suite asserts `count`
+	 *  to verify acquire/release pairs. */
 	get count(): number {
 		return this.#state.count;
 	}
@@ -337,10 +336,9 @@ export interface UnmountPlan {
  *  is NOT used for html-singleton removal (memory:
  *  `svelte-ondestroy-runs-in-ssr`); instead the teardown work is gated
  *  on `isBrowser`, so it stays correct even if the caller runs during
- *  SSR. In Cycle 5a the only callers are the controller's `unmount`
- *  method and the unit suite; in Cycle 5b the controller's `unmount`
- *  is wired into a Svelte lifecycle hook, and the `isBrowser` gate
- *  makes that SSR-safe. */
+ *  SSR. The orchestrator's `PageLifecycleController.unmount` calls
+ *  this from the pilot host's teardown hook; the unit suite covers
+ *  the `isBrowser` branches directly. */
 export function planUnmount(state: PageLifecycleState, isBrowser: boolean): UnmountPlan {
 	return {
 		runTeardowns: isBrowser,

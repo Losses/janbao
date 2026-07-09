@@ -36,7 +36,6 @@
 	} from '$lib/stores/nav-pipeline-orchestrator.svelte';
 	import { navPipelinePointer } from '$lib/actions/nav-pipeline-pointer';
 	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
-	import { HEADER_MORPH_THRESHOLD } from '$lib/utils/gesture-constants';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 
 	interface NavPipelineHostProps {
@@ -356,13 +355,6 @@
 	// measures viewportWidth. The driver writes px-based transforms via
 	// `style.setProperty` after hydration, overriding this CSS value.
 	const initialTrackTransform = $derived(!isMobile ? '' : 'transform: translateX(-50%);');
-
-	// HEADER_MORPH_THRESHOLD is published via the plan's `header`
-	// function (the resolver's header plan reads progress in [0,1] and
-	// the orchestrator's dragProgress already absorbs the 0.2 threshold
-	// before publishing). The constant is imported so the host can
-	// assert it in the future without recomputing.
-	void HEADER_MORPH_THRESHOLD;
 </script>
 
 <div
