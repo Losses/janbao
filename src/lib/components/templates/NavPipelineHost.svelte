@@ -88,6 +88,7 @@
 	// writes each frame; the centre panel is the scroll-chrome source;
 	// the viewport is the pointer surface.
 	let viewportEl: HTMLElement | null = $state(null);
+	let viewportWidth = $state(393);
 	let trackEl: HTMLElement | null = $state(null);
 	let leftEl: HTMLElement | null = $state(null);
 	let centerEl: HTMLElement | null = $state(null);
@@ -110,19 +111,29 @@
 	// `swipeNeedsLoadingAtStart && (dragOffset !== null ||
 	// isPendingNavigation || isTransitioningOut)` shape.
 	const chipVisible = $derived(chipExit && publication.inFlight);
-	// GPL drives the chip's grow + label reveal from the drag width; on
-	// the pilot's click-triggered chip-exit the executor's commit
-	// progress stands in for the drag, so the chip grows and its label
-	// reveals across the 200ms slide.
-	const chipProgress = $derived(chipExit ? Math.max(0, Math.min(1, publication.progress)) : 0);
-	const chipScale = $derived(0.5 + chipProgress * 0.8);
-	const chipMaxWidth = $derived(36 + chipProgress * 94);
-	const chipTextMaxWidth = $derived(chipProgress * 70);
-	// Fade the chip out across the final 15% of the slide so it dissolves
-	// before the nav lands (the host unmounts it on land).
-	const chipOpacity = $derived(
-		chipProgress > 0.85 ? Math.max(0, 1 - (chipProgress - 0.85) / 0.15) : 1
+	// GPL chip-exit phases: 'pending' (preload in flight, chip pulsing at
+	// scale 1.15, overlay = maxDrag width) -> 'sliding' (preload resolved,
+	// slide plays, chip fades opacity 1->0, scale 1.15->1.6, overlay grows
+	// maxDrag->W). Driven by the orchestrator's chipExitPhase + the
+	// slide's commit progress.
+	const chipPhase = $derived(orchestrator.chipExitPhase);
+	const vw = $derived(viewportWidth);
+	const maxDrag = $derived(vw * 0.3);
+	const slideProgress = $derived(
+		chipPhase === 'sliding' ? Math.max(0, Math.min(1, publication.progress)) : 0
 	);
+	const chipRevealWidth = $derived(
+		chipPhase === 'pending'
+			? maxDrag
+			: chipPhase === 'sliding'
+				? maxDrag + (vw - maxDrag) * slideProgress
+				: 0
+	);
+	const chipOverlayOpacity = $derived(chipPhase === 'sliding' ? 1 - slideProgress : 1);
+	const chipScale = $derived(
+		chipPhase === 'pending' ? 1.15 : chipPhase === 'sliding' ? 1.15 + 0.45 * slideProgress : 1
+	);
+	const chipPulsing = $derived(chipPhase === 'pending');
 
 	// The track's geometry. Replicates GPL's multi-panel layout: the
 	// track is `panelCount * 100%` wide, the panels are equal-width
@@ -209,6 +220,7 @@
 
 		const sync = (): void => {
 			isMobile = mq.matches;
+			viewportWidth = viewportEl?.clientWidth ?? 393;
 			if (isMobile) {
 				if (!held) {
 					viewportLock.acquire();
@@ -235,6 +247,7 @@
 		const ro = new ResizeObserver(() => {
 			if (!viewportEl) return;
 			const w = viewportEl.clientWidth;
+			viewportWidth = w;
 			orchestrator.updateViewport(w, -w);
 			// On a mobile-only resize (portrait <-> landscape, both
 			// <767px) AFTER a transition settled, re-apply the resting
@@ -396,18 +409,19 @@
 
 	{#if chipVisible}
 		<div
-			class="loading-overlay absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
+			class="loading-overlay absolute inset-y-0 left-0 z-30 flex items-center justify-center pointer-events-none"
+			style="width: {chipRevealWidth}px; opacity: {chipOverlayOpacity};"
 		>
 			<LoadingChip
 				icon={chipTargetTab?.icon}
 				label={chipTargetTab ? page.data.t.nav[chipTargetTab.labelKey] : page.data.t.nav.back}
 				scale={chipScale}
 				expanded={true}
-				pulsing={true}
+				pulsing={chipPulsing}
 				dragging={false}
-				opacity={chipOpacity}
-				maxWidth={chipMaxWidth}
-				textMaxWidth={chipTextMaxWidth}
+				opacity={chipOverlayOpacity}
+				maxWidth={130}
+				textMaxWidth={70}
 			/>
 		</div>
 	{/if}

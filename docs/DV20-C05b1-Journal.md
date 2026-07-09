@@ -1257,8 +1257,25 @@ reversed`; onCancel overrides progressDirection to 1. Added partial-
   files). Fixed: all 12 "Cycle 4 shadow mode" / "Cycle 5 wires"
   references reworded to current 5b1 language. B's concerns reset the
   counter. Detailed in `docs/RV20-C05b1-Audit-33.md`.
+- **Round 34 (architect, 2-auditor): 0/2 PASS.** Both flagged the same
+  36 stale "shadow mode" docstrings across 9 layer files (R33 fixed 2;
+  R34 found the other 7) + the chip-exit deviations (preload fire-and-
+  forget + overlay simplification). Fixed: ALL 36 docstrings reworded to
+  current 5b1 language. Chip-exit RE-ALIGNED with GPL: preload awaited
+  (pending -> sliding phases, matching GPL's isPendingNavigation ->
+  isTransitioningOut); overlay changed from full-viewport to GPL's
+  anchored strip with phase-driven chip props. The R24 B-C3 fire-and-
+  forget revert is itself reverted (the flaky gesture-during-tab-click
+  e2e that caused it was removed in R25). 80 e2e green. Detailed in
+  `docs/RV20-C05b1-Audit-34.md`.
+- **Round 35 (architect, 2-auditor): 0/2 PASS.** Both flagged ~44 stale
+  docstrings (R34 sed cleanup was incomplete: narrow grep + broken text)
+  - 2 bugs. Fixed: ALL 44 reworded across 12 pipeline files (verified:
+    zero remaining stale refs). #chipExitPhase now guarded on chipExit.
+    #liveDragging reset on tab-click. Detailed in
+    `docs/RV20-C05b1-Audit-35.md`.
 
-Consecutive pass votes: **0** (R33 B-concerns reset; R34 audits post-fix).
+Consecutive pass votes: **0** (R35 carried concerns; R36 audits post-fix).
 
 ## Coverage bullets (round-independent)
 

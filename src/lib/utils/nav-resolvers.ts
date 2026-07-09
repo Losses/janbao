@@ -9,8 +9,9 @@
  * `ResolverInput`). The orchestrator (Layer 1) selects the resolver by
  * the (from-tag, to-tag) pair of the current transition. Each pair has
  * one resolver because the two directions of a pair share one animation
- * played forward or in reverse. In the integrated pipeline the dispatch is
- * exercised by the unit suite; the orchestrator wires it in Cycle 5.
+ * played forward or in reverse. In the integrated pipeline the dispatch
+ * is exercised by the unit suite and wired into the live pipeline by the
+ * orchestrator.
  *
  * Six pairs for three tags (`tab`, `detail`, `search`):
  *
@@ -29,7 +30,7 @@
  * Each resolver produces per-consumer animation plans (page-track,
  * FAB, Header) as functions of `(progress, liveOffset)`. The plan is
  * resolved ONCE per gesture (FROM and TO locked at gesture start); the
- * live offset streams separately to the executor (Cycle 4).
+ * live offset streams separately to the executor.
  *
  * Pure (runes-free). The orchestrator imports the `TransitionPlan` and
  * `TransitionDirection` types from this module (the wrapper imports
@@ -109,12 +110,10 @@ export interface TransitionPlan {
 }
 
 // ---------------------------------------------------------------------------
-// Route stack. Carried on `ResolverInput` for Cycle 5, when resolvers
-// may read the back-target directly. In Cycle 3 the back-target
-// derivation lives in the caller: it precomputes `direction` from the
-// stack and passes it (§6: "the back-target is always the route stack's
-// previous entry"). The Cycle-3 resolvers consume `direction` and do
-// not read `stack`.
+// Route stack. Carried on `ResolverInput`. The back-target derivation
+// lives in the caller: it precomputes `direction` from the stack and
+// passes it (§6: "the back-target is always the route stack's previous
+// entry"). The resolvers consume `direction` and do not read `stack`.
 
 /** A single entry in the route stack. `tag` is carried alongside the
  *  pathname so the caller does not need to re-classify. */
@@ -125,11 +124,10 @@ export interface RouteStackEntry {
 }
 
 /** The flat route stack. The last entry is the current route; the
- *  entry at `length - 2` is the back-target. In Cycle 3 this type is
- *  defined but no live stack is built (the wrapper is not yet wired to
- *  SvelteKit); test fixtures construct sample stacks. the orchestrator (5b1) wires it
- *  to the live navigation history and may have resolvers read it
- *  directly. */
+ *  entry at `length - 2` is the back-target. The orchestrator builds
+ *  the live stack from the navigation history; the resolvers do not
+ *  read it directly (they read `direction`, which the caller
+ *  precomputes from the stack). */
 export interface RouteStack {
 	readonly entries: readonly RouteStackEntry[];
 }
@@ -146,10 +144,10 @@ export type TransitionDirection = 'forward' | 'backward';
 /** Input every resolver reads. The from/to route data, the from/to
  *  pathnames and tab indices, the gesture-start intent, the
  *  caller-precomputed direction, the viewport width, and the
- *  reduced-motion flag. The `stack` field is carried for Cycle 5 (see
- *  above); Cycle-3 resolvers do not read it. All fields are locked at
- *  gesture start; the live parameters stream through the plan's
- *  `fab`/`header` functions. */
+ *  reduced-motion flag. The `stack` field is carried on the input (see
+ *  above); the resolvers currently consume `direction` instead. All
+ *  fields are locked at gesture start; the live parameters stream
+ *  through the plan's `fab`/`header` functions. */
 export interface ResolverInput {
 	readonly intent: IntentState;
 	readonly stack: RouteStack;

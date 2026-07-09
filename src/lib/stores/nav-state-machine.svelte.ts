@@ -5,10 +5,10 @@
  *
  * Per `docs/DV20-Plan.md` §2 Layer 1 + §9: the orchestrator owns the
  * macro state of a navigation transition and the SvelteKit interop
- * boundary. It does NOT touch the DOM (Cycle 4 owns that); it does NOT
- * replace the existing MobileTabPager or GesturePageLayout (the 5b2
- * migration replaces them; this store models the macro phases the
- * orchestrator dispatches to).
+ * boundary. It does NOT touch the DOM (the executor owns that); it
+ * does NOT replace the existing MobileTabPager or GesturePageLayout
+ * (the 5b2 migration replaces them; this store models the macro
+ * phases the orchestrator dispatches to).
  *
  * The wrapper is a thin `$state` shell: every transition delegates to
  * the pure reducer so the reducer is the single source of truth for
@@ -115,10 +115,10 @@ export class NavStateMachine {
 	// -----------------------------------------------------------------------
 	// SvelteKit interop boundary.
 	//
-	// Methods the next cycle wires into SvelteKit's `beforeNavigate`,
-	// `afterNavigate`, and the popstate listener. In Cycle 3 these are
-	// the surface; they feed events into the reducer but do not touch
-	// SvelteKit's navigation API (the wrapper has no `goto` import).
+	// Methods the orchestrator wires into SvelteKit's `beforeNavigate`,
+	// `afterNavigate`, and the popstate listener. They feed events
+	// into the reducer but do not touch SvelteKit's navigation API
+	// (the wrapper has no `goto` import).
 
 	/** A gesture-start intent arrived from the classifier. */
 	onIntent(intent: IntentState, from: string, fromTag: RouteTag): void {
@@ -174,11 +174,12 @@ export class NavStateMachine {
 		}
 	}
 
-	/** Reset to at-rest on a tag. A public boundary with no Cycle-3
+	/** Reset to at-rest on a tag. A public boundary with no internal
 	 *  caller: the first-load landing and the SSR initial render both
 	 *  use the constructor's `initialOn` directly, and `onLand`
 	 *  dispatches the reset event itself rather than calling this
-	 *  method. Cycle 5 may call this from the first-load/SSR wiring. */
+	 *  method. Exposed for external callers that need to force-clear
+	 *  the state machine outside a land cycle. */
 	reset(on: AtRestOn): void {
 		this.dispatch({ type: 'reset', on });
 	}

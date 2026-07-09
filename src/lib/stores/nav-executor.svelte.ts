@@ -47,14 +47,14 @@ import {
 import type { NavDomDriver } from '$lib/utils/nav-dom-driver';
 import type { TransitionPlan } from '$lib/utils/nav-resolvers';
 
-/** A clock function for the rAF timeline. Injectable so a future
- *  Cycle 5 integration test can drive the rAF deterministically. The
- *  default is `performance.now()` in the browser (a
- *  `DOMHighResTimeStamp` relative to navigation start, NOT Unix epoch)
- *  and `Date.now()` as an SSR fallback that never executes (the rAF is
- *  browser-gated, so only the `performance.now()` branch runs). The two
- *  have different reference points; the orchestrator passes one shared
- *  clock to both the executor and the intent classifier. */
+/** A clock function for the rAF timeline. Injectable so integration
+ *  tests can drive the rAF deterministically. The default is
+ *  `performance.now()` in the browser (a `DOMHighResTimeStamp` relative
+ *  to navigation start, NOT Unix epoch) and `Date.now()` as an SSR
+ *  fallback that never executes (the rAF is browser-gated, so only the
+ *  `performance.now()` branch runs). The two have different reference
+ *  points; the orchestrator passes one shared clock to both the
+ *  executor and the intent classifier. */
 export type NavExecutorClockFn = () => number;
 
 /** Called once when a commit rAF reaches its target. The Cycle 5b1
@@ -239,9 +239,9 @@ export class NavExecutor {
 	}
 
 	/** Force-stop the rAF and clear the plan without resetting state.
-	 *  Cycle 5 may call this when the user navigates away from the
-	 *  gesture surface mid-commit (e.g. an OS back-button press that
-	 *  the orchestrator routes around the executor). */
+	 *  The orchestrator calls this when the user navigates away from
+	 *  the gesture surface mid-commit (e.g. an OS back-button press
+	 *  that the orchestrator routes around the executor). */
 	stop(): void {
 		this.#stopRaf();
 		this.#plan = null;

@@ -281,6 +281,10 @@ export class NavPipelineOrchestrator {
 	 *  underlying write, which left the left section in the DOM for the
 	 *  first ~3 rAF ticks of a chip-exit slide. */
 	#chipExitState = $state(false);
+	/** The chip-exit phase: 'pending' (preload in flight, chip shows +
+	 *  pulses) or 'sliding' (preload resolved, the slide plays, chip
+	 *  fades), or null (no chip-exit). Drives the host's overlay. */
+	#chipExitPhase = $state<'pending' | 'sliding' | null>(null);
 	/** The raw drag-fraction published at the moment a commit / cancel
 	 *  began. The commit-phase publication lerps from this value to the
 	 *  target (1 commit / 0 cancel) along the executor's eased fraction,
@@ -314,6 +318,10 @@ export class NavPipelineOrchestrator {
 	 *  same frame the orchestrator flips it. */
 	get chipExit(): boolean {
 		return this.#chipExitState;
+	}
+	/** The chip-exit phase for the host's overlay rendering. */
+	get chipExitPhase(): 'pending' | 'sliding' | null {
+		return this.#chipExitPhase;
 	}
 
 	/** Reactive read of the in-flight flag. */
@@ -353,6 +361,7 @@ export class NavPipelineOrchestrator {
 		// settles to the right surface.
 		this.#publication = AT_REST_PUBLICATION;
 		this.#chipExitState = false;
+		this.#chipExitPhase = null;
 		// Publish the at-rest pager state now that #mountInputs is set,
 		// independent of the host reset $effect's timing.
 		this.resetPagerStore();
@@ -824,6 +833,7 @@ export class NavPipelineOrchestrator {
 		}
 		this.#publication = AT_REST_PUBLICATION;
 		this.#chipExitState = false;
+		this.#chipExitPhase = null;
 	}
 
 	// -----------------------------------------------------------------------
@@ -890,6 +900,7 @@ export class NavPipelineOrchestrator {
 		// pre-rendered leftHref (the pilot only pre-renders /messages/inbox).
 		const chipExit = isTabRootPath(toPathname) && toPathname !== inputs.backTarget;
 		this.#pendingGesture = null;
+		this.#liveDragging = false;
 		this.#pendingTabExit = { target: to };
 		this.#navDispatchInFlight = false;
 		this.#dispatchTarget = null;
@@ -909,21 +920,26 @@ export class NavPipelineOrchestrator {
 			chipExit
 		};
 		this.#chipExitState = chipExit;
-		// Warm the target's data in parallel with the slide so the
-		// post-slide `goto` lands instantly; the slide is not blocked on
-		// the preload (the goto on settle awaits any in-flight preload
-		// before landing).
-		if (chipExit) {
-			void preloadData(to).catch(() => {});
-		}
-		// Drive the executor: dragStart, then commit with an explicit
-		// duration (`TAB_CLICK_COMMIT_MS`) matching the non-pilot
-		// routes' CSS `duration-200`. Start at the track's current visual
-		// position so an in-flight forward-enter or gesture commit hands
-		// off with no jump (#startProgressFromCurrentVisual).
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
-		this.#executor?.onDragStart(plan, startProgress, 0);
-		this.#executor?.onCommit(0, TAB_CLICK_COMMIT_MS);
+		const beginSlide = (): void => {
+			// Abort if the orchestrator moved on (unmount, gesture, or
+			// another tab-click) during the preload wait.
+			if (this.#executor === null || this.#pendingTabExit?.target !== to) return;
+			if (chipExit) this.#chipExitPhase = 'sliding';
+			this.#executor?.onDragStart(plan, startProgress, 0);
+			this.#executor?.onCommit(0, TAB_CLICK_COMMIT_MS);
+		};
+		if (chipExit) {
+			// GPL shows the chip (pending phase, pulsing), preloads, THEN
+			// slides (sliding phase, chip fades). The chip is visible
+			// during the preload wait; the slide starts on resolve.
+			this.#chipExitPhase = 'pending';
+			void preloadData(to)
+				.catch(() => {})
+				.then(beginSlide);
+		} else {
+			beginSlide();
+		}
 		return true;
 	}
 

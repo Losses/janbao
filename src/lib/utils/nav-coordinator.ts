@@ -3,16 +3,14 @@
  * Layer 4 of the DV20 mobile-navigation pipeline: the coordinator.
  *
  * Per `docs/DV20-Plan.md` §2 Layer 4: given the plan's FROM and TO,
- * consults the unified `PageCacheStore` (Cycle 2). If the TO is
- * cached, the plan is a direct slide. If not, the plan becomes a
- * chip-exit with preload.
+ * consults the unified `PageCacheStore`. If the TO is cached, the plan
+ * is a direct slide. If not, the plan becomes a chip-exit with
+ * preload.
  *
  * Pure. The cache lookup is injected as a `cacheHas` predicate so this
  * module is runes-free and unit-testable without the reactive store.
- * In the integrated pipeline the orchestrator (Layer 1) wires the live
- * `PageCacheStore.get` into the predicate; in the integrated pipeline
- * `coordinate` is called only by its unit tests (the orchestrator (5b1) wires the
- * orchestrator call).
+ * The orchestrator (Layer 1) wires the live `PageCacheStore.get` into
+ * the predicate and calls `coordinate` once per gesture start.
  *
  * Responsibilities (§7 + §9):
  *
@@ -23,7 +21,7 @@
  *   - When the TO is a snapshot-capturing route whose own snippet is
  *     cached, allow the slide to overlay it (`useDeepPreview`).
  *
- * Out of scope (Cycle 4/5): the actual rAF driving the slide, the
+ * Out of scope for this module: the actual rAF driving the slide, the
  * snippet rendering during the slide, and the SvelteKit
  * `beforeNavigate.cancel()` call. The coordinator decides; the
  * orchestrator acts.
@@ -36,10 +34,11 @@ export type CacheHasFn = (pathname: string, subKey?: string) => boolean;
 
 /** Inputs to the coordinator. `coordinate()` reads `toPathname`,
  *  `toSubKey`, `toSnapshotCapture`, `cacheHas`, and `hasToSnippet`;
- *  `fromPathname` is carried for Cycle 4/5 (e.g. FROM invalidation on a
- *  push) and is not read in Cycle 3. The `toSnapshotCapture` field
- *  comes from `RouteData.snapshotCapture`; the `cacheHas` predicate is
- *  the live cache check. */
+ *  `fromPathname` is carried on the input but not read by the
+ *  coordinator (the decision depends on the TO and the cache state).
+ *  The `toSnapshotCapture` field comes from
+ *  `RouteData.snapshotCapture`; the `cacheHas` predicate is the live
+ *  cache check. */
 export interface CoordinatorInput {
 	readonly fromPathname: string;
 	readonly toPathname: string;
@@ -64,9 +63,9 @@ export interface CoordinatorDecision {
 	 *  direct-slide (no preload needed). */
 	readonly preloadPathname: string | null;
 	readonly preloadSubKey: string | undefined;
-	/** When true, the executor (Cycle 4) should overlay the cached
-	 *  snippet during the slide. False for chip-exit and for
-	 *  direct-slide on non-snapshot routes. */
+	/** When true, the executor should overlay the cached snippet
+	 *  during the slide. False for chip-exit and for direct-slide on
+	 *  non-snapshot routes. */
 	readonly useDeepPreview: boolean;
 }
 

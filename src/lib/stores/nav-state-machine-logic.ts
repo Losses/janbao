@@ -5,17 +5,17 @@
  * Per `docs/DV20-Plan.md` §2 Layer 1 + §6: owns the macro state of a
  * navigation transition and the page lifecycle. Macro phases:
  * `at-rest`, `intent`, `resolving`, `transitioning` (carrying the
- * active resolver + sub-phase), `landing`. The Cycle 3 reducer models
- * the interruption (a new intent arriving
- * mid-transition; §5); popstate-as-interruption and
- * failed-preload-as-interruption are Cycle 5 additions, as is the
- * SvelteKit interop wiring (§9).
+ * active resolver + sub-phase), `landing`. The reducer models the
+ * interruption (a new intent arriving mid-transition; §5). The
+ * orchestrator's SvelteKit interop wiring (§9) surfaces
+ * popstate-as-interruption and failed-preload-as-interruption events
+ * into the reducer.
  *
  * This module is the reducer; `nav-state-machine.svelte.ts` is the
  * thin `$state` wrapper that delegates every transition here. The
- * split mirrors Cycle 2's `page-cache-logic.ts` / `page-cache.svelte.ts`
- * so this file is unit-testable under `bun:test` with no Svelte runes
- * loader.
+ * split mirrors the `page-cache-logic.ts` / `page-cache.svelte.ts`
+ * pattern so this file is unit-testable under `bun:test` with no
+ * Svelte runes loader.
  *
  * The reducer is TOTAL: every (state, event) pair has a defined
  * result. Interruption cancels the active commit and re-enters
@@ -41,7 +41,7 @@ export type AtRestOn = 'tab' | 'deep' | 'search';
 export type TransitionSub = 'dragging' | 'committing' | 'cancelling' | 'scrubbing';
 
 /** Macro phase kind. Per §2/§6: at-rest, intent (classified, plan not
- *  locked), resolving (reserved for Cycle 5 async resolution),
+ *  locked), resolving (reserved for async resolution),
  *  transitioning (animation in flight), landing. */
 export type MacroPhaseKind = 'at-rest' | 'intent' | 'resolving' | 'transitioning' | 'landing';
 
@@ -352,9 +352,9 @@ export function isInFlight(state: OrchestratorState): boolean {
 }
 
 /** Convenience: is the active transition a commit (released past the
- *  threshold)? A Cycle-3-unused predicate: the wrapper's `onLand`
- *  schedules the reset microtask unconditionally without consulting
- *  this. Cycle 5 may use it to gate post-commit landing. */
+ *  threshold)? Not consulted by the wrapper's `onLand`, which
+ *  schedules the reset microtask unconditionally. Exposed for callers
+ *  that need to gate behaviour on the committing sub-phase. */
 export function isCommitting(state: OrchestratorState): boolean {
 	return state.macro.kind === 'transitioning' && state.macro.sub === 'committing';
 }

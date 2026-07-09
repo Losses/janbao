@@ -4,7 +4,7 @@
  * `nav-executor.svelte.ts` owns the rAF loop and the `$state` record;
  * it delegates every per-frame decision to this module so the
  * integrator + per-frame math run under `bun:test` with no Svelte
- * runes loader (mirroring the Cycle 2/3 split -
+ * runes loader (mirroring the pure-logic / reactive-shell split -
  * `bun-test-no-runes-loader` memory).
  *
  * Per `docs/DV20-Plan.md` §5 + the C04 spec: a single rAF loop driven

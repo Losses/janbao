@@ -1,22 +1,19 @@
 // src/lib/utils/nav-dom-driver.ts
 /**
- * The DOM-driver interface for the Layer 5 executor (Cycle 4). The
- * executor (`nav-executor-logic.ts` + `nav-executor.svelte.ts`)
- * computes a per-frame visual record and hands it to a driver; the
- * driver is the only component that touches the DOM.
+ * The DOM-driver interface for the Layer 5 executor. The executor
+ * (`nav-executor-logic.ts` + `nav-executor.svelte.ts`) computes a
+ * per-frame visual record and hands it to a driver; the driver is the
+ * only component that touches the DOM.
  *
  * Per `docs/DV20-Plan.md` §5 + §13.5: the executor publishes
- * authoritative state. There is NO driver method to read the DOM
- * back. The executor tracks its own `(progress, liveOffset)` and the
- * driver is write-only (plus a `prefersReducedMotion()` query for the
+ * authoritative state. There is NO driver method to read the DOM back.
+ * The executor tracks its own `(progress, liveOffset)` and the driver
+ * is write-only (plus a `prefersReducedMotion()` query for the
  * reduced-motion snap, which is a media-query read, not a read of the
  * gesture surface's own state).
  *
- * In Cycle 4 shadow mode the only implementation is `MockNavDomDriver`
- * (exercised by the unit suite for `nav-executor-logic.ts`). A real
- * driver that proxies through to the live track / FAB / Header
- * elements is Cycle 5; it is not built here because the cutover is
- * Cycle 5's scope.
+ * Implementations: `MockNavDomDriver` (unit tests) and
+ * `LiveNavDomDriver` (production, constructed by the orchestrator).
  */
 
 /** The page-track write. `translateX` is the CSS pixel translate applied
@@ -56,8 +53,8 @@ export interface NavVisualWrite {
  *  - `MockNavDomDriver` (this file): records every write so the unit
  *    suite can assert the per-frame sequence; `prefersReducedMotion`
  *    is configurable per-test.
- *  - Cycle 5 will add a real driver that proxies through to the live
- *    track / FAB / Header elements. It is not built in Cycle 4.
+ *  - `LiveNavDomDriver` (`nav-dom-driver-live.ts`): proxies through to
+ *    the live track / FAB / Header elements.
  *
  *  The driver does NOT expose a read-back method. The executor holds
  *  the authoritative `(progress, liveOffset)` in its own state record;
@@ -71,7 +68,7 @@ export interface NavDomDriver {
 	/** Whether `matchMedia('(prefers-reduced-motion: reduce)')` matches.
 	 *  Queried once at commit start by the executor; the result
 	 *  selects snap (true) vs momentum integration (false). The mock
-	 *  returns a configurable value; the real driver (Cycle 5) reads
+	 *  returns a configurable value; `LiveNavDomDriver` reads
 	 *  the live media query. */
 	prefersReducedMotion(): boolean;
 }
@@ -107,8 +104,8 @@ export class MockNavDomDriver implements NavDomDriver {
 	/** Flip the reduced-motion flag mid-test. The mock-driver suite
 	 *  uses this to assert the flag flips; the executor-logic suite
 	 *  instead constructs a separate driver per test with the flag
-	 *  preset (no test flips the flag mid-run). Cycle 5's real-DOM
-	 *  driver will read the live media query instead. */
+	 *  preset (no test flips the flag mid-run). `LiveNavDomDriver` reads
+	 *  the live media query instead. */
 	setReducedMotion(value: boolean): void {
 		this.#reducedMotion = value;
 	}

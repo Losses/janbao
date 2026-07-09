@@ -229,8 +229,7 @@ export function resolveDirection(deltaX: number, decideThresholdPx: number): Int
  *   - `tap` / `goto` / `popstate` / `hashchange`: a no-op when the
  *      event carries no target; otherwise produces a target intent
  *      with `micro: 'committed'` and `target: pathname`, which the
- *      orchestrator will resolve into a (from, to) pair when the
- *      pipeline is wired (Cycle 5).
+ *      orchestrator resolves into a (from, to) pair.
  */
 export function classify(
 	state: IntentState,

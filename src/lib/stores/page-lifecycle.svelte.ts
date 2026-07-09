@@ -1,30 +1,21 @@
 // src/lib/stores/page-lifecycle.svelte.ts
 /**
  * Reactive shell around the pure reducer in
- * `src/lib/utils/page-lifecycle-logic.ts`. Per `docs/DV20-Plan.md` §8
- * + the C05a spec: owns the four-phase page lifecycle contract
- * (`mount` / `activate` / `deactivate` / `unmount`) for a single
- * layout that mounts a gesture surface, registers html-singleton
- * teardowns (so `unmount` is the single SSR-safe teardown path), and
- * exposes the current phase reactively. In the integrated pipeline
- * consumers read that phase in a `$derived`; in 5b1
- * the controller is not constructed (no layout wires it), so no
- * consumer reads it.
+ * `src/lib/utils/page-lifecycle-logic.ts`. Per `docs/DV20-Plan.md` §8:
+ * owns the four-phase page lifecycle contract (`mount` / `activate` /
+ * `deactivate` / `unmount`) for a single layout that mounts a gesture
+ * surface, registers html-singleton teardowns (so `unmount` is the
+ * single SSR-safe teardown path), and exposes the current phase
+ * reactively.
  *
  * The shell is a thin `$state` wrapper: every transition delegates to
- * the pure reducer so the totality (every transition defined; out-of-
- * sequence calls are no-ops) has unit coverage under `bun:test` even
- * though this file uses `$state` (per the `bun-test-no-runes-loader`
- * memory the runes loader is unavailable there, mirroring the
- * Cycle 2/3/4 split).
+ * the pure reducer so the totality (every transition defined;
+ * out-of-sequence calls are no-ops) has unit coverage under `bun:test`
+ * even though this file uses `$state`.
  *
- * In 5b1 no Svelte component constructs this
- * controller and no lifecycle-adjacent store registers a teardown;
- * the unit suite covers the pure half directly. the orchestrator wires this
- * controller into the gesture components and migrates the
- * lifecycle-adjacent stores (`viewport-lock`, `scroll-chrome`,
- * `active-gesture-track`) to register their html-singleton releases
- * via `registerTeardown`.
+ * The orchestrator (5b1) constructs this controller and calls
+ * `mount()` / `activate()` / `deactivate()` / `unmount()` from the
+ * host's `onMount` / `onDestroy`.
  */
 
 import { browser } from '$app/environment';
@@ -46,22 +37,21 @@ import type { VoidHandler } from '$lib/types/handlers';
  *  safe to wire to Svelte's `onDestroy` in 5b without re-introducing
  *  the SSR trap (memory: `svelte-ondestroy-runs-in-ssr`).
  *
- *  In 5b1 no Svelte component constructs this; the
- *  unit suite covers the pure `reduce` and `planUnmount` directly. */
+ *  The orchestrator constructs this; the unit suite covers the pure
+ *  `reduce` and `planUnmount` directly. */
 export class PageLifecycleController {
 	#state = $state<PageLifecycleState>(initialLifecycleState());
 	/** Teardowns registered by the lifecycle-adjacent stores. Each is
 	 *  typically a release callback for an html-singleton refcount
-	 *  (e.g. `() => htmlSingleton.release()`). In 5b1
-	 *  this list stays empty (no store registers); the unit suite
-	 *  exercises `planUnmount` directly. */
+	 *  (e.g. `() => htmlSingleton.release()`). In 5b1 no store
+	 *  registers a teardown here (the host releases html-singletons
+	 *  inline in `onDestroy`); the unit suite exercises `planUnmount`
+	 *  directly. */
 	#teardowns: VoidHandler[] = [];
 	/** The `browser` flag from `$app/environment`, captured at
 	 *  construction. Injectable so a future integration test can drive
-	 *  the SSR branch; the unit suite covers the pure `planUnmount`
-	 *  instead. In 5b1 no caller constructs the
-	 *  controller, so this field is exercised by nothing; the integrated
-	 *  pipeline (Cycle 5b) will exercise it. */
+	 *  the SSR branch. The orchestrator passes `browser` at
+	 *  construction. */
 	readonly #isBrowser: boolean;
 
 	constructor(isBrowser: boolean = browser) {
@@ -117,10 +107,8 @@ export class PageLifecycleController {
 	 *  the browser. The teardown is gated on the `browser` flag, so a
 	 *  teardown registered here is SSR-safe without a per-call
 	 *  `if (!browser)` guard (memory: `svelte-ondestroy-runs-in-ssr`).
-	 *  In Cycle 5b the lifecycle-adjacent stores (`viewport-lock`,
-	 *  `scroll-chrome`, `active-gesture-track`) will each register
-	 *  their html-singleton release here; in 5b1 no
-	 *  caller registers. */
+	 *  In 5b1 no caller registers (the host releases html-singletons
+	 *  inline); a future consolidation could route them here. */
 	registerTeardown(fn: VoidHandler): void {
 		this.#teardowns.push(fn);
 	}
