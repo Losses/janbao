@@ -76,12 +76,13 @@ import {
 import type { RouteTag } from '$lib/utils/route-data';
 import type { TransitionPlan } from '$lib/utils/nav-resolvers';
 
-/** Commit duration for the pilot's tab-click exit. Matches the
- *  non-pilot routes' CSS `transition-transform duration-200` duration
- *  (`TRACK_TRANSITION_MS`); the easing is the executor's
+/** Commit duration for the pilot's tab-click exit and forward-enter.
+ *  Matches the non-pilot routes' CSS `transition-transform duration-200`
+ *  duration (`TRACK_TRANSITION_MS`); the easing is the executor's
  *  constant-deceleration `s(u)=2u-u²`, not the CSS timing function, so
- *  the slide is the same length under the unified all-rAF ease. Gesture
- *  commits use the velocity-matched solver instead. */
+ *  the slide is the same length under the unified all-rAF ease. Used by
+ *  `onSvelteKitBeforeNavigate` (tab-click) and `playEnterAnimation`.
+ *  Gesture commits use the velocity-matched solver instead. */
 const TAB_CLICK_COMMIT_MS = TRACK_TRANSITION_MS;
 
 /** The host's track / FAB / Header element refs as supplied to the
@@ -289,9 +290,11 @@ export class NavPipelineOrchestrator {
 	 *  underlying write, which left the left section in the DOM for the
 	 *  first ~3 rAF ticks of a chip-exit slide. */
 	#chipExitState = $state(false);
-	/** The chip-exit phase: 'pending' (preload in flight, chip shows +
-	 *  pulses) or 'sliding' (preload resolved, the slide plays, chip
-	 *  fades), or null (no chip-exit). Drives the host's overlay. */
+	/** The chip-exit phase: 'pending' (chip shows, pulsing) or 'sliding'
+	 *  (the slide plays, chip fades), or null (no chip-exit). For the
+	 *  tab-click path: 'pending' on nav-cancel, 'sliding' when
+	 *  preloadData resolves. For the gesture path: 'pending' on gesture
+	 *  start, 'sliding' at finger release. Drives the host's overlay. */
 	#chipExitPhase = $state<'pending' | 'sliding' | null>(null);
 	/** The raw drag-fraction published at the moment a commit / cancel
 	 *  began. The commit-phase publication lerps from this value to the
@@ -392,7 +395,10 @@ export class NavPipelineOrchestrator {
 		// gesture-start width; mutating viewportWidth mid-drag would
 		// desync the rawDragFraction (new width) from the locked plan
 		// (old width). The next transition picks up the new width.
-		if (this.#pendingGesture !== null || this.#pendingTabExit !== null) return;
+		// Also guards the forward-enter animation (#isEnterAnimation drives
+		// the executor rAF without setting either pending slot).
+		if (this.#pendingGesture !== null || this.#pendingTabExit !== null || this.#isEnterAnimation)
+			return;
 		this.#mountInputs = {
 			...current,
 			viewportWidth,
@@ -583,6 +589,7 @@ export class NavPipelineOrchestrator {
 					// Capture the live raw at release so the commit publication
 					// lerps continuously from it (#onExecutorTick).
 					this.#commitStartRaw = this.#publication.progress;
+					if (this.#publication.chipExit) this.#chipExitPhase = 'sliding';
 					executor.onCommit(intent.releaseVelocity);
 				} else if (executor.state.progress > 0) {
 					// Cancel with the track off-rest: animate it back.
@@ -956,7 +963,11 @@ export class NavPipelineOrchestrator {
 			// GPL shows the chip (pending phase, pulsing), preloads, THEN
 			// slides (sliding phase, chip fades). The chip is visible
 			// during the preload wait; the slide starts on resolve.
+			// Stop the in-flight commit rAF so the executor's progress
+			// does not advance during the preload wait (startProgress was
+			// captured above and must match the visual at slide start).
 			this.#chipExitPhase = 'pending';
+			this.#executor?.stop();
 			void preloadData(to)
 				.catch(() => {})
 				.then(beginSlide);

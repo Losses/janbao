@@ -1307,8 +1307,24 @@ reversed`; onCancel overrides progressDirection to 1. Added partial-
   (re-grab e2e missing FAB assertion) OPEN. The "search for similar
   bugs" prompt instruction working. 80 e2e green. Detailed in
   `docs/RV20-C05b1-Audit-40.md`.
+- **Round 41 (architect, 2-auditor): 0/2 PASS.** Both PASS-WITH-
+  CONCERNS. Fixed: A-C2 (executor.stop() before preloadData in chip-
+  exit, halting the commit rAF so startProgress doesn't go stale); B-C1
+  (gesture chipExitPhase transitions to 'sliding' on commit); A-C1
+  (TAB_CLICK_COMMIT_MS docstring now mentions playEnterAnimation). B-C2
+  (updateViewport stale after one-shot resize) OPEN. Detailed in
+  `docs/RV20-C05b1-Audit-41.md`.
+- **Round 42 (architect, 2-auditor): 0/2 PASS.** A FAIL (2); B FAIL (2).
+  Fixed: A-C1 updateViewport guard now includes #isEnterAnimation. A-C2
+  #chipExitPhase docstring reworded. B-C1 (centre off-screen during
+  chip-exit) investigated 3 approaches; Svelte 5 spread doesn't reliably
+  remove data-\* attributes; reverted to original {#if !chipExit};
+  documented as masked by overlay during 'sliding'; 'pending'
+  imperceptible for cached targets. B-C2 (no movement during preload)
+  documented as intentional divergence (stop() prevents worse bugs).
+  80 e2e green. Detailed in `docs/RV20-C05b1-Audit-42.md`.
 
-Consecutive pass votes: **0** (R40 carried concerns; R41 audits post-fix).
+Consecutive pass votes: **0** (R42 carried concerns; R43 audits post-fix).
 
 ## Coverage bullets (round-independent)
 
