@@ -9,10 +9,12 @@ export const PILL_EXPANSION_THRESHOLD = 0.5; // 50% drag distance to begin activ
 // at GesturePageLayout.svelte:275; it does not import this constant.
 export const SWIPE_COMMIT = 60;
 // OS edge-swipe collision guard (px margin matching modern iOS/Android
-// bezel-less native triggers). `detectSwipe`, the 5b1 pointer-bridge
-// capture listener, and the classifier's `isEdgeReserve` all use this
-// with strict `<` / `>` so they agree at the boundary (an inclusive
-// `<=` would kill a gesture `detectSwipe` claims at x = EDGE_DEAD_ZONE).
+// bezel-less native triggers). `detectSwipe` and the 5b1 pointer-bridge
+// capture listener import this; the classifier's `isEdgeReserve` uses
+// `DEFAULT_EDGE_DEAD_ZONE` ({left:40,right:40}) defined in
+// `nav-intent.ts` - same value, separately defined. All three agree at
+// the boundary with strict `<` / `>` (an inclusive `<=` would kill a
+// gesture `detectSwipe` claims at x = EDGE_DEAD_ZONE).
 export const EDGE_DEAD_ZONE = 40;
 
 // Deep-title crossfade (Header.svelte unified title state machine). The vertical

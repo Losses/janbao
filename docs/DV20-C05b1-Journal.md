@@ -1285,8 +1285,14 @@ reversed`; onCancel overrides progressDirection to 1. Added partial-
     page-lifecycle-logic.ts + 3 test files cleaned; HEADER_MORPH_THRESHOLD
     single-sourced; release-gate comment corrected. 80 e2e green.
     Detailed in `docs/RV20-C05b1-Audit-37.md`.
+- **Round 38 (architect, 2-auditor): 0/2 PASS.** Both PASS-WITH-
+  CONCERNS. Fixed: A-C1 FAB coverProgress jump on re-grab (rawStart
+  captured + published as rawStart + rawDrag, same pattern as the track's
+  startProgress). A-C2 CommitInput docstring. B-C1 EDGE_DEAD_ZONE
+  overclaim. B-C2 "Cycle-5" stale ref. Detailed in
+  `docs/RV20-C05b1-Audit-38.md`.
 
-Consecutive pass votes: **0** (R37 carried concerns; R38 audits post-fix).
+Consecutive pass votes: **0** (R38 carried concerns; R39 audits post-fix).
 
 ## Coverage bullets (round-independent)
 

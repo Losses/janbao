@@ -107,6 +107,10 @@ export type PipelineElementResolver = () => PipelineElementRefs;
 interface PendingGestureTransition {
 	readonly to: string;
 	readonly startProgress: number;
+	/** The raw drag fraction at gesture start (the commit's last
+	 *  published raw for a re-grab, 0 for from-rest). The live-drag's
+	 *  coverProgress starts from here so the FAB doesn't jump. */
+	readonly rawStart: number;
 }
 
 /** A pending tab-click transition (any pilot -> tab-root nav the
@@ -536,10 +540,12 @@ export class NavPipelineOrchestrator {
 		// transition. The FAB / Header consumers see the RAW drag fraction
 		// (their consumer-side thresholds apply separately).
 		if (isRightDrag && this.#pendingGesture !== null && this.#publication.plan !== null) {
-			const raw = this.#rawDragFraction(intent, inputs);
+			const rawDrag = this.#rawDragFraction(intent, inputs);
 			const startProgress = this.#pendingGesture.startProgress;
-			const absorbed = this.#thresholdAbsorbedProgress(raw);
+			const rawStart = this.#pendingGesture.rawStart;
+			const absorbed = this.#thresholdAbsorbedProgress(rawDrag);
 			const trackProgress = startProgress + absorbed * (1 - startProgress);
+			const raw = Math.max(0, Math.min(1, rawStart + rawDrag));
 			executor.onDragMove(trackProgress, intent.offset);
 			this.#publish(raw);
 		}
@@ -691,7 +697,8 @@ export class NavPipelineOrchestrator {
 		// in-flight forward-enter or commit hands off with no jump. The
 		// geometry conversion is in #startProgressFromCurrentVisual.
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
-		this.#pendingGesture = { to, startProgress };
+		const rawStart = this.#publication.progress;
+		this.#pendingGesture = { to, startProgress, rawStart };
 		this.#executor?.onDragStart(plan, startProgress, intent.offset);
 	}
 

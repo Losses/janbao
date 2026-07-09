@@ -157,8 +157,9 @@ export interface CommitInput {
 	 *  lands on TO) vs cancel (1, snaps back to FROM); its
 	 *  `pageTrack.distance` normalizes the velocity to progress/ms. */
 	readonly plan: TransitionPlan;
-	/** Whether `prefers-reduced-motion: reduce` is active. The
-	 *  reactive shell reads this from the driver and passes it here. */
+	/** Whether `prefers-reduced-motion: reduce` is active. Derived
+	 *  from `plan.commitPhysics` (the resolver bakes the reduced-motion
+	 *  state at gesture start via `commitPhysicsFor`). */
 	readonly reducedMotion: boolean;
 	/** Commit-start timestamp (ms, caller's clock). */
 	readonly now: number;
@@ -300,7 +301,7 @@ export interface FrameSample {
 	readonly state: ExecutorState;
 	/** Whether the commit has settled. When true the shell stops
 	 *  rescheduling the rAF. The shell does NOT emit `onLand` itself;
-	 *  the Cycle-5 orchestrator observes `done` and emits the
+	 *  the orchestrator observes `done` and emits the
 	 *  post-commit land. */
 	readonly done: boolean;
 }
