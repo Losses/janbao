@@ -1291,8 +1291,24 @@ reversed`; onCancel overrides progressDirection to 1. Added partial-
   startProgress). A-C2 CommitInput docstring. B-C1 EDGE_DEAD_ZONE
   overclaim. B-C2 "Cycle-5" stale ref. Detailed in
   `docs/RV20-C05b1-Audit-38.md`.
+- **Round 39 (architect, 2-auditor): A FAIL (3), B rate-limited.**
+  Fixed: A-C1 the R38 rawStart fix was broken (captured after the
+  publication reset -> always 0); moved the capture BEFORE the reset
+  (mirrors commitStartRaw). The auditor found this via the new "search
+  for similar bugs" prompt instruction (compared the gesture path's
+  capture ordering to the tab-click path's). OPEN: A-C2 viewport resize
+  mid-gesture desync (edge case); A-C3 re-grab e2e doesn't sample FAB.
+  Detailed in `docs/RV20-C05b1-Audit-39.md`.
+- **Round 40 (architect, 2-auditor): 0/2 PASS.** A FAIL (3); B PASS-
+  WITH-CONCERNS (1). Fixed: A-C1 (5 under-describing settle/tick
+  docstrings - onCommit fires both synchronously AND from the rAF);
+  A-C2 (updateViewport guard: no mutation during in-flight transition);
+  B-C1 (gesture chip-exit now sets chipExitPhase='pending'). A-C3
+  (re-grab e2e missing FAB assertion) OPEN. The "search for similar
+  bugs" prompt instruction working. 80 e2e green. Detailed in
+  `docs/RV20-C05b1-Audit-40.md`.
 
-Consecutive pass votes: **0** (R38 carried concerns; R39 audits post-fix).
+Consecutive pass votes: **0** (R40 carried concerns; R41 audits post-fix).
 
 ## Coverage bullets (round-independent)
 

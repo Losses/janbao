@@ -57,16 +57,19 @@ import type { TransitionPlan } from '$lib/utils/nav-resolvers';
  *  executor and the intent classifier. */
 export type NavExecutorClockFn = () => number;
 
-/** Called once when a commit rAF reaches its target. The Cycle 5b1
- *  orchestrator registers a callback here to dispatch the SvelteKit
- *  navigation on a commit (or to land on FROM on a cancel). The callback
- *  receives the plan's `progressDirection` (0 = commit, lands on TO;
- *  1 = cancel, snaps back to FROM) so the orchestrator can dispatch
- *  the right post-settle action. */
+/** Called once when a commit settles: synchronously from `onCommit`'s
+ *  reduced-motion snap path (no rAF scheduled), or from the rAF when
+ *  the integration reaches its target. The orchestrator registers a
+ *  callback here to dispatch the SvelteKit navigation on a commit (or
+ *  to land on FROM on a cancel). The callback receives the plan's
+ *  `progressDirection` (0 = commit, lands on TO; 1 = cancel, snaps
+ *  back to FROM) so the orchestrator can dispatch the right post-settle
+ *  action. */
 export type NavExecutorSettleFn = (progressDirection: 0 | 1) => void;
 
-/** Per-commit-frame callback. The executor fires this after each
- *  commit rAF sample so the orchestrator can publish progress to
+/** Per-commit-frame callback. The executor fires this from `onCommit`
+ *  (the synchronous first commit frame) and after each subsequent commit
+ *  rAF sample so the orchestrator can publish progress to
  *  downstream consumers (the pager store, which the FAB / Header /
  *  fractionalIndex layers read). Without this callback the
  *  orchestrator's publication would freeze during the commit slide
@@ -82,13 +85,15 @@ export interface NavExecutorOptions {
 	readonly driver: NavDomDriver;
 	/** Optional clock override for deterministic tests. */
 	readonly now?: NavExecutorClockFn;
-	/** Optional settle callback invoked once when a commit rAF reaches
-	 *  its target. The 5b1 orchestrator wires this to dispatch the
-	 *  post-commit SvelteKit navigation. */
+	/** Optional settle callback invoked once when a commit settles
+	 *  (synchronously for the snap path, or from the rAF). The
+	 *  orchestrator wires this to dispatch the post-commit SvelteKit
+	 *  navigation. */
 	readonly onSettle?: NavExecutorSettleFn;
-	/** Optional per-frame callback fired after each commit rAF sample
-	 *  so the orchestrator can publish progress to its downstream
-	 *  consumers during the commit slide. */
+	/** Optional per-frame callback fired from `onCommit` (first frame)
+	 *  and after each subsequent commit rAF sample so the orchestrator
+	 *  can publish progress to its downstream consumers during the
+	 *  commit slide. */
 	readonly onTick?: NavExecutorTickFn;
 }
 

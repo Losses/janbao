@@ -387,6 +387,12 @@ export class NavPipelineOrchestrator {
 	updateViewport(viewportWidth: number, restingTranslate: number): void {
 		const current = this.#mountInputs;
 		if (current === null) return;
+		// Do not mutate the viewport during an in-flight transition: the
+		// locked plan's geometry (distance, restingTranslate) uses the
+		// gesture-start width; mutating viewportWidth mid-drag would
+		// desync the rawDragFraction (new width) from the locked plan
+		// (old width). The next transition picks up the new width.
+		if (this.#pendingGesture !== null || this.#pendingTabExit !== null) return;
 		this.#mountInputs = {
 			...current,
 			viewportWidth,
@@ -681,6 +687,11 @@ export class NavPipelineOrchestrator {
 		if (chipExit) {
 			void preloadData(to).catch(() => {});
 		}
+		// Capture the in-flight raw BEFORE resetting the publication so a
+		// re-grab mid-commit continues coverProgress from the commit's last
+		// raw (not from 0, which would reverse the FAB). Mirrors the
+		// tab-click path's commitStartRaw capture.
+		const rawStart = this.#publication.progress;
 		this.#stateMachine.onIntent(intent, from, fromTag);
 		this.#stateMachine.onResolved(plan, from, to, fromTag, toTag, direction);
 		this.#publication = {
@@ -693,11 +704,11 @@ export class NavPipelineOrchestrator {
 			chipExit
 		};
 		this.#chipExitState = chipExit;
+		if (chipExit) this.#chipExitPhase = 'pending';
 		// Start the gesture at the track's current visual position so an
 		// in-flight forward-enter or commit hands off with no jump. The
 		// geometry conversion is in #startProgressFromCurrentVisual.
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
-		const rawStart = this.#publication.progress;
 		this.#pendingGesture = { to, startProgress, rawStart };
 		this.#executor?.onDragStart(plan, startProgress, intent.offset);
 	}
@@ -747,7 +758,8 @@ export class NavPipelineOrchestrator {
 	// -----------------------------------------------------------------------
 	// Settle: dispatch the navigation on a commit; land on a cancel.
 
-	/** Per-frame callback fired by the executor after each commit rAF
+	/** Per-frame callback fired by the executor from `onCommit` (first
+	 *  frame) and after each subsequent commit rAF sample. Publishes a
 	 *  sample. Publishes a raw drag-fraction that is continuous with the
 	 *  live-drag publication: it lerps from `#commitStartRaw` (the raw
 	 *  captured at commit start) to the target raw (1 for a commit, 0
