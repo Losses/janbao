@@ -1547,9 +1547,21 @@ isMobile && !chipExit}` left-section guard stays. B-C2 (no movement
   fab:true), the coordinator "chip-exit with preload" docstring, +
   documented the same-route-param-change edge. Gate: check 0/0, lint EXIT=0,
   unit 436/0, e2e 81 passed. Detailed in `docs/RV20-C05b1-Audit-49.md`.
+- **Round 50 (architect, 2-auditor, clean prompt + search-similar): 0/2
+  PASS.** A PASS-WITH-CONCERNS (3: C1/C2 MED, C3 low-med); B
+  PASS-WITH-CONCERNS (5 low). A found a real FAB coverProgress
+  discontinuity bug class (rawStart/commitStartRaw captured
+  publication.progress without checking the coverProgress-forcing
+  conditions #isEnterAnimation / publication.chipExit; 3 sibling sites
+  the R44 fix missed). Fixed: the gesture path captures
+  coverProgressForcedToZero before clearing #isEnterAnimation; the
+  tab-click path checks both conditions. B's lows (dead coordinator,
+  live-drag drop, skeleton unreachable, hardcoded targets, stale toTag)
+  documented. Gate: check 0/0, lint EXIT=0, unit 436/0, e2e 81 passed.
+  Detailed in `docs/RV20-C05b1-Audit-50.md`.
 
-Consecutive pass votes: **0** (R49 A carried low concerns; all fixed or
-documented; R50 audits the post-fix state).
+Consecutive pass votes: **0** (R50 A carried the MED FAB bug; fixed; R51
+audits the post-fix state).
 
 ## Coverage bullets (round-independent)
 

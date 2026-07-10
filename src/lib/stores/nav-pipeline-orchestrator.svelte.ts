@@ -686,7 +686,12 @@ export class NavPipelineOrchestrator {
 		}
 		// A gesture now owns the publication: clear the enter flag so
 		// coverProgress follows the live drag fraction (it is forced to
-		// 0 only while #isEnterAnimation).
+		// 0 only while #isEnterAnimation). Before clearing, capture
+		// whether coverProgress was being forced to 0 (forward-enter or
+		// chip-exit); if so, the gesture's rawStart must be 0 (matching
+		// the coverProgress the FAB was showing), not the publication's
+		// lerped progress - otherwise the FAB jumps at the interrupt.
+		const coverProgressForcedToZero = this.#isEnterAnimation || this.#publication.chipExit;
 		this.#isEnterAnimation = false;
 		this.#liveDragging = true;
 		const from = inputs.fromPathname;
@@ -736,7 +741,7 @@ export class NavPipelineOrchestrator {
 		// re-grab mid-commit continues coverProgress from the commit's last
 		// raw (not from 0, which would reverse the FAB). Mirrors the
 		// tab-click path's commitStartRaw capture.
-		const rawStart = this.#publication.progress;
+		const rawStart = coverProgressForcedToZero ? 0 : this.#publication.progress;
 		this.#stateMachine.onIntent(intent, from, fromTag);
 		this.#stateMachine.onResolved(plan, from, to, fromTag, toTag, direction);
 		this.#publication = {
@@ -981,7 +986,8 @@ export class NavPipelineOrchestrator {
 		// #isEnterAnimation), so the commit-start raw is 0 then (not the
 		// enter's eased progress) - otherwise the FAB scale jumps at the
 		// interrupt. Read #isEnterAnimation before clearing it below.
-		this.#commitStartRaw = this.#isEnterAnimation ? 0 : this.#publication.progress;
+		this.#commitStartRaw =
+			this.#isEnterAnimation || this.#publication.chipExit ? 0 : this.#publication.progress;
 		this.#isEnterAnimation = false;
 		this.#publication = {
 			plan,
