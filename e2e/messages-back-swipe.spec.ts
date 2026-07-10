@@ -571,6 +571,17 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 			last - first,
 			`forward enter must slide leftward, not rightward (first=${first}, last=${last})`
 		).toBeLessThan(-50);
+
+		// The forward-enter forces coverProgress=0 (the FAB stays hidden
+		// throughout, matching GPL's centerTab branch). Verify the resting
+		// FAB atom is at scale ~0.
+		const fabScale = await page
+			.locator('[data-testid="fab"]')
+			.evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a)
+			.catch(() => null);
+		if (fabScale !== null) {
+			expect(fabScale, 'forward-enter FAB must stay hidden').toBeLessThan(0.1);
+		}
 	});
 
 	test('back-swipe started during forward-enter interrupts cleanly and commits', async ({ page, context }) => {

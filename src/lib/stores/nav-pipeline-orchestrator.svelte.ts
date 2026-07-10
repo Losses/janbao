@@ -989,13 +989,14 @@ export class NavPipelineOrchestrator {
 	}
 
 	/** Called from `+layout.svelte`'s `afterNavigate` for pilot-route
-	 *  sources / destinations. Clears the orchestrator's state (the
-	 *  transition's nav landed). For the orchestrator's own dispatch
-	 *  (chip-exit / tab-exit / back-swipe settle -> goto) this completes
-	 *  the transition. A same-route param change (`/messages/1` ->
-	 *  `/messages/2`) racing an in-flight gesture would also land-at-rest
-	 *  here, aborting the gesture - an extremely unlikely edge (the user is
-	 *  touching the screen during a gesture, not triggering pagination). */
+	 *  sources / destinations. For a pilot-internal param navigation
+	 *  (`/messages/1` -> `/messages/2`) this lands at rest (the
+	 *  orchestrator declined ownership; the call is a no-op reset). For a
+	 *  navigation AWAY from the pilot (chip-exit / tab-exit / gesture
+	 *  settle), the host's `onDestroy` runs before `afterNavigate`
+	 *  (Svelte 5 lifecycle: new route mounts -> old `onDestroy` ->
+	 *  `afterNavigate`), so the singleton is already null and this call is
+	 *  skipped; the cleanup is handled by `onDestroy` -> `unmount()`. */
 	onSvelteKitAfterNavigate(): void {
 		this.#landAtRest();
 	}

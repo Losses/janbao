@@ -1590,9 +1590,27 @@ isMobile && !chipExit}` left-section guard stays. B-C2 (no movement
   Lows documented (seed race, hardcoded targets). Gate: check 0/0, lint
   EXIT=0, unit 436/0, e2e 81 passed. Detailed in
   `docs/RV20-C05b1-Audit-53.md`.
+- **Round 54 (architect, 2-auditor, clean prompt NO Journal + search-
+  similar): A PASS-WITH-CONCERNS (1 MED + 3 low); B PASS (0 concern).**
+  B returned the first clean PASS. The MED (TAB_CLICK_COMMIT_MS=200 vs
+  §13.3) was a spec-interpretation split resolved by the owner ("200
+  挺好的"). Fixed C1 (skeleton comment accuracy). C3/C4 documented.
+  Gate: check 0/0, lint EXIT=0, unit 436/0, e2e 81 passed. Detailed in
+  `docs/RV20-C05b1-Audit-54.md`.
+- **Round 55 (architect, 2-auditor): A PWC (7 low); B PWC (3 low). Zero
+  MED/HIGH.** Fixed: fromPathname $effect gated on
+  `!publication.inFlight` (prevents teardown corruption),
+  onSvelteKitAfterNavigate docstring corrected. Lows documented. Gate:
+  check 0/0, lint EXIT=0, unit 436/0, e2e 81 passed. Detailed in
+  `docs/RV20-C05b1-Audit-55.md`.
+- **Round 56 (architect, 2-auditor): A PASS (clean); B PWC (5 low).**
+  Zero MED/HIGH. A returned the third clean PASS. Fixed: forward-enter FAB
+  scale assertion + orchestratorMounted cleared in onDestroy. Lows
+  documented. Gate: check 0/0, lint EXIT=0, unit 436/0, e2e 81 passed.
+  Detailed in `docs/RV20-C05b1-Audit-56.md`.
 
-Consecutive pass votes: **0** (R53 carried low concerns; fixed; R54 audits
-with a revised prompt that removes all Journal references).
+Consecutive pass votes: **0** (R56 B carried low concerns; fixed; R57
+audits the post-fix state).
 
 ## Coverage bullets (round-independent)
 

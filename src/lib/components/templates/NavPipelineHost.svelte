@@ -185,7 +185,9 @@
 	// (#isPilotFrom matches the live pathname, not the stale mount one).
 	$effect(() => {
 		const pathname = page.url.pathname;
-		if (orchestratorMounted) orchestrator.updateFromPathname(pathname);
+		// Skip during an in-flight transition (the dispatch's URL change
+		// would corrupt fromPathname; the host unmounts before it matters).
+		if (orchestratorMounted && !publication.inFlight) orchestrator.updateFromPathname(pathname);
 	});
 
 	// Mount the orchestrator + acquire the viewport-lock + register
@@ -331,6 +333,7 @@
 		}
 		releaseNavPipelineOrchestrator(orchestrator);
 		orchestrator.unmount();
+		orchestratorMounted = false;
 	});
 
 	// The structural style: the track is `panelCount * 100%` wide and
