@@ -115,8 +115,9 @@ interface PendingGestureTransition {
 
 /** A pending tab-click transition (any pilot -> tab-root nav the
  *  orchestrator cancelled in `onSvelteKitBeforeNavigate`). Carries
- *  the deferred dispatch target so commit-settle can fire the
- *  SvelteKit `goto`. The chip-exit variant is tracked separately on
+ *  the deferred dispatch target (the FULL url: pathname + search) so
+ *  commit-settle can fire the SvelteKit `goto` on the exact URL the
+ *  tab-click targeted. The chip-exit variant is tracked separately on
  *  `#chipExitState` / `#publication.chipExit`, which the host reads. */
 interface PendingTabExit {
 	readonly target: string;
@@ -456,17 +457,23 @@ export class NavPipelineOrchestrator {
 		executor.onCommit(0, TAB_CLICK_COMMIT_MS);
 	}
 
-	/** Land an in-flight transition when the platform flips mobile -> desktop
-	 *  (called by the host's resize handler, NOT by a route-away unmount). A
-	 *  commit-slide in flight when the viewport crosses the desktop
-	 *  breakpoint still lands on its target - the same OUTCOME as GPL's
-	 *  pendingNav wall-clock cap, via a viewport-flip handler (not GPL's
-	 *  setTimeout-backed poll). A pre-commit live-drag (executor still in
-	 *  the 'live' phase) does NOT land - the user may still cancel. A
-	 *  route-away unmount (onDestroy) does not call this, so the user's
-	 *  fresh navigation wins. */
+	/** Land an in-flight COMMIT transition when the platform flips mobile ->
+	 *  desktop (called by the host's resize handler, NOT by a route-away
+	 *  unmount). A commit-slide (progressDirection=0) in flight when the
+	 *  viewport crosses the desktop breakpoint still lands on its target -
+	 *  the same OUTCOME as GPL's pendingNav wall-clock cap, via a viewport-
+	 *  flip handler (not GPL's setTimeout-backed poll). A pre-commit live-
+	 *  drag (executor still in the 'live' phase) and a cancel-slide
+	 *  (progressDirection=1) do NOT land - the user may still cancel, or
+	 *  already cancelled. A route-away unmount (onDestroy) does not call
+	 *  this, so the user's fresh navigation wins. */
 	recoverDesktopFlipNav(): void {
 		if (this.#executor?.state.phase !== 'committing') return;
+		// Only a commit (progressDirection=0) should land on its target;
+		// a cancel (progressDirection=1, delegated to onCommit via onCancel)
+		// snaps back to FROM - dispatching the back-target on a cancel would
+		// navigate the user to a destination they explicitly cancelled.
+		if (this.#executor?.activePlan?.progressDirection !== 0) return;
 		const target = this.#pendingTabExit?.target ?? this.#pendingGesture?.to;
 		if (target !== undefined && !this.#navDispatchInFlight) {
 			this.#dispatchNav(target);
@@ -902,15 +909,23 @@ export class NavPipelineOrchestrator {
 		if (inputs === null) return false;
 		const from = navigation.from?.url.pathname ?? null;
 		const to = navigation.to?.url.pathname ?? null;
+		// The search (?q=... etc) of the target. Kept separate from `to`
+		// (pathname) because the path-based checks below (isPilotFrom,
+		// isTabRootPath) need the bare pathname, while the deferred
+		// dispatch + re-entry match must carry the full URL.
+		const toSearch = navigation.to?.url.search ?? '';
 		// The orchestrator's own dispatch (goto / history.back /
 		// history.forward) re-entering beforeNavigate. Two checks: the
 		// in-flight flag (set at dispatch time) and a target match
 		// (catches the re-entry across timer / popstate ordering so
-		// the orchestrator never re-cancels its own nav).
+		// the orchestrator never re-cancels its own nav). The match is
+		// on the FULL target (pathname + search): #dispatchTarget carries
+		// the search a tab-click preserved, so goto('/?q=foo') re-enters
+		// with to='/' + toSearch='?q=foo' and matches.
 		if (this.#navDispatchInFlight) {
 			return false;
 		}
-		if (this.#dispatchTarget !== null && to === this.#dispatchTarget) {
+		if (this.#dispatchTarget !== null && to !== null && to + toSearch === this.#dispatchTarget) {
 			return false;
 		}
 		// Only own transitions FROM the pilot route (a tab-click exit or
@@ -954,7 +969,9 @@ export class NavPipelineOrchestrator {
 		const plan = this.#resolvePlan(inputs, intent, direction, toPathname, toTabIndex);
 		this.#pendingGesture = null;
 		this.#liveDragging = false;
-		this.#pendingTabExit = { target: to };
+		// The full URL (pathname + search) so a tab-click to e.g. /?q=foo
+		// dispatches to that exact URL, not the bare pathname.
+		this.#pendingTabExit = { target: to + toSearch };
 		this.#navDispatchInFlight = false;
 		this.#dispatchTarget = null;
 		navigation.cancel();
@@ -990,14 +1007,21 @@ export class NavPipelineOrchestrator {
 
 	/** Called from `+layout.svelte`'s `afterNavigate` for pilot-route
 	 *  sources / destinations. For a pilot-internal param navigation
-	 *  (`/messages/1` -> `/messages/2`) this lands at rest (the
-	 *  orchestrator declined ownership; the call is a no-op reset). For a
-	 *  navigation AWAY from the pilot (chip-exit / tab-exit / gesture
-	 *  settle), the host's `onDestroy` runs before `afterNavigate`
-	 *  (Svelte 5 lifecycle: new route mounts -> old `onDestroy` ->
-	 *  `afterNavigate`), so the singleton is already null and this call is
-	 *  skipped; the cleanup is handled by `onDestroy` -> `unmount()`. */
+	 *  (`/messages/1` -> `/messages/2`) or the initial arrival this is a
+	 *  no-op reset (the orchestrator is at rest). For a navigation AWAY
+	 *  from the pilot (chip-exit / tab-exit / gesture settle), the host's
+	 *  `onDestroy` runs before `afterNavigate` (Svelte 5 lifecycle: new
+	 *  route mounts -> old `onDestroy` -> `afterNavigate`), so the
+	 *  singleton is already null and this call is skipped; the cleanup is
+	 *  handled by `onDestroy` -> `unmount()`.
+	 *
+	 *  Guard: if a forward-enter (`playEnterAnimation`) is in flight, a
+	 *  param-nav landing inside its ~200ms window must NOT cancel it
+	 *  (matching GPL, whose CSS `transition-transform` keeps running
+	 *  through a param change). The enter settles on its own via
+	 *  `#onExecutorSettle` -> `#landAtRest` once the slide completes. */
 	onSvelteKitAfterNavigate(): void {
+		if (this.#isEnterAnimation) return;
 		this.#landAtRest();
 	}
 

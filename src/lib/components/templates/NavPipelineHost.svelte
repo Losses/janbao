@@ -75,6 +75,11 @@
 	const navStore = getNavigationStore();
 	const shouldEnter: boolean = (() => {
 		if (!isMobile) return false;
+		// Only play the enter animation on a FORWARD navigation (SPA nav
+		// from leftHref). A popstate-back (OS-back to the pilot after a
+		// pipeline-consumed nav) sets direction='backward' and must skip
+		// the slide-in (matching GPL's shouldAnimateEnter gate).
+		if (navStore.direction !== 'forward') return false;
 		const stack = navStore.activeStack;
 		if (stack.length < 2) return false;
 		return stack[stack.length - 2].pathname === leftHref;
@@ -400,11 +405,12 @@
 			>
 				<div class="gpl-card">
 					<!-- The chip-exit reveals the target's REAL panel from the
-					     eager-loaded root-layout data. The skeleton renders
-					     when the eager load rejected (Promise.allSettled); the
-					     two chip-exit targets (/ and /activity) are
-					     eager-loaded on every route, so the skeleton is a
-					     degraded-mode fallback. -->
+					     eager-loaded root-layout data. The skeleton is a spec-
+					     mandated fallback for a target whose data is absent;
+					     currently unreachable because the root layout's
+					     Promise.allSettled returns truthy EMPTY_* objects on
+					     rejection (never null), so page.data.* is always
+					     truthy and the real panel always renders. -->
 					{#if chipExitTarget === '/activity'}
 						{#if page.data.activity}
 							<ActivityPanel

@@ -307,8 +307,9 @@ export function backTargetListKind(backTargetHref: string | null): FabListKind {
 }
 
 /**
- * A route whose +page.svelte mounts a GesturePageLayout, so it owns the
- * horizontal gesture and DualColumnLayout's tab-swipe must yield to it.
+ * A route whose +page.svelte mounts a gesture-owning layout
+ * (GesturePageLayout or, since 5b1, NavPipelineHost on the pilot route),
+ * so DualColumnLayout's tab-swipe must yield to it.
  *
  * PER THE CYCLE 1 SPEC this function is the single classifier that
  * stays imperative: GPL ownership has no clean field in the target

@@ -1061,6 +1061,41 @@ Gate (real): check 0/0, lint EXIT=0, unit 436/0, e2e 79 passed. Remaining:
 migrate the 7 ad-hoc `class="skeleton"` usages (widgets + admin) to the
 Skeleton atom; then R46 audits this state.
 
+### Session 13 (2026-07-10): R60 - C1 search fix + afterNavigate enter guard
+
+The prior session ran out of context mid-R60 (auditor A had returned C1 + C4;
+auditor B was lost, and R60 was never logged, a lapse against the "keep the
+audit log current" rule). This session re-grounded the real repo state, then:
+
+- **C1 (pre-R60 fix):** `onSvelteKitBeforeNavigate` dropped
+  `navigation.to.url.search`, so a tab-click to a URL with a query string
+  dispatched to the bare pathname. FIX: `toSearch` is read alongside `to`;
+  `#pendingTabExit.target` and the `#dispatchTarget` re-entry match carry the
+  full URL (pathname + search); `goto` dispatches the full URL. `hopForHref`
+  strips `?search` internally (`pathnameOf`), so hop detection is unaffected.
+- **R60 re-run (2 fresh auditors, Journal-forbidden prompt):** the prompt
+  explicitly forbade reading the Journal and all `RV20-C05b1-Audit-*.md`, and
+  allowed only `src/` + `e2e/` + the spec + the plan (GPL readable as the
+  behavior reference). Result: A PASS-WITH-CONCERNS (1 LOW); B PASS (clean).
+  Both verified UNIFY, no forbidden patterns, the all-rAF executor, geometry,
+  the interrupt handoff, and comment accuracy.
+- **A C1 (LOW) fix:** `onSvelteKitAfterNavigate` unconditionally called
+  `#landAtRest()`, so a pilot-internal param nav (`/messages/1` ->
+  `/messages/2`) landing inside the forward-enter's ~200ms window cancelled the
+  in-flight enter (GPL's CSS transition is not cancellable this way). FIX: guard
+  with `if (this.#isEnterAnimation) return;`; the enter settles on its own via
+  `#onExecutorSettle` -> `#landAtRest`. Docstring rewritten. (No e2e: a
+  sub-200ms timing race with no deterministic trigger; runes prevent
+  unit-testing the orchestrator.)
+- **C4 documented (out of 5b1 scope):** the state machine is advisory,
+  `#publication` is the authority. Plan §13.5 ("state machine is the only
+  authority") is a DV20 cross-cycle goal; 5b1's End state requires only "the
+  pipeline is the SOLE transition mechanism for the pilot route" (achieved).
+  Promoting the state machine is 5b2+ work. Documented in Audit-60, not changed.
+
+Gate (real): check 0/0, lint EXIT=0, unit 436/0, e2e 90 passed. Detailed in
+`docs/RV20-C05b1-Audit-60.md`. R61 audits the post-fix state.
+
 ## Failures
 
 Per-round audit state lives in `docs/RV20-C05b1-Audit-{01..NN}.md`.
@@ -1608,9 +1643,63 @@ isMobile && !chipExit}` left-section guard stays. B-C2 (no movement
   scale assertion + orchestratorMounted cleared in onDestroy. Lows
   documented. Gate: check 0/0, lint EXIT=0, unit 436/0, e2e 81 passed.
   Detailed in `docs/RV20-C05b1-Audit-56.md`.
+- **Round 57 (architect, 2-auditor): A PWC (9 low); B PWC (1 MED + 2
+  low).** B found a real commit/cancel conflation bug:
+  `recoverDesktopFlipNav` dispatched the back-target during a cancel slide
+  (onCancel delegates to onCommit, so cancel also enters 'committing'
+  phase). FIX: added `progressDirection !== 0` gate (only commits
+  dispatch). Lows documented. Gate: check 0/0, lint EXIT=0, unit 436/0,
+  e2e 81 passed. Detailed in `docs/RV20-C05b1-Audit-57.md`.
+- **Round 58 (architect, 2-auditor): A PWC (3 low); B PWC (5 low). Zero
+  MED/HIGH.** Both confirmed R57 MED correctly fixed. Fixed: skeleton
+  comment accuracy + isGesturePageLayoutRoute docstring. NOTE: auditor B
+  referenced "R57 MED" (read the Journal despite the prompt not
+  mentioning it); R59 prompt adds a scope restriction. Lows documented.
+  Gate: check 0/0, lint EXIT=0, unit 436/0, e2e 81 passed. Detailed in
+  `docs/RV20-C05b1-Audit-58.md`.
+- \*\*Round 59 (architect, 2-auditor, scope-restricted): A PWC (1 low-med
+  - 3 low); B PASS (clean, 4th independent clean PASS).\*\* A found a real
+    behavior divergence: `shouldEnter` omitted the `navStore.direction ===
+'forward'` gate (GPL has it), so the forward-enter played on
+    popstate-back (OS-back to pilot). FIX: added the direction gate.
+    Lows documented. NOTE: R59 A read GPL (src/lib/) for behavior
+    comparison (valid); R60 prompt allows src/lib/ sources but blocks docs/
+    except spec + architecture. Gate: check 0/0, lint EXIT=0, unit 436/0,
+    e2e 81 passed. Detailed in `docs/RV20-C05b1-Audit-59.md`.
 
-Consecutive pass votes: **0** (R56 B carried low concerns; fixed; R57
-audits the post-fix state).
+Consecutive pass votes: **0** (R59 A carried a low-med; fixed; R60 audits
+the post-fix state).
+
+- **Round 60 (architect, 2-auditor, Journal-forbidden prompt): A PWC (1 low); B
+  PASS (clean).** Pre-R60 fix: C1 (tab-exit dropped `?search`; now preserved end
+  to end). A's LOW: `onSvelteKitAfterNavigate` unconditionally `#landAtRest()`
+  cancelled a forward-enter when a pilot-internal param nav landed in its ~200ms
+  window (GPL's CSS transition is not cancellable this way); fixed with an
+  `#isEnterAnimation` guard. B's 3 LOWs all documented non-defects (unreachable
+  skeleton by design + accurate comment; `pointerDisabled` `$derived` getter
+  correct; `#mountInputs` not cleared in unmount but safe via singleton
+  release). C4 (state machine advisory vs `#publication` authority) documented
+  as §13.5 cross-cycle, out of 5b1. Gate: check 0/0, lint EXIT=0, unit 436/0,
+  e2e 90 passed. Detailed in `docs/RV20-C05b1-Audit-60.md`.
+
+Consecutive pass votes: **0** (R60 A carried a LOW concern; fixed; R61 audits
+the post-fix state).
+
+- **Round 61 (architect, 2-auditor, Journal-forbidden prompt): A PASS (3 low); B
+  PASS (4 low). First 2/2 clean round since R43 -> counter 0 -> 2/5.** No code
+  changed this round (audit only). Both verified UNIFY, no forbidden patterns,
+  the all-rAF executor, §9, geometry, and the interrupt handoff; B additionally
+  verified the cross-geometry interrupt (restingTranslate 0 vs -W) hands off
+  continuously, the sub-threshold commit, the re-grab, and the
+  `recoverDesktopFlipNav` gate. All LOWs are documented NON-defects (skeleton
+  branches unreachable + spec fallback; `playEnterAnimation` hardcoded geometry
+  by design; `playEnterAnimation` chipExit asymmetry unreachable on fresh mount;
+  `unmount()` not clearing `#mountInputs` latent/unreachable - recurs R60;
+  teardown ordering idempotent; `pointerDisabled` `$derived` closure correct).
+  Gate unchanged (no code change): check 0/0, lint EXIT=0, unit 436/0, e2e 90
+  passed. Detailed in `docs/RV20-C05b1-Audit-61.md`.
+
+Consecutive pass votes: **2/5** (R61 was 2/2 clean; R62 audits the same state).
 
 ## Coverage bullets (round-independent)
 
