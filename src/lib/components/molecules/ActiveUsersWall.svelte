@@ -6,6 +6,7 @@
 	 * subsequent visits.
 	 */
 	import { afterNavigate } from '$app/navigation';
+	import Skeleton from '$lib/components/atoms/Skeleton.svelte';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import type { TranslationDict } from '$lib/types/translation';
 	import { getActiveUsersStore } from '$lib/stores/active-users.svelte';
@@ -36,7 +37,7 @@
 	{#if !store.loaded}
 		<div class="flex flex-wrap gap-2">
 			{#each [0, 1, 2, 3, 4, 5] as i (i)}
-				<div class="skeleton w-10 h-10 rounded-box"></div>
+				<Skeleton class="w-10 h-10 rounded-box" />
 			{/each}
 		</div>
 	{:else if store.users.length === 0}

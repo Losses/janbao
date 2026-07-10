@@ -266,6 +266,19 @@ export function solveCommitDuration(input: CommitInput, currentProgress: number)
  *  `done`. */
 export function startCommit(state: ExecutorState, input: CommitInput): ExecutorState {
 	const target = input.plan.progressDirection === 0 ? 1 : 0;
+	// Already at the target (e.g. a tab-click whose startProgress equals
+	// the commit target because the track was already at the target
+	// visual - a tab-click landing at a forward-enter's first frame). No
+	// slide to play; settle immediately so the nav is not delayed by a
+	// no-op commit rAF.
+	if (state.progress === target) {
+		return {
+			phase: 'idle',
+			progress: target,
+			liveOffset: state.liveOffset,
+			commitStart: null
+		};
+	}
 	const solved = solveCommitDuration(input, state.progress);
 	if (solved.snapped) {
 		return {

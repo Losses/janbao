@@ -1,5 +1,6 @@
 <script lang="ts">
 	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import Skeleton from '$lib/components/atoms/Skeleton.svelte';
 	import { onMount } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import AdminSidebar from '$lib/components/molecules/AdminSidebar.svelte';
@@ -288,7 +289,7 @@
 								<tbody>
 									{#each SKELETON_ROWS as i (i)}
 										<tr>
-											<td colspan="3"><div class="skeleton h-5 w-full"></div></td>
+											<td colspan="3"><Skeleton class="h-5 w-full" /></td>
 										</tr>
 									{/each}
 								</tbody>

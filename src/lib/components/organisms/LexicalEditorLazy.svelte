@@ -31,6 +31,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import { getEditorPrefsStore } from '$lib/stores/editor-prefs.svelte';
+	import Skeleton from '$lib/components/atoms/Skeleton.svelte';
 
 	type LexicalEditorInstance = ReturnType<LexicalEditorComponent>;
 
@@ -88,13 +89,13 @@
 	>
 		{#if !plainMode}
 			<div class="flex items-center gap-1.5 border-b border-base-300 bg-base-200 p-1.5">
-				<div class="h-6 w-32 animate-pulse rounded bg-base-300/50"></div>
+				<Skeleton class="h-6 w-32 rounded" />
 			</div>
 		{/if}
 		<div class="prose prose-sm max-w-none min-h-[200px] px-3 py-2">
-			<div class="animate-pulse space-y-2">
-				<div class="h-3 w-3/4 rounded bg-base-300/50"></div>
-				<div class="h-3 w-1/2 rounded bg-base-300/50"></div>
+			<div class="space-y-2">
+				<Skeleton class="h-3 w-3/4 rounded" />
+				<Skeleton class="h-3 w-1/2 rounded" />
 			</div>
 		</div>
 	</div>

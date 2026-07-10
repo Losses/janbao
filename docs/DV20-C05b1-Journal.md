@@ -937,6 +937,130 @@ $ bun run test:e2e -- messages-back-swipe tab-click-transition tab-exit-preview
   78 passed (2.7m)   (+2: gesture-during-tab-click, chip-grow)
 ```
 
+### Session 9 (2026-07-09): R42 rework (owner rejected the rationalization)
+
+R42's initial response shipped B-C1 (centre panel off-screen during
+chip-exit) as "documented as masked by overlay" in commit e9c29d7. The
+owner rejected it: chip-exit leaving ~70% of the viewport blank behind a
+30%-wide overlay is a SUBSTANTIVE behavior gap, not an acceptable design
+simplification (the bar is "indistinguishable from GPL"). Three real
+fixes + one verification + doc/lint cleanup:
+
+- **panelCount dynamic (B-C1).** `NavPipelineHost` now `$derived`s
+  `panelCount = chipExit ? 1 : 2`, plus `sectionWidth`, `trackStyle`,
+  and `initialTrackTransform` from `chipExit`. On chip-exit the track
+  shrinks to 100% and the centre fills the viewport at translateX(0).
+  The orchestrator gains a `restingTranslateOverride` param on
+  `#resolvePlan`; chip-exit plans (both the tab-click path and the
+  gesture path) pass 0. The SSR transform drops to '' on chip-exit. The
+  `{#if isMobile && !chipExit}` left-section guard stays (unnecessary
+  when panelCount=1; the chip overlay stands in for the source list).
+- **updateViewport reapply at rest (R41-open B-C2).** The at-rest
+  `$effect` re-calls `updateViewport` with the current viewport width
+  when the publication lands (plan goes null), so a deferred resize from
+  an in-flight transition applies before the next gesture.
+- **updateViewport guard (A-C1).** The in-flight skip guard now also
+  includes `#isEnterAnimation`.
+- **B-C2 (no movement during chip-exit preload) - MISVERIFIED, later
+  overturned.** This session claimed "GPL also freezes during preload;
+  executor.stop() matches GPL; NOT a gap" by reading GPL's gesture-commit
+  path (`:681`), not the tab-click preload path (`:803`). R43 read GPL
+  directly (`GesturePageLayout.svelte:477-478`): GPL's tab-click chip-exit
+  jumps to `+maxDrag` during preload, then `+W` - it does NOT freeze. The
+  "no movement during preload" IS a divergence; tracked as R43 C1. Lesson
+  re-learned ([[cycle-manager-fabrication-under-pressure]]): do not
+  propagate an unverified correctness claim; read the comparison code
+  yourself.
+- **Docstrings + chipExitPhase.** `#chipExitPhase` reworded to describe
+  both 'sliding' triggers (tab-click commit, gesture commit); gesture
+  path sets 'pending' at start, 'sliding' on commit; `#liveDragging`
+  cleared on `onSvelteKitBeforeNavigate`; `TAB_CLICK_COMMIT_MS` now
+  mentions `playEnterAnimation`.
+- **lint.** Em-dashes -> ASCII in two e2e spec comments
+  (`local/no-emdash`).
+
+Independent gate re-verification (orchestrator, NOT the CMA's pasted
+numbers): `bun run check` 0/0 (1458 files); `bun test src/lib/utils
+src/lib/stores` 436/0. CAUGHT a stale claim: the rewritten
+`docs/RV20-C05b1-Audit-42.md` failed prettier (its own pasted `lint
+EXIT=0` was false) - fixed via `prettier --write`. The committed R42
+journal bullet also described the rejected rationalization rather than
+the rework; rewritten this session to match the code
+([[no-error-history-comments]]).
+
+R43 audits this reworked state.
+
+### Session 10 (2026-07-09): R43 fixes: chip-exit slide-while-loading + 10 more
+
+R43 returned 0/2 PASS (A PASS-WITH-CONCERNS 5, B FAIL 8); both auditors
+independently flagged C1 (chip-exit tab-click diverges from GPL). The
+owner decided C1: the chip-exit must be smooth AND show no wrong list
+(literal GPL replication was rejected: it re-introduces GPL's ~70%-
+viewport wrong-list flash). Implemented as ONE design (slide-while-
+loading), not the rejected trilemma: the slide starts immediately (no
+`executor.stop()` freeze), `preloadData` runs in parallel, the
+commit-settle dispatch is gated on the preload resolving, `panelCount=1`
+keeps the chip covering the revealed area. All 11 R43 findings fixed
+(C1/B-C2/A-C5/B-C3 via slide-while-loading; A-C2 resize-stale-px via a
+`sawTransition`-gated -50% re-apply; A-C3 by removing `chipExitPhase`;
+A-C4/B-C4/B-C5 comment accuracy; B-C6 e2e strengthen; B-C7 removed dead
+`target` plumbing; B-C8 `#tabIndexFor` sources `MOBILE_TABS`). Detail in
+`docs/RV20-C05b1-Audit-43.md` "Fixes landed". Gate (real): check 0/0,
+lint EXIT=0, unit 436/0, e2e 80 passed. R44 audits post-fix.
+
+### Session 11 (2026-07-09): R44 fixes: 3 med behaviour bugs + 9 low
+
+R44 returned 0/2 PASS (A PASS-WITH-CONCERNS 7, B PASS-WITH-CONCERNS 5).
+UNIFY, the all-rAF executor, and the R43 slide-while-loading chip-exit
+were confirmed correct; the concerns were behaviour-preservation edges +
+comment accuracy. Three med behaviour bugs (real GPL divergences): B-C1
+desktop-flip-mid-transition loses the nav (unmount now dispatches the
+pending target, gated on `!navDispatchInFlight`); A-C1 FAB coverProgress
+discontinuity on tab-click-interrupts-forward-enter (`#commitStartRaw = 0`
+when interrupting an enter); A-C2 `fromPathname` stale on a same-route
+param change (`updateFromPathname` + a host `$effect`). Nine low: A-C3
+`releaseNavPipelineOrchestrator` (identity-checked singleton release),
+A-C4 playEnter `#commitStartRaw` captured before the reset, A-C5 chip-
+overlay comment (overlay width vs atom scale), B-C2 `resetPagerStore`
+`active: true` (matches GPL centerTab), B-C4 playEnter easing caveat,
+B-C5 `unmount` resets all transient fields, A-C6 `startCommit` short-
+circuits a no-op slide when already at the target, A-C7 tab-click-during-
+enter e2e track-trajectory assertion, B-C3 cold-cache race documented.
+Detail in `docs/RV20-C05b1-Audit-44.md`. Gate (real): check 0/0, lint
+EXIT=0, unit 436/0, e2e 80 passed. R45 audits post-fix.
+
+### Session 12 (2026-07-09): chip-exit redesigned to skeleton / cached-panel; LoadingChip dropped
+
+R45 (A PASS-WITH-CONCERNS 7, B PASS-WITH-CONCERNS 5) re-flagged the
+chip-exit divergence from GPL. The owner redirected: the loading pill was
+the OLD GPL mechanism carried forward; the correct new-architecture answer
+is to slide in the target page itself (its data is eager-loaded on every
+route) or, when not yet loaded, a layout-matched skeleton. The R43-R45
+chip-exit concerns are superseded (the chip is dropped). Spec updated (End
+state #1/#7, behavior-preservation constraint, skeleton-atom constraint)
+making the chip-exit an intentional divergence.
+
+- Skeleton atom `Skeleton.svelte` (wraps daisyUI's `skeleton` class).
+- Per-tab layout skeletons: `ActivitySkeleton` (composer + title + rows +
+  paginator), `DiscussionsSkeleton` (rows + paginator), each matching its
+  panel's layout.
+- Wiring: the chip-exit is now a DIRECT SLIDE (panelCount=2,
+  restingTranslate=-W) - the SAME geometry as the back-swipe. The left
+  panel renders the target's REAL panel from the cached eager-load
+  (ActivityPanel from data.activity, DiscussionsPanel from data.home) when
+  present, else the target's skeleton. LoadingChip + the panelCount=1
+  geometry + the preload gating are removed. Dispatch on settle (the nav
+  loads the target; the revealed panel/skeleton shows during slide + load).
+- Result: the wrong-list flash, the panelCount=1 seam (R45 A C1/C2/C3), and
+  the preload-gating complexity are all gone; the cross-tab exit is a plain
+  direct slide (tabs de-special-cased). e2e: `tab-exit-preview` now sees the
+  TARGET tab (e.g. `seenTabs: ['activity']` for /activity), not the wrong
+  list; the obsolete "LoadingChip grows" test is removed.
+
+Gate (real): check 0/0, lint EXIT=0, unit 436/0, e2e 79 passed. Remaining:
+migrate the 7 ad-hoc `class="skeleton"` usages (widgets + admin) to the
+Skeleton atom; then R46 audits this state.
+
 ## Failures
 
 Per-round audit state lives in `docs/RV20-C05b1-Audit-{01..NN}.md`.
@@ -1315,16 +1439,117 @@ reversed`; onCancel overrides progressDirection to 1. Added partial-
   (updateViewport stale after one-shot resize) OPEN. Detailed in
   `docs/RV20-C05b1-Audit-41.md`.
 - **Round 42 (architect, 2-auditor): 0/2 PASS.** A FAIL (2); B FAIL (2).
-  Fixed: A-C1 updateViewport guard now includes #isEnterAnimation. A-C2
-  #chipExitPhase docstring reworded. B-C1 (centre off-screen during
-  chip-exit) investigated 3 approaches; Svelte 5 spread doesn't reliably
-  remove data-\* attributes; reverted to original {#if !chipExit};
-  documented as masked by overlay during 'sliding'; 'pending'
-  imperceptible for cached targets. B-C2 (no movement during preload)
-  documented as intentional divergence (stop() prevents worse bugs).
-  80 e2e green. Detailed in `docs/RV20-C05b1-Audit-42.md`.
+  The initial response to B-C1 rationalized the centre-off-screen gap as
+  "masked by overlay" and shipped that in e9c29d7; the owner rejected it
+  (a substantive behavior gap, not an acceptable divergence) and required
+  a real structural fix. Reworked: A-C1 updateViewport guard now includes
+  #isEnterAnimation. A-C2 #chipExitPhase docstring reworded. B-C1 (centre
+  off-screen during chip-exit): `panelCount` is now `$derived(chipExit ? 1
+: 2)` so the track shrinks to 100% on chip-exit and the centre fills the
+  viewport at translateX(0); the plan's `restingTranslate` is overridden to
+  0 for chip-exit (new `restingTranslateOverride` param on `#resolvePlan`);
+  the SSR `initialTrackTransform` drops to '' on chip-exit; the `{#if
+isMobile && !chipExit}` left-section guard stays. B-C2 (no movement
+  during chip-exit preload): R42 MISVERIFIED as "GPL also freezes; NOT a
+  gap" (cited GPL's gesture path `:681`, not the tab-click preload path
+  `:803`). R43 read GPL directly (`:477-478`): GPL jumps to `+maxDrag`
+  during preload - it does NOT freeze. This IS a divergence (R43 C1). updateViewport stale after one-shot resize: the at-rest `$effect`
+  re-calls `updateViewport` with the current viewport width when the
+  publication lands. `TAB_CLICK_COMMIT_MS` docstring mentions
+  `playEnterAnimation`. 80 e2e green. Detailed in
+  `docs/RV20-C05b1-Audit-42.md`.
 
-Consecutive pass votes: **0** (R42 carried concerns; R43 audits post-fix).
+- **Round 43 (architect, 2-auditor, clean prompt + search-similar): 0/2
+  PASS.** A PASS-WITH-CONCERNS (5); B FAIL (8). BOTH auditors
+  independently flagged C1: the chip-exit tab-click animation is
+  observably different from GPL (GPL two-phase: track -> `+maxDrag`
+  during preload, -> `+W` after; pilot single-phase: freeze at 0, slide
+  `0 -> W`). Orchestrator verified C1 against GPL directly
+  (`GesturePageLayout.svelte:477-478, 788-812`). R43 also overturned
+  R42's B-C2 misverification (GPL does NOT freeze during preload). Other
+  findings: A-C2 resize-strand stale px after cancel/forward-enter
+  (medium, behavior); A-C3 stale `#chipExitPhase` (low); A-C4 playEnter
+  fictional FAB/Header fns docstring (low); A-C5 chip overlay jump at
+  pending->sliding (low, chip-exit-tied); B-C2 pager freeze during
+  preload (medium, chip-exit-tied); B-C3 gesture chip-exit parallel
+  preload (medium, latent); B-C4 `#resolvePlan` comment; B-C5
+  `#onExecutorTick` docstring stub; B-C6 e2e tests 5/6 weak; B-C7 dead
+  `target` plumbing; B-C8 hardcoded tabs array. C1 is an architect-signed-
+  off divergence (Journal Design "no sibling panel slide"; suppresses
+  GPL's wrong-list flash; e2e asserts `seenTabs: []`) but conflicts with
+  the spec's literal "indistinguishable" bar -> architect decision
+  pending (accept+document vs replicate GPL). Detailed in
+  `docs/RV20-C05b1-Audit-43.md`.
+- **Round 44 (architect, 2-auditor, clean prompt + search-similar): 0/2
+  PASS.** A PASS-WITH-CONCERNS (7); B PASS-WITH-CONCERNS (5). UNIFY, the
+  all-rAF executor, and the R43 slide-while-loading chip-exit were
+  confirmed correct. Three med behaviour bugs (real GPL divergences):
+  B-C1 desktop-flip-mid-transition loses the nav; A-C1 FAB coverProgress
+  discontinuity on tab-click-interrupts-forward-enter; A-C2
+  `fromPathname` stale on a same-route param change. Nine low (A-C3
+  singleton release, A-C4 playEnter commitStartRaw order, A-C5 chip-
+  overlay comment, B-C2 resetPagerStore active:true, B-C4 playEnter
+  easing caveat, B-C5 unmount full reset, A-C6 startCommit no-op
+  short-circuit, A-C7 tab-click-during-enter e2e trajectory, B-C3 cold-
+  cache race documented). All 12 fixed in Session 11. 80 e2e green.
+  Detailed in `docs/RV20-C05b1-Audit-44.md`.
+- **Round 45 (architect, 2-auditor, clean prompt + search-similar): 0/2
+  PASS.** A PASS-WITH-CONCERNS (8); B PASS-WITH-CONCERNS (4). Audited the
+  post-R44 state. A C1/C2/C3 found a panelCount=1 geometry seam on chip-
+  exit <-> non-chip-exit interrupts (the slide-while-loading panelCount=1
+  vs every other transition's panelCount=2). Before fixes landed, the
+  owner redirected the chip-exit to a skeleton / cached-panel design;
+  Session 12 dropped the loading chip and reverted the chip-exit to
+  panelCount=2, superseding the chip-exit concerns (A C1-C4, B C1-C4).
+  Four non-chip concerns remain open for R46 (A C5 e2e coverage, A C6
+  cancel 300ms vs GPL 200ms, A C7 navDispatchInFlight second tab-click, A
+  C8 host style clobber). Detailed in `docs/RV20-C05b1-Audit-45.md`.
+- **Round 46 (architect, 2-auditor, clean prompt + search-similar): 0/2
+  PASS.** A PASS-WITH-CONCERNS (6); B PASS-WITH-CONCERNS (6). Audited the
+  post-Session-12 skeleton / cached-panel chip-exit. Substantive: the
+  `unmount()` dispatch over-reached (A C1 fired a pre-commit live-drag's
+  target; B C4 fired a stale target when the user navigated away
+  mid-transition). Fixed: removed the dispatch from `unmount()`, added
+  `recoverDesktopFlipNav()` (phase === 'committing' gate, desktop-flip
+  only). Plus stale LoadingChip / panelCount=1 comments rewritten
+  (orchestrator + coordinator), dead `restingTranslateOverride` removed,
+  LexicalEditorLazy migrated to `<Skeleton>`, `leftEl` dead binding
+  removed. Documented/moot: cross-type-interrupt panel-content swap
+  (geometry continuous), chip-exit FAB (matches GPL: coverProgress=0 throughout),
+  skeleton-path e2e (hard to force). Gate: check 0/0, lint EXIT=0, unit
+  436/0, e2e 79 passed. Detailed in `docs/RV20-C05b1-Audit-46.md`.
+- **Round 47 (architect, 2-auditor, clean prompt + search-similar): 0/2
+  PASS.** A PASS-WITH-CONCERNS (5, all low); B PASS-WITH-CONCERNS (5, all
+  low). Both verified every trajectory correct; no substantive concern.
+  Long-tail: skeleton path structurally unreachable (eager-load data),
+  `page.data` vs cache wording, coordinator `ensure` comment, chip-exit
+  FAB (matches GPL: coverProgress=0), gesture-path divergence (unreachable),
+  hardcoded dispatch (3 tabs correct), deep-link e2e (coverage). Fixed:
+  coordinator comment, spec "from cache" -> "eager-loaded data", skeleton
+  fallback comment, added a cold deep-link landing e2e. The rest
+  documented/moot. Gate: check 0/0, lint EXIT=0, unit 436/0, e2e 80
+  passed. Detailed in `docs/RV20-C05b1-Audit-47.md`.
+- **Round 48 (architect, 2-auditor, clean prompt + search-similar): 0/2
+  PASS.** A PASS-WITH-CONCERNS (4, all low); B PASS-WITH-CONCERNS (4 low +
+  1 med). Both verified every trajectory correct. MED: no reduced-motion e2e
+  (Plan §12/§5 accessibility). Fixed: added a reduced-motion snap e2e (range
+  < 150: the synchronous snap leaves only the tiny drag movement, not a
+  smooth slide), the stale "chip-exit + preload" comment (line 699), the
+  recoverDesktopFlipNav docstring, + a URL assert on the headline back-swipe
+  test. Documented/moot: DualColumnLayout isGesturePageLayoutRoute (5b3),
+  pager stale on desktop-flip (low), chip-exit FAB (matches GPL: coverProgress=0), cold-cache race (unreachable). Gate: check 0/0, lint EXIT=0,
+  unit 436/0, e2e 81 passed. Detailed in `docs/RV20-C05b1-Audit-48.md`.
+- **Round 49 (architect, 2-auditor, clean prompt + search-similar): A
+  PASS-WITH-CONCERNS (3 low); B PASS (1 borderline nitpick).** The cleanest
+  round since R32; B returned VERDICT: PASS. Fixed: the gesture chipExit
+  gated on `to !== backTarget` (eliminates the cold-cache FAB divergence
+  that R47/R48/R49 re-flagged), the journal "fab:false" imprecision (/ is
+  fab:true), the coordinator "chip-exit with preload" docstring, +
+  documented the same-route-param-change edge. Gate: check 0/0, lint EXIT=0,
+  unit 436/0, e2e 81 passed. Detailed in `docs/RV20-C05b1-Audit-49.md`.
+
+Consecutive pass votes: **0** (R49 A carried low concerns; all fixed or
+documented; R50 audits the post-fix state).
 
 ## Coverage bullets (round-independent)
 

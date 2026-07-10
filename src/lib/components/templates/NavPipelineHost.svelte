@@ -32,11 +32,16 @@
 	} from '$lib/stores/active-gesture-track.svelte';
 	import {
 		NavPipelineOrchestrator,
-		setNavPipelineOrchestrator
+		setNavPipelineOrchestrator,
+		releaseNavPipelineOrchestrator
 	} from '$lib/stores/nav-pipeline-orchestrator.svelte';
 	import { navPipelinePointer } from '$lib/actions/nav-pipeline-pointer';
-	import LoadingChip from '$lib/components/atoms/LoadingChip.svelte';
+	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
+	import ActivitySkeleton from '$lib/components/panels/ActivitySkeleton.svelte';
+	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
+	import DiscussionsSkeleton from '$lib/components/panels/DiscussionsSkeleton.svelte';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
+	import type { PageUrlBuilder } from '$lib/types/tabs';
 
 	interface NavPipelineHostProps {
 		/** The pilot route's back-target. The orchestrator resolves a
@@ -87,59 +92,36 @@
 	// writes each frame; the centre panel is the scroll-chrome source;
 	// the viewport is the pointer surface.
 	let viewportEl: HTMLElement | null = $state(null);
-	let viewportWidth = $state(393);
 	let trackEl: HTMLElement | null = $state(null);
-	let leftEl: HTMLElement | null = $state(null);
 	let centerEl: HTMLElement | null = $state(null);
 
-	// The back-target's tab label (drives the chip icon/label and the
-	// exit preview's `data-tab-panel`).
+	// The back-target's tab label (drives the exit preview's data-tab-panel
+	// when there is no chip-exit target).
 	const leftTabDef = $derived(MOBILE_TABS.find((tab) => tab.href === leftHref) ?? null);
 	const leftPreviewTab = $derived(leftTabDef?.labelKey ?? null);
-	// The chip-exit's target tab (set when the orchestrator publishes a
-	// chipExit). Read off the publication so the LoadingChip shows the
-	// right tab.
+	// The in-flight publication. chipExit + toPathname identify a cross-tab
+	// exit's target, so the left panel can render that tab's real panel
+	// (when its data is cached) or its skeleton.
 	const publication = $derived(orchestrator.publication);
 	const chipExit = $derived(orchestrator.chipExit);
-	const chipTargetPath = $derived(publication.toPathname ?? '');
-	const chipTargetTab = $derived(
-		chipTargetPath ? (MOBILE_TABS.find((tab) => tab.href === chipTargetPath) ?? null) : null
+	const chipExitTarget = $derived(chipExit ? publication.toPathname : null);
+	// The left panel's tab label: the chip-exit target's label during a
+	// cross-tab exit, else the back-target's.
+	const leftPanelTab = $derived(
+		chipExitTarget
+			? (MOBILE_TABS.find((tab) => tab.href === chipExitTarget)?.labelKey ?? null)
+			: leftPreviewTab
 	);
-	// Whether the chip overlay should render: only when chipExit is true
-	// and the orchestrator is in flight. Replicates GPL's
-	// `swipeNeedsLoadingAtStart && (dragOffset !== null ||
-	// isPendingNavigation || isTransitioningOut)` shape.
-	const chipVisible = $derived(chipExit && publication.inFlight);
-	// GPL chip-exit phases: 'pending' (preload in flight, chip pulsing at
-	// scale 1.15, overlay = maxDrag width) -> 'sliding' (preload resolved,
-	// slide plays, chip fades opacity 1->0, scale 1.15->1.6, overlay grows
-	// maxDrag->W). Driven by the orchestrator's chipExitPhase + the
-	// slide's commit progress.
-	const chipPhase = $derived(orchestrator.chipExitPhase);
-	const vw = $derived(viewportWidth);
-	const maxDrag = $derived(vw * 0.3);
-	const slideProgress = $derived(
-		chipPhase === 'sliding' ? Math.max(0, Math.min(1, publication.progress)) : 0
-	);
-	const chipRevealWidth = $derived(
-		chipPhase === 'pending'
-			? maxDrag
-			: chipPhase === 'sliding'
-				? maxDrag + (vw - maxDrag) * slideProgress
-				: 0
-	);
-	const chipOverlayOpacity = $derived(chipPhase === 'sliding' ? 1 - slideProgress : 1);
-	const chipScale = $derived(
-		chipPhase === 'pending' ? 1.15 : chipPhase === 'sliding' ? 1.15 + 0.45 * slideProgress : 1
-	);
-	const chipPulsing = $derived(chipPhase === 'pending');
 
-	// The track's geometry. Replicates GPL's multi-panel layout: the
-	// track is `panelCount * 100%` wide, the panels are equal-width
-	// columns, the centre panel is the right half. The driver writes
-	// the transform inline via `style.setProperty`; the trackStyle
-	// carries the structural CSS only (no transform, no transition).
+	// The track is always 2 panels: the left (the back-target's panel, or a
+	// chip-exit target's real panel / skeleton) + the centre (conversation).
+	// A chip-exit uses the SAME 2-panel geometry as a direct slide, so a
+	// cross-geometry interrupt handoff never jumps.
 	const panelCount = 2;
+
+	// Page-url builder for a DiscussionsPanel rendered as a chip-exit preview
+	// (matches the home route's pagination scheme).
+	const discussionsBuildPageUrl: PageUrlBuilder = (p) => (p === 1 ? '/' : `/discussions/p${p}`);
 
 	// Publish the bound track element to the active-gesture-track store
 	// so the existing FloatingActionButtonLayer's Family A sampler (if
@@ -164,10 +146,40 @@
 	// pager store on every drag-move / commit rAF tick itself; the host
 	// only owns the at-rest reset (the in-flight publication is the
 	// orchestrator's responsibility).
+	// Tracks whether the orchestrator has run at least one transition on
+	// this mount. The at-rest $effect uses it to distinguish a real
+	// settle (re-apply the resting -50% to correct a stale px) from the
+	// initial mount (leave the forward-enter seed at translateX(0px)).
+	let sawTransition = false;
 	$effect(() => {
-		if (isMobile && publication.plan === null) {
-			orchestrator.resetPagerStore();
+		if (publication.plan !== null) {
+			sawTransition = true;
+			return;
 		}
+		if (!isMobile) return;
+		// Refresh the viewport dims + pager at rest.
+		if (viewportEl) {
+			orchestrator.updateViewport(viewportEl.clientWidth, -viewportEl.clientWidth);
+		}
+		orchestrator.resetPagerStore();
+		// Re-apply the resting transform as a PERCENTAGE only after a
+		// transition has settled (not at initial mount, where the
+		// forward-enter seed at translateX(0px) must survive). This
+		// corrects a resize that arrived during the transition: the
+		// ResizeObserver skipped its -50% re-apply while plan !== null, so
+		// the driver's last px write would otherwise strand the track
+		// off-centre on the new width.
+		if (sawTransition && trackEl) {
+			trackEl.style.transform = 'translateX(-50%)';
+		}
+	});
+	// Keep the orchestrator's from-pathname in sync with same-route param
+	// changes (/messages/123 -> /messages/456) that reuse this host
+	// without remounting, so a subsequent tab-exit is still owned
+	// (#isPilotFrom matches the live pathname, not the stale mount one).
+	$effect(() => {
+		const pathname = page.url.pathname;
+		if (orchestratorMounted) orchestrator.updateFromPathname(pathname);
 	});
 
 	// Mount the orchestrator + acquire the viewport-lock + register
@@ -209,7 +221,7 @@
 		const unmountOrchestrator = (): void => {
 			if (!orchestratorMounted) return;
 			orchestrator.unmount();
-			setNavPipelineOrchestrator(null);
+			releaseNavPipelineOrchestrator(orchestrator);
 			// Clear any transform a gesture/commit wrote so the desktop
 			// track (which carries no inline transform) is not left
 			// off-screen.
@@ -219,7 +231,6 @@
 
 		const sync = (): void => {
 			isMobile = mq.matches;
-			viewportWidth = viewportEl?.clientWidth ?? 393;
 			if (isMobile) {
 				if (!held) {
 					viewportLock.acquire();
@@ -228,6 +239,11 @@
 				mountOrchestrator();
 				window.scrollTo(0, 0);
 			} else {
+				// A mobile->desktop flip: land an in-flight committed
+				// transition (matches GPL's pendingNav wall-clock cap) before
+				// the orchestrator is torn down. A route-away unmount
+				// (onDestroy) does NOT do this, so the user's fresh nav wins.
+				orchestrator.recoverDesktopFlipNav();
 				unmountOrchestrator();
 				if (held) {
 					viewportLock.release();
@@ -238,15 +254,13 @@
 		sync();
 		mq.addEventListener('change', sync);
 
-		// ResizeObserver on the viewport so the host's reactive
-		// `viewportWidth` stays in sync with the live dimensions and
-		// propagates into the orchestrator's plan math (distance +
-		// restingTranslate) via `updateViewport`. On desktop the
-		// orchestrator is not mounted, so updateViewport is a no-op.
+		// ResizeObserver on the viewport so the orchestrator's plan math
+		// (distance + restingTranslate) stays in sync with the live
+		// dimensions via `updateViewport`. On desktop the orchestrator is
+		// not mounted, so updateViewport is a no-op.
 		const ro = new ResizeObserver(() => {
 			if (!viewportEl) return;
 			const w = viewportEl.clientWidth;
-			viewportWidth = w;
 			orchestrator.updateViewport(w, -w);
 			// On a mobile-only resize (portrait <-> landscape, both
 			// <767px) AFTER a transition settled, re-apply the resting
@@ -309,7 +323,7 @@
 			viewportLock.release();
 			held = false;
 		}
-		setNavPipelineOrchestrator(null);
+		releaseNavPipelineOrchestrator(orchestrator);
 		orchestrator.unmount();
 	});
 
@@ -327,7 +341,7 @@
 			? 'width: 100%; display: block;'
 			: `width: ${panelCount * 100}%; display: flex; height: 100%;`
 	);
-	const sectionWidth = `${100 / panelCount}%`;
+	const sectionWidth = $derived(`${100 / panelCount}%`);
 	const leftStyle = $derived(
 		!isMobile
 			? 'display: none;'
@@ -369,15 +383,42 @@
 		class={isMobile ? 'flex items-start h-full w-full' : 'h-full w-full'}
 		style={trackStyle + ' ' + initialTrackTransform}
 	>
-		{#if isMobile && !chipExit}
+		{#if isMobile}
 			<section
-				bind:this={leftEl}
-				data-tab-panel={leftPreviewTab}
+				data-tab-panel={leftPanelTab}
 				class="shrink-0 scroll-pane md:hidden"
 				style={leftStyle}
 			>
 				<div class="gpl-card">
-					{#if left}
+					{#if chipExitTarget === '/activity'}
+						{#if page.data.activity}
+							<ActivityPanel
+								activities={page.data.activity.activities}
+								currentPage={page.data.activity.page}
+								totalPages={page.data.activity.totalPages}
+								activityDraft={page.data.activity.activityDraft}
+								mentionedUsers={page.data.activity.mentionedUsers}
+								t={page.data.t}
+								user={page.data.user}
+								paginate={false}
+							/>
+						{:else}
+							<ActivitySkeleton />
+						{/if}
+					{:else if chipExitTarget === '/'}
+						{#if page.data.home}
+							<DiscussionsPanel
+								discussions={page.data.home.discussions}
+								currentPage={page.data.home.page}
+								totalPages={page.data.home.totalPages}
+								t={page.data.t}
+								buildPageUrl={discussionsBuildPageUrl}
+								paginate={false}
+							/>
+						{:else}
+							<DiscussionsSkeleton />
+						{/if}
+					{:else if left}
 						{@render left()}
 					{:else}
 						{@const PreviewPanel = getPreviewPanel(leftHref)}
@@ -398,30 +439,4 @@
 			</div>
 		</section>
 	</div>
-
-	{#if chipVisible}
-		<div
-			class="loading-overlay absolute inset-y-0 left-0 z-30 flex items-center justify-center pointer-events-none"
-			style="width: {chipRevealWidth}px; opacity: {chipOverlayOpacity};"
-		>
-			<LoadingChip
-				icon={chipTargetTab?.icon}
-				label={chipTargetTab ? page.data.t.nav[chipTargetTab.labelKey] : page.data.t.nav.back}
-				scale={chipScale}
-				expanded={true}
-				pulsing={chipPulsing}
-				dragging={false}
-				opacity={chipOverlayOpacity}
-				maxWidth={130}
-				textMaxWidth={70}
-			/>
-		</div>
-	{/if}
 </div>
-
-<style>
-	.loading-overlay {
-		background-color: var(--color-base-200);
-		overflow: visible;
-	}
-</style>

@@ -74,13 +74,13 @@ export interface CoordinatorDecision {
  *
  *   - If `cacheHas(toPathname, toSubKey)` returns true, the TO is
  *     cached: direct-slide. The slide plays without waiting on a
- *     preload; no LoadingChip overlay.
+ *     preload.
  *   - If the TO is not cached, but the TO is a snapshot-capturing
  *     route AND a snippet exists in the cache, the slide can still be
  *     a direct-slide with a deep-preview overlay (the snippet is the
  *     stale-but-useful render of where the user is going).
- *   - Otherwise, chip-exit: the orchestrator preloads the TO and the
- *     LoadingChip overlays the gesture until the data lands.
+ *   - Otherwise, chip-exit: the orchestrator slides in the TO's real
+ *     panel (when its data is cached) or a layout-matched skeleton.
  *
  * The decision is pure. The orchestrator calls it once at gesture
  * start (FROM and TO are locked); the unit suite also exercises it

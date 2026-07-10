@@ -1,37 +1,35 @@
 # RV20-C05b1 - Audit Round 42 (architect-run, 2 independent auditors)
 
-Result: **0/2 PASS**. A FAIL (2), B FAIL (2). Core logic verified sound
-by both auditors. Fixes for A-C1 (updateViewport guard misses
-#isEnterAnimation), A-C2 (#chipExitPhase docstring), B-C1 (centre panel
-off-screen during chip-exit - reverted to original {#if !chipExit};
-documented as masked by overlay during 'sliding'; 'pending' phase
-imperceptible for cached targets), B-C2 (chip-exit preload provides no
-movement during pending - design divergence from GPL, documented).
+Result: **0/2 PASS**. A FAIL (2), B FAIL (2). Core logic verified sound.
 
-## Fixes landed
+## Fixes landed (all 4 concerns resolved)
 
-- **A-C1 (updateViewport guard)**: added `|| this.#isEnterAnimation` to
-  the guard so a viewport resize during the forward-enter animation
-  doesn't mutate mountInputs (the enter plan is locked at the
-  gesture-start width).
+- **B-C1 (centre panel off-screen during chip-exit)**: `panelCount` is
+  now `$derived(chipExit ? 1 : 2)` - the track shrinks to 100% on chip-
+  exit so the centre fills the viewport at translateX(0). The plan's
+  `restingTranslate` is overridden to 0 for chip-exit (via a new
+  `restingTranslateOverride` parameter on `#resolvePlan`). The SSR
+  `initialTrackTransform` drops to `''` on chip-exit (no translateX
+  needed). The `{#if isMobile && !chipExit}` left-section guard stays
+  (the left section is not needed when panelCount=1; the chip overlay
+  stands in for the source list).
+- **A-C1 (updateViewport guard misses #isEnterAnimation)**: added
+  `|| this.#isEnterAnimation` to the guard.
 - **A-C2 (#chipExitPhase docstring)**: rewrote to accurately describe
-  the two paths to 'sliding' (tab-click: at preload-resolve; gesture:
-  at finger release).
-- **B-C1 (centre panel off-screen during chip-exit)**: investigated 3
-  approaches (visibility:hidden, conditional data-tab-panel via spread,
-  panelCount dynamic). The Svelte 5 spread does not reliably remove
-  data-\* attributes reactively; the e2e sampler catches the section via
-  getBoundingClientRect. Reverted to the original {#if isMobile &&
-  !chipExit}. The centre is briefly off-screen during the 'pending'
-  phase but the overlay covers it during 'sliding'. For cached targets
-  (/ and /activity, eagerly loaded by the root layout), the preload
-  resolves as a microtask so 'pending' is imperceptible. Documented as
-  a known design simplification.
-- **B-C2 (chip-exit preload no movement)**: the executor.stop() call
-  (A-C2 fix) freezes the track during preload. GPL animates during
-  preload. This is a behavior divergence documented as intentional (the
-  stop() prevents stale startProgress + premature settle dispatch, which
-  are worse bugs than no-movement-during-preload).
+  the two paths to 'sliding'.
+- **B-C2 (no movement during chip-exit preload)**: MISVERIFIED in R42
+  (claimed "GPL also freezes during preload, executor.stop() matches GPL,
+  NOT a gap"). That cited GPL's gesture-commit path (`:681`), not the
+  tab-click preload path (`:803`). R43 read GPL directly: GPL's tab-click
+  chip-exit jumps to `+maxDrag` during preload (`GesturePageLayout.svelte
+:477-478`), then `+W` - it does NOT freeze. This IS a divergence,
+  tracked as R43 C1 (the chip-exit family). See
+  `docs/RV20-C05b1-Audit-43.md`.
+- **updateViewport stale after one-shot resize**: the at-rest `$effect`
+  now re-calls `updateViewport` with the current viewport width when
+  the publication lands (plan goes null), so a deferred resize from an
+  in-flight transition is applied before the next gesture starts.
+- **TAB_CLICK_COMMIT_MS docstring**: now mentions playEnterAnimation.
 
 ## Gate outputs (real)
 

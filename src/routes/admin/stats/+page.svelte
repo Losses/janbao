@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, type Component } from 'svelte';
+	import Skeleton from '$lib/components/atoms/Skeleton.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
@@ -398,7 +399,7 @@
 					<!-- Reserve the selected-range badge row so the chart below doesn't
 					     shift down when the badge renders post-load. -->
 					<div class="flex justify-end">
-						<div class="skeleton h-5 w-40 rounded-full"></div>
+						<Skeleton class="h-5 w-40 rounded-full" />
 					</div>
 				{:else if selectedRangeText}
 					<div class="flex justify-end">
@@ -423,7 +424,7 @@
 							</div>
 						{/if}
 					{:else}
-						<div class="skeleton h-full w-full"></div>
+						<Skeleton class="h-full w-full" />
 					{/if}
 				</div>
 
@@ -526,14 +527,14 @@
 							<div class="card card-bordered border-base-300 bg-base-100 rounded-none">
 								<div class="card-body p-4 gap-3">
 									<div class="flex items-center gap-3">
-										<div class="skeleton h-10 w-10 rounded-full"></div>
+										<Skeleton class="h-10 w-10 rounded-full" />
 										<div class="space-y-1.5 flex-1">
-											<div class="skeleton h-3 w-32"></div>
-											<div class="skeleton h-2 w-20"></div>
+											<Skeleton class="h-3 w-32" />
+											<Skeleton class="h-2 w-20" />
 										</div>
 									</div>
 									<div class="h-10 w-full mt-1 border-t border-base-200/50 pt-2 flex items-end">
-										<div class="skeleton h-8 w-full"></div>
+										<Skeleton class="h-8 w-full" />
 									</div>
 								</div>
 							</div>

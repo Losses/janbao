@@ -5,6 +5,7 @@
 	 * navigations  - no skeleton flash on subsequent visits.
 	 */
 	import { afterNavigate } from '$app/navigation';
+	import Skeleton from '$lib/components/atoms/Skeleton.svelte';
 	import type { TranslationDict } from '$lib/types/translation';
 	import { getCategoryStore } from '$lib/stores/categories.svelte';
 
@@ -35,7 +36,7 @@
 	{#if !store.loaded}
 		<div class="space-y-2">
 			{#each [0, 1, 2, 3] as i (i)}
-				<div class="skeleton h-5 w-full rounded"></div>
+				<Skeleton class="h-5 w-full rounded" />
 			{/each}
 		</div>
 	{:else if store.categories.length === 0}

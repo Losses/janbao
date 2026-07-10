@@ -7,7 +7,7 @@ import {
 } from './helpers';
 
 /**
- * DV20 Cycle 5b1 — pilot-route back-swipe gesture regression.
+ * DV20 Cycle 5b1 - pilot-route back-swipe gesture regression.
  *
  * Drives a real CDP touch gesture on the pilot route
  * `/messages/<numeric>` through the new pipeline
@@ -508,6 +508,18 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 			capture.fabReversals,
 			`FAB scale must not reverse for sub-threshold commit (reversals=${capture.fabReversals})`
 		).toBe(0);
+
+		// The slide must actually run - a direct dispatch that changed the
+		// URL without animating would leave delta ~0.
+		const delta = capture.maxM41 - capture.minM41;
+		expect(
+			delta,
+			`sub-threshold commit must produce a slide (delta=${delta}, samples=${capture.sampleCount})`
+		).toBeGreaterThan(50);
+		expect(
+			capture.reversals,
+			`sub-threshold commit must play a single slide (reversals=${capture.reversals})`
+		).toBe(0);
 	});
 
 	test('forward enter from /messages/inbox slides the track into view', async ({ page, context }) => {
@@ -545,6 +557,12 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		const first = samples[0];
 		const last = samples[samples.length - 1];
 		expect(Math.abs(last - first), `track should have slid during enter (first=${first}, last=${last})`).toBeGreaterThan(50);
+		// Forward enter slides the track LEFTWARD (0 -> -W): the rest
+		// sample is more negative than the enter-start sample.
+		expect(
+			last - first,
+			`forward enter must slide leftward, not rightward (first=${first}, last=${last})`
+		).toBeLessThan(-50);
 	});
 
 	test('back-swipe started during forward-enter interrupts cleanly and commits', async ({ page, context }) => {
@@ -594,17 +612,49 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		await page.goto('/messages/inbox');
 		await waitForHydration(page);
 
+		// Sample the track translateX across the forward-enter -> tab-click
+		// interrupt so a visual teleport (a broken handoff) is caught, not
+		// just the landing URL.
+		await page.evaluate(() => {
+			(window as any).__tabEnterSamples = [] as number[];
+			const sample = () => {
+				const track = document.querySelector('[data-testid="nav-pipeline-track"]');
+				if (track) {
+					(window as any).__tabEnterSamples.push(
+						new DOMMatrix(getComputedStyle(track).transform).m41
+					);
+				}
+				requestAnimationFrame(sample);
+			};
+			requestAnimationFrame(sample);
+		});
+
 		// Click a conversation link to trigger the forward-enter.
 		await page.click('a[href^="/messages/"]:not([href="/messages/new"]):not([href="/messages/inbox"])');
 		await page.waitForURL(/\/messages\/\d+/);
 		// Do NOT wait out the enter animation; click a tab immediately.
 		// The enter animation is ~200ms; the tab-click must begin within
 		// that window to exercise the onSvelteKitBeforeNavigate interrupt
-		// path (the R12-B concern).
+		// path.
 		await page.click('[data-tab-nav][href="/messages/inbox"]');
 
 		// The tab-click should commit: URL returns to /messages/inbox.
 		await page.waitForURL('**/messages/inbox', { timeout: 5000 });
+
+		const samples = (await page.evaluate(() => (window as any).__tabEnterSamples)) as number[];
+		expect(samples.length, 'sampler should have captured track frames').toBeGreaterThan(3);
+		// The interrupt handoff (#startProgressFromCurrentVisual) starts the
+		// tab-click from the enter's current visual, so no frame teleports
+		// the track. A normal slide frame is ~30-40px; a broken handoff
+		// jumps ~W. Bound the max single-frame delta well below W.
+		let maxDelta = 0;
+		for (let i = 1; i < samples.length; i++) {
+			maxDelta = Math.max(maxDelta, Math.abs(samples[i] - samples[i - 1]));
+		}
+		expect(
+			maxDelta,
+			`tab-click-during-enter must not teleport the track (maxDelta=${maxDelta})`
+		).toBeLessThan(150);
 	});
 
 	test('tab-click during gesture commit starts from current position (no backward jump)', async ({
@@ -663,45 +713,6 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 	// settle dispatches its own target) is code-verified, and the
 	// gesture-during-commit interrupt IS covered by the "re-grab
 	// mid-commit" test below (same #beginGesture path, a wider window).
-
-	test('chip-exit LoadingChip grows across the slide (progress-driven overlay)', async ({ page, context }) => {
-		await prepareContext(context);
-		await page.goto('/messages/inbox');
-		await waitForHydration(page);
-		await page.click('a[href^="/messages/"]:not([href="/messages/new"]):not([href="/messages/inbox"])');
-		await page.waitForURL(/\/messages\/\d+/);
-		await page.waitForTimeout(500);
-
-		// Sample the LoadingChip's inline `transform: scale(...)` across
-		// the chip-exit slide. The chip is driven by the executor's commit
-		// progress, so it grows from its start scale toward full size.
-		await page.evaluate(() => {
-			(window as any).__chipSamples = [] as number[];
-			const sample = (): void => {
-				const chip = document.querySelector('.loading-chip');
-				if (chip) {
-					const m = new DOMMatrix(getComputedStyle(chip).transform);
-					(window as any).__chipSamples.push(m.a);
-				}
-				requestAnimationFrame(sample);
-			};
-			requestAnimationFrame(sample);
-		});
-
-		// Tap a cross-tab target to start the chip-exit (LoadingChip shows).
-		await page.click('[data-tab-nav][href="/activity"]');
-		await page.waitForURL('**/activity', { timeout: 5000 });
-
-		const samples = (await page.evaluate(() => (window as any).__chipSamples)) as number[];
-		expect(samples.length, 'chip sampler should have captured frames').toBeGreaterThan(3);
-		const min = Math.min(...samples);
-		const max = Math.max(...samples);
-		// Progress-driven: the chip grows across the slide (non-zero range).
-		expect(
-			max - min,
-			`chip scale should change across the slide (samples=${samples.slice(0, 10).join(',')})`
-		).toBeGreaterThan(0.1);
-	});
 
 	test('re-grab mid-commit continues from the current position (no backward jump, §5)', async ({
 		page,

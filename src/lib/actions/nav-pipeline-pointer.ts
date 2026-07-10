@@ -49,24 +49,11 @@ export interface NavPipelinePointerParams {
 interface PointerContext {
 	readonly startX: number;
 	readonly startY: number;
-	readonly target: string | null;
-}
-
-/** Return the `href` of the closest `[data-tab-nav]` ancestor, or null.
- *  Forwarded as the intent event's `target` field. The classifier
- *  ignores `target` for pointer events (drags); it is read only for
- *  tap / goto / popstate / hashchange. Retained for future
- *  classification. */
-function describeTarget(target: EventTarget | null): string | null {
-	if (!(target instanceof Element)) return null;
-	const tabNav = target.closest('[data-tab-nav]');
-	if (tabNav !== null) return tabNav.getAttribute('href');
-	return null;
 }
 
 /** The Svelte action. Attaches `detectSwipe` with handlers that bridge
  *  to the orchestrator's intent classifier; tracks the pointer context
- *  (start X/Y + target) across the gesture. */
+ *  (start X/Y) across the gesture. */
 export const navPipelinePointer: Action<HTMLElement, NavPipelinePointerParams> = (
 	node,
 	initial
@@ -75,7 +62,6 @@ export const navPipelinePointer: Action<HTMLElement, NavPipelinePointerParams> =
 	let ctx: PointerContext | null = null;
 	let lastDownX = 0;
 	let lastDownY = 0;
-	let lastDownTarget: string | null = null;
 	// §9: single-gesture at a time. The primary pointer owns the gesture
 	// once its pointerdown is recorded; secondary pointerdowns are ignored
 	// until the primary is released.
@@ -85,13 +71,12 @@ export const navPipelinePointer: Action<HTMLElement, NavPipelinePointerParams> =
 		if (ctx === null) {
 			ctx = {
 				startX: lastDownX,
-				startY: lastDownY,
-				target: lastDownTarget
+				startY: lastDownY
 			};
 			// The first move classified as a swipe: forward the equivalent
 			// pointerdown + pointermove so the classifier enters the drag
 			// state. The orchestrator's classifier takes absolute X.
-			params.orchestrator.onPointerDown(lastDownX, lastDownY, lastDownTarget);
+			params.orchestrator.onPointerDown(lastDownX, lastDownY);
 			const x = lastDownX + deltaX;
 			params.orchestrator.onPointerMove(x, lastDownY);
 			return;
@@ -141,7 +126,6 @@ export const navPipelinePointer: Action<HTMLElement, NavPipelinePointerParams> =
 		primaryPointerId = event.pointerId;
 		lastDownX = event.clientX;
 		lastDownY = event.clientY;
-		lastDownTarget = describeTarget(event.target);
 		ctx = null;
 	};
 	const onPointerUpCapture = (event: PointerEvent): void => {
@@ -180,5 +164,3 @@ export const navPipelinePointer: Action<HTMLElement, NavPipelinePointerParams> =
 		}
 	};
 };
-
-export { describeTarget };
