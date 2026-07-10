@@ -829,6 +829,51 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		);
 	});
 
+	test('back-swipe preview restores the inbox scroll position (R62 MED)', async ({
+		page,
+		context
+	}) => {
+		await prepareContext(context);
+		await page.goto('/messages/inbox');
+		await waitForHydration(page);
+
+		// Shrink the viewport so the inbox list overflows it. The seed's
+		// inbox is short at the default Pixel 5 height; a small viewport
+		// makes the existing content scrollable. (The inbox + left-panel
+		// data is SSR-embedded via SvelteKit server load, not a client
+		// fetch, so a route() interception is unreliable here.)
+		await page.setViewportSize({ width: 393, height: 240 });
+
+		const inboxPane = page.locator('[data-tab-panel="messages"]');
+		await inboxPane.waitFor();
+		await inboxPane.evaluate((el: HTMLElement) => {
+			el.scrollTop = 150;
+			el.dispatchEvent(new Event('scroll', { bubbles: true }));
+		});
+		await page.waitForTimeout(100);
+		const scrolled = await inboxPane.evaluate((el: HTMLElement) => el.scrollTop);
+		expect(scrolled, 'inbox must be scrollable (viewport shrunk)').toBeGreaterThan(0);
+
+		// Navigate to a conversation; NavPipelineHost mounts and the left
+		// panel (the inbox preview) must restore the cached scroll position
+		// (matching GPL). A regression renders the preview at scrollTop 0.
+		await page.click(
+			'a[href^="/messages/"]:not([href="/messages/new"]):not([href="/messages/inbox"])'
+		);
+		await page.waitForURL(/\/messages\/\d+/);
+		await waitForHydration(page);
+
+		const leftScrollTop = await page.evaluate(() => {
+			const track = document.querySelector('[data-testid="nav-pipeline-track"]');
+			const left = track?.querySelector('[data-tab-panel="messages"]');
+			return left ? (left as HTMLElement).scrollTop : -1;
+		});
+		expect(
+			leftScrollTop,
+			`left panel must restore the cached inbox scroll (got ${leftScrollTop})`
+		).toBeGreaterThan(0);
+	});
+
 	test('desktop: the gesture pipeline is inert (no track transform, plain tab nav)', async ({
 		page,
 		context

@@ -26,6 +26,7 @@
 	import { MOBILE_TABS, getCurrentTabIndex, getPreviewPanel } from '$lib/utils/route-config';
 	import { viewportLock } from '$lib/stores/viewport-lock.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
+	import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
 	import {
 		setActiveGestureTrack,
 		clearActiveGestureTrack
@@ -98,6 +99,7 @@
 	// the viewport is the pointer surface.
 	let viewportEl: HTMLElement | null = $state(null);
 	let trackEl: HTMLElement | null = $state(null);
+	let leftEl: HTMLElement | null = $state(null);
 	let centerEl: HTMLElement | null = $state(null);
 
 	// The back-target's tab label (drives the exit preview's data-tab-panel
@@ -124,6 +126,19 @@
 			: leftPreviewTab
 	);
 
+	// Cached scroll positions for the left (back-target) and centre
+	// (conversation) panels, restored on mount / re-entry so a back-swipe
+	// preview shows the list at its last scroll position (matching GPL's
+	// leftScrollTop / currentScrollTop). The left restore is gated to a
+	// non-chip-exit: during a chip-exit the left panel renders the TARGET's
+	// panel (fresh content), not the back-target, so the back-target's
+	// cached scroll does not apply.
+	const pageCache = getPageCacheStore();
+	const leftScrollTop = $derived(!chipExit ? (pageCache.get(leftHref)?.scrollTop ?? 0) : 0);
+	const currentScrollTop = $derived(
+		page.url.pathname ? (pageCache.get(page.url.pathname)?.scrollTop ?? 0) : 0
+	);
+
 	// The track is always 2 panels: the left (the back-target's panel, or a
 	// chip-exit target's real panel / skeleton) + the centre (conversation).
 	// A chip-exit uses the SAME 2-panel geometry as a direct slide, so a
@@ -140,6 +155,28 @@
 	// the track. Mirrors the GPL pattern.
 	$effect(() => {
 		if (trackEl) setActiveGestureTrack(trackEl);
+	});
+
+	// Restore the cached scroll positions on the left + centre panels
+	// (immediately + on the next frame, matching GPL). Setting scrollTop
+	// programmatically does not fire `onscroll`, so this cannot loop.
+	$effect(() => {
+		if (leftEl && leftScrollTop > 0) {
+			leftEl.scrollTop = leftScrollTop;
+			const rafId = requestAnimationFrame(() => {
+				if (leftEl) leftEl.scrollTop = leftScrollTop;
+			});
+			return () => cancelAnimationFrame(rafId);
+		}
+	});
+	$effect(() => {
+		if (centerEl && currentScrollTop > 0) {
+			centerEl.scrollTop = currentScrollTop;
+			const rafId = requestAnimationFrame(() => {
+				if (centerEl) centerEl.scrollTop = currentScrollTop;
+			});
+			return () => cancelAnimationFrame(rafId);
+		}
 	});
 
 	// Register the centre panel as the scroll-chrome source on mobile.
@@ -399,9 +436,15 @@
 	>
 		{#if isMobile}
 			<section
+				bind:this={leftEl}
 				data-tab-panel={leftPanelTab}
 				class="shrink-0 scroll-pane md:hidden"
 				style={leftStyle}
+				onscroll={(e) => {
+					if (!chipExit && e.currentTarget.scrollTop > 0) {
+						pageCache.capture(leftHref, undefined, { scrollTop: e.currentTarget.scrollTop });
+					}
+				}}
 			>
 				<div class="gpl-card">
 					<!-- The chip-exit reveals the target's REAL panel from the
@@ -454,6 +497,13 @@
 			bind:this={centerEl}
 			class="shrink-0 scroll-pane detail-scroll-pane h-full w-full"
 			style={centerStyle}
+			onscroll={(e) => {
+				if (e.currentTarget.scrollTop > 0) {
+					pageCache.capture(page.url.pathname, undefined, {
+						scrollTop: e.currentTarget.scrollTop
+					});
+				}
+			}}
 		>
 			<div class="gpl-card">
 				{@render children()}

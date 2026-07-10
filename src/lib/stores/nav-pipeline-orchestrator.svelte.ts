@@ -440,6 +440,10 @@ export class NavPipelineOrchestrator {
 		// (consistent with #beginGesture / onSvelteKitBeforeNavigate). For
 		// a fresh mount the prior publication is AT_REST (progress 0).
 		this.#commitStartRaw = this.#publication.progress;
+		// Explicit (already false from the constructor on a fresh mount):
+		// keeps #chipExitState in sync with #publication.chipExit at every
+		// publication-write site.
+		this.#chipExitState = false;
 		this.#isEnterAnimation = true;
 		this.#publication = {
 			plan,
