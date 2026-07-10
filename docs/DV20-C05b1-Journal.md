@@ -238,10 +238,10 @@ The `{detail, tab}` resolver for the pilot emits a `PageTrackPlan` with
 `axis: 'right'`, `distance: viewportWidth / 2`, and a NEW
 `restingTranslate: -viewportWidth / 2`. The executor's `buildVisual`
 extends to `tx = restingTranslate + sign * distance * progress`. For
-axis='right' (sign=+1), at progress=0, tx = -W/2 (centre visible); at
+axis='right' (sign=+1), at progress=0, tx = -W (centre visible); at
 progress=1, tx = 0 (left panel visible). The driver writes
 `transform: translateX(${tx}px)`. The result is byte-equivalent to the
-old `calc(-50% + Npx)` (with Npx in [-W/2, 0]).
+old `calc(-50% + Npx)` (with Npx in [-W, 0]).
 
 The `HEADER_MORPH_THRESHOLD` gate (0.2 of viewport width) is replicated
 in the pointer-bridge: the first 20% of drag does not advance the
@@ -313,7 +313,7 @@ Built the UNIFY wiring for the pilot route `/messages/[id]`:
   `navStore.handleBeforeNavigate`.
 - `src/lib/utils/nav-resolvers.ts` - extended `PageTrackPlan` with an
   optional `restingTranslate` (default 0) so the multi-panel track's
-  `-W/2` rest offset is expressible. Existing resolvers unchanged.
+  `-W` rest offset is the 2-panel default. Existing resolvers unchanged.
 - `src/lib/utils/nav-executor-logic.ts` - `buildVisual` reads
   `restingTranslate ?? 0` so existing plans produce the same output.
 - `src/lib/stores/nav-executor.svelte.ts` - added an optional
@@ -1458,7 +1458,6 @@ isMobile && !chipExit}` left-section guard stays. B-C2 (no movement
   publication lands. `TAB_CLICK_COMMIT_MS` docstring mentions
   `playEnterAnimation`. 80 e2e green. Detailed in
   `docs/RV20-C05b1-Audit-42.md`.
-
 - **Round 43 (architect, 2-auditor, clean prompt + search-similar): 0/2
   PASS.** A PASS-WITH-CONCERNS (5); B FAIL (8). BOTH auditors
   independently flagged C1: the chip-exit tab-click animation is
@@ -1559,9 +1558,41 @@ isMobile && !chipExit}` left-section guard stays. B-C2 (no movement
   live-drag drop, skeleton unreachable, hardcoded targets, stale toTag)
   documented. Gate: check 0/0, lint EXIT=0, unit 436/0, e2e 81 passed.
   Detailed in `docs/RV20-C05b1-Audit-50.md`.
+- **Round 51 (architect, 2-auditor, clean prompt + search-similar): 0/2
+  PASS.** A PASS-WITH-CONCERNS (1 MED + 4 low); B PASS-WITH-CONCERNS (1
+  MED + 3 low). Two MEDs (both test-assertion gaps, not production bugs):
+  (A) the reduced-motion `range < 150` assertion was fragile (timing-
+  dependent); changed to `movingFrames <= 3` (robust regardless of rAF-vs-
+  nav timing). (B) tab-exit-preview didn't assert the target panel for the
+  pilot's chip-exit bug cases; fixed: `toContain(c.target.tab)` for pilot
+  cases + controls (GPL bug cases excluded). Lows documented (skeleton
+  unreachable, dead coordinate(), stale BUG labels, unused lifecycle,
+  forward-enter seed race, DualColumnLayout transition class). Gate: check
+  0/0, lint EXIT=0, unit 436/0, e2e 81 passed. Detailed in
+  `docs/RV20-C05b1-Audit-51.md`.
+- **Round 52 (architect, 2-auditor, clean prompt + search-similar): 0/2
+  PASS.** A PASS-WITH-CONCERNS (7 low); B PASS-WITH-CONCERNS (6 low).
+  **Zero MED/HIGH.** The cleanest round; A: "No blocking defect found."
+  Fixed: inlined the vestigial beginSlide closure (dead abort guard from
+  the preload era), renamed the stale "BUG:" test labels for the pilot's
+  chip-exit cases, gated recoverDesktopFlipNav on orchestratorMounted
+  (cold-desktop dead-on-arrival), corrected the journal Design -W/2 typo
+  (code correctly uses -W). Lows documented (dead code, edge, design
+  property, moot). Gate: check 0/0, lint EXIT=0, unit 436/0, e2e 81
+  passed. Detailed in `docs/RV20-C05b1-Audit-52.md`.
+- **Round 53 (architect, 2-auditor, clean prompt + search-similar): 0/2
+  PASS.** A PASS-WITH-CONCERNS (3 low); B PASS-WITH-CONCERNS (2 low).
+  **Zero MED/HIGH** (second consecutive). Fixed: removed the dead
+  `coordinate()` call from the gesture path (4-round recurring flag; the
+  gesture always targets the back-target, so chipExit is always false;
+  removed the unused `coordinate` + `getPageCacheStore` imports), moved
+  the misplaced mount() comment, improved the playEnterAnimation docstring.
+  Lows documented (seed race, hardcoded targets). Gate: check 0/0, lint
+  EXIT=0, unit 436/0, e2e 81 passed. Detailed in
+  `docs/RV20-C05b1-Audit-53.md`.
 
-Consecutive pass votes: **0** (R50 A carried the MED FAB bug; fixed; R51
-audits the post-fix state).
+Consecutive pass votes: **0** (R53 carried low concerns; fixed; R54 audits
+with a revised prompt that removes all Journal references).
 
 ## Coverage bullets (round-independent)
 

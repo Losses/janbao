@@ -941,11 +941,18 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		const samples = (await page.evaluate(() => (window as any).__rmSamples)) as number[];
 		expect(samples.length, 'sampler should have captured track frames').toBeGreaterThan(3);
 		// Under reduced-motion the commit SNAPS synchronously (startCommit
-		// takes the snap path, no rAF): the track jumps to the target + the
-		// page navigates in one JS tick, so the sampler catches only the
-		// tiny threshold-absorbed drag movement (range < 150), NOT a smooth
-		// slide to the target (which would span the full viewport, ~W).
-		const range = Math.max(...samples) - Math.min(...samples);
-		expect(range, `reduced-motion commit must snap, not slide (range=${range})`).toBeLessThan(150);
+		// takes the snap path, no rAF). Count frames where the track moved
+		// significantly (> 5px): a snap produces 0-1 moving frames (the
+		// snap is one synchronous write; whether the sampler catches it
+		// depends on rAF-vs-nav timing); a smooth rAF slide produces
+		// ~12-16 moving frames. This is robust to the timing either way.
+		let movingFrames = 0;
+		for (let i = 1; i < samples.length; i++) {
+			if (Math.abs(samples[i] - samples[i - 1]) > 5) movingFrames++;
+		}
+		expect(
+			movingFrames,
+			`reduced-motion commit must snap, not slide (movingFrames=${movingFrames})`
+		).toBeLessThanOrEqual(3);
 	});
 });

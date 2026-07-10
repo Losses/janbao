@@ -84,13 +84,13 @@ const CASES: ExitCase[] = [
 		control: true
 	},
 	{
-		name: 'message -> / (BUG: previews messages) [REPORTED]',
+		name: 'message -> / (chip-exit: target panel revealed)',
 		source: 'message',
 		target: TARGET_BY_HREF['/'],
 		control: false
 	},
 	{
-		name: 'message -> /activity (BUG: previews messages)',
+		name: 'message -> /activity (chip-exit: target panel revealed)',
 		source: 'message',
 		target: TARGET_BY_HREF['/activity'],
 		control: false
@@ -179,13 +179,14 @@ test.describe('cross-tab exit preview matches the target tab', () => {
 					`not a different list (saw [${anim.seenTabs.join(', ')}], revealed=${anim.revealedTab})`
 			).toHaveLength(0);
 
-			// Controls double as calibration: their target tab MUST be the preview,
-			// proving the sampler detects a correct preview (so a bug-case failure
-			// is a real regression, not a broken harness).
-			if (c.control) {
+			// The pilot's chip-exit (source=message) + all control cases must
+			// reveal the target tab's panel. GPL bug cases (source=discussion)
+			// are excluded: GPL's chip-exit may reveal the wrong panel
+			// (pre-existing GPL behavior, not the pilot's concern).
+			if (c.source === 'message' || c.control) {
 				expect(
 					anim.seenTabs,
-					`${c.name} (control): target ${c.target.tab} must be the preview`
+					`${c.name}: target ${c.target.tab} must be the preview (saw [${anim.seenTabs.join(', ')}])`
 				).toContain(c.target.tab);
 			}
 		});

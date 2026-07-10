@@ -45,7 +45,6 @@
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
 import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
-import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
 import { getNavStateMachine } from '$lib/stores/nav-state-machine.svelte';
 import { NavExecutor } from '$lib/stores/nav-executor.svelte';
 import { progressAtTranslateX, trackTranslateX } from '$lib/utils/nav-executor-logic';
@@ -60,7 +59,6 @@ import {
 	type IntentEventKind,
 	type IntentState
 } from '$lib/utils/nav-intent';
-import { coordinate } from '$lib/utils/nav-coordinator';
 import {
 	selectResolver,
 	type ResolverInput,
@@ -363,7 +361,8 @@ export class NavPipelineOrchestrator {
 		// route swap); align it to the pilot's FROM tag so a land event
 		// settles to the right surface.
 		this.#publication = AT_REST_PUBLICATION;
-		this.#chipExitState = false; // Publish the at-rest pager state now that #mountInputs is set,
+		this.#chipExitState = false;
+		// Publish the at-rest pager state now that #mountInputs is set,
 		// independent of the host reset $effect's timing.
 		this.resetPagerStore();
 	}
@@ -397,8 +396,9 @@ export class NavPipelineOrchestrator {
 	}
 
 	/** Play a forward enter-slide animation (left panel → centre
-	 *  panel). Called from the host's `onMount` when the pilot route
-	 *  is reached via a forward SPA navigation from the backTarget.
+	 *  panel). Called from the host's `onMount` (deferred one rAF so
+	 *  `viewportEl.clientWidth` can be measured) when the pilot route is
+	 *  reached via a forward SPA navigation from the backTarget.
 	 *  The track starts at `translateX(0)` (left panel visible) and
 	 *  slides to `translateX(-W)` (centre visible) over ~200ms via
 	 *  the executor's rAF. The duration matches the non-pilot routes' CSS
@@ -703,34 +703,13 @@ export class NavPipelineOrchestrator {
 		// #onExecutorSettle dispatches THIS gesture's target, not the
 		// tab-click's. The two pending slots are mutually exclusive.
 		this.#pendingTabExit = null;
-		// Coordinator: direct-slide if the TO is cached; chip-exit otherwise
-		// (the chip-exit slides in the target's cached panel / skeleton; the
-		// orchestrator does NOT preload - the nav loads the target). NOTE:
-		// cacheHas reads PageCacheStore, which the root
-		// layout's $effect seeds post-hydration (GPL instead reads the
-		// server-rendered data.* synchronously). On the very first post-
-		// hydration frame the cache may not be seeded yet, so a chip-exit
-		// could be chosen where GPL would direct-slide; not user-reachable
-		// (a drag cannot start in the first frame) and the cache flushes on
-		// the first reactive tick.
-		const cacheHas = (pathname: string, _subKey?: string): boolean => {
-			const cache = getPageCacheStore();
-			return cache.get(pathname, _subKey) !== null;
-		};
-		const decision = coordinate({
-			fromPathname: from,
-			toPathname: to,
-			toSubKey: undefined,
-			toSnapshotCapture: getRouteData(to).snapshotCapture,
-			cacheHas,
-			hasToSnippet: false
-		});
-		// The gesture always targets the back-target (pre-rendered), so a
-		// gesture never chip-exits for the pilot (to === backTarget). The
-		// `to !== backTarget` guard keeps the cache-based decision honest:
-		// a first-frame cache miss cannot flip a back-target gesture to
-		// chip-exit (which would freeze the FAB at coverProgress=0).
-		const chipExit = decision.strategy === 'chip-exit' && to !== inputs.backTarget;
+		// A back-swipe gesture always targets the back-target (pre-rendered),
+		// so it is always a direct-slide - never a chip-exit. The
+		// coordinator (Layer 4) is not consulted for gestures in 5b1 (the
+		// pilot's only gesture target is the back-target, which is always
+		// pre-rendered). A future pilot whose gesture targets a non-back-
+		// target tab would consult the coordinator here.
+		const chipExit = false;
 		// A chip-exit uses the SAME 2-panel geometry as a direct slide:
 		// the left panel (the target's real panel when cached, or its
 		// skeleton - chosen by the host from publication.toPathname) is
@@ -1000,18 +979,12 @@ export class NavPipelineOrchestrator {
 		};
 		this.#chipExitState = chipExit;
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
-		const beginSlide = (): void => {
-			// Abort if the orchestrator moved on (unmount, gesture, or
-			// another tab-click) before the slide starts.
-			if (this.#executor === null || this.#pendingTabExit?.target !== to) return;
-			this.#executor?.onDragStart(plan, startProgress, 0);
-			this.#executor?.onCommit(0, TAB_CLICK_COMMIT_MS);
-		};
 		// The chip-exit uses the same 2-panel slide as a direct exit; the
 		// host renders the target's real panel (cached) or its skeleton in
 		// the left slot (keyed off chipExit + toPathname), so the slide
 		// reveals the correct content. Dispatch on settle.
-		beginSlide();
+		this.#executor?.onDragStart(plan, startProgress, 0);
+		this.#executor?.onCommit(0, TAB_CLICK_COMMIT_MS);
 		return true;
 	}
 

@@ -249,7 +249,7 @@
 				// transition (matches GPL's pendingNav wall-clock cap) before
 				// the orchestrator is torn down. A route-away unmount
 				// (onDestroy) does NOT do this, so the user's fresh nav wins.
-				orchestrator.recoverDesktopFlipNav();
+				if (orchestratorMounted) orchestrator.recoverDesktopFlipNav();
 				unmountOrchestrator();
 				if (held) {
 					viewportLock.release();
@@ -397,11 +397,11 @@
 			>
 				<div class="gpl-card">
 					<!-- The chip-exit reveals the target's REAL panel from the
-					     eager-loaded root-layout data. The skeleton is the
-					     fallback for a target that is not eager-loaded; the
-					     three tab roots ARE eager-loaded on every route, so
-					     the real panel always shows (the skeleton branches
-					     are the spec's fallback, currently unreachable). -->
+					     eager-loaded root-layout data. The skeleton renders
+					     when the eager load rejected (Promise.allSettled); the
+					     two chip-exit targets (/ and /activity) are
+					     eager-loaded on every route, so the skeleton is a
+					     degraded-mode fallback. -->
 					{#if chipExitTarget === '/activity'}
 						{#if page.data.activity}
 							<ActivityPanel
