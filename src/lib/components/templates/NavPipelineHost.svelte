@@ -101,7 +101,13 @@
 	const leftPreviewTab = $derived(leftTabDef?.labelKey ?? null);
 	// The in-flight publication. chipExit + toPathname identify a cross-tab
 	// exit's target, so the left panel can render that tab's real panel
-	// (when its data is cached) or its skeleton.
+	// (when its data is cached) or its skeleton. A cross-type interrupt
+	// (e.g. a gesture starting mid chip-exit tab-click) flips the target,
+	// so the left-panel content swaps to the new target's panel mid-slide;
+	// the GEOMETRY stays continuous (the orchestrator's
+	// #startProgressFromCurrentVisual hands off with no jump). The content
+	// swap is expected - the panel reflects whichever transition is in
+	// flight.
 	const publication = $derived(orchestrator.publication);
 	const chipExit = $derived(orchestrator.chipExit);
 	const chipExitTarget = $derived(chipExit ? publication.toPathname : null);
@@ -390,6 +396,12 @@
 				style={leftStyle}
 			>
 				<div class="gpl-card">
+					<!-- The chip-exit reveals the target's REAL panel from the
+					     eager-loaded root-layout data. The skeleton is the
+					     fallback for a target that is not eager-loaded; the
+					     three tab roots ARE eager-loaded on every route, so
+					     the real panel always shows (the skeleton branches
+					     are the spec's fallback, currently unreachable). -->
 					{#if chipExitTarget === '/activity'}
 						{#if page.data.activity}
 							<ActivityPanel

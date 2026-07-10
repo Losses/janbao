@@ -276,6 +276,14 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 			`FAB scale must ramp monotonically (reversals=${capture.fabReversals}; ` +
 				`coverProgress must be continuous across the drag-to-commit boundary)`
 		).toBe(0);
+
+		// The commit must dispatch the nav (settle -> goto). A regression
+		// where the slide plays but the dispatch never fires would pass the
+		// trajectory assertions above but fail this.
+		await page.waitForURL('**/messages/inbox', { timeout: 5000 });
+		expect(page.url(), 'back-swipe commit must land on /messages/inbox').toMatch(
+			/\/messages\/inbox/
+		);
 	});
 
 	test('partial swipe (< 60px) cancels and stays on the pilot route', async ({ page }) => {
@@ -833,5 +841,111 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 			(el) => getComputedStyle(el).transform
 		);
 		expect(transform, 'desktop track must have no transform').toBe('none');
+	});
+
+	test('cold deep-link landing rests at centre (no enter animation)', async ({ page, context }) => {
+		await prepareContext(context);
+		// Cold-load the pilot directly (no prior /messages/inbox in history).
+		await page.goto('/messages/1');
+		await waitForHydration(page);
+		await page.waitForSelector('[data-testid="nav-pipeline-track"]');
+
+		// Sample the track transform; a deep-link must NOT play the
+		// forward-enter animation (shouldEnter is false: activeStack has no
+		// prior entry). The track rests at the SSR translateX(-50%).
+		await page.evaluate(() => {
+			(window as any).__deepLinkSamples = [] as number[];
+			const sample = () => {
+				const track = document.querySelector('[data-testid="nav-pipeline-track"]');
+				if (track) {
+					(window as any).__deepLinkSamples.push(
+						new DOMMatrix(getComputedStyle(track).transform).m41
+					);
+				}
+				requestAnimationFrame(sample);
+			};
+			requestAnimationFrame(sample);
+		});
+		await page.waitForTimeout(500);
+
+		const samples = (await page.evaluate(() => (window as any).__deepLinkSamples)) as number[];
+		expect(samples.length, 'sampler should have captured track frames').toBeGreaterThan(3);
+		// No enter animation: the track never moves (range ~0).
+		const delta = Math.max(...samples) - Math.min(...samples);
+		expect(delta, `deep-link must not play an enter animation (delta=${delta})`).toBeLessThan(20);
+	});
+
+	test('reduced-motion: back-swipe commit snaps (no rAF integration)', async ({ page, context }) => {
+		await prepareContext(context);
+		await page.emulateMedia({ reducedMotion: 'reduce' });
+		await page.goto('/');
+		await waitForHydration(page);
+		await page.locator('a[data-tab-nav][href="/messages/inbox"]').click();
+		await page.waitForURL('/messages/inbox');
+		await page.waitForTimeout(200);
+		await page
+			.locator('a[href^="/messages/"]:not([href="/messages/new"]):not([href="/messages/inbox"])')
+			.first()
+			.click();
+		await page.waitForURL(/\/messages\/\d+/);
+		await page.waitForSelector('.detail-scroll-pane');
+		await page.waitForTimeout(500);
+
+		// Sample the track m41. Under reduced-motion the commit SNAPS
+		// (startCommit takes the snap path, no rAF): the track jumps from
+		// the release position to the target in one frame, not a smooth
+		// ~16-frame slide. A slow drag keeps the per-frame drag deltas
+		// small, so the snap's single-frame jump dominates the max delta.
+		await page.evaluate(() => {
+			(window as any).__rmSamples = [] as number[];
+			const sample = () => {
+				const track = document.querySelector('[data-testid="nav-pipeline-track"]');
+				if (track) {
+					(window as any).__rmSamples.push(new DOMMatrix(getComputedStyle(track).transform).m41);
+				}
+				requestAnimationFrame(sample);
+			};
+			requestAnimationFrame(sample);
+		});
+
+		// 80px rightward drag (past SWIPE_COMMIT=60), slow (10 small moves).
+		const client = await page.context().newCDPSession(page);
+		await client.send('Emulation.setTouchEmulationEnabled', {
+			enabled: true,
+			maxTouchPoints: 5
+		});
+		const y = 400;
+		const startX = 120;
+		const endX = 200;
+		const dispatch = (type: 'touchStart' | 'touchMove' | 'touchEnd', x: number, state: string) =>
+			client.send('Input.dispatchTouchEvent', {
+				type,
+				touchPoints: [{ state, x, y, id: 1 }] as unknown as never,
+				modifiers: 0,
+				timestamp: 0
+			});
+		await dispatch('touchStart', startX, 'touchPressed');
+		for (let i = 1; i <= 10; i++) {
+			const x = Math.round(startX + (endX - startX) * (i / 10));
+			await dispatch('touchMove', x, 'touchMoved');
+		}
+		await dispatch('touchEnd', endX, 'touchReleased');
+		await client.detach();
+
+		await page.waitForURL('**/messages/inbox', { timeout: 5000 });
+		await page.waitForTimeout(300);
+
+		expect(page.url(), 'reduced-motion commit must land on /messages/inbox').toMatch(
+			/\/messages\/inbox/
+		);
+		const samples = (await page.evaluate(() => (window as any).__rmSamples)) as number[];
+		expect(samples.length, 'sampler should have captured track frames').toBeGreaterThan(3);
+		// Under reduced-motion the commit SNAPS synchronously (startCommit
+		// takes the snap path, no rAF): the track jumps to the target + the
+		// page navigates in one JS tick, so the sampler catches only the
+		// tiny threshold-absorbed drag movement (range < 150), NOT a smooth
+		// slide to the target (which would span the full viewport, ~W).
+		const range = Math.max(...samples) - Math.min(...samples);
+		expect(range, `reduced-motion commit must snap, not slide (range=${range})`).toBeLessThan(150);
 	});
 });

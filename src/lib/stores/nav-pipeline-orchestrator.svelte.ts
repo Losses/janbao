@@ -457,12 +457,14 @@ export class NavPipelineOrchestrator {
 	}
 
 	/** Land an in-flight transition when the platform flips mobile -> desktop
-	 *  (called by the host's resize handler, NOT by a route-away unmount).
-	 *  Matches GPL's pendingNav wall-clock cap: a commit-slide in flight when
-	 *  the viewport crosses the desktop breakpoint still lands on its target.
-	 *  A pre-commit live-drag (executor still in the 'live' phase) does NOT
-	 *  land - the user may still cancel. A route-away unmount (onDestroy)
-	 *  does not call this, so the user's fresh navigation wins. */
+	 *  (called by the host's resize handler, NOT by a route-away unmount). A
+	 *  commit-slide in flight when the viewport crosses the desktop
+	 *  breakpoint still lands on its target - the same OUTCOME as GPL's
+	 *  pendingNav wall-clock cap, via a viewport-flip handler (not GPL's
+	 *  setTimeout-backed poll). A pre-commit live-drag (executor still in
+	 *  the 'live' phase) does NOT land - the user may still cancel. A
+	 *  route-away unmount (onDestroy) does not call this, so the user's
+	 *  fresh navigation wins. */
 	recoverDesktopFlipNav(): void {
 		if (this.#executor?.state.phase !== 'committing') return;
 		const target = this.#pendingTabExit?.target ?? this.#pendingGesture?.to;
@@ -696,8 +698,10 @@ export class NavPipelineOrchestrator {
 		// #onExecutorSettle dispatches THIS gesture's target, not the
 		// tab-click's. The two pending slots are mutually exclusive.
 		this.#pendingTabExit = null;
-		// Coordinator: direct-slide if the TO is cached; chip-exit + preload
-		// otherwise. NOTE: cacheHas reads PageCacheStore, which the root
+		// Coordinator: direct-slide if the TO is cached; chip-exit otherwise
+		// (the chip-exit slides in the target's cached panel / skeleton; the
+		// orchestrator does NOT preload - the nav loads the target). NOTE:
+		// cacheHas reads PageCacheStore, which the root
 		// layout's $effect seeds post-hydration (GPL instead reads the
 		// server-rendered data.* synchronously). On the very first post-
 		// hydration frame the cache may not be seeded yet, so a chip-exit
@@ -716,7 +720,12 @@ export class NavPipelineOrchestrator {
 			cacheHas,
 			hasToSnippet: false
 		});
-		const chipExit = decision.strategy === 'chip-exit';
+		// The gesture always targets the back-target (pre-rendered), so a
+		// gesture never chip-exits for the pilot (to === backTarget). The
+		// `to !== backTarget` guard keeps the cache-based decision honest:
+		// a first-frame cache miss cannot flip a back-target gesture to
+		// chip-exit (which would freeze the FAB at coverProgress=0).
+		const chipExit = decision.strategy === 'chip-exit' && to !== inputs.backTarget;
 		// A chip-exit uses the SAME 2-panel geometry as a direct slide:
 		// the left panel (the target's real panel when cached, or its
 		// skeleton - chosen by the host from publication.toPathname) is
@@ -1001,7 +1010,13 @@ export class NavPipelineOrchestrator {
 	}
 
 	/** Called from `+layout.svelte`'s `afterNavigate` for pilot-route
-	 *  sources / destinations. Clears the orchestrator's state. */
+	 *  sources / destinations. Clears the orchestrator's state (the
+	 *  transition's nav landed). For the orchestrator's own dispatch
+	 *  (chip-exit / tab-exit / back-swipe settle -> goto) this completes
+	 *  the transition. A same-route param change (`/messages/1` ->
+	 *  `/messages/2`) racing an in-flight gesture would also land-at-rest
+	 *  here, aborting the gesture - an extremely unlikely edge (the user is
+	 *  touching the screen during a gesture, not triggering pagination). */
 	onSvelteKitAfterNavigate(): void {
 		this.#landAtRest();
 	}

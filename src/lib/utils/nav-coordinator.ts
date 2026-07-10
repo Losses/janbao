@@ -4,8 +4,10 @@
  *
  * Per `docs/DV20-Plan.md` §2 Layer 4: given the plan's FROM and TO,
  * consults the unified `PageCacheStore`. If the TO is cached, the plan
- * is a direct slide. If not, the plan becomes a chip-exit with
- * preload.
+ * is a direct slide. If not, the plan becomes a chip-exit (the
+ * coordinator outputs a preload pathname for a consumer that warms the
+ * cache; the 5b1 orchestrator does not consume it - it renders the
+ * cached panel / skeleton directly, see Responsibilities below).
  *
  * Pure. The cache lookup is injected as a `cacheHas` predicate so this
  * module is runes-free and unit-testable without the reactive store.
@@ -16,8 +18,10 @@
  *
  *   - Decide direct-slide vs chip-exit given the FROM/TO and the cache
  *     state.
- *   - When chip-exit, choose the preload pathname (the TO) so the
- *     orchestrator can call `PageCacheStore.ensure(pathname, subKey)`.
+ *   - When chip-exit, output the preload pathname (the TO) for a consumer
+ *     that warms the cache. (The 5b1 orchestrator does NOT call `ensure` -
+ *     it renders the target's cached panel / skeleton directly; the field
+ *     is the general contract for a future consumer.)
  *   - When the TO is a snapshot-capturing route whose own snippet is
  *     cached, allow the slide to overlay it (`useDeepPreview`).
  *
@@ -58,9 +62,10 @@ export type CoordinatorStrategy = 'direct-slide' | 'chip-exit';
 /** The coordinator's decision. Pure data; the orchestrator acts on it. */
 export interface CoordinatorDecision {
 	readonly strategy: CoordinatorStrategy;
-	/** Pathname the orchestrator should preload via
-	 *  `PageCacheStore.ensure(pathname, subKey)`. `null` for a
-	 *  direct-slide (no preload needed). */
+	/** Pathname a consumer may preload via `PageCacheStore.ensure(pathname,
+	 *  subKey)`. `null` for a direct-slide (no preload needed). The 5b1
+	 *  orchestrator does not consume this (it renders the cached panel /
+	 *  skeleton directly). */
 	readonly preloadPathname: string | null;
 	readonly preloadSubKey: string | undefined;
 	/** When true, the executor should overlay the cached snippet
