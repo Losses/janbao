@@ -27,10 +27,13 @@
  * `direction: 'forward' | 'backward'` from the input and the
  * `progressDirection` field encodes which way the plan plays.
  *
- * Each resolver produces per-consumer animation plans (page-track,
- * FAB, Header) as functions of `(progress, liveOffset)`. The plan is
- * resolved ONCE per gesture (FROM and TO locked at gesture start); the
- * live offset streams separately to the executor.
+ * Each resolver produces a page-track plan (axis + distance). The
+ * `TransitionPlan` also carries OPTIONAL `fab` / `header` per-frame
+ * functions a consumer may bind; the Cycle 5b1 pilot omits them (the
+ * FAB / Header react through their own layers reading the pager
+ * store). The plan is resolved ONCE per gesture (FROM and TO locked
+ * at gesture start); the live offset streams separately to the
+ * executor.
  *
  * Pure (runes-free). The orchestrator imports the `TransitionPlan` and
  * `TransitionDirection` types from this module (the wrapper imports
@@ -100,11 +103,18 @@ export type CommitPhysics = 'momentum' | 'snap';
  *  cancelled gesture snapping back to FROM). §4. */
 export type ProgressDirection = 0 | 1;
 
-/** The plan a resolver produces. §4's binding shape. */
+/** The plan a resolver produces. §4's binding shape. The `fab` and
+ *  `header` fields are OPTIONAL: a resolver supplies them only when a
+ *  consumer is bound to drive that visual through the executor. The
+ *  Cycle 5b1 pilot passes `fab: null, header: null` element refs to
+ *  the driver, so the pilot's resolvers omit these fields and the
+ *  FAB / Header react through their own layers reading the pager
+ *  store. A future consumer that binds a FAB / Header element would
+ *  receive the per-frame writes the plan's fns produce. */
 export interface TransitionPlan {
 	readonly pageTrack: PageTrackPlan;
-	readonly fab: FabPlanFn;
-	readonly header: HeaderPlanFn;
+	readonly fab?: FabPlanFn;
+	readonly header?: HeaderPlanFn;
 	readonly progressDirection: ProgressDirection;
 	readonly commitPhysics: CommitPhysics;
 }
@@ -146,8 +156,9 @@ export type TransitionDirection = 'forward' | 'backward';
  *  caller-precomputed direction, the viewport width, and the
  *  reduced-motion flag. The `stack` field is carried on the input (see
  *  above); the resolvers currently consume `direction` instead. All
- *  fields are locked at gesture start; the live parameters stream
- *  through the plan's `fab`/`header` functions. */
+ *  fields are locked at gesture start; the live offset streams to the
+ *  executor directly (a plan that supplies optional `fab` / `header`
+ *  fns receives it as their second argument). */
 export interface ResolverInput {
 	readonly intent: IntentState;
 	readonly stack: RouteStack;
@@ -171,53 +182,6 @@ export type Resolver = (input: ResolverInput) => TransitionPlan;
 
 // ---------------------------------------------------------------------------
 // Pure helpers shared by the resolvers.
-
-/** Clamp a value to [lo, hi]. */
-function clamp(value: number, lo: number, hi: number): number {
-	if (value < lo) return lo;
-	if (value > hi) return hi;
-	return value;
-}
-
-/** Foreground-fraction to FAB scale, mirroring `fab-scale.ts`'s
- *  `scaleFromFraction` shape: the FAB disappears over the first half
- *  of foregroundFraction and appears over the second half. */
-function fabScaleFromFraction(foregroundFraction: number): number {
-	return clamp(2 * foregroundFraction - 1, 0, 1);
-}
-
-/** Build the FAB plan from the from/to fab booleans. Returns a function
- *  of (progress) where progress=0 means FROM is visible and progress=1
- *  means TO is visible. */
-function buildFabPlan(fromFab: boolean, toFab: boolean): FabPlanFn {
-	if (fromFab && toFab) {
-		// Both routes show a FAB. The source FAB leaves in the first
-		// half (scale 1 -> 0 over progress 0 -> 0.5), the destination
-		// FAB appears in the second half (scale 0 -> 1 over progress
-		// 0.5 -> 1). The FAB layer swaps which list-kind it renders at
-		// the midpoint; the resolver drives only the scale.
-		return (progress: number): FabVisual => {
-			const scale = Math.abs(1 - 2 * progress);
-			return { scale, translateY: 0, visible: scale > 0 };
-		};
-	}
-	if (fromFab && !toFab) {
-		// Forward: source FAB hides by midpoint.
-		return (progress: number): FabVisual => {
-			const scale = fabScaleFromFraction(1 - progress);
-			return { scale, translateY: 0, visible: scale > 0 };
-		};
-	}
-	if (!fromFab && toFab) {
-		// Backward: destination FAB appears in the second half.
-		return (progress: number): FabVisual => {
-			const scale = fabScaleFromFraction(progress);
-			return { scale, translateY: 0, visible: scale > 0 };
-		};
-	}
-	// Neither route shows a FAB.
-	return (): FabVisual => ({ scale: 0, translateY: 0, visible: false });
-}
 
 /** Page-track axis for a cross-tag transition. Forward pushes slide
  *  the track left (the new page enters from the right edge); backward
@@ -243,23 +207,14 @@ function commitPhysicsFor(reducedMotion: boolean): CommitPhysics {
 // Resolver 1: {tab, tab}.
 //
 // Spatial axis resolved by tab position. Forward (toTabIndex >
-// fromTabIndex) slides the track left; backward slides it right. FAB
-// plan follows the from/to fab booleans (a / <-> /messages/inbox swipe
-// is the both-fab handoff case). Header stays in root mode: no morph,
-// no title crossfade.
+// fromTabIndex) slides the track left; backward slides it right. The
+// FAB / Header react through their own layers reading the pager store
+// (the plan carries no `fab` / `header` fns).
 
 export const tabTabResolver: Resolver = (input: ResolverInput): TransitionPlan => {
 	const axis: PageTrackAxis = input.toTabIndex > input.fromTabIndex ? 'left' : 'right';
-	const fab = buildFabPlan(input.from.fab, input.to.fab);
-	const header: HeaderPlanFn = (): HeaderVisual => ({
-		morph: 0,
-		titleCrossfade: 0,
-		translateY: 0
-	});
 	return {
 		pageTrack: { axis, distance: input.viewportWidth },
-		fab,
-		header,
 		progressDirection: progressDirectionFor(input.intent),
 		commitPhysics: commitPhysicsFor(input.reducedMotion)
 	};
@@ -270,22 +225,13 @@ export const tabTabResolver: Resolver = (input: ResolverInput): TransitionPlan =
 //
 // Deep-to-deep (thread to profile, settings to sub-settings). Axis
 // follows intent + stack (forward push left, backward pop right).
-// Header stays in deep mode (morph = 1 throughout) with a title
-// crossfade = progress. FAB stays hidden (both detail routes have
-// fab: false).
+// Both endpoints are detail routes; the FAB / Header layers read the
+// pager store for their per-frame state.
 
 export const detailDetailResolver: Resolver = (input: ResolverInput): TransitionPlan => {
 	const axis = crossTagAxis(input.direction);
-	const fab = buildFabPlan(input.from.fab, input.to.fab);
-	const header: HeaderPlanFn = (progress: number): HeaderVisual => ({
-		morph: 1,
-		titleCrossfade: clamp(progress, 0, 1),
-		translateY: 0
-	});
 	return {
 		pageTrack: { axis, distance: input.viewportWidth },
-		fab,
-		header,
 		progressDirection: progressDirectionFor(input.intent),
 		commitPhysics: commitPhysicsFor(input.reducedMotion)
 	};
@@ -301,16 +247,8 @@ export const detailDetailResolver: Resolver = (input: ResolverInput): Transition
 // an accidental dispatch cannot move the track.
 
 export const searchSearchResolver: Resolver = (input: ResolverInput): TransitionPlan => {
-	const fab = buildFabPlan(input.from.fab, input.to.fab);
-	const header: HeaderPlanFn = (): HeaderVisual => ({
-		morph: 1,
-		titleCrossfade: 0,
-		translateY: 0
-	});
 	return {
 		pageTrack: { axis: 'left', distance: 0 },
-		fab,
-		header,
 		progressDirection: progressDirectionFor(input.intent),
 		commitPhysics: commitPhysicsFor(input.reducedMotion)
 	};
@@ -320,25 +258,13 @@ export const searchSearchResolver: Resolver = (input: ResolverInput): Transition
 // Resolver 4: {tab, detail}.
 //
 // List-to-detail enter slide and detail-to-list back slide. Axis
-// follows intent + stack. FAB scales 1 -> 0 across the slide when the
-// source is a fab route (e.g. / -> /discussion/123). Header morphs
-// from root (morph = 0) to deep (morph = 1) on enter, with a title
-// crossfade so the deep title appears with the morph.
+// follows intent + stack. The FAB / Header react through their own
+// layers reading the pager store.
 
 export const tabDetailResolver: Resolver = (input: ResolverInput): TransitionPlan => {
 	const axis = crossTagAxis(input.direction);
-	const fab = buildFabPlan(input.from.fab, input.to.fab);
-	const header: HeaderPlanFn = (progress: number): HeaderVisual => {
-		// progress = 0 -> FROM visible; progress = 1 -> TO visible.
-		// When FROM is tab and TO is detail (forward), morph goes 0 -> 1.
-		// When FROM is detail and TO is tab (backward), morph goes 1 -> 0.
-		const morph = input.direction === 'forward' ? clamp(progress, 0, 1) : clamp(1 - progress, 0, 1);
-		return { morph, titleCrossfade: clamp(progress, 0, 1), translateY: 0 };
-	};
 	return {
 		pageTrack: { axis, distance: input.viewportWidth },
-		fab,
-		header,
 		progressDirection: progressDirectionFor(input.intent),
 		commitPhysics: commitPhysicsFor(input.reducedMotion)
 	};
@@ -347,21 +273,14 @@ export const tabDetailResolver: Resolver = (input: ResolverInput): TransitionPla
 // ---------------------------------------------------------------------------
 // Resolver 5: {tab, search}.
 //
-// Root-to-search and search-to-root. Owns the DV17 Header scrub morph:
-// the tab-bar gives way to the search layer as morph goes 0 -> 1 (or
-// 1 -> 0 on the back direction). Track slides like a cross-tag pair.
+// Root-to-search and search-to-root. Track slides like a cross-tag
+// pair. The DV17 Header scrub morph is driven by the Header layer
+// reading the pager store, not by this plan.
 
 export const tabSearchResolver: Resolver = (input: ResolverInput): TransitionPlan => {
 	const axis = crossTagAxis(input.direction);
-	const fab = buildFabPlan(input.from.fab, input.to.fab);
-	const header: HeaderPlanFn = (progress: number): HeaderVisual => {
-		const morph = input.direction === 'forward' ? clamp(progress, 0, 1) : clamp(1 - progress, 0, 1);
-		return { morph, titleCrossfade: 0, translateY: 0 };
-	};
 	return {
 		pageTrack: { axis, distance: input.viewportWidth },
-		fab,
-		header,
 		progressDirection: progressDirectionFor(input.intent),
 		commitPhysics: commitPhysicsFor(input.reducedMotion)
 	};
@@ -370,23 +289,14 @@ export const tabSearchResolver: Resolver = (input: ResolverInput): TransitionPla
 // ---------------------------------------------------------------------------
 // Resolver 6: {detail, search}.
 //
-// Thread/profile to search and back. Both endpoints are non-tab; morph
-// goes between deep (1) and search (1 with a different mode), so we
-// keep morph at 1 and let the Header consumer choose the layer by the
-// to-tag. Track slides like a cross-tag pair.
+// Thread/profile to search and back. Both endpoints are non-tab. Track
+// slides like a cross-tag pair; the Header layer chooses its mode by
+// the to-tag through the pager store.
 
 export const detailSearchResolver: Resolver = (input: ResolverInput): TransitionPlan => {
 	const axis = crossTagAxis(input.direction);
-	const fab = buildFabPlan(input.from.fab, input.to.fab);
-	const header: HeaderPlanFn = (progress: number): HeaderVisual => ({
-		morph: 1,
-		titleCrossfade: clamp(progress, 0, 1),
-		translateY: 0
-	});
 	return {
 		pageTrack: { axis, distance: input.viewportWidth },
-		fab,
-		header,
 		progressDirection: progressDirectionFor(input.intent),
 		commitPhysics: commitPhysicsFor(input.reducedMotion)
 	};
@@ -434,12 +344,9 @@ export function resolve(input: ResolverInput): TransitionPlan {
 }
 
 // ---------------------------------------------------------------------------
-// Internal helpers exported for unit tests (so the suite can assert
-// the FAB plan shape without re-implementing the math).
+// Internal helpers exported for unit tests.
 
 export const __test = {
-	fabScaleFromFraction,
-	buildFabPlan,
 	crossTagAxis,
 	progressDirectionFor,
 	commitPhysicsFor,

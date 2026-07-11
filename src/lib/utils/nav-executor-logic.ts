@@ -394,23 +394,27 @@ export function progressAtTranslateX(plan: TransitionPlan, tx: number): number {
 
 /** Build the per-frame visual record by calling the plan's consumer
  *  functions. Pure: returns the visual; the reactive shell hands it to
- *  the driver. */
+ *  the driver. The `fab` / `header` fields are computed only when the
+ *  plan supplies the corresponding fn; otherwise the field is
+ *  `undefined` and the driver skips that write branch. */
 export function buildVisual(
 	plan: TransitionPlan,
 	progress: number,
 	liveOffset: number
 ): NavVisualWrite {
-	const fab = plan.fab(progress, liveOffset);
-	const header = plan.header(progress, liveOffset);
+	const fab = plan.fab?.(progress, liveOffset);
+	const header = plan.header?.(progress, liveOffset);
 	const translateX = trackTranslateX(plan, progress);
 	return {
 		pageTrack: { translateX },
-		fab: { scale: fab.scale, translateY: fab.translateY, visible: fab.visible },
-		header: {
-			morph: header.morph,
-			titleCrossfade: header.titleCrossfade,
-			translateY: header.translateY
-		}
+		fab: fab ? { scale: fab.scale, translateY: fab.translateY, visible: fab.visible } : undefined,
+		header: header
+			? {
+					morph: header.morph,
+					titleCrossfade: header.titleCrossfade,
+					translateY: header.translateY
+				}
+			: undefined
 	};
 }
 

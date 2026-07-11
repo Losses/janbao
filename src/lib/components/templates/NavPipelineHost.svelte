@@ -400,9 +400,11 @@
 	});
 
 	// The structural style: the track is `panelCount * 100%` wide and
-	// a flex row of equal-width panels. The driver writes the transform
-	// inline; the CSS does NOT carry a transform or transition (the
-	// executor's rAF is the sole writer of the transform property).
+	// a flex row of equal-width panels. The CSS carries no transition
+	// (the slide is driven by the executor's rAF, not a CSS transition).
+	// The transform is written by the executor's rAF during a transition
+	// and by the SSR seed (`initialTrackTransform`), the at-rest
+	// `$effect`, and the forward-enter seed when at rest.
 	const viewportStyle = $derived(
 		!isMobile
 			? 'touch-action: auto; overflow: visible; height: auto; width: 100%; position: relative;'

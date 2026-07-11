@@ -1232,6 +1232,50 @@ runtime states, not invented categories.
 Gate (real): check 0/0, lint EXIT=0, unit 436/0, e2e 92 passed. The new e2e
 locks the cross-tab FAB scale-in. R67 audits the post-refactor state.
 
+### Session 19 (2026-07-10): clean up the LOWs + deferred items (PASS does not license ignoring them)
+
+R69 was the first 2/2 clean round after the Session-18 refactor. The owner then
+directed that the LOW findings (and earlier deferred items) be evaluated and all
+that need fixing be fixed cleanly. This session did so; it changed the state R69
+verified, so R70 audits the cleaned state (counter resets, per the Session-18
+precedent).
+
+Fixed:
+
+- e2e pilot test names/comments de-"chip-exit" (the pilot does not use
+  LoadingChip; the GPL `fab-compose-backswipe` references are accurate, kept).
+- `pointerDisabled`: removed the redundant `$derived(() => ...)` wrapper (a plain
+  const function is equivalent and clearer).
+- `#republishToPager`: removed the unreachable non-`centerTab` branch (the pilot
+  always passes `centerTab`; a non-`centerTab` pilot is 5b2).
+- Dead `fab`/`header` placeholder computation: `TransitionPlan.fab`/`header` and
+  `NavVisualWrite.fab`/`header` are now optional; the resolvers and
+  `playEnterAnimation` no longer provide them; `buildVisual` no longer calls them
+  each frame; the driver guards on `visual.fab`/`header`. Removed the now-unused
+  `buildFabPlan`, `fabScaleFromFraction`, `clamp`. The real FAB/Header are driven
+  by their reactive layers reading the pager store; the plan no longer carries
+  the unused fns. Re-add in the new model when 5b2+ migrates the FAB/Header to
+  the driver.
+- Mid-commit re-grab leftward freeze: `#rawDragFraction` no longer clamps the
+  offset to `>= 0`, so a leftward drag past the re-grab start yields a negative
+  fraction; the live-drag track-progress formula now has a leftward branch
+  (`rawDrag < 0` -> direct `startProgress + rawDrag`, clamped to 0) alongside the
+  unchanged rightward threshold-absorbed formula. The panel/FAB now track the
+  finger bidirectionally on a re-grab; the rightward path is byte-identical.
+
+Evaluated and kept (with reasons):
+
+- `mount()` double-publish (`active: false` then `active: true`): batched, no
+  observer; the `unmount()` cleanup is correct re-mount teardown. Harmless +
+  cohesive.
+- Dead skeleton `{:else}` branches: the spec-mandated defensive fallback,
+  currently unreachable (eager-load always truthy), comment accurate.
+- `history.back/forward` no `.finally()`: the dispatch flags are cleared on land;
+  `hopForHref` guarantees the popstate; a timer fallback regresses to GPL's poll.
+
+Gate (real): check 0/0, lint EXIT=0, unit 424/0, e2e 92 passed. R70 audits the
+cleaned state.
+
 ## Failures
 
 Per-round audit state lives in `docs/RV20-C05b1-Audit-{01..NN}.md`.
@@ -1946,6 +1990,31 @@ edge documented; R68 audits the post-fix state).
 
 Consecutive pass votes: **0** (B carried a MED; fixed + the carried cleanups;
 R69 audits the post-fix state).
+
+- **Round 69 (architect, 2-auditor, Journal-forbidden prompt): A PASS (3 low); B
+  PASS (3 low).** First 2/2 clean round since the Session-18 refactor (counter 0
+  -> 2/5 on the pre-cleanup state). The owner then directed the LOWs be evaluated
+  and all that need fixing be fixed (PASS does not license ignoring them);
+  Session 19 followed and changed the state. Detailed in
+  `docs/RV20-C05b1-Audit-69.md`.
+
+Consecutive pass votes: **0** (R69 was 2/2 clean on the pre-cleanup state;
+Session 19 changed the state; R70 audits the cleaned state).
+
+- **Round 70 (architect, 2-auditor, Journal-forbidden prompt): A PASS (2 low
+  documented); B PWC (1 MED + 2 comment low).** First audit of the Session-19
+  cleaned state. B's MED: the back-swipe gesture never showed a header that
+  hide-on-scroll had hidden (the orchestrator's live-drag published the pager but
+  not the scroll-chrome; GPL calls `scrollChrome.show()` on swipe-move). Fixed:
+  the orchestrator's live-drag block now calls `getScrollChromeStore().show()`.
+  B's 2 comment LOWs (NavPipelineHost "sole writer of the transform" claim; e2e
+  "forward-enter forces coverProgress=0" claim) fixed. A's LOWs (pointercancel
+  unreachable, skeleton unreachable) documented. Counter stays 0. Gate: check
+  0/0, lint EXIT=0, unit 424/0, e2e 92 passed. Detailed in
+  `docs/RV20-C05b1-Audit-70.md`.
+
+Consecutive pass votes: **0** (B carried the MED; fixed + the 2 comment LOWs;
+R71 audits the post-fix state).
 
 ## Coverage bullets (round-independent)
 

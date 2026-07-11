@@ -40,12 +40,14 @@ export interface HeaderWrite {
 
 /** A single per-frame visual write. The executor computes one of these
  *  per frame (during drag events and during the commit rAF loop) and
- *  hands it to `NavDomDriver.write`. The shape is the union of the
- *  three consumer writes; the driver does not transform it. */
+ *  hands it to `NavDomDriver.write`. The `fab` / `header` fields are
+ *  optional: when a plan supplies no per-frame fn for a consumer (the
+ *  Cycle 5b1 pilot omits both), `buildVisual` sets the field to
+ *  `undefined` and the driver skips that write branch. */
 export interface NavVisualWrite {
 	readonly pageTrack: PageTrackWrite;
-	readonly fab: FabWrite;
-	readonly header: HeaderWrite;
+	readonly fab?: FabWrite;
+	readonly header?: HeaderWrite;
 }
 
 /** The DOM abstraction the executor writes through. Implementations:

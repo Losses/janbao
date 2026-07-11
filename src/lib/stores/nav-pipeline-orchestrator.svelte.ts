@@ -45,6 +45,7 @@
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
 import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
+import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 import { getNavStateMachine } from '$lib/stores/nav-state-machine.svelte';
 import { NavExecutor } from '$lib/stores/nav-executor.svelte';
 import { progressAtTranslateX, trackTranslateX } from '$lib/utils/nav-executor-logic';
@@ -397,15 +398,12 @@ export class NavPipelineOrchestrator {
 				distance: w,
 				restingTranslate: 0
 			},
-			// The fab / header fns are interface placeholders. The host
-			// passes `fab: null, header: null` in resolveElements, so the
-			// driver skips those write branches (buildVisual calls the fns
-			// but discards the result). The real FAB / Header behaviour
-			// during the enter comes from #isEnterAnimation forcing
-			// coverProgress = 0 (the FAB layer's Family B sampler) and the
-			// centerTab branch's backMorph = null (the Header).
-			fab: () => ({ scale: 0, translateY: 0, visible: false }),
-			header: () => ({ morph: 0, titleCrossfade: 0, translateY: 0 }),
+			// The plan carries no `fab` / `header` fns: the host passes
+			// `fab: null, header: null` in resolveElements and the FAB /
+			// Header layers read the pager store. During the enter,
+			// #isEnterAnimation forces coverProgress = 0 (the FAB layer's
+			// Family B sampler) and the centerTab branch's backMorph =
+			// null drives the Header.
 			progressDirection: 0,
 			commitPhysics: this.#driver?.prefersReducedMotion() ? 'snap' : 'momentum'
 		};
@@ -572,11 +570,32 @@ export class NavPipelineOrchestrator {
 		// transition. The FAB / Header consumers see the RAW drag fraction
 		// (their consumer-side thresholds apply separately).
 		if (isRightDrag && this.#pendingGesture !== null && this.#publication.plan !== null) {
+			// Match GPL's onSwipeMove: reveal a header that hide-on-scroll
+			// had translated off-screen, so the back-arrow + title are
+			// visible during the back-swipe reveal (the host registers the
+			// centre panel as the scroll-chrome source; the orchestrator
+			// owns the transition, so it resets the chrome here). Idempotent.
+			getScrollChromeStore().show();
 			const rawDrag = this.#rawDragFraction(intent, inputs);
 			const startProgress = this.#pendingGesture.startProgress;
 			const rawStart = this.#pendingGesture.rawStart;
-			const absorbed = this.#thresholdAbsorbedProgress(rawDrag);
-			const trackProgress = startProgress + absorbed * (1 - startProgress);
+			// Rightward (rawDrag >= 0): the threshold-absorbed fraction of
+			// the drag maps onto the REMAINING [startProgress, 1] window,
+			// so the first 20% of drag is absorbed AT the start position
+			// (not at 0) and the track never snaps back when a gesture
+			// begins mid-transition.
+			//
+			// Leftward (rawDrag < 0): a mid-commit re-grab whose finger
+			// then drags back left. The threshold-absorbed formula would
+			// map the first 20% of LEFTWARD drag to 0 (freezing the track
+			// at startProgress), so the undo direction bypasses the
+			// threshold and tracks the finger 1:1 down toward 0. The
+			// boundary is consistent: at rawDrag = 0 both branches yield
+			// exactly startProgress.
+			const trackProgress =
+				rawDrag < 0
+					? Math.max(0, startProgress + rawDrag)
+					: startProgress + this.#thresholdAbsorbedProgress(rawDrag) * (1 - startProgress);
 			const raw = Math.max(0, Math.min(1, rawStart + rawDrag));
 			executor.onDragMove(trackProgress, intent.offset);
 			this.#publish(raw);
@@ -627,19 +646,29 @@ export class NavPipelineOrchestrator {
 		}
 	}
 
-	/** Map the live drag offset to the RAW drag fraction in [0, 1].
-	 *  0 at rest; 1 at a full viewport-width drag. Published to the
-	 *  pager store so the existing FAB layer (Family B reader of
+	/** Map the live drag offset to the RAW signed drag fraction.
+	 *  Returns 0 at rest; +1 at a full viewport-width rightward drag; a
+	 *  NEGATIVE value when the finger has dragged leftward past the
+	 *  gesture start (a mid-commit re-grab whose finger then tracks
+	 *  back). Published (clamped to [0, 1] by the caller) to the pager
+	 *  store so the existing FAB layer (Family B reader of
 	 *  `coverProgress`) and Header layer (reader of `backMorph`) react
-	 *  to the orchestrator's state. */
+	 *  to the orchestrator's state. Bounded here to [-1, 1]; the
+	 *  caller's `Math.max(0, ...)` clamps the published value so the
+	 *  negative range is only visible mid-gesture (a leftward drag
+	 *  decreases the published raw toward 0 instead of freezing at the
+	 *  re-grab's `rawStart`). */
 	#rawDragFraction(intent: IntentState, inputs: PipelineMountInputs): number {
 		const w = inputs.viewportWidth;
 		if (w <= 0) return 0;
 		// The back-swipe (drag-right) is the only gesture direction the
 		// pilot listens for: the TO is `/messages/inbox`, revealed by a
-		// rightward drag.
-		const offsetX = intent.direction === 'right' ? Math.max(0, intent.offset) : 0;
-		return Math.max(0, Math.min(1, offsetX / w));
+		// rightward drag. The offset is SIGNED so a leftward drag during
+		// a claimed rightward gesture (a re-grab whose finger reverses)
+		// yields a negative fraction; the caller clamps the published
+		// raw to [0, 1].
+		if (intent.direction !== 'right') return 0;
+		return Math.max(-1, Math.min(1, intent.offset / w));
 	}
 
 	/** Map the RAW drag fraction to the threshold-absorbed progress the

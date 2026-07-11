@@ -572,9 +572,11 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 			`forward enter must slide leftward, not rightward (first=${first}, last=${last})`
 		).toBeLessThan(-50);
 
-		// The forward-enter forces coverProgress=0 (the FAB stays hidden
-		// throughout, matching GPL's centerTab branch). Verify the resting
-		// FAB atom is at scale ~0.
+		// The forward-enter's target is the conversation (overlay family,
+		// no resting FAB), so the FAB layer's family gate keeps the FAB at
+		// scale 0 throughout (coverProgress ramps 0->1 during the enter,
+		// but the gate short-circuits the FAB). Verify the resting FAB atom
+		// is at scale ~0.
 		const fabScale = await page
 			.locator('[data-testid="fab"]')
 			.evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a)

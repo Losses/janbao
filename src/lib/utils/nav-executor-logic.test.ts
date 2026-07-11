@@ -142,10 +142,15 @@ describe('buildVisual', () => {
 	test('FAB and Header visuals are passed through unchanged from the plan functions', () => {
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
 		const visual = buildVisual(plan, 0.3, 12);
-		expect(visual.fab.scale).toBe(0.7);
-		expect(visual.fab.visible).toBe(true);
-		expect(visual.header.morph).toBe(0.3);
-		expect(visual.header.titleCrossfade).toBe(0.3);
+		const fab = visual.fab;
+		const header = visual.header;
+		expect(fab, 'planStub supplies a fab fn so visual.fab must be set').toBeDefined();
+		expect(header, 'planStub supplies a header fn so visual.header must be set').toBeDefined();
+		if (!fab || !header) return; // narrows for the typechecker
+		expect(fab.scale).toBe(0.7);
+		expect(fab.visible).toBe(true);
+		expect(header.morph).toBe(0.3);
+		expect(header.titleCrossfade).toBe(0.3);
 		// The plan recorded the (progress, liveOffset) it was called with.
 		expect(plan.fabCalls[0]).toEqual({ progress: 0.3, liveOffset: 12 });
 		expect(plan.headerCalls[0]).toEqual({ progress: 0.3, liveOffset: 12 });
@@ -467,7 +472,11 @@ describe('publishFrame + tickFrame', () => {
 		publishFrame(state, plan, driver);
 		expect(driver.writes.length).toBe(1);
 		expect(driver.lastWrite?.pageTrack.translateX).toBe(-187.5);
-		expect(driver.lastWrite?.fab.scale).toBeCloseTo(0.5, 5);
+		const fab = driver.lastWrite?.fab;
+		expect(fab, 'planStub supplies a fab fn so the write carries fab').toBeDefined();
+		if (fab) {
+			expect(fab.scale).toBeCloseTo(0.5, 5);
+		}
 	});
 
 	test('tickFrame samples one commit step and publishes it in one call', () => {

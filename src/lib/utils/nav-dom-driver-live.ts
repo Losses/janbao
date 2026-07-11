@@ -125,21 +125,22 @@ export class LiveNavDomDriver implements NavDomDriver {
 			pageTrack.style.setProperty('transform', `translateX(${visual.pageTrack.translateX}px)`);
 		}
 		const fab = els.fab;
-		if (fab) {
+		if (fab && visual.fab) {
 			const f = visual.fab;
 			fab.style.setProperty('transform', `scale(${f.scale}) translateY(${f.translateY}px)`);
 			fab.style.setProperty('visibility', f.visible ? 'visible' : 'hidden');
 		}
 		const header = els.header;
-		if (header) {
+		if (header && visual.header) {
 			const h = visual.header;
 			header.style.setProperty('transform', `translateY(${h.translateY}px)`);
 			// CSS custom properties for a Header consumer that reads them
 			// via `var(--header-morph)` / `var(--header-title-crossfade)`.
-			// The pilot passes `header: null` in resolveElements so this
-			// block is unreachable for the pilot route (the Header reads
-			// the pager store instead). A future consumer that binds a
-			// header element would receive these writes.
+			// The pilot passes `header: null` in resolveElements AND the
+			// pilot's plan omits the `header` fn (so `visual.header` is
+			// undefined); either condition skips this block. A consumer
+			// that binds a header element AND supplies a plan `header` fn
+			// receives these writes.
 			header.style.setProperty('--header-morph', String(h.morph));
 			header.style.setProperty('--header-title-crossfade', String(h.titleCrossfade));
 		}
