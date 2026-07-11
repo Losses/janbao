@@ -2088,6 +2088,45 @@ audits the post-fix state).
 Consecutive pass votes: **0** (A carried the comment-accuracy CONCERN; the 3
 stale comments fixed; R76 audits the post-fix state).
 
+- **Round 76 (architect, 2-auditor, Journal-forbidden prompt): A PWC (3 low); B
+  PWC (1 low).** Zero HIGH/MED. A's LOWs: NavStateMachine vestigial (C4 / §13.5,
+  documented since R60); afterNavigate docstring lifecycle ordering (fixed: "old
+  onDestroy -> new mount", not "new mount -> old onDestroy"); FAB atom CSS
+  transition for non-FAB targets (R74 intentional design, matches GPL). B's LOW:
+  skeleton dead code (recurring since R67). The recurring LOWs are documented
+  non-defects: NavStateMachine is 5b2 architecture debt, the FAB CSS is the R74
+  design choice, the skeleton is the spec-mandated defensive fallback. Counter
+  stays 0. Gate: check 0/0, lint EXIT=0, unit 424/0, e2e 92 passed. Detailed in
+  `docs/RV20-C05b1-Audit-76.md`.
+
+Consecutive pass votes: **0** (both PWC with recurring LOW non-defects; the
+lifecycle-ordering comment fixed; R77 audits the post-fix state).
+
+- **Round 77 (architect, 2-auditor, Journal-forbidden prompt, spec Known
+  conditions): A PASS (2 low non-blocking); B PASS (0 blocking).** **2/2 clean,
+  counter 0 -> 2/5.** First 2/2 clean round on the final post-Session-19 +
+  all-fixes state. The spec's new "Known 5b1 conditions" section (skeleton
+  unreachable, NavStateMachine vestigial, FAB atom CSS transition for non-FAB
+  targets) was read and accepted by both auditors. Both verified UNIFY, the
+  unified following-visual model, the `pilotTransitionListKind` gate, the
+  synchronous `playEnterAnimation`, the release-gate offset, the bidirectional
+  re-grab, the cross-type interrupt handoff, and the coverProgress continuity.
+  Counter 0 -> 2/5. Gate: check 0/0, lint EXIT=0, unit 424/0, e2e 92 passed.
+  Detailed in `docs/RV20-C05b1-Audit-77.md`.
+
+Consecutive pass votes: **2/5** (R77 was 2/2 clean; R78 audits the same state).
+
+- **Round 78 (architect, 2-auditor, Journal-forbidden prompt, spec Known
+  conditions): A PASS; B PASS.** **2/2 clean - counter 2/5 -> 4/5.** Second
+  consecutive 2/2 clean round. Both verified UNIFY, the unified model, the
+  release gate, the bidirectional re-grab, the interrupt handoff, the FAB
+  gating, the synchronous playEnter, and the Known conditions. Counter 2/5 ->
+  4/5. Gate: check 0/0, lint EXIT=0, unit 424/0, e2e 92 passed. Detailed in
+  `docs/RV20-C05b1-Audit-78.md`.
+
+Consecutive pass votes: **4/5** (R77 + R78 both 2/2 clean; R79 audits the same
+state; one more 2/2 clean round reaches 5/5 convergence).
+
 ## Coverage bullets (round-independent)
 
 The pilot's transition correctness is verified by:

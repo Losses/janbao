@@ -1012,8 +1012,8 @@ export class NavPipelineOrchestrator {
 	 *  (`/messages/1` -> `/messages/2`) or the initial arrival this is a
 	 *  no-op reset (the orchestrator is at rest). For a navigation AWAY
 	 *  from the pilot (a tab-click exit / a gesture settle), the host's
-	 *  `onDestroy` runs before `afterNavigate` (Svelte 5 lifecycle: new
-	 *  route mounts -> old `onDestroy` -> `afterNavigate`), so the
+	 *  `onDestroy` runs before `afterNavigate` (Svelte 5 lifecycle: old
+	 *  `onDestroy` -> new route mounts -> `afterNavigate`), so the
 	 *  singleton is already null and this call is skipped; the cleanup is
 	 *  handled by `onDestroy` -> `unmount()`.
 	 *

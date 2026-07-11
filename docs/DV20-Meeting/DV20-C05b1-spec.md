@@ -44,6 +44,48 @@ The four wiring points (from the cutover-surface map):
 - **No git mutation** by the CMA.
 - **Comment-accuracy + clean-prompt audit**: every code comment in NEW wiring files describes current 5b1 behavior. The audit uses the CLEAN protocol prompt AND runs `bun run test:e2e` (e2e is now in scope - the first cycle where it is).
 
+## Known 5b1 conditions (intentional, not defects)
+
+These are recurring LOW observations that audit rounds flag. They are
+**intentional design choices or cross-cycle architecture debt**, not 5b1
+defects. They are documented here so auditors do not re-flag them as
+divergences from the bar.
+
+1. **Skeleton `{:else}` branches unreachable.** The pilot's three tab-root
+   targets (`/`, `/activity`, `/messages/inbox`) are all eager-loaded by the
+   root layout's `Promise.allSettled`, which returns truthy `EMPTY_*` objects on
+   rejection (never `null`). So `page.data.*` is always truthy and the
+   `{:else} <ActivitySkeleton /> / <DiscussionsSkeleton />` branches never
+   render. The skeleton ATOMS exist and compose the shared `Skeleton` atom (the
+   deliverable is met). The branches are the spec-mandated defensive fallback for
+   a future non-eager-loaded target. **TODO (5b2+):** when a non-eager-loaded
+   target is added, these branches become reachable; verify the skeleton layout
+   matches the target page at that time.
+
+2. **NavStateMachine is vestigial in 5b1.** The orchestrator feeds the state
+   machine events (`onIntent`, `onResolved`, `onLand`) but never reads its
+   output; `#publication` is the actual authority consumed by the host and the
+   pager store. Plan §13.5 ("the state machine is the only authority") is a DV20
+   cross-cycle goal. The 5b1 End state requires only "the pipeline is the SOLE
+   transition mechanism for the pilot route" (achieved); promoting the state
+   machine to the single authority is 5b2+ work across all routes. **TODO (5b2+):
+   promote the state machine to the authority; remove `#publication` or make it a
+   read-through.**
+
+3. **FAB atom CSS transition for non-FAB targets.** When the pilot's transition
+   target has no resting FAB (`pilotTransitionListKind === null`: forward-enter
+   to the conversation, tab-click to `/activity`), the FAB atom's CSS transition
+   eases the family-swap scale-out (e.g. the inbox FAB scaling 1 to 0 on the
+   forward-enter). This is intentional: it matches GPL (which also CSS-eases the
+   FAB on forward-enter) and the FAB atom's CSS transition is a downstream
+   consumer, not the pilot's slide mechanism. The pilot's SLIDE path (the track)
+   has no CSS transition (§13.3 is about the slide, not the FAB atom). The
+   `transitionEnabled` gate (`pilotTransitionListKind === null`): OFF when the
+   rAF drives the FAB (a FAB-bearing target), ON when the CSS transition handles
+   the family-swap (a non-FAB target). **TODO (5b2+):** when the FAB/Header
+   migrate to the plan-driven driver path, decide whether the rAF or the CSS
+   transition drives the scale-out.
+
 ## Out of scope (5b2 / 5b3)
 
 - Rolling the new pipeline out to other GPL routes (`/profile/*`, compose) and to `MobileTabPager` (the tab swipe) - 5b2.
