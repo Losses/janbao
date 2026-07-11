@@ -1911,6 +1911,42 @@ documented; R66 audits the post-fix state).
 Consecutive pass votes: **0** (both PWC; Session 18 refactor supersedes the
 `chipExit` findings; R67 audits the post-refactor state).
 
+- **Round 67 (architect, 2-auditor, Journal-forbidden prompt, post-refactor): A
+  PASS (3 non-blocking observations); B PWC (2 low).** First audit of the
+  post-`chipExit` state. Both verified the unified following-visual model (every
+  visual is f(coverProgress, transitionTarget); the FAB scales in for
+  `/messages/inbox` and `/`, hidden for `/activity` and the forward-enter). B's
+  comment-accuracy LOW (the FAB layer Family B docstring said `coverProgress` is
+  published by GesturePageLayout; now the orchestrator publishes it for the
+  pilot) is FIXED. B's other LOW (a mid-commit re-grab with a leftward-past-start
+  component freezes coverProgress at rawStart) is documented as a narrow edge
+  case that is not a clear regression vs GPL's own re-grab quirk; the rightward
+  re-grab handoff is correct. Counter stays 0. Gate: check 0/0, lint EXIT=0,
+  unit 436/0, e2e 92 passed. Detailed in `docs/RV20-C05b1-Audit-67.md`.
+
+Consecutive pass votes: **0** (B carried a LOW; comment accuracy fixed, re-grab
+edge documented; R68 audits the post-fix state).
+
+- **Round 68 (architect, 2-auditor, Journal-forbidden prompt): A PASS (4 low);
+  B PWC (1 MED + 1 concern).** B's MED: `unmount()` did not clear the pager
+  store, so on landing the FAB read stale in-flight values and dipped to scale 0
+  before the destination published (visible under slow route-mount timing). R67
+  had flagged this as a LOW and the orchestrator wrongly dismissed it as
+  "theoretical"; the owner corrected that and the MED drove the fix. Fixed:
+  `unmount()` publishes a cleanup (active: false etc.) matching GPL/MobileTabPager;
+  the `playEnterAnimation` unreachable-case comment; the per-frame re-run of the
+  `sawTransition` / `updateFromPathname` `$effect`s (extracted `publicationPlan` /
+  `publicationInFlight` deriveds); the `resetPagerStore` `fractionalIndex: -1`
+  before mount (mountInputs-null guard). Documented: the non-centerTab branch
+  (5b2 future), the SSR initial transform (matches GPL), the resolver's dead
+  `buildFabPlan` placeholder (FAB/Header not yet on the plan-driven path; 5b2+),
+  the re-grab leftward edge (architect scope). Counter stays 0. Gate: check 0/0,
+  lint EXIT=0, unit 436/0, e2e 92 passed. Detailed in
+  `docs/RV20-C05b1-Audit-68.md`.
+
+Consecutive pass votes: **0** (B carried a MED; fixed + the carried cleanups;
+R69 audits the post-fix state).
+
 ## Coverage bullets (round-independent)
 
 The pilot's transition correctness is verified by:

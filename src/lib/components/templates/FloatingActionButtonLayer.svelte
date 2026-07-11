@@ -13,9 +13,10 @@
 	 *     track keeps easing, so the per-frame read is the continuous signal
 	 *     across the snap. `tabFraction(sample, tabIndex)` maps it to 0..1.
 	 *   - Family B (overlay: thread + deep): reads `pager.coverProgress` (0..1,
-	 *     deadzone-free) published by GesturePageLayout on both the centerTab and
-	 *     deep branches from the live `rawDragOffset`. The store signal drives
-	 *     the scale directly each frame.
+	 *     deadzone-free). On a GesturePageLayout route it is published from the
+	 *     live `rawDragOffset` (centerTab and deep branches); on the pilot route
+	 *     `/messages/[id]` it is published by `NavPipelineOrchestrator` as the raw
+	 *     slide fraction. The store signal drives the scale directly each frame.
 	 *   - Family C (compose): like Family B, reads `pager.coverProgress`
 	 *     (GesturePageLayout publishes it on the centerTab branch). The
 	 *     discrete-nav CSS transition still eases the non-drag list<->compose swap.
@@ -421,14 +422,16 @@
 				: getCurrentTabIndex(page.url.pathname);
 			return tabFraction(restActiveTab, cfg.tabIndex);
 		}
-		// Families B (overlay) and C (compose): both mount a GesturePageLayout
-		// that publishes `coverProgress` from the live `rawDragOffset`, so the
-		// FAB follows the finger across the drag and the commit slide. Resting
-		// (null server-side / pre-mount, 0 client-side) maps to 0; the discrete
+		// Families B (overlay) and C (compose) read `coverProgress`. On a
+		// GesturePageLayout route it is published from the live `rawDragOffset`
+		// (so the FAB follows the finger across the drag and the commit slide);
+		// on the pilot route `/messages/[id]` it is published by
+		// `NavPipelineOrchestrator` as the raw slide fraction. Resting (null
+		// server-side / pre-mount, 0 client-side) maps to 0; the discrete
 		// forward/back swap is eased by the `discreteNavInFlight` CSS latch.
-		// During a GPL chip-exit the source list is not revealed, so the GPL
-		// publishes 0 (gated on `swipeNeedsLoadingAtStart`) and the FAB hides
-		// under the LoadingChip.
+		// During a GPL cross-tab tap on a list route the source list is not
+		// revealed, so the GPL publishes 0 (gated on `swipeNeedsLoadingAtStart`)
+		// and the FAB hides under the LoadingChip.
 		return pager.coverProgress ?? 0;
 	});
 

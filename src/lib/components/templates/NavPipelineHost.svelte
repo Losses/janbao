@@ -113,6 +113,14 @@
 	// off with no jump). The content swap is expected - the panel reflects
 	// whichever transition is in flight.
 	const publication = $derived(orchestrator.publication);
+	// Stable views of the publication's plan / in-flight flag. The
+	// orchestrator publishes a new publication object each frame of a
+	// drag (the progress advances), but the plan reference and the
+	// in-flight boolean are stable mid-transition; deriving them here
+	// means $effects that only care whether a transition is in flight
+	// (not its per-frame progress) do not re-run every frame.
+	const publicationPlan = $derived(publication.plan);
+	const publicationInFlight = $derived(publication.inFlight);
 	// The transition target (null at rest / when no transition is in
 	// flight). The left panel renders the back-target's panel at rest and
 	// during a back-swipe; it renders a different tab's panel when the
@@ -213,7 +221,7 @@
 	// initial mount (leave the forward-enter seed at translateX(0px)).
 	let sawTransition = false;
 	$effect(() => {
-		if (publication.plan !== null) {
+		if (publicationPlan !== null) {
 			sawTransition = true;
 			return;
 		}
@@ -242,7 +250,7 @@
 		const pathname = page.url.pathname;
 		// Skip during an in-flight transition (the dispatch's URL change
 		// would corrupt fromPathname; the host unmounts before it matters).
-		if (orchestratorMounted && !publication.inFlight) orchestrator.updateFromPathname(pathname);
+		if (orchestratorMounted && !publicationInFlight) orchestrator.updateFromPathname(pathname);
 	});
 
 	// Mount the orchestrator + acquire the viewport-lock + register
@@ -420,7 +428,7 @@
 	// The pointer action's disabled gate: only on mobile, only when the
 	// host has bound elements. Non-mobile (desktop) keeps the bridge
 	// inert.
-	const pointerDisabled = $derived(() => !isMobile || trackEl === null);
+	const pointerDisabled = (): boolean => !isMobile || trackEl === null;
 
 	// Initial track transform: at-rest at the resting translate. The
 	// driver overwrites this on the first frame; setting it inline at

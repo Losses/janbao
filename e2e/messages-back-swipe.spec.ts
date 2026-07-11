@@ -726,7 +726,7 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 	});
 
 	// The gesture-during-tab-click-commit interrupt is not separately
-	// e2e'd here: the gesture must catch the tab-click's ~200ms chip-exit
+	// e2e'd here: the gesture must catch the tab-click's ~200ms slide
 	// slide, a race too tight to be reliable under varying dev-server
 	// load. The fix (#beginGesture clears #pendingTabExit so a gesture's
 	// settle dispatches its own target) is code-verified, and the

@@ -424,8 +424,10 @@ export class NavPipelineOrchestrator {
 			toPathname: inputs.fromPathname,
 			direction: 'forward'
 		};
-		// Start at the track's current visual position (0 at rest; the
-		// in-flight position if the enter interrupts another transition).
+		// The enter starts at rest (progress 0). playEnterAnimation runs
+		// only on a fresh mount: the guard above returns if a transition
+		// is in flight, and mount constructs a clean executor, so there is
+		// no in-flight position to continue from.
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
 		executor.onDragStart(plan, startProgress, 0);
 		executor.onCommit(0, TAB_CLICK_COMMIT_MS);
@@ -474,6 +476,19 @@ export class NavPipelineOrchestrator {
 		this.#prevWasDrag = false;
 		this.#lifecycle.deactivate();
 		this.#lifecycle.unmount();
+		// Clear the in-flight pager state so a stale fractionalIndex /
+		// transitionTarget does not drive the FAB on the destination route
+		// before that route publishes its own state (matches the onMount
+		// cleanup GPL and MobileTabPager publish).
+		getMobilePagerStore().set({
+			fractionalIndex: 0,
+			dragging: false,
+			active: false,
+			backMorph: null,
+			targetIndex: null,
+			coverProgress: 0,
+			transitionTarget: null
+		});
 	}
 
 	// -----------------------------------------------------------------------
@@ -998,6 +1013,10 @@ export class NavPipelineOrchestrator {
 	 *  back to null (no transition in flight). */
 	resetPagerStore(): void {
 		const pager = getMobilePagerStore();
+		// No at-rest state to publish before mount (#mountInputs captures
+		// the pilot's tab data in mount()); skip so the init $effect does
+		// not publish a placeholder fractionalIndex: -1 before mount runs.
+		if (this.#mountInputs === null) return;
 		const inputs = this.#mountInputs;
 		const centerTab = inputs?.centerTab;
 		pager.set({
@@ -1066,27 +1085,16 @@ export class NavPipelineOrchestrator {
 		const inputs = this.#mountInputs;
 		const centerTab = inputs?.centerTab;
 		const coverProgress = rawDragFraction;
-		if (centerTab !== undefined) {
-			pager.set({
-				fractionalIndex: centerTab,
-				dragging: publication.inFlight && this.#liveDragging,
-				active: true,
-				backMorph: null,
-				targetIndex: null,
-				coverProgress,
-				transitionTarget: publication.toPathname
-			});
-			return;
-		}
-		const fromIdx = inputs?.fromTabIndex ?? -1;
-		const toIdx = inputs?.toTabIndex ?? -1;
-		const fractionalIndex = fromIdx + (toIdx - fromIdx) * rawDragFraction;
+		// The pilot always passes centerTab. A non-centerTab pilot
+		// (interpolating fractionalIndex between from/to tab indices) is
+		// a 5b2 concern, not reached here.
+		if (centerTab === undefined) return;
 		pager.set({
-			fractionalIndex,
-			dragging: publication.inFlight,
+			fractionalIndex: centerTab,
+			dragging: publication.inFlight && this.#liveDragging,
 			active: true,
-			backMorph: rawDragFraction,
-			targetIndex: toIdx >= 0 ? toIdx : null,
+			backMorph: null,
+			targetIndex: null,
 			coverProgress,
 			transitionTarget: publication.toPathname
 		});

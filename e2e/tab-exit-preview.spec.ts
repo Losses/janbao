@@ -84,13 +84,13 @@ const CASES: ExitCase[] = [
 		control: true
 	},
 	{
-		name: 'message -> / (chip-exit: target panel revealed)',
+		name: 'message -> / (target panel revealed)',
 		source: 'message',
 		target: TARGET_BY_HREF['/'],
 		control: false
 	},
 	{
-		name: 'message -> /activity (chip-exit: target panel revealed)',
+		name: 'message -> /activity (target panel revealed)',
 		source: 'message',
 		target: TARGET_BY_HREF['/activity'],
 		control: false
@@ -179,10 +179,10 @@ test.describe('cross-tab exit preview matches the target tab', () => {
 					`not a different list (saw [${anim.seenTabs.join(', ')}], revealed=${anim.revealedTab})`
 			).toHaveLength(0);
 
-			// The pilot's chip-exit (source=message) + all control cases must
-			// reveal the target tab's panel. GPL bug cases (source=discussion)
-			// are excluded: GPL's chip-exit may reveal the wrong panel
-			// (pre-existing GPL behavior, not the pilot's concern).
+			// The pilot's tab tap from a conversation (source=message) + all
+			// control cases must reveal the target tab's panel. GPL bug cases
+			// (source=discussion) are excluded: GPL may reveal the wrong panel
+			// on a tab tap (pre-existing GPL behavior, not the pilot's concern).
 			if (c.source === 'message' || c.control) {
 				expect(
 					anim.seenTabs,
