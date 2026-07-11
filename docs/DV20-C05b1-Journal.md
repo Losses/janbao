@@ -2127,6 +2127,21 @@ Consecutive pass votes: **2/5** (R77 was 2/2 clean; R78 audits the same state).
 Consecutive pass votes: **4/5** (R77 + R78 both 2/2 clean; R79 audits the same
 state; one more 2/2 clean round reaches 5/5 convergence).
 
+- **Round 79 (architect, 2-auditor, Journal-forbidden prompt, spec Known
+  conditions): A PASS; B PASS.** **2/2 clean - counter 4/5 -> 5/5.
+  CONVERGENCE REACHED.** Three consecutive 2/2 clean rounds (R77, R78, R79) = 6
+  independent clean auditor votes. Both verified UNIFY, the all-rAF executor, the
+  unified following-visual model, the release gate (final-release offset), the
+  bidirectional re-grab, the cross-type interrupt handoff, the coverProgress
+  continuity, the FAB kind resolution + CSS-transition gating, the synchronous
+  playEnterAnimation, the SvelteKit coordination, the pager cleanup, the
+  scrollChrome.show, and the comment accuracy. Both confirmed the three Known
+  conditions. Gate: check 0/0, lint EXIT=0, unit 424/0, e2e 92 passed. Detailed
+  in `docs/RV20-C05b1-Audit-79.md`.
+
+**Consecutive pass votes: 5/5 (CONVERGED).** The DV20 Cycle 5b1 audit loop has
+reached 5/5 unconditional PASS after 37 rounds (R43-R79).
+
 ## Coverage bullets (round-independent)
 
 The pilot's transition correctness is verified by:
