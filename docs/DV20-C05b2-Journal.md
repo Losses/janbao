@@ -611,3 +611,140 @@ removed. The field stays in `RouteData` for 5b3 cleanup.
 `bun run check`: 0 errors. `bun run lint`: EXIT=0.
 `bun test src/lib/utils src/lib/stores`: 428 pass, 0 fail.
 `bun run test:e2e -- messages-back-swipe`: 16 passed.
+
+## Session 8: Phase 5 FAB tab-swipe/tab-tap fix (14 test failures)
+
+Session 5 left 14 FAB tab-swipe/tab-tap tests failing after the
+MobileTabPager to NavPipelineTabHost migration. The FAB trajectory
+showed an instant jump (`1.00 to 0.00`, no intermediate frames) during
+tab-to-tab transitions instead of a smooth animation. This session
+fixes the root causes so all 92 pilot-sweep tests pass.
+
+### Root causes
+
+1. **Wrong backward swipe target.** NavPipelineTabHost mounted the
+   orchestrator with `backTarget: fromPathname` (the current tab's
+   pathname), not the previous tab. A rightward swipe on any tab
+   targeted the current pathname, so the swipe was a no-op. And
+   `fromTabIndex` was never updated by `updateFromPathname`, so
+   `#nextTabTarget` / `#prevTabTarget` computed stale neighbours.
+
+2. **FAB override killed the sampler during tab transitions.** The
+   `foregroundFraction` override
+   `if (transitionTarget !== null && pilotTransitionListKind === null)
+return 0` forced the FAB to scale 0 whenever a transition targeted a
+   route whose FAB kind is `'dynamic'` (Activity) or `'deep'`. This is
+   correct for pilot-route transitions (Family B / overlay, no sampler)
+   but wrong for tab-to-tab transitions on the tab pager (Family A,
+   sampler active). Similarly, `displayConfig`'s
+   `pilotTransitionListKind` kind override forced an instant kind swap
+   that caused a scale snap.
+
+3. **Threshold absorption suppressed small-drag FAB movement.** The
+   orchestrator absorbed the first 20% of drag
+   (`HEADER_MORPH_THRESHOLD`) before moving the track. The old
+   MobileTabPager had the track follow the finger 1:1 from the first
+   pixel, so sub-threshold swipes moved the FAB. With absorption, the
+   FAB stayed pinned at scale 1 for small drags.
+
+4. **No boundary rubber-band.** The orchestrator dropped the gesture
+   when the target was null (first/last tab). The old MobileTabPager
+   rubber-banded the track at 0.4x, and the FAB dipped along with it.
+
+### What changed
+
+**`src/lib/stores/nav-pipeline-orchestrator.svelte.ts`:**
+
+- Added `#prevTabTarget(inputs)`: resolves `MOBILE_TABS[fromTabIndex -
+1].href` for backward swipes on bidirectional hosts.
+- `#beginGesture`: backward target for bidirectional hosts uses
+  `#prevTabTarget` instead of the stale mount-supplied `backTarget`.
+  Added `boundary: boolean` to `PendingGestureTransition`; when the
+  target is null on a bidirectional host, a rubber-band gesture starts
+  (track follows at `BOUNDARY_RUBBER_BAND_FACTOR`, always cancels on
+  release).
+- Added `#gestureToTabIndex` field: stores the gesture-resolved
+  destination tab index so `#republishToPager` interpolates the pill
+  toward the correct destination, not the at-rest mount value.
+- `updateFromPathname`: now also updates `fromTabIndex` when the
+  pathname is a tab root, so neighbour computation stays correct across
+  tab swaps.
+- `#interpretIntent` drag tracking: bidirectional hosts use 1:1 finger
+  tracking (`startProgress + rawDrag * (1 - startProgress)`); non-
+  bidirectional hosts keep the threshold-absorbed formula. Boundary
+  gestures use `rawDrag * BOUNDARY_RUBBER_BAND_FACTOR`.
+- Release logic: boundary gestures always cancel (never commit), so
+  no navigation dispatches.
+- `#landAtRest` and `unmount`: clear `#gestureToTabIndex`.
+
+**`src/lib/utils/gesture-constants.ts`:**
+
+- Added `BOUNDARY_RUBBER_BAND_FACTOR = 0.4`.
+
+**`src/lib/components/templates/FloatingActionButtonLayer.svelte`:**
+
+- Gated the `transitionTarget` foregroundFraction override on
+  `!samplerActive`: on the tab pager (Family A, sampler active) the
+  sampler drives the FAB across the slide; on the pilot route (Family
+  B, no sampler) the override still forces scale 0 for non-FAB
+  destinations.
+- Gated the `displayConfig` `pilotTransitionListKind` kind override on
+  `!samplerActive`: on the tab pager, `effectiveKind` handles the kind
+  switch at the visual midpoint; on the pilot route, the destination
+  kind still drives.
+
+### Key implementation decisions
+
+1. **`samplerActive` is the discriminator.** The sampler arms only on
+   list-family routes (the three tab roots) where the
+   `active-gesture-track` store has a track element. On overlay/compose
+   routes (pilot, deep pages) the sampler is never active. This makes
+   `!samplerActive` the clean gate: tab-pager transitions let the
+   sampler drive, pilot-route transitions let coverProgress drive.
+
+2. **1:1 tracking only for bidirectional hosts.** The pilot route's
+   threshold absorption serves the header-morph dead-zone design. The
+   tab pager has no such design constraint: the old MobileTabPager
+   tracked 1:1, and the FAB release-snap tests encode that expectation.
+   Making the threshold conditional on `bidirectional` preserves the
+   pilot's behaviour while restoring the tab pager's.
+
+3. **Boundary rubber-band reuses the executor.** Rather than special-
+   casing the track transform, the boundary gesture creates a minimal
+   plan with `progressDirection: 1` (cancel) and uses the executor's
+   own rAF to drive the rubber-band and the snap-back. The drag
+   tracking applies the 0.4x factor to the progress; the release
+   always cancels.
+
+### Gate outputs (real, verbatim)
+
+`bun run check`:
+
+```
+$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsc --noEmit -p tsconfig.sw.json
+... COMPLETED 1462 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+```
+
+`bun run lint`: EXIT=0.
+
+`bun test src/lib/utils src/lib/stores`:
+
+```
+428 pass
+0 fail
+1387 expect() calls
+Ran 428 tests across 21 files. [95.00ms]
+```
+
+`bun run test:e2e -- messages-back-swipe tab-click-transition tab-exit-preview fab`:
+
+```
+92 passed (3.6m)
+```
+
+### Deviations from the spec
+
+- None. The spec's binding constraint "UNIFY, DO NOT BRIDGE" is
+  honored: the orchestrator is the sole transition mechanism on the
+  tab pager, and the FAB layer reads a single signal (the sampler for
+  Family A, coverProgress for Family B) gated by `samplerActive`.

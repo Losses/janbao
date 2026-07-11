@@ -28,3 +28,8 @@ export const TRACK_TRANSITION_MS = TITLE_CROSSFADE_MS;
 // morph progress at or below this is "no meaningful gesture" (cancelled near the
 // origin, or no preceding drag). Effect B treats it as a non-settle release.
 export const GESTURE_MORPH_EPSILON = 0.001;
+// Boundary void-swipe rubber-band factor. On the first/last tab a swipe toward
+// the absent neighbour moves the track at this fraction of the drag distance,
+// then snaps back on release. The FAB sampler reads the live track position so
+// the FAB dips along with the pill.
+export const BOUNDARY_RUBBER_BAND_FACTOR = 0.4;

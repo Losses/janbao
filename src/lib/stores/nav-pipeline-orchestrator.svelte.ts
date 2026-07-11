@@ -81,7 +81,8 @@ import {
 	HEADER_MORPH_THRESHOLD,
 	PILL_EXPANSION_THRESHOLD,
 	SWIPE_COMMIT,
-	TRACK_TRANSITION_MS
+	TRACK_TRANSITION_MS,
+	BOUNDARY_RUBBER_BAND_FACTOR
 } from '$lib/utils/gesture-constants';
 import type { RouteTag } from '$lib/utils/route-data';
 import type { TransitionPlan } from '$lib/utils/nav-resolvers';
@@ -127,6 +128,11 @@ interface PendingGestureTransition {
 	 *  (toward the next tab, bidirectional hosts only). Determines the
 	 *  commit-threshold sign at release. */
 	readonly direction: TransitionDirection;
+	/** True when the gesture targets an absent neighbour (first/last tab
+	 *  on a bidirectional host). The track follows the finger at
+	 *  `BOUNDARY_RUBBER_BAND_FACTOR` and always cancels on release (no
+	 *  navigation dispatched). */
+	readonly boundary: boolean;
 }
 
 /** A pending tab-click transition (any pilot -> tab-root nav the
@@ -323,6 +329,12 @@ export class NavPipelineOrchestrator {
 	 *  (micro transitions into drag-right), including a re-grab
 	 *  mid-commit. */
 	#prevWasDrag = false;
+	/** The gesture-resolved destination tab index, set by
+	 *  `#beginGesture` / `onSvelteKitBeforeNavigate` and read by
+	 *  `#republishToPager` so the pill interpolation follows the actual
+	 *  destination, not the at-rest `mountInputs.toTabIndex`. Cleared on
+	 *  land / unmount. */
+	#gestureToTabIndex: number | null = null;
 
 	constructor(clock: ClockFn = defaultClock) {
 		this.#clock = clock;
@@ -523,6 +535,7 @@ export class NavPipelineOrchestrator {
 		this.#commitStartRaw = 0;
 		this.#liveDragging = false;
 		this.#prevWasDrag = false;
+		this.#gestureToTabIndex = null;
 		this.#lifecycle.deactivate();
 		this.#lifecycle.unmount();
 		// Clear the in-flight pager state so a stale fractionalIndex /
@@ -626,11 +639,14 @@ export class NavPipelineOrchestrator {
 			const rawDrag = this.#rawDragFraction(intent, inputs);
 			const startProgress = this.#pendingGesture.startProgress;
 			const rawStart = this.#pendingGesture.rawStart;
-			// Rightward (rawDrag >= 0): the threshold-absorbed fraction of
-			// the drag maps onto the REMAINING [startProgress, 1] window,
-			// so the first 20% of drag is absorbed AT the start position
-			// (not at 0) and the track never snaps back when a gesture
-			// begins mid-transition.
+			// Rightward (rawDrag >= 0): for bidirectional hosts (the tab
+			// pager) the track follows the finger 1:1 across the full range
+			// so the FAB sampler reads intermediate values from the first
+			// pixel of drag. For non-bidirectional hosts (the pilot / deep
+			// page) the threshold-absorbed fraction maps onto the REMAINING
+			// [startProgress, 1] window, so the first 20% of drag is absorbed
+			// AT the start position (not at 0) and the track never snaps back
+			// when a gesture begins mid-transition.
 			//
 			// Leftward (rawDrag < 0): a mid-commit re-grab whose finger
 			// then drags back left. The threshold-absorbed formula would
@@ -639,10 +655,15 @@ export class NavPipelineOrchestrator {
 			// threshold and tracks the finger 1:1 down toward 0. The
 			// boundary is consistent: at rawDrag = 0 both branches yield
 			// exactly startProgress.
-			const trackProgress =
-				rawDrag < 0
+			const bidirectional = inputs.bidirectional === true;
+			const isBoundary = this.#pendingGesture.boundary;
+			const trackProgress = isBoundary
+				? Math.max(0, rawDrag * BOUNDARY_RUBBER_BAND_FACTOR)
+				: rawDrag < 0
 					? Math.max(0, startProgress + rawDrag)
-					: startProgress + this.#thresholdAbsorbedProgress(rawDrag) * (1 - startProgress);
+					: bidirectional
+						? Math.min(1, startProgress + rawDrag * (1 - startProgress))
+						: startProgress + this.#thresholdAbsorbedProgress(rawDrag) * (1 - startProgress);
 			const raw = Math.max(0, Math.min(1, rawStart + rawDrag));
 			executor.onDragMove(trackProgress, intent.offset);
 			this.#publish(raw);
@@ -651,6 +672,17 @@ export class NavPipelineOrchestrator {
 		if (intent.micro === 'committed' || intent.micro === 'cancelled') {
 			this.#liveDragging = false;
 			if (this.#pendingGesture !== null) {
+				if (this.#pendingGesture.boundary) {
+					// Boundary rubber-band: always snap back, never commit.
+					if (executor.state.progress > 0) {
+						this.#commitStartRaw = this.#publication.progress;
+						executor.onCancel(intent.releaseVelocity);
+					} else {
+						this.#landAtRest();
+					}
+					this.#intent = initialIntentState();
+					return;
+				}
 				const gestureDir = this.#pendingGesture.direction;
 				// Only process the release when the intent's direction
 				// matches the gesture's start direction. A cross-direction
@@ -752,29 +784,64 @@ export class NavPipelineOrchestrator {
 		const from = inputs.fromPathname;
 		const fromTag = inputs.fromTag;
 		// Resolve the target for this direction. Backward targets the
-		// back-target; forward targets the next tab.
+		// previous tab (bidirectional hosts) or the mount-supplied
+		// back-target (pilot / deep-page hosts); forward targets the next
+		// tab.
 		const target: string | null =
-			direction === 'backward' ? inputs.backTarget : this.#nextTabTarget(inputs);
-		if (target === null) return;
-		const to: string = target;
-		const toData = getRouteData(to);
-		const toTag = toData.tag;
-		const toTabIndex = direction === 'backward' ? inputs.toTabIndex : this.#tabIndexFor(to);
+			direction === 'backward'
+				? inputs.bidirectional === true
+					? this.#prevTabTarget(inputs)
+					: inputs.backTarget
+				: this.#nextTabTarget(inputs);
 		// A gesture claims the transition: drop any in-flight tab-click so
 		// #onExecutorSettle dispatches THIS gesture's target, not the
 		// tab-click's. The two pending slots are mutually exclusive.
 		this.#pendingTabExit = null;
-		const plan = this.#resolvePlan(inputs, intent, direction, to, toTabIndex);
 		// Capture the in-flight raw BEFORE resetting the progress so a
 		// re-grab mid-commit continues coverProgress from the live value.
 		const rawStart = this.#progress;
+		if (target === null) {
+			// Boundary void-swipe on a bidirectional host (first/last tab):
+			// start a rubber-band gesture that tracks the finger at a reduced
+			// factor and always snaps back on release. No navigation is
+			// dispatched.
+			if (inputs.bidirectional !== true) return;
+			const boundaryPlan: TransitionPlan = {
+				pageTrack: {
+					axis: direction === 'backward' ? 'right' : 'left',
+					distance: inputs.viewportWidth,
+					restingTranslate: inputs.restingTranslate
+				},
+				progressDirection: 1,
+				commitPhysics: this.#driver?.prefersReducedMotion() ? 'snap' : 'momentum'
+			};
+			this.#gestureToTabIndex = null;
+			this.#stateMachine.onIntent(intent, from, fromTag);
+			this.#stateMachine.onResolved(boundaryPlan, from, from, fromTag, fromTag, direction);
+			this.#progress = 0;
+			const startProgress = this.#startProgressFromCurrentVisual(boundaryPlan);
+			this.#pendingGesture = { to: from, startProgress, rawStart, direction, boundary: true };
+			this.#executor?.onDragStart(boundaryPlan, startProgress, intent.offset);
+			return;
+		}
+		const to: string = target;
+		const toData = getRouteData(to);
+		const toTag = toData.tag;
+		const toTabIndex =
+			direction === 'backward'
+				? inputs.bidirectional === true
+					? inputs.fromTabIndex - 1
+					: inputs.toTabIndex
+				: this.#tabIndexFor(to);
+		this.#gestureToTabIndex = toTabIndex;
+		const plan = this.#resolvePlan(inputs, intent, direction, to, toTabIndex);
 		this.#stateMachine.onIntent(intent, from, fromTag);
 		this.#stateMachine.onResolved(plan, from, to, fromTag, toTag, direction);
 		this.#progress = 0;
 		// Start the gesture at the track's current visual position so an
 		// in-flight forward-enter or commit hands off with no jump.
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
-		this.#pendingGesture = { to, startProgress, rawStart, direction };
+		this.#pendingGesture = { to, startProgress, rawStart, direction, boundary: false };
 		this.#executor?.onDragStart(plan, startProgress, intent.offset);
 	}
 
@@ -784,6 +851,17 @@ export class NavPipelineOrchestrator {
 		const nextIdx = inputs.fromTabIndex + 1;
 		if (nextIdx >= MOBILE_TABS.length) return null;
 		return MOBILE_TABS[nextIdx].href;
+	}
+
+	/** Resolve the previous-tab target for a rightward (backward) gesture on
+	 *  a bidirectional host. Returns null when the active tab is the first
+	 *  tab (no previous neighbour). Used only for bidirectional hosts (the
+	 *  tab pager); non-bidirectional hosts (the pilot / deep-page host) use
+	 *  the mount-supplied `backTarget` instead. */
+	#prevTabTarget(inputs: PipelineMountInputs): string | null {
+		const prevIdx = inputs.fromTabIndex - 1;
+		if (prevIdx < 0) return null;
+		return MOBILE_TABS[prevIdx].href;
 	}
 
 	/** Resolve a transition plan for the locked FROM/TO/direction. */
@@ -927,6 +1005,7 @@ export class NavPipelineOrchestrator {
 		this.#dispatchTarget = null;
 		this.#isEnterAnimation = false;
 		this.#liveDragging = false;
+		this.#gestureToTabIndex = null;
 		this.#executor?.onLand();
 		if (inputs !== null) {
 			this.#stateMachine.onLand(inputs.fromTag);
@@ -1009,6 +1088,7 @@ export class NavPipelineOrchestrator {
 		const plan = this.#resolvePlan(inputs, intent, direction, toPathname, toTabIndex);
 		this.#pendingGesture = null;
 		this.#liveDragging = false;
+		this.#gestureToTabIndex = toTabIndex;
 		// The full URL (pathname + search) so a tab-click to e.g. /?q=foo
 		// dispatches to that exact URL, not the bare pathname.
 		this.#pendingTabExit = { target: to + toSearch };
@@ -1128,18 +1208,24 @@ export class NavPipelineOrchestrator {
 		}
 	}
 
-	/** Refresh the pilot's from-pathname (and from-tag) after a same-route
-	 *  param change (e.g. /messages/123 -> /messages/456) that reuses this
-	 *  host without remounting, so a subsequent tab-exit is still owned
-	 *  (#isPilotFrom matches the live pathname, not the stale mount
-	 *  pathname). */
+	/** Refresh the from-pathname (and from-tag) after a same-host route
+	 *  change (e.g. /messages/123 -> /messages/456 on the pilot, or a tab
+	 *  swap on the tab pager) that reuses this host without remounting, so
+	 *  a subsequent tab-exit is still owned (#isPilotFrom matches the live
+	 *  pathname, not the stale mount pathname). Also refreshes
+	 *  `fromTabIndex` when the new pathname is a tab root so the tab
+	 *  pager's prev/next neighbour computation stays correct across tab
+	 *  swaps. Non-tab-root pathnames (pilot detail pages) keep their
+	 *  mount-time `fromTabIndex` (the centerTab value). */
 	updateFromPathname(pathname: string): void {
 		const inputs = this.#mountInputs;
 		if (inputs === null) return;
+		const newTabIdx = this.#tabIndexFor(pathname);
 		this.#mountInputs = {
 			...inputs,
 			fromPathname: pathname,
-			fromTag: getRouteData(pathname).tag
+			fromTag: getRouteData(pathname).tag,
+			fromTabIndex: newTabIdx >= 0 ? newTabIdx : inputs.fromTabIndex
 		};
 	}
 
@@ -1226,7 +1312,7 @@ export class NavPipelineOrchestrator {
 		}
 		// Deep-page mode: interpolate the pill + publish the morph.
 		const fromIdx = inputs?.fromTabIndex ?? -1;
-		const toIdx = inputs?.toTabIndex ?? -1;
+		const toIdx = this.#gestureToTabIndex ?? inputs?.toTabIndex ?? -1;
 		const pillProgress =
 			toIdx >= 0
 				? Math.max(0, rawDragFraction - PILL_EXPANSION_THRESHOLD) / (1 - PILL_EXPANSION_THRESHOLD)

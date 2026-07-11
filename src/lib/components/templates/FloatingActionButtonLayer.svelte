@@ -252,8 +252,10 @@
 		if (cfg === null) return null;
 		let kind = cfg.family === 'list' ? effectiveKind : cfg.kind;
 		// A pilot detail-page transition resolves the destination's FAB kind so
-		// the correct atom scales in with coverProgress.
-		if (pilotTransitionListKind !== null) {
+		// the correct atom scales in with coverProgress. On the tab pager the
+		// Family A sampler is active; effectiveKind handles the kind switch at
+		// the visual midpoint, so the override is gated off.
+		if (pilotTransitionListKind !== null && !samplerActive) {
 			kind = pilotTransitionListKind;
 		}
 		if (kind !== null && kind !== cfg.kind) {
@@ -510,9 +512,15 @@
 		if (chipExitActive) return 0;
 		// A pilot detail-page transition scales the FAB in only when the
 		// destination shows a FAB at rest. For a destination without one (the
-		// forward-enter to the conversation; a tab-click to /activity), the FAB
-		// stays at 0 throughout.
-		if (pager.transitionTarget !== null && pilotTransitionListKind === null) return 0;
+		// forward-enter to the conversation; a tab-click to /activity from the
+		// pilot route), the FAB stays at 0 throughout. On the tab pager
+		// (NavPipelineTabHost) the Family A sampler is active and reads the
+		// pipeline-driven track, so it drives the FAB scale across the slide
+		// even when the destination has no resting FAB (e.g. /activity). Gate
+		// the override on `!samplerActive` so the sampler takes precedence on
+		// list routes.
+		if (pager.transitionTarget !== null && pilotTransitionListKind === null && !samplerActive)
+			return 0;
 		if (cfg.family === 'list') {
 			if (samplerActive && sampledFractionalIndex !== null) {
 				return tabFraction(sampledFractionalIndex, cfg.tabIndex);
