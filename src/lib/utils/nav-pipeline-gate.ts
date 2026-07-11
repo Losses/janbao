@@ -27,7 +27,7 @@ export function isNavPipelinePilotRoute(pathname: string): boolean {
 	// Strip any trailing `/pN` page segment so paged conversations
 	// (`/messages/123/p2`) are still gated as pilot routes.
 	const stripped = pathname.replace(/\/p\d+$/, '');
-	return /^\/messages\/\d+(?:\/[^/]*)?$/.test(stripped);
+	return /^\/messages\/\d+$/.test(stripped);
 }
 
 /** True iff navigating from `from` to `to` is a transition the pilot

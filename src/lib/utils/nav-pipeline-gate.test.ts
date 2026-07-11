@@ -21,8 +21,11 @@ describe('isNavPipelinePilotRoute', () => {
 		expect(isNavPipelinePilotRoute('/messages/123/p10')).toBe(true);
 	});
 
-	test('matches a single-segment suffix after the id', () => {
-		expect(isNavPipelinePilotRoute('/messages/123/some-suffix')).toBe(true);
+	test('rejects a non-page suffix after the id (only /pN paged routes are valid)', () => {
+		// The route generates /messages/<id> and /messages/<id>/p<N>; the /pN
+		// page segment is stripped before the match. Any other suffix is a 404
+		// and must not be gated as a pilot route.
+		expect(isNavPipelinePilotRoute('/messages/123/some-suffix')).toBe(false);
 	});
 
 	test('rejects the inbox (the back-target, not a pilot route)', () => {

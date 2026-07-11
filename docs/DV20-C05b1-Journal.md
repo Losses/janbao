@@ -1096,6 +1096,142 @@ audit log current" rule). This session re-grounded the real repo state, then:
 Gate (real): check 0/0, lint EXIT=0, unit 436/0, e2e 90 passed. Detailed in
 `docs/RV20-C05b1-Audit-60.md`. R61 audits the post-fix state.
 
+### Session 14 (2026-07-10): R62 MED - scroll capture/restore ported to NavPipelineHost
+
+R61 was the first 2/2 clean round (counter 0 -> 2/5). R62 returned A PWC (1 MED
+
+- 2 LOW), B PASS (5 LOW); the MED reset the counter to 0/5. The MED: GPL
+  restores each panel's scroll position from the page cache (leftScrollTop /
+  currentScrollTop `$derived` + a restore `$effect` + an `onscroll` capture on
+  each section); NavPipelineHost had none of it, so a back-swipe preview rendered
+  the inbox at `scrollTop 0` instead of its cached position (a real regression for
+  a spec-required transition). Ported GPL's pattern: a `leftEl` ref + bind,
+  `leftScrollTop` / `currentScrollTop` `$derived` (left gated to `!chipExit`),
+  two restore `$effects` (set `scrollTop` immediately + next frame; setting
+  `scrollTop` programmatically does not fire `onscroll`, so it cannot loop), two
+  `onscroll` captures (left -> `leftHref`, centre -> `page.url.pathname`). The
+  owner pushed back on an initial "seed limitation" excuse for the e2e: the inbox
+- left-panel data is SSR-embedded via SvelteKit server load (the left panel uses
+  the conversation route's own `data.inbox`, not a client fetch), so a
+  `page.route()` fetch interception is unreliable (full load is SSR; client-nav
+  hits SvelteKit's node cache). The verified e2e instead shrinks the viewport so
+  the existing inbox overflows, scrolls it, then asserts the conversation page's
+  left panel restores the cached `scrollTop`. Also folded in the `chipExitState`
+  symmetry fix (the owner had asked about it; the R62 MED reset mooted the
+  freeze-state-during-convergence objection).
+
+Gate (real): check 0/0, lint EXIT=0, unit 436/0, e2e 91 passed. Detailed in
+`docs/RV20-C05b1-Audit-62.md`. R63 audits the post-fix state.
+
+### Session 15 (2026-07-10): R63 MED - chip-exit stale scrollTop inheritance
+
+R63 returned A PASS (5 LOW non-defects), B PWC (1 MED + 1 LOW). B's MED was a
+CONSEQUENCE of the R62 scroll-restore port: the restore `$effect` set the left
+`<section>`'s `scrollTop` to the inbox's cached position; on a chip-exit the
+section's content swaps (MessagesPanel -> ActivityPanel) but the element is
+stable, so `scrollTop` stayed at the inbox value, and the restore effect's
+`> 0` guard skipped (`leftScrollTop` is 0 during chip-exit) - the target panel
+slid in scrolled down, then jumped to 0 on landing. FIX: a `$effect` resets
+`leftEl.scrollTop = 0` when `chipExit` is true. Also folded in the owner-flagged
+dedup: extracted `restoreScroll(el, top): VoidHandler` so the left + centre
+restore effects are one-liners (the project's no-inline-typing rule required the
+named `VoidHandler` return rather than `(() => void) | undefined`).
+
+Gate (real): check 0/0, lint EXIT=0, unit 436/0, e2e 91 passed. Detailed in
+`docs/RV20-C05b1-Audit-63.md`. R64 audits the post-fix state.
+
+### Session 16 (2026-07-10): R64 - chip-exit preview paginate matched to landing tab page
+
+R64 returned A PASS (3 LOW non-defects), B PWC (4 LOW, no MED/HIGH,
+"approvable"). B's only real divergence: the chip-exit preview rendered
+DiscussionsPanel / ActivityPanel with `paginate={false}`, but the real `/` and
+`/activity` routes mount `TabDiscussionsPanel` / `TabActivityPanel` with
+`paginate={true}`. When the target tab has `totalPages > 1` the preview omitted
+the paginator that appears on landing (seed-invisible, `totalPages === 1`).
+FIX: both chip-exit preview panels now render `paginate={true}`, matching the
+landing tab page (the spec's "the REAL target panel"). A had read the panel as
+the real target and not flagged it; matching the paginator chrome is the
+faithful choice.
+
+Gate (real): check 0/0, lint EXIT=0, unit 436/0, e2e 91 passed. Detailed in
+`docs/RV20-C05b1-Audit-64.md`. R65 audits the post-fix state.
+
+### Session 17 (2026-07-10): R65 - gate regex + orchestratorMounted $state + comment
+
+R65 returned A PASS (2 non-blocking observations), B PWC (1 CONCERN + 4 LOW).
+Fixed B's three real LOWs: tightened `isNavPipelinePilotRoute` (the regex
+accepted `/messages/<id>/<anything>` after the `/pN` strip; now
+`/^\/messages\/\d+$/`); `orchestratorMounted` plain `let` -> `$state(false)` so
+the `updateFromPathname` `$effect` tracks mount state reactively; chip-exit
+comment accuracy (`EMPTY_*` is truthy-but-empty, so "the real panel always
+renders" -> "the panel always renders - real list or truthy-but-empty EMPTY\_\* on
+a partial-load failure"). Documented: B's chip-exit FAB CONCERN (`coverProgress =
+0` is the R64-A-accepted chip-exit divergence; the FAB atom's CSS transition
+softens the drop; whether the FAB should ramp with the slide is an owner design
+call) and the edge-dead-zone source mismatch (unreachable on mobile - no
+scrollbar, so `innerWidth === clientWidth`).
+
+Gate (real): check 0/0, lint EXIT=0, unit 436/0, e2e 91 passed. Detailed in
+`docs/RV20-C05b1-Audit-65.md`. R66 audits the post-fix state.
+
+### Session 18 (2026-07-10): dissolve `chipExit`, unify the pilot's FAB on f(progress, target)
+
+Architect-directed refactor (not an audit round). `chipExit` was an invented
+category name for "a tab-click whose target is a tab root other than the
+back-target", and it forced several values to 0/false specifically for that
+transition (coverProgress, the FAB foregroundFraction, the left-panel scrollTop,
+the dragging flag):a divergent special-case that left the FAB hidden during a
+cross-tab slide while it scaled in for a back-swipe. The architect required:
+dissolve the named concept (the distinction is just "transition target vs
+back-target"), make the FAB follow the one slide progress uniformly, and leave
+no analogous invented category / forced value in this refactor's scope. R66 had
+audited the pre-refactor state (both PWC, LOWs); this refactor supersedes its
+`chipExit`-related findings, and its non-`chipExit` LOWs (a second-nav-during-
+slide race; the unreachable skeleton / preview-panel branches) carry forward to
+R67.
+
+The unified model:
+
+- The orchestrator publishes `coverProgress` = the raw slide fraction
+  unconditionally (removed the `chipExit || #isEnterAnimation ? 0` forcing) and
+  publishes the transition target (`transitionTarget` = `publication.toPathname`)
+  to the pager store.
+- The FAB layer resolves, from the target alone, whether the destination shows a
+  FAB at rest and which kind (`pilotTransitionListKind`); the FAB scales in with
+  the slide for a FAB-bearing target (back-swipe -> inbox, cross-tab -> `/`) and
+  stays hidden for a destination without one (the forward-enter to the
+  conversation; cross-tab to `/activity`). This is f(progress, target):no
+  per-transition forcing. The forward-enter's former `#isEnterAnimation`
+  coverProgress forcing is gone; the FAB family gate replaces it (verified:
+  `/messages/\d` is the overlay family in `FAB_ROUTE_ATTRIBUTES`, so without the
+  gate its atom would ramp to scale 1 then snap to 0, a flash).
+- `chipExit` / `#chipExitState` / `publication.chipExit` are deleted (58
+  occurrences across the orchestrator, host, pager store). Every former use is an
+  inline read of the transition target vs the back-target.
+- `coverProgressForcedToZero` and its two consumers are gone; a gesture re-grab
+  / tab-click interrupt continues coverProgress from the live
+  `publication.progress`. `#isEnterAnimation` stays (gates the afterNavigate +
+  resize guards); only its coverProgress-forcing role is gone.
+
+Files: `nav-pipeline-orchestrator.svelte.ts`, `NavPipelineHost.svelte`,
+`mobile-pager.svelte.ts`, `FloatingActionButtonLayer.svelte`,
+`nav-pipeline-gate.test.ts` (the single-segment-suffix test updated for the R65
+regex tighten), `messages-back-swipe.spec.ts` (new test: a tab-click to `/`
+scales the FAB in with the slide and resolves the discussions kind). Spec
+(`DV20-C05b1-spec.md`) End state #1 + constraints updated to the unified model.
+
+Scope scan (no analogous problem left in this refactor's scope): the only other
+forced-value branch in the FAB layer is `chipExitActive`, a separate pre-existing
+concept for the GPL / MobileTabPager cross-tab tap on list routes (reads
+`navStore.pendingNav`, gated to family `list`):not the pilot's transition, out
+of scope until the tab pager is migrated. The remaining named flags
+(`#isEnterAnimation`, `#liveDragging`, `#navDispatchInFlight`, `#pendingGesture`,
+`#pendingTabExit`, `discreteNavInFlight`, `backMorph`, `tapMorph`) are real
+runtime states, not invented categories.
+
+Gate (real): check 0/0, lint EXIT=0, unit 436/0, e2e 92 passed. The new e2e
+locks the cross-tab FAB scale-in. R67 audits the post-refactor state.
+
 ## Failures
 
 Per-round audit state lives in `docs/RV20-C05b1-Audit-{01..NN}.md`.
@@ -1700,6 +1836,80 @@ the post-fix state).
   passed. Detailed in `docs/RV20-C05b1-Audit-61.md`.
 
 Consecutive pass votes: **2/5** (R61 was 2/2 clean; R62 audits the same state).
+
+- **Round 62 (architect, 2-auditor, Journal-forbidden prompt): A PWC (1 MED + 2
+  LOW); B PASS (5 low).** A's MED: NavPipelineHost lacked GPL's scroll
+  capture/restore, so a back-swipe preview rendered the inbox at scrollTop 0
+  instead of its cached position. Fixed by porting GPL's pattern (left/centre
+  scroll `$derived` + restore `$effect` + `onscroll` capture; left gated
+  `!chipExit`) plus a new viewport-shrunk e2e. Counter reset 2/5 -> 0/5. Lows
+  documented (skeleton unreachable, recurring; `initialTrackTransform` flash
+  masked by Svelte 5 sync mount; pager reset on unmount masked;
+  `isGesturePageLayoutRoute` stale name dissolves in 5b3; content swap expected).
+  `chipExitState` symmetry folded in. Gate: check 0/0, lint EXIT=0, unit 436/0,
+  e2e 91 passed. Detailed in `docs/RV20-C05b1-Audit-62.md`.
+
+Consecutive pass votes: **0** (A carried the MED; fixed; R63 audits the
+post-fix state).
+
+- **Round 63 (architect, 2-auditor, Journal-forbidden prompt): A PASS (5 low
+  non-defects); B PWC (1 MED + 1 low).** B's MED: the R62 scroll-restore port
+  left the left `<section>`'s `scrollTop` at the inbox value across a chip-exit
+  content swap (the section element is stable), so the target panel slid in
+  scrolled down then jumped on landing. Fixed with a chip-exit reset `$effect`
+  (`leftEl.scrollTop = 0` when `chipExit`). Also deduped the two restore effects
+  into a `restoreScroll` helper (owner-flagged; `VoidHandler` return for the
+  no-inline-typing rule). Counter stays 0/5. Lows documented (pointerDisabled
+  getter recurring; chip-exit FAB deliberate divergence; skeleton dead code;
+  `#republishToPager` forward-looking; direction hardcoded for pilot). Gate:
+  check 0/0, lint EXIT=0, unit 436/0, e2e 91 passed. Detailed in
+  `docs/RV20-C05b1-Audit-63.md`.
+
+Consecutive pass votes: **0** (B carried the MED; fixed; R64 audits the
+post-fix state).
+
+- **Round 64 (architect, 2-auditor, Journal-forbidden prompt): A PASS (3 low
+  non-defects); B PWC (4 low, no MED/HIGH).** B's only real divergence: the
+  chip-exit preview used `paginate={false}` while the landing tab pages
+  (TabDiscussionsPanel / TabActivityPanel) use `paginate={true}` - a preview !=
+  landing gap when `totalPages > 1` (seed-invisible). Fixed: both preview panels
+  `paginate={true}`. Counter stays 0/5 (B PWC). Lows documented
+  (LexicalEditorLazy in preview inherent to "real panel"; pointerDisabled
+  redundant `$derived` recurring; state-machine-stuck-transitioning = C4 §13.5
+  cross-cycle; skeleton unreachable recurring; PreviewPanel fallback dead code).
+  Gate: check 0/0, lint EXIT=0, unit 436/0, e2e 91 passed. Detailed in
+  `docs/RV20-C05b1-Audit-64.md`.
+
+Consecutive pass votes: **0** (B carried a LOW concern; paginate fixed; R65
+audits the post-fix state).
+
+- **Round 65 (architect, 2-auditor, Journal-forbidden prompt): A PASS (2
+  non-blocking notes); B PWC (1 CONCERN + 4 LOW).** Fixed B's 3 real LOWs:
+  `isNavPipelinePilotRoute` regex tightened (`/^\/messages\/\d+$/` after `/pN`
+  strip), `orchestratorMounted` `let` -> `$state`, chip-exit comment accuracy.
+  Documented B's chip-exit FAB CONCERN (`coverProgress = 0` = accepted chip-exit
+  divergence; owner design call whether FAB ramps with slide) + edge-dead-zone
+  mismatch (unreachable on mobile). Counter stays 0/5. Gate: check 0/0, lint
+  EXIT=0, unit 436/0, e2e 91 passed. Detailed in `docs/RV20-C05b1-Audit-65.md`.
+
+Consecutive pass votes: **0** (B carried a CONCERN + LOWs; 3 fixed, 2
+documented; R66 audits the post-fix state).
+
+- **Round 66 (architect, 2-auditor, Journal-forbidden prompt): A PWC (2 low); B
+  PWC (2 low).** Zero MED/HIGH. This round audited the pre-refactor state. Its
+  `chipExit`-related findings did not go to a fix round: the architect directed
+  the Session-18 refactor (dissolve `chipExit`, unify the FAB on f(progress,
+  target)) instead, because `chipExit` was an invented category with a divergent
+  per-transition forcing (the FAB hid during a cross-tab slide while it scaled in
+  for a back-swipe) that round-by-round patching would have left in place. The
+  refactor supersedes the `chipExit` findings; the non-`chipExit` LOWs (a
+  second-nav-during-slide race; the unreachable skeleton / preview-panel
+  branches; the `playEnterAnimation` "buildVisual discards" comment inaccuracy)
+  carry to R67. Counter stays 0. Gate (pre-refactor): check 0/0, lint EXIT=0,
+  unit 436/0, e2e 91 passed. Detailed in `docs/RV20-C05b1-Audit-66.md`.
+
+Consecutive pass votes: **0** (both PWC; Session 18 refactor supersedes the
+`chipExit` findings; R67 audits the post-refactor state).
 
 ## Coverage bullets (round-independent)
 

@@ -874,6 +874,61 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		).toBeGreaterThan(0);
 	});
 
+	test('a tab-click to the discussions tab scales the FAB in with the slide (refactor)', async ({
+		page,
+		context
+	}) => {
+		await prepareContext(context);
+		await page.goto('/messages/inbox');
+		await waitForHydration(page);
+		// Open a conversation (the pilot route).
+		await page.click(
+			'a[href^="/messages/"]:not([href="/messages/new"]):not([href="/messages/inbox"])'
+		);
+		await page.waitForURL(/\/messages\/\d+/);
+		await waitForHydration(page);
+
+		// Sample the FAB atom's scale and the layer's kind across the
+		// tab-click slide. The refactor drives the FAB from the slide
+		// progress for a FAB-bearing target, so it must scale in (not stay
+		// frozen at 0) and resolve the destination's kind.
+		await page.evaluate(() => {
+			const w = window as unknown as {
+				__fabTabSamples?: Array<{ scale: number; kind: string | null }>;
+			};
+			w.__fabTabSamples = [];
+			const sample = (): void => {
+				const atom = document.querySelector('[data-testid="fab"]');
+				const layer = document.querySelector('[data-fab-kind]');
+				const m = atom ? getComputedStyle(atom).transform.match(/matrix\(([^)]+)\)/) : null;
+				const scale = m ? Number(m[1].split(',')[0]) : 0;
+				const kind = layer ? layer.getAttribute('data-fab-kind') : null;
+				w.__fabTabSamples!.push({ scale, kind });
+				requestAnimationFrame(sample);
+			};
+			requestAnimationFrame(sample);
+		});
+
+		// Tap the discussions tab to start the cross-tab slide.
+		await page.click('[data-tab-nav][href="/"]');
+		await page.waitForURL((url) => url.pathname === '/');
+		await page.waitForTimeout(200);
+
+		const samples = (await page.evaluate(
+			() =>
+				(window as unknown as { __fabTabSamples?: Array<{ scale: number; kind: string | null }> })
+					.__fabTabSamples
+		))!;
+		const scales = samples.map((s) => s.scale);
+		const maxScale = scales.length ? Math.max(...scales) : 0;
+		const kinds = samples.map((s) => s.kind);
+		expect(
+			maxScale,
+			'FAB must scale in during the cross-tab slide (not frozen at 0)'
+		).toBeGreaterThan(0.3);
+		expect(kinds, 'the destination FAB kind (discussions) must appear').toContain('discussions');
+	});
+
 	test('desktop: the gesture pipeline is inert (no track transform, plain tab nav)', async ({
 		page,
 		context

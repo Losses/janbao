@@ -117,8 +117,7 @@ interface PendingGestureTransition {
  *  orchestrator cancelled in `onSvelteKitBeforeNavigate`). Carries
  *  the deferred dispatch target (the FULL url: pathname + search) so
  *  commit-settle can fire the SvelteKit `goto` on the exact URL the
- *  tab-click targeted. The chip-exit variant is tracked separately on
- *  `#chipExitState` / `#publication.chipExit`, which the host reads. */
+ *  tab-click targeted. */
 interface PendingTabExit {
 	readonly target: string;
 }
@@ -207,12 +206,6 @@ export interface OrchestratorPublication {
 	readonly toPathname: string | null;
 	/** The transition direction. */
 	readonly direction: TransitionDirection | null;
-	/** True for the whole duration of a chip-exit (a cross-tab exit to a
-	 *  non-back-target tab root): from the slide start through the
-	 *  post-slide dispatch, cleared on land. The host reads it (with
-	 *  toPathname) to render the target's real cached panel / skeleton in
-	 *  the left slot. */
-	readonly chipExit: boolean;
 }
 
 /** A noop publication used at-rest. */
@@ -222,8 +215,7 @@ const AT_REST_PUBLICATION: OrchestratorPublication = {
 	inFlight: false,
 	fromPathname: null,
 	toPathname: null,
-	direction: null,
-	chipExit: false
+	direction: null
 };
 
 /** The clock function the intent classifier + executor use. */
@@ -255,14 +247,11 @@ export class NavPipelineOrchestrator {
 	#pendingGesture: PendingGestureTransition | null = null;
 	/** A pending tab-click transition. The orchestrator cancelled the
 	 *  SvelteKit nav; `target` is the dispatch target fired on
-	 *  commit-settle. The chip-exit variant is tracked on
-	 *  `#chipExitState` / `#publication.chipExit`. Null at rest. */
+	 *  commit-settle. Null at rest. */
 	#pendingTabExit: PendingTabExit | null = null;
 	/** True while the forward-enter animation (playEnterAnimation) is
-	 *  active. Suppresses the coverProgress ramp in #republishToPager:
-	 *  during a forward-enter the source list is being COVERED (not
-	 *  revealed), so coverProgress stays 0, matching GPL's centerTab
-	 *  branch. */
+	 *  active. The afterNavigate guard and the resize guard read it to
+	 *  avoid landing the orchestrator or mutating the plan mid-enter. */
 	#isEnterAnimation = false;
 	/** True only while the live pointer is actively dragging rightward
 	 *  (micro is drag-right; a leftward drag is not a claimed gesture).
@@ -285,12 +274,6 @@ export class NavPipelineOrchestrator {
 	/** Reactive publication (the source of truth for the host's $effect
 	 *  that mirrors into the pager store). */
 	#publication = $state<OrchestratorPublication>(AT_REST_PUBLICATION);
-	/** Dedicated `$state` for the chipExit flag so the host's left-panel
-	 *  content swap (keyed off chipExit + toPathname) updates the same
-	 *  frame the orchestrator flips it (a dedicated `$state` is
-	 *  flush-accurate, unlike a field nested inside the `#publication`
-	 *  object literal). */
-	#chipExitState = $state(false);
 	/** The raw drag-fraction published at the moment a commit / cancel
 	 *  began. The commit-phase publication lerps from this value to the
 	 *  target (1 commit / 0 cancel) along the executor's eased fraction,
@@ -317,13 +300,6 @@ export class NavPipelineOrchestrator {
 	 *  state. */
 	get publication(): OrchestratorPublication {
 		return this.#publication;
-	}
-
-	/** Reactive read of the chipExit flag. The host reads this in a
-	 *  `$derived` so the {#if !chipExit} template block updates the
-	 *  same frame the orchestrator flips it. */
-	get chipExit(): boolean {
-		return this.#chipExitState;
 	}
 
 	/** Reactive read of the in-flight flag. */
@@ -362,7 +338,6 @@ export class NavPipelineOrchestrator {
 		// route swap); align it to the pilot's FROM tag so a land event
 		// settles to the right surface.
 		this.#publication = AT_REST_PUBLICATION;
-		this.#chipExitState = false;
 		// Publish the at-rest pager state now that #mountInputs is set,
 		// independent of the host reset $effect's timing.
 		this.resetPagerStore();
@@ -440,10 +415,6 @@ export class NavPipelineOrchestrator {
 		// (consistent with #beginGesture / onSvelteKitBeforeNavigate). For
 		// a fresh mount the prior publication is AT_REST (progress 0).
 		this.#commitStartRaw = this.#publication.progress;
-		// Explicit (already false from the constructor on a fresh mount):
-		// keeps #chipExitState in sync with #publication.chipExit at every
-		// publication-write site.
-		this.#chipExitState = false;
 		this.#isEnterAnimation = true;
 		this.#publication = {
 			plan,
@@ -451,8 +422,7 @@ export class NavPipelineOrchestrator {
 			inFlight: true,
 			fromPathname: inputs.backTarget,
 			toPathname: inputs.fromPathname,
-			direction: 'forward',
-			chipExit: false
+			direction: 'forward'
 		};
 		// Start at the track's current visual position (0 at rest; the
 		// in-flight position if the enter interrupts another transition).
@@ -502,7 +472,6 @@ export class NavPipelineOrchestrator {
 		this.#commitStartRaw = 0;
 		this.#liveDragging = false;
 		this.#prevWasDrag = false;
-		this.#chipExitState = false;
 		this.#lifecycle.deactivate();
 		this.#lifecycle.unmount();
 	}
@@ -695,14 +664,8 @@ export class NavPipelineOrchestrator {
 		if (intent.direction !== 'right') {
 			return;
 		}
-		// A gesture now owns the publication: clear the enter flag so
-		// coverProgress follows the live drag fraction (it is forced to
-		// 0 only while #isEnterAnimation). Before clearing, capture
-		// whether coverProgress was being forced to 0 (forward-enter or
-		// chip-exit); if so, the gesture's rawStart must be 0 (matching
-		// the coverProgress the FAB was showing), not the publication's
-		// lerped progress - otherwise the FAB jumps at the interrupt.
-		const coverProgressForcedToZero = this.#isEnterAnimation || this.#publication.chipExit;
+		// A gesture now owns the publication. Clear the enter flag; a
+		// re-grab continues coverProgress from the publication's live raw.
 		this.#isEnterAnimation = false;
 		this.#liveDragging = true;
 		const from = inputs.fromPathname;
@@ -714,24 +677,17 @@ export class NavPipelineOrchestrator {
 		// #onExecutorSettle dispatches THIS gesture's target, not the
 		// tab-click's. The two pending slots are mutually exclusive.
 		this.#pendingTabExit = null;
-		// A back-swipe gesture always targets the back-target (pre-rendered),
-		// so it is always a direct-slide - never a chip-exit. The
-		// coordinator (Layer 4) is not consulted for gestures in 5b1 (the
-		// pilot's only gesture target is the back-target, which is always
-		// pre-rendered). A future pilot whose gesture targets a non-back-
-		// target tab would consult the coordinator here.
-		const chipExit = false;
-		// A chip-exit uses the SAME 2-panel geometry as a direct slide:
-		// the left panel (the target's real panel when cached, or its
-		// skeleton - chosen by the host from publication.toPathname) is
-		// revealed. No preload gating; the nav loads the target and the
-		// revealed panel/skeleton shows during the slide + load.
+		// A back-swipe gesture always targets the back-target
+		// (pre-rendered). The coordinator (Layer 4) is not consulted for
+		// gestures in 5b1 (the pilot's only gesture target is the
+		// back-target, which is always pre-rendered). A future pilot whose
+		// gesture targets a non-back-target tab would consult the
+		// coordinator here.
 		const plan = this.#resolvePlan(inputs, intent, direction, to, inputs.toTabIndex);
 		// Capture the in-flight raw BEFORE resetting the publication so a
-		// re-grab mid-commit continues coverProgress from the commit's last
-		// raw (not from 0, which would reverse the FAB). Mirrors the
-		// tab-click path's commitStartRaw capture.
-		const rawStart = coverProgressForcedToZero ? 0 : this.#publication.progress;
+		// re-grab mid-commit continues coverProgress from the live value.
+		// Mirrors the tab-click path's commitStartRaw capture.
+		const rawStart = this.#publication.progress;
 		this.#stateMachine.onIntent(intent, from, fromTag);
 		this.#stateMachine.onResolved(plan, from, to, fromTag, toTag, direction);
 		this.#publication = {
@@ -740,10 +696,8 @@ export class NavPipelineOrchestrator {
 			inFlight: true,
 			fromPathname: from,
 			toPathname: to,
-			direction,
-			chipExit
+			direction
 		};
-		this.#chipExitState = chipExit;
 		// Start the gesture at the track's current visual position so an
 		// in-flight forward-enter or commit hands off with no jump. The
 		// geometry conversion is in #startProgressFromCurrentVisual.
@@ -782,8 +736,9 @@ export class NavPipelineOrchestrator {
 		// is the right half, track offset W..2W). restingTranslate = -W,
 		// distance = W; progress 0 -> 1 maps the track from -W (centre fills
 		// the viewport, left section off-screen) to 0 (left section fills,
-		// centre off-screen). The chip-exit uses the SAME geometry - its left
-		// panel renders the target's cached panel / skeleton.
+		// centre off-screen). The slide uses this geometry whether the target
+		// is the back-target or another tab root; the left panel renders the
+		// target's cached panel / skeleton.
 		return {
 			...plan,
 			pageTrack: {
@@ -897,7 +852,6 @@ export class NavPipelineOrchestrator {
 			this.#stateMachine.onLand(inputs.fromTag);
 		}
 		this.#publication = AT_REST_PUBLICATION;
-		this.#chipExitState = false;
 	}
 
 	// -----------------------------------------------------------------------
@@ -967,9 +921,6 @@ export class NavPipelineOrchestrator {
 			target: toPathname,
 			startedAt: this.#clock()
 		};
-		// Chip-exit when the target is a tab root that is NOT the
-		// pre-rendered leftHref (the pilot only pre-renders /messages/inbox).
-		const chipExit = isTabRootPath(toPathname) && toPathname !== inputs.backTarget;
 		const plan = this.#resolvePlan(inputs, intent, direction, toPathname, toTabIndex);
 		this.#pendingGesture = null;
 		this.#liveDragging = false;
@@ -980,14 +931,9 @@ export class NavPipelineOrchestrator {
 		this.#dispatchTarget = null;
 		navigation.cancel();
 		// Capture the in-flight raw BEFORE resetting the publication so a
-		// tab-click interrupting a gesture commit lerps coverProgress from
-		// the gesture's last raw (not from 0, which would reverse the FAB).
-		// During a forward-enter coverProgress was forced to 0 (by
-		// #isEnterAnimation), so the commit-start raw is 0 then (not the
-		// enter's eased progress) - otherwise the FAB scale jumps at the
-		// interrupt. Read #isEnterAnimation before clearing it below.
-		this.#commitStartRaw =
-			this.#isEnterAnimation || this.#publication.chipExit ? 0 : this.#publication.progress;
+		// tab-click interrupting a gesture commit continues coverProgress
+		// from the live value.
+		this.#commitStartRaw = this.#publication.progress;
 		this.#isEnterAnimation = false;
 		this.#publication = {
 			plan,
@@ -995,15 +941,13 @@ export class NavPipelineOrchestrator {
 			inFlight: true,
 			fromPathname: inputs.fromPathname,
 			toPathname,
-			direction,
-			chipExit
+			direction
 		};
-		this.#chipExitState = chipExit;
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
-		// The chip-exit uses the same 2-panel slide as a direct exit; the
-		// host renders the target's real panel (cached) or its skeleton in
-		// the left slot (keyed off chipExit + toPathname), so the slide
-		// reveals the correct content. Dispatch on settle.
+		// The slide uses the same 2-panel geometry whether the target is
+		// the back-target or another tab root; the host renders the
+		// target's real panel (cached) or its skeleton in the left slot,
+		// so the slide reveals the correct content. Dispatch on settle.
 		this.#executor?.onDragStart(plan, startProgress, 0);
 		this.#executor?.onCommit(0, TAB_CLICK_COMMIT_MS);
 		return true;
@@ -1013,7 +957,7 @@ export class NavPipelineOrchestrator {
 	 *  sources / destinations. For a pilot-internal param navigation
 	 *  (`/messages/1` -> `/messages/2`) or the initial arrival this is a
 	 *  no-op reset (the orchestrator is at rest). For a navigation AWAY
-	 *  from the pilot (chip-exit / tab-exit / gesture settle), the host's
+	 *  from the pilot (a tab-click exit / a gesture settle), the host's
 	 *  `onDestroy` runs before `afterNavigate` (Svelte 5 lifecycle: new
 	 *  route mounts -> old `onDestroy` -> `afterNavigate`), so the
 	 *  singleton is already null and this call is skipped; the cleanup is
@@ -1066,7 +1010,8 @@ export class NavPipelineOrchestrator {
 			active: true,
 			backMorph: centerTab !== undefined ? null : 0,
 			targetIndex: null,
-			coverProgress: 0
+			coverProgress: 0,
+			transitionTarget: null
 		});
 	}
 
@@ -1107,11 +1052,10 @@ export class NavPipelineOrchestrator {
 	 *  targetIndex: null, fractionalIndex: centerTab` (constant) so
 	 *  the Header stays in back-arrow mode and the tab-bar pill stays
 	 *  highlighted at centerTab throughout the gesture, matching GPL's
-	 *  centerTab branch. `coverProgress` follows the raw drag fraction
-	 *  during a live gesture, but is forced to 0 during chip-exit (the
-	 *  target's panel / skeleton slides in, not the source list) and
-	 *  during the forward-enter animation (the source list is being
-	 *  covered, not revealed). */
+	 *  centerTab branch. `coverProgress` is always the raw slide fraction;
+	 *  the FAB layer resolves the destination's family/kind to decide
+	 *  whether the FAB scales in. `transitionTarget` carries the in-flight
+	 *  destination so the FAB layer can resolve that kind. */
 	#republishToPager(rawDragFraction: number): void {
 		const pager = getMobilePagerStore();
 		const publication = this.#publication;
@@ -1121,15 +1065,16 @@ export class NavPipelineOrchestrator {
 		}
 		const inputs = this.#mountInputs;
 		const centerTab = inputs?.centerTab;
-		const coverProgress = publication.chipExit || this.#isEnterAnimation ? 0 : rawDragFraction;
+		const coverProgress = rawDragFraction;
 		if (centerTab !== undefined) {
 			pager.set({
 				fractionalIndex: centerTab,
-				dragging: publication.inFlight && this.#liveDragging && !publication.chipExit,
+				dragging: publication.inFlight && this.#liveDragging,
 				active: true,
 				backMorph: null,
 				targetIndex: null,
-				coverProgress
+				coverProgress,
+				transitionTarget: publication.toPathname
 			});
 			return;
 		}
@@ -1138,11 +1083,12 @@ export class NavPipelineOrchestrator {
 		const fractionalIndex = fromIdx + (toIdx - fromIdx) * rawDragFraction;
 		pager.set({
 			fractionalIndex,
-			dragging: publication.inFlight && !publication.chipExit,
+			dragging: publication.inFlight,
 			active: true,
 			backMorph: rawDragFraction,
 			targetIndex: toIdx >= 0 ? toIdx : null,
-			coverProgress
+			coverProgress,
+			transitionTarget: publication.toPathname
 		});
 	}
 }

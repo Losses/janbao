@@ -213,11 +213,31 @@
 		return fabConfig?.kind ?? retainedConfig?.kind ?? null;
 	});
 
+	// The destination's resting FAB kind during a pilot detail-page transition,
+	// or null when no transition is in flight or the destination shows no FAB at
+	// rest (the conversation, which is the overlay family; /activity, whose kind
+	// is 'dynamic' and resolves to no resting FAB). Used so the correct atom
+	// scales in with the slide, and so no FAB appears for a destination without
+	// one.
+	const pilotTransitionListKind = $derived.by<FabListKind | null>(() => {
+		const target = pager.transitionTarget;
+		if (target === null) return null;
+		const attrs = getFabRouteAttributes(target);
+		if (attrs === null || attrs.family !== 'list') return null;
+		if (attrs.kind === 'discussions') return 'discussions';
+		if (attrs.kind === 'messages') return 'messages';
+		return null;
+	});
+
 	const displayConfig = $derived.by<FabConfig | null>(() => {
 		const cfg = fabConfig ?? retainedConfig;
 		if (cfg === null) return null;
-		// For the list family, effectiveKind (sampler-driven) is authoritative.
-		const kind = cfg.family === 'list' ? effectiveKind : cfg.kind;
+		let kind = cfg.family === 'list' ? effectiveKind : cfg.kind;
+		// A pilot detail-page transition resolves the destination's FAB kind so
+		// the correct atom scales in with coverProgress.
+		if (pilotTransitionListKind !== null) {
+			kind = pilotTransitionListKind;
+		}
 		if (kind !== null && kind !== cfg.kind) {
 			const kc = FAB_KIND_CONFIGS[kind];
 			return {
@@ -384,6 +404,11 @@
 		const cfg = displayConfig;
 		if (cfg === null) return 0;
 		if (chipExitActive) return 0;
+		// A pilot detail-page transition scales the FAB in only when the
+		// destination shows a FAB at rest. For a destination without one (the
+		// forward-enter to the conversation; a tab-click to /activity), the FAB
+		// stays at 0 throughout.
+		if (pager.transitionTarget !== null && pilotTransitionListKind === null) return 0;
 		if (cfg.family === 'list') {
 			if (samplerActive && sampledFractionalIndex !== null) {
 				return tabFraction(sampledFractionalIndex, cfg.tabIndex);

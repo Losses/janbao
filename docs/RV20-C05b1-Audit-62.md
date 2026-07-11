@@ -60,7 +60,7 @@ all `RV20-C05b1-Audit-*.md` files**; neither saw prior-round results.
 ## Opportunistic cleanup (convergence reset made it moot)
 
 - **chipExitState symmetry:** `playEnterAnimation` set `#publication.chipExit =
-  false` but not `#chipExitState`. Added `this.#chipExitState = false;` so the
+false` but not `#chipExitState`. Added `this.#chipExitState = false;` so the
   `#chipExitState` / `#publication.chipExit` sync invariant holds at every
   publication-write site. No behavior change (already false from the constructor
   on a fresh mount); code-aesthetics only. (The owner had asked about doing this;

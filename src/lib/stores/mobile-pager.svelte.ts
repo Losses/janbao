@@ -32,16 +32,22 @@ interface PagerUpdate {
 	active: boolean;
 	backMorph: number | null;
 	targetIndex?: number | null;
-	/** source-list reveal progress 0..1, consumed by the FAB layer and published
-	 * by GesturePageLayout. null = not published, so the FAB falls back to its
-	 * resting fraction. Optional so non-GPL writers (MobileTabPager,
-	 * SearchScopePager) compile without touching it. */
+	/** The slide-progress signal the FAB layer reads to drive its scale,
+	 * published by the pilot orchestrator as the raw slide fraction and by
+	 * GesturePageLayout for other routes. null = not published, so the FAB falls
+	 * back to its resting fraction. Optional so non-publishing writers
+	 * (MobileTabPager, SearchScopePager) compile without touching it. */
 	coverProgress?: number | null;
 	/** tap-morph progress 0..1 (DV17): continuous morph signal consumed by the
 	 * search track/Tab group and the search-page Page-slide headroom on a tap.
 	 * null = no tap scrub in flight (rest, drag). Optional so non-publishing
 	 * writers compile without touching it. */
 	tapMorph?: number | null;
+	/** The target pathname of an in-flight pilot detail-page transition; null at
+	 * rest. Read by the FAB layer to resolve the destination's FAB family/kind
+	 * during the slide. Optional so non-pilot writers compile without touching
+	 * it. */
+	transitionTarget?: string | null;
 }
 
 type SetPagerFn = (update: PagerUpdate) => void;
@@ -51,6 +57,7 @@ interface PagerStore extends PagerUpdate {
 	targetIndex: number | null;
 	coverProgress: number | null;
 	tapMorph: number | null;
+	transitionTarget: string | null;
 	set: SetPagerFn;
 	setTapMorph: SetTapMorphFn;
 }
@@ -63,6 +70,7 @@ export function createPagerStore(): PagerStore {
 	let targetIndex = $state<number | null>(null);
 	let coverProgress = $state<number | null>(null);
 	let tapMorph = $state<number | null>(null);
+	let transitionTarget = $state<string | null>(null);
 
 	function set(update: PagerUpdate): void {
 		fractionalIndex = update.fractionalIndex;
@@ -71,6 +79,7 @@ export function createPagerStore(): PagerStore {
 		backMorph = update.backMorph;
 		targetIndex = update.targetIndex !== undefined ? update.targetIndex : null;
 		coverProgress = update.coverProgress ?? null;
+		transitionTarget = update.transitionTarget ?? null;
 		// tapMorph is omitted by the drag $effect's pager.set calls; preserve
 		// it so an in-flight tap scrub is not clobbered. The tap publisher
 		// writes via setTapMorph.
@@ -102,6 +111,9 @@ export function createPagerStore(): PagerStore {
 		},
 		get tapMorph() {
 			return tapMorph;
+		},
+		get transitionTarget() {
+			return transitionTarget;
 		},
 		set,
 		setTapMorph

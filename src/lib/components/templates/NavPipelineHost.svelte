@@ -19,11 +19,13 @@
 	// `pendingNav` rAF-poll.
 
 	import type { Snippet } from 'svelte';
+	import type { VoidHandler } from '$lib/types/handlers';
 	import { onMount, onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
 	import { page } from '$app/state';
 	import { getRouteData } from '$lib/utils/route-data';
 	import { MOBILE_TABS, getCurrentTabIndex, getPreviewPanel } from '$lib/utils/route-config';
+	import { isTabRootPath } from '$lib/utils/history-nav';
 	import { viewportLock } from '$lib/stores/viewport-lock.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
@@ -102,50 +104,58 @@
 	let leftEl: HTMLElement | null = $state(null);
 	let centerEl: HTMLElement | null = $state(null);
 
-	// The back-target's tab label (drives the exit preview's data-tab-panel
-	// when there is no chip-exit target).
-	const leftTabDef = $derived(MOBILE_TABS.find((tab) => tab.href === leftHref) ?? null);
-	const leftPreviewTab = $derived(leftTabDef?.labelKey ?? null);
-	// The in-flight publication. chipExit + toPathname identify a cross-tab
-	// exit's target, so the left panel can render that tab's real panel
-	// (when its data is cached) or its skeleton. A cross-type interrupt
-	// (e.g. a gesture starting mid chip-exit tab-click) flips the target,
-	// so the left-panel content swaps to the new target's panel mid-slide;
-	// the GEOMETRY stays continuous (the orchestrator's
-	// #startProgressFromCurrentVisual hands off with no jump). The content
-	// swap is expected - the panel reflects whichever transition is in
-	// flight.
+	// The in-flight publication. toPathname identifies the transition's
+	// target, so the left panel can render that tab's real panel (when its
+	// data is cached) or its skeleton. A cross-type interrupt (e.g. a
+	// gesture starting mid tab-click) flips the target, so the left-panel
+	// content swaps to the new target's panel mid-slide; the geometry stays
+	// continuous (the orchestrator's #startProgressFromCurrentVisual hands
+	// off with no jump). The content swap is expected - the panel reflects
+	// whichever transition is in flight.
 	const publication = $derived(orchestrator.publication);
-	const chipExit = $derived(orchestrator.chipExit);
-	const chipExitTarget = $derived(chipExit ? publication.toPathname : null);
-	// The left panel's tab label: the chip-exit target's label during a
-	// cross-tab exit, else the back-target's.
+	// The transition target (null at rest / when no transition is in
+	// flight). The left panel renders the back-target's panel at rest and
+	// during a back-swipe; it renders a different tab's panel when the
+	// transition targets that tab.
+	const transitionTarget = $derived(publication.inFlight ? publication.toPathname : null);
+	// The pathname whose panel the left slot renders: the transition's
+	// target when it is a tab root other than the back-target, else the
+	// back-target.
+	const crossTabPanelPath = $derived.by<string | null>(() => {
+		const target = transitionTarget;
+		if (target === null) return null;
+		if (!isTabRootPath(target) || target === leftHref) return null;
+		return target;
+	});
+	const leftPanelPathname = $derived(crossTabPanelPath ?? leftHref);
+	// The left panel's tab label.
 	const leftPanelTab = $derived(
-		chipExitTarget
-			? (MOBILE_TABS.find((tab) => tab.href === chipExitTarget)?.labelKey ?? null)
-			: leftPreviewTab
+		MOBILE_TABS.find((tab) => tab.href === leftPanelPathname)?.labelKey ?? null
 	);
 
 	// Cached scroll positions for the left (back-target) and centre
 	// (conversation) panels, restored on mount / re-entry so a back-swipe
 	// preview shows the list at its last scroll position (matching GPL's
-	// leftScrollTop / currentScrollTop). The left restore is gated to a
-	// non-chip-exit: during a chip-exit the left panel renders the TARGET's
-	// panel (fresh content), not the back-target, so the back-target's
-	// cached scroll does not apply.
+	// leftScrollTop / currentScrollTop). The left restore is gated to the
+	// back-target being the rendered panel: when the slide reveals a
+	// different tab (crossTabPanelPath), that panel is fresh content, so
+	// the back-target's cached scroll does not apply.
 	const pageCache = getPageCacheStore();
-	const leftScrollTop = $derived(!chipExit ? (pageCache.get(leftHref)?.scrollTop ?? 0) : 0);
+	const leftScrollTop = $derived(
+		crossTabPanelPath === null ? (pageCache.get(leftHref)?.scrollTop ?? 0) : 0
+	);
 	const currentScrollTop = $derived(
 		page.url.pathname ? (pageCache.get(page.url.pathname)?.scrollTop ?? 0) : 0
 	);
 
-	// The track is always 2 panels: the left (the back-target's panel, or a
-	// chip-exit target's real panel / skeleton) + the centre (conversation).
-	// A chip-exit uses the SAME 2-panel geometry as a direct slide, so a
-	// cross-geometry interrupt handoff never jumps.
+	// The track is always 2 panels: the left (the back-target's panel, or
+	// another tab's real panel / skeleton) + the centre (conversation). The
+	// slide uses the same 2-panel geometry whether the target is the
+	// back-target or another tab, so a cross-type interrupt handoff never
+	// jumps.
 	const panelCount = 2;
 
-	// Page-url builder for a DiscussionsPanel rendered as a chip-exit preview
+	// Page-url builder for a DiscussionsPanel rendered as a tab preview
 	// (matches the home route's pagination scheme).
 	const discussionsBuildPageUrl: PageUrlBuilder = (p) => (p === 1 ? '/' : `/discussions/p${p}`);
 
@@ -157,26 +167,29 @@
 		if (trackEl) setActiveGestureTrack(trackEl);
 	});
 
-	// Restore the cached scroll positions on the left + centre panels
-	// (immediately + on the next frame, matching GPL). Setting scrollTop
-	// programmatically does not fire `onscroll`, so this cannot loop.
-	$effect(() => {
-		if (leftEl && leftScrollTop > 0) {
-			leftEl.scrollTop = leftScrollTop;
+	// Restore a panel's cached scroll position: set it immediately and again
+	// on the next frame (matching GPL). Setting scrollTop programmatically
+	// does not fire `onscroll`, so this cannot loop. Returns a rAF cleanup
+	// so an `$effect` can use it directly.
+	const restoreScroll = (el: HTMLElement | null, top: number): VoidHandler => {
+		if (el && top > 0) {
+			el.scrollTop = top;
 			const rafId = requestAnimationFrame(() => {
-				if (leftEl) leftEl.scrollTop = leftScrollTop;
+				if (el) el.scrollTop = top;
 			});
 			return () => cancelAnimationFrame(rafId);
 		}
-	});
+		return () => {};
+	};
+	$effect(() => restoreScroll(leftEl, leftScrollTop));
+	$effect(() => restoreScroll(centerEl, currentScrollTop));
+	// When the slide reveals a different tab's panel (crossTabPanelPath),
+	// the `<section>` element is stable across the content swap, so its
+	// scrollTop would otherwise inherit the inbox preview's restored
+	// position; reset it to 0 so the target panel starts at the top (no
+	// stale-scroll jump on landing).
 	$effect(() => {
-		if (centerEl && currentScrollTop > 0) {
-			centerEl.scrollTop = currentScrollTop;
-			const rafId = requestAnimationFrame(() => {
-				if (centerEl) centerEl.scrollTop = currentScrollTop;
-			});
-			return () => cancelAnimationFrame(rafId);
-		}
+		if (crossTabPanelPath !== null && leftEl) leftEl.scrollTop = 0;
 	});
 
 	// Register the centre panel as the scroll-chrome source on mobile.
@@ -236,7 +249,7 @@
 	// teardowns. Idempotent mount so a re-mount (HMR, route swap) rebinds
 	// the element refs.
 	let held = false;
-	let orchestratorMounted = false;
+	let orchestratorMounted = $state(false);
 	onMount(() => {
 		const mq = window.matchMedia(MOBILE_BREAKPOINT);
 
@@ -441,20 +454,26 @@
 				class="shrink-0 scroll-pane md:hidden"
 				style={leftStyle}
 				onscroll={(e) => {
-					if (!chipExit && e.currentTarget.scrollTop > 0) {
+					if (crossTabPanelPath === null && e.currentTarget.scrollTop > 0) {
 						pageCache.capture(leftHref, undefined, { scrollTop: e.currentTarget.scrollTop });
 					}
 				}}
 			>
 				<div class="gpl-card">
-					<!-- The chip-exit reveals the target's REAL panel from the
+					<!-- When the slide reveals another tab, the left panel renders
+					     that tab's real panel from the
 					     eager-loaded root-layout data. The skeleton is a spec-
 					     mandated fallback for a target whose data is absent;
 					     currently unreachable because the root layout's
 					     Promise.allSettled returns truthy EMPTY_* objects on
 					     rejection (never null), so page.data.* is always
-					     truthy and the real panel always renders. -->
-					{#if chipExitTarget === '/activity'}
+					     truthy and the panel always renders - the real list, or
+					     the truthy-but-empty EMPTY_* on a partial-load failure
+					     (never the skeleton). The panels render with
+					     paginate={true} to match the landing tab page
+					     (TabDiscussionsPanel / TabActivityPanel), so the
+					     preview is faithful when totalPages > 1. -->
+					{#if leftPanelPathname === '/activity'}
 						{#if page.data.activity}
 							<ActivityPanel
 								activities={page.data.activity.activities}
@@ -464,12 +483,12 @@
 								mentionedUsers={page.data.activity.mentionedUsers}
 								t={page.data.t}
 								user={page.data.user}
-								paginate={false}
+								paginate={true}
 							/>
 						{:else}
 							<ActivitySkeleton />
 						{/if}
-					{:else if chipExitTarget === '/'}
+					{:else if leftPanelPathname === '/'}
 						{#if page.data.home}
 							<DiscussionsPanel
 								discussions={page.data.home.discussions}
@@ -477,7 +496,7 @@
 								totalPages={page.data.home.totalPages}
 								t={page.data.t}
 								buildPageUrl={discussionsBuildPageUrl}
-								paginate={false}
+								paginate={true}
 							/>
 						{:else}
 							<DiscussionsSkeleton />
