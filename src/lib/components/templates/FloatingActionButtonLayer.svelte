@@ -8,18 +8,16 @@
 	 * reactive pager store, selected by family:
 	 *
 	 *   - Family A (list / tab swipe): the per-frame track sampler reads the
-	 *     MobileTabPager track `m41` (the fractional tab index). The store's
-	 *     `fractionalIndex` jumps to its integer endpoint on release while the
-	 *     track keeps easing, so the per-frame read is the continuous signal
-	 *     across the snap. `tabFraction(sample, tabIndex)` maps it to 0..1.
-	 *   - Family B (overlay: thread + deep): reads `pager.coverProgress` (0..1,
-	 *     deadzone-free). On a GesturePageLayout route it is published from the
-	 *     live `rawDragOffset` (centerTab and deep branches); on the pilot route
-	 *     `/messages/[id]` it is published by `NavPipelineOrchestrator` as the raw
-	 *     slide fraction. The store signal drives the scale directly each frame.
-	 *   - Family C (compose): like Family B, reads `pager.coverProgress`
-	 *     (GesturePageLayout publishes it on the centerTab branch). The
-	 *     discrete-nav CSS transition still eases the non-drag list<->compose swap.
+	 *     NavPipelineTabHost track `m41` (the fractional tab index). The
+	 *     store's `fractionalIndex` jumps to its integer endpoint on release
+	 *     while the track keeps easing, so the per-frame read is the
+	 *     continuous signal across the snap. `tabFraction(sample, tabIndex)`
+	 *     maps it to 0..1.
+	 *   - Family B (overlay: thread + deep): reads `pager.coverProgress`
+	 *     (0..1, deadzone-free), published by `NavPipelineOrchestrator` as
+	 *     the raw slide fraction. The store signal drives the scale directly
+	 *     each frame.
+	 *   - Family C (compose): like Family B, reads `pager.coverProgress`.
 	 *
 	 * `scaleFromFraction` maps foregroundFraction over the second half of its
 	 * range (`clamp(2·f − 1, 0, 1)`): the FAB disappears over the first 50% of a
@@ -32,16 +30,8 @@
 	 * new family's resting scale over `TRACK_TRANSITION_MS` (200ms) via the
 	 * constant-deceleration curve `s(u) = 2u - u^2` (the same curve the
 	 * executor uses). Same-family tab taps (list<->list) do not trigger it;
-	 * their easing track is driven by the Family A sampler. A
-	 * GesturePageLayout exit slide (`navStore.pendingNav` set) still eases via
-	 * the atom's CSS transition (the pendingNav path, kept until the GPL
-	 * routes migrate in Phase 3); the rAF ease is gated off while pendingNav
-	 * is set so the two clocks never overlap. During a drag the rAF ease is
-	 * off (the live signal drives), so there is no double-clock.
-	 *
-	 * Cross-tab chip-exit: on a cross-tab tap FROM a list route, the
-	 * MobileTabPager's z-30 LoadingChip covers the pager and the FAB at z-35
-	 * must not render above it, so scale is forced to 0 (tested first).
+	 * their easing track is driven by the Family A sampler. During a drag the
+	 * rAF ease is off (the live signal drives), so there is no double-clock.
 	 *
 	 * The active track reaches this ancestor via the `active-gesture-track`
 	 * module-singleton store (Family A sampler only; overlay reads the store
@@ -91,10 +81,8 @@
 	// curve the executor uses). The ease runs on the layer's own rAF loop, a
 	// persistent consumer that survives the route swap. It is gated off when a
 	// higher-priority driver owns the FAB scale: a drag (the live signal
-	// drives), the pilot orchestrator (pilotTransitionListKind !== null;
-	// coverProgress ramps the scale), or a GesturePageLayout exit slide
-	// (navStore.pendingNav !== null; the atom's CSS transition eases the GPL
-	// track slide via the pendingNav path). A same-family tab tap (list<->list)
+	// drives) or the orchestrator (pilotTransitionListKind !== null;
+	// coverProgress ramps the scale). A same-family tab tap (list<->list)
 	// does not trigger it (the Family A sampler drives that easing track).
 	let familySwapRafId: number | undefined;
 	let familySwapFromScale = 0;
@@ -169,7 +157,7 @@
 		}
 
 		if (attrs.kind === 'deep') {
-			// A non-FAB GesturePageLayout route (bookmarks, profile/*, search,
+			// A non-FAB deep route (bookmarks, profile/*, search,
 			// notifications, admin/*). Resolve the source-list kind from the back
 			// target so the FAB scales toward the list the user came from. Family
 			// 'overlay' reads `pager.coverProgress` directly. This branch does not
@@ -205,13 +193,14 @@
 
 	// Retain the last non-null FAB config so the atom stays mounted across every
 	// tab route, including ones with no FAB of their own (e.g. /activity). The
-	// Family A sampler then drives the scale continuously from the MobileTabPager
-	// track: tabFraction(track position, tabIndex) follows the slide, so a tab
-	// tap animates the FAB without any latch or timing dependency. A fresh
-	// deep-link to a no-FAB route has retainedConfig === null (no prior FAB
-	// seen), so the atom does not render there (the "activity has no FAB"
-	// contract holds on first load); once any FAB route has been visited the atom
-	// persists and the sampler carries the scale to 0 on no-FAB tabs.
+	// Family A sampler then drives the scale continuously from the
+	// NavPipelineTabHost track: tabFraction(track position, tabIndex) follows
+	// the slide, so a tab tap animates the FAB without any latch or timing
+	// dependency. A fresh deep-link to a no-FAB route has retainedConfig ===
+	// null (no prior FAB seen), so the atom does not render there (the
+	// "activity has no FAB" contract holds on first load); once any FAB route
+	// has been visited the atom persists and the sampler carries the scale to
+	// 0 on no-FAB tabs.
 	let retainedConfig = $state<FabConfig | null>(null);
 	$effect(() => {
 		if (fabConfig !== null) retainedConfig = fabConfig;
@@ -219,10 +208,11 @@
 
 	// Kind follows the visual track position (the sampler's sample), NOT the URL.
 	// The URL swaps at click time (before the track moves); the sample lags by
-	// the CSS transition. Using the sample for kind means the kind swaps at the
-	// visual midpoint (scale 0 via 2f-1), not at the click, so no flicker. This
-	// is ALWAYS active (even at integer rest) so the URL-swap frame cannot leak
-	// the incoming kind before the track has crossed the midpoint.
+	// the executor's rAF slide. Using the sample for kind means the kind swaps
+	// at the visual midpoint (scale 0 via 2f-1), not at the click, so no
+	// flicker. This is ALWAYS active (even at integer rest) so the URL-swap
+	// frame cannot leak the incoming kind before the track has crossed the
+	// midpoint.
 	const effectiveKind = $derived.by<FabKind>(() => {
 		if (samplerActive && sampledFractionalIndex !== null) {
 			return sampledFractionalIndex < 1 ? 'discussions' : 'messages';
@@ -293,7 +283,7 @@
 		// the Family A sampler, not this ease.
 		if (prev !== null && prev !== current) {
 			// Gate: skip when a higher-priority driver owns the FAB scale.
-			if (pager.dragging || pilotTransitionListKind !== null || navStore.pendingNav !== null) {
+			if (pager.dragging || pilotTransitionListKind !== null) {
 				return;
 			}
 			// Anchor from the atom's visible scale (the DOM ground truth). On a
@@ -382,7 +372,7 @@
 		const attrs = getFabRouteAttributes(page.url.pathname);
 		const hasCfg = attrs !== null && attrs.kind !== null;
 		const family = attrs?.family ?? null;
-		if (!hasTrack || !hasCfg || family !== 'list' || chipExitActive) {
+		if (!hasTrack || !hasCfg || family !== 'list') {
 			stopSampler();
 			return;
 		}
@@ -434,10 +424,10 @@
 		familySwapStartTs = 0;
 		familySwapScale = fromScale;
 		const tick = (): void => {
-			// If a higher-priority driver took over mid-ease (a drag, the pilot
-			// orchestrator, or a GPL pendingNav exit slide), cancel and hand the
-			// scale back to the resting/live signal.
-			if (pager.dragging || pilotTransitionListKind !== null || navStore.pendingNav !== null) {
+			// If a higher-priority driver took over mid-ease (a drag or the
+			// orchestrator), cancel and hand the scale back to the
+			// resting/live signal.
+			if (pager.dragging || pilotTransitionListKind !== null) {
 				stopFamilySwapEase();
 				return;
 			}
@@ -482,34 +472,17 @@
 		stopFamilySwapEase();
 	});
 
-	// Cross-tab chip-exit / pendingNav: forces scale 0 directly, bypassing the
-	// foregroundFraction derivation. The back-chip overlay (MobileTabPager's
-	// z-30 LoadingChip) renders on LIST routes during a back-swipe toward a deep
-	// page or a cross-tab tap. Family B (overlay) and Family C (compose) routes
-	// never host the overlay, so chip-exit is gated to `fabConfig.family ===
-	// 'list'`. Tested first in foregroundFraction so it overrides coverProgress.
-	const chipExitActive = $derived.by(() => {
-		const cfg = fabConfig;
-		if (cfg?.family !== 'list') return false;
-		const pending = navStore.pendingNav;
-		if (pending !== null) {
-			// Same source-list tab: the nav stays within the tab the FAB
-			// represents (e.g. discussions list -> discussions list page 2).
-			return getCurrentTabIndex(pending.href) !== cfg.tabIndex;
-		}
-		// navInFlight without a pending nav: a cross-tab tap is a FORWARD nav
-		// (navigateForward) and the LoadingChip covers the target pager. A
-		// BACKWARD nav (back-swipe to this source list) has no chip.
-		return navStore.navInFlight && navStore.direction === 'forward';
-	});
+	// Cross-tab slide coverage: every route is a pipeline route, so
+	// SvelteKit's `beforeNavigate` is consumed by the orchestrator and the
+	// Family A sampler (live track m41) drives the FAB scale across a
+	// cross-tab slide directly. No `navInFlight` gate is involved.
 
 	/** Per-family foreground fraction (0 = source list covered, 1 = fully
 	 *  foreground). Family A reads the sampler; Families B and C read
-	 *  `coverProgress`. `chipExitActive` overrides to 0. */
+	 *  `coverProgress`. */
 	const foregroundFraction = $derived.by(() => {
 		const cfg = displayConfig;
 		if (cfg === null) return 0;
-		if (chipExitActive) return 0;
 		// A pilot detail-page transition scales the FAB in only when the
 		// destination shows a FAB at rest. For a destination without one (the
 		// forward-enter to the conversation; a tab-click to /activity from the
@@ -533,17 +506,12 @@
 				: getCurrentTabIndex(page.url.pathname);
 			return tabFraction(restActiveTab, cfg.tabIndex);
 		}
-		// Families B (overlay) and C (compose) read `coverProgress`. On a
-		// GesturePageLayout route it is published from the live `rawDragOffset`
-		// (so the FAB follows the finger across the drag and the commit slide);
-		// on the pilot route `/messages/[id]` it is published by
-		// `NavPipelineOrchestrator` as the raw slide fraction. Resting (null
-		// server-side / pre-mount, 0 client-side) maps to 0; the discrete
-		// forward/back swap is eased by the layer's rAF family-swap ease (the
-		// `startFamilySwapEase` loop), not a CSS latch.
-		// During a GPL cross-tab tap on a list route the source list is not
-		// revealed, so the GPL publishes 0 (gated on `swipeNeedsLoadingAtStart`)
-		// and the FAB hides under the LoadingChip.
+		// Families B (overlay) and C (compose) read `coverProgress`,
+		// published by `NavPipelineOrchestrator` as the raw slide fraction
+		// (so the FAB follows the finger across the drag and the commit
+		// slide). Resting (null server-side / pre-mount, 0 client-side) maps
+		// to 0; the discrete forward/back swap is eased by the layer's rAF
+		// family-swap ease (the `startFamilySwapEase` loop).
 		return pager.coverProgress ?? 0;
 	});
 
@@ -554,19 +522,6 @@
 	// `familySwapScale` back to null on completion so the handoff to
 	// `restingScale` is seamless (the ease target equals the new resting scale).
 	const scale = $derived(familySwapScale !== null ? familySwapScale : restingScale);
-
-	// The atom's CSS transition eases the scale ONLY for a GesturePageLayout
-	// exit slide (`navStore.pendingNav` set): on a back-swipe release GPL
-	// publishes the coverProgress endpoint as a snapshot, and this transition
-	// eases the FAB from its mid-drag scale to that endpoint across the GPL
-	// track's 200ms slide. The discrete (non-GPL) family swap is eased by the
-	// rAF family-swap ease above, not this class. Suppressed during a drag (the
-	// live signal drives) and when the pilot orchestrator drives the FAB
-	// (`pilotTransitionListKind !== null`). Dissolves in Phase 3 when the GPL
-	// routes migrate off GesturePageLayout and `pendingNav` stops publishing.
-	const transitionEnabled = $derived(
-		!pager.dragging && pilotTransitionListKind === null && navStore.pendingNav !== null
-	);
 
 	const fabHideProgress = $derived(
 		hideProgress(scrollChrome.translateY, scrollChrome.headerHeight)
@@ -585,7 +540,6 @@
 			href={displayConfig.href}
 			label={displayConfig.label}
 			icon={displayConfig.icon}
-			{transitionEnabled}
 		/>
 	</div>
 {/if}

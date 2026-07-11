@@ -4,7 +4,7 @@ import {
 	getTabBarPillTarget,
 	getCurrentTabIndex,
 	isPagerRoute,
-	isGestureRoute,
+	isPipelineSwipeDisabledRoute,
 	backTargetListKind,
 	getPreviewPanel
 } from './route-config';
@@ -191,56 +191,49 @@ describe('isPagerRoute - positional query over MOBILE_TAB_DEFS', () => {
 	});
 });
 
-describe('isGestureRoute - migration-era imperative (deferred to Cycle 5)', () => {
-	// The function's answer set is preserved verbatim per the Cycle 1 spec.
+describe('isPipelineSwipeDisabledRoute - DualColumnLayout yield gate', () => {
 	// Masked latent bug: `/search`, `/bookmarks`, `/notifications`, and
-	// `/profile` mount a GPL but the function returns FALSE because they
-	// carry `kind: 'deep'` (failing the overlay branch) and have no
-	// declared `backParent` (failing the deep-route branch). Sub-pages
-	// of `/profile` and the `/admin/*` tree declare `backParent`, so
-	// they return TRUE; the latent-bug set is the four leaf routes only.
-	// Cycle 5 dissolves the function and the bug together.
+	// `/profile` mount a NavPipelineHost but the function returns FALSE
+	// because they carry `kind: 'deep'` (failing the overlay branch) and
+	// have no declared `backParent` (failing the deep-route branch). Sub-
+	// pages of `/profile` and the `/admin/*` tree declare `backParent`,
+	// so they return TRUE; the latent-bug set is the four leaf routes
+	// only. The race does not manifest (NavPipelineHost wins pointer
+	// capture); the function and the bug dissolve in 5b3 when the
+	// DualColumnLayout detectSwipe is removed.
 	test('true for thread / conversation routes (Family B overlay, non-deep kind)', () => {
-		expect(isGestureRoute('/discussion/123')).toBe(true);
-		expect(isGestureRoute('/discussion/123/slug/p1')).toBe(true);
-		expect(isGestureRoute('/messages/123')).toBe(true);
-		expect(isGestureRoute('/messages/123/p2')).toBe(true);
+		expect(isPipelineSwipeDisabledRoute('/discussion/123')).toBe(true);
+		expect(isPipelineSwipeDisabledRoute('/discussion/123/slug/p1')).toBe(true);
+		expect(isPipelineSwipeDisabledRoute('/messages/123')).toBe(true);
+		expect(isPipelineSwipeDisabledRoute('/messages/123/p2')).toBe(true);
 	});
 	test('true for routes whose structural parent is declared in the registry', () => {
-		expect(isGestureRoute('/profile/settings')).toBe(true);
-		expect(isGestureRoute('/profile/55/sunny')).toBe(true);
-		expect(isGestureRoute('/profile/comments/55/sunny')).toBe(true);
-		expect(isGestureRoute('/profile/discussions/55/sunny')).toBe(true);
-		expect(isGestureRoute('/profile/appearance')).toBe(true);
-		expect(isGestureRoute('/profile/invitations')).toBe(true);
-		expect(isGestureRoute('/admin')).toBe(true);
-		expect(isGestureRoute('/admin/backups')).toBe(true);
-		expect(isGestureRoute('/post/discussion')).toBe(true);
-		expect(isGestureRoute('/messages/new')).toBe(true);
+		expect(isPipelineSwipeDisabledRoute('/profile/settings')).toBe(true);
+		expect(isPipelineSwipeDisabledRoute('/profile/55/sunny')).toBe(true);
+		expect(isPipelineSwipeDisabledRoute('/profile/comments/55/sunny')).toBe(true);
+		expect(isPipelineSwipeDisabledRoute('/profile/discussions/55/sunny')).toBe(true);
+		expect(isPipelineSwipeDisabledRoute('/profile/appearance')).toBe(true);
+		expect(isPipelineSwipeDisabledRoute('/profile/invitations')).toBe(true);
+		expect(isPipelineSwipeDisabledRoute('/admin')).toBe(true);
+		expect(isPipelineSwipeDisabledRoute('/admin/backups')).toBe(true);
+		expect(isPipelineSwipeDisabledRoute('/post/discussion')).toBe(true);
+		expect(isPipelineSwipeDisabledRoute('/messages/new')).toBe(true);
 	});
 	test('latent-bug leaf routes return FALSE; backParent-declaring sub-pages return TRUE', () => {
-		// `/search`, `/bookmarks`, `/notifications`, and `/profile` mount a
-		// GPL but the function returns FALSE: they carry `kind: 'deep'`
-		// (failing the overlay branch) and have no declared `backParent`
-		// (failing the deep-route branch). `/admin/user-groups` carries
-		// `backParent: '/admin'`, so the deep-route branch returns TRUE
-		// (no bug for sub-pages with declared parents). The function
-		// stays imperative per the spec; the leaf-route bug is preserved
-		// verbatim and deferred to Cycle 5.
-		expect(isGestureRoute('/search')).toBe(false);
-		expect(isGestureRoute('/bookmarks')).toBe(false);
-		expect(isGestureRoute('/notifications')).toBe(false);
-		expect(isGestureRoute('/profile')).toBe(false);
-		expect(isGestureRoute('/admin/user-groups')).toBe(true);
+		expect(isPipelineSwipeDisabledRoute('/search')).toBe(false);
+		expect(isPipelineSwipeDisabledRoute('/bookmarks')).toBe(false);
+		expect(isPipelineSwipeDisabledRoute('/notifications')).toBe(false);
+		expect(isPipelineSwipeDisabledRoute('/profile')).toBe(false);
+		expect(isPipelineSwipeDisabledRoute('/admin/user-groups')).toBe(true);
 	});
 	test('false for tab roots, tab-internal pagination, offline routes, unmatched', () => {
-		expect(isGestureRoute('/')).toBe(false);
-		expect(isGestureRoute('/activity')).toBe(false);
-		expect(isGestureRoute('/messages/inbox')).toBe(false);
-		expect(isGestureRoute('/discussions/p2')).toBe(false);
-		expect(isGestureRoute('/offline')).toBe(false);
-		expect(isGestureRoute('/offline/123')).toBe(false);
-		expect(isGestureRoute('/entry/signin')).toBe(false);
+		expect(isPipelineSwipeDisabledRoute('/')).toBe(false);
+		expect(isPipelineSwipeDisabledRoute('/activity')).toBe(false);
+		expect(isPipelineSwipeDisabledRoute('/messages/inbox')).toBe(false);
+		expect(isPipelineSwipeDisabledRoute('/discussions/p2')).toBe(false);
+		expect(isPipelineSwipeDisabledRoute('/offline')).toBe(false);
+		expect(isPipelineSwipeDisabledRoute('/offline/123')).toBe(false);
+		expect(isPipelineSwipeDisabledRoute('/entry/signin')).toBe(false);
 	});
 });
 

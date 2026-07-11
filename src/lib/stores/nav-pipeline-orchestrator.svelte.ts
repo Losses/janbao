@@ -1,8 +1,7 @@
 // src/lib/stores/nav-pipeline-orchestrator.svelte.ts
 /**
- * The Cycle 5b1 pilot-route orchestrator integration. Owns the wiring
- * of the four integration points the C05b1 spec requires for the pilot
- * route `/messages/[id]`:
+ * The universal pipeline orchestrator for every mobile route. Owns the
+ * four integration points the DV20 spec requires:
  *
  *   1. SvelteKit nav -> orchestrator: `onSvelteKitBeforeNavigate` /
  *      `onSvelteKitAfterNavigate` (called from `src/routes/+layout.svelte`'s
@@ -20,13 +19,14 @@
  *      onDestroy and releases the html-singletons (active-gesture-track,
  *      viewport-lock) directly with a `browser` guard.
  *
- * Per the C05b1 spec's binding "UNIFY, DO NOT BRIDGE" constraint: for
- * the pilot route, this orchestrator is the SOLE transition mechanism
- * for EVERY transition type. No `gestureSource` selector; no intent
- * mirror into the host component's `$state`; the
- * `detectSwipe -> $state -> CSS transition -> transitionend` path used
- * by `GesturePageLayout` (still active on non-pilot routes in 5b1) is
- * not mounted on the pilot.
+ * Per the DV20 spec's binding "UNIFY, DO NOT BRIDGE" constraint: this
+ * orchestrator is the SOLE transition mechanism for EVERY transition
+ * type on EVERY mobile route. No `gestureSource` selector; no intent
+ * mirror into the host component's `$state`; no CSS-transition +
+ * `transitionend` path. Every mobile route mounts `NavPipelineHost` (the
+ * thread and deep-page routes) or `NavPipelineTabHost` (the three tab
+ * roots); the orchestrator constructed by each host drives every
+ * transition through the executor's rAF.
  *
  * The orchestrator coordinates; it does NOT bypass SvelteKit (§9).
  * Settle on a commit dispatches the SvelteKit navigation via `goto`
@@ -36,10 +36,10 @@
  * `beforeNavigate` without re-cancelling.
  *
  * Module-singleton pattern, matching the other reactive stores in this
- * directory. The host component (`NavPipelineHost`) is per-route; the
- * orchestrator is constructed fresh on each `mount` (so route swaps do
- * not carry stale state) but exposed via a single getter for the
- * layout-level hooks.
+ * directory. The host component (`NavPipelineHost` /
+ * `NavPipelineTabHost`) is per-route; the orchestrator is constructed
+ * fresh on each `mount` (so route swaps do not carry stale state) but
+ * exposed via a single getter for the layout-level hooks.
  *
  * Per DV20 §13.5 the `NavStateMachine` is the sole authority for the
  * macro transition state (phase, plan, FROM/TO, direction). The
@@ -76,7 +76,12 @@ import {
 } from '$lib/utils/nav-resolvers';
 import { getRouteData } from '$lib/utils/route-data';
 import { MOBILE_TABS } from '$lib/utils/route-config';
-import { hopForHref, isTabRootPath } from '$lib/utils/history-nav';
+import {
+	hopForHref,
+	isTabRootPath,
+	backSwipeShouldPopHistory,
+	previousEntryPathname
+} from '$lib/utils/history-nav';
 import {
 	HEADER_MORPH_THRESHOLD,
 	PILL_EXPANSION_THRESHOLD,
@@ -87,13 +92,12 @@ import {
 import type { RouteTag } from '$lib/utils/route-data';
 import type { TransitionPlan } from '$lib/utils/nav-resolvers';
 
-/** Commit duration for the pilot's tab-click exit and forward-enter.
- *  Matches the non-pilot routes' CSS `transition-transform duration-200`
- *  duration (`TRACK_TRANSITION_MS`); the easing is the executor's
- *  constant-deceleration `s(u)=2u-u²`, not the CSS timing function, so
- *  the slide is the same length under the unified all-rAF ease. Used by
- *  `onSvelteKitBeforeNavigate` (tab-click) and `playEnterAnimation`.
- *  Gesture commits use the velocity-matched solver instead. */
+/** Commit duration for a tab-click exit and a forward-enter. Equals
+ *  `TRACK_TRANSITION_MS` (200ms); the easing is the executor's
+ *  constant-deceleration `s(u)=2u-u²` (no CSS timing function), so the
+ *  slide is the all-rAF ease. Used by `onSvelteKitBeforeNavigate`
+ *  (tab-click) and `playEnterAnimation`. Gesture commits use the
+ *  velocity-matched solver instead. */
 const TAB_CLICK_COMMIT_MS = TRACK_TRANSITION_MS;
 
 /** The host's track / FAB / Header element refs as supplied to the
@@ -135,7 +139,7 @@ interface PendingGestureTransition {
 	readonly boundary: boolean;
 }
 
-/** A pending tab-click transition (any pilot -> tab-root nav the
+/** A pending tab-click transition (a host-route -> tab-root nav the
  *  orchestrator cancelled in `onSvelteKitBeforeNavigate`). Carries
  *  the deferred dispatch target (the FULL url: pathname + search) so
  *  commit-settle can fire the SvelteKit `goto` on the exact URL the
@@ -181,40 +185,44 @@ export interface PipelineMountInputs {
 	/** The current viewport width (px). */
 	readonly viewportWidth: number;
 	/** The multi-panel track's resting translate (px) at progress=0.
-	 *  For the pilot's 2-panel track this is `-viewportWidth` so the
-	 *  centre panel (the right half of the 2*W track) fills the
-	 *  viewport and the left panel sits off-screen. The plan's
+	 *  For a 2-panel host (`NavPipelineHost`) this is `-viewportWidth`
+	 *  so the centre panel (the right half of the 2*W track) fills the
+	 *  viewport and the left panel sits off-screen. For a 3-panel
+	 *  bidirectional host (`NavPipelineTabHost`) this is
+	 *  `-activeIndex * viewportWidth`. The plan's
 	 *  `pageTrack.restingTranslate` field carries this into the
 	 *  executor's `buildVisual`. */
 	readonly restingTranslate: number;
-	/** The pilot route's back-target (the `leftHref` prop, resolved
-	 *  host-side to the actual URL). */
+	/** The host route's back-target (the `leftHref` prop on
+	 *  `NavPipelineHost`, resolved host-side to the actual URL). */
 	readonly backTarget: string;
-	/** The current route's pathname (the pilot detail route). */
+	/** The current route's pathname. */
 	readonly fromPathname: string;
-	/** The current route's tag (`'detail'` for the pilot). */
+	/** The current route's tag. */
 	readonly fromTag: RouteTag;
-	/** The back-target's tag (`'tab'` for `/messages/inbox`). */
+	/** The back-target's tag. */
 	readonly toTag: RouteTag;
-	/** The tab-bar pill index the FROM route is associated with (the
-	 *  pilot passes its `centerTab` here so the pill animates from the
-	 *  pilot's tab); -1 when FROM has no tab association. */
+	/** The tab-bar pill index the FROM route is associated with; -1
+	 *  when FROM has no tab association. The thread host passes its
+	 *  `centerTab` here so the pill animates from the thread's tab. */
 	readonly fromTabIndex: number;
 	/** Index of the back-target in the tab-bar's pill order, or -1
 	 *  when TO is not a tab root. */
 	readonly toTabIndex: number;
-	/** The pilot's `centerTab` prop (the tab index the conversation
-	 *  page is centered on, e.g. 2 for messages). When set, the
+	/** The thread host's `centerTab` prop (the tab index the thread
+	 *  page is centered on, e.g. 0 for discussions). When set, the
 	 *  orchestrator publishes `backMorph: null, targetIndex: null,
-	 *  fractionalIndex: centerTab` (constant) to the pager store,
-	 *  matching the centerTab branch of GesturePageLayout. When
-	 *  undefined (deep routes in 5b2), the morph values apply. */
+	 *  fractionalIndex: centerTab` (constant) to the pager store so
+	 *  the Header stays in back-arrow mode and the pill stays on the
+	 *  thread's tab throughout the gesture. When undefined, the
+	 *  morph/pill values apply (deep page or tab host). */
 	readonly centerTab?: number;
 	/** When true the orchestrator claims BOTH rightward and leftward
-	 *  drags (the tab-pager host). Rightward targets the back-target
-	 *  (previous tab); leftward targets the next tab. When false or
-	 *  undefined, only rightward back-swipes are claimed (the pilot /
-	 *  deep-page host). */
+	 *  drags (`NavPipelineTabHost`, the three tab roots). Rightward
+	 *  targets the back-target (previous tab); leftward targets the
+	 *  next tab. When false or undefined, only rightward back-swipes
+	 *  are claimed (`NavPipelineHost`, the thread and deep-page
+	 *  routes). */
 	readonly bidirectional?: boolean;
 }
 
@@ -249,8 +257,8 @@ function defaultClock(): number {
 	return Date.now();
 }
 
-/** The 5b1 pilot-route orchestrator. Constructed fresh on each pilot
- *  mount; torn down on unmount. Holds the NavStateMachine, NavExecutor,
+/** The pipeline orchestrator. Constructed fresh on each host mount;
+ *  torn down on unmount. Holds the NavStateMachine, NavExecutor,
  *  LiveNavDomDriver, the intent classifier state, and the lifecycle
  *  controller. */
 export class NavPipelineOrchestrator {
@@ -279,10 +287,8 @@ export class NavPipelineOrchestrator {
 	 *  is claimed, so a mid-gesture reversal (finger moves leftward
 	 *  within the claimed gesture) stays live-dragging; the flag clears
 	 *  on release (committed / cancelled). Controls the pager store's
-	 *  `dragging` field: GPL publishes `dragging: dragOffset !== null`
-	 *  which is true during live drag only, NOT during the commit slide
-	 *  (dragOffset is nulled on release). Matching this aligns the
-	 *  pilot's `dragging` field with GPL's. */
+	 *  `dragging` field: true during live drag only, NOT during the
+	 *  commit slide (dragOffset is nulled on release). */
 	#liveDragging = false;
 	/** True when the orchestrator's own dispatch (`goto` /
 	 *  `history.back()` / `history.forward()`) has fired and is
@@ -422,13 +428,12 @@ export class NavPipelineOrchestrator {
 
 	/** Play a forward enter-slide animation (left panel -> centre
 	 *  panel). Called synchronously from the host's `onMount` (the DOM
-	 *  is mounted so `viewportEl.clientWidth` is available) when the pilot
+	 *  is mounted so `viewportEl.clientWidth` is available) when the
 	 *  route is reached via a forward SPA navigation from the backTarget.
 	 *  The track starts at `translateX(0)` (left panel visible) and
 	 *  slides to `translateX(-W)` (centre visible) over ~200ms via
-	 *  the executor's rAF. The duration matches the non-pilot routes' CSS
-	 *  `duration-200`; the easing is the executor's constant-deceleration
-	 *  `s(u) = 2u - u²` (Plan §5), not the CSS timing function. No
+	 *  the executor's rAF. The easing is the executor's constant-deceleration
+	 *  `s(u) = 2u - u²` (Plan §5). No
 	 *  navigation is dispatched on settle (the route has already landed). */
 	playEnterAnimation(): void {
 		const inputs = this.#mountInputs;
@@ -439,7 +444,7 @@ export class NavPipelineOrchestrator {
 		// Defensive: if a gesture or tab-click somehow reached the
 		// orchestrator between mount and this synchronous call (only
 		// reachable if a beforeNavigate fires during mount), it owns the
-		// pilot now: skip the enter so the in-flight transition is not
+		// host now: skip the enter so the in-flight transition is not
 		// clobbered.
 		if (this.#pendingGesture !== null || this.#pendingTabExit !== null) return;
 		const plan: TransitionPlan = {
@@ -465,7 +470,7 @@ export class NavPipelineOrchestrator {
 		this.#commitStartRaw = this.#progress;
 		this.#isEnterAnimation = true;
 		// The enter is a forward transition: FROM is the back-target, TO
-		// is the pilot route. Dispatch through the state machine so its
+		// is the host route. Dispatch through the state machine so its
 		// macro state (phase, plan, FROM/TO, direction) is the authority
 		// the derived publication reads.
 		const enterIntent: IntentState = {
@@ -584,7 +589,7 @@ export class NavPipelineOrchestrator {
 	 *  classifier's own estimates: detectSwipe's rebound-based
 	 *  `reversed` (peak minus final, with a forward-fling gate) and
 	 *  trailing-window `velocity` are the authoritative release
-	 *  signals, matching the non-pilot routes' commit/cancel decision. */
+	 *  signals for the commit/cancel decision. */
 	onPointerUp(x: number, y: number, velocity?: number, reversed?: boolean): void {
 		const inputs = this.#mountInputs;
 		if (inputs === null) return;
@@ -642,7 +647,7 @@ export class NavPipelineOrchestrator {
 			// Rightward (rawDrag >= 0): for bidirectional hosts (the tab
 			// pager) the track follows the finger 1:1 across the full range
 			// so the FAB sampler reads intermediate values from the first
-			// pixel of drag. For non-bidirectional hosts (the pilot / deep
+			// pixel of drag. For non-bidirectional hosts (thread / deep
 			// page) the threshold-absorbed fraction maps onto the REMAINING
 			// [startProgress, 1] window, so the first 20% of drag is absorbed
 			// AT the start position (not at 0) and the track never snaps back
@@ -785,12 +790,18 @@ export class NavPipelineOrchestrator {
 		const fromTag = inputs.fromTag;
 		// Resolve the target for this direction. Backward targets the
 		// previous tab (bidirectional hosts) or the mount-supplied
-		// back-target (pilot / deep-page hosts); forward targets the next
-		// tab.
+		// back-target (thread / deep-page hosts); forward targets the next
+		// tab. For bidirectional hosts, when the history entry behind the
+		// current tab is a DEEP page (the tab was reached by a forward nav
+		// from a thread / profile / etc.), the backward gesture targets
+		// that deep page so commit-settle dispatches `history.back()` to
+		// it via `#dispatchNav`'s `hopForHref` check; the spatial switch
+		// to the previous tab root would strand the originating page
+		// between the two tabs in history.
 		const target: string | null =
 			direction === 'backward'
 				? inputs.bidirectional === true
-					? this.#prevTabTarget(inputs)
+					? this.#backwardTabTarget(inputs)
 					: inputs.backTarget
 				: this.#nextTabTarget(inputs);
 		// A gesture claims the transition: drop any in-flight tab-click so
@@ -856,12 +867,31 @@ export class NavPipelineOrchestrator {
 	/** Resolve the previous-tab target for a rightward (backward) gesture on
 	 *  a bidirectional host. Returns null when the active tab is the first
 	 *  tab (no previous neighbour). Used only for bidirectional hosts (the
-	 *  tab pager); non-bidirectional hosts (the pilot / deep-page host) use
+	 *  tab pager); non-bidirectional hosts (thread / deep-page host) use
 	 *  the mount-supplied `backTarget` instead. */
 	#prevTabTarget(inputs: PipelineMountInputs): string | null {
 		const prevIdx = inputs.fromTabIndex - 1;
 		if (prevIdx < 0) return null;
 		return MOBILE_TABS[prevIdx].href;
+	}
+
+	/** Resolve the backward-gesture target for a bidirectional host.
+	 *  When the history entry behind the current tab is a DEEP page
+	 *  (reached this tab by a forward nav from a thread / profile /
+	 *  etc.), the target is that deep page's pathname so commit-settle
+	 *  dispatches `history.back()` to it (via `hopForHref` returning
+	 *  `'back'` in `#dispatchNav`). The slide reveals the previous tab
+	 *  panel as a visual proxy; on commit the deep page route mounts and
+	 *  the tab host unmounts. TODO(5b3): overlay the deep page's cached
+	 *  snapshot in the left panel during the slide so the visual matches
+	 *  the landing page. Otherwise falls back to the spatially-previous
+	 *  tab root. */
+	#backwardTabTarget(inputs: PipelineMountInputs): string | null {
+		if (backSwipeShouldPopHistory(inputs.fromTabIndex - 1)) {
+			const deepTarget = previousEntryPathname();
+			if (deepTarget !== null) return deepTarget;
+		}
+		return this.#prevTabTarget(inputs);
 	}
 
 	/** Resolve a transition plan for the locked FROM/TO/direction. */
@@ -889,19 +919,36 @@ export class NavPipelineOrchestrator {
 		};
 		const resolver = selectResolver(fromData.tag, toData.tag);
 		const plan = resolver(resolverInput);
-		// Apply the multi-panel resting translate and slide distance. The
-		// host's panelCount is always 2 (the track is 2*W wide; the centre
-		// is the right half, track offset W..2W). restingTranslate = -W,
-		// distance = W; progress 0 -> 1 maps the track from -W (centre fills
-		// the viewport, left section off-screen) to 0 (left section fills,
-		// centre off-screen). The slide uses this geometry whether the target
-		// is the back-target or another tab root; the left panel renders the
-		// target's cached panel / skeleton.
+		// Apply the multi-panel resting translate and slide distance.
+		//
+		// Non-bidirectional hosts (the 2-panel route host): panelCount is
+		// always 2 (the track is 2*W wide; the centre is the right half).
+		// restingTranslate = -W (FROM's centred position), distance = W;
+		// progress 0 -> 1 maps the track from -W (centre fills the
+		// viewport, left section off-screen) to 0 (left section fills,
+		// centre off-screen).
+		//
+		// Bidirectional hosts (the 3-panel tab host): a tab click can span
+		// more than one panel (e.g. tab 0 -> tab 2 = 2W). The slide
+		// distance is `|toTabIndex - fromTabIndex| * W` so the track
+		// travels the full multi-panel span in one rAF-driven motion.
+		// `restingTranslate` stays `inputs.restingTranslate` (FROM's
+		// centred position = `-activeIndex * W`): progress=0 leaves FROM
+		// centred, progress=1 brings TO centred at
+		// `restingTranslate + sign * distance`.
+		const multiPanel =
+			inputs.bidirectional === true &&
+			inputs.fromTabIndex >= 0 &&
+			toTabIndex >= 0 &&
+			Math.abs(toTabIndex - inputs.fromTabIndex) > 1;
+		const distance = multiPanel
+			? Math.abs(toTabIndex - inputs.fromTabIndex) * inputs.viewportWidth
+			: inputs.viewportWidth;
 		return {
 			...plan,
 			pageTrack: {
 				axis: plan.pageTrack.axis,
-				distance: inputs.viewportWidth,
+				distance,
 				restingTranslate: inputs.restingTranslate
 			}
 		};
@@ -979,7 +1026,7 @@ export class NavPipelineOrchestrator {
 		// navigation lands. They are cleared in `#landAtRest` (called
 		// from `onSvelteKitAfterNavigate` on the destination route)
 		// or `unmount` (called from the host's `onDestroy` when the
-		// pilot route unmounts during the navigation). For the `goto`
+		// host route unmounts during the navigation). For the `goto`
 		// path, `goto`'s promise resolves after the navigation lands
 		// so the `.finally` cleanup is safe; the `history.back` /
 		// `history.forward` paths have no promise to await, so they
@@ -1016,7 +1063,7 @@ export class NavPipelineOrchestrator {
 	// -----------------------------------------------------------------------
 	// SvelteKit interop.
 
-	/** Called from `+layout.svelte`'s `beforeNavigate` for pilot-route
+	/** Called from `+layout.svelte`'s `beforeNavigate` for pipeline-route
 	 *  sources / destinations. Returns true if the orchestrator
 	 *  consumed the navigation (cancelled + started a slide plan); the
 	 *  layout hook does NOT also call the root layout's
@@ -1045,8 +1092,8 @@ export class NavPipelineOrchestrator {
 		if (this.#dispatchTarget !== null && to !== null && to + toSearch === this.#dispatchTarget) {
 			return false;
 		}
-		// Only own transitions FROM the pilot route (a tab-click exit or
-		// a back-swipe equivalent). Transitions TO the pilot route
+		// Only own transitions FROM the host route (a tab-click exit or
+		// a back-swipe equivalent). Transitions TO the host route
 		// (deep-link landings) fall through; the afterNavigate hook
 		// clears the state.
 		if (from === null || !this.#isPilotFrom(inputs, from)) {
@@ -1054,7 +1101,7 @@ export class NavPipelineOrchestrator {
 		}
 		if (to === null) return false;
 		// Let the root layout hooks handle the navigation if the target
-		// is also the pilot route (e.g. a paged conversation step within
+		// is also the host route (e.g. a paged conversation step within
 		// the same route: `/messages/123/p1` -> `/messages/123/p2`).
 		if (this.#isPilotFrom(inputs, to)) {
 			return false;
@@ -1123,32 +1170,40 @@ export class NavPipelineOrchestrator {
 		return true;
 	}
 
-	/** Called from `+layout.svelte`'s `afterNavigate` for pilot-route
-	 *  sources / destinations. For a pilot-internal param navigation
+	/** Called from `+layout.svelte`'s `afterNavigate` for pipeline-route
+	 *  sources / destinations. For a host-internal param navigation
 	 *  (`/messages/1` -> `/messages/2`) or the initial arrival this is a
 	 *  no-op reset (the orchestrator is at rest). For a navigation AWAY
-	 *  from the pilot (a tab-click exit / a gesture settle), the host's
+	 *  from the host route (a tab-click exit / a gesture settle), the host's
 	 *  `onDestroy` runs before `afterNavigate` (Svelte 5 lifecycle: old
 	 *  `onDestroy` -> new route mounts -> `afterNavigate`), so the
 	 *  singleton is already null and this call is skipped; the cleanup is
 	 *  handled by `onDestroy` -> `unmount()`.
 	 *
-	 *  Guard: if a forward-enter (`playEnterAnimation`) is in flight, a
-	 *  param-nav landing inside its ~200ms window must NOT cancel it
-	 *  (matching GPL, whose CSS `transition-transform` keeps running
-	 *  through a param change). The enter settles on its own via
-	 *  `#onExecutorSettle` -> `#landAtRest` once the slide completes. */
+	 *  Guards: a forward-enter (`playEnterAnimation`) or an in-flight
+	 *  gesture / tab-click that the orchestrator did NOT dispatch (an
+	 *  external param-nav arriving mid-transition) must NOT call
+	 *  `#landAtRest`; the in-flight transition owns the state and
+	 *  settles on its own via `#onExecutorSettle`. The orchestrator's
+	 *  OWN dispatch (`#navDispatchInFlight === true`) is the normal
+	 *  landing: `#landAtRest` runs and clears the pending slots. */
 	onSvelteKitAfterNavigate(): void {
 		if (this.#isEnterAnimation) return;
+		if (
+			!this.#navDispatchInFlight &&
+			(this.#pendingGesture !== null || this.#pendingTabExit !== null)
+		) {
+			return;
+		}
 		this.#landAtRest();
 	}
 
 	#isPilotFrom(inputs: PipelineMountInputs, from: string): boolean {
-		// The pilot's own pathname. Compare by prefix so a paged URL
-		// (`/messages/123/p2`) still counts as the pilot.
-		const pilotPath = inputs.fromPathname.replace(/\/p\d+$/, '');
+		// The host's own pathname. Compare by prefix so a paged URL
+		// (`/messages/123/p2`) still counts as the same host.
+		const hostPath = inputs.fromPathname.replace(/\/p\d+$/, '');
 		const fromStripped = from.replace(/\/p\d+$/, '');
-		return pilotPath === fromStripped;
+		return hostPath === fromStripped;
 	}
 
 	#tabIndexFor(pathname: string): number {
@@ -1178,8 +1233,10 @@ export class NavPipelineOrchestrator {
 		const inputs = this.#mountInputs;
 		const centerTab = inputs?.centerTab;
 		if (centerTab !== undefined) {
-			// centerTab route (pilot / thread): the pill stays on centerTab
-			// at rest, active: true so the FAB reads fractionalIndex.
+			// Thread route (the overlay family): the pill stays on centerTab
+			// at rest, active: true so the FAB reads fractionalIndex,
+			// backMorph: null so the Header stays in back-arrow mode for
+			// the deep route.
 			pager.set({
 				fractionalIndex: centerTab,
 				dragging: false,
@@ -1189,33 +1246,49 @@ export class NavPipelineOrchestrator {
 				coverProgress: 0,
 				transitionTarget: null
 			});
-		} else {
-			// Deep page at rest: no pill highlight (fromTabIndex is -1 for
-			// routes with no tab association), active: false so the FAB
-			// falls back to the URL-derived tab index, backMorph: 0 so the
-			// Header is in normal (hamburger) mode. Matches GPL's
-			// non-centerTab at-rest branch.
-			const fromIdx = inputs?.fromTabIndex ?? -1;
+			return;
+		}
+		const fromIdx = inputs?.fromTabIndex ?? -1;
+		if (inputs?.bidirectional === true) {
+			// Tab host at rest (NavPipelineTabHost): the active tab is the
+			// pill's resting index, active: true so the FAB reads the live
+			// fractionalIndex, backMorph: null so the Header stays in
+			// hamburger mode (tab-to-tab transitions never morph toward
+			// the back-arrow).
 			pager.set({
 				fractionalIndex: fromIdx,
 				dragging: false,
-				active: false,
-				backMorph: 0,
+				active: true,
+				backMorph: null,
 				targetIndex: null,
 				coverProgress: 0,
 				transitionTarget: null
 			});
+			return;
 		}
+		// Deep page at rest (Family B without centerTab): no pill highlight
+		// (fromTabIndex is -1 for routes with no tab association), active:
+		// false so the FAB falls back to the URL-derived tab index,
+		// backMorph: 0 so the Header is in normal (hamburger) mode.
+		pager.set({
+			fractionalIndex: fromIdx,
+			dragging: false,
+			active: false,
+			backMorph: 0,
+			targetIndex: null,
+			coverProgress: 0,
+			transitionTarget: null
+		});
 	}
 
 	/** Refresh the from-pathname (and from-tag) after a same-host route
-	 *  change (e.g. /messages/123 -> /messages/456 on the pilot, or a tab
-	 *  swap on the tab pager) that reuses this host without remounting, so
-	 *  a subsequent tab-exit is still owned (#isPilotFrom matches the live
-	 *  pathname, not the stale mount pathname). Also refreshes
+	 *  change (e.g. /messages/123 -> /messages/456 on a thread host, or a
+	 *  tab swap on the tab pager) that reuses this host without remounting,
+	 *  so a subsequent tab-exit is still owned (#isPilotFrom matches the
+	 *  live pathname, not the stale mount pathname). Also refreshes
 	 *  `fromTabIndex` when the new pathname is a tab root so the tab
 	 *  pager's prev/next neighbour computation stays correct across tab
-	 *  swaps. Non-tab-root pathnames (pilot detail pages) keep their
+	 *  swaps. Non-tab-root pathnames (thread detail pages) keep their
 	 *  mount-time `fromTabIndex` (the centerTab value). */
 	updateFromPathname(pathname: string): void {
 		const inputs = this.#mountInputs;
@@ -1268,23 +1341,25 @@ export class NavPipelineOrchestrator {
 		this.#republishToPager(rawDragFraction);
 	}
 
-	/** Republish the current publication to the pager store. Two modes:
+	/** Republish the current publication to the pager store. Three modes:
 	 *
-	 *  centerTab mode (pilot / thread): publishes `backMorph: null,
+	 *  Thread mode (centerTab set): publishes `backMorph: null,
 	 *  targetIndex: null, fractionalIndex: centerTab` (constant) so the
 	 *  Header stays in back-arrow mode and the tab-bar pill stays
 	 *  highlighted at centerTab throughout the gesture. `coverProgress`
 	 *  is the raw slide fraction; the FAB layer resolves the
 	 *  destination's family/kind to decide whether the FAB scales in.
 	 *
-	 *  Deep-page mode (no centerTab): interpolates `fractionalIndex`
-	 *  between `fromTabIndex` (-1 for routes with no tab) and
-	 *  `toTabIndex` (the back-target's tab index), threshold-absorbed by
-	 *  `PILL_EXPANSION_THRESHOLD` so the pill stays put for the first
-	 *  part of the drag then expands toward the target. `backMorph` and
-	 *  `coverProgress` both follow the raw slide fraction so the Header
-	 *  morph and the FAB scale track the finger. Matches GPL's
-	 *  non-centerTab drag branch.
+	 *  Tab-host mode (no centerTab, bidirectional): interpolates
+	 *  `fractionalIndex` between `fromTabIndex` and `toTabIndex`
+	 *  (threshold-absorbed by `PILL_EXPANSION_THRESHOLD`) so the pill
+	 *  follows the slide, but publishes `backMorph: null` so the Header
+	 *  never morphs toward the back-arrow (tab-to-tab transitions stay
+	 *  in hamburger mode end to end).
+	 *
+	 *  Deep-page mode (no centerTab, not bidirectional): same pill
+	 *  interpolation, plus `backMorph: rawDragFraction` so the Header
+	 *  morph and the FAB scale track the finger.
 	 *
 	 *  `transitionTarget` carries the in-flight destination so the FAB
 	 *  layer can resolve that kind. */
@@ -1310,18 +1385,22 @@ export class NavPipelineOrchestrator {
 			});
 			return;
 		}
-		// Deep-page mode: interpolate the pill + publish the morph.
+		// No centerTab: tab host (bidirectional) or deep page. Both modes
+		// share the pill interpolation; only backMorph differs (null for the
+		// tab host so the Header stays in hamburger mode, the raw slide
+		// fraction for a deep page so the Header morphs).
 		const fromIdx = inputs?.fromTabIndex ?? -1;
 		const toIdx = this.#gestureToTabIndex ?? inputs?.toTabIndex ?? -1;
 		const pillProgress =
 			toIdx >= 0
 				? Math.max(0, rawDragFraction - PILL_EXPANSION_THRESHOLD) / (1 - PILL_EXPANSION_THRESHOLD)
 				: 0;
+		const bidirectional = inputs?.bidirectional === true;
 		pager.set({
 			fractionalIndex: toIdx >= 0 ? fromIdx + (toIdx - fromIdx) * pillProgress : fromIdx,
 			dragging: publication.inFlight && this.#liveDragging,
 			active: true,
-			backMorph: rawDragFraction,
+			backMorph: bidirectional ? null : rawDragFraction,
 			targetIndex: toIdx >= 0 ? toIdx : null,
 			coverProgress,
 			transitionTarget: publication.toPathname
@@ -1330,12 +1409,12 @@ export class NavPipelineOrchestrator {
 }
 
 /** The module singleton. The host constructs a fresh orchestrator on
- *  each pilot mount and assigns it via `setNavPipelineOrchestrator`;
+ *  each mount and assigns it via `setNavPipelineOrchestrator`;
  *  `+layout.svelte` reads it via `getNavPipelineOrchestrator` so the
  *  SvelteKit nav hooks reach the active orchestrator. */
 let active: NavPipelineOrchestrator | null = null;
 
-/** Get the active orchestrator (or null if the pilot is not mounted). */
+/** Get the active orchestrator (or null if no host is mounted). */
 export function getNavPipelineOrchestrator(): NavPipelineOrchestrator | null {
 	return active;
 }

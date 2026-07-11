@@ -6,9 +6,9 @@
 	 * own DualColumnLayout + inline sidebar, exactly as before.
 	 *
 	 * Mobile: render ONE DualColumnLayout shell (Header with the tab bar + a single
-	 * drawer) whose main content is the MobileTabPager (all three panels mounted)
-	 * and whose drawer shows the ACTIVE tab's sidebar. Suppresses the route's own
-	 * page so there is exactly one Header/drawer.
+	 * drawer) whose main content is the NavPipelineTabHost (all three panels
+	 * mounted) and whose drawer shows the ACTIVE tab's sidebar. Suppresses the
+	 * route's own page so there is exactly one Header/drawer.
 	 *
 	 * SSR renders the desktop branch (isMobile defaults false); the mobile client
 	 * flips isMobile in onMount - a normal reactive update, not a hydration
@@ -37,7 +37,7 @@
 
 	// SvelteKit snapshot: capture/restore the list scroll position per-route on
 	// desktop (the window scrolls there). Under fixed-viewport (mobile) the window
-	// is locked, so this is mobile-dead; MobileTabPager restores via pageCache.
+	// is locked, so this is mobile-dead; NavPipelineTabHost restores via pageCache.
 	let restoredScrollY = $state(0);
 	export const snapshot = {
 		capture: () => (typeof window !== 'undefined' ? window.scrollY : 0),

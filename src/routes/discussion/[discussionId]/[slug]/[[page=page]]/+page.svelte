@@ -1,8 +1,7 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
-	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import NavPipelineHost from '$lib/components/templates/NavPipelineHost.svelte';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
-	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
 	import type { PageUrlBuilder } from '$lib/types/tabs';
 	import type { VoidHandler } from '$lib/types/handlers';
 	import ActiveUsersWall from '$lib/components/molecules/ActiveUsersWall.svelte';
@@ -28,10 +27,7 @@
 	import { writeThread, passthroughEnabledFor } from '$lib/offline/passthrough';
 	import type { ThreadPassthroughInput } from '$lib/offline/passthrough';
 	import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
-	import type {
-		ActivityListCacheData,
-		DiscussionsListCacheData
-	} from '$lib/types/page-cache-shapes';
+	import type { DiscussionsListCacheData } from '$lib/types/page-cache-shapes';
 	import { isTabRootPath } from '$lib/utils/history-nav';
 	import type { PageData } from './$types';
 
@@ -110,34 +106,16 @@
 		runThreadPassthrough(data);
 	});
 
-	// Each deep page captures its own data for the MobileTabPager's back-swipe
-	// preview. The thread page knows its own data shape; the root layout does
-	// NOT hardcode any route-specific fields. Config-driven: any deep page can
-	// register a preview by importing the store and capturing here.
+	// Capture the thread pane's scroll position into the page cache so a
+	// back-swipe-to-tab followed by a return restores the user's prior
+	// scroll. NavPipelineHost reads only `scrollTop`; the full thread
+	// payload (data / snippet) is NOT cached here.
 	beforeNavigate(({ to }) => {
 		if (to && isTabRootPath(to.url.pathname) && typeof window !== 'undefined') {
 			const pane = document.querySelector('.detail-scroll-pane') as HTMLElement | null;
 			if (pane) {
 				pageCache.capture(page.url.pathname, undefined, {
-					data: {
-						pathname: page.url.pathname,
-						discussion: data.discussion,
-						opReply: data.opReply ?? null,
-						replies: data.replies ?? [],
-						mentionedUsers: data.mentionedUsers ?? {},
-						t: data.t,
-						user: data.user ?? null,
-						theme: data.theme ?? null,
-						canCreate: data.canCreate ?? false,
-						canUpdate: data.canUpdate ?? false,
-						canDelete: data.canDelete ?? false,
-						currentPage: data.page ?? 1,
-						totalPages: data.totalPages ?? 1,
-						replyDraft: data.replyDraft ?? null
-					},
-					snippet: threadContentSnippet,
-					scrollTop: pane.scrollTop,
-					source: { route: page.url.pathname }
+					scrollTop: pane.scrollTop
 				});
 			}
 		}
@@ -354,8 +332,8 @@
 	function landAtAnchor(targetId: string): void {
 		cancelLanding?.();
 		cancelLanding = null;
-		// The container is now the scroll-chrome source (GesturePageLayout
-		// registered `.detail-scroll-pane` on mobile), so this landing scroll
+		// The container is now the scroll-chrome source (NavPipelineHost
+		// registers `.detail-scroll-pane` on mobile), so this landing scroll
 		// WOULD drive hide-on-scroll. On a hash deep-link beforeNavigate never
 		// fired (no root-layout hold), so hold here and release at finish/cancel
 		// to keep the Header visible through the landing instead of twitching on
@@ -556,19 +534,6 @@
 		totalPages={cached?.totalPages ?? data.home?.totalPages ?? 1}
 		{t}
 		{buildPageUrl}
-		paginate={true}
-	/>
-{/snippet}
-{#snippet rightSnippet()}
-	{@const cached = pageCache.get('/activity')?.data as ActivityListCacheData | undefined}
-	<ActivityPanel
-		activities={cached?.activities ?? data.activity?.activities ?? []}
-		currentPage={cached?.page ?? data.activity?.page ?? 1}
-		totalPages={cached?.totalPages ?? data.activity?.totalPages ?? 1}
-		activityDraft={cached?.activityDraft ?? data.activity?.activityDraft ?? null}
-		mentionedUsers={cached?.mentionedUsers ?? data.activity?.mentionedUsers ?? {}}
-		{t}
-		{user}
 		paginate={true}
 	/>
 {/snippet}
@@ -896,16 +861,9 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout
-		centerTab={0}
-		rightTab={1}
-		leftHref="/"
-		rightHref="/activity"
-		left={leftSnippet}
-		right={rightSnippet}
-	>
+	<NavPipelineHost centerTab={0} leftHref="/" left={leftSnippet}>
 		{@render threadContentSnippet()}
-	</GesturePageLayout>
+	</NavPipelineHost>
 </DualColumnLayout>
 
 <ConfirmationModal

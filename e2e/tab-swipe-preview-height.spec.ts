@@ -1,13 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { prepareContext, waitForHydration } from './helpers';
 
-// MobileTabPager renders all three tabs as full-height `.scroll-pane` scrollers
-// under a screen-height viewport (`height:100%; overflow:clip`) acquired via
-// `viewportLock`. Each panel is independently scrollable; the preview during a
-// swipe matches the landed page exactly (same screen-height box). This spec
-// verifies: (a) all panels are full-height (offsetHeight === viewport height);
-// (b) the activity panel's tall content is reachable by internal scroll (not
-// clipped); (c) the viewport height is constant across swipe and landing.
+// NavPipelineTabHost renders all three tabs as full-height `.scroll-pane`
+// scrollers under a screen-height viewport (`height:100%; overflow:clip`)
+// acquired via `viewportLock`. Each panel is independently scrollable; the
+// preview during a swipe matches the landed page exactly (same screen-height
+// box). This spec verifies: (a) all panels are full-height (offsetHeight ===
+// viewport height); (b) the activity panel's tall content is reachable by
+// internal scroll (not clipped); (c) the viewport height is constant across
+// swipe and landing.
 //
 // detectSwipe rejects pointerType 'mouse', so the gesture is driven via CDP
 // Input.dispatchTouchEvent. The swipe is PAUSED mid-drag (no touchEnd yet) so
@@ -22,8 +23,8 @@ interface PanelMetrics {
 
 async function capturePagerMetrics(page: import('@playwright/test').Page): Promise<PanelMetrics> {
 	return page.evaluate(() => {
-		const vp = document.querySelector('.mobile-tab-pager-viewport') as HTMLElement | null;
-		const track = vp ? (vp.firstElementChild as HTMLElement | null) : null;
+		const track = document.querySelector('[data-testid="nav-pipeline-tab-track"]') as HTMLElement | null;
+		const vp = track ? (track.parentElement as HTMLElement | null) : null;
 		const rectOf = (el: Element | null) => {
 			if (!el) return null;
 			const r = (el as HTMLElement).getBoundingClientRect();

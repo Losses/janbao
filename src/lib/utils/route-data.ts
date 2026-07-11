@@ -51,12 +51,12 @@ export interface RouteData {
 	 * architecture use (the mobile app has no breadcrumb, and the preview
 	 * panel is `PREVIEW_PANEL_CONFIG`, not this field). Its two consumers
 	 * are both transitional:
-	 *   - `isGestureRoute` reads `backParent !== undefined` to
-	 *     mark the deep-route set; that classifier dissolves in Cycle 5
-	 *     when the state machine owns the gesture.
+	 *   - `isPipelineSwipeDisabledRoute` reads `backParent !== undefined`
+	 *     to mark the deep-route set; that classifier dissolves in 5b3
+	 *     when DualColumnLayout's detectSwipe is removed.
 	 *   - `GesturePageLayout.resolvedLeftHref` uses `backParent` for the
-	 *     "/" edge-case substitution; that dissolves in Cycle 3 when the
-	 *     back-target becomes always stack-based.
+	 *     "/" edge-case substitution; that dissolves in 5b3 when GPL is
+	 *     deleted.
 	 * When BOTH consumers are gone (end of Cycle 5), remove this field
 	 * from the record and the registry. NOT the back-target (the
 	 * back-target is the route-stack entry behind the current one, §6).

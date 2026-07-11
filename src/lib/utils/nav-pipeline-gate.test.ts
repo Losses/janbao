@@ -52,6 +52,12 @@ describe('isNavPipelineRoute', () => {
 		expect(isNavPipelineRoute('/messages')).toBe(false);
 	});
 
+	test('matches the discussion thread', () => {
+		expect(isNavPipelineRoute('/discussion/123/some-slug')).toBe(true);
+		expect(isNavPipelineRoute('/discussion/123/some-slug/p2')).toBe(true);
+		expect(isNavPipelineRoute('/discussion/999/a')).toBe(true);
+	});
+
 	test('matches compose routes', () => {
 		expect(isNavPipelineRoute('/post/discussion')).toBe(true);
 		expect(isNavPipelineRoute('/messages/new')).toBe(true);
@@ -66,6 +72,7 @@ describe('isNavPipelineRoute', () => {
 	test('rejects non-migrated routes', () => {
 		expect(isNavPipelineRoute('/messages')).toBe(false);
 		expect(isNavPipelineRoute('/discussion/123')).toBe(false);
+		expect(isNavPipelineRoute('/drafts')).toBe(false);
 	});
 
 	test('rejects a non-page suffix after the id (only /pN paged routes are valid)', () => {

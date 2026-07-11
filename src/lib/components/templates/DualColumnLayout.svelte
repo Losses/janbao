@@ -10,7 +10,7 @@
 		MOBILE_TABS,
 		getCurrentTabIndex,
 		isPagerRoute,
-		isGestureRoute
+		isPipelineSwipeDisabledRoute
 	} from '$lib/utils/route-config';
 	import type { UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
@@ -113,17 +113,18 @@
 	const TAB_SWIPE_COMMIT = 60;
 	const TAB_SWIPE_MAX = 100; // px of finger-follow feedback on inner pages
 	const swipeBaseline = $derived(getCurrentTabIndex(page.url.pathname));
-	// Disabled wherever another gesture layer owns the horizontal drag: the
-	// MobileTabPager on pager routes, or a GesturePageLayout on every GPL route
-	// (thread, conversation, deep page, and the compose forms). Config-driven via
-	// isGestureRoute so adding a GPL route needs no edit here. Also
-	// disabled off-tab (swipeBaseline < 0) and on desktop. If this were enabled
-	// on a GPL route too, both detectSwipe nodes would race to setPointerCapture
-	// on the same bubbled touch, and main (higher in the DOM) would win and
-	// override the GPL's 1:1 + reveal.
+	// Disabled wherever another gesture layer owns the horizontal drag:
+	// the pipeline tab host on pager routes, or NavPipelineHost on every
+	// route that mounts it (thread, conversation, deep page, and the
+	// compose forms). Config-driven via isPipelineSwipeDisabledRoute so
+	// adding a pipeline route needs no edit here. Also disabled off-tab
+	// (swipeBaseline < 0) and on desktop. If this were enabled on a
+	// pipeline route too, both detectSwipe nodes would race to
+	// setPointerCapture on the same bubbled touch, and main (higher in
+	// the DOM) would win and override the pipeline's 1:1 + reveal.
 	const swipeDisabled = $derived(
 		isPagerRoute(page.url.pathname) ||
-			isGestureRoute(page.url.pathname) ||
+			isPipelineSwipeDisabledRoute(page.url.pathname) ||
 			swipeBaseline < 0 ||
 			!isMobile
 	);

@@ -18,18 +18,22 @@
  *  Matches:
  *  - The conversation-detail pilot `/messages/<numeric id>` (with
  *    optional `/pN` page suffix).
+ *  - The discussion thread `/discussion/<id>/<slug>` (with optional
+ *    `/pN` page suffix).
  *  - The standalone deep pages `/search`, `/bookmarks`,
  *    `/notifications`.
  *  - The profile tree `/profile` and all sub-routes.
  *  - The admin tree `/admin` and all sub-routes.
  *
- *  Non-pipeline routes (compose routes, tab roots, discussion thread)
- *  stay on the legacy mechanism until their migration phase. */
+ *  Non-pipeline routes stay on the legacy mechanism until their
+ *  migration phase. */
 export function isNavPipelineRoute(pathname: string): boolean {
 	// Strip any trailing `/pN` page segment so paged conversations
-	// (`/messages/123/p2`) are still gated as pipeline routes.
+	// (`/messages/123/p2`, `/discussion/123/slug/p2`) are still gated
+	// as pipeline routes.
 	const stripped = pathname.replace(/\/p\d+$/, '');
 	if (/^\/messages\/\d+$/.test(stripped)) return true;
+	if (/^\/discussion\/\d+\/[^/]+$/.test(stripped)) return true;
 	if (pathname === '/search') return true;
 	if (pathname === '/bookmarks') return true;
 	if (pathname === '/notifications') return true;

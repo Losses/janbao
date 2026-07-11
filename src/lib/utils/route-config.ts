@@ -26,18 +26,18 @@
  *   - `PREVIEW_PANEL_CONFIG`      the back-preview snippet component
  *                                  per route that captures one.
  *
- * `isGestureRoute` (the migration-era imperative exception
- * the Cycle 1 spec carves out) reads the core `RouteData` registry
+ * `isPipelineSwipeDisabledRoute` reads the core `RouteData` registry
  * directly via `getRouteData(p).backParent !== undefined` for its
  * deep-route set, plus `FAB_ROUTE_ATTRIBUTES` for the
- * thread/conversation check. Cycle 5 dissolves the function.
+ * thread/conversation check. Both the function and DualColumnLayout's
+ * detectSwipe dissolve in 5b3.
  *
  * The classifier functions below are either positional queries over
  * `MOBILE_TAB_DEFS` (`isPagerRoute`), one-line reads of the consumer
  * configs (`getCurrentTabIndex`), or non-route classifiers
  * (`backTargetListKind` classifies a back-target string). The
- * migration-era `isGestureRoute` stays imperative per the
- * Cycle 1 spec; its body reads the consumer registries above.
+ * `isPipelineSwipeDisabledRoute` classifier reads the consumer
+ * registries above.
  */
 import type { Component } from 'svelte';
 import ProfileMenuPanel from '$lib/components/panels/ProfileMenuPanel.svelte';
@@ -276,11 +276,11 @@ export function getPreviewPanel(pathname: string): SvelteComponentType | null {
 }
 
 // ---------------------------------------------------------------------------
-// `isGestureRoute` reads the deep-route-parent set directly from
-// the core `RouteData` registry (`backParent !== undefined`) rather than
-// maintaining a separate pattern list. This keeps the function's answer
-// set byte-stable without a duplication hazard: the set of routes that
-// declare a structural parent lives in one place (`route-data.ts`).
+// `isPipelineSwipeDisabledRoute` reads the deep-route-parent set directly
+// from the core `RouteData` registry (`backParent !== undefined`) rather
+// than maintaining a separate pattern list. This keeps the function's
+// answer set byte-stable without a duplication hazard: the set of routes
+// that declare a structural parent lives in one place (`route-data.ts`).
 
 // ---------------------------------------------------------------------------
 // Classifiers.
@@ -289,8 +289,8 @@ export function getPreviewPanel(pathname: string): SvelteComponentType | null {
 // or the consumer configs above. The remaining functions below are
 // positional queries (`isPagerRoute`), consumer-config reads
 // (`getCurrentTabIndex`), non-route classifiers (`backTargetListKind`),
-// and the migration-era `isGestureRoute` whose body the
-// Cycle 1 spec carves out as the single imperative exception.
+// and `isPipelineSwipeDisabledRoute` whose body reads the consumer
+// registries above.
 
 /**
  * Resolve the source-list kind for a `deep` route from its back target. The back
@@ -307,28 +307,24 @@ export function backTargetListKind(backTargetHref: string | null): FabListKind {
 }
 
 /**
- * A route whose +page.svelte mounts a gesture-owning layout
- * (GesturePageLayout or, since 5b1, NavPipelineHost on the pilot route),
- * so DualColumnLayout's tab-swipe must yield to it.
+ * A route whose +page.svelte mounts a pipeline-owning layout
+ * (`NavPipelineHost`), so `DualColumnLayout`'s own detectSwipe tab-
+ * swipe must yield to it (the pipeline owns the horizontal drag on
+ * these routes). TRUE for routes in Family-B `overlay` whose kind is
+ * not `'deep'` (threads and conversations) OR routes whose structural
+ * parent is declared in the core record.
  *
- * PER THE CYCLE 1 SPEC this function is the single classifier that
- * stays imperative: GPL ownership has no clean field in the target
- * record (§3) and dissolves in Cycle 5. Its answer set is: TRUE for
- * routes in Family-B `overlay` whose kind is not `'deep'` (i.e. threads
- * and conversations) OR routes whose structural parent is declared in
- * the core record.
- *
- * Masked latent bug (deferred to Cycle 5): `/search`, `/bookmarks`,
- * `/notifications`, and `/profile` mount a GPL but this function
- * returns FALSE for them (they carry `kind: 'deep'`, failing the
- * overlay branch, and have no declared `backParent`, failing the
- * deep-route branch). Sub-pages of `/profile` and the entire
- * `/admin/*` tree declare `backParent`, so they return TRUE; the
- * latent-bug set is the four leaf routes only. The function's answer
- * set is preserved verbatim per the Cycle 1 spec; Cycle 5 dissolves
- * both the function and the bug.
+ * Masked latent bug: `/search`, `/bookmarks`, `/notifications`, and
+ * `/profile` mount a NavPipelineHost but this function returns FALSE
+ * for them (they carry `kind: 'deep'`, failing the overlay branch, and
+ * have no declared `backParent`, failing the deep-route branch). Sub-
+ * pages of `/profile` and the entire `/admin/*` tree declare
+ * `backParent`, so they return TRUE; the latent-bug set is the four
+ * leaf routes only. The race does not manifest because NavPipelineHost
+ * wins the pointer capture consistently; the function and the bug
+ * dissolve in 5b3 when `DualColumnLayout`'s detectSwipe is removed.
  */
-export function isGestureRoute(pathname: string): boolean {
+export function isPipelineSwipeDisabledRoute(pathname: string): boolean {
 	const attrs = getFabRouteAttributes(pathname);
 	if (attrs && attrs.family === 'overlay' && attrs.kind !== 'deep') return true;
 	return getRouteData(pathname).backParent !== undefined;
