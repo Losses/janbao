@@ -25,7 +25,8 @@ import {
  *     the thread route's GesturePageLayout pins `fractionalIndex = centerTab`
  *     for the whole back-swipe drag, so the sampler reads the actual GPL track
  *     `m41` each frame to follow the finger. Family C (compose) eases the
- *     discrete swap via the atom's 200ms CSS transition.
+ *     discrete swap via the FAB layer's rAF family-swap ease (the inline
+ *     scale changes each frame over 200ms).
  *   - translateY (scroll hide): slides off the bottom edge in lockstep with
  *     the Header's hide-on-scroll (driven by the shared scroll-chrome store).
  *
@@ -128,9 +129,10 @@ test.describe('SSR style serialization: FAB transform resolves in the server ren
 		{ path: '/messages/inbox', expectedScale: 1, family: 'list' }
 	];
 	// Compose routes rest at scale 0 via the layer's `cfg.family !== 'list'`
-	// branch. The atom enables its CSS transition on a compose route (the
-	// `fab-transition` class) AND gates pointer-events via `pointer-events-none`
-	// (scale < 0.01), so a correct compose SSR class string carries BOTH classes.
+	// branch. The atom gates pointer-events via `pointer-events-none`
+	// (scale < 0.01). The `fab-transition` class is armed only for a GPL
+	// `pendingNav` exit slide (not at SSR rest), so a compose SSR class string
+	// carries pointer-events-none and NOT fab-transition.
 	const composeAssertions: readonly SsrFabAssertion[] = [
 		{ path: '/post/discussion', expectedScale: 0, family: 'compose' },
 		{ path: '/messages/new', expectedScale: 0, family: 'compose' }
@@ -165,8 +167,8 @@ test.describe('SSR style serialization: FAB transform resolves in the server ren
 	 *   - overlay:   pointer-events-none PRESENT, fab-transition ABSENT
 	 *   - compose:   pointer-events-none PRESENT, fab-transition ABSENT
 	 *   - error page scale 0: pointer-events-none PRESENT, fab-transition ABSENT
-	 * The fab-transition class is armed only during a family swap
-	 * (discreteNavInFlight), not on a deep-link SSR render, so every family
+	 * The fab-transition class is armed only for a GesturePageLayout
+	 * `pendingNav` exit slide, not on a deep-link SSR render, so every family
 	 * rests WITHOUT the class. The pointer-events-none gate (scale < 0.01) is
 	 * what a scale-only assertion cannot see: overlay/compose/error rest at
 	 * scale 0 and must be non-interactive; list rests at scale 1 and is
@@ -188,8 +190,8 @@ test.describe('SSR style serialization: FAB transform resolves in the server ren
 				break;
 			case 'compose':
 				// Compose rests at scale 0 (pointer-events-none). The fab-transition
-				// class is armed only during a family swap (discreteNavInFlight), not
-				// on a deep-link SSR render, so a deep-linked compose route does NOT
+				// class is armed only for a GPL `pendingNav` exit slide, not on a
+				// deep-link SSR render, so a deep-linked compose route does NOT
 				// carry the class at rest.
 				expect(hasPe, 'compose FAB at scale 0 must be pointer-events-none').toBe(true);
 				expect(hasTransition, 'compose FAB must NOT enable fab-transition at SSR rest').toBe(false);
@@ -241,7 +243,7 @@ test.describe('SSR style serialization: FAB transform resolves in the server ren
 	// so the assertion tracks whatever the seed currently exposes, rather than a
 	// hardcoded id that happens to exist today. The overlay family rests the FAB
 	// at scale 0 with pointer-events-none present AND fab-transition ABSENT
-	// (distinct from the compose family, which enables the transition class).
+	// (the same class-string shape as the compose family at SSR rest).
 	test('SSR style: overlay discussion deep-link renders scale(0) with overlay-family classes', async ({
 		request
 	}) => {
@@ -491,7 +493,7 @@ test('Family B back: thread -> list scales the FAB in as a monotonic trajectory'
 
 // Family C forward: tapping the FAB on a list route navigates to the compose
 // page. The atom stays mounted and the discrete foregroundFraction swap
-// (1 -> 0) is eased by the atom's 200ms CSS transition. Assert the transition
+// (1 -> 0) is eased by the FAB layer's rAF family-swap ease. Assert the ease
 // produced a monotonic trajectory with a mid-window 0.5 crossing (NOT an
 // instant jump to 0).
 test('Family C forward: list -> compose scales the FAB out as a monotonic trajectory', async ({
@@ -506,7 +508,7 @@ test('Family C forward: list -> compose scales the FAB out as a monotonic trajec
 	});
 	expect(
 		capture.samples.length,
-		'CSS transition must have produced enough scale samples to span the window (not instant)'
+		'rAF ease must have produced enough scale samples to span the window (not instant)'
 	).toBeGreaterThanOrEqual(6);
 	expect(
 		capture.samples[0] ?? -1,
@@ -553,7 +555,7 @@ test('Family C forward (messages): inbox -> compose scales the FAB out as a mono
 	});
 	expect(
 		capture.samples.length,
-		'CSS transition must have produced enough scale samples to span the window (not instant)'
+		'rAF ease must have produced enough scale samples to span the window (not instant)'
 	).toBeGreaterThanOrEqual(6);
 	expect(
 		capture.samples[0] ?? -1,
@@ -575,9 +577,10 @@ test('Family C forward (messages): inbox -> compose scales the FAB out as a mono
 });
 
 // Family C back: navigating back from the compose page to the list drives the
-// foregroundFraction 0 -> 1, eased by the 200ms CSS transition (scale-in).
-// Reach the compose page via SPA navigation from the list so history.back()
-// returns to `/` (a hard goto('/post/discussion') has no back history).
+// foregroundFraction 0 -> 1, eased by the FAB layer's rAF family-swap ease
+// (scale-in). Reach the compose page via SPA navigation from the list so
+// history.back() returns to `/` (a hard goto('/post/discussion') has no back
+// history).
 test('Family C back: compose -> list scales the FAB in as a monotonic trajectory', async ({
 	page
 }) => {
@@ -593,7 +596,7 @@ test('Family C back: compose -> list scales the FAB in as a monotonic trajectory
 	});
 	expect(
 		capture.samples.length,
-		'CSS transition must have produced enough scale samples to span the window (not instant)'
+		'rAF ease must have produced enough scale samples to span the window (not instant)'
 	).toBeGreaterThanOrEqual(6);
 	expect(
 		capture.samples[0] ?? 1,
@@ -601,7 +604,7 @@ test('Family C back: compose -> list scales the FAB in as a monotonic trajectory
 	).toBeLessThan(0.2);
 	// Robust scale-in completion check: assert the trajectory SHAPE rather than
 	// the absolute last sample. The 1.8s sampler window can cut off ~16ms before
-	// the 200ms CSS ease fully settles under load, so the LAST sample may dip to
+	// the 200ms rAF ease fully settles under load, so the LAST sample may dip to
 	// ~0.84 even on a correct run. The shape that proves the scale-in completed
 	// is: the trajectory REACHED near-1 at some point (maxScale > 0.9), it is
 	// monotonic non-decreasing (no reversal), and it crossed 0.5 inside the
@@ -630,7 +633,7 @@ test('Family C back (messages): compose -> inbox scales the FAB in as a monotoni
 	});
 	expect(
 		capture.samples.length,
-		'CSS transition must have produced enough scale samples to span the window (not instant)'
+		'rAF ease must have produced enough scale samples to span the window (not instant)'
 	).toBeGreaterThanOrEqual(6);
 	expect(
 		capture.samples[0] ?? 1,
@@ -874,9 +877,9 @@ const SAMPLER_WINDOW_MS = 1800;
 
 /**
  * Install a rAF sampler over the FAB's RESOLVED `transform: scale(...)` (via
- * getComputedStyle, so the eased CSS transition value during Family C is also
- * captured, not just the inline binding), arm it, trigger a navigation, then
- * report the captured scale samples.
+ * getComputedStyle, which resolves the inline `scale(s) translateY(y)` string
+ * to a matrix so the scale component is parsed directly), arm it, trigger a
+ * navigation, then report the captured scale samples.
  *
  * Cross-document survival (T1): the sampler is installed via
  * `context.addInitScript` so it re-arms on EVERY new document (the source
@@ -889,10 +892,11 @@ const SAMPLER_WINDOW_MS = 1800;
  * init-script on the destination document picks up the in-flight gesture
  * without missing the post-swap tail.
  *
- * getComputedStyle is required because Family C's CSS `transition: transform
- * 200ms ease-out` updates the resolved transform each frame even though the
- * inline `style.transform` binding only changes when foregroundFraction
- * changes; an inline-only sampler would see just two values (start, end) and
+ * getComputedStyle is used (rather than reading `style.transform` directly)
+ * because it resolves the transform string to a `matrix(a, b, c, d, tx, ty)`
+ * form, so the sampler reads the scale component `a` directly. The FAB
+ * layer's rAF family-swap ease writes a new inline `style.transform` each
+ * frame, so the resolved value advances every frame across the ease.
  * miss the easing trajectory.
  */
 async function sampleFabScale(
@@ -1123,7 +1127,7 @@ function scaleTrajectoryCrosses(samples: number[], threshold: number): boolean {
  * absolute last sample: the trajectory REACHED near-1 at some point
  * (`maxScale > 0.9`), it is monotonic non-decreasing (no reversal, via
  * `assertNonDecreasingWithinTolerance`), and it crossed 0.5 inside the window.
- * The sampler window (1800ms) can cut off ~16ms before the 200ms CSS ease fully
+ * The sampler window (1800ms) can cut off ~16ms before the 200ms rAF ease fully
  * settles under load, so the LAST sample may dip to ~0.84 on a correct run; the
  * shape guards tolerate that truncation while still failing a stuck-mid or
  * stuck-low trajectory.

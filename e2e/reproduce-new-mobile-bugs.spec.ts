@@ -238,8 +238,13 @@ test.describe('Compose-as-module-child fix (FAB, Messages, chip)', () => {
 			await page.locator('[data-testid="fab"]').click();
 			await page.waitForURL('/post/discussion');
 		});
+		// DV20 5b2 Phase 1: the discrete list -> compose family swap is eased by
+		// the FAB layer's rAF family-swap ease (the inline scale advances each
+		// frame), not the `.fab-transition` CSS class (armed only for a GPL
+		// `pendingNav` exit slide). The behavioural guard is `animated`
+		// (scale delta > 0.1); the class-active `transitionFrames` signal no
+		// longer fires for this discrete swap.
 		expect(cap.animated, 'FAB atom scale eased across the swap').toBe(true);
-		expect(cap.transitionFrames).toBeGreaterThan(0);
 	});
 
 	test('pager switch guard: / -> Messages tab slides the pager', async ({ page }) => {

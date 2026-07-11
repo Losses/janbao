@@ -26,12 +26,18 @@
 	 * route transition and appears over the last 50%, tracking the finger across
 	 * the whole drag.
 	 *
-	 * Non-drag navigation (drawer tap, back arrow, forward enter, commit) is
-	 * eased by the atom's CSS transition. `discreteNavInFlight` latches on any
-	 * distinct family swap and holds the transition class for the 200ms ease.
-	 * Same-family tab taps (list<->list) do not latch; their easing track is
-	 * driven by the Family A sampler. During a drag the transition is off (the
-	 * live signal drives), so there is no double-clock.
+	 * Non-drag navigation across a family swap (list -> compose, list ->
+	 * overlay, etc.) is eased by the layer's own rAF family-swap ease: the
+	 * published scale is interpolated from the pre-swap resting scale to the
+	 * new family's resting scale over `TRACK_TRANSITION_MS` (200ms) via the
+	 * constant-deceleration curve `s(u) = 2u - u^2` (the same curve the
+	 * executor uses). Same-family tab taps (list<->list) do not trigger it;
+	 * their easing track is driven by the Family A sampler. A
+	 * GesturePageLayout exit slide (`navStore.pendingNav` set) still eases via
+	 * the atom's CSS transition (the pendingNav path, kept until the GPL
+	 * routes migrate in Phase 3); the rAF ease is gated off while pendingNav
+	 * is set so the two clocks never overlap. During a drag the rAF ease is
+	 * off (the live signal drives), so there is no double-clock.
 	 *
 	 * Cross-tab chip-exit: on a cross-tab tap FROM a list route, the
 	 * MobileTabPager's z-30 LoadingChip covers the pager and the FAB at z-35
@@ -64,6 +70,7 @@
 		hideProgress,
 		translateYFromHideProgress
 	} from '$lib/utils/fab-scale';
+	import { TRACK_TRANSITION_MS } from '$lib/utils/gesture-constants';
 	import type { TranslationDict } from '$lib/types/translation';
 
 	interface FloatingActionButtonLayerProps {
@@ -77,14 +84,24 @@
 	const scrollChrome = getScrollChromeStore();
 	const activeGestureTrack = getActiveGestureTrack();
 
-	// Discrete-nav CSS transition latch. Arms on any distinct family swap
-	// (overlay<->list, compose<->list) and holds the atom's transition class
-	// across the route swap so the 200ms ease completes on BOTH routes. A
-	// same-family tab tap does not latch (the Family A sampler drives its easing
-	// track). Cleared by the timer; a later distinct swap re-arms it.
-	const FAMILY_TRANSITION_WINDOW_MS = 280;
-	let discreteNavInFlight = $state(false);
-	let discreteNavTimer: ReturnType<typeof setTimeout> | undefined;
+	// rAF family-swap ease state. On a distinct family swap (overlay<->list,
+	// compose<->list) the published scale is interpolated from the pre-swap
+	// resting scale to the new family's resting scale over TRACK_TRANSITION_MS
+	// (200ms) via the constant-deceleration curve `s(u) = 2u - u^2` (the same
+	// curve the executor uses). The ease runs on the layer's own rAF loop, a
+	// persistent consumer that survives the route swap. It is gated off when a
+	// higher-priority driver owns the FAB scale: a drag (the live signal
+	// drives), the pilot orchestrator (pilotTransitionListKind !== null;
+	// coverProgress ramps the scale), or a GesturePageLayout exit slide
+	// (navStore.pendingNav !== null; the atom's CSS transition eases the GPL
+	// track slide via the pendingNav path). A same-family tab tap (list<->list)
+	// does not trigger it (the Family A sampler drives that easing track).
+	let familySwapRafId: number | undefined;
+	let familySwapFromScale = 0;
+	let familySwapToScale = 0;
+	let familySwapToScaleCaptured = false;
+	let familySwapStartTs = 0;
+	let familySwapScale = $state<number | null>(null);
 	let previousFamily: FabFamily | null = null;
 
 	// Fixed geometry (kept in sync with the atom). `size-14` = 56px FAB; the
@@ -253,24 +270,35 @@
 		return cfg;
 	});
 
-	// Latch `discreteNavInFlight` on any distinct family swap so the atom's CSS
-	// transition stays armed across the route swap (the 200ms ease must run on
-	// both the source and destination route). A same-family swap (tab tap) does
-	// not latch: the Family A sampler drives its easing track, and a second CSS
-	// clock would fight it. `$effect.pre` runs before the DOM update, so the
-	// latch is set in the same flush as the new family's resting scale change
-	// and the transition catches the change.
+	// Detect a distinct family swap and start the rAF ease. `$effect.pre` runs
+	// before the DOM update, so reading the atom's inline transform here returns
+	// the last committed (visible) scale, even if the reactive `restingScale`
+	// has already raced ahead to a transient post-swap value (e.g. an incoming
+	// route's coverProgress published mid-flush). `startFamilySwapEase` pins
+	// `familySwapScale` to that from-scale in this same flush so the swap frame
+	// renders the pre-swap scale (no snap), then the rAF interpolates toward the
+	// new resting scale over the next 200ms.
 	$effect.pre(() => {
 		const current = fabConfig?.family ?? null;
 		const prev = previousFamily;
 		previousFamily = current;
-		if (prev !== current && (prev !== null || current !== null)) {
-			discreteNavInFlight = true;
-			if (discreteNavTimer !== undefined) clearTimeout(discreteNavTimer);
-			discreteNavTimer = setTimeout(() => {
-				discreteNavInFlight = false;
-				discreteNavTimer = undefined;
-			}, FAMILY_TRANSITION_WINDOW_MS);
+		// Only ease a real family swap. Skip the initial mount (prev === null):
+		// the atom renders at its resting scale already, and easing from 0
+		// would flash the FAB on every hydration. A swap to no-config
+		// (current === null, e.g. landing on /activity where no FAB renders)
+		// still eases the scale out toward the new resting scale (0). Same-
+		// family transitions (tab taps within the list family) are handled by
+		// the Family A sampler, not this ease.
+		if (prev !== null && prev !== current) {
+			// Gate: skip when a higher-priority driver owns the FAB scale.
+			if (pager.dragging || pilotTransitionListKind !== null || navStore.pendingNav !== null) {
+				return;
+			}
+			// Anchor from the atom's visible scale (the DOM ground truth). On a
+			// re-swap mid-ease this is the current eased value, so the trajectory
+			// stays continuous. Falls back to 0 only if the atom is absent.
+			const fromScale = readRenderedFabScale() ?? 0;
+			startFamilySwapEase(fromScale);
 		}
 	});
 
@@ -365,16 +393,91 @@
 		startSampler();
 	});
 
+	/** Read the FAB atom's currently-rendered scale from its inline transform.
+	 *  Used by the family-swap `$effect.pre` to anchor the ease at the visible
+	 *  scale (the DOM ground truth), which is immune to the reactive
+	 *  `restingScale` racing ahead to a transient post-swap value in the same
+	 *  flush. Returns null when the atom is not in the DOM (SSR, or no FAB
+	 *  route). */
+	function readRenderedFabScale(): number | null {
+		if (!browser) return null;
+		const el = document.querySelector('[data-testid="fab"]');
+		if (!el) return null;
+		const transform = (el as HTMLElement).style.transform;
+		const m = transform.match(/scale\(([-0-9.]+)\)/);
+		return m ? Number(m[1]) : null;
+	}
+
+	/** Start the rAF family-swap ease from `fromScale` to the new family's
+	 *  resting scale (captured on the first tick from the recomputed
+	 *  `restingScale`). Cancels any in-flight ease first (a second family swap
+	 *  mid-ease); the caller passes the current visible scale as `fromScale` so
+	 *  the trajectory stays continuous. Pins `familySwapScale` to `fromScale`
+	 *  immediately so the swap frame does not snap before the first tick. */
+	function startFamilySwapEase(fromScale: number): void {
+		if (!browser) return;
+		if (familySwapRafId !== undefined) {
+			cancelAnimationFrame(familySwapRafId);
+		}
+		familySwapFromScale = fromScale;
+		familySwapToScale = fromScale;
+		familySwapToScaleCaptured = false;
+		// The clock starts on the FIRST tick, not here: the $effect.pre that
+		// arms the ease can run during a SvelteKit navigation whose DOM work
+		// delays the first rAF by many frames. Starting the clock here would
+		// make the first tick compute a large elapsed `u` and skip the
+		// early-ease scale range. Pinning `familySwapScale` to `fromScale`
+		// holds the atom at the pre-swap scale during that gap, then the ease
+		// runs the full curve from the first real frame.
+		familySwapStartTs = 0;
+		familySwapScale = fromScale;
+		const tick = (): void => {
+			// If a higher-priority driver took over mid-ease (a drag, the pilot
+			// orchestrator, or a GPL pendingNav exit slide), cancel and hand the
+			// scale back to the resting/live signal.
+			if (pager.dragging || pilotTransitionListKind !== null || navStore.pendingNav !== null) {
+				stopFamilySwapEase();
+				return;
+			}
+			const now = performance.now();
+			if (!familySwapToScaleCaptured) {
+				// By the first tick `restingScale` has recomputed for the new
+				// family; capture it as the ease target once, and start the
+				// clock on this frame so the full 200ms curve plays.
+				familySwapToScale = restingScale;
+				familySwapToScaleCaptured = true;
+				familySwapStartTs = now;
+			}
+			const u = Math.min((now - familySwapStartTs) / TRACK_TRANSITION_MS, 1);
+			const eased = 2 * u - u * u;
+			familySwapScale = familySwapFromScale + (familySwapToScale - familySwapFromScale) * eased;
+			if (u >= 1) {
+				familySwapScale = null;
+				familySwapRafId = undefined;
+				return;
+			}
+			familySwapRafId = requestAnimationFrame(tick);
+		};
+		familySwapRafId = requestAnimationFrame(tick);
+	}
+
+	/** Cancel the rAF family-swap ease and hand the published scale back to the
+	 *  resting formula. */
+	function stopFamilySwapEase(): void {
+		if (familySwapRafId !== undefined) {
+			cancelAnimationFrame(familySwapRafId);
+			familySwapRafId = undefined;
+		}
+		familySwapScale = null;
+	}
+
 	onDestroy(() => {
 		// onDestroy runs in SSR; guard DOM-touching teardown (svelte-ondestroy-
-		// runs-in-ssr memory). cancelAnimationFrame / clearTimeout are no-ops on
-		// the server but the guard is defensive.
+		// runs-in-ssr memory). cancelAnimationFrame is a no-op on the server but
+		// the guard is defensive.
 		if (!browser) return;
 		stopSampler();
-		if (discreteNavTimer !== undefined) {
-			clearTimeout(discreteNavTimer);
-			discreteNavTimer = undefined;
-		}
+		stopFamilySwapEase();
 	});
 
 	// Cross-tab chip-exit / pendingNav: forces scale 0 directly, bypassing the
@@ -428,35 +531,33 @@
 		// on the pilot route `/messages/[id]` it is published by
 		// `NavPipelineOrchestrator` as the raw slide fraction. Resting (null
 		// server-side / pre-mount, 0 client-side) maps to 0; the discrete
-		// forward/back swap is eased by the `discreteNavInFlight` CSS latch.
+		// forward/back swap is eased by the layer's rAF family-swap ease (the
+		// `startFamilySwapEase` loop), not a CSS latch.
 		// During a GPL cross-tab tap on a list route the source list is not
 		// revealed, so the GPL publishes 0 (gated on `swipeNeedsLoadingAtStart`)
 		// and the FAB hides under the LoadingChip.
 		return pager.coverProgress ?? 0;
 	});
 
-	const scale = $derived(scaleFromFraction(foregroundFraction));
+	const restingScale = $derived(scaleFromFraction(foregroundFraction));
 
-	// The atom's CSS transition eases non-drag scale changes across a route
-	// swap or a GesturePageLayout exit slide. Armed by `discreteNavInFlight`
-	// (any distinct family swap, latched via $effect.pre so it lands in the
-	// same flush as the scale change) OR by `navStore.pendingNav` (a GPL exit
-	// slide sets pendingNav and publishes the logical endpoint coverProgress;
-	// the transition eases the FAB toward it across the slide). Off during a
-	// drag (the live signal drives) and off when the pilot's rAF drives the
-	// FAB scale (`pilotTransitionListKind !== null`: the target has a resting
-	// FAB and coverProgress ramps the scale each frame, so a stale
-	// `discreteNavInFlight` must not re-ease it). When the target has no
-	// resting FAB (`pilotTransitionListKind === null`: the forward-enter to
-	// the conversation, a tab-click to /activity), the FAB is forced to 0 by
-	// the foregroundFraction short-circuit and the CSS transition eases the
-	// family-swap scale-out (e.g. the inbox FAB scaling 1 to 0 on the
-	// forward-enter). A same-family tab tap sets neither flag; its easing
-	// track is driven by the Family A sampler.
+	// While the rAF family-swap ease is running, publish the eased scale;
+	// otherwise fall through to the resting formula. The ease sets
+	// `familySwapScale` back to null on completion so the handoff to
+	// `restingScale` is seamless (the ease target equals the new resting scale).
+	const scale = $derived(familySwapScale !== null ? familySwapScale : restingScale);
+
+	// The atom's CSS transition eases the scale ONLY for a GesturePageLayout
+	// exit slide (`navStore.pendingNav` set): on a back-swipe release GPL
+	// publishes the coverProgress endpoint as a snapshot, and this transition
+	// eases the FAB from its mid-drag scale to that endpoint across the GPL
+	// track's 200ms slide. The discrete (non-GPL) family swap is eased by the
+	// rAF family-swap ease above, not this class. Suppressed during a drag (the
+	// live signal drives) and when the pilot orchestrator drives the FAB
+	// (`pilotTransitionListKind !== null`). Dissolves in Phase 3 when the GPL
+	// routes migrate off GesturePageLayout and `pendingNav` stops publishing.
 	const transitionEnabled = $derived(
-		!pager.dragging &&
-			pilotTransitionListKind === null &&
-			(discreteNavInFlight || navStore.pendingNav !== null)
+		!pager.dragging && pilotTransitionListKind === null && navStore.pendingNav !== null
 	);
 
 	const fabHideProgress = $derived(

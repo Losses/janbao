@@ -9,12 +9,17 @@
 	 * Viewport gating (mobile-only) and stacking context live on the layer
 	 * (FloatingActionButtonLayer); the atom is viewport-agnostic.
 	 *
-	 * CSS transition on `transform`: active only when `transitionEnabled` is true
-	 * (the discrete list<->compose swap; during a drag compose reads `coverProgress` like overlay, so the transition handles only the non-drag swap).
-	 * Family A runs a per-frame rAF sampler that follows the track's own
-	 * CSS easing 1:1; enabling the atom's transition then would run a second
-	 * unsynchronized clock and double-animate. The layer therefore drives
-	 * `transitionEnabled = !pager.dragging && (discreteNavInFlight || pendingNav !== null)`.
+	 * CSS transition on `transform`: active only when `transitionEnabled` is
+	 * true (a GesturePageLayout exit slide, where `navStore.pendingNav` is set
+	 * and GPL publishes the coverProgress endpoint snapshot). The discrete
+	 * list<->compose family swap is no longer eased here: the FAB layer drives
+	 * that via its own rAF family-swap ease, publishing the eased scale through
+	 * the inline `style:transform` binding. Family A runs a per-frame rAF
+	 * sampler that follows the track's own CSS easing 1:1; enabling the atom's
+	 * transition during a drag would run a second unsynchronized clock and
+	 * double-animate. The layer therefore drives
+	 * `transitionEnabled = !pager.dragging && pendingNav !== null`. This CSS
+	 * path dissolves in Phase 3 when the GPL routes migrate.
 	 *
 	 * Visibility gates (both feed `pointer-events` and `aria-hidden`):
 	 *   - scale hidden: `scale < 0.01` (route-transition scale-out)
@@ -38,8 +43,9 @@
 		/** MDI path data (defaults to a plus icon). */
 		icon?: string;
 		/** When true, the atom's `transform` transitions over 200ms ease-out
-		 *  (Family C discrete route-predicate swap). Suppressed while the layer's
-		 *  per-frame sampler or a drag is driving the transform continuously. */
+		 *  (a GesturePageLayout exit slide, armed by `navStore.pendingNav`).
+		 *  Suppressed while the layer's per-frame sampler, the rAF family-swap
+		 *  ease, or a drag is driving the transform continuously. */
 		transitionEnabled?: boolean;
 	}
 
@@ -86,11 +92,14 @@
 		bottom: calc(1rem + env(safe-area-inset-bottom));
 	}
 
-	/* Family C: ease the discrete foregroundFraction swap (list -> compose,
-	   compose -> list) over 200ms. The `transform` property carries both the
-	   scale and the translateY, so the transition covers the route-transition
-	   scale-out/in. Suppressed while the per-frame sampler or a drag owns the
-	   transform (the layer toggles the class off then). */
+	/* GPL exit-slide ease: when `navStore.pendingNav` is set (a
+	   GesturePageLayout back-swipe release), the layer arms this class so the
+	   atom's transform eases from the mid-drag scale toward the published
+	   coverProgress endpoint across the GPL track's 200ms CSS slide. The
+	   discrete list<->compose family swap is eased by the layer's rAF
+	   (publishing the eased scale inline), not this class. Suppressed while the
+	   per-frame sampler or a drag owns the transform (the layer toggles the
+	   class off then). Dissolves in Phase 3 when the GPL routes migrate. */
 	.fab-transition {
 		transition: transform 200ms ease-out;
 	}

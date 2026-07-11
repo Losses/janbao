@@ -554,13 +554,15 @@ export async function captureExitPreview(
 // --- FAB route-transition capture -------------------------------------------
 // Samples `[data-testid="fab"]`'s computed scale and whether the
 // `.fab-transition` class is active, each frame for ~700ms across `trigger`.
-// The FAB atom binds `transform: scale(s) translateY(y)` and adds
-// `.fab-transition` (transform 200ms ease-out) only while
-// FloatingActionButtonLayer's `discreteNavInFlight` latch is armed, so a route
-// swap that eases the scale shows many distinct descending frames WITH the
-// class active; a snap shows a one-frame jump with the class absent. This is
-// the only behavioural signal that the FAB scale-out played (the FAB atom
-// carries no transitionend the test can await).
+// The FAB atom binds `transform: scale(s) translateY(y)`; since DV20 5b2 the
+// discrete family swap is eased by the FAB layer's rAF (the inline scale
+// changes each frame), and `.fab-transition` (transform 200ms ease-out) is
+// armed only for a GesturePageLayout `pendingNav` exit slide. So a discrete
+// swap that eases the scale shows many distinct descending frames with the
+// class ABSENT (the rAF drives the inline value); a snap shows a one-frame
+// jump. `animated` (scale delta > 0.1) is the behavioural signal;
+// `transitionFrames` (class active) only fires for the GPL exit-slide path.
+// The FAB atom carries no transitionend the test can await.
 
 interface FabFrame {
 	t: number;
