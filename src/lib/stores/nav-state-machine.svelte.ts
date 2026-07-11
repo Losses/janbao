@@ -179,9 +179,22 @@ export class NavStateMachine {
 	 *  use the constructor's `initialOn` directly, and `onLand`
 	 *  dispatches the reset event itself rather than calling this
 	 *  method. Exposed for external callers that need to force-clear
-	 *  the state machine outside a land cycle. */
+	 *  the state machine outside a land cycle. The `reset` event
+	 *  guards against clobbering an `intent` phase (a new gesture
+	 *  that arrived during the landing microtask); use `forceReset`
+	 *  when the caller needs an unconditional clear. */
 	reset(on: AtRestOn): void {
 		this.dispatch({ type: 'reset', on });
+	}
+
+	/** Unconditionally reset to at-rest on a tag, bypassing the
+	 *  `intent` guard on the `reset` event. Used by a fresh
+	 *  orchestrator mount to clear stale state left by a prior mount
+	 *  (the singleton state machine survives across orchestrator
+	 *  construction/teardown; a prior route's transition may have
+	 *  left the machine in any phase, including `intent`). */
+	forceReset(on: AtRestOn): void {
+		this.#state = initialOrchestratorState(on);
 	}
 }
 

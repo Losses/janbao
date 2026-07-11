@@ -1,5 +1,5 @@
 <script lang="ts">
-	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import NavPipelineHost from '$lib/components/templates/NavPipelineHost.svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
@@ -102,7 +102,7 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout fallbackRoute="/profile">
+	<NavPipelineHost leftHref="/profile">
 		<div class="space-y-3">
 			<PageTitle title={profileT.invitations} />
 
@@ -180,7 +180,7 @@
 				</div>
 			{/if}
 		</div>
-	</GesturePageLayout>
+	</NavPipelineHost>
 </DualColumnLayout>
 
 {#if showInviteModal}

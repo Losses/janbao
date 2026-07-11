@@ -11,7 +11,7 @@
 	import { formatDisplayName } from '$lib/utils/user';
 	import type { NotificationItem, ApiResult } from '$lib/types/api';
 	import type { PageData } from './$types';
-	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import NavPipelineHost from '$lib/components/templates/NavPipelineHost.svelte';
 	interface PageProps {
 		data: PageData;
 	}
@@ -129,7 +129,7 @@
 </svelte:head>
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout fallbackRoute="/">
+	<NavPipelineHost leftHref="/">
 		<div class="space-y-3">
 			<div class="flex items-center justify-between border-b border-base-300 pb-4">
 				<h1 class="page-title">{notificationT.title}</h1>
@@ -211,5 +211,5 @@
 				</div>
 			{/if}
 		</div>
-	</GesturePageLayout>
+	</NavPipelineHost>
 </DualColumnLayout>

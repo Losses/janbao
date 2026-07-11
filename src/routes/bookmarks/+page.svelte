@@ -11,7 +11,7 @@
 	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import type { BookmarkListItem } from '$lib/types/api';
 	import type { PageData } from './$types';
-	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import NavPipelineHost from '$lib/components/templates/NavPipelineHost.svelte';
 
 	interface PageProps {
 		data: PageData;
@@ -48,7 +48,7 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout fallbackRoute="/">
+	<NavPipelineHost leftHref="/">
 		<div class="space-y-3">
 			<h1 class="page-title border-b border-base-300 pb-4">{bookmarkT.myBookmarks}</h1>
 
@@ -98,5 +98,5 @@
 				{/if}
 			{/if}
 		</div>
-	</GesturePageLayout>
+	</NavPipelineHost>
 </DualColumnLayout>

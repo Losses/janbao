@@ -26,7 +26,7 @@
  *   - `PREVIEW_PANEL_CONFIG`      the back-preview snippet component
  *                                  per route that captures one.
  *
- * `isGesturePageLayoutRoute` (the migration-era imperative exception
+ * `isGestureRoute` (the migration-era imperative exception
  * the Cycle 1 spec carves out) reads the core `RouteData` registry
  * directly via `getRouteData(p).backParent !== undefined` for its
  * deep-route set, plus `FAB_ROUTE_ATTRIBUTES` for the
@@ -36,7 +36,7 @@
  * `MOBILE_TAB_DEFS` (`isPagerRoute`), one-line reads of the consumer
  * configs (`getCurrentTabIndex`), or non-route classifiers
  * (`backTargetListKind` classifies a back-target string). The
- * migration-era `isGesturePageLayoutRoute` stays imperative per the
+ * migration-era `isGestureRoute` stays imperative per the
  * Cycle 1 spec; its body reads the consumer registries above.
  */
 import type { Component } from 'svelte';
@@ -276,7 +276,7 @@ export function getPreviewPanel(pathname: string): SvelteComponentType | null {
 }
 
 // ---------------------------------------------------------------------------
-// `isGesturePageLayoutRoute` reads the deep-route-parent set directly from
+// `isGestureRoute` reads the deep-route-parent set directly from
 // the core `RouteData` registry (`backParent !== undefined`) rather than
 // maintaining a separate pattern list. This keeps the function's answer
 // set byte-stable without a duplication hazard: the set of routes that
@@ -289,7 +289,7 @@ export function getPreviewPanel(pathname: string): SvelteComponentType | null {
 // or the consumer configs above. The remaining functions below are
 // positional queries (`isPagerRoute`), consumer-config reads
 // (`getCurrentTabIndex`), non-route classifiers (`backTargetListKind`),
-// and the migration-era `isGesturePageLayoutRoute` whose body the
+// and the migration-era `isGestureRoute` whose body the
 // Cycle 1 spec carves out as the single imperative exception.
 
 /**
@@ -328,7 +328,7 @@ export function backTargetListKind(backTargetHref: string | null): FabListKind {
  * set is preserved verbatim per the Cycle 1 spec; Cycle 5 dissolves
  * both the function and the bug.
  */
-export function isGesturePageLayoutRoute(pathname: string): boolean {
+export function isGestureRoute(pathname: string): boolean {
 	const attrs = getFabRouteAttributes(pathname);
 	if (attrs && attrs.family === 'overlay' && attrs.kind !== 'deep') return true;
 	return getRouteData(pathname).backParent !== undefined;

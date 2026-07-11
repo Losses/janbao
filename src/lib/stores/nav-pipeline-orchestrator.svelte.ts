@@ -40,6 +40,14 @@
  * orchestrator is constructed fresh on each `mount` (so route swaps do
  * not carry stale state) but exposed via a single getter for the
  * layout-level hooks.
+ *
+ * Per DV20 §13.5 the `NavStateMachine` is the sole authority for the
+ * macro transition state (phase, plan, FROM/TO, direction). The
+ * orchestrator dispatches `intent` / `resolved` / `land` events into
+ * the state machine and reads its publication as a `$derived` that
+ * merges the state machine's macro fields with the executor's
+ * per-frame `#progress`. The orchestrator does not hold an independent
+ * publication `$state`.
  */
 
 import { browser } from '$app/environment';
@@ -47,6 +55,7 @@ import { goto } from '$app/navigation';
 import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 import { getNavStateMachine } from '$lib/stores/nav-state-machine.svelte';
+import { atRestOnFor } from '$lib/stores/nav-state-machine-logic';
 import { NavExecutor } from '$lib/stores/nav-executor.svelte';
 import { progressAtTranslateX, trackTranslateX } from '$lib/utils/nav-executor-logic';
 import { LiveNavDomDriver } from '$lib/utils/nav-dom-driver-live';
@@ -70,6 +79,7 @@ import { MOBILE_TABS } from '$lib/utils/route-config';
 import { hopForHref, isTabRootPath } from '$lib/utils/history-nav';
 import {
 	HEADER_MORPH_THRESHOLD,
+	PILL_EXPANSION_THRESHOLD,
 	SWIPE_COMMIT,
 	TRACK_TRANSITION_MS
 } from '$lib/utils/gesture-constants';
@@ -112,6 +122,11 @@ interface PendingGestureTransition {
 	 *  published raw for a re-grab, 0 for from-rest). The live-drag's
 	 *  coverProgress starts from here so the FAB doesn't jump. */
 	readonly rawStart: number;
+	/** The gesture's transition direction. 'backward' = rightward
+	 *  (toward the previous tab / back-target); 'forward' = leftward
+	 *  (toward the next tab, bidirectional hosts only). Determines the
+	 *  commit-threshold sign at release. */
+	readonly direction: TransitionDirection;
 }
 
 /** A pending tab-click transition (any pilot -> tab-root nav the
@@ -189,11 +204,20 @@ export interface PipelineMountInputs {
 	 *  matching the centerTab branch of GesturePageLayout. When
 	 *  undefined (deep routes in 5b2), the morph values apply. */
 	readonly centerTab?: number;
+	/** When true the orchestrator claims BOTH rightward and leftward
+	 *  drags (the tab-pager host). Rightward targets the back-target
+	 *  (previous tab); leftward targets the next tab. When false or
+	 *  undefined, only rightward back-swipes are claimed (the pilot /
+	 *  deep-page host). */
+	readonly bidirectional?: boolean;
 }
 
 /** The orchestrator's published reactive state for downstream
  *  consumers (the host's `$effect` reads this and publishes to the
- *  pager store so the existing FAB / Header layers react). */
+ *  pager store so the existing FAB / Header layers react). Per DV20
+ *  §13.5 the NavStateMachine is the sole authority for the macro
+ *  fields (plan, FROM/TO, direction, in-flight); only `progress` is
+ *  the executor's per-frame contribution. */
 export interface OrchestratorPublication {
 	/** Null when at-rest; the resolved plan when transitioning. */
 	readonly plan: TransitionPlan | null;
@@ -208,16 +232,6 @@ export interface OrchestratorPublication {
 	/** The transition direction. */
 	readonly direction: TransitionDirection | null;
 }
-
-/** A noop publication used at-rest. */
-const AT_REST_PUBLICATION: OrchestratorPublication = {
-	plan: null,
-	progress: 0,
-	inFlight: false,
-	fromPathname: null,
-	toPathname: null,
-	direction: null
-};
 
 /** The clock function the intent classifier + executor use. */
 type ClockFn = () => number;
@@ -275,9 +289,26 @@ export class NavPipelineOrchestrator {
 	 *  orchestrator's own `goto` / `history.back()` re-entry
 	 *  regardless of timer or popstate ordering. */
 	#dispatchTarget: string | null = null;
-	/** Reactive publication (the source of truth for the host's $effect
-	 *  that mirrors into the pager store). */
-	#publication = $state<OrchestratorPublication>(AT_REST_PUBLICATION);
+	/** The executor-driven per-frame raw drag fraction in [0, 1]. The
+	 *  state machine owns the macro authority (phase, plan, FROM/TO,
+	 *  direction); this field owns the sub-frame progress the executor
+	 *  produces each tick. The `#publication` derived merges the two. */
+	#progress = $state(0);
+	/** Reactive publication: a read-through to the state machine's macro
+	 *  state (plan, FROM/TO, direction, in-flight phase) merged with the
+	 *  executor-driven `#progress`. Per DV20 §13.5 the state machine is
+	 *  the sole authority; this derived has no independent state. */
+	readonly #publication = $derived.by<OrchestratorPublication>(() => {
+		const sm = this.#stateMachine.state;
+		return {
+			plan: sm.macro.plan,
+			progress: this.#progress,
+			inFlight: sm.macro.kind === 'transitioning',
+			fromPathname: sm.fromPathname,
+			toPathname: sm.toPathname,
+			direction: sm.direction
+		};
+	});
 	/** The raw drag-fraction published at the moment a commit / cancel
 	 *  began. The commit-phase publication lerps from this value to the
 	 *  target (1 commit / 0 cancel) along the executor's eased fraction,
@@ -337,11 +368,13 @@ export class NavPipelineOrchestrator {
 		});
 		this.#lifecycle.mount();
 		this.#lifecycle.activate();
-		// Reset the at-rest publication. The state machine may have a
-		// stale at-rest surface from a prior pilot mount (e.g. after a
-		// route swap); align it to the pilot's FROM tag so a land event
-		// settles to the right surface.
-		this.#publication = AT_REST_PUBLICATION;
+		// Reset the state machine (the singleton authority) to at-rest on
+		// this route's tag so a stale phase from a prior mount does not
+		// leak into the derived publication. The `forceReset` bypasses the
+		// `reset` event's `intent` guard: the singleton may be in any phase
+		// when a fresh orchestrator mounts.
+		this.#stateMachine.forceReset(atRestOnFor(inputs.fromTag));
+		this.#progress = 0;
 		// Publish the at-rest pager state now that #mountInputs is set,
 		// independent of the host reset $effect's timing.
 		this.resetPagerStore();
@@ -414,19 +447,32 @@ export class NavPipelineOrchestrator {
 		};
 		this.#pendingGesture = null;
 		this.#pendingTabExit = null;
-		// Capture the in-flight raw BEFORE resetting the publication
+		// Capture the in-flight raw BEFORE resetting the progress
 		// (consistent with #beginGesture / onSvelteKitBeforeNavigate). For
-		// a fresh mount the prior publication is AT_REST (progress 0).
-		this.#commitStartRaw = this.#publication.progress;
+		// a fresh mount the prior progress is 0 (at rest).
+		this.#commitStartRaw = this.#progress;
 		this.#isEnterAnimation = true;
-		this.#publication = {
-			plan,
-			progress: 0,
-			inFlight: true,
-			fromPathname: inputs.backTarget,
-			toPathname: inputs.fromPathname,
-			direction: 'forward'
+		// The enter is a forward transition: FROM is the back-target, TO
+		// is the pilot route. Dispatch through the state machine so its
+		// macro state (phase, plan, FROM/TO, direction) is the authority
+		// the derived publication reads.
+		const enterIntent: IntentState = {
+			...initialIntentState(),
+			micro: 'committed',
+			target: inputs.fromPathname,
+			startedAt: this.#clock()
 		};
+		const toData = getRouteData(inputs.fromPathname);
+		this.#stateMachine.onIntent(enterIntent, inputs.backTarget, inputs.toTag);
+		this.#stateMachine.onResolved(
+			plan,
+			inputs.backTarget,
+			inputs.fromPathname,
+			inputs.toTag,
+			toData.tag,
+			'forward'
+		);
+		this.#progress = 0;
 		// The enter starts at rest (progress 0). playEnterAnimation runs
 		// only on a fresh mount: the guard above returns if a transition
 		// is in flight, and mount constructs a clean executor, so there is
@@ -470,7 +516,7 @@ export class NavPipelineOrchestrator {
 		this.#navDispatchInFlight = false;
 		this.#dispatchTarget = null;
 		this.#intent = initialIntentState();
-		this.#publication = AT_REST_PUBLICATION;
+		this.#progress = 0;
 		// Reset every transient transition field so an idempotent re-mount
 		// (a future caller reusing the instance) starts clean.
 		this.#isEnterAnimation = false;
@@ -553,16 +599,15 @@ export class NavPipelineOrchestrator {
 		const executor = this.#executor;
 		if (inputs === null || executor === null) return;
 		const intent = this.#intent;
-		// The pilot claims only RIGHTWARD back-swipes. A gesture starts
-		// when micro transitions into drag-right (a from-rest start or a
-		// re-grab mid-commit; §5: a new intent arriving mid-commit
-		// continues from the current visual position). A leftward drag is
-		// not a claimed gesture and is ignored entirely, so it cannot
-		// clear an in-flight commit's dispatch target or interfere with
-		// its settle.
+		// The host claims RIGHTWARD back-swipes always, and LEFTWARD
+		// forward-swipes when bidirectional (the tab-pager host). A
+		// gesture starts when micro transitions into a claimed drag
+		// direction (a from-rest start or a re-grab mid-commit).
 		const isRightDrag = intent.micro === 'drag-right';
-		const newDragStart = isRightDrag && !this.#prevWasDrag;
-		this.#prevWasDrag = isRightDrag;
+		const isLeftDrag = inputs.bidirectional === true && intent.micro === 'drag-left';
+		const isDrag = isRightDrag || isLeftDrag;
+		const newDragStart = isDrag && !this.#prevWasDrag;
+		this.#prevWasDrag = isDrag;
 		// Deciding / idle: nothing to do.
 		if (intent.micro === 'idle' || intent.micro === 'deciding') {
 			return;
@@ -570,16 +615,8 @@ export class NavPipelineOrchestrator {
 		if (newDragStart) {
 			this.#beginGesture(inputs, intent);
 		}
-		// During a rightward drag, stream the live progress to the
-		// executor. (Post-release streaming is done by #onExecutorTick via
-		// the commit rAF, not this block.) The track continues from the
-		// gesture's start position: the threshold-absorbed fraction of the
-		// drag maps onto the REMAINING [startProgress, 1] window, so the
-		// first 20% of drag is absorbed AT the start position (not at 0)
-		// and the track never snaps back when a gesture begins mid-
-		// transition. The FAB / Header consumers see the RAW drag fraction
-		// (their consumer-side thresholds apply separately).
-		if (isRightDrag && this.#pendingGesture !== null && this.#publication.plan !== null) {
+		// During a claimed drag, stream the live progress to the executor.
+		if (isDrag && this.#pendingGesture !== null && this.#publication.plan !== null) {
 			// Match GPL's onSwipeMove: reveal a header that hide-on-scroll
 			// had translated off-screen, so the back-arrow + title are
 			// visible during the back-swipe reveal (the host registers the
@@ -611,44 +648,34 @@ export class NavPipelineOrchestrator {
 			this.#publish(raw);
 		}
 		// Released: apply the commit-vs-cancel gate.
-		// The orchestrator resolves the plan ONCE at gesture start
-		// (progressDirection=0, commit). At release the orchestrator
-		// decides commit vs cancel based on drag distance + the
-		// rebound-based `reversed` signal forwarded from detectSwipe
-		// (the same source the non-pilot routes use): commit iff
-		// `intent.offset >= SWIPE_COMMIT && !reversed` (signed offset).
 		if (intent.micro === 'committed' || intent.micro === 'cancelled') {
 			this.#liveDragging = false;
-			// Only a RIGHTWARD gesture's release ends a transition. A leftward
-			// drag is not claimed (filtered upstream); its release must not
-			// reset an in-flight commit (no onCommit / onCancel, no dispatch
-			// re-timing) - the commit continues and settles on its own.
-			if (this.#pendingGesture !== null && intent.direction === 'right') {
-				// SIGNED offset: a rightward gesture commits only if the
-				// release position is rightward of the start by >=
-				// SWIPE_COMMIT. A reversed-past-start release (offset < 0)
-				// cancels even when |offset| >= SWIPE_COMMIT (the user
-				// changed their mind); detectSwipe's rebound-based
-				// `reversed` does not catch this when the release point IS
-				// the drag minimum (rebound = 0). Matches GPL's signed
-				// `deltaX >= SWIPE_COMMIT`.
-				const reversed = intent.reversed;
-				const shouldCommit = intent.offset >= SWIPE_COMMIT && !reversed;
-				if (shouldCommit) {
-					// Capture the live raw at release so the commit publication
-					// lerps continuously from it (#onExecutorTick).
-					this.#commitStartRaw = this.#publication.progress;
-					executor.onCommit(intent.releaseVelocity);
-				} else if (executor.state.progress > 0) {
-					// Cancel with the track off-rest: animate it back.
-					this.#commitStartRaw = this.#publication.progress;
-					executor.onCancel(intent.releaseVelocity);
-				} else {
-					// Sub-threshold cancel: the track is already at rest (the
-					// drag was absorbed below the morph threshold), so there is
-					// nothing to animate back. Land at rest immediately (no
-					// no-op cancel rAF).
-					this.#landAtRest();
+			if (this.#pendingGesture !== null) {
+				const gestureDir = this.#pendingGesture.direction;
+				// Only process the release when the intent's direction
+				// matches the gesture's start direction. A cross-direction
+				// touchup during a commit (a leftward tap during a
+				// rightward commit on a non-bidirectional host, or vice
+				// versa) must NOT trigger the release logic; the commit
+				// runs to completion via the executor's rAF.
+				const intentMatchesGesture =
+					(gestureDir === 'backward' && intent.direction === 'right') ||
+					(gestureDir === 'forward' && intent.direction === 'left');
+				if (intentMatchesGesture) {
+					// Normalize the signed offset: positive = toward the
+					// gesture's target.
+					const signedOffset = gestureDir === 'backward' ? intent.offset : -intent.offset;
+					const reversed = intent.reversed;
+					const shouldCommit = signedOffset >= SWIPE_COMMIT && !reversed;
+					if (shouldCommit) {
+						this.#commitStartRaw = this.#publication.progress;
+						executor.onCommit(intent.releaseVelocity);
+					} else if (executor.state.progress > 0) {
+						this.#commitStartRaw = this.#publication.progress;
+						executor.onCancel(intent.releaseVelocity);
+					} else {
+						this.#landAtRest();
+					}
 				}
 			}
 			this.#intent = initialIntentState();
@@ -657,28 +684,23 @@ export class NavPipelineOrchestrator {
 	}
 
 	/** Map the live drag offset to the RAW signed drag fraction.
-	 *  Returns 0 at rest; +1 at a full viewport-width rightward drag; a
-	 *  NEGATIVE value when the finger has dragged leftward past the
-	 *  gesture start (a mid-commit re-grab whose finger then tracks
-	 *  back). Published (clamped to [0, 1] by the caller) to the pager
-	 *  store so the existing FAB layer (Family B reader of
-	 *  `coverProgress`) and Header layer (reader of `backMorph`) react
-	 *  to the orchestrator's state. Bounded here to [-1, 1]; the
-	 *  caller's `Math.max(0, ...)` clamps the published value so the
-	 *  negative range is only visible mid-gesture (a leftward drag
-	 *  decreases the published raw toward 0 instead of freezing at the
-	 *  re-grab's `rawStart`). */
+	 *  Returns 0 at rest; +1 at a full viewport-width drag toward the
+	 *  target; a NEGATIVE value when the finger has dragged backward
+	 *  past the gesture start (a mid-commit re-grab whose finger then
+	 *  tracks back). For a rightward (backward) gesture, the offset is
+	 *  already positive toward the target. For a leftward (forward)
+	 *  gesture, the offset is inverted so the fraction is positive
+	 *  toward the next-tab target. */
 	#rawDragFraction(intent: IntentState, inputs: PipelineMountInputs): number {
 		const w = inputs.viewportWidth;
 		if (w <= 0) return 0;
-		// The back-swipe (drag-right) is the only gesture direction the
-		// pilot listens for: the TO is `/messages/inbox`, revealed by a
-		// rightward drag. The offset is SIGNED so a leftward drag during
-		// a claimed rightward gesture (a re-grab whose finger reverses)
-		// yields a negative fraction; the caller clamps the published
-		// raw to [0, 1].
-		if (intent.direction !== 'right') return 0;
-		return Math.max(-1, Math.min(1, intent.offset / w));
+		if (intent.direction === 'right') {
+			return Math.max(-1, Math.min(1, intent.offset / w));
+		}
+		if (intent.direction === 'left' && inputs.bidirectional === true) {
+			return Math.max(-1, Math.min(1, -intent.offset / w));
+		}
+		return 0;
 	}
 
 	/** Map the RAW drag fraction to the threshold-absorbed progress the
@@ -711,11 +733,16 @@ export class NavPipelineOrchestrator {
 		return progressAtTranslateX(newPlan, tx);
 	}
 
-	/** Lock FROM/TO and run the resolver + coordinator once. */
+	/** Lock FROM/TO and run the resolver + coordinator once. Handles both
+	 *  rightward (backward, toward the back-target) and, when the host is
+	 *  bidirectional, leftward (forward, toward the next tab) gestures. */
 	#beginGesture(inputs: PipelineMountInputs, intent: IntentState): void {
-		// Defensive: the pilot claims only rightward back-swipes (a
-		// leftward drag is filtered out before #beginGesture is called).
-		if (intent.direction !== 'right') {
+		let direction: TransitionDirection;
+		if (intent.direction === 'left' && inputs.bidirectional === true) {
+			direction = 'forward';
+		} else if (intent.direction === 'right') {
+			direction = 'backward';
+		} else {
 			return;
 		}
 		// A gesture now owns the publication. Clear the enter flag; a
@@ -724,40 +751,39 @@ export class NavPipelineOrchestrator {
 		this.#liveDragging = true;
 		const from = inputs.fromPathname;
 		const fromTag = inputs.fromTag;
-		const to = inputs.backTarget;
-		const toTag = inputs.toTag;
-		const direction: TransitionDirection = 'backward';
+		// Resolve the target for this direction. Backward targets the
+		// back-target; forward targets the next tab.
+		const target: string | null =
+			direction === 'backward' ? inputs.backTarget : this.#nextTabTarget(inputs);
+		if (target === null) return;
+		const to: string = target;
+		const toData = getRouteData(to);
+		const toTag = toData.tag;
+		const toTabIndex = direction === 'backward' ? inputs.toTabIndex : this.#tabIndexFor(to);
 		// A gesture claims the transition: drop any in-flight tab-click so
 		// #onExecutorSettle dispatches THIS gesture's target, not the
 		// tab-click's. The two pending slots are mutually exclusive.
 		this.#pendingTabExit = null;
-		// A back-swipe gesture always targets the back-target
-		// (pre-rendered). The coordinator (Layer 4) is not consulted for
-		// gestures in 5b1 (the pilot's only gesture target is the
-		// back-target, which is always pre-rendered). A future pilot whose
-		// gesture targets a non-back-target tab would consult the
-		// coordinator here.
-		const plan = this.#resolvePlan(inputs, intent, direction, to, inputs.toTabIndex);
-		// Capture the in-flight raw BEFORE resetting the publication so a
+		const plan = this.#resolvePlan(inputs, intent, direction, to, toTabIndex);
+		// Capture the in-flight raw BEFORE resetting the progress so a
 		// re-grab mid-commit continues coverProgress from the live value.
-		// Mirrors the tab-click path's commitStartRaw capture.
-		const rawStart = this.#publication.progress;
+		const rawStart = this.#progress;
 		this.#stateMachine.onIntent(intent, from, fromTag);
 		this.#stateMachine.onResolved(plan, from, to, fromTag, toTag, direction);
-		this.#publication = {
-			plan,
-			progress: 0,
-			inFlight: true,
-			fromPathname: from,
-			toPathname: to,
-			direction
-		};
+		this.#progress = 0;
 		// Start the gesture at the track's current visual position so an
-		// in-flight forward-enter or commit hands off with no jump. The
-		// geometry conversion is in #startProgressFromCurrentVisual.
+		// in-flight forward-enter or commit hands off with no jump.
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
-		this.#pendingGesture = { to, startProgress, rawStart };
+		this.#pendingGesture = { to, startProgress, rawStart, direction };
 		this.#executor?.onDragStart(plan, startProgress, intent.offset);
+	}
+
+	/** Resolve the next-tab target for a leftward (forward) gesture. Returns
+	 *  null when the active tab is the last tab (no next neighbour). */
+	#nextTabTarget(inputs: PipelineMountInputs): string | null {
+		const nextIdx = inputs.fromTabIndex + 1;
+		if (nextIdx >= MOBILE_TABS.length) return null;
+		return MOBILE_TABS[nextIdx].href;
 	}
 
 	/** Resolve a transition plan for the locked FROM/TO/direction. */
@@ -905,7 +931,7 @@ export class NavPipelineOrchestrator {
 		if (inputs !== null) {
 			this.#stateMachine.onLand(inputs.fromTag);
 		}
-		this.#publication = AT_REST_PUBLICATION;
+		this.#progress = 0;
 	}
 
 	// -----------------------------------------------------------------------
@@ -963,11 +989,16 @@ export class NavPipelineOrchestrator {
 		if (!isTabRootPath(to)) {
 			return false;
 		}
-		// A tab-click exit (pilot -> tab-root). Drive
-		// the slide plan via the executor and dispatch on settle.
+		// A tab-click exit (pipeline route -> tab-root). Drive the slide
+		// plan via the executor and dispatch on settle. The direction
+		// depends on the target's relative tab position: a higher index
+		// is forward (leftward slide), a lower index is backward
+		// (rightward slide). For non-bidirectional hosts the target is
+		// always at a lower index (the back-target).
 		const toPathname = to;
 		const toTabIndex = this.#tabIndexFor(toPathname);
-		const direction: TransitionDirection = 'backward';
+		const direction: TransitionDirection =
+			inputs.bidirectional === true && toTabIndex > inputs.fromTabIndex ? 'forward' : 'backward';
 		// Synthesize a "tap" intent so the resolver produces a commit plan.
 		const intent = {
 			...initialIntentState(),
@@ -984,19 +1015,24 @@ export class NavPipelineOrchestrator {
 		this.#navDispatchInFlight = false;
 		this.#dispatchTarget = null;
 		navigation.cancel();
-		// Capture the in-flight raw BEFORE resetting the publication so a
+		// Capture the in-flight raw BEFORE resetting the progress so a
 		// tab-click interrupting a gesture commit continues coverProgress
 		// from the live value.
-		this.#commitStartRaw = this.#publication.progress;
+		this.#commitStartRaw = this.#progress;
 		this.#isEnterAnimation = false;
-		this.#publication = {
+		// Dispatch through the state machine so its macro state is the
+		// authority the derived publication reads.
+		const toData = getRouteData(toPathname);
+		this.#stateMachine.onIntent(intent, inputs.fromPathname, inputs.fromTag);
+		this.#stateMachine.onResolved(
 			plan,
-			progress: 0,
-			inFlight: true,
-			fromPathname: inputs.fromPathname,
+			inputs.fromPathname,
 			toPathname,
+			inputs.fromTag,
+			toData.tag,
 			direction
-		};
+		);
+		this.#progress = 0;
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
 		// The slide uses the same 2-panel geometry whether the target is
 		// the back-target or another tab root; the host renders the
@@ -1055,24 +1091,41 @@ export class NavPipelineOrchestrator {
 	resetPagerStore(): void {
 		const pager = getMobilePagerStore();
 		// No at-rest state to publish before mount (#mountInputs captures
-		// the pilot's tab data in mount()); skip so the init $effect does
-		// not publish a placeholder fractionalIndex: -1 before mount runs.
+		// the host route's tab data in mount()); skip so the init $effect
+		// does not publish a placeholder fractionalIndex: -1 before mount
+		// runs.
 		if (this.#mountInputs === null) return;
 		const inputs = this.#mountInputs;
 		const centerTab = inputs?.centerTab;
-		pager.set({
-			fractionalIndex: centerTab ?? inputs?.fromTabIndex ?? -1,
-			dragging: false,
-			// active: true matches GPL's centerTab branch (the pill follows
-			// fractionalIndex, which is centerTab at rest). For the pilot
-			// urlIndex === centerTab so this is not visually distinct, but
-			// it removes the divergence from GPL.
-			active: true,
-			backMorph: centerTab !== undefined ? null : 0,
-			targetIndex: null,
-			coverProgress: 0,
-			transitionTarget: null
-		});
+		if (centerTab !== undefined) {
+			// centerTab route (pilot / thread): the pill stays on centerTab
+			// at rest, active: true so the FAB reads fractionalIndex.
+			pager.set({
+				fractionalIndex: centerTab,
+				dragging: false,
+				active: true,
+				backMorph: null,
+				targetIndex: null,
+				coverProgress: 0,
+				transitionTarget: null
+			});
+		} else {
+			// Deep page at rest: no pill highlight (fromTabIndex is -1 for
+			// routes with no tab association), active: false so the FAB
+			// falls back to the URL-derived tab index, backMorph: 0 so the
+			// Header is in normal (hamburger) mode. Matches GPL's
+			// non-centerTab at-rest branch.
+			const fromIdx = inputs?.fromTabIndex ?? -1;
+			pager.set({
+				fractionalIndex: fromIdx,
+				dragging: false,
+				active: false,
+				backMorph: 0,
+				targetIndex: null,
+				coverProgress: 0,
+				transitionTarget: null
+			});
+		}
 	}
 
 	/** Refresh the pilot's from-pathname (and from-tag) after a same-route
@@ -1090,32 +1143,65 @@ export class NavPipelineOrchestrator {
 		};
 	}
 
-	/** Internal: refresh the publication's progress and re-publish to
+	/** Refresh the back-target after a navigation that reuses this host
+	 *  without remounting (e.g. the user navigated from one tab to a deep
+	 *  page, then to another tab, then back to the same deep page). The
+	 *  resolved back-target follows the live navigation stack so a
+	 *  back-swipe lands on the correct entry. Skipped during an in-flight
+	 *  transition so a locked plan's geometry is not corrupted. */
+	updateBackTarget(backTarget: string): void {
+		const inputs = this.#mountInputs;
+		if (inputs === null) return;
+		if (this.#pendingGesture !== null || this.#pendingTabExit !== null || this.#isEnterAnimation)
+			return;
+		const toData = getRouteData(backTarget);
+		this.#mountInputs = {
+			...inputs,
+			backTarget,
+			toTag: toData.tag,
+			toTabIndex: this.#tabIndexFor(backTarget)
+		};
+	}
+
+	/** Internal: refresh the executor-driven progress and re-publish to
 	 *  the pager store. Called from two paths, both passing a RAW drag
 	 *  fraction on the same scale: (1) the live-drag path
 	 *  (`#interpretIntent`) passes `offsetX / W` directly; (2) the
 	 *  commit path (`#onExecutorTick`) lerps from `#commitStartRaw`
 	 *  toward the target raw along the executor's eased fraction. Both
 	 *  values drive `coverProgress` / `backMorph` / `fractionalIndex`
-	 *  via `#republishToPager`. The host's `$effect` only handles the
-	 *  at-rest reset (when `publication.plan` becomes null); the
-	 *  in-flight publication is the orchestrator's responsibility. */
+	 *  via `#republishToPager`. The macro fields (plan, FROM/TO,
+	 *  direction, in-flight) stay owned by the state machine; only the
+	 *  per-frame `#progress` mutates here. The host's `$effect` only
+	 *  handles the at-rest reset (when `publication.plan` becomes null);
+	 *  the in-flight pager publication is the orchestrator's
+	 *  responsibility. */
 	#publish(rawDragFraction: number): void {
-		const current = this.#publication;
-		if (current.plan === null) return;
-		this.#publication = { ...current, progress: rawDragFraction };
+		if (this.#publication.plan === null) return;
+		this.#progress = rawDragFraction;
 		this.#republishToPager(rawDragFraction);
 	}
 
-	/** Republish the current publication to the pager store. In
-	 *  centerTab mode (pilot route), publishes `backMorph: null,
-	 *  targetIndex: null, fractionalIndex: centerTab` (constant) so
-	 *  the Header stays in back-arrow mode and the tab-bar pill stays
-	 *  highlighted at centerTab throughout the gesture, matching GPL's
-	 *  centerTab branch. `coverProgress` is always the raw slide fraction;
-	 *  the FAB layer resolves the destination's family/kind to decide
-	 *  whether the FAB scales in. `transitionTarget` carries the in-flight
-	 *  destination so the FAB layer can resolve that kind. */
+	/** Republish the current publication to the pager store. Two modes:
+	 *
+	 *  centerTab mode (pilot / thread): publishes `backMorph: null,
+	 *  targetIndex: null, fractionalIndex: centerTab` (constant) so the
+	 *  Header stays in back-arrow mode and the tab-bar pill stays
+	 *  highlighted at centerTab throughout the gesture. `coverProgress`
+	 *  is the raw slide fraction; the FAB layer resolves the
+	 *  destination's family/kind to decide whether the FAB scales in.
+	 *
+	 *  Deep-page mode (no centerTab): interpolates `fractionalIndex`
+	 *  between `fromTabIndex` (-1 for routes with no tab) and
+	 *  `toTabIndex` (the back-target's tab index), threshold-absorbed by
+	 *  `PILL_EXPANSION_THRESHOLD` so the pill stays put for the first
+	 *  part of the drag then expands toward the target. `backMorph` and
+	 *  `coverProgress` both follow the raw slide fraction so the Header
+	 *  morph and the FAB scale track the finger. Matches GPL's
+	 *  non-centerTab drag branch.
+	 *
+	 *  `transitionTarget` carries the in-flight destination so the FAB
+	 *  layer can resolve that kind. */
 	#republishToPager(rawDragFraction: number): void {
 		const pager = getMobilePagerStore();
 		const publication = this.#publication;
@@ -1126,16 +1212,31 @@ export class NavPipelineOrchestrator {
 		const inputs = this.#mountInputs;
 		const centerTab = inputs?.centerTab;
 		const coverProgress = rawDragFraction;
-		// The pilot always passes centerTab. A non-centerTab pilot
-		// (interpolating fractionalIndex between from/to tab indices) is
-		// a 5b2 concern, not reached here.
-		if (centerTab === undefined) return;
+		if (centerTab !== undefined) {
+			pager.set({
+				fractionalIndex: centerTab,
+				dragging: publication.inFlight && this.#liveDragging,
+				active: true,
+				backMorph: null,
+				targetIndex: null,
+				coverProgress,
+				transitionTarget: publication.toPathname
+			});
+			return;
+		}
+		// Deep-page mode: interpolate the pill + publish the morph.
+		const fromIdx = inputs?.fromTabIndex ?? -1;
+		const toIdx = inputs?.toTabIndex ?? -1;
+		const pillProgress =
+			toIdx >= 0
+				? Math.max(0, rawDragFraction - PILL_EXPANSION_THRESHOLD) / (1 - PILL_EXPANSION_THRESHOLD)
+				: 0;
 		pager.set({
-			fractionalIndex: centerTab,
+			fractionalIndex: toIdx >= 0 ? fromIdx + (toIdx - fromIdx) * pillProgress : fromIdx,
 			dragging: publication.inFlight && this.#liveDragging,
 			active: true,
-			backMorph: null,
-			targetIndex: null,
+			backMorph: rawDragFraction,
+			targetIndex: toIdx >= 0 ? toIdx : null,
 			coverProgress,
 			transitionTarget: publication.toPathname
 		});

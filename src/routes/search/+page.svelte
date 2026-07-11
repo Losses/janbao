@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
-	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import NavPipelineHost from '$lib/components/templates/NavPipelineHost.svelte';
 	import SearchScopePager from '$lib/components/templates/SearchScopePager.svelte';
 	import DesktopSearch from '$lib/components/templates/DesktopSearch.svelte';
 	import { formatTitle } from '$lib/utils/title';
@@ -16,7 +16,7 @@
 	const t = $derived(data.t);
 	const tSearch = $derived(t.search);
 
-	// Mobile renders the scope pager inside GesturePageLayout; desktop keeps the
+	// Mobile renders the scope pager inside NavPipelineHost; desktop keeps the
 	// pre-DV08 form/select surface. SSR defaults to desktop (isMobile false);
 	// the client flips on mount (a normal reactive update, not a hydration
 	// mismatch), mirroring the (tabs) layout.
@@ -44,9 +44,9 @@
 
 <DualColumnLayout {sidebar} {t} user={data.user}>
 	{#if isMobile}
-		<GesturePageLayout fallbackRoute="/">
+		<NavPipelineHost leftHref="/">
 			<SearchScopePager {data} />
-		</GesturePageLayout>
+		</NavPipelineHost>
 	{:else}
 		<DesktopSearch {data} />
 	{/if}

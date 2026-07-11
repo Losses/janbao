@@ -1,5 +1,5 @@
 <script lang="ts">
-	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import NavPipelineHost from '$lib/components/templates/NavPipelineHost.svelte';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
@@ -103,10 +103,10 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout fallbackRoute="/">
+	<NavPipelineHost leftHref="/">
 		<div class="space-y-4">
 			<PageTitle title={adminT['title'] || 'Admin'} />
 			<DirectoryGrid {groups} />
 		</div>
-	</GesturePageLayout>
+	</NavPipelineHost>
 </DualColumnLayout>

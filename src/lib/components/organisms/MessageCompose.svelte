@@ -9,7 +9,7 @@
 	 */
 	import { untrack } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
-	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import NavPipelineHost from '$lib/components/templates/NavPipelineHost.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import MentionChipInput from '$lib/components/organisms/MentionChipInput.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditorLazy.svelte';
@@ -116,7 +116,7 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout centerTab={2} leftHref="/messages/inbox">
+	<NavPipelineHost centerTab={2} leftHref="/messages/inbox">
 		<div class="space-y-3">
 			<h1 class="page-title border-b border-base-300 pb-4">{messageT.composeTitle}</h1>
 
@@ -195,5 +195,5 @@
 				</div>
 			</div>
 		</div>
-	</GesturePageLayout>
+	</NavPipelineHost>
 </DualColumnLayout>

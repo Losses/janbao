@@ -16,7 +16,7 @@
 		mdiCommentOutline,
 		mdiLogout
 	} from '@mdi/js';
-	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import NavPipelineHost from '$lib/components/templates/NavPipelineHost.svelte';
 	import type { PageData } from './$types';
 
 	interface PageProps {
@@ -102,7 +102,7 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout fallbackRoute="/">
+	<NavPipelineHost leftHref="/">
 		<div class="space-y-6">
 			{#if data.headerPayload}
 				<ProfileHeader
@@ -115,5 +115,5 @@
 				<DirectoryGrid {groups} />
 			{/if}
 		</div>
-	</GesturePageLayout>
+	</NavPipelineHost>
 </DualColumnLayout>

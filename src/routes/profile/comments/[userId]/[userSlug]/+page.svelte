@@ -1,5 +1,5 @@
 <script lang="ts">
-	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import NavPipelineHost from '$lib/components/templates/NavPipelineHost.svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
 	import ProfileHeader from '$lib/components/molecules/ProfileHeader.svelte';
@@ -73,7 +73,7 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout fallbackRoute="/profile">
+	<NavPipelineHost leftHref="/profile">
 		<div class="space-y-3">
 			<!-- Profile Header -->
 			<ProfileHeader
@@ -120,5 +120,5 @@
 				{/if}
 			{/if}
 		</div>
-	</GesturePageLayout>
+	</NavPipelineHost>
 </DualColumnLayout>

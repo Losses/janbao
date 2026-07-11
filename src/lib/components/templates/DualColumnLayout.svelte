@@ -10,7 +10,7 @@
 		MOBILE_TABS,
 		getCurrentTabIndex,
 		isPagerRoute,
-		isGesturePageLayoutRoute
+		isGestureRoute
 	} from '$lib/utils/route-config';
 	import type { UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
@@ -116,14 +116,14 @@
 	// Disabled wherever another gesture layer owns the horizontal drag: the
 	// MobileTabPager on pager routes, or a GesturePageLayout on every GPL route
 	// (thread, conversation, deep page, and the compose forms). Config-driven via
-	// isGesturePageLayoutRoute so adding a GPL route needs no edit here. Also
+	// isGestureRoute so adding a GPL route needs no edit here. Also
 	// disabled off-tab (swipeBaseline < 0) and on desktop. If this were enabled
 	// on a GPL route too, both detectSwipe nodes would race to setPointerCapture
 	// on the same bubbled touch, and main (higher in the DOM) would win and
 	// override the GPL's 1:1 + reveal.
 	const swipeDisabled = $derived(
 		isPagerRoute(page.url.pathname) ||
-			isGesturePageLayoutRoute(page.url.pathname) ||
+			isGestureRoute(page.url.pathname) ||
 			swipeBaseline < 0 ||
 			!isMobile
 	);

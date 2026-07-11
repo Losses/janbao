@@ -19,7 +19,7 @@
 	import { afterNavigate } from '$app/navigation';
 	import type { Snippet } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
-	import MobileTabPager from '$lib/components/templates/MobileTabPager.svelte';
+	import NavPipelineTabHost from '$lib/components/templates/NavPipelineTabHost.svelte';
 	import DiscussionsSidebar from '$lib/components/panels/DiscussionsSidebar.svelte';
 	import ActivitySidebar from '$lib/components/panels/ActivitySidebar.svelte';
 	import MessagesSidebar from '$lib/components/panels/MessagesSidebar.svelte';
@@ -98,7 +98,7 @@
 				<MessagesSidebar {t} {user} />
 			{/if}
 		{/snippet}
-		<MobileTabPager {data} {t} {user} />
+		<NavPipelineTabHost {data} {t} {user} />
 	</DualColumnLayout>
 
 	<div class="fixed inset-y-0 right-0 z-30 w-8 md:hidden" aria-hidden="true">

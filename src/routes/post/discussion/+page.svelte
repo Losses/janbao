@@ -1,6 +1,6 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
-	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import NavPipelineHost from '$lib/components/templates/NavPipelineHost.svelte';
 	import LexicalEditor from '$lib/components/organisms/LexicalEditorLazy.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import ProfileSidebar from '$lib/components/molecules/ProfileSidebar.svelte';
@@ -113,7 +113,7 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout centerTab={0} leftHref="/">
+	<NavPipelineHost centerTab={0} leftHref="/">
 		<div class="space-y-3 md:py-2">
 			<!-- Header -->
 			<div class="border-b border-base-300 pb-4">
@@ -315,5 +315,5 @@
 				</div>
 			{/if}
 		</div>
-	</GesturePageLayout>
+	</NavPipelineHost>
 </DualColumnLayout>

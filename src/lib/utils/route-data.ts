@@ -51,7 +51,7 @@ export interface RouteData {
 	 * architecture use (the mobile app has no breadcrumb, and the preview
 	 * panel is `PREVIEW_PANEL_CONFIG`, not this field). Its two consumers
 	 * are both transitional:
-	 *   - `isGesturePageLayoutRoute` reads `backParent !== undefined` to
+	 *   - `isGestureRoute` reads `backParent !== undefined` to
 	 *     mark the deep-route set; that classifier dissolves in Cycle 5
 	 *     when the state machine owns the gesture.
 	 *   - `GesturePageLayout.resolvedLeftHref` uses `backParent` for the

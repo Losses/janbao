@@ -3,7 +3,7 @@
 	import Skeleton from '$lib/components/atoms/Skeleton.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import NavPipelineHost from '$lib/components/templates/NavPipelineHost.svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import AdminSidebar from '$lib/components/molecules/AdminSidebar.svelte';
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
@@ -358,7 +358,7 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout fallbackRoute="/admin">
+	<NavPipelineHost leftHref="/admin">
 		<div class="space-y-6">
 			<!-- Header and Dropdown Selection -->
 			<div class="flex items-center justify-between border-b border-base-300 pb-4">
@@ -590,5 +590,5 @@
 				{/if}
 			</div>
 		</div>
-	</GesturePageLayout>
+	</NavPipelineHost>
 </DualColumnLayout>

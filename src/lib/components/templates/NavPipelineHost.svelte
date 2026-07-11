@@ -47,13 +47,16 @@
 	import type { PageUrlBuilder } from '$lib/types/tabs';
 
 	interface NavPipelineHostProps {
-		/** The pilot route's back-target. The orchestrator resolves a
-		 *  plan for the back-swipe to this URL. */
+		/** The route's back-target. The orchestrator resolves a plan for
+		 *  the back-swipe to this URL. */
 		readonly leftHref: string;
 		/** The tab index (0=discussions, 1=activity, 2=messages) the
-		 *  pilot's centerTab is rendered on. Drives the tab-bar pill
-		 *  interpolation published to the pager store. */
-		readonly centerTab: number;
+		 *  route's centerTab is rendered on. Drives the tab-bar pill
+		 *  interpolation published to the pager store. Undefined for
+		 *  deep pages (bookmarks, profile/*, admin/*, etc.) which have
+		 *  no tab of their own; the orchestrator falls back to the
+		 *  route's URL-derived tab index. */
+		readonly centerTab?: number;
 		/** The left preview snippet (MessagesPanel for the pilot). */
 		readonly left?: Snippet;
 		/** The conversation body. */
@@ -87,6 +90,18 @@
 		if (stack.length < 2) return false;
 		return stack[stack.length - 2].pathname === leftHref;
 	})();
+
+	// The resolved back-target: follows the live navigation stack so a
+	// back-swipe lands on the correct entry (the tab root or structural
+	// parent the user actually came from), matching GPL's resolvedLeftHref.
+	// Falls back to the static leftHref prop when the stack has no prior
+	// entry.
+	const resolvedLeftHref = $derived.by<string>(() => {
+		const bt = navStore.backTarget;
+		if (!bt) return leftHref;
+		const queryIdx = bt.indexOf('?');
+		return queryIdx >= 0 ? bt.slice(0, queryIdx) : bt;
+	});
 
 	// Constructed fresh per mount. The orchestrator publishes the in-flight
 	// pager state itself (every drag-move / commit rAF tick); the host's
@@ -132,10 +147,10 @@
 	const crossTabPanelPath = $derived.by<string | null>(() => {
 		const target = transitionTarget;
 		if (target === null) return null;
-		if (!isTabRootPath(target) || target === leftHref) return null;
+		if (!isTabRootPath(target) || target === resolvedLeftHref) return null;
 		return target;
 	});
-	const leftPanelPathname = $derived(crossTabPanelPath ?? leftHref);
+	const leftPanelPathname = $derived(crossTabPanelPath ?? resolvedLeftHref);
 	// The left panel's tab label.
 	const leftPanelTab = $derived(
 		MOBILE_TABS.find((tab) => tab.href === leftPanelPathname)?.labelKey ?? null
@@ -150,7 +165,7 @@
 	// the back-target's cached scroll does not apply.
 	const pageCache = getPageCacheStore();
 	const leftScrollTop = $derived(
-		crossTabPanelPath === null ? (pageCache.get(leftHref)?.scrollTop ?? 0) : 0
+		crossTabPanelPath === null ? (pageCache.get(resolvedLeftHref)?.scrollTop ?? 0) : 0
 	);
 	const currentScrollTop = $derived(
 		page.url.pathname ? (pageCache.get(page.url.pathname)?.scrollTop ?? 0) : 0
@@ -252,6 +267,17 @@
 		// would corrupt fromPathname; the host unmounts before it matters).
 		if (orchestratorMounted && !publicationInFlight) orchestrator.updateFromPathname(pathname);
 	});
+	// Keep the orchestrator's back-target in sync with the live navigation
+	// stack so a back-swipe lands on the correct entry (the user's actual
+	// previous tab, not the static leftHref default).
+	$effect(() => {
+		// Skip during an in-flight transition (the orchestrator's method
+		// guards against this too, but the early return avoids re-deriving
+		// the mount inputs mid-transition).
+		if (orchestratorMounted && !publicationInFlight) {
+			orchestrator.updateBackTarget(resolvedLeftHref);
+		}
+	});
 
 	// Mount the orchestrator + acquire the viewport-lock + register
 	// teardowns. Idempotent mount so a re-mount (HMR, route swap) rebinds
@@ -273,17 +299,17 @@
 			if (orchestratorMounted || !trackEl || !viewportEl) return;
 			const fromPathname = page.url.pathname;
 			const fromData = getRouteData(fromPathname);
-			const toData = getRouteData(leftHref);
+			const toData = getRouteData(resolvedLeftHref);
 			orchestrator.mount({
 				resolveElements: () => ({ pageTrack: trackEl, fab: null, header: null }),
 				viewportWidth: viewportEl.clientWidth,
 				restingTranslate: -viewportEl.clientWidth,
-				backTarget: leftHref,
+				backTarget: resolvedLeftHref,
 				fromPathname,
 				fromTag: fromData.tag,
 				toTag: toData.tag,
-				fromTabIndex: centerTab,
-				toTabIndex: getCurrentTabIndex(leftHref),
+				fromTabIndex: centerTab ?? getCurrentTabIndex(fromPathname),
+				toTabIndex: getCurrentTabIndex(resolvedLeftHref),
 				centerTab
 			});
 			setNavPipelineOrchestrator(orchestrator);
@@ -467,7 +493,9 @@
 				style={leftStyle}
 				onscroll={(e) => {
 					if (crossTabPanelPath === null && e.currentTarget.scrollTop > 0) {
-						pageCache.capture(leftHref, undefined, { scrollTop: e.currentTarget.scrollTop });
+						pageCache.capture(resolvedLeftHref, undefined, {
+							scrollTop: e.currentTarget.scrollTop
+						});
 					}
 				}}
 			>
@@ -516,7 +544,7 @@
 					{:else if left}
 						{@render left()}
 					{:else}
-						{@const PreviewPanel = getPreviewPanel(leftHref)}
+						{@const PreviewPanel = getPreviewPanel(resolvedLeftHref)}
 						{#if PreviewPanel}
 							<PreviewPanel />
 						{/if}

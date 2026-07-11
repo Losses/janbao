@@ -232,21 +232,13 @@ interface ChipFrame {
 }
 
 /**
- * Cross-tab chip-exit guard: a drawer/tab tap from /post/discussion toward a
- * different tab routes through the GesturePageLayout chip-exit path, which
- * publishes coverProgress = 0 (gated on swipeNeedsLoadingAtStart). The FAB must
- * stay hidden (scale ~0) for every frame the z-30 LoadingChip is mounted, not
- * paint above it at scale 1.
- *
- * The probe keys the chip-exit window on the `.loading-overlay` DOM (not on
- * pendingNav) so the post-preload window is sampled. The preload micro-task
- * window itself is sub-frame for a warm target and is guarded structurally by
- * the GPL gating (swipeNeedsLoadingAtStart is set alongside isPendingNavigation),
- * not by a painted frame here.
+ * Cross-tab transition guard: a drawer/tab tap from /post/discussion toward a
+ * different tab is intercepted by the orchestrator (NavPipelineHost), which
+ * publishes transitionTarget. The FAB layer forces scale 0 when the target
+ * shows no resting FAB. The FAB must stay hidden (scale ~0) for every frame
+ * of the orchestrator-driven slide, not paint above it at scale 1.
  */
-test('compose `/post/discussion` cross-tab chip-exit hides the FAB under the LoadingChip', async ({
-	page
-}) => {
+test('compose `/post/discussion` cross-tab transition keeps the FAB hidden', async ({ page }) => {
 	await page.goto('/');
 	await waitForHydration(page);
 	await page.waitForTimeout(300);
@@ -293,7 +285,7 @@ test('compose `/post/discussion` cross-tab chip-exit hides the FAB under the Loa
 	await page.evaluate((b) => {
 		(window as unknown as { __chipArmed?: boolean }).__chipArmed = b;
 	}, true);
-	// Cross-tab tap to a different tab triggers the GPL chip-exit path.
+	// Cross-tab tap to a different tab triggers the orchestrator's slide plan.
 	await openSidebarAndGoto(page, '/activity');
 	await page.waitForURL('/activity', { timeout: 5000 });
 	await page.waitForTimeout(500);
@@ -301,30 +293,25 @@ test('compose `/post/discussion` cross-tab chip-exit hides the FAB under the Loa
 		(window as unknown as { __chipArmed?: boolean }).__chipArmed = b;
 	}, false);
 
-	const overlayFrames = samples.filter((s) => s.hasOverlay && s.scale !== null) as {
+	const presentFrames = samples.filter((s) => s.scale !== null) as {
 		scale: number;
 		hasOverlay: boolean;
 	}[];
-	const overlayScales = overlayFrames.map((s) => s.scale);
-	const maxOverlayScale = overlayScales.length ? Math.max(...overlayScales) : NaN;
+	const scales = presentFrames.map((s) => s.scale);
+	const maxScale = scales.length ? Math.max(...scales) : NaN;
+	expect(presentFrames.length, 'the cross-tab transition must capture FAB frames').toBeGreaterThan(0);
 	expect(
-		overlayFrames.length,
-		'the chip-exit must render the LoadingChip for at least one captured frame'
-	).toBeGreaterThan(0);
-	expect(
-		maxOverlayScale,
-		`FAB must stay hidden (scale < 0.1) under the LoadingChip during the cross-tab chip-exit. maxOverlayScale=${Number.isNaN(maxOverlayScale) ? 'NaN' : maxOverlayScale.toFixed(2)}`
+		maxScale,
+		`compose FAB must stay hidden (scale < 0.1) during the cross-tab transition from /post/discussion. maxScale=${Number.isNaN(maxScale) ? 'NaN' : maxScale.toFixed(2)}`
 	).toBeLessThan(0.1);
 });
 
-// Overlay (deep branch) variant of the chip-exit guard. /bookmarks takes the GPL
-// deep branch (no centerTab); a cross-tab tap publishes coverProgress = 0 via the
-// deep committed publish point's swipeNeedsLoadingAtStart gate, so the overlay
-// FAB stays hidden under the chip. Covers the deep branch gating that the
-// compose (centerTab) test above does not reach.
-test('overlay `/bookmarks` cross-tab chip-exit hides the FAB under the LoadingChip', async ({
-	page
-}) => {
+// Overlay (deep branch) variant of the cross-tab FAB guard. /bookmarks runs on
+// NavPipelineHost (no LoadingChip); a cross-tab tap is intercepted by the
+// orchestrator which publishes transitionTarget, and the FAB layer forces scale
+// 0 when the target shows no resting FAB. Covers the deep-page transition
+// gating that the compose (centerTab) test above does not reach.
+test('overlay `/bookmarks` cross-tab transition keeps the FAB hidden', async ({ page }) => {
 	await page.goto('/');
 	await waitForHydration(page);
 	await page.waitForTimeout(300);
@@ -370,7 +357,7 @@ test('overlay `/bookmarks` cross-tab chip-exit hides the FAB under the LoadingCh
 	await page.evaluate((b) => {
 		(window as unknown as { __chipArmed?: boolean }).__chipArmed = b;
 	}, true);
-	// Cross-tab tap to a different tab triggers the GPL deep-branch chip-exit.
+	// Cross-tab tap to a different tab triggers the orchestrator's slide plan.
 	await openSidebarAndGoto(page, '/activity');
 	await page.waitForURL('/activity', { timeout: 5000 });
 	await page.waitForTimeout(500);
@@ -378,18 +365,15 @@ test('overlay `/bookmarks` cross-tab chip-exit hides the FAB under the LoadingCh
 		(window as unknown as { __chipArmed?: boolean }).__chipArmed = b;
 	}, false);
 
-	const overlayFrames = samples.filter((s) => s.hasOverlay && s.scale !== null) as {
+	const presentFrames = samples.filter((s) => s.scale !== null) as {
 		scale: number;
 		hasOverlay: boolean;
 	}[];
-	const overlayScales = overlayFrames.map((s) => s.scale);
-	const maxOverlayScale = overlayScales.length ? Math.max(...overlayScales) : NaN;
+	const scales = presentFrames.map((s) => s.scale);
+	const maxScale = scales.length ? Math.max(...scales) : NaN;
+	expect(presentFrames.length, 'the cross-tab transition must capture FAB frames').toBeGreaterThan(0);
 	expect(
-		overlayFrames.length,
-		'the overlay chip-exit must render the LoadingChip for at least one captured frame'
-	).toBeGreaterThan(0);
-	expect(
-		maxOverlayScale,
-		`overlay FAB must stay hidden (scale < 0.1) under the LoadingChip during the cross-tab chip-exit (deep branch). maxOverlayScale=${Number.isNaN(maxOverlayScale) ? 'NaN' : maxOverlayScale.toFixed(2)}`
+		maxScale,
+		`overlay FAB must stay hidden (scale < 0.1) during the cross-tab transition from /bookmarks. maxScale=${Number.isNaN(maxScale) ? 'NaN' : maxScale.toFixed(2)}`
 	).toBeLessThan(0.1);
 });

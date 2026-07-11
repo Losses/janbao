@@ -1,5 +1,5 @@
 <script lang="ts">
-	import GesturePageLayout from '$lib/components/templates/GesturePageLayout.svelte';
+	import NavPipelineHost from '$lib/components/templates/NavPipelineHost.svelte';
 	import { onMount } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import AdminSidebar from '$lib/components/molecules/AdminSidebar.svelte';
@@ -167,7 +167,7 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<GesturePageLayout fallbackRoute="/admin">
+	<NavPipelineHost leftHref="/admin">
 		<div class="space-y-3">
 			<div class="border-b border-base-300 pb-4">
 				<h1 class="page-title">{maintenanceT.title}</h1>
@@ -270,5 +270,5 @@
 				<OfflinePlaceholder {t} />
 			{/if}
 		</div>
-	</GesturePageLayout>
+	</NavPipelineHost>
 </DualColumnLayout>

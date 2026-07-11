@@ -4,7 +4,7 @@ import {
 	getTabBarPillTarget,
 	getCurrentTabIndex,
 	isPagerRoute,
-	isGesturePageLayoutRoute,
+	isGestureRoute,
 	backTargetListKind,
 	getPreviewPanel
 } from './route-config';
@@ -191,7 +191,7 @@ describe('isPagerRoute - positional query over MOBILE_TAB_DEFS', () => {
 	});
 });
 
-describe('isGesturePageLayoutRoute - migration-era imperative (deferred to Cycle 5)', () => {
+describe('isGestureRoute - migration-era imperative (deferred to Cycle 5)', () => {
 	// The function's answer set is preserved verbatim per the Cycle 1 spec.
 	// Masked latent bug: `/search`, `/bookmarks`, `/notifications`, and
 	// `/profile` mount a GPL but the function returns FALSE because they
@@ -201,22 +201,22 @@ describe('isGesturePageLayoutRoute - migration-era imperative (deferred to Cycle
 	// they return TRUE; the latent-bug set is the four leaf routes only.
 	// Cycle 5 dissolves the function and the bug together.
 	test('true for thread / conversation routes (Family B overlay, non-deep kind)', () => {
-		expect(isGesturePageLayoutRoute('/discussion/123')).toBe(true);
-		expect(isGesturePageLayoutRoute('/discussion/123/slug/p1')).toBe(true);
-		expect(isGesturePageLayoutRoute('/messages/123')).toBe(true);
-		expect(isGesturePageLayoutRoute('/messages/123/p2')).toBe(true);
+		expect(isGestureRoute('/discussion/123')).toBe(true);
+		expect(isGestureRoute('/discussion/123/slug/p1')).toBe(true);
+		expect(isGestureRoute('/messages/123')).toBe(true);
+		expect(isGestureRoute('/messages/123/p2')).toBe(true);
 	});
 	test('true for routes whose structural parent is declared in the registry', () => {
-		expect(isGesturePageLayoutRoute('/profile/settings')).toBe(true);
-		expect(isGesturePageLayoutRoute('/profile/55/sunny')).toBe(true);
-		expect(isGesturePageLayoutRoute('/profile/comments/55/sunny')).toBe(true);
-		expect(isGesturePageLayoutRoute('/profile/discussions/55/sunny')).toBe(true);
-		expect(isGesturePageLayoutRoute('/profile/appearance')).toBe(true);
-		expect(isGesturePageLayoutRoute('/profile/invitations')).toBe(true);
-		expect(isGesturePageLayoutRoute('/admin')).toBe(true);
-		expect(isGesturePageLayoutRoute('/admin/backups')).toBe(true);
-		expect(isGesturePageLayoutRoute('/post/discussion')).toBe(true);
-		expect(isGesturePageLayoutRoute('/messages/new')).toBe(true);
+		expect(isGestureRoute('/profile/settings')).toBe(true);
+		expect(isGestureRoute('/profile/55/sunny')).toBe(true);
+		expect(isGestureRoute('/profile/comments/55/sunny')).toBe(true);
+		expect(isGestureRoute('/profile/discussions/55/sunny')).toBe(true);
+		expect(isGestureRoute('/profile/appearance')).toBe(true);
+		expect(isGestureRoute('/profile/invitations')).toBe(true);
+		expect(isGestureRoute('/admin')).toBe(true);
+		expect(isGestureRoute('/admin/backups')).toBe(true);
+		expect(isGestureRoute('/post/discussion')).toBe(true);
+		expect(isGestureRoute('/messages/new')).toBe(true);
 	});
 	test('latent-bug leaf routes return FALSE; backParent-declaring sub-pages return TRUE', () => {
 		// `/search`, `/bookmarks`, `/notifications`, and `/profile` mount a
@@ -227,20 +227,20 @@ describe('isGesturePageLayoutRoute - migration-era imperative (deferred to Cycle
 		// (no bug for sub-pages with declared parents). The function
 		// stays imperative per the spec; the leaf-route bug is preserved
 		// verbatim and deferred to Cycle 5.
-		expect(isGesturePageLayoutRoute('/search')).toBe(false);
-		expect(isGesturePageLayoutRoute('/bookmarks')).toBe(false);
-		expect(isGesturePageLayoutRoute('/notifications')).toBe(false);
-		expect(isGesturePageLayoutRoute('/profile')).toBe(false);
-		expect(isGesturePageLayoutRoute('/admin/user-groups')).toBe(true);
+		expect(isGestureRoute('/search')).toBe(false);
+		expect(isGestureRoute('/bookmarks')).toBe(false);
+		expect(isGestureRoute('/notifications')).toBe(false);
+		expect(isGestureRoute('/profile')).toBe(false);
+		expect(isGestureRoute('/admin/user-groups')).toBe(true);
 	});
 	test('false for tab roots, tab-internal pagination, offline routes, unmatched', () => {
-		expect(isGesturePageLayoutRoute('/')).toBe(false);
-		expect(isGesturePageLayoutRoute('/activity')).toBe(false);
-		expect(isGesturePageLayoutRoute('/messages/inbox')).toBe(false);
-		expect(isGesturePageLayoutRoute('/discussions/p2')).toBe(false);
-		expect(isGesturePageLayoutRoute('/offline')).toBe(false);
-		expect(isGesturePageLayoutRoute('/offline/123')).toBe(false);
-		expect(isGesturePageLayoutRoute('/entry/signin')).toBe(false);
+		expect(isGestureRoute('/')).toBe(false);
+		expect(isGestureRoute('/activity')).toBe(false);
+		expect(isGestureRoute('/messages/inbox')).toBe(false);
+		expect(isGestureRoute('/discussions/p2')).toBe(false);
+		expect(isGestureRoute('/offline')).toBe(false);
+		expect(isGestureRoute('/offline/123')).toBe(false);
+		expect(isGestureRoute('/entry/signin')).toBe(false);
 	});
 });
 

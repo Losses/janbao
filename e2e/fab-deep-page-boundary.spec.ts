@@ -253,9 +253,10 @@ test('back-swipe: `/profile/edit` -> `/` scales the atom in following the gestur
 });
 
 // Forward nav `/` -> `/search`. /search wraps a SearchScopePager inside its
-// GesturePageLayout; the OUTER GPL track is what the sampler reads, so the atom
-// scales out across the outer enter slide regardless of the inner scope pager.
-test('forward: `/` -> `/search` scales the atom out across the outer GPL slide', async ({ page }) => {
+// NavPipelineHost; the OUTER pipeline track is what the sampler reads, so the
+// atom scales out across the outer enter slide regardless of the inner scope
+// pager.
+test('forward: `/` -> `/search` scales the atom out across the outer pipeline slide', async ({ page }) => {
 	await page.goto('/');
 	await waitForHydration(page);
 	await page.waitForTimeout(300);
