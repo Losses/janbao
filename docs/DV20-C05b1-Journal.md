@@ -2016,6 +2016,78 @@ Session 19 changed the state; R70 audits the cleaned state).
 Consecutive pass votes: **0** (B carried the MED; fixed + the 2 comment LOWs;
 R71 audits the post-fix state).
 
+- **Round 71 (architect, 2-auditor, Journal-forbidden prompt): A PWC (2 low); B
+  PWC (1 low).** Zero MED/HIGH. B's LOW: the release-gate offset used the
+  classifier's last-pointermove offset, not detectSwipe's final-release delta (a
+  narrow <2px commit-threshold divergence from GPL). Fixed: `onPointerUp` now
+  overrides `offset = x - startX`. A's LOW: `resetPagerStore` docstring omitted
+  the `mount()` call site. Fixed. A's other LOW (stale fractionalIndex at
+  landing) documented as the R68 MED's class, now mitigated by the unmount pager
+  cleanup + batched flush. Counter stays 0. Gate: check 0/0, lint EXIT=0, unit
+  424/0, e2e 92 passed. Detailed in `docs/RV20-C05b1-Audit-71.md`.
+
+Consecutive pass votes: **0** (both PWC with LOW; the offset override + docstring
+fixed; R72 audits the post-fix state).
+
+- **Round 72 (architect, 2-auditor, Journal-forbidden prompt): A PASS (4 low); B
+  PASS (3 low).** 2/2 clean - first on the Session-19 cleaned state (counter 0
+  -> 2/5). Both verified UNIFY, the unified model, the bidirectional re-grab, the
+  release gate (final-release offset), the interrupt handoff, the FAB gate, the
+  scrollChrome.show, the pager cleanup, and the forward-enter. Two comment-accuracy
+  LOWs fixed post-round: `#liveDragging` docstring (locked gesture direction, not
+  finger direction) and `#commitStartRaw` docstring (removed stale `chipProgress`).
+  The remaining LOWs are defensive code / unreachable edge timing / harmless
+  mismatches (documented). The comment fixes are behavior-neutral, so the counter
+  continues. Gate: check 0/0, lint EXIT=0, unit 424/0, e2e 92 passed. Detailed in
+  `docs/RV20-C05b1-Audit-72.md`.
+
+Consecutive pass votes: **2/5** (R72 was 2/2 clean; the comment fixes are
+behavior-neutral; R73 audits the post-fix state).
+
+- **Round 73 (architect, 2-auditor, Journal-forbidden prompt): A PWC (1 MED + 1
+  low); B PASS (4 low).** Counter resets 2/5 -> 0/5. A's MED: a stale
+  `discreteNavInFlight` (latched 280ms after the arrival family swap) enabled the
+  FAB atom's CSS transition during a pilot commit, double-easing the rAF-driven
+  FAB scale. Fixed: `transitionEnabled` now gates on `pager.transitionTarget ===
+null` (during a pilot transition the CSS transition is OFF). B's 2 comment
+  LOWs (`#dispatchTarget` "pathname" -> full URL; `#navDispatchInFlight` "goto"
+  -> goto + history.back + history.forward) fixed. A's LOW (goto.finally on
+  instance reuse) + B's LOWs (pointercancel unreachable, unmount pager reset =
+  GPL pattern) documented. Gate: check 0/0, lint EXIT=0, unit 424/0, e2e 92
+  passed. Detailed in `docs/RV20-C05b1-Audit-73.md`.
+
+Consecutive pass votes: **0** (A carried the MED; fixed + the 2 comment LOWs;
+R74 audits the post-fix state).
+
+- **Round 74 (architect, 2-auditor, Journal-forbidden prompt): A PWC (1 low); B
+  PWC (1 MED + 1 low).** B's MED: the forward-enter snapped the FAB from ~0.85 to
+  0 instead of easing over 200ms (a side-effect of the R73
+  `transitionTarget === null` gate, which killed the CSS transition when
+  `playEnterAnimation` set the target one rAF after mount). Fixed: the gate is now
+  `pilotTransitionListKind === null` (rAF-driven FAB -> CSS OFF; non-rAF FAB ->
+  CSS ON for the family-swap ease). A's LOW: `playEnterAnimation` was deferred via
+  rAF, creating a seed/plan race window; fixed by calling it synchronously in
+  onMount. B's other LOW (skeleton dead code) documented. Counter stays 0. Gate:
+  check 0/0, lint EXIT=0, unit 424/0, e2e 92 passed. Detailed in
+  `docs/RV20-C05b1-Audit-74.md`.
+
+Consecutive pass votes: **0** (both PWC; the MED + the seed-race fixed; R75
+audits the post-fix state).
+
+- **Round 75 (architect, 2-auditor, Journal-forbidden prompt): A PWC (1 comment
+  CONCERN + 1 low); B PASS (1 low).** A's CONCERN: 3 stale "deferred one rAF"
+  comments (the host's outer comment, the orchestrator's `playEnterAnimation`
+  docstring, and the guard comment) still described the old rAF-deferred call
+  after the R74 synchronous-call fix. Fixed: all 3 updated to describe the
+  synchronous call. B confirmed the `pilotTransitionListKind` gate, the
+  synchronous `playEnterAnimation`, the release gate offset, and the bidirectional
+  re-grab are all correct. Both LOWs (skeleton dead code) documented. Counter
+  stays 0. Gate: check 0/0, lint EXIT=0, unit 424/0, e2e 92 passed. Detailed in
+  `docs/RV20-C05b1-Audit-75.md`.
+
+Consecutive pass votes: **0** (A carried the comment-accuracy CONCERN; the 3
+stale comments fixed; R76 audits the post-fix state).
+
 ## Coverage bullets (round-independent)
 
 The pilot's transition correctness is verified by:

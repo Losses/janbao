@@ -349,18 +349,20 @@
 		// Forward enter animation (initial mount only): if this mount is a
 		// forward SPA nav from leftHref, seed the track at translateX(0)
 		// (left panel visible) then drive the slide to rest via the
-		// executor's rAF. Deferred to the next rAF so the viewport has a
-		// measured clientWidth. Not replayed on a resize-remount (a resize
-		// is not a forward navigation).
+		// executor's rAF. Called synchronously in onMount (the DOM is
+		// mounted so clientWidth is available). Not replayed on a
+		// resize-remount (a resize is not a forward navigation).
 		if (isMobile && shouldEnter && trackEl) {
 			trackEl.style.setProperty('transform', 'translateX(0px)');
-			requestAnimationFrame(() => {
-				const w = viewportEl?.clientWidth ?? 0;
-				if (w > 0) {
-					orchestrator.updateViewport(w, -w);
-					orchestrator.playEnterAnimation();
-				}
-			});
+			// Called synchronously in onMount: the DOM is mounted so
+			// clientWidth is available, and starting the enter plan here
+			// means executor.activePlan is non-null before any tab-click's
+			// beforeNavigate can arrive (no seed/plan race window).
+			const w = viewportEl?.clientWidth ?? 0;
+			if (w > 0) {
+				orchestrator.updateViewport(w, -w);
+				orchestrator.playEnterAnimation();
+			}
 		}
 
 		// Reset any parent element's scroll that might have been changed

@@ -254,19 +254,22 @@ export class NavPipelineOrchestrator {
 	 *  active. The afterNavigate guard and the resize guard read it to
 	 *  avoid landing the orchestrator or mutating the plan mid-enter. */
 	#isEnterAnimation = false;
-	/** True only while the live pointer is actively dragging rightward
-	 *  (micro is drag-right; a leftward drag is not a claimed gesture).
-	 *  Set false on release (committed / cancelled). Controls the pager
-	 *  store's `dragging` field: GPL publishes `dragging: dragOffset !==
-	 *  null` which is true during live drag only, NOT during the commit
-	 *  slide (dragOffset is nulled on release). Matching this aligns the
+	/** True while a rightward back-swipe gesture is in its live-drag
+	 *  phase. The classifier locks `micro='drag-right'` once the gesture
+	 *  is claimed, so a mid-gesture reversal (finger moves leftward
+	 *  within the claimed gesture) stays live-dragging; the flag clears
+	 *  on release (committed / cancelled). Controls the pager store's
+	 *  `dragging` field: GPL publishes `dragging: dragOffset !== null`
+	 *  which is true during live drag only, NOT during the commit slide
+	 *  (dragOffset is nulled on release). Matching this aligns the
 	 *  pilot's `dragging` field with GPL's. */
 	#liveDragging = false;
-	/** True when the orchestrator's own goto has fired and is
+	/** True when the orchestrator's own dispatch (`goto` /
+	 *  `history.back()` / `history.forward()`) has fired and is
 	 *  re-entering beforeNavigate. Lets the orchestrator's
 	 *  beforeNavigate handler pass it through. */
 	#navDispatchInFlight = $state(false);
-	/** The most recent dispatch's target pathname. The robust
+	/** The most recent dispatch's target URL (pathname + search). The robust
 	 *  pass-through check in `onSvelteKitBeforeNavigate`: matching
 	 *  the nav's `to` against the dispatched target catches the
 	 *  orchestrator's own `goto` / `history.back()` re-entry
@@ -278,7 +281,7 @@ export class NavPipelineOrchestrator {
 	/** The raw drag-fraction published at the moment a commit / cancel
 	 *  began. The commit-phase publication lerps from this value to the
 	 *  target (1 commit / 0 cancel) along the executor's eased fraction,
-	 *  so `coverProgress` / `chipProgress` stay continuous across the
+	 *  so `coverProgress` stays continuous across the
 	 *  drag-to-commit boundary for every transition that starts a
 	 *  commit/cancel (gesture from rest, mid-transition interrupt,
 	 *  tab-click / enter with no live drag). A sub-threshold cancel
@@ -372,10 +375,10 @@ export class NavPipelineOrchestrator {
 		};
 	}
 
-	/** Play a forward enter-slide animation (left panel → centre
-	 *  panel). Called from the host's `onMount` (deferred one rAF so
-	 *  `viewportEl.clientWidth` can be measured) when the pilot route is
-	 *  reached via a forward SPA navigation from the backTarget.
+	/** Play a forward enter-slide animation (left panel -> centre
+	 *  panel). Called synchronously from the host's `onMount` (the DOM
+	 *  is mounted so `viewportEl.clientWidth` is available) when the pilot
+	 *  route is reached via a forward SPA navigation from the backTarget.
 	 *  The track starts at `translateX(0)` (left panel visible) and
 	 *  slides to `translateX(-W)` (centre visible) over ~200ms via
 	 *  the executor's rAF. The duration matches the non-pilot routes' CSS
@@ -388,9 +391,11 @@ export class NavPipelineOrchestrator {
 		if (inputs === null || executor === null) return;
 		const w = inputs.viewportWidth;
 		if (w <= 0) return;
-		// If a gesture or tab-click started in the deferred rAF window
-		// between mount and this call, it owns the pilot now - skip the
-		// enter so the in-flight transition is not clobbered.
+		// Defensive: if a gesture or tab-click somehow reached the
+		// orchestrator between mount and this synchronous call (only
+		// reachable if a beforeNavigate fires during mount), it owns the
+		// pilot now: skip the enter so the in-flight transition is not
+		// clobbered.
 		if (this.#pendingGesture !== null || this.#pendingTabExit !== null) return;
 		const plan: TransitionPlan = {
 			pageTrack: {
@@ -533,6 +538,11 @@ export class NavPipelineOrchestrator {
 		if (reversed !== undefined) {
 			this.#intent = { ...this.#intent, reversed };
 		}
+		// Override the offset with the final-release delta. The classifier's
+		// pointerup preserves the last pointermove's offset; the commit gate
+		// must read the release position, matching GPL's `deltaX` (detectSwipe's
+		// onEnd argument).
+		this.#intent = { ...this.#intent, offset: x - this.#intent.startX };
 		this.#interpretIntent();
 	}
 
@@ -1037,9 +1047,11 @@ export class NavPipelineOrchestrator {
 	// -----------------------------------------------------------------------
 	// Reactive publication to the pager store.
 
-	/** Reset the pager store to the at-rest publication. The host calls
-	 *  this from a `$effect` when the orchestrator's plan transitions
-	 *  back to null (no transition in flight). */
+	/** Reset the pager store to the at-rest publication. Called from two
+	 *  sites: `mount()` (to publish the at-rest state with the freshly
+	 *  captured mount inputs) and the host's `$effect` when the
+	 *  orchestrator's plan transitions back to null (no transition in
+	 *  flight). */
 	resetPagerStore(): void {
 		const pager = getMobilePagerStore();
 		// No at-rest state to publish before mount (#mountInputs captures

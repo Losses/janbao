@@ -439,14 +439,24 @@
 
 	// The atom's CSS transition eases non-drag scale changes across a route
 	// swap or a GesturePageLayout exit slide. Armed by `discreteNavInFlight`
-	// (any distinct family swap, latched via $effect.pre so it lands in the same
-	// flush as the scale change) OR by `navStore.pendingNav` (a GPL exit slide
-	// sets pendingNav and publishes the logical endpoint coverProgress; the
-	// transition eases the FAB toward it across the slide). Off during a drag
-	// (the live signal drives), so there is no double-clock. A same-family tab
-	// tap sets neither flag; its easing track is driven by the Family A sampler.
+	// (any distinct family swap, latched via $effect.pre so it lands in the
+	// same flush as the scale change) OR by `navStore.pendingNav` (a GPL exit
+	// slide sets pendingNav and publishes the logical endpoint coverProgress;
+	// the transition eases the FAB toward it across the slide). Off during a
+	// drag (the live signal drives) and off when the pilot's rAF drives the
+	// FAB scale (`pilotTransitionListKind !== null`: the target has a resting
+	// FAB and coverProgress ramps the scale each frame, so a stale
+	// `discreteNavInFlight` must not re-ease it). When the target has no
+	// resting FAB (`pilotTransitionListKind === null`: the forward-enter to
+	// the conversation, a tab-click to /activity), the FAB is forced to 0 by
+	// the foregroundFraction short-circuit and the CSS transition eases the
+	// family-swap scale-out (e.g. the inbox FAB scaling 1 to 0 on the
+	// forward-enter). A same-family tab tap sets neither flag; its easing
+	// track is driven by the Family A sampler.
 	const transitionEnabled = $derived(
-		!pager.dragging && (discreteNavInFlight || navStore.pendingNav !== null)
+		!pager.dragging &&
+			pilotTransitionListKind === null &&
+			(discreteNavInFlight || navStore.pendingNav !== null)
 	);
 
 	const fabHideProgress = $derived(
