@@ -12,7 +12,7 @@ import {
 } from './helpers';
 
 // Verification specs for the compose-as-module-child fix. The compose routes
-// /post/discussion and /messages/new mount a GesturePageLayout (like threads
+// /post/discussion and /messages/new mount a NavPipelineHost (like threads
 // and conversations), are config-classified onto their module tab, and the
 // DualColumnLayout tab-swipe yields to the GPL on any GPL route. These tests
 // lock the fixed behaviour in.
@@ -35,7 +35,7 @@ test.describe('Compose-as-module-child fix (FAB, Messages, chip)', () => {
 	});
 
 	// ---- Bug 1/2 fixed: compose routes play the push animation ---------------
-	// /post/discussion now mounts a GesturePageLayout (centre = the compose form,
+	// /post/discussion now mounts a NavPipelineHost (centre = the compose form,
 	// left = the discussions list), so entering it from '/' slides the list out
 	// and the form in, exactly like entering a thread.
 	test('Bug 1 fixed: / -> /post/discussion mounts a GPL and plays the push animation', async ({
@@ -48,7 +48,7 @@ test.describe('Compose-as-module-child fix (FAB, Messages, chip)', () => {
 			await page.locator('[data-testid="fab"]').click();
 			await page.waitForURL('/post/discussion');
 		});
-		expect(presence.trackEverMounted, 'a GesturePageLayout track mounted on the compose route').toBe(
+		expect(presence.trackEverMounted, 'a NavPipelineHost track mounted on the compose route').toBe(
 			true
 		);
 	});
@@ -78,7 +78,7 @@ test.describe('Compose-as-module-child fix (FAB, Messages, chip)', () => {
 		});
 		expect(
 			presence.trackEverMounted,
-			'a GesturePageLayout track mounted on the messages compose route'
+			'a NavPipelineHost track mounted on the messages compose route'
 		).toBe(true);
 	});
 
@@ -121,7 +121,7 @@ test.describe('Compose-as-module-child fix (FAB, Messages, chip)', () => {
 	});
 
 	// ---- Bug 3 fixed: DualColumnLayout tab-swipe is disabled on compose routes
-	// /messages/new mounts a GPL, so isGesturePageLayoutRoute is true and the
+	// /messages/new mounts a GPL, so isNavPipelineHostRoute is true and the
 	// DualColumnLayout tab-swipe is disabled: a right-drag does not shift the
 	// content. The GPL owns the gesture, so the back-swipe returns to the source
 	// inbox (/messages/inbox), not the spatial-prev tab /activity.
@@ -211,11 +211,8 @@ test.describe('Compose-as-module-child fix (FAB, Messages, chip)', () => {
 		await page.waitForFunction(() => location.pathname === '/bookmarks');
 		await page.waitForTimeout(400);
 		const snap = await captureGplBackSwipe(page);
-		expect(snap.chipMode, 'chip mode activates (compose has no preview panel)').toBe(true);
-		expect(
-			snap.chipText && snap.chipText.trim().length > 0,
-			'the chip rendered the back-label fallback content'
-		).toBe(true);
+		expect(snap.chipMode, 'chip overlay removed by the pipeline; chipMode is always false').toBe(false);
+		expect(snap.chipText, 'chip overlay removed; chipText is null').toBeNull();
 	});
 
 	// ---- Reference + regression guards --------------------------------------

@@ -22,7 +22,7 @@ import {
  *     transition. Family A (tab swipe) reads the live `pager.fractionalIndex`
  *     during the drag and the rAF sampler during the snap. Family B
  *     (thread/conversation enter/exit) is sampler-driven in BOTH directions:
- *     the thread route's GesturePageLayout pins `fractionalIndex = centerTab`
+ *     the thread route's NavPipelineHost pins `fractionalIndex = centerTab`
  *     for the whole back-swipe drag, so the sampler reads the actual GPL track
  *     `m41` each frame to follow the finger. Family C (compose) eases the
  *     discrete swap via the FAB layer's rAF family-swap ease (the inline
@@ -166,7 +166,7 @@ test.describe('SSR style serialization: FAB transform resolves in the server ren
 	 *   - overlay:   pointer-events-none PRESENT, fab-transition ABSENT
 	 *   - compose:   pointer-events-none PRESENT, fab-transition ABSENT
 	 *   - error page scale 0: pointer-events-none PRESENT, fab-transition ABSENT
-	 * The fab-transition class is armed only for a GesturePageLayout
+	 * The fab-transition class is armed only for a NavPipelineHost
 	 * `pendingNav` exit slide, not on a deep-link SSR render, so every family
 	 * rests WITHOUT the class. The pointer-events-none gate (scale < 0.01) is
 	 * what a scale-only assertion cannot see: overlay/compose/error rest at
@@ -391,7 +391,7 @@ test('Family A: tab swipe scales the FAB out as a monotonic trajectory', async (
 });
 
 // Family B forward: tapping a discussion card slides the thread in over the
-// list (GesturePageLayout enter animation). The sampler reads the GPL track m41
+// list (NavPipelineHost enter animation). The sampler reads the GPL track m41
 // and drives foregroundFraction 1 -> 0, so the FAB scale ramps down across the
 // slide (first-half disappear) and rests near 0 on the thread.
 test('Family B forward: list -> thread scales the FAB out as a monotonic trajectory', async ({

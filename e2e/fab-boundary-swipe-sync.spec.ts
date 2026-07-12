@@ -34,7 +34,7 @@ test.beforeEach(async ({ context }) => {
 
 // Discussions FAB (tab 0, the first tab). swipeBack swipes rightward toward the
 // non-existent previous tab, so follow() rubber-bands. On a fresh landing
-// previousEntryPathname() is null, so backSwipeShouldPopHistory(-1) is false and
+// previousEntryPathname() is null, so backSwipeShouldPopHistory() is false and
 // swipeMove takes the follow() branch rather than the deep-preview or back-chip
 // branch.
 test('Family A boundary: FAB tracks the void-swipe rubber-band on the first tab (discussions)', async ({

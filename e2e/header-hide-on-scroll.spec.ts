@@ -8,7 +8,7 @@ import {
 } from './helpers';
 
 /**
- * Mobile Header hide-on-scroll regression coverage for GesturePageLayout routes.
+ * Mobile Header hide-on-scroll regression coverage for NavPipelineHost routes.
  *
  * The mobile thread page locks the document window (`html.fixed-viewport` makes
  * html/body `position:fixed; overflow:hidden`) and scrolls the thread INSIDE

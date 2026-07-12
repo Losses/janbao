@@ -1,7 +1,6 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import NavPipelineHost from '$lib/components/templates/NavPipelineHost.svelte';
-	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
 	import PrivateMessageWindow from '$lib/components/organisms/PrivateMessageWindow.svelte';
 	import ParticipantAdder from '$lib/components/molecules/ParticipantAdder.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
@@ -142,15 +141,6 @@
 
 <DualColumnLayout {sidebar} {user} {t}>
 	<NavPipelineHost centerTab={2} leftHref="/messages/inbox">
-		{#snippet left()}
-			<MessagesPanel
-				conversations={data.inbox.conversations}
-				currentPage={data.inbox.page}
-				totalPages={data.inbox.totalPages}
-				{t}
-				paginate={true}
-			/>
-		{/snippet}
 		<div class="space-y-3">
 			<div class="flex items-center justify-between border-b border-base-300 pb-4">
 				<h1 class="page-title truncate">{conversation.title}</h1>

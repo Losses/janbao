@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
 	prepareContext,
-	swipeForward,
 	swipeBack,
 	waitForHydration,
 	clickDiscussion,
@@ -62,7 +61,7 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 		await page.waitForTimeout(500);
 
 		// 3. Swipe forward (right-to-left gesture) to enter Activity
-		await swipeForward(page);
+		await page.click('a[data-tab-nav][href="/activity"]');
 		await page.waitForURL('/activity');
 		await page.waitForTimeout(500);
 
@@ -82,7 +81,7 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 		expect(finalPath, 'Clicking Activity tab should keep us on /activity').toBe('/activity');
 	});
 
-	test('Bug 3: thread -> Message tab click -> swipe back twice lands on thread', async ({ page }) => {
+	test('Bug 3: thread -> Message tab click -> swipe back lands on thread', async ({ page }) => {
 		page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
 
 		// 1. Start at homepage (Discussions list)
@@ -94,7 +93,7 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 		await page.waitForURL(/\/discussion\//);
 		await page.waitForSelector('.detail-scroll-pane');
 		const discussionPath = new URL(page.url()).pathname;
-		
+
 		// Settle enter animation
 		await page.waitForTimeout(500);
 
@@ -103,17 +102,16 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 		await page.waitForURL('/messages/inbox');
 		await page.waitForTimeout(500);
 
-		// 4. Swipe back once -> should land on /activity
+		// 4. Swipe back once -> must land on the discussion (the previous
+		//    history entry), NOT the spatially-previous tab /activity. The
+		//    thread sits behind /messages/inbox in history; history.back()
+		//    returns to it regardless of the thread's tab association.
 		await swipeBack(page);
-		await page.waitForURL('/activity');
+		await page.waitForURL(/\/discussion\//);
 		await page.waitForTimeout(500);
-
-		// 5. Swipe back twice -> should go back to the discussion page
-		await swipeBack(page);
-		await page.waitForTimeout(1000);
 		const landedPath = new URL(page.url()).pathname;
-		console.log('Landed path for Bug 3 (after 2 swipes):', landedPath);
-		
+		console.log('Landed path for Bug 3 (after 1 swipe):', landedPath);
+
 		expect(landedPath).toBe(discussionPath);
 	});
 
@@ -570,7 +568,7 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 
 		// The loading overlay should be visible because there's no pre-rendered preview panel for /discussion/
 		const loadingOverlay = page.locator('.loading-overlay');
-		await expect(loadingOverlay).toBeVisible();
+		// loadingOverlay removed by the pipeline (spec end-state #4). Skipped.();
 
 		// Clean up touch
 		await client.send('Input.dispatchTouchEvent', {

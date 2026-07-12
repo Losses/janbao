@@ -5,17 +5,17 @@ import { prepareContext, waitForHydration, openSidebarAndGoto, swipeBack, mintAd
  * FAB deep-page boundary regression spec.
  *
  * The FAB atom must scale continuously across the boundary between a FAB list
- * route (`/`, `/messages/inbox`) and a non-FAB GesturePageLayout route
+ * route (`/`, `/messages/inbox`) and a non-FAB NavPipelineHost route
  * (`/bookmarks`, `/profile/edit`, `/search`, ...), in both directions, following
  * the finger on back-swipe and the enter slide on forward nav. At rest on a deep
  * route the atom stays mounted at scale 0 (invisible, non-interactive).
  *
  * Mechanism (see docs/FAB-Deep-Boundary-Fix-Plan.md): the 24 non-FAB
- * GesturePageLayout routes carry `fab: { family: 'overlay', kind: 'deep' }`. The
+ * NavPipelineHost routes carry `fab: { family: 'overlay', kind: 'deep' }`. The
  * layer's `fabConfig` derivation resolves the `deep` kind from the back target
  * into a concrete list kind and returns `family: 'overlay'`, so the atom stays
  * mounted (scale 0 at rest, SSR-safe) and the existing overlay-family sampler
- * drives its scale across the boundary reading the GesturePageLayout track.
+ * drives its scale across the boundary reading the NavPipelineHost track.
  *
  * A per-frame rAF probe records BOTH the atom's presence and its resolved scale.
  * The regressions assert the trajectory SHAPE: the atom stays present through the
@@ -190,7 +190,7 @@ test('CALIBRATION: atom present at scale 1 on / and scale 0 on /bookmarks', asyn
 	expect(onBookmarks.scale, 'atom rests at scale 0 on /bookmarks').toBeCloseTo(0, 1);
 });
 
-// Forward nav `/` -> `/bookmarks`: the bookmarks GesturePageLayout plays a
+// Forward nav `/` -> `/bookmarks`: the bookmarks NavPipelineHost plays a
 // forward-enter slide-in, and the atom scales out 1 -> 0 across it.
 test('forward: `/` -> `/bookmarks` scales the atom out across the enter slide', async ({ page }) => {
 	await page.goto('/');

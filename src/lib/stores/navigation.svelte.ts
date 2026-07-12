@@ -223,8 +223,7 @@ class NavigationStore {
 	 * otherwise falls back to a spatial hop matching the previous tab or root.
 	 */
 	navigateBackward(fallbackHref: string) {
-		const targetTabIdx = this.getTabFromPath(fallbackHref);
-		if (backSwipeShouldPopHistory(targetTabIdx)) {
+		if (backSwipeShouldPopHistory()) {
 			history.back();
 		} else {
 			const hop = hopForHref(fallbackHref);

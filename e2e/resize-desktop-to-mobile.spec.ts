@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { prepareContext, waitForHydration, clickDiscussion } from './helpers';
 
 /**
- * Desktop→mobile resize regression coverage for GesturePageLayout.
+ * Desktop→mobile resize regression coverage for NavPipelineHost.
  *
  * The pager initialises `snapIndex = isEntering ? 0 : ACTIVE`. On a list→thread
  * SPA navigation `navStore.direction` is `'forward'` and the stack is

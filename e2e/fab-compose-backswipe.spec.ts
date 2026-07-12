@@ -198,7 +198,7 @@ test('compose `/post/discussion` -> `/` drag back-swipe scales the FAB in before
 });
 
 // Compose (messages): /messages/new reaches the same compose family via
-// MessageCompose.svelte's <GesturePageLayout centerTab={2} leftHref="/messages/inbox">.
+// MessageCompose.svelte's <NavPipelineHost centerTab={2} leftHref="/messages/inbox">.
 // Guards against a fix that lands the coverProgress read on the discussions
 // compose route only.
 test('compose (messages) `/messages/new` -> `/messages/inbox` drag back-swipe scales the FAB in before the swap', async ({

@@ -1,7 +1,8 @@
 # RV20-C05b2 - Audit Round 9 (architect-run, 2 independent auditors)
 
-Result: **A PASS-WITH-CONCERNS (1 CONCERN + 1 LOW); B PASS-WITH-CONCERNS (1 MED
-+ 1 LOW + 1 CONCERN).** Counter stays 0/5.
+Result: \*\*A PASS-WITH-CONCERNS (1 CONCERN + 1 LOW); B PASS-WITH-CONCERNS (1 MED
+
+- 1 LOW + 1 CONCERN).\*\* Counter stays 0/5.
 
 Both auditors independently flagged the SAME two issues (consensus) and verified
 the rest of the core pipeline clean (no CSS transition/setTimeout, FAB atom
@@ -17,7 +18,7 @@ comment precision + a latent-state field from R8's fix.
   (`startProgress=0`). For a mid-commit re-grab the rate scales by
   `(1 - startProgress)` so a full drag completes the slide to TO. FIX: rewrote
   the comment to describe the window mapping accurately (1:1 from rest; rate
-  scales for a re-grab so the full span completes). The formula is unchanged —
+  scales for a re-grab so the full span completes). The formula is unchanged;
   it is consistent with the non-bidirectional (thread) host's window mapping
   (both map onto `[startProgress, 1]`; the bidirectional just omits the threshold
   dead-zone), and it ensures a re-grab's full drag reaches TO rather than
@@ -32,7 +33,7 @@ comment precision + a latent-state field from R8's fix.
 
 ## Carried
 
-- **B #3** — mid-commit re-grab on the tab host has no e2e (Known #7). The
+- **B #3**: mid-commit re-grab on the tab host has no e2e (Known #7). The
   window-mapping rate (B #1) is its primary visible symptom; the geometry is
   unit-tested.
 

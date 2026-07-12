@@ -1402,3 +1402,52 @@ $ bun test src/lib/utils src/lib/stores    418 pass / 0 fail
 ```
 
 R10 audits the post-fix state.
+
+## Session 18: R10 A#1 HIGH fix (Header morph commit/cancel regression) + carried
+
+R10 returned A FAIL (1 HIGH + 1 MED-HIGH + 1 MED + 1 LOW) + B PWC (1 LOW). A
+found a HIGH regression B missed (B did not read the Header organism). Detailed
+in `docs/RV20-C05b2-Audit-10.md`.
+
+### A #1 (HIGH): Header morph commit/cancel broken (5b2 regression)
+
+The Header's release-settle state machine read `navStore.pendingNav !== null` for
+commit/cancel, but the pipeline orchestrator never calls `setPendingNav`
+(dispatches `goto` directly). Every pipeline gesture release was classified as
+cancel → morph retreated during commits → snapped on land. FIX: added `committed`
+to the pager store (`setCommitted`); orchestrator publishes it at release
+(commit→true, cancel→false) + clears in `#landAtRest`. Header Effect B reads
+`pager.committed === true`; Effect D ends settle when `pager.committed === null`.
+
+### Carried (next round)
+
+- A #2 (MED-HIGH): Header CSS transitions + setTimeout (§5 deviation,
+  pre-existing). Needs Known condition.
+- A #3 (MED): `playEnterAnimation` comment (coverProgress mechanism). Comment fix.
+- A #4 (LOW): Header reduced-motion not gated. Needs Known documentation.
+- B #1 (LOW): NavPipelineHost `left` prop dead code.
+
+### Gate outputs (real, post-fix)
+
+```
+$ bun run check                       0 errors / 0 warnings (1461 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    418 pass / 0 fail
+$ bun run test:e2e -- messages-back-swipe tab-click-transition tab-exit-preview fab tab-host-swipe tab-swipe-preview-height    93 passed, 1 flake (passes alone)
+```
+
+R11 audits the post-fix state.
+
+## Session 19: R11 triage (minimal-prompt round)
+
+R11 used the MINIMAL prompt (no scope framing). A PWC (1 MED + 1 CONCERN) + B
+PWC (3 LOW). Detailed in `docs/RV20-C05b2-Audit-11.md`.
+
+Key finding: A #1 (MED) `#dispatchNav` hardcodes `replaceState: false`, losing
+the original nav's replaceState intent on intercept+re-dispatch. SvelteKit's
+beforeNavigate doesn't expose goto's replaceState, so the fix requires a
+side-channel signal. Carried to the next fix round alongside R10's A #2/#3/#4
+
+- B #1 + R11's B C1/C2/C3.
+
+R12 audits the post-fix state.

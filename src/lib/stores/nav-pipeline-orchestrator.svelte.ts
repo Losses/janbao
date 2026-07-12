@@ -453,12 +453,10 @@ export class NavPipelineOrchestrator {
 				distance: w,
 				restingTranslate: 0
 			},
-			// The plan carries no `fab` / `header` fns: the host passes
-			// `fab: null, header: null` in resolveElements and the FAB /
-			// Header layers read the pager store. During the enter,
-			// #isEnterAnimation forces coverProgress = 0 (the FAB layer's
-			// Family B coverProgress driver) and the centerTab branch's backMorph =
-			// null drives the Header.
+			// During the enter, coverProgress ramps 0 to 1 (the executor's
+			// commit rAF publishes it); the FAB layer's foregroundFraction
+			// gate hides the FAB (the destination is a non-list family). The
+			// centerTab branch's backMorph = null drives the Header.
 			progressDirection: 0,
 			commitPhysics: this.#driver?.prefersReducedMotion() ? 'snap' : 'momentum'
 		};
@@ -555,7 +553,8 @@ export class NavPipelineOrchestrator {
 			backMorph: null,
 			targetIndex: null,
 			coverProgress: 0,
-			transitionTarget: null
+			transitionTarget: null,
+			committed: null
 		});
 	}
 
@@ -706,6 +705,7 @@ export class NavPipelineOrchestrator {
 					if (executor.state.progress !== 0) {
 						this.#commitStartRaw = this.#publication.progress;
 						executor.onCancel(intent.releaseVelocity);
+						getMobilePagerStore().setCommitted(false);
 						this.#stateMachine.onCancel();
 					} else {
 						this.#landAtRest();
@@ -732,10 +732,12 @@ export class NavPipelineOrchestrator {
 					if (shouldCommit) {
 						this.#commitStartRaw = this.#publication.progress;
 						executor.onCommit(intent.releaseVelocity);
+						getMobilePagerStore().setCommitted(true);
 						this.#stateMachine.onCommit();
 					} else if (executor.state.progress > 0) {
 						this.#commitStartRaw = this.#publication.progress;
 						executor.onCancel(intent.releaseVelocity);
+						getMobilePagerStore().setCommitted(false);
 						this.#stateMachine.onCancel();
 					} else {
 						this.#landAtRest();
@@ -922,9 +924,11 @@ export class NavPipelineOrchestrator {
 	 *  the tab host unmounts. TODO(5b3): overlay the deep page's cached
 	 *  snapshot in the left panel during the slide so the visual matches
 	 *  the landing page. Otherwise falls back to the spatially-previous
-	 *  tab root. */
+	 *  tab root. The deep page's tab association is not consulted: the
+	 *  user came from that page, so `history.back()` returns to it
+	 *  regardless of which tab it belongs to. */
 	#backwardTabTarget(inputs: PipelineMountInputs): string | null {
-		if (backSwipeShouldPopHistory(inputs.fromTabIndex - 1)) {
+		if (backSwipeShouldPopHistory()) {
 			const deepTarget = previousEntryPathname();
 			if (deepTarget !== null) return deepTarget;
 		}
@@ -1073,7 +1077,8 @@ export class NavPipelineOrchestrator {
 		} else if (hop === 'forward') {
 			history.forward();
 		} else {
-			void goto(target, { replaceState: false }).finally(() => {
+			void goto(target, { replaceState: getMobilePagerStore().replaceStateIntent }).finally(() => {
+				getMobilePagerStore().setReplaceStateIntent(false);
 				this.#navDispatchInFlight = false;
 				this.#dispatchTarget = null;
 			});
@@ -1091,6 +1096,7 @@ export class NavPipelineOrchestrator {
 		this.#liveDragging = false;
 		this.#gestureToTabIndex = null;
 		this.#executor?.onLand();
+		getMobilePagerStore().setCommitted(null);
 		if (inputs !== null) {
 			this.#stateMachine.onLand(inputs.fromTag);
 		}
@@ -1316,7 +1322,8 @@ export class NavPipelineOrchestrator {
 			backMorph: 0,
 			targetIndex: null,
 			coverProgress: 0,
-			transitionTarget: null
+			transitionTarget: null,
+			committed: null
 		});
 	}
 
@@ -1332,6 +1339,7 @@ export class NavPipelineOrchestrator {
 	updateFromPathname(pathname: string): void {
 		const inputs = this.#mountInputs;
 		if (inputs === null) return;
+		if (this.#publication.inFlight) return;
 		const newTabIdx = this.#tabIndexFor(pathname);
 		this.#mountInputs = {
 			...inputs,

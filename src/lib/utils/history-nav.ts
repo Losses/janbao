@@ -85,25 +85,25 @@ export function previousEntryPathname(): string | null {
  * (`history.back()`) instead of switching to the spatially-previous tab?
  *
  * True iff the entry behind the current tab is a DEEP page - i.e. the user
- * reached this tab by forward-swiping from a thread / profile / bookmarks /
+ * reached this tab by forward-navigating from a thread / profile / bookmarks /
  * search / ... (any non-tab-root route). In that case "back" must return to that
- * originating page; switching to the previous tab root would strand it (the
- * thread sits between the tab and its root in history, and hopForHref only
- * inspects the adjacent entry, so the tab switch would push the root and skip
- * the thread). When the previous entry IS a tab root (normal tab <-> tab use),
- * the spatial switch is correct and this returns false.
+ * originating page; switching to the previous tab root would strand it (the deep
+ * page sits between the current tab and the previous tab root in history, and a
+ * spatial tab switch would push the root on top of it, leaving the deep page
+ * buried). When the previous entry IS a tab root (normal tab <-> tab use), the
+ * spatial switch is correct and this returns false.
  *
  * The discriminator is `isTabRootPath` (config-driven), so this is agnostic to
- * which deep route is involved - no route is hardcoded.
+ * WHICH deep route is involved and WHICH tab it is associated with. The deep
+ * page's tab association is irrelevant: the user arrived at this tab FROM that
+ * page, so `history.back()` returns to it regardless of whether it belongs to
+ * the spatially-previous tab, the current tab, or no tab at all (a global route
+ * like /bookmarks). Only the entry's deep-page-vs-tab-root nature matters.
  */
-export function backSwipeShouldPopHistory(targetTabIdx: number): boolean {
+export function backSwipeShouldPopHistory(): boolean {
 	const prev = previousEntryPathname();
 	if (prev === null) return false;
-	if (isTabRootPath(prev)) return false;
-
-	const idx = MOBILE_TAB_DEFS.findIndex((tab) => tab.isActive(prev));
-	const prevTabIdx = idx >= 0 ? idx : 0;
-	return prevTabIdx === targetTabIdx;
+	return !isTabRootPath(prev);
 }
 
 /**

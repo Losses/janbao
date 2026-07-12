@@ -201,7 +201,7 @@
 		return fabConfig?.kind ?? retainedConfig?.kind ?? null;
 	});
 
-	// The destination's resting FAB kind during a pilot detail-page transition,
+	// The destination's resting FAB kind during a pipeline transition,
 	// or null when no transition is in flight or the destination shows no FAB at
 	// rest (the conversation, which is the overlay family; /activity, whose kind
 	// is 'dynamic' and resolves to no resting FAB). Used so the correct atom
@@ -221,7 +221,7 @@
 		const cfg = fabConfig ?? retainedConfig;
 		if (cfg === null) return null;
 		let kind = cfg.family === 'list' ? effectiveKind : cfg.kind;
-		// A pilot detail-page transition resolves the destination's FAB kind so
+		// A pipeline transition resolves the destination's FAB kind so
 		// the correct atom scales in with coverProgress. On the tab pager the
 		// published track fractional index is live; effectiveKind handles the
 		// kind switch at the visual midpoint, so the override is gated off.

@@ -201,12 +201,12 @@ test('isTabRootPath is false for every kind of deep page (no /discussion hardcod
 // entry behind the tab is a deep page, and switch tabs otherwise.
 test('backSwipeShouldPopHistory is false when the Navigation API is absent', () => {
 	clearNav();
-	expect(backSwipeShouldPopHistory(0)).toBe(false);
+	expect(backSwipeShouldPopHistory()).toBe(false);
 });
 
 test('backSwipeShouldPopHistory is false at the first entry (nothing behind)', () => {
 	setNav([{ url: '/activity', index: 0 }], { url: '/activity', index: 0 });
-	expect(backSwipeShouldPopHistory(0)).toBe(false);
+	expect(backSwipeShouldPopHistory()).toBe(false);
 });
 
 test('backSwipeShouldPopHistory is false when the previous entry is a tab root (normal tab<->tab)', () => {
@@ -218,7 +218,7 @@ test('backSwipeShouldPopHistory is false when the previous entry is a tab root (
 		],
 		{ url: '/activity', index: 1 }
 	);
-	expect(backSwipeShouldPopHistory(0)).toBe(false);
+	expect(backSwipeShouldPopHistory()).toBe(false);
 });
 
 test('backSwipeShouldPopHistory is false when the previous entry is a different tab root', () => {
@@ -230,7 +230,7 @@ test('backSwipeShouldPopHistory is false when the previous entry is a different 
 		],
 		{ url: '/messages/inbox', index: 1 }
 	);
-	expect(backSwipeShouldPopHistory(1)).toBe(false);
+	expect(backSwipeShouldPopHistory()).toBe(false);
 });
 
 test('backSwipeShouldPopHistory is TRUE when the previous entry is a deep page (the bug case)', () => {
@@ -244,13 +244,14 @@ test('backSwipeShouldPopHistory is TRUE when the previous entry is a deep page (
 		],
 		{ url: '/activity', index: 2 }
 	);
-	expect(backSwipeShouldPopHistory(0)).toBe(true);
+	expect(backSwipeShouldPopHistory()).toBe(true);
 });
 
-test('backSwipeShouldPopHistory is false when previous entry belongs to a different tab than the target', () => {
-	// On /messages/inbox (Tab 2), target is /activity (Tab 1).
-	// Previous entry is a thread (belongs to Tab 0 Discussions).
-	// Target is Tab 1, previous is Tab 0 -> do not pop.
+test('backSwipeShouldPopHistory is TRUE when the deep page belongs to a different tab than the spatial previous', () => {
+	// On /messages/inbox (Tab 2), the spatial previous tab is /activity (Tab 1).
+	// The history entry behind the tab is a thread (belongs to Tab 0 Discussions).
+	// The user came from the thread, so back-swipe must pop history to it -
+	// NOT switch to /activity. The deep page's tab association is irrelevant.
 	setNav(
 		[
 			{ url: '/', index: 0 },
@@ -259,7 +260,7 @@ test('backSwipeShouldPopHistory is false when previous entry belongs to a differ
 		],
 		{ url: '/messages/inbox', index: 2 }
 	);
-	expect(backSwipeShouldPopHistory(1)).toBe(false);
+	expect(backSwipeShouldPopHistory()).toBe(true);
 });
 
 test('backSwipeShouldPopHistory is TRUE for any deep page behind the tab (generality)', () => {
@@ -282,6 +283,6 @@ test('backSwipeShouldPopHistory is TRUE for any deep page behind the tab (genera
 			],
 			{ url: '/activity', index: 2 }
 		);
-		expect(backSwipeShouldPopHistory(0), `prev=${prev} should pop history`).toBe(true);
+		expect(backSwipeShouldPopHistory(), `prev=${prev} should pop history`).toBe(true);
 	}
 });

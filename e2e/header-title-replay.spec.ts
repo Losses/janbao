@@ -20,7 +20,7 @@ import { prepareContext, waitForHydration, openSidebarAndGoto } from './helpers'
  *                   These only update when the `$effect` over `title` fires.
  *
  * On a back-swipe COMMIT, onSwipeEnd clears `dragOffset` synchronously, so the
- * GesturePageLayout pager effect flips `dragging` false + `backMorph` 1 BEFORE
+ * NavPipelineHost pager effect flips `dragging` false + `backMorph` 1 BEFORE
  * the SvelteKit navigation has landed. `title` is still the source page's title,
  * so the title `$effect` has NOT fired → `titleTransitionActive` is false → the
  * Header drops from the DRAG branch (two titles, mid-crossfade) straight to the

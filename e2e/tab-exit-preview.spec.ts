@@ -12,11 +12,11 @@ import {
  * Symptom (reported): on mobile, open the homepage, tap the messages icon,
  * open a conversation, then tap the homepage tab. During the page-transition
  * animation the PREVIEW is the messages-inbox list, not the homepage you
- * tapped. Root cause: GesturePageLayout's exit animation slides the track to
+ * tapped. Root cause: NavPipelineHost's exit animation slides the track to
  * reveal a neighbouring panel, but those panels are FIXED by the detail page:
  *   discussion -> left = DiscussionsPanel, right = ActivityPanel
  *   messages   -> left = MessagesPanel only (no right panel)
- * beforeNavigate (GesturePageLayout.svelte) cancels the tab nav, snaps the
+ * beforeNavigate (NavPipelineHost.svelte) cancels the tab nav, snaps the
  * track toward index 0 or panelCount-1, and navigates on transitionend. When
  * the tapped tab is NOT one of the pre-rendered panels, the slide reveals the
  * WRONG list for ~200ms before the real destination loads.

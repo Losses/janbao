@@ -164,6 +164,45 @@ known + planned, not as undiscovered divergences from the bar.
     is outside 5b2's "no CSS transitions in the gesture layer" binding (which is
     about the top-level transition mechanism). It is not in 5b2's migration set.
 
+12. **Header morph/title animation uses CSS transitions + setTimeout (pre-existing,
+    not a 5b2 regression).** The Header organism (a consumer of the gesture layer)
+    drives its morph (BurgerArrowIcon back-arrow prominence) + title crossfade via
+    `transition: transform 200ms ease-out` + a `setTimeout` settle backstop during
+    gesture release settles. These are the mechanisms §5 prohibits in the gesture
+    layer; they predate 5b2 (the Header was never on GesturePageLayout's gesture
+    path; it read `navStore.pendingNav` for its settle classification, which 5b2
+    replaced with `pager.committed`). The Header's `runSettleDriver` has no
+    `prefers-reduced-motion` gate (unlike the executor + the FAB family-swap ease).
+    Fully merging the Header's morph/title animation into the executor's rAF loop
+    (and adding the reduced-motion gate) is a DV20-wide goal beyond 5b2's scope.
+
+13. **Skeleton `{:else}` branches remain unreachable (spec-code drift on
+    end-state #3 / 5b1-skipped item #3).** The spec says "skeleton branches
+    become reachable" but the root layout's `Promise.allSettled` returns truthy
+    `EMPTY_*` objects on rejection (never null), so `page.data.*` is always truthy
+    and the real panel (or the truthy empty fallback) renders. The skeleton
+    components (`ActivitySkeleton`, `DiscussionsSkeleton`, `MessagesSkeleton`)
+    exist as defensive fallbacks for a future non-eager-loaded target. They are
+    currently unreachable; the spec's "become reachable" claim is qualified to
+    "when a non-eager-loaded target is added."
+
+14. **`backParent` consumer dissolution timeline (spec-code drift on 5b1-skipped
+    item #5).** The spec says "at end of 5b2, both consumers are gone; 5b3 removes
+    the field," but `isPipelineSwipeDisabledRoute` still reads
+    `backParent !== undefined` and is not scheduled to dissolve until 5b3 alongside
+    DualColumnLayout's `detectSwipe`. The field therefore cannot be removed until
+    both the classifier + DualColumnLayout are addressed in 5b3.
+
+15. **`#dispatchNav` hardcodes `replaceState: false` (history pollution on
+    programmatic goto with replaceState).** When a caller (e.g. Header.onBack)
+    fires `goto(target, { replaceState: true })`, the orchestrator intercepts the
+    beforeNavigate, plays its slide, then re-dispatches with `replaceState: false`.
+    SvelteKit's beforeNavigate does not expose the original goto's replaceState
+    option, so the orchestrator cannot recover it. The result: the left page stays
+    in history (OS-back lands on it). **Fix path:** a side-channel signal (the
+    caller sets a replaceState flag on the pager store before goto; the orchestrator
+    reads it in `#dispatchNav`). TODO.
+
 ## Out of scope (5b3)
 
 - Deleting `GesturePageLayout` / `MobileTabPager` / `swipe.ts` / `DualColumnLayout`.

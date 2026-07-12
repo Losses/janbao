@@ -214,7 +214,7 @@ export function collectConsole(page: Page): string[] {
 }
 
 // --- Thread enter-animation capture ----------------------------------------
-// GesturePageLayout plays a list→thread slide-in when a discussion is reached
+// NavPipelineHost plays a list→thread slide-in when a discussion is reached
 // from `/` (shouldAnimateEnter): the track starts at translateX(0%) and animates
 // to translateX(-33.3%) over ~200ms. We sample the track's computed translateX
 // to prove the animation ran - the only behavioural signal that the transition
@@ -241,7 +241,7 @@ export interface EnterAnimCapture {
 
 /**
  * Install a rAF sampler, trigger a navigation, then report whether the
- * GesturePageLayout track translated (i.e. the slide-in played). The sampler
+ * NavPipelineHost track translated (i.e. the slide-in played). The sampler
  * polls for `.detail-scroll-pane` (the thread's centre panel, present only on a
  * thread page) and records its parent track's translateX each frame for 700ms.
  * `animated` is true iff the track moved >100px - unambiguous, since the only
@@ -412,7 +412,7 @@ export async function captureHeaderOnThreadScroll(page: Page): Promise<HeaderScr
 }
 
 // --- Cross-tab exit preview capture ----------------------------------------
-// Tapping a tab from a GesturePageLayout deep page (thread / messages
+// Tapping a tab from a NavPipelineHost deep page (thread / messages
 // conversation) cancels the SvelteKit nav in beforeNavigate, slides the track
 // to reveal a neighbouring panel as the exit "preview", then navigates on
 // transitionend. The detail page FIXES which lists those panels hold:
@@ -452,13 +452,13 @@ interface ExitPreviewWindow extends Window {
 }
 
 /**
- * Install a rAF sampler over the GesturePageLayout track, trigger a tab-tap
+ * Install a rAF sampler over the NavPipelineHost track, trigger a tab-tap
  * navigation, then report which tab list the slide revealed. The sampler polls
  * `.detail-scroll-pane` (the thread/conversation centre panel); its parent track
  * holds the left/right preview `<section>`s side-by-side with the centre. Each
  * frame it measures every non-centre section's horizontal intersection with the
  * viewport and records the `data-tab-panel` attribute of any covering >40% of
- * the width. The attribute is set by GesturePageLayout to the rendered panel's
+ * the width. The attribute is set by NavPipelineHost to the rendered panel's
  * tab labelKey (or null when the panel is not a tab list), so detection does not
  * depend on DOM content - content markers collide across pages and cannot
  * enumerate non-tab sidebars.
@@ -507,7 +507,7 @@ export async function captureExitPreview(
 				const inter = Math.max(0, Math.min(rect.right, vw) - Math.max(rect.left, 0));
 				const cov = vw > 0 ? inter / vw : 0;
 				if (cov <= 0.4) continue;
-				// Identity: `data-tab-panel` (MobileTabPager + GesturePageLayout
+				// Identity: `data-tab-panel` (MobileTabPager + NavPipelineHost
 				// preview sections).
 				const key = s.getAttribute('data-tab-panel') as PreviewTab;
 				if (!state.seen.includes(key)) state.seen.push(key);
@@ -557,7 +557,7 @@ export async function captureExitPreview(
 // The FAB atom binds `transform: scale(s) translateY(y)`; since DV20 5b2 the
 // discrete family swap is eased by the FAB layer's rAF (the inline scale
 // changes each frame), and `.fab-transition` (transform 200ms ease-out) is
-// armed only for a GesturePageLayout `pendingNav` exit slide. So a discrete
+// armed only for a NavPipelineHost `pendingNav` exit slide. So a discrete
 // swap that eases the scale shows many distinct descending frames with the
 // class ABSENT (the rAF drives the inline value); a snap shows a one-frame
 // jump. `animated` (scale delta > 0.1) is the behavioural signal;
@@ -669,7 +669,7 @@ export async function capturePagerSwitch(
 			let best: string | null = null;
 			let bestCov = 0;
 			for (const s of Array.from(
-				document.querySelectorAll('.mobile-tab-pager-viewport section')
+				document.querySelectorAll('[data-testid="nav-pipeline-tab-track"] section')
 			)) {
 				const r = (s as HTMLElement).getBoundingClientRect();
 				const cov = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
@@ -681,7 +681,7 @@ export async function capturePagerSwitch(
 			return best;
 		};
 		const tick = (): void => {
-			const track = document.querySelector('.mobile-tab-pager-viewport > div') as
+			const track = document.querySelector('[data-testid="nav-pipeline-tab-track"]') as
 				| HTMLElement
 				| null;
 			if (track) {
@@ -729,9 +729,9 @@ export async function capturePagerSwitch(
 	});
 }
 
-// --- GesturePageLayout track-presence capture ------------------------------
+// --- NavPipelineHost track-presence capture ------------------------------
 // Polls `.detail-scroll-pane` (the GPL centre panel, present only when a
-// GesturePageLayout is mounted) each frame for ~700ms across `trigger`. The
+// NavPipelineHost is mounted) each frame for ~700ms across `trigger`. The
 // push animation (shouldAnimateEnter) needs that track to slide, so a route
 // that never mounts a GPL (the compose routes /post/discussion, /messages/new,
 // which render DualColumnLayout only) records zero track frames = no push
@@ -791,7 +791,7 @@ export async function captureGplTrackPresence(
 
 // --- GPL back-swipe chip-mode capture ---------------------------------------
 // Drives a partial (held) rightward back-swipe via CDP touch from `startX` to
-// `endX`, holds one frame, snapshots whether GesturePageLayout entered chip
+// `endX`, holds one frame, snapshots whether NavPipelineHost entered chip
 // mode (the `.loading-overlay` with its tanh-clamped width + base-200 bg
 // stands in for an un-previewable back target), then releases. A real preview
 // renders a sibling `<section data-tab-panel>`; chip mode renders the overlay

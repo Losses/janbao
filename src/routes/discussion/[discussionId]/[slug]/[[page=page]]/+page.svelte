@@ -1,8 +1,6 @@
 <script lang="ts">
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import NavPipelineHost from '$lib/components/templates/NavPipelineHost.svelte';
-	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
-	import type { PageUrlBuilder } from '$lib/types/tabs';
 	import type { VoidHandler } from '$lib/types/handlers';
 	import ActiveUsersWall from '$lib/components/molecules/ActiveUsersWall.svelte';
 	import CategoryListWidget from '$lib/components/molecules/CategoryListWidget.svelte';
@@ -27,7 +25,6 @@
 	import { writeThread, passthroughEnabledFor } from '$lib/offline/passthrough';
 	import type { ThreadPassthroughInput } from '$lib/offline/passthrough';
 	import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
-	import type { DiscussionsListCacheData } from '$lib/types/page-cache-shapes';
 	import { isTabRootPath } from '$lib/utils/history-nav';
 	import type { PageData } from './$types';
 
@@ -190,8 +187,6 @@
 			console.error('[offline passthrough] writeThread failed', err);
 		});
 	}
-
-	const buildPageUrl: PageUrlBuilder = (p) => (p === 1 ? '/' : `/discussions/p${p}`);
 
 	const t = $derived(data.t);
 	const user = $derived(data.user);
@@ -526,18 +521,6 @@
 	</div>
 {/snippet}
 
-{#snippet leftSnippet()}
-	{@const cached = pageCache.get('/')?.data as DiscussionsListCacheData | undefined}
-	<DiscussionsPanel
-		discussions={cached?.discussions ?? data.home?.discussions}
-		currentPage={cached?.page ?? data.home?.page ?? 1}
-		totalPages={cached?.totalPages ?? data.home?.totalPages ?? 1}
-		{t}
-		{buildPageUrl}
-		paginate={true}
-	/>
-{/snippet}
-
 {#snippet threadContentSnippet()}
 	<div class="space-y-3">
 		<!-- Discussion Header -->
@@ -861,7 +844,7 @@
 {/snippet}
 
 <DualColumnLayout {sidebar} {user} {t}>
-	<NavPipelineHost centerTab={0} leftHref="/" left={leftSnippet}>
+	<NavPipelineHost centerTab={0} leftHref="/">
 		{@render threadContentSnippet()}
 	</NavPipelineHost>
 </DualColumnLayout>

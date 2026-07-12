@@ -13,13 +13,13 @@ import { prepareContext, waitForHydration } from './helpers';
  * drag or a root↔search tap scrub, where `morph` is driven 1:1 by the finger or
  * the scrubber. It does not suppress during an in-flight navigation, so the
  * back-to-tab landing descent animates the same way as the forward direction.
- * This is branch-agnostic: both GesturePageLayout exit branches (same-panel slide
+ * This is branch-agnostic: both NavPipelineHost exit branches (same-panel slide
  * and cross-tab chip) call setPendingNav → executePendingNav → navInFlight at the
  * landing, and the tabs layer animates there in both.
  *
  * The forward direction (tab route → deep page, e.g. /messages/inbox →
  * /bookmarks) animates the same way: the tab route does not mount
- * GesturePageLayout, navInFlight is never set, and the Effect-C settle drives
+ * NavPipelineHost, navInFlight is never set, and the Effect-C settle drives
  * morph with the transition enabled.
  *
  * Tests:
@@ -241,10 +241,10 @@ test('CALIBRATION: forward and back descents both keep their transition (documen
 	// witness that the gate is independent of the navInFlight signal.
 	expect((fwdLanding as LandingFlush).slideNone, 'forward landing keeps the transition').toBe(false);
 	expect((backLanding as LandingFlush).slideNone, 'back landing keeps the transition').toBe(false);
-	expect((backLanding as LandingFlush).navInFlight, 'back landing sets navInFlight').toBe(true);
+	expect((backLanding as LandingFlush).navInFlight, 'pipeline does not set navInFlight (replaced by pager.committed)').toBe(false);
 });
 
-test(`DEFECT: back descent from a GesturePageLayout deep page to a tab route must not suppress the transition at landing (${BACK_CYCLES} cycles)`, async ({
+test(`DEFECT: back descent from a NavPipelineHost deep page to a tab route must not suppress the transition at landing (${BACK_CYCLES} cycles)`, async ({
 	page
 }) => {
 	await page.goto('/messages/inbox');

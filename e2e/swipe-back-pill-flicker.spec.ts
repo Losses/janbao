@@ -7,12 +7,12 @@ import { prepareContext, swipeBack, openSidebarAndGoto, waitForHydration } from 
  * Sibling of backtarget.spec.ts "Bug3" (which proves the pill EXPANDS gradually
  * DURING the drag). This file covers the moment Bug3 stops sampling: AFTER the
  * finger lifts. On a back-swipe from a deep page (/bookmarks - a page with no
- * tab of its own, GesturePageLayout fallbackRoute="/") back to a tab root (/),
+ * tab of its own, NavPipelineHost fallbackRoute="/") back to a tab root (/),
  * the top Discussions pill must HOLD active+expanded through the handoff to the
  * homepage pager. Pre-fix it collapsed and lost its highlight, then re-expanded
  * - a visible flicker.
  *
- * Root cause: GesturePageLayout's pager-driving $effect has a "true rest" branch
+ * Root cause: NavPipelineHost's pager-driving $effect has a "true rest" branch
  * that resets the pager to `fractionalIndex = fromIdx` (-1 on a deep page) +
  * `active:false`. That branch fires in the window `onTrackTransitionEnd` opens:
  * it clears `pendingNav` and dispatches history.back()/goto(), but the route

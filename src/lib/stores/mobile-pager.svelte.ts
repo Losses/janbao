@@ -57,10 +57,18 @@ interface PagerUpdate {
 	 * `trackTranslateX(plan, executor.progress)`; null on non-tab-host routes.
 	 * Optional so non-publishing writers compile without touching it. */
 	trackFractionalIndex?: number | null;
+	/** Whether the last gesture release was a commit (true) or cancel
+	 * (false). Set synchronously by the orchestrator's release gate via
+	 * `setCommitted` so the Header's settle state machine can classify the
+	 * release direction. null at rest / before any gesture. Preserved across
+	 * the drag `pager.set` calls (like `tapMorph`). */
+	committed?: boolean | null;
 }
 
 type SetPagerFn = (update: PagerUpdate) => void;
 type SetTapMorphFn = (value: number | null) => void;
+type SetCommittedFn = (value: boolean | null) => void;
+type SetReplaceStateIntentFn = (value: boolean) => void;
 
 interface PagerStore extends PagerUpdate {
 	targetIndex: number | null;
@@ -68,8 +76,12 @@ interface PagerStore extends PagerUpdate {
 	tapMorph: number | null;
 	transitionTarget: string | null;
 	trackFractionalIndex: number | null;
+	committed: boolean | null;
+	replaceStateIntent: boolean;
 	set: SetPagerFn;
 	setTapMorph: SetTapMorphFn;
+	setCommitted: SetCommittedFn;
+	setReplaceStateIntent: SetReplaceStateIntentFn;
 }
 
 export function createPagerStore(): PagerStore {
@@ -82,6 +94,8 @@ export function createPagerStore(): PagerStore {
 	let tapMorph = $state<number | null>(null);
 	let transitionTarget = $state<string | null>(null);
 	let trackFractionalIndex = $state<number | null>(null);
+	let committed = $state<boolean | null>(null);
+	let replaceStateIntent = $state(false);
 
 	function set(update: PagerUpdate): void {
 		fractionalIndex = update.fractionalIndex;
@@ -92,6 +106,7 @@ export function createPagerStore(): PagerStore {
 		coverProgress = update.coverProgress ?? null;
 		transitionTarget = update.transitionTarget ?? null;
 		trackFractionalIndex = update.trackFractionalIndex ?? null;
+		committed = update.committed !== undefined ? update.committed : committed;
 		// tapMorph is omitted by the drag $effect's pager.set calls; preserve
 		// it so an in-flight tap scrub is not clobbered. The tap publisher
 		// writes via setTapMorph.
@@ -100,6 +115,14 @@ export function createPagerStore(): PagerStore {
 
 	function setTapMorph(value: number | null): void {
 		tapMorph = value;
+	}
+
+	function setCommitted(value: boolean | null): void {
+		committed = value;
+	}
+
+	function setReplaceStateIntent(value: boolean): void {
+		replaceStateIntent = value;
 	}
 
 	return {
@@ -130,8 +153,16 @@ export function createPagerStore(): PagerStore {
 		get trackFractionalIndex() {
 			return trackFractionalIndex;
 		},
+		get committed() {
+			return committed;
+		},
+		get replaceStateIntent() {
+			return replaceStateIntent;
+		},
 		set,
-		setTapMorph
+		setTapMorph,
+		setCommitted,
+		setReplaceStateIntent
 	};
 }
 

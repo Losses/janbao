@@ -54,13 +54,12 @@
 		 *  no tab of their own; the orchestrator falls back to the
 		 *  route's URL-derived tab index. */
 		readonly centerTab?: number;
-		/** The left preview snippet (MessagesPanel for the pilot). */
-		readonly left?: Snippet;
+
 		/** The conversation body. */
 		readonly children: Snippet;
 	}
 
-	let { leftHref, centerTab, left, children }: NavPipelineHostProps = $props();
+	let { leftHref, centerTab, children }: NavPipelineHostProps = $props();
 
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	const getIsMobile = (): boolean => {
@@ -544,8 +543,6 @@
 							     a skeleton and the real inbox loads on land. -->
 							<MessagesSkeleton />
 						{/if}
-					{:else if left}
-						{@render left()}
 					{:else}
 						{@const PreviewPanel = getPreviewPanel(resolvedLeftHref)}
 						{#if PreviewPanel}

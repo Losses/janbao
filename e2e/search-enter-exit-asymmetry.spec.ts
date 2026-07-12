@@ -17,7 +17,7 @@ import { prepareContext, waitForHydration } from './helpers';
  * morph 1->0 slides first then expands the tab. The two are exact mirrors, so a
  * single continuous morph timeline serves both directions.
  *
- * The gesture exit scrubs `morph` continuously: GesturePageLayout writes
+ * The gesture exit scrubs `morph` continuously: NavPipelineHost writes
  * pager.backMorph 0->1 with the finger and Header `morph` reads it. The tap nav
  * has no finger and no title change (/search has no deep title, so the
  * title-settle driver stays idle), so Header.startSearchScrub drives the same
@@ -43,7 +43,7 @@ interface SearchHdrFrame {
 	btnLeft: number | null;
 	/** Primary pager store backMorph (0..1, or null when no swipe-back is in progress). */
 	backMorph: number | null;
-	/** GesturePageLayout (content) track translateX (px) - the page-change signal on /search. */
+	/** NavPipelineHost (content) track translateX (px) - the page-change signal on /search. */
 	contentTx: number | null;
 	/** Header rootLayer translateY (px) - the MobileTabBar Tab descent descent signal (DV17 NB27). */
 	rootLayerY: number | null;
@@ -60,7 +60,7 @@ interface SearchHdrWindow extends Window {
 
 interface SamplerOpts {
 	windowMs: number;
-	/** When true, also sample the GesturePageLayout content track (.detail-scroll-pane parent). */
+	/** When true, also sample the NavPipelineHost content track (.detail-scroll-pane parent). */
 	withContent: boolean;
 }
 

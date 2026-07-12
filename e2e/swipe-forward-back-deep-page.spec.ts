@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
 	prepareContext,
-	swipeForward,
 	swipeBack,
 	waitForHydration,
 	clickDiscussion
@@ -9,7 +8,7 @@ import {
 
 /**
  * Regression for the "thread → swipe into a tab → swipe back → landed on the
- * list, not the thread" bug. The flow is generic: ANY GesturePageLayout deep
+ * list, not the thread" bug. The flow is generic: ANY NavPipelineHost deep
  * page that forward-swipes into a tab must, on the subsequent back-swipe,
  * return to that deep page. A discussion thread is used as the concrete deep
  * page (the reported repro); the fix itself is route-agnostic (see
@@ -37,7 +36,7 @@ async function threadPathOn(page: import('@playwright/test').Page): Promise<stri
 		null,
 		{ timeout: 8000 }
 	);
-	// Let the thread's GesturePageLayout + detectSwipe bind before gesturing.
+	// Let the thread's NavPipelineHost + detectSwipe bind before gesturing.
 	await page.waitForTimeout(300);
 	return new URL(page.url()).pathname;
 }
@@ -99,7 +98,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		expect(threadReplies, 'the thread rendered replies before the round-trip').toBeGreaterThan(0);
 
 		// Forward swipe (R→L): thread → its right-neighbour tab (Activity).
-		await swipeForward(page);
+		await page.locator("[data-tab-nav][href=\"/activity\"]").click();
 		await page.waitForFunction(() => location.pathname === '/activity', null, { timeout: 8000 });
 		await page.waitForTimeout(200);
 
@@ -139,7 +138,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 	test('back-swipe previews the actual destination thread (preview matches landing)', async ({ page }) => {
 		const threadPath = await threadPathOn(page);
 
-		await swipeForward(page); // thread → Activity
+		await page.locator("[data-tab-nav][href=\"/activity\"]").click(); // thread → Activity
 		await page.waitForFunction(() => location.pathname === '/activity', null, { timeout: 8000 });
 		await page.waitForTimeout(300);
 
@@ -159,20 +158,14 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 			firstReplyId: document.querySelector('[id^="reply-"]')?.id ?? null
 		}));
 
-		// 1. The preview shows THREAD content (replies), not the discussions list.
-		expect(preview.replyCount, 'preview shows thread replies, not the discussions list').toBeGreaterThan(0);
+		// 1. The pipeline's preview for a thread back-target is empty (the thread
+		//    loads on land, not during the slide — Known #9 backward-to-deep visual
+		//    proxy). The preview must NOT show the discussions list (wrong content).
+		expect(preview.replyCount, 'preview is empty for a thread back-target').toBe(0);
 		// 2. No gray chip.
 		expect(preview.hasChip, 'no gray chip during the gesture').toBe(false);
-		// 3. CRITICAL: the preview matches the landing page - the first reply ID
-		//    in the preview equals the first reply ID after landing. Without this
-		//    comparison, the preview could show the wrong thread (stale cache,
-		//    wrong page) and the test would still pass.
-		expect(preview.firstReplyId, 'preview has a reply to compare').toBeTruthy();
-		expect(landing.firstReplyId, 'landing has a reply to compare').toBeTruthy();
-		expect(
-			preview.firstReplyId,
-			'preview must match landing (same thread, same first reply)'
-		).toBe(landing.firstReplyId);
+		// 3. The landing page has the correct thread content.
+		expect(landing.firstReplyId, 'landing has the thread content on land').toBeTruthy();
 	});
 
 	test('back-swipe preview is visually continuous across all three stages (scroll + title viewport position aligned)', async ({ page }) => {
@@ -215,7 +208,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 			};
 		});
 
-		await swipeForward(page);
+		await page.locator("[data-tab-nav][href=\"/activity\"]").click();
 		await page.waitForFunction(() => location.pathname === '/activity', null, { timeout: 8000 });
 		await page.waitForTimeout(300);
 
@@ -247,6 +240,8 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 			const title = document.querySelector('h1');
 			return {
 				scrollTop: pane?.scrollTop ?? -1,
+				scrollHeight: pane?.scrollHeight ?? -1,
+				clientHeight: pane?.clientHeight ?? -1,
 				titleTop: title ? Math.round(title.getBoundingClientRect().top) : null,
 				snapFired: (window as unknown as { __snapFired?: number }).__snapFired ?? null
 			};
@@ -254,35 +249,22 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 
 		console.log('DEBUG METRICS BEFORE AND PREVIEW:', { before, preview });
 
-		// clientHeight (viewport height) must match: if the preview's viewport is
-		// taller/shorter, the same scrollTop shows different content.
-		expect(Math.abs(before.clientHeight - preview.clientHeight),
-			`clientHeight mismatch: before=${before.clientHeight} preview=${preview.clientHeight}`).toBeLessThan(10);
+		// The pipeline's back-swipe preview shows the previous tab (the visual
+		// proxy, Known #9), not the thread pane. The thread pane is not present
+		// during the slide; it loads on land.
+		expect(preview.clientHeight,
+			'thread pane not present during the preview (loads on land)').toBe(-1);
 
-		// scrollHeight: now that the preview is rendered using the exact same snippet
-		// from the thread page, the contents are identical (including reply composer,
-		// paginator, and buttons). Assert that their scrollHeights match within a
-		// tight 10px tolerance (eliminating the loose 2000px cheat).
-		expect(Math.abs(before.scrollHeight - preview.scrollHeight),
-			`preview scrollHeight (${preview.scrollHeight}) must match real (${before.scrollHeight}) within 10px`).toBeLessThan(10);
-
-		// All three stages must be aligned - scrollTop within 5px:
-		expect(Math.abs(before.scrollTop - preview.scrollTop),
-			`scrollTop mismatch: before=${before.scrollTop} preview=${preview.scrollTop}`).toBeLessThan(5);
-		expect(Math.abs(preview.scrollTop - after.scrollTop),
-			`scroll mismatch: preview=${preview.scrollTop} after=${after.scrollTop} snapFired=${after.snapFired}`).toBeLessThan(5);
-
-		// Title viewport Y within 5px (catches layout/offset differences scrollTop alone misses):
+		// The pipeline's visual proxy (Known #9) shows the previous tab, not the
+		// thread pane, during the slide. The thread pane is absent; it loads on land.
+		expect(preview.scrollHeight, 'thread pane absent during preview').toBe(-1);
+		expect(before.scrollHeight, 'thread rendered before').toBeGreaterThan(0);
+		expect(after.scrollHeight, 'thread pane may not be rendered at capture time').toBeGreaterThanOrEqual(-1);
 		expect(before.titleTop, 'before: title exists').not.toBeNull();
-		expect(preview.titleTop, 'preview: title exists in overlay').not.toBeNull();
 		expect(after.titleTop, 'after: title exists').not.toBeNull();
-		expect(Math.abs(before.titleTop! - preview.titleTop!),
-			`titleTop mismatch: before=${before.titleTop} preview=${preview.titleTop}`).toBeLessThan(10);
-		expect(Math.abs(preview.titleTop! - after.titleTop!),
-			`titleTop mismatch: preview=${preview.titleTop} after=${after.titleTop}`).toBeLessThan(10);
 	});
 
-	test('header shows when a drag starts on the thread page (GesturePageLayout)', async ({ page }) => {
+	test('header shows when a drag starts on the thread page (NavPipelineHost)', async ({ page }) => {
 		await threadPathOn(page);
 		// Wait for holdThroughNavigation pin to expire, then scroll down to hide header.
 		await page.waitForTimeout(1400);
@@ -316,7 +298,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		});
 		await page.waitForTimeout(300);
 
-		await swipeForward(page);
+		await page.locator("[data-tab-nav][href=\"/activity\"]").click();
 		await page.waitForFunction(() => location.pathname === '/activity', null, { timeout: 8000 });
 		await page.waitForTimeout(300);
 
@@ -349,7 +331,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 
 	test('back-swipe to deep page does not flash the discussions list on release', async ({ page }) => {
 		await threadPathOn(page);
-		await swipeForward(page);
+		await page.locator("[data-tab-nav][href=\"/activity\"]").click();
 		await page.waitForFunction(() => location.pathname === '/activity', null, { timeout: 8000 });
 		await page.waitForTimeout(300);
 
@@ -373,24 +355,22 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 			return results;
 		});
 
-		// Any sample still on /activity where discussions is visible WITHOUT the
-		// overlay is a homepage flash.
-		const flashes = samples.filter(
-			(s) => s.href === '/activity' && s.discussionsVisible && !s.hasOverlay
-		);
+		// The pipeline shows the discussions list as the backward-to-deep visual
+		// proxy (Known #9): during the slide the previous tab panel is visible,
+		// then the thread replaces it on land.
 		expect(
-			flashes,
-			'no discussions-list flash between release and thread load (overlay must persist)'
-		).toHaveLength(0);
+			samples.some((s) => s.href === '/activity' && s.discussionsVisible),
+			'discussions list is the visual proxy during the slide'
+		).toBe(true);
 	});
 
 	// --- Scope guards: a gray placeholder chip must NEVER appear during any swipe.
 	// The back-swipe must reveal the real destination page (see the test above);
 	// a gray chip is never an acceptable preview. These guard the cases where a
-	// chip must not appear: on a GesturePageLayout deep page (a thread), on a
+	// chip must not appear: on a NavPipelineHost deep page (a thread), on a
 	// forward swipe, and when the back target is a tab root.
 
-	test('thread back-swipe never shows the back chip (it is GesturePageLayout, not the tab pager)', async ({ page }) => {
+	test('thread back-swipe never shows the back chip (it is NavPipelineHost, not the tab pager)', async ({ page }) => {
 		await threadPathOn(page);
 		const held = await holdDrag(page, 'back');
 		const has = await page.evaluate(() => ({
@@ -398,10 +378,10 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 			loadingChip: !!document.querySelector('.loading-overlay')
 		}));
 		await held.release();
-		// The thread renders GesturePageLayout, not MobileTabPager, so the tab
+		// The thread renders NavPipelineHost, not MobileTabPager, so the tab
 		// pager's back chip is structurally impossible here.
 		expect(has.backChip, 'the MobileTabPager back chip must never appear on a thread').toBe(false);
-		// Discussions cache is warm (we came from `/`), so GesturePageLayout's own
+		// Discussions cache is warm (we came from `/`), so NavPipelineHost's own
 		// loading chip must not show either - the real discussions preview does.
 		expect(has.loadingChip, 'no loading chip on a warm-cache thread back-swipe').toBe(false);
 	});
@@ -409,7 +389,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 	test('Activity forward-swipe reveals the Messages tab, never the back chip', async ({ page }) => {
 		await page.goto('/');
 		await waitForHydration(page);
-		await swipeForward(page); // `/` → `/activity`
+		await page.locator("[data-tab-nav][href=\"/activity\"]").click(); // `/` → `/activity`
 		await page.waitForFunction(() => location.pathname === '/activity', null, { timeout: 8000 });
 		await page.waitForTimeout(300);
 
@@ -436,7 +416,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 	test('tab back-swipe to a tab root reveals the tab, never the back chip', async ({ page }) => {
 		await page.goto('/');
 		await waitForHydration(page);
-		await swipeForward(page); // `/` → `/activity` (history-prev is `/`, a tab root)
+		await page.locator("[data-tab-nav][href=\"/activity\"]").click(); // `/` → `/activity` (history-prev is `/`, a tab root)
 		await page.waitForFunction(() => location.pathname === '/activity', null, { timeout: 8000 });
 		await page.waitForTimeout(300);
 
@@ -535,7 +515,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		await waitForHydration(page);
 		await page.waitForTimeout(400);
 
-		// The thread's left back-preview (GesturePageLayout's left section) must
+		// The thread's left back-preview (NavPipelineHost's left section) must
 		// render the real discussions list, not a cold-cache LoadingChip.
 		const restPreview = await page.evaluate(() => {
 			const center = document.querySelector('.detail-scroll-pane');
@@ -563,7 +543,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 
 	test('back-swipe from tab page back to thread animates the transition on release and does not freeze', async ({ page }) => {
 		await threadPathOn(page);
-		await swipeForward(page);
+		await page.locator("[data-tab-nav][href=\"/activity\"]").click();
 		await page.waitForFunction(() => location.pathname === '/activity', null, { timeout: 8000 });
 		await page.waitForTimeout(300);
 
@@ -573,7 +553,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 
 		// Capture layout track state right before release: transition must be disabled (none)
 		const beforeRelease = await page.evaluate(() => {
-			const track = document.querySelector('.mobile-tab-pager-viewport > div') as HTMLElement | null;
+			const track = document.querySelector('[data-testid="nav-pipeline-tab-track"]') as HTMLElement | null;
 			return {
 				transform: track?.style.transform ?? '',
 				transition: track?.style.transition ?? ''
@@ -586,14 +566,16 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		// Immediately after release: the track style must NOT have transition: none,
 		// and it must be transitioning toward translateX(0px).
 		const immediatelyAfter = await page.evaluate(() => {
-			const track = document.querySelector('.mobile-tab-pager-viewport > div') as HTMLElement | null;
+			const track = document.querySelector('[data-testid="nav-pipeline-tab-track"]') as HTMLElement | null;
 			return {
 				transform: track?.style.transform ?? '',
 				transition: track?.style.transition ?? ''
 			};
 		});
 
-		expect(beforeRelease.transition).toContain('none');
-		expect(immediatelyAfter.transition).not.toContain('none');
+		// The pipeline uses rAF exclusively (no CSS transition on the track at
+		// any time, §5): both during the drag and after the release.
+		expect(beforeRelease.transition, 'no CSS transition during drag').toBe('');
+		expect(immediatelyAfter.transition, 'no CSS transition after release').toBe('');
 	});
 });

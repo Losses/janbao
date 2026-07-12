@@ -4,7 +4,7 @@ import { prepareContext, waitForHydration, openSidebarAndGoto, clickDiscussion }
 // Reproduces the PWA "return-to-foreground stale preview" defect.
 //
 // The mobile swipe-back preview sources its data from the unified
-// page cache: GesturePageLayout.getPreviewPanel falls back to
+// page cache: NavPipelineHost.getPreviewPanel falls back to
 // MOBILE_TABS[tab].panel, which is TabDiscussionsPanel /
 // TabActivityPanel / TabMessagesPanel, and each reads `cache.get(href)?.data
 // ?? page.data.X` (cache first). The root-layout $effect seeds the
@@ -181,7 +181,7 @@ test('characterize post-refresh back-swipe: the track must commit to / without a
 	// A separate symptom reported in the same scenario is a one-frame skip on the
 	// swipe that immediately follows the refresh: the target page appears, then
 	// the track reverts to the source. This test drives that exact sequence
-	// (refresh on the thread, then back-swipe) and samples the GesturePageLayout
+	// (refresh on the thread, then back-swipe) and samples the NavPipelineHost
 	// track translateX every frame. The IDEAL is a monotonic reveal that commits
 	// to '/'. A snap-back (m41 opens then returns to ~0 while the URL stays on
 	// /discussion) is the defect; the per-frame log surfaces on failure.
