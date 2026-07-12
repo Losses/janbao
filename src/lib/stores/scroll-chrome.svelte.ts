@@ -31,7 +31,7 @@ interface ScrollChromeStore {
 	start: VoidHandler;
 	show: VoidHandler;
 	/** Register the element whose scrolling now drives hide-on-scroll. The mobile
-	 * GesturePageLayout routes lock the document window (`html.fixed-viewport`:
+	 * NavPipelineHost / NavPipelineTabHost routes lock the document window (`html.fixed-viewport`:
 	 * html/body are position:fixed; overflow:hidden) and scroll the page inside a
 	 * centre panel (`.detail-scroll-pane`) instead; on those routes the window
 	 * never scrolls, so the store must listen to that container. Pass null on
@@ -45,7 +45,7 @@ interface ScrollChromeStore {
 	 *  the handoff self-healing regardless of mount/destroy ordering. */
 	releaseContainer: ReleaseContainerHandler;
 	/** A nested scroller owner (a scope panel inside a pager) claims the scroll
-	 *  source: GesturePageLayout's setScrollContainer $effect reads
+	 *  source: the pipeline host's setScrollContainer $effect reads
 	 *  `override ?? centerEl`, so the override wins deterministically without a
 	 *  parent/child $effect ordering race. null clears it. */
 	setOverride: SetScrollContainerHandler;
@@ -82,10 +82,10 @@ let scrollTimeoutId = 0;
 // that intermediate scroll; releaseNavigation clears it at the landing.
 let frozen = false;
 // When set, the page scrolls inside this element instead of the window (mobile
-// GesturePageLayout routes), so evaluate() reads its scrollTop and the scroll
+// NavPipelineHost / NavPipelineTabHost routes), so evaluate() reads its scrollTop and the scroll
 // listener is attached to it. null = scroll the window (homepage / desktop).
 let containerEl: HTMLElement | null = null;
-// A nested scroller that claimed the scroll source. Read by GesturePageLayout's
+// A nested scroller that claimed the scroll source. Read by the pipeline host's
 // sole setScrollContainer $effect as `override ?? centerEl`.
 let overrideEl = $state<HTMLElement | null>(null);
 

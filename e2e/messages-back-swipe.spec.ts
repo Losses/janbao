@@ -539,12 +539,23 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		// the moment it appears (the enter animation runs on mount).
 		await page.evaluate(() => {
 			(window as any).__enterSamples = [] as number[];
+			(window as any).__fabEnterSamples = [] as number[];
 			const sample = () => {
 				const track = document.querySelector('[data-testid="nav-pipeline-track"]');
 				if (track) {
 					const cs = getComputedStyle(track);
 					const m = new DOMMatrix(cs.transform);
 					(window as any).__enterSamples.push(m.m41);
+				}
+				const fab = document.querySelector('[data-testid="fab"]');
+				if (fab) {
+					try {
+						(window as any).__fabEnterSamples.push(
+							new DOMMatrix(getComputedStyle(fab).transform).a
+						);
+					} catch {
+						/* transform not parseable yet */
+					}
 				}
 				requestAnimationFrame(sample);
 			};
@@ -572,17 +583,22 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 			`forward enter must slide leftward, not rightward (first=${first}, last=${last})`
 		).toBeLessThan(-50);
 
-		// The forward-enter's target is the conversation (overlay family,
-		// no resting FAB), so the FAB layer's family gate keeps the FAB at
-		// scale 0 throughout (coverProgress ramps 0->1 during the enter,
-		// but the gate short-circuits the FAB). Verify the resting FAB atom
-		// is at scale ~0.
-		const fabScale = await page
-			.locator('[data-testid="fab"]')
-			.evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a)
-			.catch(() => null);
-		if (fabScale !== null) {
-			expect(fabScale, 'forward-enter FAB must stay hidden').toBeLessThan(0.1);
+		// The forward-enter's target is the conversation (overlay family, no
+		// resting FAB). The FAB scales 1->0 across the enter via the layer's
+		// family-swap ease, which holds at the destination scale (0) until the
+		// transition lands (coverProgress resets), so the FAB never spikes back
+		// up after easing out. Sample the FAB scale across the enter and assert
+		// no flicker: once the scale first drops below 0.1 it stays below 0.5.
+		const fabSamples = (await page.evaluate(() => (window as any).__fabEnterSamples)) as number[];
+		if (fabSamples.length > 4) {
+			const droppedIdx = fabSamples.findIndex((s) => s < 0.1);
+			if (droppedIdx >= 0) {
+				const maxAfter = Math.max(...fabSamples.slice(droppedIdx));
+				expect(
+					maxAfter,
+					`forward-enter FAB must not flicker back up after easing out (fabSamples=${fabSamples.map((s) => s.toFixed(2)).join(',')})`
+				).toBeLessThan(0.5);
+			}
 		}
 	});
 

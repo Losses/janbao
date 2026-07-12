@@ -1,20 +1,20 @@
 <script lang="ts">
 	/**
 	 * SearchScopePager - the four search-scope panels mounted side-by-side in a
-	 * horizontal track (a sibling of `MobileTabPager`), hosted inside the
-	 * `/search` page's `GesturePageLayout` centre panel (MOBILE ONLY). A drag
-	 * switches scope 1:1; `?scope=` drives `activeIndex` (URL = source of truth).
+	 * horizontal track, nested inside the `/search` page's `NavPipelineHost`
+	 * centre panel (MOBILE ONLY). A drag switches scope 1:1; `?scope=` drives
+	 * `activeIndex` (URL = source of truth).
 	 *
 	 * Boundary handoff: `detectSwipe` is given `shouldClaim` + `exclusive`. At the
 	 * leftmost scope a rightward drag (the back-swipe direction) YIELDS
 	 * (`shouldClaim` returns false → reset to idle, no claim, no stop-prop) so the
-	 * bubbled move reaches the ancestor `GesturePageLayout`, which claims it and
-	 * runs its unchanged back-swipe (preview / chip). `exclusive` shields the
-	 * ancestor from every inward move so the two never race to `setPointerCapture`
-	 * (the c05594c slicing race).
+	 * bubbled move reaches the ancestor `NavPipelineHost` (via its
+	 * `navPipelinePointer` action), which claims it and runs the back-swipe.
+	 * `exclusive` shields the ancestor from every inward move so the two never
+	 * race to `setPointerCapture`.
 	 *
 	 * The active scope panel is its own `overflow-y:auto` scroller and claims the
-	 * scroll-chrome source via `scrollChrome.setOverride` (GesturePageLayout's
+	 * scroll-chrome source via `scrollChrome.setOverride` (the pipeline host's
 	 * single `setScrollContainer` $effect reads `override ?? centerEl`).
 	 *
 	 * Data: the `/search` load returns only the ACTIVE scope; the page cache

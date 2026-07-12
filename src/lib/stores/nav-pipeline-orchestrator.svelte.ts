@@ -546,8 +546,8 @@ export class NavPipelineOrchestrator {
 		this.#lifecycle.unmount();
 		// Clear the in-flight pager state so a stale fractionalIndex /
 		// transitionTarget does not drive the FAB on the destination route
-		// before that route publishes its own state (matches the onMount
-		// cleanup GPL and MobileTabPager publish).
+		// before that route publishes its own state (mirrors the at-rest pager
+		// publication each host sets on mount).
 		getMobilePagerStore().set({
 			fractionalIndex: 0,
 			dragging: false,
@@ -693,8 +693,14 @@ export class NavPipelineOrchestrator {
 			this.#liveDragging = false;
 			if (this.#pendingGesture !== null) {
 				if (this.#pendingGesture.boundary) {
-					// Boundary rubber-band: always snap back, never commit.
-					if (executor.state.progress > 0) {
+					// Boundary rubber-band: always snap back, never commit. The
+					// guard fires for any non-zero progress: a direction-reversing
+					// re-grab can leave the executor progress negative (the
+					// in-flight forward visual is rightward of the boundary plan's
+					// at-rest), and it must still cancel-animate back continuously
+					// (§5 "No jump"). Progress exactly 0 (a from-rest boundary with
+					// no drag) lands at rest with nothing to animate.
+					if (executor.state.progress !== 0) {
 						this.#commitStartRaw = this.#publication.progress;
 						executor.onCancel(intent.releaseVelocity);
 						this.#stateMachine.onCancel();

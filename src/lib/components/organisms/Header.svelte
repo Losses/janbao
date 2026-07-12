@@ -5,7 +5,7 @@
 	 * Desktop: logo + navigation links (Activity / Messages / Search).
 	 *
 	 * Mobile: a 2-panel horizontal track (root panel + search panel, mirrors the
-	 * MobileTabPager pattern). The search button is a SINGLE absolutely-positioned
+	 * NavPipelineTabHost pattern). The search button is a SINGLE absolutely-positioned
 	 * `<a>` that slides from the right edge to the left edge via a `left` CSS
 	 * transition: one icon, no duplicate. Entering search slides the track left
 	 * (root content exits left, search content pushes in from the right) while the

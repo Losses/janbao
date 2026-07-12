@@ -111,10 +111,11 @@ export class PageCacheStore {
 	}
 
 	/**
-	 * The most recent entry whose capture included a `snippet`. Used by
-	 * the MobileTabPager's deep-page back-swipe preview, which does not
-	 * know the destination thread's pathname at gesture start. Returns
-	 * `null` when no snippet has been captured.
+	 * The most recent entry whose capture included a `snippet`. The only consumer
+	 * is the dead `MobileTabPager`'s deep-page back-swipe preview (MobileTabPager
+	 * is unmounted, pending 5b3 deletion), which does not know the destination
+	 * thread's pathname at gesture start. Returns `null` when no snippet has been
+	 * captured.
 	 */
 	getLatestWithSnippet(): PageCacheEntry | null {
 		return findLatestWithSnippet(this.#state);

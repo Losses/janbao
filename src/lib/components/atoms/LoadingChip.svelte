@@ -3,15 +3,13 @@
 	import Icon from '$lib/components/atoms/Icon.svelte';
 
 	/**
-	 * LoadingChip - the card-scaling loading pill shared by the mobile gesture
-	 * back-preview (GesturePageLayout) and any list panel's !data fallback. Shows
-	 * the loading page's icon + label, scaled and pulsing. Extracted so every
-	 * loading surface is this one indicator instead of drifting to a spinner or
-	 * skeleton.
+	 * LoadingChip - the card-scaling loading pill used by any list panel's !data
+	 * fallback. Shows the loading page's icon + label, scaled and pulsing.
+	 * Extracted so every loading surface is this one indicator instead of
+	 * drifting to a spinner or skeleton.
 	 *
-	 * GesturePageLayout drives the dynamic props from drag progress (scale grows,
-	 * the label reveals with the swipe); panels use the defaults (expanded,
-	 * pulsing, scale 1.15) for a static "this page is loading" state.
+	 * Panels use the defaults (expanded, pulsing, scale 1.15) for a static "this
+	 * page is loading" state.
 	 */
 	interface LoadingChipProps {
 		/** mdi icon path for the page that is loading / being swiped toward. */

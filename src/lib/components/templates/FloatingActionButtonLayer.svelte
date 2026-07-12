@@ -343,6 +343,19 @@
 			const eased = 2 * u - u * u;
 			familySwapScale = familySwapFromScale + (familySwapToScale - familySwapFromScale) * eased;
 			if (u >= 1) {
+				// The ease's rAF starts one frame before the executor's commit
+				// (the $effect.pre that arms it runs before onMount), so it
+				// reaches u=1 one frame before the executor resets coverProgress.
+				// Hold at the destination scale until the transition lands
+				// (coverProgress = 0) so the restingScale fallback (inverted for a
+				// list->overlay forward enter) is never the published scale for
+				// that gap frame. A non-pipeline family swap has coverProgress 0
+				// throughout, so it clears at u=1.
+				if (pager.coverProgress !== 0) {
+					familySwapScale = familySwapToScale;
+					familySwapRafId = requestAnimationFrame(tick);
+					return;
+				}
 				familySwapScale = null;
 				familySwapRafId = undefined;
 				return;

@@ -1,7 +1,7 @@
 /**
  * Active-Gesture-Track Store - module-singleton bridge that lets an ancestor
  * component read the live gesture track element owned by a descendant
- * (MobileTabPager / GesturePageLayout) without a `getContext` channel (Svelte
+ * (NavPipelineHost / NavPipelineTabHost) without a `getContext` channel (Svelte
  * context flows parent -> child only, and the consumer here is an ancestor).
  *
  * Mirrors the existing reachability pattern of `mobile-pager.svelte.ts` and

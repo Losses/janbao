@@ -1,11 +1,10 @@
 // src/lib/utils/nav-pipeline-gate.test.ts
 /**
- * Unit suite for the pipeline-route gate. The gate is the SOLE selector
- * that decides whether a pathname runs the new DV20 pipeline or the
- * legacy `GesturePageLayout` mechanism; a regression here silently
- * routes a pipeline route through `GesturePageLayout` instead of the
- * pipeline (a UNIFY violation), so the selector is locked down by
- * tests.
+ * Unit suite for the pipeline-route gate. The gate is the SOLE selector that
+ * decides whether a pathname is a pipeline route (mounts `NavPipelineHost` or
+ * `NavPipelineTabHost`); a regression here silently mis-routes a pipeline
+ * route's SvelteKit hooks (a UNIFY violation), so the selector is locked down
+ * by tests.
  */
 
 import { describe, test, expect } from 'bun:test';
@@ -61,6 +60,7 @@ describe('isNavPipelineRoute', () => {
 	test('matches compose routes', () => {
 		expect(isNavPipelineRoute('/post/discussion')).toBe(true);
 		expect(isNavPipelineRoute('/messages/new')).toBe(true);
+		expect(isNavPipelineRoute('/messages/add/123')).toBe(true);
 	});
 
 	test('matches tab roots', () => {

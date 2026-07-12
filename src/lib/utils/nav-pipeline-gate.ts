@@ -49,6 +49,7 @@ export function isNavPipelineRoute(pathname: string): boolean {
 	if (pathname.startsWith('/admin/')) return true;
 	if (pathname === '/post/discussion') return true;
 	if (pathname === '/messages/new') return true;
+	if (/^\/messages\/add\/[^/]+$/.test(pathname)) return true;
 	if (pathname === '/') return true;
 	if (pathname === '/activity') return true;
 	if (pathname === '/messages/inbox') return true;

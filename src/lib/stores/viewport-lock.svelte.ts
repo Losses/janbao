@@ -4,8 +4,9 @@
  * the DualColumnLayout chain fills 100% height) so a route can scroll inside a
  * full-height internal panel instead of the window.
  *
- * Two route-layouts own the class: `GesturePageLayout` (deep pages) and
- * `MobileTabPager` (tab roots). They are never co-mounted at steady state, but a
+ * Two route-layouts own the class: `NavPipelineHost` (deep pages and threads)
+ * and `NavPipelineTabHost` (tab roots). They are never co-mounted at steady
+ * state, but a
  * `/`↔`/discussion` SPA swap unmounts one and mounts the other, and Svelte does
  * not guarantee mount-before-destroy across that boundary. A plain add/remove
  * pair can dip the class to absent for one painted frame (the source's release at
@@ -17,11 +18,11 @@
  * count returns above 0 and the class is never removed. This eliminates the
  * one-frame flicker structurally, not by Svelte ordering luck.
  *
- * Each caller tracks its own per-instance `held` flag: `GesturePageLayout`
+ * Each caller tracks its own per-instance `held` flag: `NavPipelineHost`
  * toggles the class on matchMedia resize (it stays mounted across mobile↔desktop),
  * so it acquires on a `!held → mobile` transition and releases on a `held →
  * desktop` transition (and on cleanup if held), never double-counting. A
- * mobile-only caller (`MobileTabPager`) uses plain mount/destroy acquire/release.
+ * mobile-only caller (`NavPipelineTabHost`) uses plain mount/destroy acquire/release.
  *
  * `import.meta.hot?.dispose` zeroes the counter and removes the class so a
  * module-only HMR re-converges on the next consumer remount/navigation.

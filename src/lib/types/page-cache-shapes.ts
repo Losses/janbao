@@ -86,7 +86,8 @@ export interface SearchScopeCacheData {
 
 /**
  * The thread snapshot written by the discussion page's `beforeNavigate`
- * and read by `MobileTabPager`'s deep-preview overlay. The render
+ * and read by the dead `MobileTabPager`'s deep-preview overlay (MobileTabPager
+ * is unmounted, pending 5b3 deletion). The render
  * closure (`Snippet`) is stored alongside on the same cache entry.
  */
 export interface ThreadSnapshotCacheData {

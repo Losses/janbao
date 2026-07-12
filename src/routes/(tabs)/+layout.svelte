@@ -26,6 +26,7 @@
 	import { getCurrentTabIndex } from '$lib/utils/route-config';
 	import { getDrawerStore } from '$lib/stores/drawer.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
+	import { getNavPipelineOrchestrator } from '$lib/stores/nav-pipeline-orchestrator.svelte';
 	import type { LayoutData } from './$types';
 
 	interface TabsLayoutProps {
@@ -59,7 +60,16 @@
 	onMount(() => {
 		const mq = window.matchMedia(MOBILE_BREAKPOINT);
 		const sync = () => {
+			const wasMobile = isMobile;
 			isMobile = mq.matches;
+			if (wasMobile && !isMobile) {
+				// A mobile->desktop flip: land an in-flight committed transition
+				// before NavPipelineTabHost is torn down (the same recovery
+				// NavPipelineHost does in its own breakpoint handler). A
+				// route-away unmount does NOT do this, so the user's fresh nav
+				// wins.
+				getNavPipelineOrchestrator()?.recoverDesktopFlipNav();
+			}
 			if (!isMobile) {
 				const drawer = getDrawerStore();
 				if (drawer.isOpen) {

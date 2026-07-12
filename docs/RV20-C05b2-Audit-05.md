@@ -42,7 +42,7 @@ multi-panel geometry + reduced-motion paths all hold, and `MobileTabPager` /
 ## B-only
 
 - **`effectiveKind` comment says "midpoint" (B #2).** Real comment inaccuracy:
-  the kind swaps at `trackFrac = 1` (the tab-0/tab-1 boundary) — the midpoint
+  the kind swaps at `trackFrac = 1` (the tab-0/tab-1 boundary): the midpoint
   of a multi-panel swap, the destination of an adjacent one. Rewritten.
 - **`TAB_CLICK_COMMIT_MS` hardcoded 200ms (B #3).** Real §13.3 tension.
   Tab-click/enter are discrete navs with no release velocity; their fixed 200ms
@@ -55,8 +55,9 @@ multi-panel geometry + reduced-motion paths all hold, and `MobileTabPager` /
 ## No new code-behavior change
 
 R5's fixes are comment accuracy + spec documentation (end-state #1 qualification
-+ Known conditions #5-7). No gesture/FAB/executor behavior changed, so the e2e
-gate is unchanged from R4 (94 passed).
+
+- Known conditions #5-7). No gesture/FAB/executor behavior changed, so the e2e
+  gate is unchanged from R4 (94 passed).
 
 ## Gate outputs (real, post-fix)
 

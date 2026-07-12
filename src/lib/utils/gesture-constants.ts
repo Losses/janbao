@@ -4,9 +4,10 @@ export const HEADER_MORPH_THRESHOLD = 0.2; // 20% drag distance to complete Head
 export const PILL_EXPANSION_THRESHOLD = 0.5; // 50% drag distance to begin active tab pill expansion
 // Minimum horizontal drag (px) for a swipe to commit (navigate to the
 // target). Below this the gesture cancels (snaps back to rest).
-// Consumer: the 5b1 pilot orchestrator's release gate.
-// GesturePageLayout defines its own local `const SWIPE_COMMIT = 60`
-// at GesturePageLayout.svelte:275; it does not import this constant.
+// Consumer: the orchestrator's release gate.
+// The dead GesturePageLayout file defines its own local `const SWIPE_COMMIT = 60`
+// (GesturePageLayout.svelte:275; unmounted, pending 5b3 deletion); it does not
+// import this constant.
 export const SWIPE_COMMIT = 60;
 // OS edge-swipe collision guard (px margin matching modern iOS/Android
 // bezel-less native triggers). `detectSwipe` and the 5b1 pointer-bridge

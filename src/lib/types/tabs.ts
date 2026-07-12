@@ -2,7 +2,7 @@
  * Shapes for the eager-loaded mobile tab pager. The `(tabs)` layout load returns
  * `TabsLayoutData` (all three tabs at page 1) so the pager can mount every panel
  * up front; the active tab's `?page` pagination is still served by the per-route
- * page loads. Shared with `MobileTabPager` and the panel components so they
+ * page loads. Shared with `NavPipelineTabHost` and the panel components so they
  * don't each redeclare the shapes.
  */
 import type { DiscussionListItem } from '$lib/server/db/dao/discussions';

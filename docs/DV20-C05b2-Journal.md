@@ -1234,3 +1234,58 @@ $ bun test src/lib/utils src/lib/stores    418 pass / 0 fail
 ```
 
 R6 audits the post-fix state.
+
+## Session 14: R6 fixes (breakpoint recover, boundary release, FAB ease timing, gate gap, comment sweep)
+
+R6 returned A PWC (1 MED + 2 LOW + 1 CONCERN) + B PWC (7 CONCERN + 1 LOW).
+Both verified the core pipeline sound. Detailed in `docs/RV20-C05b2-Audit-06.md`.
+
+### A #1 (MED): NavPipelineTabHost breakpoint recover
+
+The tab host was torn down by the `(tabs)` layout's mq handler on a
+mobile->desktop flip with no `recoverDesktopFlipNav`, losing an in-flight
+committed transition. FIX: the layout's mq `sync` now calls
+`getNavPipelineOrchestrator()?.recoverDesktopFlipNav()` on the flip (mirroring
+NavPipelineHost's own breakpoint handler).
+
+### A #2 (LOW): boundary release jump on negative progress
+
+The boundary release gate `executor.state.progress > 0` was false for a
+negative progress (a direction-reversing re-grab), so `#landAtRest` jumped the
+track. FIX: the gate is `!== 0` (the residual of the R4 reverse-re-grab fix).
+
+### B LOW-1: FAB family-swap ease forward-enter flicker (investigated to root cause)
+
+The ease (independent rAF) reaches u=1 one frame before the executor resets
+`coverProgress`; for that gap frame the published FAB scale fell back to
+`restingScale = scaleFromFraction(coverProgress)`, which is inverted for a
+list->overlay forward enter. FIX: the ease holds at the destination scale until
+`coverProgress` reaches 0 (the transition lands) before clearing. Verified by a
+new per-frame FAB-scale no-spike assertion in the forward-enter e2e.
+
+### A #3 (LOW): `/messages/add/<userId>` gate gap
+
+The route mounts NavPipelineHost (via MessageCompose) but was absent from
+`isNavPipelineRoute`. FIX: added the pattern + a test assertion.
+
+### Comment sweep
+
+Fixed stale GesturePageLayout/MobileTabPager consumer refs in `viewport-lock`,
+`active-gesture-track`, `page-cache.svelte`/`page-cache-logic`,
+`page-cache-shapes`, `tabs.ts`, `gesture-constants`, the orchestrator
+`unmount()` comment, `nav-pipeline-gate.test`, `scroll-chrome` (4 refs),
+`SearchScopePager` header, `LoadingChip`, `Header`. **Carried:**
+`SearchScopePager.svelte:127,146,155` and `src/app.css:235,269,314,336`.
+
+### Gate outputs (real, post-fix)
+
+```
+$ bun run check                       0 errors / 0 warnings (1461 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    green (0 fail)
+$ bun run test:e2e -- messages-back-swipe tab-click-transition tab-exit-preview fab tab-host-swipe tab-swipe-preview-height    93 passed, 1 flake (4.2m)
+```
+
+The one e2e failure (sub-threshold-morph commit, 30s timeout in the full run)
+passes in isolation at 5.2s; transient dev-server contention from six parallel
+spec files, not a regression. R7 audits the post-fix state.
