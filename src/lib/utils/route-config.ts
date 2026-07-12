@@ -94,7 +94,7 @@ export const FAB_KIND_CONFIGS: Record<FabListKind, FabKindConfig> = {
 //
 // `family` selects the FAB layer's scale driver; `kind` selects the icon/href
 // (or `'dynamic'` for the Activity route's spatially-resolved FAB, or
-// `'deep'` for the non-FAB GPL routes whose atom stays mounted at scale
+// `'deep'` for the non-FAB deep routes whose atom stays mounted at scale
 // 0 across the list<->deep boundary). Together they preserve the
 // per-route rendering that the FAB layer needs; nothing here is a
 // concept the core `RouteData` record holds.
@@ -107,7 +107,7 @@ import type { FabFamily } from './fab-scale';
 
 /**
  * The dynamic FAB kind. `'dynamic'` is the Activity route's
- * spatially-resolved FAB; `'deep'` is the non-FAB GPL route sentinel
+ * spatially-resolved FAB; `'deep'` is the non-FAB deep route sentinel
  * that keeps the atom mounted at scale 0; `null` covers the static list
  * FAB kinds (`'discussions'` / `'messages'`).
  */
@@ -140,7 +140,7 @@ const FAB_ROUTE_ATTRIBUTES: readonly FabRouteAttributes[] = [
 	{ pattern: /^\/post\/discussion$/, family: 'compose', kind: 'discussions' },
 	{ pattern: /^\/messages\/new$/, family: 'compose', kind: 'messages' },
 
-	// Family B 'deep': non-FAB GPL routes whose atom stays mounted at scale 0
+	// Family B 'deep': non-FAB deep routes whose atom stays mounted at scale 0
 	// so coverProgress drives the scale across the list<->deep boundary.
 	{ pattern: /^\/bookmarks$/, family: 'overlay', kind: 'deep' },
 	{ pattern: /^\/search$/, family: 'overlay', kind: 'deep' },

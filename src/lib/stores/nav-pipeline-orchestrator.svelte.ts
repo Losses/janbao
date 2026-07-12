@@ -556,6 +556,10 @@ export class NavPipelineOrchestrator {
 			transitionTarget: null,
 			committed: null
 		});
+		// Clear the replaceState side-channel on unmount (route-swap
+		// displacement or a mobile->desktop flip) so the intent does not
+		// survive the host that set it.
+		getMobilePagerStore().setReplaceStateIntent(false);
 	}
 
 	// -----------------------------------------------------------------------
@@ -604,8 +608,7 @@ export class NavPipelineOrchestrator {
 		}
 		// Override the offset with the final-release delta. The classifier's
 		// pointerup preserves the last pointermove's offset; the commit gate
-		// must read the release position, matching GPL's `deltaX` (detectSwipe's
-		// onEnd argument).
+		// must read the release position.
 		this.#intent = { ...this.#intent, offset: x - this.#intent.startX };
 		this.#interpretIntent();
 	}
@@ -635,9 +638,9 @@ export class NavPipelineOrchestrator {
 		}
 		// During a claimed drag, stream the live progress to the executor.
 		if (isDrag && this.#pendingGesture !== null && this.#publication.plan !== null) {
-			// Match GPL's onSwipeMove: reveal a header that hide-on-scroll
-			// had translated off-screen, so the back-arrow + title are
-			// visible during the back-swipe reveal (the host registers the
+			// Reveal a header that hide-on-scroll had translated
+			// off-screen, so the back-arrow + title are visible during
+			// the back-swipe reveal (the host registers the
 			// centre panel as the scroll-chrome source; the orchestrator
 			// owns the transition, so it resets the chrome here). Idempotent.
 			getScrollChromeStore().show();
@@ -1097,6 +1100,13 @@ export class NavPipelineOrchestrator {
 		this.#gestureToTabIndex = null;
 		this.#executor?.onLand();
 		getMobilePagerStore().setCommitted(null);
+		// Clear the replaceState side-channel: a cancel-after-regrab returns
+		// to rest WITHOUT dispatching (no navigation lands, so
+		// onSvelteKitAfterNavigate never fires), so the intent Header.onBack
+		// set would leak to the next consumed dispatch without this clear.
+		// (#landAtRest also runs after a normal landing, so this is
+		// defense-in-depth alongside the onSvelteKitAfterNavigate clear.)
+		getMobilePagerStore().setReplaceStateIntent(false);
 		if (inputs !== null) {
 			this.#stateMachine.onLand(inputs.fromTag);
 		}
@@ -1232,6 +1242,15 @@ export class NavPipelineOrchestrator {
 	 *  OWN dispatch (`#navDispatchInFlight === true`) is the normal
 	 *  landing: `#landAtRest` runs and clears the pending slots. */
 	onSvelteKitAfterNavigate(): void {
+		// Clear the replaceState side-channel on every navigation
+		// landing. Header.onBack sets it before goto(replaceState:true);
+		// a consumed nav's #dispatchNav reads + clears it via the goto
+		// finally, but a non-consumed nav (onBack to a deep page, which
+		// the orchestrator does not intercept) passes straight through to
+		// SvelteKit with replaceState already applied, so the intent is
+		// spent. Without this clear the stale intent leaks to the next
+		// consumed dispatch, which then wrongly replaces history.
+		getMobilePagerStore().setReplaceStateIntent(false);
 		if (this.#isEnterAnimation) return;
 		if (
 			!this.#navDispatchInFlight &&

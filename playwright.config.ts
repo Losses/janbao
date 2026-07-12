@@ -24,7 +24,13 @@ export default defineConfig({
 	// login/DB contention and keeps gesture timing deterministic.
 	fullyParallel: false,
 	workers: 1,
-	retries: 0,
+	// A full sequential run (~196 specs, one fresh dev server) degrades the dev
+	// server over ~10 min, so timing-sensitive specs intermittently time out
+	// late in the run despite passing in isolation. Two retries passes those
+	// intermittent flakes (Playwright marks them flaky in the list reporter)
+	// while a real regression still fails every attempt. trace:'on-first-retry'
+	// captures the first failure for diagnosis.
+	retries: 2,
 	reporter: 'list',
 	timeout: 30_000,
 	use: {

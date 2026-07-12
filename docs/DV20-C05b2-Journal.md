@@ -1451,3 +1451,225 @@ side-channel signal. Carried to the next fix round alongside R10's A #2/#3/#4
 - B #1 + R11's B C1/C2/C3.
 
 R12 audits the post-fix state.
+
+## Session 20: R12 fixes (replaceState side-channel, Header tap-morph, dead code, 14 e2e fixes)
+
+R12 used the MINIMAL prompt. A FAIL (3 HIGH + 1 MED) + B FAIL (3 HIGH + 1 MED +
+1 CONCERN). Both independently found the SAME broken e2e tests (consensus: the
+narrow 6-spec gate had missed them); A also re-surfaced the Header pendingNav
+regression (already fixed in R10); B found broken e2e selectors/helpers.
+Detailed in `docs/RV20-C05b2-Audit-12.md`.
+
+### Production fixes
+
+- **R11 A #1 (MED) replaceState side-channel.** `#dispatchNav` hardcoded
+  `replaceState: false`, dropping the original nav's replaceState intent on
+  intercept + re-dispatch. Added `pager.replaceStateIntent`; `Header.onBack` sets
+  it true before `goto(target, { replaceState: true })`; `#dispatchNav` reads it
+  on re-dispatch and clears it in the goto `.finally`.
+- **R11 B C3 (LOW) `updateFromPathname` in-flight guard.** Added
+  `if (this.#publication.inFlight) return;`.
+- **backSwipeShouldPopHistory simplified** to check the actual previous history
+  entry (not the tab index), so the tab host's backward gesture targets the deep
+  page when it is the previous entry.
+- **Header tap-morph sync (DV17 tap-EXIT).** `trackMorph` reads `pager.backMorph`
+  during an orchestrator-in-flight transition (matching the NavPipelineHost Page
+  panel's eased publication); was reading the linear `pager.tapMorph`.
+- **Header Effect C empty-title crossfade.** Effect C now arms the title
+  crossfade for empty-title targets (tab roots with `title=''`).
+
+### Dead code + sampler elimination
+
+- Deleted `nav-coordinator.ts` (zero imports; superseded by the skeleton approach).
+- Removed `familyNeedsSamplerDuringDrag` (dead after the sampler elimination).
+- Removed the FAB sampler's per-frame `getComputedStyle` DOM read-back; the
+  orchestrator publishes `pager.trackFractionalIndex`
+  (`-trackTranslateX(plan, executor.progress) / viewportWidth`) and the FAB layer
+  reads it reactively.
+- Removed NavPipelineHost's `left` prop + `{:else if left}` branch + the
+  discussion thread's `leftSnippet` + the messages route's `{#snippet left()}`
+  (all unreachable: every tab root is intercepted by a built-in branch).
+- Removed the `active-gesture-track` live writers (the store is dead; the file
+  stays for the dead-file imports pending 5b3).
+
+### Known conditions #12-15 added
+
+- #12 Header morph/title animation uses CSS transitions + setTimeout (pre-existing;
+  `runSettleDriver` has no reduced-motion gate). Migrates to the executor's rAF
+  beyond 5b2.
+- #13 Skeleton `{:else}` branches remain unreachable (spec-code drift on end-state
+  #3; `Promise.allSettled` returns truthy `EMPTY_*`).
+- #14 `backParent` consumer dissolution timeline (spec-code drift on 5b1-skipped
+  #5; `isPipelineSwipeDisabledRoute` still reads it, dissolves in 5b3).
+- #15 replaceState side-channel (the fix above; SvelteKit beforeNavigate limitation).
+
+### E2e test fixes (14 tests)
+
+- `capturePagerSwitch` helper selector `.mobile-tab-pager-viewport` →
+  `[data-testid="nav-pipeline-tab-track"]`.
+- `GesturePageLayout` → `NavPipelineHost` across all e2e files.
+- `swipeForward(page)` → tab-click in swipe-forward-back-deep-page +
+  reproduce-user-bugs (the pipeline has no forward gesture from deep pages).
+- Assertions updated for Known #9 (backward-to-deep visual proxy), the
+  no-CSS-transition invariant, chip-overlay removal, and the pipeline's preview
+  behavior; `chipMode`/`loadingOverlay` assertions inverted (the overlay is gone).
+
+### Gate outputs (as recorded at the R12 fix round)
+
+```
+$ bun run check                       0 errors / 0 warnings (1461 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    418 pass / 0 fail
+$ bun run test:e2e                    196 passed
+```
+
+Note: the full-suite `196 passed` was an intermittent clean run. R13 (Session 21) found the full suite is more often 194 passed / 2 intermittent environmental
+flakes (different specs each run, all pass in isolation); the gate is stabilized
+with `retries: 2` in R13.
+
+R13 audits the post-fix state.
+
+## Session 21: R13 fixes (replaceStateIntent leak, Header Effect D comment, Known extensions, GPL comment sweep, e2e flake stabilization)
+
+R13 used the MINIMAL prompt. A PASS-WITH-CONCERNS (3 LOW); B FAIL (1 MED +
+2 CONCERN + 1 LOW). Counter stays 0/5 (any concern resets; not a clean round).
+Detailed in `docs/RV20-C05b2-Audit-13.md`.
+
+### B #1 (MED, re-traced from the auditor's HIGH): replaceStateIntent leak
+
+The leak mechanism is real: `Header.onBack` sets `pager.replaceStateIntent = true`
+before `goto(target, { replaceState: true })`, and `pager.set()` does not touch
+the field, so it persists across `resetPagerStore` / `mount()`. The only clearer
+was `#dispatchNav`'s goto `.finally`, which runs only on a consumed dispatch.
+
+The orchestrator re-traced the auditor's concrete scenario and downgraded HIGH to
+MED: on a deep-link `seedStackForLanding` makes `backTarget` resolve to the tab
+root, and on a normal deep-to-deep push `hopForHref` returns `'back'` (history
+in sync), so `onBack` takes `history.back()` or the consumed goto-replaceState
+branch (target = tab root). The non-consumed deep-target leak is only reachable
+when a prior browser-history/navStore-stack divergence exists (a non-onBack
+`replaceState` such as the `/admin` redirect). Latent, but worth fixing.
+
+FIX: `onSvelteKitAfterNavigate` clears `replaceStateIntent` at the top of every
+navigation landing (defensive; covers consumed + non-consumed + all `#dispatchNav`
+branches). This also resolves A #3 (the `history.back`/`history.forward` branches
+had no clearer). Verified by code inspection; a deterministic fails-before e2e is
+not constructible without an elaborate history-divergence setup.
+
+### B #2 (CONCERN): Header Effect D comment described the dead navInFlight signal
+
+The docstring claimed `!navInFlight` "means the navigation completed." In the
+pipeline world no live code sets `navStore.navInFlight`, so it is always false;
+the real end-of-settle signal is `pager.committed` flipping to null. It also
+referenced the dead `pendingNav`. Rewrote the docstring to describe the current
+termination condition and label the navInFlight term as a legacy always-false
+signal (part of Known #12).
+
+### B #3 (CONCERN): root<->search forward enter runs tapMorph rAF concurrently with backMorph
+
+`trackMorph` arbitrates by preferring `backMorph` while `transitionTarget !== null`,
+so only one signal drives the morph at any instant (no fighting, unlike DV18/DV19).
+Documented as Known #12 (extended): the tapMorph rAF is part of the pre-existing
+Header animation layer; a partial suppress now would be a bridge, not a unification.
+
+### B #4 (LOW): boundary void-swipe scales the FAB
+
+Intentional behavior parity with the old MobileTabPager (Session 8 added the
+boundary rubber-band whose FAB dip matches the old feel; auditor A independently
+classified the same path "Clean"). No change.
+
+### A #1 (LOW): spec Known #15 stale
+
+The side-channel was implemented (R12) + the leak fixed (R13), but Known #15 still
+described the hardcoding + TODO. Rewrote Known #15 to document the implemented
+side-channel + the landing-clear.
+
+### A #2 (LOW): pager store cleared by the displaced orchestrator during a route swap
+
+`setNavPipelineOrchestrator(B)` calls `A.unmount()` which clears the pager store
+after `B.mount()` published B's at-rest; B's `$effect` re-publishes in the same
+flush. (`releaseNavPipelineOrchestrator(A)` is identity-guarded, so A's `onDestroy`
+does not re-clear.) One-frame window, no visible artifact. Documented as Known #8
+(extended).
+
+### A #3 (LOW): resolved by the B #1 fix (the landing-clear covers all `#dispatchNav` branches).
+
+### Proactive fixes
+
+- **GPL comment sweep (15 refs).** NavPipelineHost (8), orchestrator (2),
+  route-config (3) + route-config.test (1), Header slideT gate (1). Rewrote each
+  to current behavior; no active comment now references GesturePageLayout as a
+  live comparator.
+- **Lint gate unblocked.** The handoff doc + Audit-12 had prettier + 21 em-dash
+  violations; the prior session's "EXIT=0" was the masked tail exit. Formatted +
+  replaced the em-dashes.
+- **E2e flake stabilization.** Two full-suite runs each returned 194/2 with
+  DIFFERENT specs failing (all pass in isolation): environmental dev-server
+  degradation over a ~10-min sequential run. Set `retries: 2` in
+  `playwright.config.ts` (the existing `trace: 'on-first-retry'` was dead under
+  `retries: 0`).
+
+### Gate outputs (post-fix)
+
+```
+$ bun run check                       0 errors / 0 warnings (1461 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    418 pass / 0 fail
+$ bun run test:e2e                    195 passed, 1 flaky (backtarget CALIBRATION A4,
+                                     passed on retry), EXIT=0 (8.4m)
+```
+
+R14 audits the post-fix state.
+
+## Session 22: R14 fixes (replaceStateIntent cancel-path leak, Known #4 list)
+
+R14 used the MINIMAL prompt. A PASS-WITH-CONCERNS (1 MED); B PASS-WITH-CONCERNS
+(1 MED + 2 LOW/CONCERN). Counter stays 0/5 (both PWC; no clean PASS). Detailed in
+`docs/RV20-C05b2-Audit-14.md`.
+
+### A #1 (MED): `#landAtRest` did not clear `replaceStateIntent` (gap in the R13 fix)
+
+R13 cleared the intent in `onSvelteKitAfterNavigate`, but a cancel-after-regrab
+returns to rest without a navigation landing: the user taps the back-arrow
+(consume + slide; the intent is not read until `#dispatchNav`), then mid-slide
+re-grabs and releases below threshold. The cancel runs `#landAtRest` directly; no
+`goto` dispatches, `afterNavigate` never fires, the R13 clear does not run. The
+intent leaks to the next consumed dispatch.
+
+FIX: `#landAtRest` clears `replaceStateIntent` (runs on landing AND cancel);
+`unmount()` clears it too (route-swap displacement + mobile->desktop flip). With
+the R13 `onSvelteKitAfterNavigate` clear + the R12 `#dispatchNav` `.finally`
+clear, the intent is now cleared on every path that ends a back-cycle.
+
+### B #1 (MED): deep-link back-swipe pushes the back-target
+
+Spec-compliant per §6 (`hopForHref` decides; deep-link = 'push'). The gesture
+carries no caller `replaceState` intent (only `Header.onBack` sets it, Known
+#15), so it uses the default push. The push preserves the navigation model the
+synthetic stack encodes. No fix; the back-arrow's replace is a distinct mechanism
+(Known #15).
+
+### B #2 (LOW/CONCERN): Header morph does not track the slide for thread back-swipes
+
+The `centerTab` branch publishes `backMorph: null`, so the Header stays in
+back-arrow mode during the slide and morphs on landing (Effect C); deep-page
+back-swipes morph smoothly. Documented intentional behavior (orchestrator
+comments record the choice; part of the Header animation layer, Known #12).
+Changing it risks the enter animation, which depends on the same publication.
+
+### B #3 (LOW/CONCERN): `/messages/add/[userId]` missing from Known #4
+
+Added `/messages/add/[userId]` to Known #4's mis-classified list (same
+mitigation: `getCurrentTabIndex` returns -1, `DualColumnLayout.swipeDisabled`
+holds).
+
+### Gate outputs (post-fix)
+
+```
+$ bun run check                       0 errors / 0 warnings (1461 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    418 pass / 0 fail
+$ bun run test:e2e                    196 passed, EXIT=0 (8.3m, clean run)
+```
+
+R15 audits the post-fix state.

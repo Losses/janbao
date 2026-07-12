@@ -202,10 +202,12 @@
 	// gesture path is owned by `settling` (Effect D holds settling=true through the
 	// navInFlight window, so the settle driver animates the morph), and on a
 	// click/tab-tap back-to-tab the morph rest value flips at the landing flush and
-	// must animate (the "Tab descent" descent). navInFlight is deliberately not part
-	// of the gate: it is set at every GPL exit landing (same-panel and cross-tab
-	// alike), so gating on it would suppress exactly the descent this layer exists
-	// to play. See docs/DV12-Plan.md.
+	// must animate (the "Tab descent"). navInFlight is not part of this
+	// gate; the nav-window morph is owned by the settle driver (Effect D),
+	// so slideT stays enabled to play the descent. This CSS transition +
+	// the setTimeout settle backstop + the navInFlight signal are the
+	// pre-existing Header animation layer documented as Known #12
+	// (migrates to the executor's rAF beyond 5b2). See docs/DV12-Plan.md.
 	const slideT = $derived(
 		dragging || searchScrubbing ? 'none' : 'transform 200ms ease-out, opacity 200ms ease-out'
 	);
@@ -364,28 +366,31 @@
 
 	// D. Commit settle ends on nav-done. `$effect.pre` so endSettle's writes
 	// (settling=false, restTitle=title) are visible to the render in the same
-	// flush. `pager.committed` is read OUTSIDE
-	// untrack so this effect re-runs the moment either flips.
+	// flush. `pager.committed` is read OUTSIDE untrack so this effect re-runs
+	// the moment it flips.
 	//
-	// pager.committed === null means the orchestrator cleared it (#landAtRest
-	// before setting navInFlight). !navInFlight means the navigation completed
-	// (afterNavigate clears navInFlight, or goto.reject's .catch does). Both
-	// together = the dispatch happened AND the navigation landed, on any device
-	// speed. No latch, no wall-clock, no microtask-order dependency.
+	// pager.committed === null means the orchestrator cleared it at #landAtRest
+	// (the navigation landed). The !navInFlight term is a legacy signal: no live
+	// code sets navStore.navInFlight in the pipeline world, so it is always false
+	// and the real end-of-settle signal is pager.committed flipping to null. The
+	// navInFlight read + the setTimeout settle backstop are the pre-existing
+	// Header animation layer documented as Known #12 (migrates to the executor's
+	// rAF beyond 5b2).
 	//
 	// settleAwaitTitle restricts this to commit settles; cancel / non-gesture
 	// (settleAwaitTitle=false) end on the span transitionend + the CSS-derived
 	// backstop in runSettleDriver and never enter this branch. navigateBackward
-	// is cancel-class here: it sets no pendingNav so Effect B's
-	// `hasPending = pager.committed === true` is false -> settleAwaitTitle stays false.
+	// is cancel-class here: the orchestrator does not publish committed=true, so
+	// Effect B's `hasPending = pager.committed === true` is false -> settleAwaitTitle stays false.
 	//
-	// Load-bearing premise: a gesture-committed history.back() always has a real
-	// previous entry to pop (gestures route through hopForHref and dispatch via
-	// 'link', never a bare history.back() against a single-entry stack), so
-	// afterNavigate ALWAYS fires on a commit. If a future non-hop gesture path
-	// dispatches history.back() against a one-entry history, afterNavigate would
-	// not fire, navInFlight would stay true, and this effect would never end the
-	// settle; such a path must keep history.back() out of single-entry stacks.
+	// Load-bearing premise: a gesture-committed dispatch always has a real
+	// destination to land on (gestures route through hopForHref and dispatch via
+	// the orchestrator's goto/history.back, never a bare pop against a
+	// single-entry stack), so the landing fires and #landAtRest clears
+	// pager.committed on every commit. A non-hop path that dispatched against a
+	// one-entry history would not land, pager.committed would stay non-null, and
+	// this effect would never end the settle; such a path must keep dispatches
+	// landable.
 	$effect.pre(() => {
 		const inFlight = navStore.navInFlight;
 		if (

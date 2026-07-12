@@ -71,16 +71,16 @@
 	// Forward enter animation: if this mount is a forward SPA navigation
 	// from `leftHref` (e.g. user tapped a conversation in /messages/inbox),
 	// slide the track from the left-panel position (translateX(0)) to the
-	// centre rest (translateX(-50%)) over ~200ms, matching GPL's
-	// `enterRaf`. Computed at script init (before render) via
-	// `navStore.activeStack` so there is no first-paint flash.
+	// centre rest (translateX(-50%)) over ~200ms. Computed at script init
+	// (before render) via `navStore.activeStack` so there is no
+	// first-paint flash.
 	const navStore = getNavigationStore();
 	const shouldEnter: boolean = (() => {
 		if (!isMobile) return false;
 		// Only play the enter animation on a FORWARD navigation (SPA nav
-		// from leftHref). A popstate-back (OS-back to the pilot after a
+		// from leftHref). A popstate-back (OS-back to this route after a
 		// pipeline-consumed nav) sets direction='backward' and must skip
-		// the slide-in (matching GPL's shouldAnimateEnter gate).
+		// the slide-in.
 		if (navStore.direction !== 'forward') return false;
 		const stack = navStore.activeStack;
 		if (stack.length < 2) return false;
@@ -89,9 +89,8 @@
 
 	// The resolved back-target: follows the live navigation stack so a
 	// back-swipe lands on the correct entry (the tab root or structural
-	// parent the user actually came from), matching GPL's resolvedLeftHref.
-	// Falls back to the static leftHref prop when the stack has no prior
-	// entry.
+	// parent the user actually came from). Falls back to the static
+	// leftHref prop when the stack has no prior entry.
 	const resolvedLeftHref = $derived.by<string>(() => {
 		const bt = navStore.backTarget;
 		if (!bt) return leftHref;
@@ -154,11 +153,10 @@
 
 	// Cached scroll positions for the left (back-target) and centre
 	// (conversation) panels, restored on mount / re-entry so a back-swipe
-	// preview shows the list at its last scroll position (matching GPL's
-	// leftScrollTop / currentScrollTop). The left restore is gated to the
-	// back-target being the rendered panel: when the slide reveals a
-	// different tab (crossTabPanelPath), that panel is fresh content, so
-	// the back-target's cached scroll does not apply.
+	// preview shows the list at its last scroll position. The left
+	// restore is gated to the back-target being the rendered panel: when
+	// the slide reveals a different tab (crossTabPanelPath), that panel
+	// is fresh content, so the back-target's cached scroll does not apply.
 	const pageCache = getPageCacheStore();
 	const leftScrollTop = $derived(
 		crossTabPanelPath === null ? (pageCache.get(resolvedLeftHref)?.scrollTop ?? 0) : 0
@@ -178,8 +176,8 @@
 	// (matches the home route's pagination scheme).
 	const discussionsBuildPageUrl: PageUrlBuilder = (p) => (p === 1 ? '/' : `/discussions/p${p}`);
 
-	// Restore a panel's cached scroll position: set it immediately and again
-	// on the next frame (matching GPL). Setting scrollTop programmatically
+	// Restore a panel's cached scroll position: set it immediately and
+	// again on the next frame. Setting scrollTop programmatically
 	// does not fire `onscroll`, so this cannot loop. Returns a rAF cleanup
 	// so an `$effect` can use it directly.
 	const restoreScroll = (el: HTMLElement | null, top: number): VoidHandler => {
@@ -204,7 +202,7 @@
 	});
 
 	// Register the centre panel as the scroll-chrome source on mobile.
-	// Mirrors the GPL effect; the cleanup reverts the store to window.
+	// The cleanup reverts the store to window.
 	$effect(() => {
 		if (!isMobile || !centerEl) return;
 		const el = scrollChrome.override ?? centerEl;
@@ -351,8 +349,8 @@
 			// <767px) AFTER a transition settled, re-apply the resting
 			// transform as a PERCENTAGE so it scales with the new width.
 			// The driver's last px write (translateX(-Wpx)) would
-			// otherwise stay stale (GPL uses -50% which scales). Only when
-			// at-rest; an in-flight transition keeps its locked plan and
+			// otherwise stay stale. Only when at-rest; an in-flight
+			// transition keeps its locked plan and
 			// picks up the new width on the next transition.
 			if (isMobile && publication.plan === null && trackEl) {
 				trackEl.style.transform = 'translateX(-50%)';
@@ -381,7 +379,7 @@
 
 		// Reset any parent element's scroll that might have been changed
 		// by browser's native anchor scrolling before fixed-viewport
-		// locked the scroll. Mirrors GPL's pattern.
+		// locked the scroll.
 		let parent = viewportEl?.parentElement;
 		while (parent) {
 			if (parent.scrollTop !== 0) parent.scrollTop = 0;

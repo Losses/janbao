@@ -24,7 +24,7 @@ describe('getFabRouteAttributes - the FAB atom-mount registry', () => {
 		expect(getFabRouteAttributes('/messages/123')?.family).toBe('overlay');
 		expect(getFabRouteAttributes('/messages/123')?.kind).toBe('messages');
 	});
-	test('Family B deep routes (non-FAB GPL routes) mount the atom at scale 0', () => {
+	test('Family B deep routes (non-FAB deep routes) mount the atom at scale 0', () => {
 		const deep = [
 			'/bookmarks',
 			'/search',

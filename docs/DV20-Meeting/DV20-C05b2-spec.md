@@ -84,8 +84,9 @@ known + planned, not as undiscovered divergences from the bar.
    **TODO:** add the integration-level velocity e2e.
 
 4. **`isPipelineSwipeDisabledRoute` latent mis-classification.** The function
-   returns `false` for `/search`, `/bookmarks`, `/notifications`, `/profile`
-   despite those routes mounting `NavPipelineHost` (they fail both the
+   returns `false` for `/search`, `/bookmarks`, `/notifications`, `/profile`,
+   `/messages/add/[userId]` despite those routes mounting `NavPipelineHost`
+   (they fail both the
    overlay-family branch and the `backParent !== undefined` branch). It does not
    manifest because `DualColumnLayout`'s parallel `detectSwipe` is disabled by
    its own `swipeBaseline < 0` check (those routes resolve `getCurrentTabIndex`
@@ -134,7 +135,13 @@ known + planned, not as undiscovered divergences from the bar.
    prior orchestrator left in `transitioning`. No visible artifact (the prior
    `unmount()` clears the pager store first; the SSR initial transform holds the
    visual at rest); `mount()` clears it the next frame. Tightening (a `mounted`
-   guard on the derived) is a future improvement.
+   guard on the derived) is a future improvement. A related one-frame window: on a
+   route swap the new host's `setNavPipelineOrchestrator` displaces the prior
+   orchestrator by calling its `unmount()`, which clears the pager store after the
+   new host's `mount()` already published its at-rest state; the new host's
+   `$effect` re-publishes the at-rest state in the same flush. No visible artifact
+   (the FAB layer's URL-derived tab fallback and the Header's `backMorph === null`
+   at-rest value hold the visual correct through the cleared frame).
 
 9. **Backward-to-deep-page visual proxy.** When the tab host's backward gesture
    targets a deep page (via `backSwipeShouldPopHistory`), the slide reveals the
@@ -175,6 +182,15 @@ known + planned, not as undiscovered divergences from the bar.
     `prefers-reduced-motion` gate (unlike the executor + the FAB family-swap ease).
     Fully merging the Header's morph/title animation into the executor's rAF loop
     (and adding the reduced-motion gate) is a DV20-wide goal beyond 5b2's scope.
+    The Header's root<->search morph also runs its own rAF (`startTapScrub`,
+    publishing `pager.tapMorph`). During a tap-induced `/` -> `/search` forward
+    enter the orchestrator additionally plays an enter slide that publishes
+    `pager.backMorph`; the Header's `trackMorph` derivation arbitrates by
+    preferring `backMorph` while `transitionTarget !== null`, so only one signal
+    drives the morph at any instant (no fighting, unlike the DV18/DV19
+    parallel-mechanism failures). The `tapMorph` rAF nonetheless runs concurrently
+    with its output unused during the enter and dissolves when the Header morph
+    fully merges into the executor's rAF (the same DV20-wide goal above).
 
 13. **Skeleton `{:else}` branches remain unreachable (spec-code drift on
     end-state #3 / 5b1-skipped item #3).** The spec says "skeleton branches
@@ -193,15 +209,18 @@ known + planned, not as undiscovered divergences from the bar.
     DualColumnLayout's `detectSwipe`. The field therefore cannot be removed until
     both the classifier + DualColumnLayout are addressed in 5b3.
 
-15. **`#dispatchNav` hardcodes `replaceState: false` (history pollution on
-    programmatic goto with replaceState).** When a caller (e.g. Header.onBack)
-    fires `goto(target, { replaceState: true })`, the orchestrator intercepts the
-    beforeNavigate, plays its slide, then re-dispatches with `replaceState: false`.
-    SvelteKit's beforeNavigate does not expose the original goto's replaceState
-    option, so the orchestrator cannot recover it. The result: the left page stays
-    in history (OS-back lands on it). **Fix path:** a side-channel signal (the
-    caller sets a replaceState flag on the pager store before goto; the orchestrator
-    reads it in `#dispatchNav`). TODO.
+15. **`replaceState` side-channel (SvelteKit beforeNavigate limitation).**
+    SvelteKit's `beforeNavigate` does not expose the original `goto`'s
+    `replaceState` option. When `Header.onBack` fires `goto(target, { replaceState:
+true })` and the orchestrator intercepts + re-dispatches, it recovers the intent
+    via a side-channel signal on the pager store: `Header.onBack` sets
+    `replaceStateIntent = true` before the goto, and `#dispatchNav` reads it when
+    re-dispatching. The intent is cleared on every navigation landing
+    (`onSvelteKitAfterNavigate`) so it cannot leak: a non-consumed nav (onBack to a
+    deep page, which the orchestrator does not intercept because it only consumes
+    tab-root targets) passes through to SvelteKit with `replaceState` already
+    applied, and the landing clears the spent intent before the next consumed
+    dispatch.
 
 ## Out of scope (5b3)
 

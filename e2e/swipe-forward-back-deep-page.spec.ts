@@ -159,7 +159,7 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		}));
 
 		// 1. The pipeline's preview for a thread back-target is empty (the thread
-		//    loads on land, not during the slide — Known #9 backward-to-deep visual
+		//    loads on land, not during the slide - Known #9 backward-to-deep visual
 		//    proxy). The preview must NOT show the discussions list (wrong content).
 		expect(preview.replyCount, 'preview is empty for a thread back-target').toBe(0);
 		// 2. No gray chip.
