@@ -291,7 +291,8 @@ export function reduce(
 					on: null,
 					sub: 'cancelling',
 					plan: state.macro.plan === null ? null : { ...state.macro.plan, progressDirection: 1 }
-				}
+				},
+				activePlan: state.activePlan === null ? null : { ...state.activePlan, progressDirection: 1 }
 			};
 		}
 		case 'interrupt': {

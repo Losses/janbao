@@ -1367,3 +1367,38 @@ $ bun run test:e2e -- messages-back-swipe tab-click-transition tab-exit-preview 
 ```
 
 R9 audits the post-fix state.
+
+## Session 17: R9 fixes (bidirectional formula comment + cancel activePlan consistency)
+
+R9 returned A PWC (1 CONCERN + 1 LOW) + B PWC (1 MED + 1 LOW + 1 CONCERN). Both
+auditors independently flagged the SAME two issues (consensus) + verified the
+core pipeline clean. Detailed in `docs/RV20-C05b2-Audit-09.md`.
+
+### Consensus #1: bidirectional re-grab formula comment
+
+The comment claimed "1:1 across the full range" but the formula
+`startProgress + rawDrag * (1 - startProgress)` maps rawDrag onto the
+`[startProgress, 1]` window (1:1 only from rest; rate scales by
+`(1 - startProgress)` for a re-grab so a full drag completes the slide to TO).
+FIX: rewrote the comment to describe the window mapping accurately. The formula
+is unchanged (consistent with the thread host's window mapping + ensures a
+re-grab's full drag reaches TO).
+
+### Consensus #2: cancel reducer activePlan divergence
+
+R8's §13.5 fix flipped `macro.plan.progressDirection` to 1 on cancel but left
+`activePlan` at the resolved direction. FIX: the cancel reducer now flips
+`activePlan.progressDirection` to 1 alongside `macro.plan`.
+
+### Gate outputs (real, post-fix)
+
+No behavior change (comment + latent state-field consistency). The e2e gate is
+unchanged from R8.
+
+```
+$ bun run check                       0 errors / 0 warnings (1461 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    418 pass / 0 fail
+```
+
+R10 audits the post-fix state.

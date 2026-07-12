@@ -646,13 +646,16 @@ export class NavPipelineOrchestrator {
 			const startProgress = this.#pendingGesture.startProgress;
 			const rawStart = this.#pendingGesture.rawStart;
 			// Rightward (rawDrag >= 0): for bidirectional hosts (the tab
-			// pager) the track follows the finger 1:1 across the full range
-			// so the published trackFractionalIndex carries intermediate values
-			// pixel of drag. For non-bidirectional hosts (thread / deep
-			// page) the threshold-absorbed fraction maps onto the REMAINING
-			// [startProgress, 1] window, so the first 20% of drag is absorbed
-			// AT the start position (not at 0) and the track never snaps back
-			// when a gesture begins mid-transition.
+			// pager) the drag maps onto the [startProgress, 1] window with no
+			// threshold, so the track moves from the first pixel (no 20%
+			// dead-zone) and a full drag completes the slide to TO. This is
+			// 1:1 only from rest (startProgress = 0); a mid-commit re-grab
+			// (startProgress != 0) scales the rate by (1 - startProgress) so
+			// the full [startProgress, 1] span completes in one drag. For
+			// non-bidirectional hosts (thread / deep page) the same window
+			// mapping is threshold-absorbed (the first 20% of drag is absorbed
+			// AT the start position), so the track never snaps back when a
+			// gesture begins mid-transition.
 			//
 			// Leftward (rawDrag < 0): a mid-commit re-grab whose finger
 			// then drags back left. The threshold-absorbed formula would
