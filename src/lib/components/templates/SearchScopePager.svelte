@@ -124,7 +124,7 @@
 
 	// Publish drag progress to the search pager store so SearchTabBar's underline
 	// tracks the finger. backMorph stays null: scope switching does not morph the
-	// header (only the GesturePageLayout back-swipe does, via the primary store).
+	// header (only the NavPipelineHost back-swipe does, via the primary store).
 	$effect(() => {
 		pager.set({
 			fractionalIndex: activeIndex - (dragOffset ?? 0) / (viewportWidth || 1),
@@ -143,7 +143,7 @@
 	});
 
 	// The active scope panel claims the scroll-chrome source. Keyed on
-	// activeIndex so it re-runs on scope switch; GesturePageLayout's single
+	// activeIndex so it re-runs on scope switch; the pipeline host's single
 	// setScrollContainer $effect reads this override, so registration is
 	// race-free regardless of parent/child $effect ordering.
 	$effect(() => {
@@ -152,7 +152,7 @@
 	});
 
 	/** Claim every drag EXCEPT a rightward drag at the leftmost scope, which is the
-	 *  back-swipe direction and must reach the ancestor GesturePageLayout. */
+	 *  back-swipe direction and must reach the ancestor NavPipelineHost. */
 	function shouldClaim(dx: number): boolean {
 		if (activeIndex === 0 && dx > 0) return false;
 		return true;

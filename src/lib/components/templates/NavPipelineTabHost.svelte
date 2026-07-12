@@ -17,10 +17,6 @@
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
 	import {
-		setActiveGestureTrack,
-		clearActiveGestureTrack
-	} from '$lib/stores/active-gesture-track.svelte';
-	import {
 		NavPipelineOrchestrator,
 		setNavPipelineOrchestrator,
 		releaseNavPipelineOrchestrator
@@ -63,11 +59,6 @@
 	const publication = $derived(orchestrator.publication);
 	const publicationPlan = $derived(publication.plan);
 	const publicationInFlight = $derived(publication.inFlight);
-
-	// Publish the track element for the FAB layer's Family A sampler.
-	$effect(() => {
-		if (trackEl) setActiveGestureTrack(trackEl);
-	});
 
 	// Per-panel scroll restore + scroll-chrome registration.
 	$effect(() => {
@@ -223,7 +214,6 @@
 	let held = false;
 	onDestroy(() => {
 		if (!browser) return;
-		if (trackEl) clearActiveGestureTrack();
 		scrollChrome.setScrollContainer(null);
 		releaseNavPipelineOrchestrator(orchestrator);
 		orchestrator.unmount();

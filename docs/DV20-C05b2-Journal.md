@@ -1289,3 +1289,81 @@ $ bun run test:e2e -- messages-back-swipe tab-click-transition tab-exit-preview 
 The one e2e failure (sub-threshold-morph commit, 30s timeout in the full run)
 passes in isolation at 5.2s; transient dev-server contention from six parallel
 spec files, not a regression. R7 audits the post-fix state.
+
+## Session 15: R7 fixes (active-gesture-track dead-write removal + comments + Known #8-11)
+
+R7 returned A PWC (2 CONCERN + 4 LOW) + B PWC (3 LOW). Both verified the core
+pipeline sound + all trajectories clean. Detailed in `docs/RV20-C05b2-Audit-07.md`.
+
+### A #1/#2: active-gesture-track dead writes + sampler comments
+
+A consequence of R4's sampler elimination: the FAB layer was the store's only
+reader, so after its removal the store was dead, but the live hosts still
+published to it and the comments still described the deleted sampler. FIX:
+removed the live writers (`setActiveGestureTrack`/`clearActiveGestureTrack`
+imports + publish `$effect` + teardown clear in NavPipelineHost and
+NavPipelineTabHost; `initActiveGestureTrack` in `+layout.svelte`) and rewrote
+the comments. The store file stays (the dead MobileTabPager/GesturePageLayout
+files import it; deletes with them in 5b3). Also fixed the orchestrator's two
+"sampler" comment references + the NavPipelineHost header.
+
+### B C1: effectiveKind comment scope
+
+Qualified the "ALWAYS active" comment to the tab host (deep pages fall through
+to the URL/config kind).
+
+### Documented as Known #8-11
+
+- #8: singleton state-machine one-frame stale window (latent, no visible
+  artifact).
+- #9: backward-to-deep-page visual proxy (deep-snapshot overlay is TODO 5b3).
+- #10: pointercancel treated as a release (pre-existing from detectSwipe; fix
+  coupled to 5b3 detectSwipe rework).
+- #11: SearchScopePager nested CSS transition (macro §9 nested sub-pager).
+- A #4 (skeleton unreachable) carried (5b1 Known #1); A #6 (coverage) = Known
+  #3/#7.
+
+### Gate outputs (real, post-fix)
+
+```
+$ bun run check                       0 errors / 0 warnings (1461 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    418 pass / 0 fail
+$ bun run test:e2e -- messages-back-swipe tab-click-transition tab-exit-preview fab tab-host-swipe tab-swipe-preview-height    94 passed (3.7m)
+```
+
+R8 audits the post-fix state.
+
+## Session 16: R8 fixes (state-machine cancel direction §13.5 + comment sweep)
+
+R8 returned A PWC (1 MED + 2 LOW) + B PWC (3 CONCERN). Both verified the core
+pipeline sound + all trajectories clean. Detailed in `docs/RV20-C05b2-Audit-08.md`.
+
+### A #1 (MED): state-machine plan progressDirection diverged on cancel (§13.5)
+
+`executor.onCancel` flips its plan copy to `progressDirection=1` (commit
+integrator targets FROM); the reducer's `cancel` preserved the resolved plan
+(`progressDirection=0`), so `publication.plan.progressDirection` carried the
+commit direction through the cancel. FIX: the reducer's `cancel` now produces
+`{ ...plan, progressDirection: 1 }`. Added a test assertion.
+
+### A #2/#3 + B C1/C2/C3: comments + spec doc
+
+- Spec: added `/messages/add/[userId]` to compose scope; "served by
+  MobileTabPager" -> `NavPipelineTabHost`.
+- `recoverDesktopFlipNav` comments: dropped the unqualified GPL `pendingNav`
+  reference -> direct "mobile->desktop analogue of commit-settle."
+- `gesture-constants.ts` (BOUNDARY_RUBBER_BAND_FACTOR), `e2e/tab-host-swipe.spec.ts`
+  (header + assertion), `e2e/enter-animation.spec.ts` (-33% -> -50%): removed the
+  stale "Family A sampler" framing + the 3-panel percentage.
+
+### Gate outputs (real, post-fix)
+
+```
+$ bun run check                       0 errors / 0 warnings (1461 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    418 pass / 0 fail
+$ bun run test:e2e -- messages-back-swipe tab-click-transition tab-exit-preview fab tab-host-swipe tab-swipe-preview-height    94 passed (3.7m)
+```
+
+R9 audits the post-fix state.

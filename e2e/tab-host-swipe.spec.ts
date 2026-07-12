@@ -7,9 +7,9 @@ import { prepareContext, waitForHydration, swipeForward } from './helpers';
 //
 //   1. The track slides (>= 3 intermediate frames with a delta > 50px from
 //      the resting m41). A snap or a no-op driver fails this.
-//   2. The FAB animates (scale delta > 0.1). The Family A sampler reads the
-//      NavPipelineTabHost track m41 each frame and `tabFraction(sample,
-//      tabIndex)` drives the scale across the slide.
+//   2. The FAB animates (scale delta > 0.1). The orchestrator publishes
+//      trackFractionalIndex across the slide and `tabFraction(track position,
+//      tabIndex)` drives the FAB scale.
 //   3. The Header stays in hamburger mode (the icon's mask group never
 //      rotates toward the back-arrow). This is the regression test for the
 //      orchestrator's tab-host pager publication: when `centerTab ===
@@ -148,7 +148,7 @@ test.describe('NavPipelineTabHost tab-swipe regression', () => {
 			fabScales.length > 0 ? Math.max(...fabScales) - Math.min(...fabScales) : 0;
 		expect(
 			fabDelta,
-			'FAB scale must animate (delta > 0.1) across the tab swipe via the Family A sampler'
+			'FAB scale must animate (delta > 0.1) across the tab swipe'
 		).toBeGreaterThan(0.1);
 
 		// (3) Header stays in hamburger mode: every sampled rotation must

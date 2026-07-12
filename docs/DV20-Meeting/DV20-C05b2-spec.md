@@ -11,9 +11,9 @@ Roll the new pipeline out to every remaining route that mounts `GesturePageLayou
 ### Routes to migrate
 
 - **Discussion thread** (`/discussion/[discussionId]/[slug]/[[page]]`): the 5b1 pilot. Verify after shared-component changes.
-- **Compose routes** (Family C): `/post/discussion`, `/messages/new`.
+- **Compose routes** (Family C): `/post/discussion`, `/messages/new`, `/messages/add/[userId]` (the last two share `MessageCompose`).
 - **Deep pages** (Family B 'deep', 19 routes): `/search`, `/bookmarks`, `/notifications`, `/profile/*` (12 sub-routes), `/admin/*` (6 sub-routes).
-- **Tab roots** (Family A, served by MobileTabPager): `/`, `/activity`, `/messages/inbox`.
+- **Tab roots** (Family A, served by NavPipelineTabHost): `/`, `/activity`, `/messages/inbox`.
 
 ### 5b1-skipped items (explicitly included)
 
@@ -126,6 +126,43 @@ known + planned, not as undiscovered divergences from the bar.
    on the tab host, or the backward-to-deep-page path. The geometry is
    unit-tested (`nav-executor-logic`); the forward tab swipe + the reduced-motion
    snap have e2e. **TODO:** add the missing trajectory e2e specs.
+
+8. **Singleton state-machine: one-frame stale window on a route swap.** The
+   orchestrator is constructed at component-init but `mount()` (which
+   `forceReset`s the shared singleton state machine) runs in `onMount`. For one
+   render frame the new host's `$derived` publication reads the singleton the
+   prior orchestrator left in `transitioning`. No visible artifact (the prior
+   `unmount()` clears the pager store first; the SSR initial transform holds the
+   visual at rest); `mount()` clears it the next frame. Tightening (a `mounted`
+   guard on the derived) is a future improvement.
+
+9. **Backward-to-deep-page visual proxy.** When the tab host's backward gesture
+   targets a deep page (via `backSwipeShouldPopHistory`), the slide reveals the
+   PREVIOUS TAB's panel as a visual proxy (the tab host has only its three tab
+   panels); on commit `history.back()` lands on the deep page, so the deep
+   content replaces the proxy at the slide's end. The orchestrator carries a
+   `TODO(5b3)` to overlay the deep page's cached snapshot during the slide. This
+   is the user-visible consequence of Known #6's `backSwipeShouldPopHistory`
+   retention.
+
+10. **`pointercancel` treated as a regular release.** `detectSwipe` routes
+    `pointercancel` through its terminal path to `onEnd`, so the pointer bridge
+    forwards it as a `pointerup` and the release gate commits vs cancels by
+    offset. A `pointercancel` past the commit threshold therefore commits
+    (navigates) instead of snapping back. Pre-existing (inherited from
+    `detectSwipe`, which DualColumnLayout still uses); rare in practice
+    (`touch-action: pan-y` handles most scroll conflicts). The intent
+    classifier's `pointercancel -> cancelled` path is dead because the bridge
+    cannot distinguish the cancel from a release inside `detectSwipe`'s `onEnd`.
+    The clean fix is coupled to the 5b3 `detectSwipe` rework.
+
+11. **`SearchScopePager` nested CSS transition.** The nested scope pager inside
+    `/search`'s `NavPipelineHost` centre panel drives its scope-switch via
+    `detectSwipe` + a `transition-transform duration-200` CSS class, with
+    `shouldClaim` + `exclusive` boundary handoff to the parent orchestrator.
+    Macro §9 sanctions this as a nested sub-pager (not a top-level pair), so it
+    is outside 5b2's "no CSS transitions in the gesture layer" binding (which is
+    about the top-level transition mechanism). It is not in 5b2's migration set.
 
 ## Out of scope (5b3)
 

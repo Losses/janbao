@@ -187,9 +187,11 @@
 	// for kind means the kind swaps at the trackFrac = 1 boundary (the tab-0 /
 	// tab-1 crossing, where the source-list FAB is already at scale 0; the
 	// midpoint of a multi-panel swap, the destination of an adjacent one), not
-	// at the click, so no flicker. This is ALWAYS active (even at integer rest)
-	// so the URL-swap frame cannot leak the incoming kind before the track has
-	// crossed that boundary.
+	// at the click, so no flicker. This is active whenever the tab host
+	// publishes trackFractionalIndex (including at integer rest on the tab
+	// host); on routes where it is null (deep pages) the kind falls through to
+	// the URL/config value, so the URL-swap frame cannot leak the incoming kind
+	// before the track has crossed that boundary.
 	const effectiveKind = $derived.by<FabKind>(() => {
 		const trackFrac = pager.trackFractionalIndex;
 		if (trackFrac !== null) {

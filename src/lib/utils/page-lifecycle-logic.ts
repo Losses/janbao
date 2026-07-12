@@ -20,8 +20,8 @@
  * / `deactivate` / `unmount` from the pilot host's lifecycle hooks;
  * every transition flows through `reduce` and `planUnmount` here, so
  * the reducer is exercised by production. The lifecycle-adjacent
- * html-singleton stores (`viewport-lock`, `scroll-chrome`,
- * `active-gesture-track`) inline their own refcounts; the
+ * html-singleton stores (`viewport-lock`, `scroll-chrome`) inline their
+ * own refcounts; the
  * `HttpSingletonClassController` below is the canonical template a
  * future consolidation would route them through, and is exercised by
  * the unit suite.
@@ -255,7 +255,7 @@ export const defaultHtmlClassApplier: HtmlClassApplier = {
  *  remove+add does not flicker.
  *
  *  The lifecycle-adjacent stores (`viewport-lock.svelte.ts`,
- *  `scroll-chrome`, `active-gesture-track`) inline their own refcounts
+ *  `scroll-chrome`) inline their own refcounts
  *  and do not construct this controller; this is the canonical
  *  template a future consolidation would route them through, and is
  *  exercised by the unit suite. */

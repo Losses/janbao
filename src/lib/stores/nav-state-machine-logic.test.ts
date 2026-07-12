@@ -119,6 +119,9 @@ describe('reducer: dragging -> committing -> cancelling', () => {
 		const s2 = reduce(s1, resolvedEvent(), NOW + 10);
 		const s3 = reduce(s2, { type: 'cancel' }, NOW + 20);
 		expect(s3.macro.sub).toBe('cancelling');
+		// §13.5: the plan's progressDirection flips to 1 (cancel) to match the
+		// executor's onCancel, so the state machine stays the sole authority.
+		expect(s3.macro.plan?.progressDirection).toBe(1);
 	});
 
 	test('commit from at-rest is a no-op', () => {

@@ -16,8 +16,8 @@
  *      host's track `bind:this` plus the FAB / Header via DOM queries;
  *      the executor writes the per-frame visual to those elements.
  *   4. Lifecycle: the host calls `mount` / `unmount` from its onMount /
- *      onDestroy and releases the html-singletons (active-gesture-track,
- *      viewport-lock) directly with a `browser` guard.
+ *      onDestroy and releases the html-singletons (viewport-lock) directly
+ *      with a `browser` guard.
  *
  * Per the DV20 spec's binding "UNIFY, DO NOT BRIDGE" constraint: this
  * orchestrator is the SOLE transition mechanism for EVERY transition
@@ -457,7 +457,7 @@ export class NavPipelineOrchestrator {
 			// `fab: null, header: null` in resolveElements and the FAB /
 			// Header layers read the pager store. During the enter,
 			// #isEnterAnimation forces coverProgress = 0 (the FAB layer's
-			// Family B sampler) and the centerTab branch's backMorph =
+			// Family B coverProgress driver) and the centerTab branch's backMorph =
 			// null drives the Header.
 			progressDirection: 0,
 			commitPhysics: this.#driver?.prefersReducedMotion() ? 'snap' : 'momentum'
@@ -503,9 +503,9 @@ export class NavPipelineOrchestrator {
 	/** Land an in-flight COMMIT transition when the platform flips mobile ->
 	 *  desktop (called by the host's resize handler, NOT by a route-away
 	 *  unmount). A commit-slide (progressDirection=0) in flight when the
-	 *  viewport crosses the desktop breakpoint still lands on its target -
-	 *  the same OUTCOME as GPL's pendingNav wall-clock cap, via a viewport-
-	 *  flip handler (not GPL's setTimeout-backed poll). A pre-commit live-
+	 *  viewport crosses the desktop breakpoint still lands on its target via
+	 *  a viewport-flip handler (the mobile->desktop analogue of the
+	 *  commit-settle dispatch, not a setTimeout-backed poll). A pre-commit live-
 	 *  drag (executor still in the 'live' phase) and a cancel-slide
 	 *  (progressDirection=1) do NOT land - the user may still cancel, or
 	 *  already cancelled. A route-away unmount (onDestroy) does not call
@@ -647,7 +647,7 @@ export class NavPipelineOrchestrator {
 			const rawStart = this.#pendingGesture.rawStart;
 			// Rightward (rawDrag >= 0): for bidirectional hosts (the tab
 			// pager) the track follows the finger 1:1 across the full range
-			// so the FAB sampler reads intermediate values from the first
+			// so the published trackFractionalIndex carries intermediate values
 			// pixel of drag. For non-bidirectional hosts (thread / deep
 			// page) the threshold-absorbed fraction maps onto the REMAINING
 			// [startProgress, 1] window, so the first 20% of drag is absorbed

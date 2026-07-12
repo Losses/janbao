@@ -4,8 +4,7 @@
 	// The pipeline structural shell for the deep-page, thread, and
 	// compose routes (the three tab roots mount `NavPipelineTabHost`
 	// instead). Renders the multi-panel track / scroll-pane / snippet
-	// slots / viewport-lock acquisition / scroll-chrome registration /
-	// active-gesture-track publication.
+	// slots / viewport-lock acquisition / scroll-chrome registration.
 	//
 	// Per the binding "UNIFY, DO NOT BRIDGE" constraint,
 	// this component carries NO gesture / navigation state of its own.
@@ -29,10 +28,6 @@
 	import { viewportLock } from '$lib/stores/viewport-lock.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
-	import {
-		setActiveGestureTrack,
-		clearActiveGestureTrack
-	} from '$lib/stores/active-gesture-track.svelte';
 	import {
 		NavPipelineOrchestrator,
 		setNavPipelineOrchestrator,
@@ -184,14 +179,6 @@
 	// (matches the home route's pagination scheme).
 	const discussionsBuildPageUrl: PageUrlBuilder = (p) => (p === 1 ? '/' : `/discussions/p${p}`);
 
-	// Publish the bound track element to the active-gesture-track store
-	// so the existing FloatingActionButtonLayer's Family A sampler (if
-	// any reads this surface) and any other ancestor consumer can follow
-	// the track. Mirrors the GPL pattern.
-	$effect(() => {
-		if (trackEl) setActiveGestureTrack(trackEl);
-	});
-
 	// Restore a panel's cached scroll position: set it immediately and again
 	// on the next frame (matching GPL). Setting scrollTop programmatically
 	// does not fire `onscroll`, so this cannot loop. Returns a rAF cleanup
@@ -339,8 +326,8 @@
 				window.scrollTo(0, 0);
 			} else {
 				// A mobile->desktop flip: land an in-flight committed
-				// transition (matches GPL's pendingNav wall-clock cap) before
-				// the orchestrator is torn down. A route-away unmount
+				// transition (the mobile->desktop analogue of commit-settle)
+				// before the orchestrator is torn down. A route-away unmount
 				// (onDestroy) does NOT do this, so the user's fresh nav wins.
 				if (orchestratorMounted) orchestrator.recoverDesktopFlipNav();
 				unmountOrchestrator();
@@ -416,10 +403,8 @@
 
 	onDestroy(() => {
 		if (!browser) return;
-		// Tear down: clear the active-gesture-track publication, release
-		// the viewport-lock, deactivate the orchestrator. Each release is
-		// guarded by `browser` (onDestroy also runs in SSR).
-		if (trackEl) clearActiveGestureTrack();
+		// Tear down: release the viewport-lock, deactivate the orchestrator.
+		// Each release is guarded by `browser` (onDestroy also runs in SSR).
 		if (held) {
 			viewportLock.release();
 			held = false;

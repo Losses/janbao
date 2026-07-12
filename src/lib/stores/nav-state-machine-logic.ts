@@ -275,7 +275,13 @@ export function reduce(
 		case 'cancel': {
 			// Released below threshold: enter cancelling, then land
 			// back on FROM. The orchestrator emits `land` after the
-			// cancel animation completes.
+			// cancel animation completes. The plan's progressDirection
+			// flips to 1 (cancel, target FROM) to match the executor's
+			// onCancel (which flips its own plan copy for the commit
+			// integrator's target). This keeps the state machine the
+			// sole authority for the plan (§13.5): a consumer reading
+			// publication.plan.progressDirection during the cancel sees
+			// the cancel direction, not the resolved commit direction.
 			if (state.macro.kind !== 'transitioning') return state;
 			if (state.macro.sub !== 'dragging') return state;
 			return {
@@ -284,7 +290,7 @@ export function reduce(
 					kind: 'transitioning',
 					on: null,
 					sub: 'cancelling',
-					plan: state.macro.plan
+					plan: state.macro.plan === null ? null : { ...state.macro.plan, progressDirection: 1 }
 				}
 			};
 		}

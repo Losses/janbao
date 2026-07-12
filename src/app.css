@@ -232,7 +232,7 @@ header nav {
 	scroll-margin-top: var(--header-height, 0px);
 }
 
-/* GesturePageLayout content card. Wraps each panel's content so the scroll
+/* Pipeline host content card. Wraps each panel's content so the scroll
    container (`.scroll-pane`) can be the page-bg surface with this white card
    floating inside it on mobile (matching the homepage). Transparent + padding
    on desktop (replaces the pane's former `p-3`); white card on mobile. */
@@ -266,7 +266,7 @@ header nav {
 	}
 
 	/* DualColumnLayout must fill 100% height when fixed-viewport is active so the 
-	   inner ThreadPager / GesturePageLayout viewports can restrict their client height
+	   inner pipeline-host track viewports can restrict their client height
 	   and scroll independently. Otherwise, flexbox parent height collapses and the
 	   entire layout stretches to scrollHeight, freezing all scrolling. */
 	html.fixed-viewport .dual-column-layout,
@@ -311,7 +311,7 @@ header nav {
 	/* Mobile content gutter for non-gesture, non-pager routes: the 0.75rem
 	   content padding (matches .gpl-card on gesture routes and the p-3 on the
 	   pager's own panels). Two exclusions, both structural:
-	   - html.fixed-viewport (GesturePageLayout): .gpl-card already supplies
+	   - html.fixed-viewport (pipeline host): .gpl-card already supplies
 	     0.75rem inside a full-bleed page-bg scroll surface.
 	   - .mobile-tab-pager-viewport descendant: the pager's overflow-hidden
 	     viewport MUST sit edge-to-edge so neighbour panels clip at the screen
@@ -333,7 +333,7 @@ header nav {
 		background-color: var(--color-base-100);
 		border-bottom: 1px solid var(--color-base-300);
 	}
-	/* The search scope pager fills its GesturePageLayout centre card. Give that
+	/* The search scope pager fills its NavPipelineHost centre card. Give that
 	   card a definite height + NO padding (the scope panels carry their own via
 	   .scroll-pane) so each panel (height:100% overflow-y:auto) becomes a scroller
 	   and the active panel drives hide-on-scroll via the scroll-chrome override. */

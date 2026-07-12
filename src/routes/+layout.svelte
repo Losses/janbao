@@ -20,7 +20,6 @@
 	import { markEnterFromList, setReachedFromList } from '$lib/stores/thread-nav.svelte';
 	import { initNavigationStore } from '$lib/stores/navigation.svelte';
 	import { initMobilePagerStore, initSearchPagerStore } from '$lib/stores/mobile-pager.svelte';
-	import { initActiveGestureTrack } from '$lib/stores/active-gesture-track.svelte';
 	import { getPageCacheStore, type PageCacheStore } from '$lib/stores/page-cache.svelte';
 	import { getCurrentScrollY } from '$lib/utils/get-current-scroll-y';
 	import { isTabRootPath } from '$lib/utils/history-nav';
@@ -64,7 +63,6 @@
 	const navStore = initNavigationStore();
 	initMobilePagerStore();
 	initSearchPagerStore();
-	initActiveGestureTrack();
 
 	// Hold the scroll-chrome header (and pin it visible on hash-enter) for
 	// navigations where SvelteKit's scroll would otherwise make it twitch:
