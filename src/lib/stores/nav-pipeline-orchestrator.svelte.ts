@@ -497,6 +497,7 @@ export class NavPipelineOrchestrator {
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
 		executor.onDragStart(plan, startProgress, 0);
 		executor.onCommit(0, TAB_CLICK_COMMIT_MS);
+		this.#stateMachine.onCommit();
 	}
 
 	/** Land an in-flight COMMIT transition when the platform flips mobile ->
@@ -663,7 +664,14 @@ export class NavPipelineOrchestrator {
 			const bidirectional = inputs.bidirectional === true;
 			const isBoundary = this.#pendingGesture.boundary;
 			const trackProgress = isBoundary
-				? Math.max(0, rawDrag * BOUNDARY_RUBBER_BAND_FACTOR)
+				? // Boundary rubber-band anchors at the gesture's start
+					// progress so a re-grab that begins mid-commit (the in-flight
+					// forward commit's visual is left of the at-rest tab) does not
+					// jump to the at-rest position on the first drag frame. From
+					// rest startProgress is 0 and the term is `max(0, rawDrag)
+					// * factor`, i.e. a rubber-band that never crosses the at-rest
+					// tab back into the panel range.
+					startProgress + Math.max(0, rawDrag) * BOUNDARY_RUBBER_BAND_FACTOR
 				: rawDrag < 0
 					? Math.max(0, startProgress + rawDrag)
 					: bidirectional
@@ -671,6 +679,7 @@ export class NavPipelineOrchestrator {
 						: startProgress + this.#thresholdAbsorbedProgress(rawDrag) * (1 - startProgress);
 			const raw = Math.max(0, Math.min(1, rawStart + rawDrag));
 			executor.onDragMove(trackProgress, intent.offset);
+			this.#stateMachine.onDragMove(intent);
 			this.#publish(raw);
 		}
 		// Released: apply the commit-vs-cancel gate.
@@ -682,6 +691,7 @@ export class NavPipelineOrchestrator {
 					if (executor.state.progress > 0) {
 						this.#commitStartRaw = this.#publication.progress;
 						executor.onCancel(intent.releaseVelocity);
+						this.#stateMachine.onCancel();
 					} else {
 						this.#landAtRest();
 					}
@@ -707,9 +717,11 @@ export class NavPipelineOrchestrator {
 					if (shouldCommit) {
 						this.#commitStartRaw = this.#publication.progress;
 						executor.onCommit(intent.releaseVelocity);
+						this.#stateMachine.onCommit();
 					} else if (executor.state.progress > 0) {
 						this.#commitStartRaw = this.#publication.progress;
 						executor.onCancel(intent.releaseVelocity);
+						this.#stateMachine.onCancel();
 					} else {
 						this.#landAtRest();
 					}
@@ -781,6 +793,16 @@ export class NavPipelineOrchestrator {
 			direction = 'backward';
 		} else {
 			return;
+		}
+		// A re-grab mid-transition (an in-flight gesture or tab-click)
+		// fires the §5 interrupt event so the state machine drops the
+		// in-flight phase + TO before this gesture's onResolved re-enters
+		// transitioning. The interrupt is required because the resolved
+		// handler preserves a 'committing' sub when re-resolved mid-commit;
+		// clearing it here lets the new drag re-enter 'dragging' so its
+		// drag-move/commit/cancel events track correctly.
+		if (this.#publication.inFlight) {
+			this.#stateMachine.onInterrupt(intent);
 		}
 		// A gesture now owns the publication. Clear the enter flag; a
 		// re-grab continues coverProgress from the publication's live raw.
@@ -1167,6 +1189,7 @@ export class NavPipelineOrchestrator {
 		// so the slide reveals the correct content. Dispatch on settle.
 		this.#executor?.onDragStart(plan, startProgress, 0);
 		this.#executor?.onCommit(0, TAB_CLICK_COMMIT_MS);
+		this.#stateMachine.onCommit();
 		return true;
 	}
 

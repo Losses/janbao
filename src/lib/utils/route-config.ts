@@ -330,9 +330,10 @@ export function isPipelineSwipeDisabledRoute(pathname: string): boolean {
 	return getRouteData(pathname).backParent !== undefined;
 }
 
-/** True for the exact pager routes (where the MobileTabPager owns the swipe).
- *  A positional query over `MOBILE_TAB_DEFS` (the spatial tab metadata),
- *  not a per-route `RouteData` field. */
+/** True for the exact pager routes (the three tab roots, where
+ *  `NavPipelineTabHost` owns the tab swipe). A positional query over
+ *  `MOBILE_TAB_DEFS` (the spatial tab metadata), not a per-route
+ *  `RouteData` field. */
 export function isPagerRoute(pathname: string): boolean {
 	return MOBILE_TAB_DEFS.some((tab) => tab.href === pathname);
 }

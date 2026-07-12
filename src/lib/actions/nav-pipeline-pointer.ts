@@ -1,25 +1,20 @@
 // src/lib/actions/nav-pipeline-pointer.ts
 /**
- * The 5b1 pilot pointer bridge. A Svelte action that wraps the existing
+ * The pipeline pointer bridge. A Svelte action that wraps the
  * `detectSwipe` primitive (so the edge-dead-zone, horizontal-ratio
- * classification, and rebound logic are byte-stable with every other
- * route's gesture detection) and forwards pointer events to the
- * orchestrator's intent classifier.
+ * classification, and rebound logic stay byte-stable) and forwards
+ * pointer events to the orchestrator's intent classifier.
  *
- * Per the C05b1 spec's binding "UNIFY, DO NOT BRIDGE" constraint: this
- * action does NOT own animation or navigation. It is gesture DETECTION
- * only - it converts pointer events into `(deltaX, velocity, reversed)`
- * callbacks (the same surface `detectSwipe` exposes to GesturePageLayout
- * on non-pilot routes) and forwards them to the orchestrator. The
- * orchestrator runs the resolver + executor + driver; the executor
- * drives the rAF that writes the track transform. There is no CSS
- * transition, no `transitionend`, no `pendingNav` rAF-poll on this
- * action's surface.
+ * Per the binding "UNIFY, DO NOT BRIDGE" constraint: this action does
+ * NOT own animation or navigation. It is gesture DETECTION only: it
+ * converts pointer events into `(deltaX, velocity, reversed)` callbacks
+ * and forwards them to the orchestrator. The orchestrator runs the
+ * resolver + executor + driver; the executor drives the rAF that
+ * writes the track transform. There is no CSS transition, no
+ * `transitionend`, no `pendingNav` rAF-poll on this action's surface.
  *
- * `disabled` is gated so non-pilot routes never activate this bridge
- * (non-pilot routes keep their existing `GesturePageLayout` gesture
- * path, untouched in 5b1). The action is only mounted on the pilot's
- * `NavPipelineHost` viewport element.
+ * Mounted on the viewport element of both pipeline hosts
+ * (`NavPipelineHost` and `NavPipelineTabHost`).
  */
 import type { Action } from 'svelte/action';
 import { detectSwipe, type EndHandler, type MoveHandler } from './swipe';

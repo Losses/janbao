@@ -10,7 +10,7 @@ MED + 2 comment concerns).** Counter stays 0/5.
   branch to publish `backMorph: rawDragFraction` (a number) instead of `null`.
   The Header read `backMorph: 0` (not null) and flipped to back-arrow. FIX:
   `resetPagerStore` and `#republishToPager` now have a third branch (bidirectional
-  tab host) that publishes `backMorph: null, active: true` — matching the old
+  tab host) that publishes `backMorph: null, active: true`, matching the old
   MobileTabPager.
 - **B C2 + A C1-C2 (dead code + stale comments):** removed dead `chipExitActive`
   derivation; rewrote the orchestrator docstring from "pilot route" to "universal

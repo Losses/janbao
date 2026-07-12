@@ -195,6 +195,23 @@ describe('reducer: interruption', () => {
 		expect(s4.fromPathname).toBe('/from');
 		expect(s4.fromTag).toBe('detail');
 	});
+
+	test('re-grab after commit re-enters dragging (interrupt clears committing)', () => {
+		// A mid-commit re-grab: interrupt clears the committing sub to
+		// intent, then resolved for the new gesture sets sub 'dragging'
+		// (the preserve-committing branch fires only from transitioning,
+		// not from intent).
+		const s0 = initialOrchestratorState('deep');
+		const s1 = reduce(s0, intentEvent(), NOW);
+		const s2 = reduce(s1, resolvedEvent(), NOW + 10);
+		const s3 = reduce(s2, { type: 'commit' }, NOW + 20);
+		expect(s3.macro.sub).toBe('committing');
+		const s4 = reduce(s3, { type: 'interrupt', intent: initialIntentState() }, NOW + 30);
+		expect(s4.macro.kind).toBe('intent');
+		const s5 = reduce(s4, resolvedEvent(), NOW + 40);
+		expect(s5.macro.kind).toBe('transitioning');
+		expect(s5.macro.sub).toBe('dragging');
+	});
 });
 
 describe('reducer: landing and reset', () => {

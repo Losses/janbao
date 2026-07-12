@@ -382,14 +382,24 @@ export function trackTranslateX(plan: TransitionPlan, progress: number): number 
  *  read together with the executor's current progress.
  *
  *  Returns 0 when the plan covers zero distance (a degenerate plan with
- *  no slide). Clamps to [0, 1] when `tx` falls outside the plan's
- *  travelled span. */
+ *  no slide). Extrapolates (returns a value outside [0, 1]) when `tx`
+ *  falls outside the new plan's travelled span, so the new transition's
+ *  first frame reproduces the current visual exactly (§5 "No jump"). A
+ *  direction-reversing re-grab on the bidirectional tab host builds a
+ *  plan whose span does not contain the in-flight visual (a forward
+ *  commit toward tab N interrupted by a backward re-grab whose plan
+ *  spans the previous tab); extrapolating keeps the track continuous
+ *  while the drag proceeds. Out-of-range progress is safe downstream:
+ *  `trackTranslateX` is linear, the commit solver scales by
+ *  `|target - progress|`, and the raw `coverProgress` the FAB/Header
+ *  read is clamped at its own publish site (the orchestrator), so only
+ *  the track translateX carries the out-of-range value transiently. */
 export function progressAtTranslateX(plan: TransitionPlan, tx: number): number {
 	const sign = plan.pageTrack.axis === 'left' ? -1 : 1;
 	const base = plan.pageTrack.restingTranslate ?? 0;
 	const span = sign * plan.pageTrack.distance;
 	if (span === 0) return 0;
-	return clamp((tx - base) / span, 0, 1);
+	return (tx - base) / span;
 }
 
 /** Build the per-frame visual record by calling the plan's consumer

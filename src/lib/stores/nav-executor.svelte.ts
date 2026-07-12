@@ -28,10 +28,10 @@
  *     the rAF scheduler; the rAF never runs during SSR.
  *
  * The boundary methods (`onDragStart`, `onDragMove`, `onCommit`,
- * `onCancel`, `onLand`) are called by the orchestrator (Cycle 5b1),
- * which drives them from the state-machine events. The shell is
- * exercised by the unit suite for the pure half; the shell itself is
- * not unit-tested under `bun:test` (it uses `$state`).
+ * `onCancel`, `onLand`) are called by the orchestrator, which drives
+ * them from the state-machine events. The shell is exercised by the
+ * unit suite for the pure half; the shell itself is not unit-tested
+ * under `bun:test` (it uses `$state`).
  */
 
 import { browser } from '$app/environment';

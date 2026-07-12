@@ -1,13 +1,13 @@
 <script lang="ts">
 	// src/lib/components/templates/NavPipelineHost.svelte
 	//
-	// The 5b1 pilot-route structural shell. Renders the multi-panel
-	// track / scroll-pane / snippet slots / viewport-lock acquisition /
-	// scroll-chrome registration / active-gesture-track publication for
-	// the pilot route `/messages/[id]`. Replaces `GesturePageLayout` on
-	// the pilot route ONLY (every other route still mounts GPL).
+	// The pipeline structural shell for the deep-page, thread, and
+	// compose routes (the three tab roots mount `NavPipelineTabHost`
+	// instead). Renders the multi-panel track / scroll-pane / snippet
+	// slots / viewport-lock acquisition / scroll-chrome registration /
+	// active-gesture-track publication.
 	//
-	// Per the C05b1 spec's binding "UNIFY, DO NOT BRIDGE" constraint,
+	// Per the binding "UNIFY, DO NOT BRIDGE" constraint,
 	// this component carries NO gesture / navigation state of its own.
 	// The track's transform is written by `LiveNavDomDriver` each frame
 	// (via `style.setProperty`); the navigation is dispatched by the
@@ -43,6 +43,8 @@
 	import ActivitySkeleton from '$lib/components/panels/ActivitySkeleton.svelte';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import DiscussionsSkeleton from '$lib/components/panels/DiscussionsSkeleton.svelte';
+	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
+	import MessagesSkeleton from '$lib/components/panels/MessagesSkeleton.svelte';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import type { PageUrlBuilder } from '$lib/types/tabs';
 
@@ -540,6 +542,22 @@
 							/>
 						{:else}
 							<DiscussionsSkeleton />
+						{/if}
+					{:else if leftPanelPathname === '/messages/inbox'}
+						{#if page.data.messages && !Array.isArray(page.data.messages)}
+							<MessagesPanel
+								conversations={page.data.messages.conversations}
+								currentPage={page.data.messages.page}
+								totalPages={page.data.messages.totalPages}
+								t={page.data.t}
+								paginate={true}
+							/>
+						{:else}
+							<!-- The inbox list object is the root-layout `messages`
+							     data; on `/messages/[id]` that key is shadowed by the
+							     route's message-row array, so the preview falls back to
+							     a skeleton and the real inbox loads on land. -->
+							<MessagesSkeleton />
 						{/if}
 					{:else if left}
 						{@render left()}

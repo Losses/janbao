@@ -606,10 +606,45 @@ describe('track geometry helpers (interrupt handoff)', () => {
 		expect(progressAtTranslateX(enter, trackTranslateX(backSwipe, 0.3))).toBeCloseTo(0.7, 7);
 	});
 
-	test('progressAtTranslateX clamps when tx is outside the plan span', () => {
+	test('progressAtTranslateX extrapolates when tx is outside the plan span', () => {
+		// Extrapolation keeps a handoff whose in-flight visual falls outside
+		// the new plan's span starting at that visual (§5 "No jump").
+		// `trackTranslateX` is linear, so the inverse extends past [0, 1];
+		// downstream consumers tolerate the out-of-range value (the raw
+		// coverProgress the FAB/Header read is clamped at its own site).
 		const plan = trackPlan('left', 375, 0); // travelled span [0, -375]
-		expect(progressAtTranslateX(plan, 100)).toBe(0); // above 0 -> progress 0
-		expect(progressAtTranslateX(plan, -500)).toBe(1); // below -375 -> progress 1
+		expect(progressAtTranslateX(plan, 100)).toBeCloseTo(-100 / 375, 7); // above 0 -> negative
+		expect(progressAtTranslateX(plan, -500)).toBeCloseTo(500 / 375, 7); // below -375 -> past 1
+	});
+
+	test('reverse-direction re-grab on the tab host hands off with no jump', () => {
+		// A forward tab-to-tab commit (tab 1 at -W toward tab 2 at -2W)
+		// interrupted mid-commit by a backward re-grab whose plan spans the
+		// previous tab (tab 1 at -W toward tab 0 at 0). The in-flight visual
+		// (-1.5W) lies outside the backward plan's span [-W, 0]; the handoff
+		// must reproduce that visual on the new plan's first frame so the
+		// track does not jump half a panel rightward.
+		const W = 375;
+		const forward = trackPlan('left', W, -W);
+		const backward = trackPlan('right', W, -W);
+		const inflightTx = trackTranslateX(forward, 0.5); // -1.5W
+		const startProgress = progressAtTranslateX(backward, inflightTx);
+		expect(trackTranslateX(backward, startProgress)).toBeCloseTo(inflightTx, 7);
+		expect(startProgress).toBeLessThan(0); // extrapolated below [0, 1]
+	});
+
+	test('boundary re-grab at the first tab hands off with no jump', () => {
+		// A forward commit from tab 0 (0 toward tab 1 at -W) interrupted by a
+		// rightward re-grab that resolves to the first-tab boundary plan
+		// (span [0, W]). The in-flight visual (-0.5W) lies outside that span;
+		// the handoff reproduces it.
+		const W = 375;
+		const forward = trackPlan('left', W, 0);
+		const boundary = trackPlan('right', W, 0);
+		const inflightTx = trackTranslateX(forward, 0.5); // -0.5W
+		const startProgress = progressAtTranslateX(boundary, inflightTx);
+		expect(trackTranslateX(boundary, startProgress)).toBeCloseTo(inflightTx, 7);
+		expect(startProgress).toBeLessThan(0);
 	});
 
 	test('progressAtTranslateX returns 0 for a zero-distance plan', () => {

@@ -65,11 +65,13 @@ export type FabFamily = 'list' | 'overlay' | 'compose';
 /**
  * Whether the family's FAB scale is driven by the per-frame track sampler.
  *
- * Only Family A (list / tab pager): the MobileTabPager `fractionalIndex` jumps
- * to its integer endpoint on release while the track keeps easing, so the
- * per-frame track read is the continuous signal across the snap. Families B (overlay) and C (compose) both read the live `coverProgress` store
- * signal directly (no sampler); the atom's CSS transition eases only their
- * discrete (non-drag) swaps.
+ * Only Family A (list / tab host): the orchestrator's published
+ * `fractionalIndex` is the threshold-absorbed pill position and
+ * `coverProgress` is the raw drag fraction; neither is the 1:1 track
+ * position the Family A FAB follows across a drag, a re-grab, and the
+ * first/last-tab rubber-band, so Family A reads the live track transform
+ * (the sampler). Families B (overlay) and C (compose) read the live
+ * `coverProgress` signal directly (no sampler).
  */
 export function familyNeedsSamplerDuringDrag(family: FabFamily): boolean {
 	return family === 'list';

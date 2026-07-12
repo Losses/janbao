@@ -1022,3 +1022,99 @@ Updated F5 spec:
   Mechanically ran `prettier --write` and a byte-level em-dash -> `--`
   sed substitution on that file to unblock the gate; the audit
   content was not read into the session.
+
+## Session 11: R3 audit fixes + Known 5b2 conditions
+
+R3 returned A FAIL (1 HIGH + 2 MED + 1 CONCERN + 2 LOW) + B PWC (2 MED +
+5 CONCERN + 2 LOW + 2 comment CONCERN). Every finding was triaged for
+validity (empirical repro + code trace) before the fix; only confirmed-real
+items were fixed. Detailed in `docs/RV20-C05b2-Audit-03.md`.
+
+### HIGH (A): reverse-direction re-grab track jump on the tab host
+
+- `progressAtTranslateX` extrapolates instead of clamping. A direction-
+  reversing re-grab mid-commit builds a new plan whose track span does not
+  contain the in-flight visual; extrapolating keeps the new gesture's first
+  frame at the current visual (§5 "No jump"). Out-of-range progress is safe
+  downstream (`trackTranslateX` is linear; the commit solver scales by
+  `|target - progress|`; the raw `coverProgress` the FAB/Header read is
+  clamped at its own publish site).
+- The boundary rubber-band drag formula anchors at `startProgress` so a
+  mid-commit boundary re-grab does not jump on the first drag frame.
+- Three preventive unit tests (extrapolation; reverse handoff; boundary
+  handoff). An empirical pure-function repro confirmed the half-panel jump
+  before the fix.
+
+### MED (B): `/messages/inbox` left-panel branch
+
+- Added the `/messages/inbox` branch to `NavPipelineHost` + a new
+  `MessagesSkeleton` (mirroring `ActivitySkeleton` / `DiscussionsSkeleton`).
+- Guards on `!Array.isArray(page.data.messages)`: on `/messages/[id]` the
+  `messages` key is shadowed by the route's message-row array, so the preview
+  renders `MessagesSkeleton` there (the inbox loads on land); elsewhere
+  `MessagesPanel` from the eager-loaded inbox object. The shadowing caused a
+  first-pass e2e regression (`conversations.length` on undefined) that the
+  guard resolves.
+
+### MED (B): `NavPipelineTabHost` at-rest `resetPagerStore`
+
+- The at-rest `$effect` now calls `orchestrator.resetPagerStore()` so
+  `coverProgress` / `transitionTarget` do not retain in-flight values at rest.
+
+### CONCERN (consensus): `NavStateMachine` sub driven through commit/cancel
+
+- The orchestrator now dispatches `onDragMove` (live drag), `onCommit`
+  (release past threshold), `onCancel` (release below threshold) at every
+  executor call site, and `onInterrupt` at `#beginGesture` start when a
+  transition is in flight. The interrupt is required because the resolved
+  handler preserves a `'committing'` sub when re-resolved mid-commit; the
+  interrupt clears it so the new drag re-enters `'dragging'` and its
+  drag-move/commit/cancel events track. Preventive reducer test for the
+  commit → interrupt → resolved → dragging sequence.
+
+### CONCERN (B): coordinator dead code
+
+- Deleted `nav-coordinator.ts` + `nav-coordinator.test.ts` (zero source
+  imports; its §9 chip-exit role is superseded by the 5b2 skeleton approach).
+
+### CONCERN (both): stale comments
+
+- Rewrote every pilot-only / `GesturePageLayout` / `MobileTabPager` /
+  CSS-transition reference to current behavior: `NavPipelineHost` header,
+  `nav-pipeline-pointer`, `FloatingActionButtonLayer` (sampler + family-swap),
+  `fab-scale`, `nav-state-machine`, `nav-executor`, `nav-pipeline-gate`,
+  `gesture-constants` `TRACK_TRANSITION_MS`, `route-config` `isPagerRoute`,
+  `route-data` `backParent` header.
+
+### LOW (B): `held` init
+
+- `NavPipelineTabHost` `held` initializes `false`; the acquire site sets it
+  `true` (matching `NavPipelineHost`).
+
+### Documented as Known 5b2 conditions (spec)
+
+- Family A FAB sampler (§5 DOM read-back): the published `fractionalIndex` is
+  the threshold-absorbed pill position and `coverProgress` is the raw drag
+  fraction; neither is the 1:1 track position. TODO next round: publish the
+  track position (from `trackTranslateX(plan, executor.progress)`) and remove
+  the sampler.
+- `readRenderedFabScale` (§13.5): anchors the family-swap ease at the visible
+  scale, immune to the reactive race on a SvelteKit-navigation flush. TODO.
+- FAB/Header separate rAF loops (end-state #2 accommodates the separate FAB
+  family-swap ease).
+- Velocity-matched commit e2e (§12): TODO.
+
+### Gate outputs (real, post-fix)
+
+```
+$ bun run check                       0 errors / 0 warnings (1461 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    422 pass / 0 fail
+$ bun run test:e2e -- messages-back-swipe tab-click-transition tab-exit-preview fab tab-host-swipe tab-swipe-preview-height    94 passed (3.7m)
+```
+
+`lint` also required fixing a residual em-dash in
+`docs/RV20-C05b2-Audit-02.md` that the S10 sed sweep missed; the S10
+journal's `LINT_EXIT=0` captured `tail`'s exit code, not `bun run lint`'s
+(the gate was actually red until the em-dash fix). R4 audits the post-fix
+state.

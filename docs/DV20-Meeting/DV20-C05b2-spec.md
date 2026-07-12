@@ -53,6 +53,50 @@ Roll the new pipeline out to every remaining route that mounts `GesturePageLayou
 6. **Discussion thread verify.** The 5b1 pilot after shared-component changes.
 7. **`isGesturePageLayoutRoute` rename + `backParent` audit.** Prepare for 5b3.
 
+## Known 5b2 conditions (intentional deviations, not defects)
+
+These are §5/§13.5 deviations retained with a technical justification and a
+defined resolution path. They are documented here so auditors assess them as
+known + planned, not as undiscovered divergences from the bar.
+
+1. **Family A FAB sampler (DOM read-back, §5).** The Family A (tab host) FAB
+   reads the live track transform via `getComputedStyle(...).transform.m41`
+   every frame (the sampler in `FloatingActionButtonLayer`). §5 names this DOM
+   read-back for elimination. The orchestrator's published `fractionalIndex` is
+   the threshold-absorbed PILL position and `coverProgress` is the raw drag
+   fraction; neither is the 1:1 track position the Family A FAB follows across a
+   drag, a mid-commit re-grab, and the first/last-tab rubber-band. Eliminating
+   the sampler requires the orchestrator to publish the track's 1:1 fractional
+   position, computed from `trackTranslateX(plan, executor.progress)` (which
+   covers the boundary/re-grab edge cases the existing published signals do
+   not), and the FAB layer to read that signal reactively. **TODO (next round):**
+   publish the track position and remove the sampler.
+
+2. **Family-swap ease `fromScale` (DOM read-back, §13.5).** The FAB family-swap
+   ease anchors its start scale by reading the atom's rendered transform
+   (`readRenderedFabScale`). This is immune to a reactive race where
+   `restingScale` advances to a transient post-swap value in the same
+   SvelteKit-navigation flush before the ease's `$effect.pre` reads it (the
+   tracked reactive value had already ramped away from the visible scale).
+   **TODO (next round):** track the last-committed scale in a `$state` updated
+   post-DOM-update so the reactive signal holds the visible value, eliminating
+   the DOM read.
+
+3. **FAB/Header run their own rAF loops (not the executor's single loop).**
+   End-state #2 specifies the FAB scale is driven by `coverProgress`
+   (within-route) OR the FAB layer's family-swap rAF ease (cross-route). The
+   FAB layer therefore runs its own rAF (the Family A sampler + the family-swap
+   ease), not the executor's single loop. Fully merging the FAB/Header into the
+   executor's plan-driven loop is a DV20-wide goal (macro §5) beyond 5b2's
+   scope; the 5b2 spec's end-state #2 explicitly accommodates the separate FAB
+   ease.
+
+4. **Velocity-matched commit e2e (§12).** No e2e varies the release velocity and
+   asserts the commit duration tracks it (longer for slow releases, shorter for
+   fast). The `nav-executor-logic` unit suite covers the solver branches
+   (`solveCommitDuration`); reduced-motion has an e2e (`messages-back-swipe`).
+   **TODO:** add the integration-level velocity e2e.
+
 ## Out of scope (5b3)
 
 - Deleting `GesturePageLayout` / `MobileTabPager` / `swipe.ts` / `DualColumnLayout`.

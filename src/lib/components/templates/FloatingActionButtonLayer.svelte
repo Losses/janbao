@@ -326,14 +326,16 @@
 		if (!browser) return;
 		if (samplerRafId !== undefined) return;
 		samplerActive = true;
-		// The sampler runs CONTINUOUSLY while a list-family track is bound. It does
-		// NOT self-stop at the resting integer: a tab TAP slides the track (CSS
-		// transition) without changing any arm-effect dependency (track element,
-		// family, dragging all stay the same), so a self-stopped sampler would never
-		// re-arm and the FAB would snap instead of following the slide. Reading the
-		// track transform every frame is one getComputedStyle on one element
-		// (mobile-only, list routes only) - cheap, and the only way to follow the
-		// visual track motion across drags, snaps, cancels, and tab taps uniformly.
+		// The sampler runs CONTINUOUSLY while a list-family track is bound. It
+		// does NOT self-stop at the resting integer: a tab TAP slides the track
+		// via the executor's rAF without changing any arm-effect dependency
+		// (track element, family, dragging all stay the same), so a self-stopped
+		// sampler would never re-arm and the FAB would snap instead of following
+		// the slide. Reading the track transform every frame is one
+		// getComputedStyle on one element (mobile-only, list routes only); it is
+		// the continuous 1:1 track signal the FAB follows across drags, commits,
+		// cancels, and tab taps (the published `fractionalIndex` is the
+		// threshold-absorbed pill position, not the 1:1 track position).
 		const tick = (): void => {
 			// Track unmounted (route swap took it): disarm.
 			if (activeGestureTrack.track === null) {

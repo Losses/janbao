@@ -115,6 +115,7 @@
 	// pager store to the at-rest state.
 	$effect(() => {
 		if (publicationPlan !== null) return;
+		orchestrator.resetPagerStore();
 		if (viewportEl) {
 			const idx = activeIndex;
 			orchestrator.updateViewport(viewportEl.clientWidth, -idx * viewportEl.clientWidth);
@@ -193,6 +194,7 @@
 		setNavPipelineOrchestrator(orchestrator);
 		orchestratorMounted = true;
 		viewportLock.acquire();
+		held = true;
 		const initialEl = activeIndex === 0 ? section0El : activeIndex === 1 ? section1El : section2El;
 		if (initialEl) scrollChrome.setScrollContainer(initialEl);
 
@@ -218,7 +220,7 @@
 		};
 	});
 
-	let held = true;
+	let held = false;
 	onDestroy(() => {
 		if (!browser) return;
 		if (trackEl) clearActiveGestureTrack();

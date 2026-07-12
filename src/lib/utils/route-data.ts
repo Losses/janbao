@@ -6,8 +6,9 @@
  * per `docs/DV20-Plan.md` §3. The record holds exactly four fields:
  *
  *   - `tag`              selects the resolver pair (§4)
- *   - `backParent`       structural parent (breadcrumb + left-preview);
- *                        NOT the back-target (§3, §6)
+ *   - `backParent`       structural parent (transitional; read by
+ *                        `isPipelineSwipeDisabledRoute`); NOT the
+ *                        back-target (§3, §6)
  *   - `snapshotCapture`  whether the page captures data + snippet on
  *                        leave; read by the coordinator (§7, Layer 4)
  *   - `fab`              whether the FAB is visible on this page

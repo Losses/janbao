@@ -1,32 +1,38 @@
 // src/lib/utils/nav-pipeline-gate.ts
 /**
- * The pipeline-route gate. Selects whether a pathname runs the DV20
- * navigation pipeline (orchestrator + executor + driver) or the legacy
- * `GesturePageLayout` / `MobileTabPager` gesture mechanism.
+ * The pipeline-route gate. True iff a pathname mounts a DV20 pipeline
+ * host (`NavPipelineHost` for deep pages / threads / compose, or
+ * `NavPipelineTabHost` for the three tab roots) and so runs the
+ * navigation pipeline (orchestrator + executor + driver) for its
+ * horizontal gesture.
  *
  * Per the binding "UNIFY, DO NOT BRIDGE" constraint: for every pipeline
- * route, the new pipeline is the SOLE transition mechanism for every
- * transition the route makes. Non-pipeline routes stay on the full
- * legacy mechanism untouched until they are migrated.
+ * route the pipeline is the SOLE transition mechanism. A pathname that
+ * is not a pipeline route does not mount a pipeline host and is outside
+ * the mobile gesture layer.
  *
  * Pure (runes-free) and pattern-matched, so importable from `bun:test`
  * and from any module without a Svelte runtime.
  */
 
-/** True iff `pathname` is a pipeline route (mounts `NavPipelineHost`).
+/** True iff `pathname` is a pipeline route (mounts `NavPipelineHost` or
+ *  `NavPipelineTabHost`).
  *
  *  Matches:
- *  - The conversation-detail pilot `/messages/<numeric id>` (with
- *    optional `/pN` page suffix).
+ *  - The conversation detail `/messages/<numeric id>` (with optional
+ *    `/pN` page suffix).
  *  - The discussion thread `/discussion/<id>/<slug>` (with optional
  *    `/pN` page suffix).
  *  - The standalone deep pages `/search`, `/bookmarks`,
  *    `/notifications`.
  *  - The profile tree `/profile` and all sub-routes.
  *  - The admin tree `/admin` and all sub-routes.
+ *  - The compose routes `/post/discussion`, `/messages/new`.
+ *  - The three tab roots `/`, `/activity`, `/messages/inbox` (these
+ *    mount `NavPipelineTabHost`).
  *
- *  Non-pipeline routes stay on the legacy mechanism until their
- *  migration phase. */
+ *  A pathname not listed here does not mount a pipeline host (it is
+ *  outside the mobile gesture layer). */
 export function isNavPipelineRoute(pathname: string): boolean {
 	// Strip any trailing `/pN` page segment so paged conversations
 	// (`/messages/123/p2`, `/discussion/123/slug/p2`) are still gated

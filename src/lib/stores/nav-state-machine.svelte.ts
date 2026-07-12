@@ -6,9 +6,9 @@
  * Per `docs/DV20-Plan.md` §2 Layer 1 + §9: the orchestrator owns the
  * macro state of a navigation transition and the SvelteKit interop
  * boundary. It does NOT touch the DOM (the executor owns that); it
- * does NOT replace the existing MobileTabPager or GesturePageLayout
- * (the 5b2 migration replaces them; this store models the macro
- * phases the orchestrator dispatches to).
+ * models the macro phases the orchestrator dispatches to. Every
+ * mobile gesture route mounts a pipeline host whose orchestrator feeds
+ * this store; there is no parallel gesture state machine.
  *
  * The wrapper is a thin `$state` shell: every transition delegates to
  * the pure reducer so the reducer is the single source of truth for
