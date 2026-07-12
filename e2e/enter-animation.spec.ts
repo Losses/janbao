@@ -10,7 +10,7 @@ import {
 /**
  * Thread enter-animation regression coverage.
  *
- * GesturePageLayout plays a list→thread slide-in (track translateX 0% → -33%
+ * NavPipelineHost's playEnterAnimation plays a list→thread slide-in (track translateX 0% → -33%
  * over ~200ms) only when the discussion was reached from `/`
  * (shouldAnimateEnter: prevPath === '/'). A tab-bar tap that returns to the list
  * goes through switchTab; if that leaves a stale thread entry in the tab's nav

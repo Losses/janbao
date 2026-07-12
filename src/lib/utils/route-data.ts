@@ -55,9 +55,9 @@ export interface RouteData {
 	 *   - `isPipelineSwipeDisabledRoute` reads `backParent !== undefined`
 	 *     to mark the deep-route set; that classifier dissolves in 5b3
 	 *     when DualColumnLayout's detectSwipe is removed.
-	 *   - `GesturePageLayout.resolvedLeftHref` uses `backParent` for the
-	 *     "/" edge-case substitution; that dissolves in 5b3 when GPL is
-	 *     deleted.
+	 *   - `GesturePageLayout.resolvedLeftHref` reads `backParent` for the
+	 *     "/" edge-case substitution; GPL is unmounted (a dead file pending
+	 *     5b3 deletion), so this consumer is inert and dissolves with it.
 	 * When BOTH consumers are gone (end of Cycle 5), remove this field
 	 * from the record and the registry. NOT the back-target (the
 	 * back-target is the route-stack entry behind the current one, §6).

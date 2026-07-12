@@ -2,7 +2,7 @@ import { MOBILE_TAB_DEFS } from '$lib/utils/tab-config';
 
 /**
  * history-nav - decide how to reach a tab route without growing the history
- * stack. Shared by every tab-switch entry point (MobileTabPager swipe,
+ * stack. Shared by every tab-switch entry point (NavPipelineTabHost swipe,
  * MobileTabBar tap) so toggling between two tabs (B <-> A) collapses to a hop
  * (history.back / history.forward) instead of pushing a new entry each time -
  * which would otherwise make the user unable to browser-back out of the app.
@@ -11,7 +11,7 @@ import { MOBILE_TAB_DEFS } from '$lib/utils/tab-config';
  * 'push' when that API is unavailable, so old browsers keep the
  * push-on-every-switch behaviour (progressive enhancement). The same function
  * also backs the thread back-swipe's "does the previous entry match" check
- * (GesturePageLayout / thread-nav).
+ * (NavPipelineHost / thread-nav).
  *
  * Direction-agnostic: it only asks "which adjacent entry equals the target",
  * never "which way the finger moved" - so a left or right swipe that targets a
@@ -27,8 +27,8 @@ export type HistoryHop = 'back' | 'forward' | 'push';
 /**
  * The tab-root pathnames, derived from the shared tab config so this never
  * hardcodes the site's routes (add/reorder a tab in tab-config and every check
- * here follows). A "tab root" is one of the primary pager routes the
- * MobileTabPager owns (`/`, `/activity`, `/messages/inbox`); everything else
+ * here follows). A "tab root" is one of the primary tab routes
+ * NavPipelineTabHost owns (`/`, `/activity`, `/messages/inbox`); everything else
  * (a thread, a profile, /bookmarks, /search, ...) is a DEEP page.
  */
 const TAB_ROOT_PATHNAMES: readonly string[] = MOBILE_TAB_DEFS.map((tab) => tab.href);

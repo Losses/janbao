@@ -1118,3 +1118,119 @@ $ bun run test:e2e -- messages-back-swipe tab-click-transition tab-exit-preview 
 journal's `LINT_EXIT=0` captured `tail`'s exit code, not `bun run lint`'s
 (the gate was actually red until the em-dash fix). R4 audits the post-fix
 state.
+
+## Session 12: R4 fixes + Family A sampler eliminated (§13.4 / §5)
+
+R4 returned A PWC (1 MED + 2 CONCERN + 1 LOW) + B PWC (1 MED + 2 CONCERN + 2
+LOW). Findings triaged for validity; detailed in `docs/RV20-C05b2-Audit-04.md`.
+
+### MED (A): reverse re-grab jump on negative startProgress
+
+The `rawDrag < 0` branch of `#interpretIntent` computed
+`Math.max(0, startProgress + rawDrag)`; for a negative extrapolated
+`startProgress` (a direction-reversing re-grab on the bidirectional host) any
+leftward `rawDrag` clamped to 0, a half-panel jump (the mirror of R3's HIGH).
+FIX: the lower bound is `Math.min(0, startProgress)` so the track holds
+continuous with the visual (§5 "No jump").
+
+### MED (B): FAB family-swap ease reduced-motion
+
+`startFamilySwapEase` always ran the 200ms rAF. FIX: a
+`matchMedia('(prefers-reduced-motion: reduce)')` gate snaps
+(`familySwapScale = null`) with no rAF integration (§5 non-negotiable).
+
+### Family A sampler eliminated (architectural, §13.4 / §5)
+
+R3 documented the per-frame `getComputedStyle` sampler as a Known condition.
+Eliminated this round, not deferred:
+
+- The orchestrator publishes the tab host's 1:1 track fractional position
+  (`pager.trackFractionalIndex`) in `#republishToPager`
+  (`-trackTranslateX(plan, executor.progress) / viewportWidth`) and
+  `resetPagerStore` (`fromIdx` at rest). The signal covers the drag, the
+  mid-commit re-grab, and the boundary rubber-band.
+- The FAB layer reads `pager.trackFractionalIndex` reactively in place of the
+  sampled state. Removed: `sampleFraction`, `startSampler`, `stopSampler`, the
+  arm/disarm `$effect`, the `sampledFractionalIndex` / `samplerActive` /
+  `samplerRafId` state, the now-unused `track` / `activeGestureTrack` /
+  `getActiveGestureTrack` binding, and the dead `familyNeedsSamplerDuringDrag`
+  helper + its unit test.
+
+### CONCERN (both): stale comments
+
+Rewrote `history-nav.ts`, `route-config.ts` (`PREVIEW_PANEL_CONFIG`,
+`FabFamily`/sampler phrasing), `DualColumnLayout.svelte`, and
+`e2e/enter-animation.spec.ts` to current behavior.
+
+### Documented / carried
+
+- `isPipelineSwipeDisabledRoute` latent mis-classification (A #4 / B #3) added
+  to the spec's Known 5b2 conditions (#4).
+- `readRenderedFabScale` retained as Known #1: a one-shot `fromScale` anchor
+  (not a per-frame mechanism), immune to the reactive race on a SvelteKit flush.
+- A #2 (`route-data.ts` field comment naming `isGesturePageLayoutRoute`) was
+  invalid for the current state (the comment already names
+  `isPipelineSwipeDisabledRoute`); not changed.
+- B #4 (compose forward-enter e2e) + B #5 (`#publication` naming) carried as
+  LOW TODOs.
+
+### Gate outputs (real, post-fix)
+
+```
+$ bun run check                       0 errors / 0 warnings (1461 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    418 pass / 0 fail
+$ bun run test:e2e -- messages-back-swipe tab-click-transition tab-exit-preview fab tab-host-swipe tab-swipe-preview-height    94 passed (3.7m)
+```
+
+R5 audits the post-fix state.
+
+## Session 13: R5 fixes (comments + scope documentation)
+
+R5 returned A PWC (1 MED + 1 MED/LOW + 3 LOW) + B PWC (1 MED + 3 LOW). Both
+verified the core pipeline is sound (sampler gone, no CSS-transition /
+setTimeout / getComputedStyle in the gesture layer, state machine authoritative,
+re-grab continuity + boundary + reduced-motion all hold). Detailed in
+`docs/RV20-C05b2-Audit-05.md`.
+
+### Consensus: `/discussions/pN` is a DualColumnLayout route (not pipeline)
+
+Real and reachable: the paginated discussions list runs on DualColumnLayout's
+`detectSwipe` + CSS transition. It was never on GesturePageLayout /
+MobileTabPager, so it is outside end-state #1's migration set; DualColumnLayout
+deletion is 5b3. Resolution: qualified end-state #1 ("SOLE for every route that
+was on those two hosts"; DualColumnLayout routes are 5b3) + Known condition #5.
+
+### Comments fixed
+
+`mobile-pager.svelte.ts` (coverProgress no longer "published by
+GesturePageLayout"; MobileTabPager dropped from the non-publishing-writers
+list), `route-data.ts` (the GesturePageLayout.resolvedLeftHref consumer marked
+inert pending 5b3), `FloatingActionButtonLayer.svelte` (effectiveKind "midpoint"
+-> "the trackFrac = 1 boundary"), `e2e/fab.spec.ts` (no `fab-transition` class),
+`e2e/fab-compose-backswipe.spec.ts` (header: GesturePageLayout/chip-exit/
+LoadingChip -> the pipeline orchestrator).
+
+### Documented as Known conditions (#5-7)
+
+- DualColumnLayout mobile routes (`/discussions/pN`) -> 5b3 (#5).
+- Macro-plan divergences (#6): `backSwipeShouldPopHistory` (§6 deletion is
+  future-cycle; the orchestrator needs it for backward-to-deep-page); forward
+  deep-to-deep nav (plain SvelteKit; the `{detail,detail}` resolver is
+  gesture-only); `TAB_CLICK_COMMIT_MS` (discrete navs use a fixed 200ms; gesture
+  commits use the velocity solver).
+- Coverage gaps (#7): backward tab swipe, boundary void-swipe, mid-commit
+  re-grab, backward-to-deep-page e2e (TODO).
+
+### Gate outputs (real, post-fix)
+
+No code-behavior change (comments + spec only), so the e2e gate is unchanged
+from R4.
+
+```
+$ bun run check                       0 errors / 0 warnings (1461 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    418 pass / 0 fail
+```
+
+R6 audits the post-fix state.

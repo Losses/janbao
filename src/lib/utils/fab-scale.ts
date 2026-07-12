@@ -46,13 +46,13 @@ export function scaleFromFraction(fraction: number): number {
 }
 
 /**
- * Fraction of tab `tabIndex`'s surface covered by the pager at the sampled
+ * Fraction of tab `tabIndex`'s surface covered at the published track
  * fractional index. 1 when the tab is fully foreground, 0 when fully away,
- * linear in between. Used by the Family A (list) sampler path and the list
- * resting fraction.
+ * linear in between. Used by the Family A (list) path and the list resting
+ * fraction.
  */
-export function tabFraction(sampledFractionalIndex: number, tabIndex: number): number {
-	return clamp(1 - Math.abs(sampledFractionalIndex - tabIndex), SCALE_RANGE);
+export function tabFraction(trackFractionalIndex: number, tabIndex: number): number {
+	return clamp(1 - Math.abs(trackFractionalIndex - tabIndex), SCALE_RANGE);
 }
 
 /**
@@ -61,21 +61,6 @@ export function tabFraction(sampledFractionalIndex: number, tabIndex: number): n
  * Svelte component.
  */
 export type FabFamily = 'list' | 'overlay' | 'compose';
-
-/**
- * Whether the family's FAB scale is driven by the per-frame track sampler.
- *
- * Only Family A (list / tab host): the orchestrator's published
- * `fractionalIndex` is the threshold-absorbed pill position and
- * `coverProgress` is the raw drag fraction; neither is the 1:1 track
- * position the Family A FAB follows across a drag, a re-grab, and the
- * first/last-tab rubber-band, so Family A reads the live track transform
- * (the sampler). Families B (overlay) and C (compose) read the live
- * `coverProgress` signal directly (no sampler).
- */
-export function familyNeedsSamplerDuringDrag(family: FabFamily): boolean {
-	return family === 'list';
-}
 
 /**
  * Scroll-hide progress for the FAB's translateY. `translateY` is the shared

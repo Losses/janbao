@@ -18,7 +18,7 @@
  *                                  atom mounts (including Family B/C
  *                                  routes that keep the atom at scale
  *                                  0). Family enum is consumed by the
- *                                  FAB layer's sampler selection; it
+ *                                  FAB layer's family selection; it
  *                                  dissolves in Cycle 4's all-rAF
  *                                  executor.
  *   - `TAB_BAR_CONFIG`            the pill target per route (§3's
@@ -92,14 +92,14 @@ export const FAB_KIND_CONFIGS: Record<FabListKind, FabKindConfig> = {
 // FAB route attributes (§3 consumer config #2; the family enum dissolves
 // in Cycle 4's all-rAF executor).
 //
-// `family` selects the FAB layer's sampler; `kind` selects the icon/href
+// `family` selects the FAB layer's scale driver; `kind` selects the icon/href
 // (or `'dynamic'` for the Activity route's spatially-resolved FAB, or
 // `'deep'` for the non-FAB GPL routes whose atom stays mounted at scale
 // 0 across the list<->deep boundary). Together they preserve the
 // per-route rendering that the FAB layer needs; nothing here is a
 // concept the core `RouteData` record holds.
 
-// `FabFamily` is the canonical FAB-sampler family enum, owned by
+// `FabFamily` is the canonical FAB family enum, owned by
 // `fab-scale.ts` (the FAB layer's pure scale maths). Imported here so
 // the consumer registry and the FAB layer share one type; adding a
 // family in either module requires updating the other.
@@ -136,12 +136,12 @@ const FAB_ROUTE_ATTRIBUTES: readonly FabRouteAttributes[] = [
 	{ pattern: /^\/discussion\//, family: 'overlay', kind: 'discussions' },
 	{ pattern: /^\/messages\/\d/, family: 'overlay', kind: 'messages' },
 
-	// Family C: compose forms (publish coverProgress for the FAB sampler).
+	// Family C: compose forms (publish coverProgress for the FAB scale).
 	{ pattern: /^\/post\/discussion$/, family: 'compose', kind: 'discussions' },
 	{ pattern: /^\/messages\/new$/, family: 'compose', kind: 'messages' },
 
 	// Family B 'deep': non-FAB GPL routes whose atom stays mounted at scale 0
-	// so the sampler drives the scale across the list<->deep boundary.
+	// so coverProgress drives the scale across the list<->deep boundary.
 	{ pattern: /^\/bookmarks$/, family: 'overlay', kind: 'deep' },
 	{ pattern: /^\/search$/, family: 'overlay', kind: 'deep' },
 	{ pattern: /^\/notifications$/, family: 'overlay', kind: 'deep' },
@@ -233,7 +233,7 @@ export function getTabBarPillTarget(pathname: string): TabBarPillTarget {
 // ---------------------------------------------------------------------------
 // Preview-panel config (§3 consumer config #4).
 //
-// The component rendered in the MobileTabPager's deep-preview slot when
+// The component rendered in NavPipelineHost's left-panel preview slot when
 // a back-swipe targets a route that captures a snippet. Routes that
 // capture a snippet but render the source tab's panel (e.g. compose
 // forms) are absent here; the layer's fallback to

@@ -130,9 +130,8 @@ test.describe('SSR style serialization: FAB transform resolves in the server ren
 	];
 	// Compose routes rest at scale 0 via the layer's `cfg.family !== 'list'`
 	// branch. The atom gates pointer-events via `pointer-events-none`
-	// (scale < 0.01). The `fab-transition` class is armed only for a GPL
-	// `pendingNav` exit slide (not at SSR rest), so a compose SSR class string
-	// carries pointer-events-none and NOT fab-transition.
+	// (scale < 0.01). The FAB atom carries no transition class, so a compose SSR
+	// class string carries pointer-events-none and no transition class.
 	const composeAssertions: readonly SsrFabAssertion[] = [
 		{ path: '/post/discussion', expectedScale: 0, family: 'compose' },
 		{ path: '/messages/new', expectedScale: 0, family: 'compose' }

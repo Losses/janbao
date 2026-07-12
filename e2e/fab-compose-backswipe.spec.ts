@@ -9,9 +9,9 @@ import { prepareContext, waitForHydration, swipeBack, openSidebarAndGoto } from 
  *  1. The compose family reads `pager.coverProgress` (like the overlay family),
  *     so the FAB follows the finger during a drag back-swipe from a compose route
  *     toward its source list, scaling in over the last 50% of the gesture.
- *  2. The GesturePageLayout publishes `coverProgress = 0` during a cross-tab
- *     chip-exit (`swipeNeedsLoadingAtStart`), so the FAB hides under the
- *     LoadingChip.
+ *  2. A cross-tab tap from a compose route is intercepted by the pipeline
+ *     orchestrator, which publishes `coverProgress` across the slide so the FAB
+ *     stays hidden for a destination without a resting FAB.
  *
  * Discriminator: a per-frame `{scale, pathname}` probe across the gesture. The
  * back-swipe contract holds iff the FAB scale rises above threshold AND passes

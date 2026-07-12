@@ -7,12 +7,10 @@
 	 * Scale is a pure function of a live gesture/page signal, read from the
 	 * reactive pager store, selected by family:
 	 *
-	 *   - Family A (list / tab swipe): the per-frame track sampler reads the
-	 *     NavPipelineTabHost track `m41` (the fractional tab index). The
-	 *     store's `fractionalIndex` jumps to its integer endpoint on release
-	 *     while the track keeps easing, so the per-frame read is the
-	 *     continuous signal across the snap. `tabFraction(sample, tabIndex)`
-	 *     maps it to 0..1.
+	 *   - Family A (list / tab swipe): the orchestrator publishes the tab
+	 *     host's 1:1 track fractional position (`pager.trackFractionalIndex`),
+	 *     computed from `trackTranslateX(plan, executor.progress)`.
+	 *     `tabFraction(track position, tabIndex)` maps it to 0..1.
 	 *   - Family B (overlay: thread + deep): reads `pager.coverProgress`
 	 *     (0..1, deadzone-free), published by `NavPipelineOrchestrator` as
 	 *     the raw slide fraction. The store signal drives the scale directly
@@ -30,12 +28,8 @@
 	 * new family's resting scale over `TRACK_TRANSITION_MS` (200ms) via the
 	 * constant-deceleration curve `s(u) = 2u - u^2` (the same curve the
 	 * executor uses). Same-family tab taps (list<->list) do not trigger it;
-	 * their easing track is driven by the Family A sampler. During a drag the
+	 * their easing track is driven by the published track fractional index. During a drag the
 	 * rAF ease is off (the live signal drives), so there is no double-clock.
-	 *
-	 * The active track reaches this ancestor via the `active-gesture-track`
-	 * module-singleton store (Family A sampler only; overlay reads the store
-	 * signal directly and does not use the track).
 	 */
 	import { onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
@@ -44,7 +38,6 @@
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
-	import { getActiveGestureTrack } from '$lib/stores/active-gesture-track.svelte';
 	import {
 		getFabRouteAttributes,
 		FAB_KIND_CONFIGS,
@@ -56,7 +49,6 @@
 	import {
 		scaleFromFraction,
 		tabFraction,
-		familyNeedsSamplerDuringDrag,
 		hideProgress,
 		translateYFromHideProgress
 	} from '$lib/utils/fab-scale';
@@ -72,7 +64,6 @@
 	const pager = getMobilePagerStore();
 	const navStore = getNavigationStore();
 	const scrollChrome = getScrollChromeStore();
-	const activeGestureTrack = getActiveGestureTrack();
 
 	// rAF family-swap ease state. On a distinct family swap (overlay<->list,
 	// compose<->list) the published scale is interpolated from the pre-swap
@@ -83,7 +74,7 @@
 	// higher-priority driver owns the FAB scale: a drag (the live signal
 	// drives) or the orchestrator (pilotTransitionListKind !== null;
 	// coverProgress ramps the scale). A same-family tab tap (list<->list)
-	// does not trigger it (the Family A sampler drives that easing track).
+	// does not trigger it (the published track fractional index drives that easing track).
 	let familySwapRafId: number | undefined;
 	let familySwapFromScale = 0;
 	let familySwapToScale = 0;
@@ -98,15 +89,6 @@
 	// viewport bottom edge entirely.
 	const FAB_HEIGHT_PX = 56;
 	const BOTTOM_CLEARANCE_PX = 16;
-
-	// Family A sampler state. Declared before `fabConfig` because the Activity
-	// `'dynamic'` branch reads `samplerActive`/`sampledFractionalIndex`, and the
-	// family-swap `$effect.pre` (which runs before the first render) can trigger
-	// that evaluation during init - declaring these here avoids a temporal-dead-
-	// zone access at hydration.
-	let sampledFractionalIndex = $state<number | null>(null);
-	let samplerActive = $state(false);
-	let samplerRafId: number | undefined;
 
 	type FabKind = 'discussions' | 'messages' | null;
 
@@ -127,20 +109,16 @@
 		if (!attrs) return null;
 
 		if (attrs.kind === 'dynamic') {
-			// The Activity route resolves its FAB from the gesture's source tab. The
-			// live pager.fractionalIndex is the prompt signal for the drag and at
-			// rest. On a committing swipe the route lands on Activity while the track
-			// is still mid-slide: the live value has already jumped to the integer
-			// endpoint and would unmount the source-list FAB before it can ease out.
-			// In that mid-slide window the sampler's visual index is the true
-			// position, so defer to it and keep the FAB mounted until the slide
-			// finishes.
-			const sliding =
-				samplerActive &&
-				sampledFractionalIndex !== null &&
-				Math.abs(sampledFractionalIndex - Math.round(sampledFractionalIndex)) > 0.01;
-			const index =
-				sliding && sampledFractionalIndex !== null ? sampledFractionalIndex : pager.fractionalIndex;
+			// The Activity route resolves its FAB from the gesture's source tab.
+			// The orchestrator publishes the tab host's 1:1 track fractional
+			// position (`pager.trackFractionalIndex`); on a committing swipe the
+			// route lands on Activity while the track is still mid-slide, and that
+			// published position is the true visual index (fractionalIndex, the
+			// pill, would unmount the source-list FAB before it can ease out), so
+			// defer to it and keep the FAB mounted until the slide finishes.
+			const trackFrac = pager.trackFractionalIndex;
+			const sliding = trackFrac !== null && Math.abs(trackFrac - Math.round(trackFrac)) > 0.01;
+			const index = sliding && trackFrac !== null ? trackFrac : pager.fractionalIndex;
 			if (pager.active && Math.abs(index - 1) > 0.01) {
 				const resolvedKind: FabListKind = index < 1 ? 'discussions' : 'messages';
 				const kindConfig = FAB_KIND_CONFIGS[resolvedKind];
@@ -189,35 +167,35 @@
 		};
 	});
 
-	const track = $derived(activeGestureTrack.track);
-
 	// Retain the last non-null FAB config so the atom stays mounted across every
 	// tab route, including ones with no FAB of their own (e.g. /activity). The
-	// Family A sampler then drives the scale continuously from the
-	// NavPipelineTabHost track: tabFraction(track position, tabIndex) follows
-	// the slide, so a tab tap animates the FAB without any latch or timing
-	// dependency. A fresh deep-link to a no-FAB route has retainedConfig ===
+	// published track fractional index then drives the scale continuously:
+	// tabFraction(track position, tabIndex) follows the slide, so a tab tap
+	// animates the FAB without any latch or timing dependency. A fresh deep-link to a no-FAB route has retainedConfig ===
 	// null (no prior FAB seen), so the atom does not render there (the
 	// "activity has no FAB" contract holds on first load); once any FAB route
-	// has been visited the atom persists and the sampler carries the scale to
+	// has been visited the atom persists and the published track index carries the scale to
 	// 0 on no-FAB tabs.
 	let retainedConfig = $state<FabConfig | null>(null);
 	$effect(() => {
 		if (fabConfig !== null) retainedConfig = fabConfig;
 	});
 
-	// Kind follows the visual track position (the sampler's sample), NOT the URL.
-	// The URL swaps at click time (before the track moves); the sample lags by
-	// the executor's rAF slide. Using the sample for kind means the kind swaps
-	// at the visual midpoint (scale 0 via 2f-1), not at the click, so no
-	// flicker. This is ALWAYS active (even at integer rest) so the URL-swap
-	// frame cannot leak the incoming kind before the track has crossed the
-	// midpoint.
+	// Kind follows the visual track position (the published track fractional
+	// index), NOT the URL. The URL swaps at click time (before the track
+	// moves); the published position lags by the executor's rAF slide. Using it
+	// for kind means the kind swaps at the trackFrac = 1 boundary (the tab-0 /
+	// tab-1 crossing, where the source-list FAB is already at scale 0; the
+	// midpoint of a multi-panel swap, the destination of an adjacent one), not
+	// at the click, so no flicker. This is ALWAYS active (even at integer rest)
+	// so the URL-swap frame cannot leak the incoming kind before the track has
+	// crossed that boundary.
 	const effectiveKind = $derived.by<FabKind>(() => {
-		if (samplerActive && sampledFractionalIndex !== null) {
-			return sampledFractionalIndex < 1 ? 'discussions' : 'messages';
+		const trackFrac = pager.trackFractionalIndex;
+		if (trackFrac !== null) {
+			return trackFrac < 1 ? 'discussions' : 'messages';
 		}
-		// SSR / before sampler mounts: URL-derived kind.
+		// SSR / before the tab host publishes: URL-derived kind.
 		return fabConfig?.kind ?? retainedConfig?.kind ?? null;
 	});
 
@@ -243,9 +221,9 @@
 		let kind = cfg.family === 'list' ? effectiveKind : cfg.kind;
 		// A pilot detail-page transition resolves the destination's FAB kind so
 		// the correct atom scales in with coverProgress. On the tab pager the
-		// Family A sampler is active; effectiveKind handles the kind switch at
-		// the visual midpoint, so the override is gated off.
-		if (pilotTransitionListKind !== null && !samplerActive) {
+		// published track fractional index is live; effectiveKind handles the
+		// kind switch at the visual midpoint, so the override is gated off.
+		if (pilotTransitionListKind !== null && pager.trackFractionalIndex === null) {
 			kind = pilotTransitionListKind;
 		}
 		if (kind !== null && kind !== cfg.kind) {
@@ -280,7 +258,7 @@
 		// (current === null, e.g. landing on /activity where no FAB renders)
 		// still eases the scale out toward the new resting scale (0). Same-
 		// family transitions (tab taps within the list family) are handled by
-		// the Family A sampler, not this ease.
+		// the published track fractional index, not this ease.
 		if (prev !== null && prev !== current) {
 			// Gate: skip when a higher-priority driver owns the FAB scale.
 			if (pager.dragging || pilotTransitionListKind !== null) {
@@ -292,99 +270,6 @@
 			const fromScale = readRenderedFabScale() ?? 0;
 			startFamilySwapEase(fromScale);
 		}
-	});
-
-	// The sampled fractional index, written by the rAF callback (NOT inside a
-	// $effect that reads pager.fractionalIndex) so the arm/disarm effect does
-	// not loop (svelte-effect-fetch-loop memory). Holds its last value when no
-	// sampler is running. (State declared above, before `fabConfig`.)
-
-	/** Read the live Family A track m41 (px) and convert to the fractional tab
-	 *  index. Deliberately NOT clamped to [0,2]: at the first/last tab a void
-	 *  swipe rubber-bands the track (follow() applies a 0.4x factor), so the
-	 *  index briefly goes negative or past 2. The FAB must track that motion
-	 *  the same way the MobileTabBar pill does: the pill's closeness and the
-	 *  FAB's tabFraction share the formula 1 - |idx - tabIndex| over the
-	 *  unclamped fractionalIndex. tabFraction clamps the OUTPUT to [0,1], so
-	 *  an input clamp here would suppress only the boundary rubber-band and
-	 *  leave the FAB still while the pill moves. Returns null when there is
-	 *  no track. */
-	function sampleFraction(): number | null {
-		const el = track;
-		if (!el || !browser) return null;
-		const panelWidth = window.innerWidth;
-		if (panelWidth <= 0) return null;
-		try {
-			const m41 = new DOMMatrix(getComputedStyle(el).transform).m41;
-			return -m41 / panelWidth;
-		} catch {
-			return null;
-		}
-	}
-
-	function startSampler(): void {
-		if (!browser) return;
-		if (samplerRafId !== undefined) return;
-		samplerActive = true;
-		// The sampler runs CONTINUOUSLY while a list-family track is bound. It
-		// does NOT self-stop at the resting integer: a tab TAP slides the track
-		// via the executor's rAF without changing any arm-effect dependency
-		// (track element, family, dragging all stay the same), so a self-stopped
-		// sampler would never re-arm and the FAB would snap instead of following
-		// the slide. Reading the track transform every frame is one
-		// getComputedStyle on one element (mobile-only, list routes only); it is
-		// the continuous 1:1 track signal the FAB follows across drags, commits,
-		// cancels, and tab taps (the published `fractionalIndex` is the
-		// threshold-absorbed pill position, not the 1:1 track position).
-		const tick = (): void => {
-			// Track unmounted (route swap took it): disarm.
-			if (activeGestureTrack.track === null) {
-				stopSampler();
-				return;
-			}
-			const sample = sampleFraction();
-			if (sample !== null) {
-				sampledFractionalIndex = sample;
-			}
-			samplerRafId = requestAnimationFrame(tick);
-		};
-		samplerRafId = requestAnimationFrame(tick);
-	}
-
-	function stopSampler(): void {
-		samplerActive = false;
-		// Clear the last sample so a re-arm (e.g. list -> overlay -> list
-		// roundtrip) does not read a stale value from the previous family for
-		// one frame before the first fresh rAF sample arrives. effectiveKind
-		// falls back to the URL-derived resting kind when the sample is null.
-		sampledFractionalIndex = null;
-		if (samplerRafId !== undefined) {
-			cancelAnimationFrame(samplerRafId);
-			samplerRafId = undefined;
-		}
-	}
-
-	// Arm/disarm the Family A sampler. Plain $effect (NOT $effect.pre) per the
-	// svelte-effect-pre-same-flush-rerun memory. The sampler runs ONLY for the
-	// list family: overlay reads `pager.coverProgress` directly and never arms a
-	// sampler. The effect does NOT write sampledFractionalIndex synchronously
-	// (it only starts/stops the rAF), so it cannot loop (svelte-effect-fetch-loop).
-	$effect(() => {
-		const hasTrack = track !== null;
-		const attrs = getFabRouteAttributes(page.url.pathname);
-		const hasCfg = attrs !== null && attrs.kind !== null;
-		const family = attrs?.family ?? null;
-		if (!hasTrack || !hasCfg || family !== 'list') {
-			stopSampler();
-			return;
-		}
-		// `familyNeedsSamplerDuringDrag('list')` is true, so a drag never disarms
-		// the Family A sampler; this guard is defensive for any future family.
-		if (pager.dragging && !familyNeedsSamplerDuringDrag(family)) {
-			stopSampler();
-			return;
-		}
-		startSampler();
 	});
 
 	/** Read the FAB atom's currently-rendered scale from its inline transform.
@@ -410,6 +295,18 @@
 	 *  immediately so the swap frame does not snap before the first tick. */
 	function startFamilySwapEase(fromScale: number): void {
 		if (!browser) return;
+		// Reduced-motion: snap to the new family's resting scale with no
+		// rAF integration (§5 "non-negotiable"). Drop `familySwapScale` so
+		// the published scale falls through to `restingScale` (the new
+		// family's resting value) immediately.
+		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+			if (familySwapRafId !== undefined) {
+				cancelAnimationFrame(familySwapRafId);
+				familySwapRafId = undefined;
+			}
+			familySwapScale = null;
+			return;
+		}
 		if (familySwapRafId !== undefined) {
 			cancelAnimationFrame(familySwapRafId);
 		}
@@ -470,18 +367,17 @@
 		// runs-in-ssr memory). cancelAnimationFrame is a no-op on the server but
 		// the guard is defensive.
 		if (!browser) return;
-		stopSampler();
 		stopFamilySwapEase();
 	});
 
 	// Cross-tab slide coverage: every route is a pipeline route, so
-	// SvelteKit's `beforeNavigate` is consumed by the orchestrator and the
-	// Family A sampler (live track m41) drives the FAB scale across a
-	// cross-tab slide directly. No `navInFlight` gate is involved.
+	// SvelteKit's `beforeNavigate` is consumed by the orchestrator, which
+	// publishes the tab host's 1:1 track fractional index; the Family A FAB
+	// reads it directly. No `navInFlight` gate is involved.
 
 	/** Per-family foreground fraction (0 = source list covered, 1 = fully
-	 *  foreground). Family A reads the sampler; Families B and C read
-	 *  `coverProgress`. */
+	 *  foreground). Family A reads the published track fractional index;
+	 *  Families B and C read `coverProgress`. */
 	const foregroundFraction = $derived.by(() => {
 		const cfg = displayConfig;
 		if (cfg === null) return 0;
@@ -489,16 +385,20 @@
 		// destination shows a FAB at rest. For a destination without one (the
 		// forward-enter to the conversation; a tab-click to /activity from the
 		// pilot route), the FAB stays at 0 throughout. On the tab pager
-		// (NavPipelineTabHost) the Family A sampler is active and reads the
-		// pipeline-driven track, so it drives the FAB scale across the slide
-		// even when the destination has no resting FAB (e.g. /activity). Gate
-		// the override on `!samplerActive` so the sampler takes precedence on
-		// list routes.
-		if (pager.transitionTarget !== null && pilotTransitionListKind === null && !samplerActive)
+		// (NavPipelineTabHost) the published track fractional index is live, so
+		// it drives the FAB scale across the slide even when the destination
+		// has no resting FAB (e.g. /activity). Gate the override on the index
+		// being absent so the tab-host signal takes precedence on list routes.
+		if (
+			pager.transitionTarget !== null &&
+			pilotTransitionListKind === null &&
+			pager.trackFractionalIndex === null
+		)
 			return 0;
 		if (cfg.family === 'list') {
-			if (samplerActive && sampledFractionalIndex !== null) {
-				return tabFraction(sampledFractionalIndex, cfg.tabIndex);
+			const trackFrac = pager.trackFractionalIndex;
+			if (trackFrac !== null) {
+				return tabFraction(trackFrac, cfg.tabIndex);
 			}
 			// Resting / SSR: the route's known tab position. `pager.active`
 			// fallback to the URL tab makes a deep-link SSR render at the right

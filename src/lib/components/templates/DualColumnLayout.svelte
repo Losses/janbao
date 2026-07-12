@@ -103,7 +103,7 @@
 	}
 
 	// ---- Swipe to switch tab on inner (non-pager) pages ----
-	// On the pager routes the MobileTabPager owns the swipe (1:1 drag + live
+	// On the tab routes NavPipelineTabHost owns the swipe (1:1 drag + live
 	// reveal); everywhere else a horizontal drag slides the page content with the
 	// finger (clamped + rubber-banded at the tab boundaries) and a committed
 	// release jumps to the next/prev tab, relative to the tab the current page
@@ -228,8 +228,8 @@
 		>
 			<!-- Left Column (Main Page Content). On non-pager pages a horizontal
 			     drag slides the content with the finger and a committed swipe
-			     switches to the next/prev tab (disabled on the pager routes, where
-			     MobileTabPager owns the gesture). -->
+			     switches to the next/prev tab (disabled on the tab routes, where
+			     NavPipelineTabHost owns the gesture). -->
 			<main
 				class="dual-column-layout-main flex w-full min-w-0 flex-1 flex-col"
 				style="touch-action: pan-y pinch-zoom"

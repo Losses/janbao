@@ -658,9 +658,15 @@ export class NavPipelineOrchestrator {
 			// then drags back left. The threshold-absorbed formula would
 			// map the first 20% of LEFTWARD drag to 0 (freezing the track
 			// at startProgress), so the undo direction bypasses the
-			// threshold and tracks the finger 1:1 down toward 0. The
-			// boundary is consistent: at rawDrag = 0 both branches yield
-			// exactly startProgress.
+			// threshold and tracks the finger 1:1 down toward 0. The lower
+			// bound is min(0, startProgress): for a from-rest or
+			// mid-transition grab with startProgress >= 0 the track stops
+			// at 0 (the plan's at-rest); for a direction-reversing re-grab
+			// whose extrapolated startProgress is negative (the visual is
+			// rightward of the new plan's at-rest) the lower bound is
+			// startProgress, so the track holds there, continuous with the
+			// visual (§5 "No jump"). The boundary is consistent: at
+			// rawDrag = 0 both branches yield exactly startProgress.
 			const bidirectional = inputs.bidirectional === true;
 			const isBoundary = this.#pendingGesture.boundary;
 			const trackProgress = isBoundary
@@ -673,7 +679,7 @@ export class NavPipelineOrchestrator {
 					// tab back into the panel range.
 					startProgress + Math.max(0, rawDrag) * BOUNDARY_RUBBER_BAND_FACTOR
 				: rawDrag < 0
-					? Math.max(0, startProgress + rawDrag)
+					? Math.max(Math.min(0, startProgress), startProgress + rawDrag)
 					: bidirectional
 						? Math.min(1, startProgress + rawDrag * (1 - startProgress))
 						: startProgress + this.#thresholdAbsorbedProgress(rawDrag) * (1 - startProgress);
@@ -1285,7 +1291,8 @@ export class NavPipelineOrchestrator {
 				backMorph: null,
 				targetIndex: null,
 				coverProgress: 0,
-				transitionTarget: null
+				transitionTarget: null,
+				trackFractionalIndex: fromIdx
 			});
 			return;
 		}
@@ -1419,6 +1426,17 @@ export class NavPipelineOrchestrator {
 				? Math.max(0, rawDragFraction - PILL_EXPANSION_THRESHOLD) / (1 - PILL_EXPANSION_THRESHOLD)
 				: 0;
 		const bidirectional = inputs?.bidirectional === true;
+		// The tab host's 1:1 track fractional position, published for the
+		// Family A FAB (it follows the slide across a drag, a re-grab, and
+		// the boundary rubber-band). Computed from the executor's
+		// authoritative progress + the plan geometry so the FAB reads the
+		// orchestrator's published signal (§5: no DOM read-back). null on a
+		// deep page (no tab-host track).
+		const viewportWidth = inputs?.viewportWidth ?? 0;
+		const trackFrac =
+			bidirectional && this.#executor !== null && viewportWidth > 0
+				? -trackTranslateX(plan, this.#executor.state.progress) / viewportWidth
+				: null;
 		pager.set({
 			fractionalIndex: toIdx >= 0 ? fromIdx + (toIdx - fromIdx) * pillProgress : fromIdx,
 			dragging: publication.inFlight && this.#liveDragging,
@@ -1426,7 +1444,8 @@ export class NavPipelineOrchestrator {
 			backMorph: bidirectional ? null : rawDragFraction,
 			targetIndex: toIdx >= 0 ? toIdx : null,
 			coverProgress,
-			transitionTarget: publication.toPathname
+			transitionTarget: publication.toPathname,
+			trackFractionalIndex: trackFrac
 		});
 	}
 }

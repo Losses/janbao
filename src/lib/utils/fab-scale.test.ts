@@ -2,7 +2,6 @@ import { describe, test, expect } from 'bun:test';
 import {
 	scaleFromFraction,
 	tabFraction,
-	familyNeedsSamplerDuringDrag,
 	hideProgress,
 	translateYFromHideProgress
 } from './fab-scale';
@@ -60,26 +59,6 @@ describe('tabFraction', () => {
 		// Between tab 0 and tab 1: distance from 0.5 to either is 0.5 -> 0.5.
 		expect(tabFraction(0.5, 0)).toBe(0.5);
 		expect(tabFraction(0.5, 1)).toBe(0.5);
-	});
-});
-
-describe('familyNeedsSamplerDuringDrag', () => {
-	test('Family A (list) -> true (live fractionalIndex jumps on release; sampler covers drag + snap)', () => {
-		expect(familyNeedsSamplerDuringDrag('list')).toBe(true);
-	});
-
-	test('Family B (overlay) -> false (reads live coverProgress from the store)', () => {
-		expect(familyNeedsSamplerDuringDrag('overlay')).toBe(false);
-	});
-
-	test('Family C (compose) -> false (reads live coverProgress, like overlay)', () => {
-		expect(familyNeedsSamplerDuringDrag('compose')).toBe(false);
-	});
-
-	test('only the list family is sampler-driven', () => {
-		const families = ['list', 'overlay', 'compose'] as const;
-		const samplerDriven = families.filter(familyNeedsSamplerDuringDrag);
-		expect(samplerDriven).toEqual(['list']);
 	});
 });
 

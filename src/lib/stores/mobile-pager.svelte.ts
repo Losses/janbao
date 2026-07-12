@@ -13,13 +13,18 @@
  * `backMorph` drives the Header's layer morph during a swipe-back on a deep /
  * search page. It is the swipe-back progress 0..1 (0 at rest on the current
  * page, 1 once committed toward the source), written frame-synced with
- * `fractionalIndex` by GesturePageLayout. null everywhere a swipe-back is not
- * in progress (root tab routes, before mount): the Header then falls back to a
- * URL-derived default so a deep link SSRs in the right mode without waiting for
- * hydration.
+ * `fractionalIndex` by the pipeline orchestrator. null everywhere a swipe-back
+ * is not in progress (root tab routes, before mount): the Header then falls
+ * back to a URL-derived default so a deep link SSRs in the right mode without
+ * waiting for hydration.
  *
- * Factory: two pagers exist - the PRIMARY tab pager (MobileTabPager /
- * GesturePageLayout write; Header / MobileTabBar read) and the SEARCH scope
+ * `trackFractionalIndex` is the tab-host track's 1:1 fractional position (the
+ * Family A FAB reads it to follow the slide across a drag, a re-grab, and the
+ * first/last-tab rubber-band). Published by the orchestrator from
+ * `trackTranslateX(plan, executor.progress)`; null on non-tab-host routes.
+ *
+ * Factory: two pagers exist - the PRIMARY tab pager (NavPipelineTabHost /
+ * NavPipelineHost write; Header / MobileTabBar read) and the SEARCH scope
  * pager (SearchScopePager writes; SearchTabBar reads). Each `createPagerStore()`
  * call holds its OWN closure-scoped `$state` so the two never cross-wire. The
  * instances are created once at module load and returned by the getters.
@@ -33,10 +38,9 @@ interface PagerUpdate {
 	backMorph: number | null;
 	targetIndex?: number | null;
 	/** The slide-progress signal the FAB layer reads to drive its scale,
-	 * published by the pilot orchestrator as the raw slide fraction and by
-	 * GesturePageLayout for other routes. null = not published, so the FAB falls
-	 * back to its resting fraction. Optional so non-publishing writers
-	 * (MobileTabPager, SearchScopePager) compile without touching it. */
+	 * published by the pipeline orchestrator as the raw slide fraction. null =
+	 * not published, so the FAB falls back to its resting fraction. Optional so
+	 * non-publishing writers (SearchScopePager) compile without touching it. */
 	coverProgress?: number | null;
 	/** tap-morph progress 0..1 (DV17): continuous morph signal consumed by the
 	 * search track/Tab group and the search-page Page-slide headroom on a tap.
@@ -48,6 +52,11 @@ interface PagerUpdate {
 	 * during the slide. Optional so non-pilot writers compile without touching
 	 * it. */
 	transitionTarget?: string | null;
+	/** The tab-host track's 1:1 fractional position the Family A FAB reads to
+	 * follow the slide. Published by the orchestrator from
+	 * `trackTranslateX(plan, executor.progress)`; null on non-tab-host routes.
+	 * Optional so non-publishing writers compile without touching it. */
+	trackFractionalIndex?: number | null;
 }
 
 type SetPagerFn = (update: PagerUpdate) => void;
@@ -58,6 +67,7 @@ interface PagerStore extends PagerUpdate {
 	coverProgress: number | null;
 	tapMorph: number | null;
 	transitionTarget: string | null;
+	trackFractionalIndex: number | null;
 	set: SetPagerFn;
 	setTapMorph: SetTapMorphFn;
 }
@@ -71,6 +81,7 @@ export function createPagerStore(): PagerStore {
 	let coverProgress = $state<number | null>(null);
 	let tapMorph = $state<number | null>(null);
 	let transitionTarget = $state<string | null>(null);
+	let trackFractionalIndex = $state<number | null>(null);
 
 	function set(update: PagerUpdate): void {
 		fractionalIndex = update.fractionalIndex;
@@ -80,6 +91,7 @@ export function createPagerStore(): PagerStore {
 		targetIndex = update.targetIndex !== undefined ? update.targetIndex : null;
 		coverProgress = update.coverProgress ?? null;
 		transitionTarget = update.transitionTarget ?? null;
+		trackFractionalIndex = update.trackFractionalIndex ?? null;
 		// tapMorph is omitted by the drag $effect's pager.set calls; preserve
 		// it so an in-flight tap scrub is not clobbered. The tap publisher
 		// writes via setTapMorph.
@@ -114,6 +126,9 @@ export function createPagerStore(): PagerStore {
 		},
 		get transitionTarget() {
 			return transitionTarget;
+		},
+		get trackFractionalIndex() {
+			return trackFractionalIndex;
 		},
 		set,
 		setTapMorph
