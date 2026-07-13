@@ -24,12 +24,12 @@
 	import { page } from '$app/state';
 	import { getRouteData } from '$lib/utils/route-data';
 	import { MOBILE_TABS, getCurrentTabIndex, getPreviewPanel } from '$lib/utils/route-config';
-	import { isTabRootPath } from '$lib/utils/history-nav';
+	import { isTabRootPath, previousEntryPathname } from '$lib/utils/history-nav';
 	import { viewportLock } from '$lib/stores/viewport-lock.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
 	import {
-		NavPipelineOrchestrator,
+		getGlobalNavPipelineOrchestrator,
 		setNavPipelineOrchestrator,
 		releaseNavPipelineOrchestrator
 	} from '$lib/stores/nav-pipeline-orchestrator.svelte';
@@ -40,6 +40,7 @@
 	import DiscussionsSkeleton from '$lib/components/panels/DiscussionsSkeleton.svelte';
 	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
 	import MessagesSkeleton from '$lib/components/panels/MessagesSkeleton.svelte';
+	import DeepPreviewSkeleton from '$lib/components/panels/DeepPreviewSkeleton.svelte';
 	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import type { PageUrlBuilder } from '$lib/types/tabs';
 
@@ -92,18 +93,29 @@
 	// parent the user actually came from). Falls back to the static
 	// leftHref prop when the stack has no prior entry.
 	const resolvedLeftHref = $derived.by<string>(() => {
+		// Prefer the real browser-history previous entry so a thread reached
+		// cross-tab backs to the source (macro §3: a thread reached from
+		// elsewhere backs to where the user came from), not the synthetic
+		// navStore stack which re-seeds to the tab root on a cross-tab
+		// landing. For a thread reached from its own list the two agree.
+		const prev = previousEntryPathname();
+		if (prev) return prev;
 		const bt = navStore.backTarget;
 		if (!bt) return leftHref;
 		const queryIdx = bt.indexOf('?');
 		return queryIdx >= 0 ? bt.slice(0, queryIdx) : bt;
 	});
 
-	// Constructed fresh per mount. The orchestrator publishes the in-flight
-	// pager state itself (every drag-move / commit rAF tick); the host's
-	// $effect below only handles the at-rest reset (when the publication's
-	// plan goes null). The orchestrator is the authority; the pager store
-	// is the downstream consumer.
-	const orchestrator = new NavPipelineOrchestrator();
+	// The shared singleton orchestrator. Every mobile host reaches the same
+	// instance via `getGlobalNavPipelineOrchestrator`; the host calls
+	// `configure` on mount and `releaseInputs` on destroy so the
+	// singleton's executor + driver + rAF persist across the route swap.
+	// The orchestrator publishes the in-flight pager state itself (every
+	// drag-move / commit rAF tick); the host's $effect below only handles
+	// the at-rest reset (when the publication's plan goes null). The
+	// orchestrator is the authority; the pager store is the downstream
+	// consumer.
+	const orchestrator = getGlobalNavPipelineOrchestrator();
 	const scrollChrome = getScrollChromeStore();
 
 	// Element refs. The track is the multi-panel container the driver
@@ -266,27 +278,43 @@
 	});
 
 	// Mount the orchestrator + acquire the viewport-lock + register
-	// teardowns. Idempotent mount so a re-mount (HMR, route swap) rebinds
-	// the element refs.
+	// teardowns. `configure` rebinds the element refs on each call so a
+	// re-mount (HMR) or a desktop -> mobile re-entry picks up the live
+	// `bind:this` values.
 	let held = false;
 	let orchestratorMounted = $state(false);
+	// Light teardown for a route-away destroy: drop the inputs +
+	// deactivate. The singleton's executor + driver + rAF persist for the
+	// next mobile host's configure (the route swap rebinds in place).
+	// Idempotent: guarded by `orchestratorMounted` so a destroy that
+	// follows a desktop flip (already unmounted via `unmountOrchestrator`)
+	// is a no-op.
+	const releaseOrchestrator = (): void => {
+		if (!orchestratorMounted) return;
+		orchestrator.releaseInputs();
+		releaseNavPipelineOrchestrator(orchestrator);
+		orchestratorMounted = false;
+	};
 	onMount(() => {
 		const mq = window.matchMedia(MOBILE_BREAKPOINT);
 
-		// The gesture pipeline is mobile-only (Plan §Scope). Mount +
-		// register the orchestrator on mobile; unmount + clear on desktop.
+		// The gesture pipeline is mobile-only (Plan §Scope). Configure +
+		// register the orchestrator on mobile; tear down + clear on desktop.
 		// Called both for the initial platform and on a mobile <-> desktop
 		// resize, so a session that crosses platforms does not leave the
 		// orchestrator active on desktop (where it would consume tab-clicks
 		// and write track transforms). On a mid-gesture/commit resize to
-		// desktop, unmount aborts the in-flight transition (stops the rAF,
-		// no dispatch) and clears the track transform.
+		// desktop, `unmountOrchestrator` aborts the in-flight transition
+		// (stops the rAF, no dispatch) and clears the track transform. A
+		// route-away destroy (component onDestroy) takes the lighter
+		// `releaseOrchestrator` path so the singleton persists for the next
+		// mobile host.
 		const mountOrchestrator = (): void => {
 			if (orchestratorMounted || !trackEl || !viewportEl) return;
 			const fromPathname = page.url.pathname;
 			const fromData = getRouteData(fromPathname);
 			const toData = getRouteData(resolvedLeftHref);
-			orchestrator.mount({
+			orchestrator.configure({
 				resolveElements: () => ({ pageTrack: trackEl, fab: null, header: null }),
 				viewportWidth: viewportEl.clientWidth,
 				restingTranslate: -viewportEl.clientWidth,
@@ -301,6 +329,10 @@
 			setNavPipelineOrchestrator(orchestrator);
 			orchestratorMounted = true;
 		};
+		// Full teardown for the mobile -> desktop flip: the host stays
+		// mounted but the gesture surface leaves the mobile breakpoint.
+		// The singleton's executor + driver are torn down; a subsequent
+		// desktop -> mobile flip reconstructs them on the next configure.
 		const unmountOrchestrator = (): void => {
 			if (!orchestratorMounted) return;
 			orchestrator.unmount();
@@ -324,7 +356,7 @@
 			} else {
 				// A mobile->desktop flip: land an in-flight committed
 				// transition (the mobile->desktop analogue of commit-settle)
-				// before the orchestrator is torn down. A route-away unmount
+				// before the orchestrator is torn down. A route-away destroy
 				// (onDestroy) does NOT do this, so the user's fresh nav wins.
 				if (orchestratorMounted) orchestrator.recoverDesktopFlipNav();
 				unmountOrchestrator();
@@ -390,7 +422,11 @@
 		return () => {
 			mq.removeEventListener('change', sync);
 			ro.disconnect();
-			unmountOrchestrator();
+			// A route-away destroy takes the light path so the singleton's
+			// executor + driver persist for the next mobile host. A desktop
+			// flip already called `unmountOrchestrator` (clearing
+			// `orchestratorMounted`); this is a no-op in that case.
+			releaseOrchestrator();
 			if (held) {
 				viewportLock.release();
 				held = false;
@@ -400,15 +436,16 @@
 
 	onDestroy(() => {
 		if (!browser) return;
-		// Tear down: release the viewport-lock, deactivate the orchestrator.
-		// Each release is guarded by `browser` (onDestroy also runs in SSR).
+		// Route-away destroy: release the viewport-lock and the singleton's
+		// per-host inputs (the executor + driver persist for the next mobile
+		// host). Each release is guarded by `browser` (onDestroy also runs
+		// in SSR). `releaseOrchestrator` is idempotent with the onMount
+		// cleanup above.
 		if (held) {
 			viewportLock.release();
 			held = false;
 		}
-		releaseNavPipelineOrchestrator(orchestrator);
-		orchestrator.unmount();
-		orchestratorMounted = false;
+		releaseOrchestrator();
 	});
 
 	// The structural style: the track is `panelCount * 100%` wide and
@@ -545,6 +582,8 @@
 						{@const PreviewPanel = getPreviewPanel(resolvedLeftHref)}
 						{#if PreviewPanel}
 							<PreviewPanel />
+						{:else}
+							<DeepPreviewSkeleton />
 						{/if}
 					{/if}
 				</div>

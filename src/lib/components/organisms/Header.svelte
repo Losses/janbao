@@ -17,10 +17,21 @@
 	 * with the track, never float up vertically).
 	 *
 	 * The SearchTabBar row clip-expands (max-height 0 → auto) rather than jumping.
+	 *
+	 * RENDER-ONLY (DV20 step 3): the Header is a reader of the pipeline
+	 * orchestrator's reactive class fields. The orchestrator owns the
+	 * settle ease (the post-release / post-title-change morph + title
+	 * crossfade), the root↔search tap-scrub ease, and the `searchScrubbing`
+	 * flag; this component reads `orchestrator.settleProgress`,
+	 * `orchestrator.settleLatched`, `orchestrator.settleActive`,
+	 * `orchestrator.settleDirection`, `pager.tapMorph`, and
+	 * `orchestrator.searchScrubbing` and derives every visual from them.
+	 * No Header-owned rAF, no Header-owned animation state. §5: one rAF
+	 * (the orchestrator's) owns every motion.
 	 */
-	import { untrack, tick, onDestroy } from 'svelte';
+	import { untrack } from 'svelte';
 	import { page } from '$app/state';
-	import { beforeNavigate, goto } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import Logo from '$lib/components/atoms/Logo.svelte';
@@ -36,17 +47,14 @@
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getNavigationStore, backHandler } from '$lib/stores/navigation.svelte';
+	import { getGlobalNavPipelineOrchestrator } from '$lib/stores/nav-pipeline-orchestrator.svelte';
 	import { hopForHref } from '$lib/utils/history-nav';
-	import {
-		HEADER_MORPH_THRESHOLD,
-		TITLE_CROSSFADE_MS,
-		GESTURE_MORPH_EPSILON
-	} from '$lib/utils/gesture-constants';
+	import { HEADER_MORPH_THRESHOLD } from '$lib/utils/gesture-constants';
 	import { mdiMagnify, mdiFilterVariant } from '@mdi/js';
 	import type { SearchSort, SearchScope } from '$lib/types/search';
 	import type { VoidHandler } from '$lib/types/handlers';
 	import type { TranslationDict } from '$lib/types/translation';
-	import type { HeaderSettleTransition, HeaderStateSnapshot } from '$lib/utils/header-probe';
+	import type { HeaderStateSnapshot } from '$lib/utils/header-probe';
 
 	interface HeaderProps {
 		t: TranslationDict;
@@ -58,6 +66,7 @@
 	const scrollChrome = getScrollChromeStore();
 	const pager = getMobilePagerStore();
 	const navStore = getNavigationStore();
+	const orchestrator = getGlobalNavPipelineOrchestrator();
 	const tNav = $derived(t.nav);
 	const currentPath = $derived(page.url.pathname);
 	const translateY = $derived(scrollChrome.translateY);
@@ -77,544 +86,78 @@
 
 	type TitleDirection = 'forward' | 'back';
 
-	// Unified title state machine. The deep-title layer renders from ONE model
-	// (`titleView` below): a single (outgoing, incoming, progress, transition,
-	// direction) tuple that is continuous across the gesture→event handoff: the
-	// in-flight crossfade holds through release and navigation landing, so the
-	// incoming title stays visible the whole way (no mid-transition vanish).
-	// svelte-ignore state_referenced_locally
-	let restTitle = $state(title); // title shown at rest; updated to the arrived title at settle-end
-	let settling = $state(false); // any non-gesture crossfade (commit / cancel / click)
-	// The committed transition's endpoint identity (titles + tab-ness), latched
-	// atomically at every settle arming (Effect B gesture, Effect C idle click,
-	// Effect C re-arm) and read by titleView, the morph settle arm, and the layer
-	// styles during a settle. null at rest (consumers fall back to live values).
-	// Invariant: latchedSettle !== null ⇔ settling === true (every arming writes
-	// both together; endSettle + Effect B CLEAR clear both together). Shape
-	// HeaderSettleTransition is imported from $lib/utils/header-probe.
-	let latchedSettle = $state<HeaderSettleTransition | null>(null);
-	let settleProgress = $state(1); // 0..1, CSS-transitioned during settling
-	let settleTarget = $state<0 | 1>(1); // commit / non-gesture → 1; cancel → 0
-	let settleAwaitTitle = $state(false); // commit holds settling until the nav lands (title === latchedSettle.incomingTitle); cancel/non-gesture end on the visual transition
-	let titleDirection = $state<TitleDirection>('forward');
-	let lastGestureMorph = $state(0); // per-frame latch while dragging (pager.backMorph has already jumped to 1/0 by the time dragging flips false)
-	// Idempotency flag for Effect B's CLEAR branch. The CLEAR branch (m ≤ epsilon)
-	// zeroes lastGestureMorph; a same-flush re-run of Effect B then reads m=0 and
-	// would re-enter CLEAR and undo the settle that the commit/cancel branch of
-	// this same release just started (collapse-then-replay). releaseConsumed marks
-	// a release already consumed by the commit/cancel branch so the CLEAR branch
-	// skips the undo on a same-flush re-run; the genuine no-gesture release (m=0 on
-	// the first run, flag never set) still clears. Reset on the next drag (Effect A)
-	// and in endSettle.
-	let releaseConsumed = $state(false);
+	// Settle / tap-scrub state comes straight from the orchestrator's
+	// reactive class getters. The orchestrator owns the settle ease
+	// (the post-release / post-title-change morph + title crossfade),
+	// the tap-scrub ease, and the `searchScrubbing` flag; these are
+	// class `$state` fields on the orchestrator singleton, read by the
+	// Header via the public getters. `orchestrator.settleLatched` carries
+	// the endpoint identity frozen at settle-arm; `orchestrator.settleDirection`
+	// selects the title-span slide axis.
+	const settleActive = $derived(orchestrator.settleActive);
+	const settleProgress = $derived(orchestrator.settleProgress);
+	const settleLatched = $derived(orchestrator.settleLatched);
+	const settleDirection = $derived(orchestrator.settleDirection);
+	const searchScrubbing = $derived(orchestrator.searchScrubbing);
 
-	// Root<->search tap transition CSS gate. While the tap scrub
-	// (searchScrubbing) is in flight, the search consumers (trackStyle /
-	// tabBarStyle / searchButtonStyle / slideT) drop their CSS transition so
-	// pager.tapMorph drives them 1:1, as a drag does. The flag also freezes
-	// iconProgress at the hamburger on a tab-root page during the scrub. The
-	// horizontal track sync on a tap is owned by the tap-morph rAF
-	// (startTapScrub below); this flag only gates CSS + the icon.
-	let searchScrubbing = $state(false);
-	let searchScrubRafId: number | undefined;
-	// tap-morph rAF state. tapMorph is written to the pager store and consumed
-	// by the horizontal track/Tab group (searchProgress / tabProgress via
-	// trackMorph). The layer group (rootLayerStyle / iconProgress) does NOT
-	// read tapMorph; it reads morph, which stays at rest during a root<->search
-	// tap. scrubSource / target / terminal latch the clear-watch condition.
-	let tapScrubRafId: number | undefined;
-	let scrubSource = $state('');
-	let scrubTarget = $state(false);
-	let scrubTerminal = $state(0);
-	let prevHadTabs: boolean | null = null;
-	let prevSearchTitle: string | null = null;
-	let prevIsSearch: boolean | null = null;
-	let prevPath = $state('');
-	let lastPath = '';
+	// Header-state notification to the orchestrator. The Header is in a
+	// component scope so SvelteKit's `$app/state` `page` reactivity reaches
+	// it on every navigation; the orchestrator singleton module's
+	// `$effect.root` scope does not see those changes. The Header's
+	// `$effect.pre` runs before the render in the same flush, reads the
+	// live `currentPath` / `title` / `currentHasTabs` / `isSearch`, and
+	// hands them to `orchestrator.notifyHeaderState`. The orchestrator
+	// owns the detection logic: it arms the settle ease on a title change
+	// and the tap-scrub ease on a root<->search ENTER flip. The drag /
+	// drag-cancel / in-flight-settle guards live in the orchestrator. No
+	// Header-owned animation state; this Effect is a thin sensor channel.
 	$effect.pre(() => {
-		const path = currentPath;
-		prevPath = lastPath;
-		lastPath = path;
-	});
-	const prevHasTabs = $derived(prevPath ? getCurrentTabIndex(prevPath) >= 0 : currentHasTabs);
-
-	const isSettleMode = $derived.by(() => {
-		if (settling) return true;
-		// Transition frame for gesture release:
-		if (!dragging && lastGestureMorph > GESTURE_MORPH_EPSILON && !releaseConsumed) {
-			return true;
-		}
-		return false;
+		// Reactive reads (track page.url.pathname + page.data.* + the
+		// local derived tab-ness / search-mode).
+		const newPath = currentPath;
+		const newTitle = title;
+		const tabs = currentHasTabs;
+		const search = isSearch;
+		const tt = t;
+		orchestrator.notifyHeaderState(newPath, newTitle, tabs, search, tt);
 	});
 
+	// Morph derivation. Reads `pager.backMorph` while a drag owns the track,
+	// the orchestrator's settle publication while a settle owns the crossfade,
+	// and the static tab-ness at rest. The root↔search tap scrub does not
+	// touch `morph` (the vertical layer group stays out of the horizontal
+	// scrub): tapMorph drives the horizontal track via `trackMorph` below.
 	const morph = $derived.by(() => {
-		const res = (() => {
-			// 1. Gesture dragging: follow finger progress directly (unless it is deep-to-deep transition, which has no morph)
-			if (dragging) {
-				return isDeepToDeep ? 0 : (pager.backMorph ?? (currentHasTabs ? 1 : 0));
-			}
-
-			// The root<->search tap scrub writes pager.tapMorph, which the
-			// horizontal track group reads via trackMorph. The vertical layer
-			// group (rootLayerStyle / iconProgress) reads morph here and stays
-			// out of the root<->search animation: the MobileTabBar rests at
-			// translateY(0) on a tab-root page regardless of the scrub, so a
-			// /search tap-EXIT does not descend it. morph changes only in the
-			// gesture, settle, and rest cases below.
-
-			// 2. Settling phase (gesture commit/cancel, or click/popstate). Endpoint
-			// identity comes solely from the latched record (armed at Effect B for
-			// gestures, Effect C idle for clicks, Effect C re-arm for rapid
-			// back-to-back). The three sub-arms collapse to one interpolation; they
-			// differ only in the (outgoing, incoming) mapping (in the record) and the
-			// settleProgress direction (settleTarget: 1 commit/click, 0 cancel).
-			if (isSettleMode && latchedSettle) {
-				const outgoing = latchedSettle.outgoingHasTabs ? 1 : 0;
-				const incoming = latchedSettle.incomingHasTabs ? 1 : 0;
-				// m-continuity: actual continuity comes from settleProgress = m set in
-				// the same Effect B flush as the record; the lastGestureMorph arm is
-				// unreachable under the arming invariant (latchedSettle !== null ⇒
-				// settling) but kept for formula-shape parity.
-				const progress = settling ? settleProgress : lastGestureMorph;
-				return outgoing * (1 - progress) + incoming * progress;
-			}
-			// isSettleMode with a null record cannot render in normal operation (the
-			// arming same-flush invariant); fall through to the rest branch.
-
-			// 3. Resting idle state: determined solely by whether the current path has tabs (1 = tabs, 0 = deep page)
-			return currentHasTabs ? 1 : 0;
-		})();
-
-		return res;
+		if (dragging) {
+			return isDeepToDeep ? 0 : (pager.backMorph ?? (currentHasTabs ? 1 : 0));
+		}
+		if (settleActive && settleLatched) {
+			const outgoing = settleLatched.outgoingHasTabs ? 1 : 0;
+			const incoming = settleLatched.incomingHasTabs ? 1 : 0;
+			return outgoing * (1 - settleProgress) + incoming * settleProgress;
+		}
+		return currentHasTabs ? 1 : 0;
 	});
 
 	// Freeze the icon morph during a search transition. The icon's morph is a
-	// root<->deep animation; `morph` is also driven as horizontal scrub progress
-	// (branch 1b) on root<->search taps, where the icon must stay a hamburger at
-	// both endpoints. Freeze on `isSearch` (search-mode rest) OR on `searchScrubbing`
-	// while on a tab-root page. The `currentHasTabs` term scopes the scrub freeze to
-	// tab-root pages, so a scrub in flight when the route is a deep page does not
-	// freeze the icon there (deep pages show the back arrow).
+	// root↔deep animation; on a root↔search tap scrub the icon must stay a
+	// hamburger at both endpoints. Freeze on `isSearch` (search-mode rest) OR
+	// on `searchScrubbing` while on a tab-root page. The `currentHasTabs`
+	// term scopes the scrub freeze to tab-root pages, so a scrub in flight
+	// when the route is a deep page does not freeze the icon there.
 	const iconProgress = $derived(isSearch || (searchScrubbing && currentHasTabs) ? 0 : 1 - morph);
-	// The layer transition is suppressed only during a live drag or a root↔search
-	// tap scrub, where `morph` is driven 1:1 by the finger / the scrubber and a CSS
-	// transition would fight it. It is not suppressed during an in-flight nav: the
-	// gesture path is owned by `settling` (Effect D holds settling=true through the
-	// navInFlight window, so the settle driver animates the morph), and on a
-	// click/tab-tap back-to-tab the morph rest value flips at the landing flush and
-	// must animate (the "Tab descent"). navInFlight is not part of this
-	// gate; the nav-window morph is owned by the settle driver (Effect D),
-	// so slideT stays enabled to play the descent. This CSS transition +
-	// the setTimeout settle backstop + the navInFlight signal are the
-	// pre-existing Header animation layer documented as Known #12
-	// (migrates to the executor's rAF beyond 5b2). See docs/DV12-Plan.md.
-	const slideT = $derived(
-		dragging || searchScrubbing ? 'none' : 'transform 200ms ease-out, opacity 200ms ease-out'
-	);
-	let settleRafId: number | undefined;
-	let settleTimeoutId: ReturnType<typeof setTimeout> | undefined;
-	let active = true; // HMR/destroy guard (onDestroy sets false)
 
-	// A. Gesture morph latch. `$effect.pre` so the write is visible to the render
-	// in the same flush. `morph` is read OUTSIDE untrack so the effect tracks it
-	// and runs every drag frame; on the release flush `dragging` is already false
-	// so `if (dragging)` skips the write and the last in-drag value M survives.
-	$effect.pre(() => {
-		const m = pager.backMorph ?? 0;
-		if (dragging)
-			untrack(() => {
-				lastGestureMorph = m;
-				releaseConsumed = false;
-			});
-	});
-
-	// B. Release → settle. `$effect.pre` runs before the DOM update, so
-	// `settling=true` is visible to the render in the same flush. `lastGestureMorph
-	// > 0` is the "just gestured" witness; `pager.committed === true`
-	// distinguishes commit (the orchestrator setCommitted) from cancel.
-	//
-	// The CLEAR branch (m ≤ epsilon) skips the undo when this same release was
-	// already consumed by the commit/cancel branch: see releaseConsumed above. A
-	// same-flush re-run after CLEAR zeroed lastGestureMorph would otherwise undo
-	// the settle just started (collapse-then-replay).
-	$effect.pre(() => {
-		if (dragging) return;
-		if (untrack(() => releaseConsumed)) return;
-		const m = untrack(() => lastGestureMorph);
-		const hasPending = pager.committed === true;
-
-		if (m <= GESTURE_MORPH_EPSILON && !hasPending) {
-			// No preceding gesture / cancelled near origin: clear any stale settle so
-			// it can't stick. Skip the undo if this release was already consumed by
-			// the commit/cancel branch (the in-flight settle is owned by Effect D /
-			// Effect C / the span transitionend).
-			untrack(() => {
-				if (settling && !releaseConsumed) {
-					settling = false;
-					restTitle = title;
-					latchedSettle = null;
-				}
-				lastGestureMorph = 0;
-			});
-			return;
-		}
-		const committed = hasPending;
-		untrack(() => {
-			const out = title;
-			const back = navStore.backTarget;
-			if (!back) {
-				lastGestureMorph = 0;
-				releaseConsumed = true;
-				return;
-			}
-			const inc = resolveDeepHeaderTitle(back, t) ?? '';
-			// Latch the transition's endpoint identity atomically (outgoing = current
-			// page, incoming = reveal target), frozen at release so the beforeNavigate
-			// stack-pop (which flips the live backTarget to a tab on a deep→deep
-			// commit) cannot reach the settle.
-			latchedSettle = {
-				outgoingTitle: out,
-				incomingTitle: inc,
-				outgoingHasTabs: currentHasTabs,
-				incomingHasTabs: getCurrentTabIndex(back) >= 0
-			};
-			if (committed) {
-				settleTarget = 1;
-				settleAwaitTitle = true; // hold the crossfade until the nav lands (title → inc)
-			} else {
-				// Cancel: the revealed title retreats, the current title stays.
-				settleTarget = 0;
-				settleAwaitTitle = false; // no nav: end on the visual transition
-			}
-			settleProgress = m; // continuity: begin the settle at the finger's release position
-			titleDirection = 'back';
-			settling = true;
-			lastGestureMorph = 0;
-			releaseConsumed = true;
-		});
-		runSettleDriver();
-	});
-
-	// C. Title change. `$effect.pre` so the latch is visible to the render in the
-	// same flush. Absorb a title change that matches the in-flight settle (the
-	// committed nav landing); interrupt + re-arm toward a new title so a rapid
-	// back-to-back nav can't strand the header on a stale title.
-	$effect.pre(() => {
-		const newTitle = title;
-		if (untrack(() => dragging)) return;
-		if (untrack(() => settling)) {
-			if (untrack(() => newTitle === (latchedSettle?.incomingTitle ?? ''))) {
-				// The awaited navigation landed. For a commit (`settleAwaitTitle`) this
-				// is the real end of the settle (the visual crossfade has been holding
-				// the incoming title centred); end it now so restTitle adopts the live
-				// title. Cancel / non-gesture settle end on the visual transition instead.
-				if (untrack(() => settleAwaitTitle)) endSettle();
-				return;
-			}
-			// A different title arrived mid-settle: interrupt + re-arm toward it so a
-			// rapid back-to-back nav can't strand the header on a stale title.
-			// Re-arm for any title that differs from both endpoints, including an
-			// empty title (a rapid back-to-back landing on a tab root).
-			let rearmed = false;
-			untrack(() => {
-				const prev = latchedSettle;
-				if (prev && newTitle !== prev.incomingTitle && newTitle !== prev.outgoingTitle) {
-					// Rotate the record: outgoing adopts the record's incoming title +
-					// tab-ness; incoming adopts the new title + its page (currentPath,
-					// already updated when the title change fires).
-					latchedSettle = {
-						outgoingTitle: prev.incomingTitle,
-						incomingTitle: newTitle,
-						outgoingHasTabs: prev.incomingHasTabs,
-						incomingHasTabs: currentHasTabs
-					};
-					settleTarget = 1;
-					settleProgress = 0;
-					settleAwaitTitle = false; // the new title is already current; end on the visual transition
-					titleDirection = navStore.direction === 'backward' ? 'back' : 'forward';
-					rearmed = true;
-				}
-			});
-			if (rearmed) runSettleDriver();
-			return;
-		}
-		// idle: non-gesture title change (forward click / back button / popstate).
-		// Arm the crossfade for ANY title change, including an empty incoming
-		// title (back to a tab root: the outgoing title fades out, the empty
-		// title fades in) and an empty outgoing title (forward from a tab root to
-		// a deep page). The only no-op case is newTitle === restTitle (same page).
-		untrack(() => {
-			if (newTitle !== restTitle) {
-				// Click / back-button / popstate: outgoing = the page being left
-				// (prevPath), incoming = the page being landed on (currentPath,
-				// already the destination when the title change fires).
-				latchedSettle = {
-					outgoingTitle: restTitle,
-					incomingTitle: newTitle,
-					outgoingHasTabs: prevHasTabs,
-					incomingHasTabs: currentHasTabs
-				};
-				settleTarget = 1;
-				settleProgress = 0;
-				settleAwaitTitle = false; // title is already current; end on the visual transition
-				titleDirection = navStore.direction === 'backward' ? 'back' : 'forward';
-				settling = true;
-			}
-		});
-		if (untrack(() => settling)) runSettleDriver();
-	});
-
-	// D. Commit settle ends on nav-done. `$effect.pre` so endSettle's writes
-	// (settling=false, restTitle=title) are visible to the render in the same
-	// flush. `pager.committed` is read OUTSIDE untrack so this effect re-runs
-	// the moment it flips.
-	//
-	// pager.committed === null means the orchestrator cleared it at #landAtRest
-	// (the navigation landed). The !navInFlight term is a legacy signal: no live
-	// code sets navStore.navInFlight in the pipeline world, so it is always false
-	// and the real end-of-settle signal is pager.committed flipping to null. The
-	// navInFlight read + the setTimeout settle backstop are the pre-existing
-	// Header animation layer documented as Known #12 (migrates to the executor's
-	// rAF beyond 5b2).
-	//
-	// settleAwaitTitle restricts this to commit settles; cancel / non-gesture
-	// (settleAwaitTitle=false) end on the span transitionend + the CSS-derived
-	// backstop in runSettleDriver and never enter this branch. navigateBackward
-	// is cancel-class here: the orchestrator does not publish committed=true, so
-	// Effect B's `hasPending = pager.committed === true` is false -> settleAwaitTitle stays false.
-	//
-	// Load-bearing premise: a gesture-committed dispatch always has a real
-	// destination to land on (gestures route through hopForHref and dispatch via
-	// the orchestrator's goto/history.back, never a bare pop against a
-	// single-entry stack), so the landing fires and #landAtRest clears
-	// pager.committed on every commit. A non-hop path that dispatched against a
-	// one-entry history would not land, pager.committed would stay non-null, and
-	// this effect would never end the settle; such a path must keep dispatches
-	// landable.
-	$effect.pre(() => {
-		const inFlight = navStore.navInFlight;
-		if (
-			untrack(() => settling) &&
-			untrack(() => settleAwaitTitle) &&
-			pager.committed === null &&
-			!inFlight
-		) {
-			endSettle();
-		}
-	});
-
-	// E. Root<->search tap scrub trigger. Arm the CSS-gate flag
-	// (startSearchScrub) and, on enter, the tap-morph rAF (startTapScrub) only
-	// on a root<->search tap: currentHasTabs flips, isSearch flips (one side is
-	// /search), the title does not change (so Effect C's settle stays idle), and
-	// no gesture is in flight (a gesture scrubs via backMorph). Other
-	// currentHasTabs flips are left alone: root<->deep leaves isSearch
-	// unchanged, and search<->deep has no morph delta (startSearchScrub no-ops).
-	$effect.pre(() => {
-		const curTabs = currentHasTabs;
-		const curTitle = title;
-		const curIsSearch = isSearch;
-		if (prevHadTabs === null) {
-			prevHadTabs = curTabs;
-			prevSearchTitle = curTitle;
-			prevIsSearch = curIsSearch;
-			return;
-		}
-		const prevTabs = prevHadTabs;
-		const prevT = prevSearchTitle;
-		const prevS = prevIsSearch;
-		prevHadTabs = curTabs;
-		prevSearchTitle = curTitle;
-		prevIsSearch = curIsSearch;
-		if (curTabs === prevTabs) return;
-		if (curIsSearch === prevS) return; // only root<->search; root<->deep is unchanged
-		if (!browser) return;
-		if (curTitle !== prevT) return; // Effect C settle animates morph
-		if (untrack(() => dragging)) return; // gesture owns morph via backMorph
-		if (untrack(() => settling)) return; // a settle is in flight
-		if (untrack(() => lastGestureMorph) > GESTURE_MORPH_EPSILON) return;
-		startSearchScrub(prevTabs ? 1 : 0, curTabs ? 1 : 0);
-		// ENTER tap-morph rAF drives the track/Tab group sync. curIsSearch gates
-		// it to enter; the EXIT tap-morph is owned by the beforeNavigate pre-nav
-		// publisher below (this effect fires post-nav, after the /search
-		// NavPipelineHost has unmounted, so it cannot drive the pre-nav exit).
-		if (curIsSearch) {
-			startTapScrub(prevTabs ? 1 : 0, curTabs ? 1 : 0, '/search', false);
-		}
-	});
-
-	function startSearchScrub(from: number, to: number): void {
-		if (from === to) return; // no morph delta (search<->deep) -> nothing to gate
-		if (searchScrubRafId !== undefined) {
-			cancelAnimationFrame(searchScrubRafId);
-			searchScrubRafId = undefined;
-		}
-		searchScrubbing = true;
-		const startT = performance.now();
-		const tick = (): void => {
-			if (!searchScrubbing) return; // cancelled or interrupted
-			const t = Math.min(1, (performance.now() - startT) / TITLE_CROSSFADE_MS);
-			if (t >= 1) {
-				searchScrubbing = false;
-				searchScrubRafId = undefined;
-				return;
-			}
-			searchScrubRafId = requestAnimationFrame(tick);
-		};
-		searchScrubRafId = requestAnimationFrame(tick);
-	}
-
-	// tap-morph rAF: writes pager.tapMorph over TITLE_CROSSFADE_MS with the
-	// same constant-deceleration ease `s(u) = 2u - u²` the NavExecutor's commit
-	// loop uses, so the horizontal Header track (trackMorph → searchProgress)
-	// stays frame-synced with the NavPipelineHost Page panel the executor
-	// drives. Sets the start value synchronously so the CSS gates see
-	// tapMorph !== null in the same flush. Latches scrubSource/target/terminal
-	// for the clear watch.
-	function startTapScrub(from: number, to: number, source: string, target: boolean): void {
-		if (tapScrubRafId !== undefined) {
-			cancelAnimationFrame(tapScrubRafId);
-			tapScrubRafId = undefined;
-		}
-		scrubSource = source;
-		scrubTarget = target;
-		scrubTerminal = to;
-		pager.setTapMorph(from);
-		const startT = performance.now();
-		const tick = (): void => {
-			const t = Math.min(1, (performance.now() - startT) / TITLE_CROSSFADE_MS);
-			const eased = 2 * t - t * t;
-			pager.setTapMorph(from + (to - from) * eased);
-			if (t >= 1) {
-				tapScrubRafId = undefined;
-				return;
-			}
-			tapScrubRafId = requestAnimationFrame(tick);
-		};
-		tapScrubRafId = requestAnimationFrame(tick);
-	}
-
-	function runSettleDriver(): void {
-		if (settleRafId) cancelAnimationFrame(settleRafId);
-		if (settleTimeoutId) clearTimeout(settleTimeoutId);
-		void tick().then(() => {
-			if (!active) return;
-			if (typeof document !== 'undefined') void document.body.offsetHeight;
-			settleRafId = requestAnimationFrame(() => {
-				if (!active) return;
-				settleProgress = settleTarget;
-			});
-		});
-		// Cancel / non-gesture settle backstop only. A commit settle
-		// (settleAwaitTitle) ends via Effect D on nav-done (pendingNav cleared AND
-		// navInFlight false) with NO timer: a device-dependent navigation-delay
-		// timer would race slow-device landings (timer fires first -> STATIC
-		// collapse -> landing re-triggers the crossfade = the replay bug). Cancel /
-		// non-gesture do not navigate, so no navigation-delay race exists; this
-		// timer is bound to the known CSS span duration and only covers a dropped
-		// span transitionend on those non-navigating branches.
-		if (!settleAwaitTitle) {
-			settleTimeoutId = setTimeout(() => {
-				if (active) endSettle();
-			}, TITLE_CROSSFADE_MS * 2);
-		}
-	}
-
-	function endSettle(): void {
-		if (!untrack(() => settling)) return; // idempotent
-		// restTitle reads the record BEFORE the clear (same synchronous tick as the
-		// settling=false + latchedSettle=null writes below, so a re-arm on a later
-		// flush can't deref null).
-		restTitle = untrack(() => title) || untrack(() => latchedSettle?.incomingTitle ?? '');
-		settling = false;
-		latchedSettle = null;
-		settleAwaitTitle = false;
-		releaseConsumed = false;
-		if (settleRafId) {
-			cancelAnimationFrame(settleRafId);
-			settleRafId = undefined;
-		}
-		if (settleTimeoutId) {
-			clearTimeout(settleTimeoutId);
-			settleTimeoutId = undefined;
-		}
-	}
-
-	function onTitleSpanTransitionEnd(): void {
-		// A commit settle ignores the visual transitionend and waits for the
-		// navigation to land (Effect C absorb); cancel / non-gesture end here.
-		if (!untrack(() => settleAwaitTitle)) endSettle();
-	}
-
-	// EXIT tap-morph publisher (pre-nav). The /search NavPipelineHost's
-	// orchestrator intercepts the /search -> / navigation pre-nav and animates
-	// its Page-panel slide via the executor's rAF before page.url updates, so a
-	// post-nav publisher (Effect E) cannot reach the pre-nav window; publishing
-	// tapMorph here (pre-nav, while /search is still mounted) lets the Header
-	// track stay frame-synced with the Page panel during that pre-nav slide.
-	// navInFlight short-circuits the orchestrator's own re-dispatch; the
-	// pathname check is strict ('/') so /search -> /activity etc. do not arm.
-	beforeNavigate((navigation) => {
-		if (!browser) return;
-		if (navStore.navInFlight) return;
-		if (!isSearch) return;
-		const toPath = navigation.to?.url?.pathname ?? '';
-		if (toPath !== '/') return;
-		startTapScrub(0, 1, '/search', true);
-	});
-
-	// DV17 NB26 clear watch. Clears tapMorph (and cancels the orphan rAF) when
-	// the scrub has reached its terminal at the destination, OR immediately on
-	// any navigation away from the scrub source (mid-scrub redirect recovery).
-	$effect.pre(() => {
-		if (pager.tapMorph === null) return;
-		const atTerminal = Math.abs(pager.tapMorph - scrubTerminal) < 0.001;
-		if ((atTerminal && currentHasTabs === scrubTarget) || currentPath !== scrubSource) {
-			if (tapScrubRafId !== undefined) {
-				cancelAnimationFrame(tapScrubRafId);
-				tapScrubRafId = undefined;
-			}
-			pager.setTapMorph(null);
-		}
-	});
-
-	// DV17 NB13 drag-cancel: a drag mid-scrub cancels the tap-morph rAF so the
-	// post-settle morph returns the drag's rest, not a stale tap value.
-	$effect.pre(() => {
-		if (dragging && pager.tapMorph !== null) {
-			if (tapScrubRafId !== undefined) {
-				cancelAnimationFrame(tapScrubRafId);
-				tapScrubRafId = undefined;
-			}
-			pager.setTapMorph(null);
-		}
-	});
-
-	onDestroy(() => {
-		active = false;
-		if (browser) {
-			if (settleRafId) cancelAnimationFrame(settleRafId);
-			if (settleTimeoutId) clearTimeout(settleTimeoutId);
-			searchScrubbing = false;
-			if (searchScrubRafId !== undefined) {
-				cancelAnimationFrame(searchScrubRafId);
-				searchScrubRafId = undefined;
-			}
-			if (tapScrubRafId !== undefined) {
-				cancelAnimationFrame(tapScrubRafId);
-				tapScrubRafId = undefined;
-			}
-			pager.setTapMorph(null);
-		}
-	});
-
-	// Derived tab status and direction are declared at the top of script to satisfy dependency order.
-
+	// Title view model. The drag branch hardcodes direction 'back' (a
+	// back-swipe always slides the current title down and brings the back
+	// target in from above). The title spans read `progress` directly: during
+	// a settle it is the orchestrator-published `settleProgress`, animated
+	// frame-by-frame by the orchestrator's settle rAF; during a drag it is
+	// `pager.backMorph` (the orchestrator's executor rAF publication); at
+	// rest it is 1. No CSS transition is involved on the title spans.
 	interface TitleView {
 		outgoing: string;
 		incoming: string;
 		progress: number;
-		transition: string;
 		direction: TitleDirection;
 	}
 
@@ -622,62 +165,64 @@
 	const backTitle = $derived(
 		navStore.backTarget ? (resolveDeepHeaderTitle(navStore.backTarget, t) ?? '') : ''
 	);
-	// One render model for every phase. The drag branch hardcodes direction
-	// 'back' (a back-swipe always slides the current title down and brings the
-	// back target in from above) so it never inherits a stale module titleDirection.
 	const titleView = $derived<TitleView>(
 		dragging && backTitle && currentTitle
 			? {
 					outgoing: currentTitle,
 					incoming: backTitle,
 					progress: pager.backMorph ?? 0,
-					transition: 'none',
 					direction: 'back'
 				}
-			: settling
+			: settleActive
 				? {
-						outgoing: latchedSettle?.outgoingTitle ?? '',
-						incoming: latchedSettle?.incomingTitle ?? '',
+						outgoing: settleLatched?.outgoingTitle ?? '',
+						incoming: settleLatched?.incomingTitle ?? '',
 						progress: settleProgress,
-						transition: `transform ${TITLE_CROSSFADE_MS}ms ease-out`,
-						direction: titleDirection
+						direction: settleDirection
 					}
 				: {
-						outgoing: restTitle,
-						incoming: restTitle,
+						outgoing: title,
+						incoming: title,
 						progress: 1,
-						transition: 'none',
-						direction: titleDirection
+						direction: settleDirection
 					}
 	);
 
 	// Hoisted endpoint-identity source for the layer styles AND the probe: the
 	// latched record during a settle (frozen), live at rest. Consuming the SAME
-	// derived here means a revert to live in either layer style is observable via
-	// effectiveTabsOut/In in the probe (the §7 source-attribution guard).
-	const tabsOut = $derived(latchedSettle ? latchedSettle.outgoingHasTabs : currentHasTabs);
-	const tabsIn = $derived(latchedSettle ? latchedSettle.incomingHasTabs : targetHasTabs);
+	// derived here means a revert to live in either layer style is observable
+	// via effectiveTabsOut/In in the probe (the §7 source-attribution guard).
+	const tabsOut = $derived(settleLatched ? settleLatched.outgoingHasTabs : currentHasTabs);
+	const tabsIn = $derived(settleLatched ? settleLatched.incomingHasTabs : targetHasTabs);
 	// Root↔deep vertical morph: FROZEN in search mode so the tabs exit
-	// horizontally with the track, never float up.
+	// horizontally with the track, never float up. The transform follows
+	// `morph` directly (no `transition:` inline): during a settle `morph`
+	// reads the orchestrator-published `settleProgress`; during a drag it
+	// reads `pager.backMorph`; at rest it is the static tab-ness value.
 	const rootLayerStyle = $derived(
 		isSearch
 			? 'transform: none; opacity: 1;'
 			: `transform: translateY(${
 					!(tabsOut || tabsIn) ? -100 : -(1 - morph) * 100
-				}%); transition: ${slideT}; pointer-events: ${morph > 0.5 && tabsIn ? 'auto' : 'none'}`
+				}%); pointer-events: ${morph > 0.5 && tabsIn ? 'auto' : 'none'}`
 	);
 	const layerDownStyle = $derived(
-		`transform: translateY(${(!tabsOut && !tabsIn ? 0 : morph) * 100}%); transition: ${slideT}; pointer-events: ${
+		`transform: translateY(${(!tabsOut && !tabsIn ? 0 : morph) * 100}%); pointer-events: ${
 			morph < 0.5 ? 'auto' : 'none'
 		}`
 	);
 
 	// DEV-ONLY probe. Reads every morph-state dep so Svelte re-runs it on each
-	// flush they change, pushing a snapshot to window.__headerMorphProbe regardless of
-	// whether a paint fires between flushes. This captures the slideT/navInFlight
-	// values at the exact flush a tabs-layer jump is committed, which a rAF
-	// sampler misses when the navigation commit blocks the main thread for a few
-	// frames. Gated on DEV + browser so it never ships.
+	// flush they change, pushing a snapshot to window.__headerMorphProbe
+	// regardless of whether a paint fires between flushes. The settle /
+	// tap-scrub fields come from the orchestrator's pager-store publication.
+	// `lastGestureMorph`, `isSettleMode`, and `prevHasTabs` are kept in the
+	// snapshot shape (the e2e tests mirror the shape) and carry stable
+	// values: `settleActive` is the single settle-mode signal (aliased into
+	// `isSettleMode`); the orchestrator seeds `settleProgress` directly from
+	// the executor's release-raw, so there is no separate gesture-morph
+	// latch (`lastGestureMorph` reads 0); the Header does not track a
+	// previous path (`prevHasTabs` mirrors `currentHasTabs`).
 	$effect(() => {
 		if (!import.meta.env.DEV || !browser) return;
 		if (!window.__headerMorphProbe) window.__headerMorphProbe = [];
@@ -686,18 +231,17 @@
 			t: performance.now(),
 			path: currentPath,
 			morph,
-			slideT,
 			rootLayerStyle,
 			layerDownStyle,
-			settling,
-			isSettleMode,
+			settling: settleActive,
+			isSettleMode: settleActive,
 			settleProgress,
-			settleAwaitTitle,
-			lastGestureMorph,
+			settleAwaitTitle: orchestrator.settleAwaitTitle,
+			lastGestureMorph: 0,
 			currentHasTabs,
 			targetHasTabs,
-			prevHasTabs,
-			latchedSettle,
+			prevHasTabs: currentHasTabs,
+			latchedSettle: settleLatched,
 			effectiveTabsOut: tabsOut,
 			effectiveTabsIn: tabsIn,
 			navInFlight: navStore.navInFlight,
@@ -718,7 +262,8 @@
 	// 1→0 on a forward-enter (transitionTarget === currentPath, arriving at
 	// /search) and 0→1 on a backward-exit (transitionTarget !== currentPath,
 	// leaving /search). Outside an orchestrator transition the track falls
-	// back to pager.tapMorph, then to morph (rest / gesture-settle).
+	// back to pager.tapMorph (the orchestrator's tap-scrub rAF publication),
+	// then to morph (rest / gesture-settle).
 	const trackMorph = $derived(
 		pager.transitionTarget !== null && pager.backMorph !== null
 			? pager.transitionTarget === currentPath
@@ -728,49 +273,61 @@
 				? pager.tapMorph
 				: morph
 	);
-	// searchProgress follows trackMorph 1:1 (raw) so the Header track stays
-	// frame-synced with the NavPipelineHost Page panel, which the executor
-	// drives linearly in its eased progress. The scope-tab bar keeps its own
-	// threshold window (tabProgress below) for the collapse/expand visual.
-	const searchProgress = $derived(isSearch ? 1 - trackMorph : 0);
-	const tabProgress = $derived(isSearch ? 1 - Math.min(1, trackMorph / HEADER_MORPH_THRESHOLD) : 0);
+	// searchProgress is the search-layout position the Header renders: 1 when
+	// the search panel fills the track, 0 when the root panel fills it. The
+	// orchestrator owns the motion; the consumers (track / search button /
+	// scope-tab bar) are pure functions of this value. Three sources by
+	// precedence:
+	//   1. A tap-scrub in flight (pager.tapMorph !== null): tapMorph is
+	//      `isSearch`-inverted (1 = not search, 0 = search), so searchProgress
+	//      = 1 - tapMorph. Drives the root↔search AND the deep↔search
+	//      trajectories (the orchestrator arms the scrub on any isSearch
+	//      flip). Reading tapMorph directly (not via trackMorph + isSearch)
+	//      is required for the deep↔search EXIT: once the URL lands on a
+	//      deep page isSearch is false and the gated fallback below would
+	//      clamp to 0; tapMorph drives the slide back to 0 over the scrub.
+	//   2. A gesture in flight (transitionTarget + backMorph): follows
+	//      trackMorph, gated by isSearch (the gesture rAF runs while the
+	//      source route is still mounted, so isSearch matches the
+	//      pre-flip endpoint).
+	//   3. At rest: isSearch ? 1 : 0.
+	const searchProgress = $derived.by(() => {
+		if (pager.tapMorph !== null) {
+			return 1 - pager.tapMorph;
+		}
+		if (pager.transitionTarget !== null && pager.backMorph !== null) {
+			return isSearch ? 1 - trackMorph : 0;
+		}
+		return isSearch ? 1 : 0;
+	});
+	const tabProgress = $derived.by(() => {
+		if (pager.tapMorph !== null) {
+			return Math.max(0, 1 - pager.tapMorph / HEADER_MORPH_THRESHOLD);
+		}
+		if (pager.transitionTarget !== null && pager.backMorph !== null) {
+			return isSearch ? Math.max(0, 1 - trackMorph / HEADER_MORPH_THRESHOLD) : 0;
+		}
+		return isSearch ? 1 : 0;
+	});
 
-	const trackStyle = $derived(
-		`transform: translateX(${-(searchProgress * 50).toFixed(2)}%); transition: ${
-			dragging ||
-			searchScrubbing ||
-			pager.tapMorph !== null ||
-			navStore.navInFlight ||
-			pager.transitionTarget !== null
-				? 'none'
-				: 'transform 200ms ease-out'
-		};`
-	);
+	// Pure functions of searchProgress / tabProgress. No CSS transition: the
+	// orchestrator's rAF (gesture rAF or tap-scrub rAF) drives every frame;
+	// the styles re-render via Svelte's reactive `style=` binding. §5: no
+	// CSS transitions in this layer.
+	const trackStyle = $derived(`transform: translateX(${-(searchProgress * 50).toFixed(2)}%);`);
 
 	// The SINGLE search button: absolute, slides from right to left. Driven by
-	// the SAME searchProgress as the track so it is gesture-synced (1:1 with the
-	// finger during a back-swipe). `left` is a linear interp from calc(100% -
-	// 3rem) at progress 0 to 0.5rem at progress 1.
+	// the SAME searchProgress as the track so it is sync'd with the rAF.
+	// `left` is a linear interp from calc(100% - 3rem) at progress 0 to
+	// 0.5rem at progress 1.
 	const searchButtonLeft = $derived(
 		`calc(${((1 - searchProgress) * 100).toFixed(2)}% - ${((1 - searchProgress) * 3).toFixed(2)}rem + ${(searchProgress * 0.5).toFixed(2)}rem)`
 	);
-	const searchButtonStyle = $derived(
-		`left: ${searchButtonLeft}; transition: ${dragging || searchScrubbing || pager.tapMorph !== null || navStore.navInFlight || pager.transitionTarget !== null ? 'none' : 'left 200ms ease-out'};`
-	);
+	const searchButtonStyle = $derived(`left: ${searchButtonLeft};`);
 
 	// SearchTabBar row: clip-expand (max-height) driven by tabProgress so it
-	// gesture-syncs with the track and the search button.
-	const tabBarStyle = $derived(
-		`max-height: ${(tabProgress * 3).toFixed(2)}rem; transition: ${
-			dragging ||
-			searchScrubbing ||
-			pager.tapMorph !== null ||
-			navStore.navInFlight ||
-			pager.transitionTarget !== null
-				? 'none'
-				: 'max-height 200ms ease-out'
-		};`
-	);
+	// syncs with the track and the search button.
+	const tabBarStyle = $derived(`max-height: ${(tabProgress * 3).toFixed(2)}rem;`);
 
 	// Search query input (bind:value + composition gating + debounce + keepFocus).
 	const urlQ = $derived(page.url.searchParams.get('q') ?? '');
@@ -944,12 +501,13 @@
 								</div>
 							{:else}
 								{@const fwd = titleView.direction === 'forward'}
-								<!-- Outgoing title -->
+								<!-- Outgoing title. Transform follows titleView.progress
+								     (settleProgress during a settle, backMorph during a drag) frame
+								     by frame; no CSS transition is involved. -->
 								<div
 									class="absolute inset-0 flex items-center justify-center px-2"
 									style="transform: translateY({(fwd ? -titleView.progress : titleView.progress) *
-										100}%); transition: {titleView.transition};"
-									ontransitionend={onTitleSpanTransitionEnd}
+										100}%);"
 								>
 									<span class="w-full truncate text-center font-medium text-neutral-content">
 										{titleView.outgoing}
@@ -961,7 +519,7 @@
 									class="absolute inset-0 flex items-center justify-center px-2"
 									style="transform: translateY({(fwd
 										? 1 - titleView.progress
-										: -(1 - titleView.progress)) * 100}%); transition: {titleView.transition};"
+										: -(1 - titleView.progress)) * 100}%);"
 								>
 									<span class="w-full truncate text-center font-medium text-neutral-content">
 										{titleView.incoming}

@@ -17,7 +17,7 @@
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
 	import {
-		NavPipelineOrchestrator,
+		getGlobalNavPipelineOrchestrator,
 		setNavPipelineOrchestrator,
 		releaseNavPipelineOrchestrator
 	} from '$lib/stores/nav-pipeline-orchestrator.svelte';
@@ -46,7 +46,11 @@
 
 	let activeIndex = $state(initialIndex());
 
-	const orchestrator = new NavPipelineOrchestrator();
+	// The shared singleton orchestrator. Every mobile host reaches the same
+	// instance via `getGlobalNavPipelineOrchestrator`; the host calls
+	// `configure` on mount and `releaseInputs` on destroy so the
+	// singleton's executor + driver + rAF persist across the route swap.
+	const orchestrator = getGlobalNavPipelineOrchestrator();
 	const scrollChrome = getScrollChromeStore();
 	const pageCache = getPageCacheStore();
 
@@ -170,7 +174,7 @@
 		const fromPathname = page.url.pathname;
 		const fromData = getRouteData(fromPathname);
 		const w = viewportEl?.clientWidth ?? 0;
-		orchestrator.mount({
+		orchestrator.configure({
 			resolveElements: () => ({ pageTrack: trackEl, fab: null, header: null }),
 			viewportWidth: w,
 			restingTranslate: -activeIndex * w,
@@ -201,9 +205,9 @@
 
 		return () => {
 			ro.disconnect();
-			releaseNavPipelineOrchestrator(orchestrator);
-			orchestrator.unmount();
-			orchestratorMounted = false;
+			// Route-away destroy: light teardown. The singleton's executor
+			// + driver persist for the next mobile host's configure.
+			releaseOrchestrator();
 			if (held) {
 				viewportLock.release();
 				held = false;
@@ -212,11 +216,18 @@
 	});
 
 	let held = false;
+	const releaseOrchestrator = (): void => {
+		if (!orchestratorMounted) return;
+		releaseNavPipelineOrchestrator(orchestrator);
+		orchestrator.releaseInputs();
+		orchestratorMounted = false;
+	};
+
 	onDestroy(() => {
 		if (!browser) return;
 		scrollChrome.setScrollContainer(null);
-		releaseNavPipelineOrchestrator(orchestrator);
-		orchestrator.unmount();
+		// Idempotent with the onMount cleanup; either path runs once.
+		releaseOrchestrator();
 		if (held) {
 			viewportLock.release();
 			held = false;

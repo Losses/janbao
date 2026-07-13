@@ -53,174 +53,328 @@ Roll the new pipeline out to every remaining route that mounts `GesturePageLayou
 6. **Discussion thread verify.** The 5b1 pilot after shared-component changes.
 7. **`isGesturePageLayoutRoute` rename + `backParent` audit.** Prepare for 5b3.
 
+## Global animation manager (the 5b2 structural refactor)
+
+The 5b2 audit loop (R1 through R16) converged the piecemeal fixes but kept
+re-flagging two deviations as lazily deferred: the FAB family-swap running on
+its own rAF (then Known #2) and the Header morph/title animation running on CSS
+transitions plus a `setTimeout` settle backstop plus a `startTapScrub` rAF
+(then Known #12). R16's A/B auditors traced both to one structural root cause
+and an in-place patch was ruled out (it would have been a third bridge on top
+of the two parallel mechanisms, violating §13.4). The refactor that followed
+(steps 1 through 3 below) is now the architecture; this section is its
+authoritative description.
+
+### Root cause that was fixed
+
+The orchestrator was per-host: each route's `NavPipelineHost` /
+`NavPipelineTabHost` constructed an orchestrator in `onMount` and tore it down
+in `onDestroy`, so its lifecycle was bound to one route's host. The FAB atom
+and the Header organism persist across route swaps (they live in the root /
+`(tabs)` layout, and the FAB atom is intentionally retained across swaps so it
+can ease the family change). During a route swap the old host's orchestrator
+was unmounting while the new host's was constructing; neither was a stable
+owner, but the FAB and Header still needed animation data for the route-swap
+transition (FAB family change, Header title crossfade, Header settle).
+
+A global singleton pager store bridged this gap, but it only carried gesture
+progress (when a host was driving). The route-swap animations happened in the
+gap with no host driving, so the FAB ran its own family-swap rAF and the Header
+runs CSS transitions + a `setTimeout` settle backstop + a `startTapScrub` rAF.
+The global state and the per-consumer rAFs were all symptoms of one root cause:
+the per-host orchestrator vs persistent consumers lifecycle mismatch.
+
+### Target architecture (in place after the refactor)
+
+One persistent manager (a module-level singleton constructed eagerly at module
+load) owns the animation layer for the app's mobile lifetime:
+
+1. **Global singleton.** `getGlobalNavPipelineOrchestrator()` returns one
+   instance shared by every mobile host. It does not unmount on a route swap;
+   hosts feed it inputs via `configure(inputs)` and release them via
+   `releaseInputs()`. The active-slot pointer (`getNavPipelineOrchestrator`)
+   is `null` only in the gap frame between an old host's `releaseInputs` and
+   the new host's `configure`, during which the SvelteKit nav hooks skip
+   processing.
+2. **One rAF per motion channel, all owned by the orchestrator.** The
+   executor's rAF drives the gesture slide (the track, the cover-progress-driven
+   FAB, and the Header morph). A separate orchestrator-owned rAF drives the
+   family-swap ease (publishing `pager.familySwapScale`); a third drives the
+   settle ease (publishing `settleActive` / `settleProgress` / `settleLatched` /
+   `settleDirection`); a fourth drives the tap-scrub ease (publishing
+   `searchScrubbing` while scrubbing the root<->search morph). Each motion
+   channel has exactly one rAF owner; no consumer runs its own.
+3. **`configure` / `releaseInputs` lifecycle.** The host calls `configure` in
+   `onMount` (capture inputs, `forceReset` the singleton state machine, publish
+   at-rest, detect a family change and arm the family-swap ease) and
+   `releaseInputs` in `onDestroy` (capture the visible FAB scale into
+   `#lastRenderedScale` for the next configure's family-swap anchor, clear the
+   in-flight pager state, drop the inputs) WITHOUT tearing down the executor,
+   the driver, the rAF loops, or the lifecycle `mount`. The `#mounted` guard
+   returns at-rest from the publication while inputs are absent, so the gap
+   frame publishes at-rest instead of the prior route's in-flight state. The
+   mobile -> desktop flip and the app exit call the full `unmount` teardown.
+4. **FAB layer is a reactive reader.** The FAB layer derives its scale from
+   `pager.familySwapScale ?? restingScale` (restingScale is itself derived from
+   `pager.coverProgress`, `pager.fractionalIndex`, and the URL-derived family).
+   It runs no rAF of its own and performs no DOM read-back. The orchestrator
+   tracks `#lastRenderedScale` itself across `releaseInputs` so the family-swap
+   ease anchors at the visible pre-swap scale.
+5. **Header organism is a reactive reader.** The Header derives its morph,
+   title crossfade, search-track / search-button / tab-bar transforms, and
+   settle/tap-scrub state from manager-published signals
+   (`pager.backMorph`, `pager.tapMorph`, `pager.transitionTarget`,
+   `orchestrator.settleActive`, `.settleProgress`, `.settleLatched`,
+   `.settleDirection`, `.searchScrubbing`). The `runSettleDriver` rAF, the
+   `startTapScrub` rAF, and the `setTimeout` settle backstop are deleted from
+   the Header. The root<->search morph arbitration (`trackMorph` prefers
+   `backMorph` while `transitionTarget !== null`) is unchanged.
+
+### Step rollout
+
+- **Step 1 - global singleton + `configure` / `releaseInputs` lifecycle.**
+  Module-level singleton + `getGlobalNavPipelineOrchestrator()`; the prior
+  `mount` / `unmount` split into `configure(inputs)` (capture inputs, reset,
+  publish at-rest) and `releaseInputs()` (drop inputs, return publication to
+  at-rest) without tearing down the executor / driver / rAF. Hosts call
+  `configure` in `onMount` and `releaseInputs` in `onDestroy`.
+- **Step 1a - attempted skip-`mount` shortcut (reverted).** A first attempt
+  rerouted `releaseInputs` through the full `unmount` teardown on the
+  assumption that the singleton's executor / driver / rAF could be rebuilt
+  cheaply on the next `configure`. The Header froze on the first route swap:
+  the Header's settle / tap-scrub eases had been moved onto the orchestrator's
+  rAF in step 1, so when the singleton tore its executor down between hosts,
+  the in-flight settle rAF (a commit settle awaiting its navigation landing)
+  died mid-transition. The hang was the lifecycle-interdependence proof: the
+  orchestrator's rAF channels cannot be torn down across a route swap while
+  the persistent Header is mid-settle. Reverted to the `releaseInputs`
+  definition that preserves the executor / driver / rAF.
+- **Step 2 - orchestrator owns the FAB family-swap ease.** The family-swap
+  rAF moved into the orchestrator (`#startFamilySwapEase` /
+  `#stopFamilySwapEase` / `#publishFamilySwapScale`), armed on a family change
+  detected at `configure` time. The orchestrator publishes
+  `pager.familySwapScale` each tick; the FAB layer reads it reactively. The
+  orchestrator's `#lastRenderedScale` (captured in `releaseInputs` before the
+  inputs clear) is the anchor, so the DOM read-back the FAB layer used to do
+  is gone.
+- **Step 3 - orchestrator owns the Header settle + tap-scrub eases.** The
+  settle rAF (`settleActive` / `settleProgress` / `settleLatched` /
+  `settleDirection` / `#settleAwaitTitle`) and the tap-scrub rAF
+  (`#tapScrubRafId` / `searchScrubbing`) moved into the orchestrator. The
+  Header reads the published getters and derives every visual from them; the
+  CSS transitions and `setTimeout` backstop in the Header were deleted.
+
+### §5 invariant status
+
+Macro §5's structural invariant reads: "For any visual property of the
+gesture/navigation layer at any instant, exactly one rAF write owns its
+motion, decided solely by the orchestrator's phase. CSS transitions and
+`setTimeout` alignment do not exist in this layer." Status after the refactor:
+
+- **Track slide during a gesture / commit / scrub:** owned by the executor's
+  rAF (unchanged). CSS-transition-free.
+- **FAB scale during a within-route transition:** owned by the executor's rAF
+  via `coverProgress` / `fractionalIndex` (unchanged). CSS-transition-free.
+- **FAB scale during a cross-route family swap:** owned by the orchestrator's
+  family-swap rAF via `pager.familySwapScale`. CSS-transition-free; no
+  DOM read-back (the FAB layer's `readRenderedFabScale` was deleted along with
+  the FAB's own rAF).
+- **Header morph / title crossfade during a drag / commit:** owned by the
+  executor's rAF via `pager.backMorph` / `pager.tapMorph` (unchanged).
+  CSS-transition-free.
+- **Header title crossfade during a settle:** owned by the orchestrator's
+  settle rAF via the `settleProgress` getter. CSS-transition-free; the
+  `setTimeout` settle backstop is deleted.
+- **Header root<->search morph on a tap:** owned by the orchestrator's
+  tap-scrub rAF via the `searchScrubbing` flag and `pager.tapMorph`.
+  CSS-transition-free; the Header's `startTapScrub` rAF is deleted.
+
+The residual inline-style CSS transitions on the Header's search-track,
+search-button, and tab-bar transforms fire only outside an orchestrator
+transition (their condition list collapses to `'none'` during
+`searchScrubbing`, `tapMorph`, `navInFlight`, or an active
+`transitionTarget`). They cover programmatic URL changes that arrive without a
+gesture or a tap (direct URL entry, an external link); the macro plan folds
+them into the executor when those paths become orchestrator-driven.
+
 ## Known 5b2 conditions (intentional deviations, not defects)
 
-These are §5/§13.5 deviations retained with a technical justification and a
+These are §5 / §13.5 deviations retained with a technical justification and a
 defined resolution path. They are documented here so auditors assess them as
-known + planned, not as undiscovered divergences from the bar.
+known + planned, not as undiscovered divergences from the bar. Each entry is
+labelled by status so the reader can tell at a glance whether it is a
+**coverage gap**, a **5b3-deletion item** (the clean fix is in 5b3 and the
+item dissolves with the named 5b3 deletion), a **macro-plan deviation** (the
+behaviour intentionally diverges from the macro plan with a stated rationale),
+or **spec-code drift** (the spec text in another section overstates what the
+code does; the drift is documented rather than the spec text being softened,
+because the spec text is forward-looking).
 
-1. **Family-swap ease `fromScale` (DOM read-back, §13.5).** The FAB family-swap
-   ease anchors its start scale by reading the atom's rendered transform
-   (`readRenderedFabScale`) once per family swap. This is immune to a reactive
-   race where `restingScale` advances to a transient post-swap value in the same
-   SvelteKit-navigation flush before the ease's `$effect.pre` reads it (the
-   tracked reactive value had already ramped away from the visible scale). It is
-   a one-shot anchor at swap-start, not a per-frame parallel mechanism.
-   **TODO:** track the last-committed scale in a `$state` updated post-DOM-update
-   so the reactive signal holds the visible value, eliminating the DOM read.
+The six deviations the global animation manager resolved (the FAB DOM
+read-back, the FAB family-swap separate rAF, the singleton state-machine gap
+frame, the Header CSS transitions + setTimeout + settle / tapScrub rAFs, the
+`replaceState` side-channel leak, and the non-profile/admin no-preview panel)
+are no longer deviations and are no longer listed. The manager is documented
+in the previous section.
 
-2. **FAB family-swap rAF ease (separate from the executor's single loop).**
-   End-state #2 specifies the FAB scale is driven by `coverProgress`
-   (within-route) OR the FAB layer's family-swap rAF ease (cross-route family
-   swap). The FAB layer therefore runs its own rAF (the family-swap ease), not
-   the executor's single loop. Fully merging the FAB/Header into the executor's
-   plan-driven loop is a DV20-wide goal (macro §5) beyond 5b2's scope; the 5b2
-   spec's end-state #2 explicitly accommodates the separate FAB ease.
+1. **Velocity-matched commit e2e (coverage gap, §12).** No e2e varies the
+   release velocity and asserts the commit duration tracks it (longer for slow
+   releases, shorter for fast). The `nav-executor-logic` unit suite covers the
+   solver branches (`solveCommitDuration`); the reduced-motion branch has an
+   e2e (`messages-back-swipe`). **Why retained:** a release-velocity e2e must
+   drive a synthetic `pointerup` with a specific `coMovementX` trajectory and
+   assert a wall-clock duration delta, which is flake-prone on the sequential
+   Playwright run; the right shape is a pair of slow / fast trajectories on
+   the same route with a relative-duration assertion (slow > fast), not an
+   absolute-duration assertion. **Resolution:** add the relative-duration e2e
+   on top of the existing `messages-back-swipe` harness.
 
-3. **Velocity-matched commit e2e (§12).** No e2e varies the release velocity and
-   asserts the commit duration tracks it (longer for slow releases, shorter for
-   fast). The `nav-executor-logic` unit suite covers the solver branches
-   (`solveCommitDuration`); reduced-motion has an e2e (`messages-back-swipe`).
-   **TODO:** add the integration-level velocity e2e.
-
-4. **`isPipelineSwipeDisabledRoute` latent mis-classification.** The function
-   returns `false` for `/search`, `/bookmarks`, `/notifications`, `/profile`,
-   `/messages/add/[userId]` despite those routes mounting `NavPipelineHost`
-   (they fail both the
-   overlay-family branch and the `backParent !== undefined` branch). It does not
-   manifest because `DualColumnLayout`'s parallel `detectSwipe` is disabled by
-   its own `swipeBaseline < 0` check (those routes resolve `getCurrentTabIndex`
-   to -1), so the pipeline wins pointer capture consistently. The function and
-   `DualColumnLayout.swipeDisabled` dissolve together in 5b3 when
+2. **`isPipelineSwipeDisabledRoute` latent mis-classification (5b3-deletion).**
+   The function returns `false` for `/search`, `/bookmarks`, `/notifications`,
+   `/profile`, `/messages/add/[userId]` despite those routes mounting
+   `NavPipelineHost` (they fail both the overlay-family branch and the
+   `backParent !== undefined` branch). **Why retained:** the mis-classification
+   does not manifest because `DualColumnLayout`'s parallel `detectSwipe` is
+   gated off by its own `swipeBaseline < 0` check (those routes resolve
+   `getCurrentTabIndex` to -1), so the pipeline wins pointer capture
+   consistently. Fixing the classifier in isolation would leave it reading a
+   `backParent` field whose own dissolution is also tracked (see #10) and
+   would not change any user-visible behaviour. **Resolution:** the classifier
+   and `DualColumnLayout.swipeDisabled` dissolve together in 5b3 when
    `DualColumnLayout`'s `detectSwipe` is removed.
 
-5. **DualColumnLayout mobile routes (`/discussions/pN`).** The paginated
-   discussions list `/discussions/pN` (and any other route rendered only by
-   `DualColumnLayout`) is a mobile-reachable route whose tab-switch gesture runs
-   on `DualColumnLayout`'s `detectSwipe` + `transition-transform duration-200`
-   CSS transition, not the pipeline. It was never on `GesturePageLayout` or
-   `MobileTabPager`, so it is outside end-state #1's migration set. It migrates
-   when `DualColumnLayout` is deleted in 5b3.
+3. **DualColumnLayout mobile routes (5b3-deletion).** The paginated discussions
+   list `/discussions/pN` and any other route rendered only by
+   `DualColumnLayout` is mobile-reachable but its tab-switch gesture runs on
+   `DualColumnLayout`'s `detectSwipe` + `transition-transform duration-200` CSS
+   transition, not the pipeline. **Why retained:** these routes were never on
+   `GesturePageLayout` or `MobileTabPager`, so they are outside end-state #1's
+   migration set; migrating them in 5b2 would require deleting
+   `DualColumnLayout` (5b3 scope) because they have no other host.
+   **Resolution:** migrate when `DualColumnLayout` is deleted in 5b3.
 
-6. **Macro-plan divergences retained.** Three intentional deviations from the
-   macro plan, each with a concrete reason:
-   - `backSwipeShouldPopHistory` (§6 says it is deleted): the orchestrator's
+4. **Macro-plan divergences retained (macro-plan deviation).** Three
+   intentional deviations from the macro plan, each with a stated rationale:
+
+   - `backSwipeShouldPopHistory` (§6 says it is deleted). The orchestrator's
      `#backwardTabTarget` retains it to decide a backward-to-deep-page
      back-swipe (pop to the deep page in history) vs. a spatial switch to the
      previous tab root. The generic `hopForHref` does not encode that
-     distinction. §6's deletion is a future-cycle goal.
+     distinction; without this check a backward-to-deep-page gesture would
+     land on the tab root instead of the deep page the user came from.
+     **Resolution:** §6's deletion lands when the deep-page back-target
+     disambiguation is encoded in `hopForHref` itself (a cycle after 5b3).
    - Forward deep-to-deep navigation (e.g. `/profile` -> `/profile/settings`)
-     is plain SvelteKit nav, not a pipeline slide:
-     `onSvelteKitBeforeNavigate` intercepts only tab-root targets, and
+     is plain SvelteKit nav, not a pipeline slide.
+     `onSvelteKitBeforeNavigate` consumes only tab-root targets, and
      `playEnterAnimation`'s `shouldEnter` requires the prior stack entry to
-     equal the route's `leftHref`. The `{detail,detail}` resolver is exercised
-     by gesture back-swipes only. Wiring forward deep-to-deep is beyond 5b2's
-     transition-type scope.
-   - `TAB_CLICK_COMMIT_MS` (§13.3 "no hardcoded commit duration"): a tab-click
-     exit and a forward enter are discrete navs with no finger-release velocity
-     to match, so their commit uses a fixed 200ms (`TRACK_TRANSITION_MS`) to
-     align with the Header title crossfade. Gesture commits use the
-     velocity-matched solver per §5.
+     equal the route's `leftHref`; the `{detail,detail}` resolver is exercised
+     by gesture back-swipes only. **Resolution:** wiring forward deep-to-deep
+     as a pipeline transition is a transition-type scope expansion beyond
+     5b2's "every transition that was on GesturePageLayout / MobileTabPager"
+     charter; it lands when the macro plan takes up forward deep-to-deep.
+   - `TAB_CLICK_COMMIT_MS` (§13.3 "no hardcoded commit duration"). A tab-click
+     exit and a forward enter are discrete navs with no finger-release
+     velocity to match, so their commit uses a fixed 200ms
+     (`TRACK_TRANSITION_MS`) to align with the Header title crossfade.
+     Gesture commits use the velocity-matched solver per §5.
+     **Resolution:** the fixed commit dissolves when the tab-click commit is
+     reworked to derive from the title-crossfade end (so the slide and the
+     crossfade share one timing source instead of two aligned constants).
 
-7. **Coverage gaps.** No dedicated e2e covers the backward tab swipe, the
-   first/last-tab boundary void-swipe, a mid-commit re-grab (either direction)
-   on the tab host, or the backward-to-deep-page path. The geometry is
-   unit-tested (`nav-executor-logic`); the forward tab swipe + the reduced-motion
-   snap have e2e. **TODO:** add the missing trajectory e2e specs.
+5. **Trajectory coverage gaps (coverage gap).** No dedicated e2e covers the
+   backward tab swipe, the first / last-tab boundary void-swipe, a mid-commit
+   re-grab (either direction) on the tab host, or the backward-to-deep-page
+   path. The geometry is unit-tested (`nav-executor-logic`); the forward tab
+   swipe + the reduced-motion snap have e2e. **Why retained:** each missing
+   trajectory needs a deterministic pointer-event script (the boundary
+   void-swipe needs an out-of-range drag; the mid-commit re-grab needs a
+   `pointerdown` mid-slide); these are constructible on the current Playwright
+   driver but were not blocking for 5b2 convergence (the geometry they would
+   exercise is unit-covered). **Resolution:** add the missing trajectory e2e
+   specs; pair them with the 5b3 deletion sweep so they assert against the
+   pipeline-only world.
 
-8. **Singleton state-machine: one-frame stale window on a route swap.** The
-   orchestrator is constructed at component-init but `mount()` (which
-   `forceReset`s the shared singleton state machine) runs in `onMount`. For one
-   render frame the new host's `$derived` publication reads the singleton the
-   prior orchestrator left in `transitioning`. No visible artifact (the prior
-   `unmount()` clears the pager store first; the SSR initial transform holds the
-   visual at rest); `mount()` clears it the next frame. Tightening (a `mounted`
-   guard on the derived) is a future improvement. A related one-frame window: on a
-   route swap the new host's `setNavPipelineOrchestrator` displaces the prior
-   orchestrator by calling its `unmount()`, which clears the pager store after the
-   new host's `mount()` already published its at-rest state; the new host's
-   `$effect` re-publishes the at-rest state in the same flush. No visible artifact
-   (the FAB layer's URL-derived tab fallback and the Header's `backMorph === null`
-   at-rest value hold the visual correct through the cleared frame).
+6. **Backward-to-deep-page visual proxy (5b3-deletion).** When the tab host's
+   backward gesture targets a deep page (via `backSwipeShouldPopHistory`), the
+   slide reveals the PREVIOUS TAB's panel as a visual proxy when
+   `fromTabIndex >= 1` (the tab host has only its three tab panels). At
+   `fromTabIndex === 0` (the leftmost tab) the orchestrator suppresses the
+   track slide (`distance = 0`), so only `coverProgress` drives the FAB and
+   Header morph and no empty-space artifact is visible; `history.back()` still
+   lands on the deep page on commit. On the `/activity` tab (the dynamic-kind
+   tab) the same gesture also scales the FAB IN toward "discussions" during
+   the slide (the dynamic-kind branch follows `trackFractionalIndex` without
+   consulting the destination's family), then scales it OUT post-land via the
+   family-swap ease; the other two tabs scale the FAB OUT (the user is leaving
+   a list with a real FAB). In every case `history.back()` lands on the deep
+   page on commit, so the deep content replaces the proxy at the slide's end.
+   **Why retained:** the clean visual fix is the deep-snapshot overlay (a
+   pre-rendered snapshot of the destination deep page composited as a panel
+   surrogate during the slide), which is 5b3 scope. A 5b2 partial fix for the
+   `fromTabIndex >= 1` wrong-proxy case would trade a wrong-proxy for a
+   no-slide (the same suppress-track trick used at the leftmost tab), which
+   diverges from the back-swipe feel on every other tab and violates the
+   unify-don't-bridge principle. **Resolution:** the 5b3 deep-snapshot overlay
+   covers the `fromTabIndex >= 1` wrong-proxy and the `/activity` FAB-scale-in
+   cases (the overlay carries the destination's FAB state too); the
+   `fromTabIndex === 0` empty-space case is already handled in 5b2.
 
-9. **Backward-to-deep-page visual proxy.** When the tab host's backward gesture
-   targets a deep page (via `backSwipeShouldPopHistory`), the slide reveals the
-   PREVIOUS TAB's panel as a visual proxy (the tab host has only its three tab
-   panels); on commit `history.back()` lands on the deep page, so the deep
-   content replaces the proxy at the slide's end. The orchestrator carries a
-   `TODO(5b3)` to overlay the deep page's cached snapshot during the slide. This
-   is the user-visible consequence of Known #6's `backSwipeShouldPopHistory`
-   retention.
+7. **`pointercancel` treated as a regular release (5b3-deletion).**
+   `detectSwipe` routes `pointercancel` through its terminal path to `onEnd`,
+   so the pointer bridge forwards it as a `pointerup` and the release gate
+   commits vs cancels by offset. A `pointercancel` past the commit threshold
+   therefore commits (navigates) instead of snapping back. Pre-existing
+   (inherited from `detectSwipe`, which `DualColumnLayout` still uses); rare
+   in practice (`touch-action: pan-y` handles most scroll conflicts). The
+   intent classifier's `pointercancel -> cancelled` path is dead because the
+   bridge cannot distinguish the cancel from a release inside `detectSwipe`'s
+   `onEnd`. **Why retained:** `detectSwipe` is shared with `DualColumnLayout`,
+   so changing its terminal routing before 5b3 would bifurcate the gesture
+   model between the pipeline and `DualColumnLayout`. **Resolution:** the
+   clean fix lands with the 5b3 `detectSwipe` rework (when
+   `DualColumnLayout`'s `detectSwipe` is removed and the pipeline owns the
+   gesture layer end-to-end).
 
-10. **`pointercancel` treated as a regular release.** `detectSwipe` routes
-    `pointercancel` through its terminal path to `onEnd`, so the pointer bridge
-    forwards it as a `pointerup` and the release gate commits vs cancels by
-    offset. A `pointercancel` past the commit threshold therefore commits
-    (navigates) instead of snapping back. Pre-existing (inherited from
-    `detectSwipe`, which DualColumnLayout still uses); rare in practice
-    (`touch-action: pan-y` handles most scroll conflicts). The intent
-    classifier's `pointercancel -> cancelled` path is dead because the bridge
-    cannot distinguish the cancel from a release inside `detectSwipe`'s `onEnd`.
-    The clean fix is coupled to the 5b3 `detectSwipe` rework.
+8. **`SearchScopePager` nested CSS transition (macro-plan deviation, macro
+   §9).** The nested scope pager inside `/search`'s `NavPipelineHost` centre
+   panel drives its scope-switch via `detectSwipe` + a
+   `transition-transform duration-200` CSS class, with `shouldClaim` +
+   `exclusive` boundary handoff to the parent orchestrator. **Why retained:**
+   macro §9 sanctions nested sub-pagers as a distinct class from top-level
+   transition pairs, so this is outside 5b2's "no CSS transitions in the
+   gesture layer" binding (which targets the top-level transition mechanism).
+   It was not in 5b2's migration set. **Resolution:** migrate when the macro
+   plan takes up nested sub-pagers as a transition class.
 
-11. **`SearchScopePager` nested CSS transition.** The nested scope pager inside
-    `/search`'s `NavPipelineHost` centre panel drives its scope-switch via
-    `detectSwipe` + a `transition-transform duration-200` CSS class, with
-    `shouldClaim` + `exclusive` boundary handoff to the parent orchestrator.
-    Macro §9 sanctions this as a nested sub-pager (not a top-level pair), so it
-    is outside 5b2's "no CSS transitions in the gesture layer" binding (which is
-    about the top-level transition mechanism). It is not in 5b2's migration set.
+9. **Skeleton `{:else}` branches remain unreachable (spec-code drift on
+   5b1-skipped item #3).** The spec's 5b1-skipped item #3 ("Deep pages may
+   have uncached targets on cold load; the `{:else}` skeleton branches become
+   reachable") overstates the current code: the root layout's
+   `Promise.allSettled` returns truthy `EMPTY_*` objects on rejection (never
+   null), so `page.data.*` is always truthy and the real panel (or the truthy
+   empty fallback) renders. The skeleton components (`ActivitySkeleton`,
+   `DiscussionsSkeleton`, `MessagesSkeleton`) exist as defensive fallbacks
+   for a future non-eager-loaded target. **Why documented rather than
+   softened:** the 5b1-skipped item #3 text is forward-looking (it describes
+   the design intent when a non-eager-loaded target is added); downgrading it
+   to "defensive fallback" would lose the design intent. **Resolution:** the
+   drift dissolves when the first non-eager-loaded target is added (the
+   skeletons become reachable as the spec claims) or when the spec text is
+   reworded to "skeletons are defensive fallbacks" if the eager-loaded model
+   is made permanent.
 
-12. **Header morph/title animation uses CSS transitions + setTimeout (pre-existing,
-    not a 5b2 regression).** The Header organism (a consumer of the gesture layer)
-    drives its morph (BurgerArrowIcon back-arrow prominence) + title crossfade via
-    `transition: transform 200ms ease-out` + a `setTimeout` settle backstop during
-    gesture release settles. These are the mechanisms §5 prohibits in the gesture
-    layer; they predate 5b2 (the Header was never on GesturePageLayout's gesture
-    path; it read `navStore.pendingNav` for its settle classification, which 5b2
-    replaced with `pager.committed`). The Header's `runSettleDriver` has no
-    `prefers-reduced-motion` gate (unlike the executor + the FAB family-swap ease).
-    Fully merging the Header's morph/title animation into the executor's rAF loop
-    (and adding the reduced-motion gate) is a DV20-wide goal beyond 5b2's scope.
-    The Header's root<->search morph also runs its own rAF (`startTapScrub`,
-    publishing `pager.tapMorph`). During a tap-induced `/` -> `/search` forward
-    enter the orchestrator additionally plays an enter slide that publishes
-    `pager.backMorph`; the Header's `trackMorph` derivation arbitrates by
-    preferring `backMorph` while `transitionTarget !== null`, so only one signal
-    drives the morph at any instant (no fighting, unlike the DV18/DV19
-    parallel-mechanism failures). The `tapMorph` rAF nonetheless runs concurrently
-    with its output unused during the enter and dissolves when the Header morph
-    fully merges into the executor's rAF (the same DV20-wide goal above).
-
-13. **Skeleton `{:else}` branches remain unreachable (spec-code drift on
-    end-state #3 / 5b1-skipped item #3).** The spec says "skeleton branches
-    become reachable" but the root layout's `Promise.allSettled` returns truthy
-    `EMPTY_*` objects on rejection (never null), so `page.data.*` is always truthy
-    and the real panel (or the truthy empty fallback) renders. The skeleton
-    components (`ActivitySkeleton`, `DiscussionsSkeleton`, `MessagesSkeleton`)
-    exist as defensive fallbacks for a future non-eager-loaded target. They are
-    currently unreachable; the spec's "become reachable" claim is qualified to
-    "when a non-eager-loaded target is added."
-
-14. **`backParent` consumer dissolution timeline (spec-code drift on 5b1-skipped
-    item #5).** The spec says "at end of 5b2, both consumers are gone; 5b3 removes
-    the field," but `isPipelineSwipeDisabledRoute` still reads
-    `backParent !== undefined` and is not scheduled to dissolve until 5b3 alongside
-    DualColumnLayout's `detectSwipe`. The field therefore cannot be removed until
-    both the classifier + DualColumnLayout are addressed in 5b3.
-
-15. **`replaceState` side-channel (SvelteKit beforeNavigate limitation).**
-    SvelteKit's `beforeNavigate` does not expose the original `goto`'s
-    `replaceState` option. When `Header.onBack` fires `goto(target, { replaceState:
-true })` and the orchestrator intercepts + re-dispatches, it recovers the intent
-    via a side-channel signal on the pager store: `Header.onBack` sets
-    `replaceStateIntent = true` before the goto, and `#dispatchNav` reads it when
-    re-dispatching. The intent is cleared on every navigation landing
-    (`onSvelteKitAfterNavigate`) so it cannot leak: a non-consumed nav (onBack to a
-    deep page, which the orchestrator does not intercept because it only consumes
-    tab-root targets) passes through to SvelteKit with `replaceState` already
-    applied, and the landing clears the spent intent before the next consumed
-    dispatch.
+10. **`backParent` consumer dissolution timeline (spec-code drift on
+    5b1-skipped item #5).** The spec's 5b1-skipped item #5 ("at end of 5b2,
+    both consumers are gone; 5b3 removes the field") overstates the current
+    code: `isPipelineSwipeDisabledRoute` still reads `backParent !==
+undefined` (see #2), so one consumer remains at end of 5b2. The field
+    cannot be removed until both the classifier and `DualColumnLayout`'s
+    `detectSwipe` are addressed in 5b3. **Why documented rather than
+    softened:** the 5b1-skipped item #5 text is forward-looking (it tracks
+    the field's dissolution plan). **Resolution:** the drift dissolves in 5b3
+    when the classifier and `DualColumnLayout`'s `detectSwipe` are removed
+    and the field is deleted.
 
 ## Out of scope (5b3)
 

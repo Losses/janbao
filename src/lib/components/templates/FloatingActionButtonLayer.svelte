@@ -23,16 +23,20 @@
 	 * the whole drag.
 	 *
 	 * Non-drag navigation across a family swap (list -> compose, list ->
-	 * overlay, etc.) is eased by the layer's own rAF family-swap ease: the
-	 * published scale is interpolated from the pre-swap resting scale to the
-	 * new family's resting scale over `TRACK_TRANSITION_MS` (200ms) via the
-	 * constant-deceleration curve `s(u) = 2u - u^2` (the same curve the
-	 * executor uses). Same-family tab taps (list<->list) do not trigger it;
-	 * their easing track is driven by the published track fractional index. During a drag the
-	 * rAF ease is off (the live signal drives), so there is no double-clock.
+	 * overlay, etc.) is eased by the orchestrator (the persistent singleton
+	 * spans the route swap). The orchestrator detects the family change on
+	 * `configure`, interpolates the published `pager.familySwapScale` from the
+	 * pre-swap rendered scale to the destination family's resting scale over
+	 * `TRACK_TRANSITION_MS` (200ms) via the constant-deceleration curve
+	 * `s(u) = 2u - u^2` on its own rAF, and publishes the eased scale each
+	 * tick. This layer is a READER: when `pager.familySwapScale` is non-null
+	 * it takes precedence over the resting formula; when the ease completes
+	 * (or a higher-priority driver takes over) the orchestrator clears the
+	 * field and this layer falls through to the coverProgress /
+	 * trackFractionalIndex-driven resting scale. Same-family tab taps
+	 * (list<->list) do not trigger the ease; their easing track is driven by
+	 * the published track fractional index.
 	 */
-	import { onDestroy } from 'svelte';
-	import { browser } from '$app/environment';
 	import { page } from '$app/state';
 	import FloatingActionButton from '$lib/components/atoms/FloatingActionButton.svelte';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
@@ -45,14 +49,12 @@
 		getCurrentTabIndex
 	} from '$lib/utils/route-config';
 	import type { FabListKind } from '$lib/utils/route-config';
-	import type { FabFamily } from '$lib/utils/fab-scale';
 	import {
 		scaleFromFraction,
 		tabFraction,
 		hideProgress,
 		translateYFromHideProgress
 	} from '$lib/utils/fab-scale';
-	import { TRACK_TRANSITION_MS } from '$lib/utils/gesture-constants';
 	import type { TranslationDict } from '$lib/types/translation';
 
 	interface FloatingActionButtonLayerProps {
@@ -64,24 +66,6 @@
 	const pager = getMobilePagerStore();
 	const navStore = getNavigationStore();
 	const scrollChrome = getScrollChromeStore();
-
-	// rAF family-swap ease state. On a distinct family swap (overlay<->list,
-	// compose<->list) the published scale is interpolated from the pre-swap
-	// resting scale to the new family's resting scale over TRACK_TRANSITION_MS
-	// (200ms) via the constant-deceleration curve `s(u) = 2u - u^2` (the same
-	// curve the executor uses). The ease runs on the layer's own rAF loop, a
-	// persistent consumer that survives the route swap. It is gated off when a
-	// higher-priority driver owns the FAB scale: a drag (the live signal
-	// drives) or the orchestrator (pilotTransitionListKind !== null;
-	// coverProgress ramps the scale). A same-family tab tap (list<->list)
-	// does not trigger it (the published track fractional index drives that easing track).
-	let familySwapRafId: number | undefined;
-	let familySwapFromScale = 0;
-	let familySwapToScale = 0;
-	let familySwapToScaleCaptured = false;
-	let familySwapStartTs = 0;
-	let familySwapScale = $state<number | null>(null);
-	let previousFamily: FabFamily | null = null;
 
 	// Fixed geometry (kept in sync with the atom). `size-14` = 56px FAB; the
 	// resting bottom inset is 1rem + the device safe-area inset (env). The slide
@@ -242,149 +226,6 @@
 		return cfg;
 	});
 
-	// Detect a distinct family swap and start the rAF ease. `$effect.pre` runs
-	// before the DOM update, so reading the atom's inline transform here returns
-	// the last committed (visible) scale, even if the reactive `restingScale`
-	// has already raced ahead to a transient post-swap value (e.g. an incoming
-	// route's coverProgress published mid-flush). `startFamilySwapEase` pins
-	// `familySwapScale` to that from-scale in this same flush so the swap frame
-	// renders the pre-swap scale (no snap), then the rAF interpolates toward the
-	// new resting scale over the next 200ms.
-	$effect.pre(() => {
-		const current = fabConfig?.family ?? null;
-		const prev = previousFamily;
-		previousFamily = current;
-		// Only ease a real family swap. Skip the initial mount (prev === null):
-		// the atom renders at its resting scale already, and easing from 0
-		// would flash the FAB on every hydration. A swap to no-config
-		// (current === null, e.g. landing on /activity where no FAB renders)
-		// still eases the scale out toward the new resting scale (0). Same-
-		// family transitions (tab taps within the list family) are handled by
-		// the published track fractional index, not this ease.
-		if (prev !== null && prev !== current) {
-			// Gate: skip when a higher-priority driver owns the FAB scale.
-			if (pager.dragging || pilotTransitionListKind !== null) {
-				return;
-			}
-			// Anchor from the atom's visible scale (the DOM ground truth). On a
-			// re-swap mid-ease this is the current eased value, so the trajectory
-			// stays continuous. Falls back to 0 only if the atom is absent.
-			const fromScale = readRenderedFabScale() ?? 0;
-			startFamilySwapEase(fromScale);
-		}
-	});
-
-	/** Read the FAB atom's currently-rendered scale from its inline transform.
-	 *  Used by the family-swap `$effect.pre` to anchor the ease at the visible
-	 *  scale (the DOM ground truth), which is immune to the reactive
-	 *  `restingScale` racing ahead to a transient post-swap value in the same
-	 *  flush. Returns null when the atom is not in the DOM (SSR, or no FAB
-	 *  route). */
-	function readRenderedFabScale(): number | null {
-		if (!browser) return null;
-		const el = document.querySelector('[data-testid="fab"]');
-		if (!el) return null;
-		const transform = (el as HTMLElement).style.transform;
-		const m = transform.match(/scale\(([-0-9.]+)\)/);
-		return m ? Number(m[1]) : null;
-	}
-
-	/** Start the rAF family-swap ease from `fromScale` to the new family's
-	 *  resting scale (captured on the first tick from the recomputed
-	 *  `restingScale`). Cancels any in-flight ease first (a second family swap
-	 *  mid-ease); the caller passes the current visible scale as `fromScale` so
-	 *  the trajectory stays continuous. Pins `familySwapScale` to `fromScale`
-	 *  immediately so the swap frame does not snap before the first tick. */
-	function startFamilySwapEase(fromScale: number): void {
-		if (!browser) return;
-		// Reduced-motion: snap to the new family's resting scale with no
-		// rAF integration (§5 "non-negotiable"). Drop `familySwapScale` so
-		// the published scale falls through to `restingScale` (the new
-		// family's resting value) immediately.
-		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-			if (familySwapRafId !== undefined) {
-				cancelAnimationFrame(familySwapRafId);
-				familySwapRafId = undefined;
-			}
-			familySwapScale = null;
-			return;
-		}
-		if (familySwapRafId !== undefined) {
-			cancelAnimationFrame(familySwapRafId);
-		}
-		familySwapFromScale = fromScale;
-		familySwapToScale = fromScale;
-		familySwapToScaleCaptured = false;
-		// The clock starts on the FIRST tick, not here: the $effect.pre that
-		// arms the ease can run during a SvelteKit navigation whose DOM work
-		// delays the first rAF by many frames. Starting the clock here would
-		// make the first tick compute a large elapsed `u` and skip the
-		// early-ease scale range. Pinning `familySwapScale` to `fromScale`
-		// holds the atom at the pre-swap scale during that gap, then the ease
-		// runs the full curve from the first real frame.
-		familySwapStartTs = 0;
-		familySwapScale = fromScale;
-		const tick = (): void => {
-			// If a higher-priority driver took over mid-ease (a drag or the
-			// orchestrator), cancel and hand the scale back to the
-			// resting/live signal.
-			if (pager.dragging || pilotTransitionListKind !== null) {
-				stopFamilySwapEase();
-				return;
-			}
-			const now = performance.now();
-			if (!familySwapToScaleCaptured) {
-				// By the first tick `restingScale` has recomputed for the new
-				// family; capture it as the ease target once, and start the
-				// clock on this frame so the full 200ms curve plays.
-				familySwapToScale = restingScale;
-				familySwapToScaleCaptured = true;
-				familySwapStartTs = now;
-			}
-			const u = Math.min((now - familySwapStartTs) / TRACK_TRANSITION_MS, 1);
-			const eased = 2 * u - u * u;
-			familySwapScale = familySwapFromScale + (familySwapToScale - familySwapFromScale) * eased;
-			if (u >= 1) {
-				// The ease's rAF starts one frame before the executor's commit
-				// (the $effect.pre that arms it runs before onMount), so it
-				// reaches u=1 one frame before the executor resets coverProgress.
-				// Hold at the destination scale until the transition lands
-				// (coverProgress = 0) so the restingScale fallback (inverted for a
-				// list->overlay forward enter) is never the published scale for
-				// that gap frame. A non-pipeline family swap has coverProgress 0
-				// throughout, so it clears at u=1.
-				if (pager.coverProgress !== 0) {
-					familySwapScale = familySwapToScale;
-					familySwapRafId = requestAnimationFrame(tick);
-					return;
-				}
-				familySwapScale = null;
-				familySwapRafId = undefined;
-				return;
-			}
-			familySwapRafId = requestAnimationFrame(tick);
-		};
-		familySwapRafId = requestAnimationFrame(tick);
-	}
-
-	/** Cancel the rAF family-swap ease and hand the published scale back to the
-	 *  resting formula. */
-	function stopFamilySwapEase(): void {
-		if (familySwapRafId !== undefined) {
-			cancelAnimationFrame(familySwapRafId);
-			familySwapRafId = undefined;
-		}
-		familySwapScale = null;
-	}
-
-	onDestroy(() => {
-		// onDestroy runs in SSR; guard DOM-touching teardown (svelte-ondestroy-
-		// runs-in-ssr memory). cancelAnimationFrame is a no-op on the server but
-		// the guard is defensive.
-		if (!browser) return;
-		stopFamilySwapEase();
-	});
-
 	// Cross-tab slide coverage: every route is a pipeline route, so
 	// SvelteKit's `beforeNavigate` is consumed by the orchestrator, which
 	// publishes the tab host's 1:1 track fractional index; the Family A FAB
@@ -427,18 +268,19 @@
 		// published by `NavPipelineOrchestrator` as the raw slide fraction
 		// (so the FAB follows the finger across the drag and the commit
 		// slide). Resting (null server-side / pre-mount, 0 client-side) maps
-		// to 0; the discrete forward/back swap is eased by the layer's rAF
-		// family-swap ease (the `startFamilySwapEase` loop).
+		// to 0; the discrete forward/back swap is eased by the orchestrator's
+		// family-swap ease (published via `pager.familySwapScale`).
 		return pager.coverProgress ?? 0;
 	});
 
 	const restingScale = $derived(scaleFromFraction(foregroundFraction));
 
-	// While the rAF family-swap ease is running, publish the eased scale;
-	// otherwise fall through to the resting formula. The ease sets
-	// `familySwapScale` back to null on completion so the handoff to
-	// `restingScale` is seamless (the ease target equals the new resting scale).
-	const scale = $derived(familySwapScale !== null ? familySwapScale : restingScale);
+	// The orchestrator publishes `pager.familySwapScale` while a route-swap
+	// family-change ease is in flight on its own rAF; it takes precedence
+	// over the resting formula. When the ease completes (or a higher-priority
+	// driver takes over), the orchestrator clears the field and this layer
+	// falls through to the resting scale.
+	const scale = $derived(pager.familySwapScale ?? restingScale);
 
 	const fabHideProgress = $derived(
 		hideProgress(scrollChrome.translateY, scrollChrome.headerHeight)

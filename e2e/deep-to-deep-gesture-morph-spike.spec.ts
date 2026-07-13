@@ -51,7 +51,6 @@ interface HeaderSnap {
 	t: number;
 	path: string;
 	morph: number;
-	slideT: string;
 	rootLayerStyle: string;
 	layerDownStyle: string;
 	settling: boolean;

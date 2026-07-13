@@ -11,13 +11,14 @@
  *      action that wraps `detectSwipe`; a `pointercancel` is routed by
  *      `detectSwipe` through its onUp listener, reaching the
  *      orchestrator as `onPointerUp`).
- *   3. Executor + driver -> elements: `mount({ resolveElements, ... })`
- *      constructs a `LiveNavDomDriver` whose `resolveElements` reads the
- *      host's track `bind:this` plus the FAB / Header via DOM queries;
+ *   3. Executor + driver -> elements: `configure({ resolveElements, ... })`
+ *      constructs (once) a `LiveNavDomDriver` whose `resolveElements` reads
+ *      the host's track `bind:this` plus the FAB / Header via DOM queries;
  *      the executor writes the per-frame visual to those elements.
- *   4. Lifecycle: the host calls `mount` / `unmount` from its onMount /
- *      onDestroy and releases the html-singletons (viewport-lock) directly
- *      with a `browser` guard.
+ *   4. Lifecycle: the host calls `configure` / `releaseInputs` from its
+ *      onMount / onDestroy and releases the html-singletons (viewport-lock)
+ *      directly with a `browser` guard. The mobile -> desktop flip and app
+ *      exit use the full `mount` / `unmount` teardown.
  *
  * Per the DV20 spec's binding "UNIFY, DO NOT BRIDGE" constraint: this
  * orchestrator is the SOLE transition mechanism for EVERY transition
@@ -25,8 +26,8 @@
  * mirror into the host component's `$state`; no CSS-transition +
  * `transitionend` path. Every mobile route mounts `NavPipelineHost` (the
  * thread and deep-page routes) or `NavPipelineTabHost` (the three tab
- * roots); the orchestrator constructed by each host drives every
- * transition through the executor's rAF.
+ * roots); the shared singleton orchestrator drives every transition
+ * through the executor's rAF.
  *
  * The orchestrator coordinates; it does NOT bypass SvelteKit (§9).
  * Settle on a commit dispatches the SvelteKit navigation via `goto`
@@ -35,11 +36,15 @@
  * `navDispatchInFlight` flag lets the orchestrator's own goto re-fire
  * `beforeNavigate` without re-cancelling.
  *
- * Module-singleton pattern, matching the other reactive stores in this
- * directory. The host component (`NavPipelineHost` /
- * `NavPipelineTabHost`) is per-route; the orchestrator is constructed
- * fresh on each `mount` (so route swaps do not carry stale state) but
- * exposed via a single getter for the layout-level hooks.
+ * Global-singleton pattern: one orchestrator instance is shared by every
+ * mobile host for the app's lifetime (see `getGlobalNavPipelineOrchestrator`).
+ * The host component (`NavPipelineHost` / `NavPipelineTabHost`) calls
+ * `configure(inputs)` on mount and `releaseInputs()` on destroy; a route
+ * swap rebinds the element refs in place WITHOUT tearing down the executor
+ * + driver + rAF, so the persistent FAB and Header layers (consumers of the
+ * orchestrator's publication) read a continuous signal across the swap
+ * instead of seeing a per-host lifecycle gap. The mobile -> desktop flip
+ * and the app exit call the full `unmount()` teardown.
  *
  * Per DV20 §13.5 the `NavStateMachine` is the sole authority for the
  * macro transition state (phase, plan, FROM/TO, direction). The
@@ -55,6 +60,7 @@ import { goto } from '$app/navigation';
 import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
 import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 import { getNavStateMachine } from '$lib/stores/nav-state-machine.svelte';
+import { getNavigationStore } from '$lib/stores/navigation.svelte';
 import { atRestOnFor } from '$lib/stores/nav-state-machine-logic';
 import { NavExecutor } from '$lib/stores/nav-executor.svelte';
 import { progressAtTranslateX, trackTranslateX } from '$lib/utils/nav-executor-logic';
@@ -75,7 +81,9 @@ import {
 	type TransitionDirection
 } from '$lib/utils/nav-resolvers';
 import { getRouteData } from '$lib/utils/route-data';
-import { MOBILE_TABS } from '$lib/utils/route-config';
+import { getFabRouteAttributes, FAB_KIND_CONFIGS, MOBILE_TABS } from '$lib/utils/route-config';
+import { getCurrentTabIndex } from '$lib/utils/route-config';
+import { scaleFromFraction, tabFraction, type FabFamily } from '$lib/utils/fab-scale';
 import {
 	hopForHref,
 	isTabRootPath,
@@ -87,8 +95,12 @@ import {
 	PILL_EXPANSION_THRESHOLD,
 	SWIPE_COMMIT,
 	TRACK_TRANSITION_MS,
-	BOUNDARY_RUBBER_BAND_FACTOR
+	BOUNDARY_RUBBER_BAND_FACTOR,
+	TITLE_CROSSFADE_MS
 } from '$lib/utils/gesture-constants';
+import { resolveDeepHeaderTitle } from '$lib/utils/deep-header-config';
+import type { HeaderSettleTransition } from '$lib/utils/header-probe';
+import type { TranslationDict } from '$lib/types/translation';
 import type { RouteTag } from '$lib/utils/route-data';
 import type { TransitionPlan } from '$lib/utils/nav-resolvers';
 
@@ -257,10 +269,12 @@ function defaultClock(): number {
 	return Date.now();
 }
 
-/** The pipeline orchestrator. Constructed fresh on each host mount;
- *  torn down on unmount. Holds the NavStateMachine, NavExecutor,
- *  LiveNavDomDriver, the intent classifier state, and the lifecycle
- *  controller. */
+/** The pipeline orchestrator. A single global instance is shared by
+ *  every mobile host (see `getGlobalNavPipelineOrchestrator`); hosts
+ *  call `configure` on mount and `releaseInputs` on destroy so the
+ *  executor + driver + rAF persist across route swaps. Holds the
+ *  NavStateMachine, NavExecutor, LiveNavDomDriver, the intent
+ *  classifier state, and the lifecycle controller. */
 export class NavPipelineOrchestrator {
 	#stateMachine = getNavStateMachine();
 	#executor: NavExecutor | null = null;
@@ -270,6 +284,22 @@ export class NavPipelineOrchestrator {
 	#classifierOpts: IntentClassifierOptions = DEFAULT_CLASSIFIER_OPTIONS;
 	readonly #clock: ClockFn;
 	#mountInputs: PipelineMountInputs | null = null;
+	// The host's element resolver, captured on each `configure`. The
+	// driver is constructed once with a stable closure that reads
+	// through this field, so a `configure` rebind (a route swap that
+	// supplies fresh `bind:this` refs) takes effect on the next frame
+	// without reconstructing the driver.
+	#elementResolver: PipelineElementResolver = () => ({
+		pageTrack: null,
+		fab: null,
+		header: null
+	});
+	// True between configure() and releaseInputs(). Guards #publication
+	// so the derived returns at-rest during the gap frame between an old
+	// host's releaseInputs and the new host's configure, instead of
+	// publishing the prior route's transition state to the persistent
+	// FAB / Header consumers.
+	#mounted = $state(false);
 	/** A pending back-swipe gesture. `to` is the commit-settle dispatch
 	 *  target; `startProgress` is the track's progress at gesture start,
 	 *  read by the live-drag loop. Null at rest and after settle. */
@@ -311,6 +341,21 @@ export class NavPipelineOrchestrator {
 	 *  executor-driven `#progress`. Per DV20 §13.5 the state machine is
 	 *  the sole authority; this derived has no independent state. */
 	readonly #publication = $derived.by<OrchestratorPublication>(() => {
+		// Guard: between releaseInputs (old host destroy) and configure
+		// (new host mount), #mountInputs is null and #mounted is false.
+		// Return at-rest for the gap frame so this derived does not
+		// publish the prior host's transition state to the persistent
+		// FAB / Header consumers.
+		if (!this.#mounted) {
+			return {
+				plan: null,
+				progress: 0,
+				inFlight: false,
+				fromPathname: null,
+				toPathname: null,
+				direction: null
+			};
+		}
 		const sm = this.#stateMachine.state;
 		return {
 			plan: sm.macro.plan,
@@ -341,6 +386,149 @@ export class NavPipelineOrchestrator {
 	 *  destination, not the at-rest `mountInputs.toTabIndex`. Cleared on
 	 *  land / unmount. */
 	#gestureToTabIndex: number | null = null;
+	/** The rAF handle for the route-swap family-change ease. The
+	 *  orchestrator owns the FAB family-swap motion on this rAF (a
+	 *  distinct loop from the executor's gesture rAF, which is
+	 *  gesture-only). Started by `configure` on a real family change,
+	 *  cancelled on completion, on a higher-priority driver taking over
+	 *  (live drag / pipeline transition to a list family), and on
+	 *  `releaseInputs` / `unmount`. */
+	#familySwapRafId: number | undefined;
+	/** The eased family-swap scale's starting value (the FAB's
+	 *  pre-swap rendered scale, captured before the route swap). */
+	#familySwapFromScale = 0;
+	/** The eased family-swap scale's target (the destination family's
+	 *  resting scale, captured on the first tick once the new
+	 *  mountInputs have settled). */
+	#familySwapToScale = 0;
+	/** True after the first tick has captured `#familySwapToScale`. The
+	 *  clock starts on that first tick so the full TRACK_TRANSITION_MS
+	 *  curve plays regardless of the gap between `configure` arming the
+	 *  ease and the first rAF. */
+	#familySwapToScaleCaptured = false;
+	/** The wall-clock start time of the ease (set on the first tick). */
+	#familySwapStartTs = 0;
+	/** The last FAB scale value the orchestrator published (either the
+	 *  eased value while a family-swap ease runs, or the resting-scale
+	 *  projection of the orchestrator's published coverProgress /
+	 *  trackFractionalIndex / fractionalIndex at the end of every
+	 *  `#republishToPager`). Read by `configure` to anchor the next
+	 *  family-swap ease at the visible pre-swap scale, immune to the
+	 *  reactive race where the destination route's at-rest publication
+	 *  snaps the FAB to the new family's resting scale before the ease's
+	 *  first tick. Survives `releaseInputs` (the route-swap gap between
+	 *  a host's destroy and the next host's configure) since the
+	 *  orchestrator singleton persists. */
+	#lastRenderedScale = 0;
+	/** The FAB family of the route the orchestrator was last configured
+	 *  for. Compared on each `configure` to detect a route-swap family
+	 *  change (the trigger for the family-swap ease). Null before the
+	 *  first configure so the initial mount skips the ease. */
+	#previousFamily: FabFamily | null = null;
+
+	// ---------------------------------------------------------------------
+	// Settle ease state. The orchestrator owns the Header's post-release /
+	// post-title-change crossfade. The rAF below eases `settleProgress`
+	// toward `#settleTargetProgress` over TITLE_CROSSFADE_MS with the
+	// constant-deceleration curve `s(u) = 2u - u²` (the same curve the
+	// executor's commit loop and the tap-scrub ease use). Each tick
+	// publishes `settleProgress` (and the latched record at arm time) via
+	// the pager store; the Header reads these and renders the morph /
+	// title crossfade. Reduced-motion snaps (no rAF integration).
+	#settleRafId: number | undefined;
+	/** The eased settle progress's start value (the release position for a
+	 *  gesture-release settle, 0 for a non-gesture title-change settle). */
+	#settleStartProgress = 0;
+	/** The eased settle progress's terminal value (1 for commit / click, 0
+	 *  for cancel). */
+	#settleTargetProgress: 0 | 1 = 1;
+	/** Wall-clock start time of the ease (set on the first tick). */
+	#settleStartTs = 0;
+	/** True while a commit settle holds at progress 1 awaiting the
+	 *  navigation to land. The afterNavigate hook + the title-change
+	 *  watcher clear it; on clear, an in-flight rAF endSettles at u=1 on
+	 *  its tick (no premature morph snap), a completed rAF endSettles
+	 *  immediately. */
+	#settleAwaitTitle = false;
+	/** True while the orchestrator's settle ease owns the morph / title
+	 *  crossfade (between arm and endSettle). Read by the Header's morph
+	 *  / titleView derivations via the orchestrator's public reactive
+	 *  getters (the orchestrator is the sole owner of settle state). */
+	#settleActive = $state(false);
+	/** The eased settle progress 0..1, published each rAF tick. Read by
+	 *  the Header's morph / titleView derivations. */
+	#settleProgress = $state(1);
+	/** The latched endpoint identity of the in-flight settle. null at
+	 *  rest. Read by the Header's morph / titleView derivations. */
+	#settleLatched = $state<HeaderSettleTransition | null>(null);
+	/** The direction of the in-flight settle (forward / back). Read by
+	 *  the Header's titleView to pick the title-span slide axis. */
+	#settleDirection = $state<'forward' | 'back'>('forward');
+	/** True while a commit settle holds at progress 1 awaiting the
+	 *  navigation to land. Read by the DEV probe. */
+	#settleAwaitTitlePub = $state(false);
+	/** True while the orchestrator's tap-scrub ease is in flight. Read by
+	 *  the Header's `iconProgress` derivation to freeze the hamburger icon
+	 *  on a tab-root page while the search-layout scrub runs. */
+	#searchScrubbing = $state(false);
+
+	// ---------------------------------------------------------------------
+	// tap-scrub ease state. The orchestrator owns the root<->search
+	// horizontal-track scrub on a tap navigation. The rAF below eases
+	// `pager.tapMorph` from `#scrubFromValue` to `#scrubToValue` over
+	// TITLE_CROSSFADE_MS with the constant-deceleration curve the settle
+	// ease uses, frame-synced with the NavPipelineHost Page panel the
+	// executor drives. Reduced-motion snaps.
+	#tapScrubRafId: number | undefined;
+	/** The scrub's start value (1 for an exit-from-root, 0 for an
+	 *  enter-from-search). */
+	#scrubFromValue = 0;
+	/** The scrub's terminal value (0 for exit-to-search, 1 for
+	 *  enter-to-root). */
+	#scrubToValue = 0;
+	/** Wall-clock start time of the scrub ease. */
+	#scrubStartTs = 0;
+	/** The pathname the scrub started on. The clear watch clears tapMorph
+	 *  when the route leaves it (mid-scrub redirect recovery). */
+	#scrubSource = '';
+	/** Whether the scrub's destination route has tabs (true = a tab root).
+	 *  The clear watch clears tapMorph when currentHasTabs === scrubTarget
+	 *  AND the eased value reached its terminal (the scrub completed at
+	 *  the destination). */
+	#scrubTargetTabs = false;
+	/** The scrub's terminal value (mirrors `#scrubToValue` for the clear
+	 *  watch's at-terminal check). */
+	#scrubTerminal = 0;
+
+	// ---------------------------------------------------------------------
+	// Header-state tracking + detection. The orchestrator owns the
+	// detection logic for the non-gesture settle arm (a title change) and
+	// the root<->search tap-scrub arm. The trigger signals come from two
+	// sources: a gesture release is armed directly from
+	// `#interpretIntent` (the orchestrator is the gesture authority); a
+	// non-gesture title change or a root<->search flip is fed by the
+	// Header's `$effect.pre` notification via `notifyHeaderState` (the
+	// Header is in a component scope so SvelteKit's `$app/state` `page`
+	// reactivity reaches it; the orchestrator singleton module does not).
+	#headerStateInitialized = false;
+	#prevHeaderTitle = '';
+	#prevHeaderHasTabs = false;
+	#prevHeaderIsSearch = false;
+	/** The live translation dict, fed by the Header's `notifyHeaderState`
+	 *  each time the route changes. The orchestrator does not see SvelteKit's
+	 *  `$app/state` `page.data.t` reactivity from its singleton module scope;
+	 *  the Header (in a component scope) does. Kept current so the
+	 *  gesture-release settle arming can resolve the back-target title via
+	 *  `resolveDeepHeaderTitle`. */
+	#headerT: TranslationDict | null = null;
+	/** True when the most recent `#landAtRest` ran with `#navDispatchInFlight`
+	 *  true, i.e. the navigation landed via the orchestrator's own commit
+	 *  dispatch (a gesture commit or a tab-click commit). Read and cleared in
+	 *  `notifyHeaderState` so the tap-scrub arming can skip the just-landed
+	 *  pipeline commit (the executor's slide already drove the search-layout
+	 *  visual to its post-land position; arming a fresh scrub would re-animate
+	 *  it from the opposite endpoint and jump). */
+	#lastLandWasPipelineCommit = false;
 
 	constructor(clock: ClockFn = defaultClock) {
 		this.#clock = clock;
@@ -365,37 +553,146 @@ export class NavPipelineOrchestrator {
 		return this.#publication.plan;
 	}
 
-	/** Mount: construct the driver + executor + lifecycle activation.
-	 *  Idempotent: re-mounting the same orchestrator with fresh inputs
-	 *  re-binds the element refs (a tab swap) without leaking rAFs. */
-	mount(inputs: PipelineMountInputs): void {
-		this.unmount();
+	/** Reactive read of the in-flight settle flag. The Header reads this
+	 *  to select the morph / titleView settle branch. */
+	get settleActive(): boolean {
+		return this.#settleActive;
+	}
+	/** Reactive read of the eased settle progress. */
+	get settleProgress(): number {
+		return this.#settleProgress;
+	}
+	/** Reactive read of the latched settle record. */
+	get settleLatched(): HeaderSettleTransition | null {
+		return this.#settleLatched;
+	}
+	/** Reactive read of the settle direction. */
+	get settleDirection(): 'forward' | 'back' {
+		return this.#settleDirection;
+	}
+	/** Reactive read of the awaitTitle flag (DEV probe consumer). */
+	get settleAwaitTitle(): boolean {
+		return this.#settleAwaitTitlePub;
+	}
+	/** Reactive read of the search-scrub gate flag. The Header reads this
+	 *  to drop its horizontal-track CSS transitions during a tap scrub. */
+	get searchScrubbing(): boolean {
+		return this.#searchScrubbing;
+	}
+
+	/** Configure: capture the host's mount inputs, rebind the element
+	 *  resolver, forceReset the shared state machine to at-rest on this
+	 *  route's tag, reset the publication, and run the lifecycle
+	 *  `activate`. Construct-once: the executor + driver + lifecycle
+	 *  `mount` are built on the first configure and reused across every
+	 *  subsequent configure; only the per-host inputs + element-resolver
+	 *  are rebound. The route-swap pairing is `releaseInputs` (old host)
+	 *  -> `configure` (new host) on the same singleton; no rAF is
+	 *  cancelled and no lifecycle `unmount` runs between them, so the
+	 *  persistent FAB / Header layers see a continuous signal. */
+	configure(inputs: PipelineMountInputs): void {
 		this.#mountInputs = inputs;
-		// The driver's element-resolver reads the host's bound element
-		// refs each `write`. The PipelineElementResolver returns the
-		// widened HTMLElement refs; the LiveNavDomDriver accepts those
-		// structurally (its DriverElement subset is satisfied by
-		// HTMLElement).
-		const resolveElements: PipelineElementResolver = inputs.resolveElements;
-		this.#driver = new LiveNavDomDriver({ resolveElements });
-		this.#executor = new NavExecutor({
-			driver: this.#driver,
-			now: this.#clock,
-			onSettle: (progressDirection) => this.#onExecutorSettle(progressDirection),
-			onTick: (progress) => this.#onExecutorTick(progress)
-		});
-		this.#lifecycle.mount();
-		this.#lifecycle.activate();
+		this.#elementResolver = inputs.resolveElements;
+		// Construct-once. The driver is built with a stable closure that
+		// reads through `#elementResolver`, so a re-configure (a route
+		// swap with fresh `bind:this` refs) takes effect on the next
+		// `write` without reconstructing the driver or the executor.
+		if (this.#driver === null) {
+			this.#driver = new LiveNavDomDriver({
+				resolveElements: () => this.#elementResolver()
+			});
+		}
+		if (this.#executor === null) {
+			this.#executor = new NavExecutor({
+				driver: this.#driver,
+				now: this.#clock,
+				onSettle: (progressDirection) => this.#onExecutorSettle(progressDirection),
+				onTick: (progress) => this.#onExecutorTick(progress)
+			});
+		}
 		// Reset the state machine (the singleton authority) to at-rest on
-		// this route's tag so a stale phase from a prior mount does not
-		// leak into the derived publication. The `forceReset` bypasses the
-		// `reset` event's `intent` guard: the singleton may be in any phase
-		// when a fresh orchestrator mounts.
+		// this route's tag so a stale phase from the prior host does not
+		// leak into the derived publication. The `forceReset` bypasses
+		// the `reset` event's `intent` guard: the singleton may be in
+		// any phase when the next host configures.
 		this.#stateMachine.forceReset(atRestOnFor(inputs.fromTag));
 		this.#progress = 0;
 		// Publish the at-rest pager state now that #mountInputs is set,
 		// independent of the host reset $effect's timing.
 		this.resetPagerStore();
+		// Detect a route-swap family change (the trigger for the family-swap
+		// ease). Computed AFTER #mountInputs + resetPagerStore so the new
+		// family is resolved against the destination route's pathname and
+		// the pager store reflects the at-rest publication the FAB layer
+		// reads. Skipped on the first configure (#previousFamily === null).
+		this.#detectFamilyChange(inputs.fromPathname);
+		this.#mounted = true;
+		this.#lifecycle.activate();
+	}
+
+	/** Mount: configure the inputs and run the one-time lifecycle
+	 *  `mount` (SSR + hydrate done). Used for the initial setup or after
+	 *  a full `unmount` (mobile -> desktop flip); route swaps call
+	 *  `configure` directly so the executor + driver persist across the
+	 *  swap. The lifecycle `mount` is idempotent so a re-mount after a
+	 *  desktop -> mobile flip (which calls `unmount` then `mount`) is
+	 *  safe. */
+	mount(inputs: PipelineMountInputs): void {
+		this.configure(inputs);
+		this.#lifecycle.mount();
+	}
+
+	/** Release the host's inputs and run the lifecycle `deactivate`. The
+	 *  singleton's executor + driver + rAF + lifecycle `mount` persist
+	 *  for the next host's `configure`; this is the route-swap teardown
+	 *  path. The gap-frame publication reads at-rest because
+	 *  `#mountInputs` becomes null and `#mounted` becomes false (the
+	 *  guard in `#publication`). */
+	releaseInputs(): void {
+		// Capture the FAB's current scale before clearing the inputs so the
+		// next configure's family-swap ease anchors at the visible pre-swap
+		// scale (the orchestrator is the sole owner of this tracking).
+		// Skipped while the family-swap ease runs (its tick maintains
+		// #lastRenderedScale at the eased value, which IS the visible scale).
+		if (this.#familySwapRafId === undefined) {
+			this.#lastRenderedScale = this.#computeFabRestingScale();
+		}
+		this.#mountInputs = null;
+		this.#mounted = false;
+		this.#pendingGesture = null;
+		this.#pendingTabExit = null;
+		this.#navDispatchInFlight = false;
+		this.#dispatchTarget = null;
+		this.#gestureToTabIndex = null;
+		// Cancel the family-swap ease: the route swap that releaseInputs
+		// tears down for is either the source of the family change (the
+		// new host's configure will re-arm a fresh ease anchored at
+		// #lastRenderedScale) or a route-away (no further FAB motion
+		// needed). #lastRenderedScale + #previousFamily survive so the
+		// next configure can detect the change.
+		this.#stopFamilySwapEase();
+		// Do NOT cancel the settle / tap-scrub eases here: the Header
+		// persists across the route swap, and a settle in flight at the
+		// host's destroy (a commit settle awaiting its navigation landing)
+		// must continue until the navigation lands. The header-state
+		// watcher's `!this.#mounted` guard skips re-arming during the gap
+		// frame; the afterNavigate hook clears the awaitTitle once the
+		// navigation lands.
+		// Clear the in-flight pager state so a stale fractionalIndex /
+		// transitionTarget does not drive the FAB on the destination
+		// route before that route's configure publishes its own state.
+		getMobilePagerStore().set({
+			fractionalIndex: 0,
+			dragging: false,
+			active: false,
+			backMorph: null,
+			targetIndex: null,
+			coverProgress: 0,
+			transitionTarget: null,
+			committed: null
+		});
+		getMobilePagerStore().setReplaceStateIntent(false);
+		this.#lifecycle.deactivate();
 	}
 
 	/** Update the viewport dimensions on a host resize. The
@@ -463,8 +760,9 @@ export class NavPipelineOrchestrator {
 		this.#pendingGesture = null;
 		this.#pendingTabExit = null;
 		// Capture the in-flight raw BEFORE resetting the progress
-		// (consistent with #beginGesture / onSvelteKitBeforeNavigate). For
-		// a fresh mount the prior progress is 0 (at rest).
+		// (consistent with #beginGesture / onSvelteKitBeforeNavigate).
+		// playEnterAnimation runs synchronously after configure in the
+		// host's onMount, so the prior progress is 0 (configure reset it).
 		this.#commitStartRaw = this.#progress;
 		this.#isEnterAnimation = true;
 		// The enter is a forward transition: FROM is the back-target, TO
@@ -489,9 +787,9 @@ export class NavPipelineOrchestrator {
 		);
 		this.#progress = 0;
 		// The enter starts at rest (progress 0). playEnterAnimation runs
-		// only on a fresh mount: the guard above returns if a transition
-		// is in flight, and mount constructs a clean executor, so there is
-		// no in-flight position to continue from.
+		// synchronously after configure in the host's onMount; the guard
+		// above returns if a gesture or tab-click arrived in the same
+		// tick, so there is no in-flight position to continue from.
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
 		executor.onDragStart(plan, startProgress, 0);
 		executor.onCommit(0, TAB_CLICK_COMMIT_MS);
@@ -500,13 +798,13 @@ export class NavPipelineOrchestrator {
 
 	/** Land an in-flight COMMIT transition when the platform flips mobile ->
 	 *  desktop (called by the host's resize handler, NOT by a route-away
-	 *  unmount). A commit-slide (progressDirection=0) in flight when the
+	 *  releaseInputs). A commit-slide (progressDirection=0) in flight when the
 	 *  viewport crosses the desktop breakpoint still lands on its target via
 	 *  a viewport-flip handler (the mobile->desktop analogue of the
 	 *  commit-settle dispatch, not a setTimeout-backed poll). A pre-commit live-
 	 *  drag (executor still in the 'live' phase) and a cancel-slide
 	 *  (progressDirection=1) do NOT land - the user may still cancel, or
-	 *  already cancelled. A route-away unmount (onDestroy) does not call
+	 *  already cancelled. A route-away releaseInputs (onDestroy) does not call
 	 *  this, so the user's fresh navigation wins. */
 	recoverDesktopFlipNav(): void {
 		if (this.#executor?.state.phase !== 'committing') return;
@@ -521,7 +819,12 @@ export class NavPipelineOrchestrator {
 		}
 	}
 
-	/** Unmount: stop the rAF, drop the plan, run lifecycle teardowns.
+	/** Unmount: full teardown. Stops the rAF, drops the plan + executor +
+	 *  driver, and runs the lifecycle `unmount`. Used for the mobile ->
+	 *  desktop flip (the host stays mounted but the gesture surface
+	 *  leaves the mobile breakpoint) and the app exit. Route swaps do
+	 *  NOT call this; they call `releaseInputs` so the singleton's
+	 *  executor + driver persist for the next host's `configure`.
 	 *  Idempotent. */
 	unmount(): void {
 		this.#executor?.stop();
@@ -533,19 +836,52 @@ export class NavPipelineOrchestrator {
 		this.#dispatchTarget = null;
 		this.#intent = initialIntentState();
 		this.#progress = 0;
-		// Reset every transient transition field so an idempotent re-mount
-		// (a future caller reusing the instance) starts clean.
+		// Reset every transient transition field so the next mount (a
+		// desktop -> mobile flip that re-enters mobile) starts clean.
 		this.#isEnterAnimation = false;
 		this.#commitStartRaw = 0;
 		this.#liveDragging = false;
 		this.#prevWasDrag = false;
 		this.#gestureToTabIndex = null;
+		// Tear down the family-swap ease + the family-tracking fields so
+		// the next mount (a desktop -> mobile flip re-entering mobile)
+		// sees no stale ease and treats its first configure as a
+		// first-mount (#previousFamily === null -> skip the ease).
+		this.#stopFamilySwapEase();
+		this.#familySwapFromScale = 0;
+		this.#familySwapToScale = 0;
+		this.#familySwapToScaleCaptured = false;
+		this.#familySwapStartTs = 0;
+		this.#lastRenderedScale = 0;
+		this.#previousFamily = null;
+		// Tear down the settle + tap-scrub eases and the header-state
+		// watchers so the next mount (a desktop -> mobile flip) starts
+		// clean. The first configure after the re-mount re-installs the
+		// watchers.
+		this.#cancelSettleEaseRaf();
+		this.#cancelTapScrubRaf();
+		this.#settleActive = false;
+		this.#settleAwaitTitle = false;
+		this.#settleStartProgress = 0;
+		this.#settleStartTs = 0;
+		this.#scrubSource = '';
+		this.#scrubFromValue = 0;
+		this.#scrubToValue = 0;
+		this.#scrubStartTs = 0;
+		this.#scrubTerminal = 0;
+		this.#headerStateInitialized = false;
+		this.#prevHeaderTitle = '';
+		this.#prevHeaderHasTabs = false;
+		this.#prevHeaderIsSearch = false;
+		this.#headerT = null;
+		this.#lastLandWasPipelineCommit = false;
+		this.#mounted = false;
 		this.#lifecycle.deactivate();
 		this.#lifecycle.unmount();
 		// Clear the in-flight pager state so a stale fractionalIndex /
 		// transitionTarget does not drive the FAB on the destination route
-		// before that route publishes its own state (mirrors the at-rest pager
-		// publication each host sets on mount).
+		// before that route publishes its own state (mirrors the at-rest
+		// pager publication each host sets on configure).
 		getMobilePagerStore().set({
 			fractionalIndex: 0,
 			dragging: false,
@@ -556,9 +892,18 @@ export class NavPipelineOrchestrator {
 			transitionTarget: null,
 			committed: null
 		});
-		// Clear the replaceState side-channel on unmount (route-swap
-		// displacement or a mobile->desktop flip) so the intent does not
-		// survive the host that set it.
+		// Clear the settle / tap-scrub publications so the next mount
+		// starts at rest. The orchestrator owns these as class fields
+		// (the Header reads via the public reactive getters).
+		this.#settleProgress = 1;
+		this.#settleActive = false;
+		this.#settleLatched = null;
+		this.#settleAwaitTitlePub = false;
+		this.#searchScrubbing = false;
+		getMobilePagerStore().setTapMorph(null);
+		// Clear the replaceState side-channel on a mobile -> desktop flip
+		// so the intent does not survive the host that set it. Route-swap
+		// displacement clears the same channel via releaseInputs.
 		getMobilePagerStore().setReplaceStateIntent(false);
 	}
 
@@ -710,6 +1055,10 @@ export class NavPipelineOrchestrator {
 						executor.onCancel(intent.releaseVelocity);
 						getMobilePagerStore().setCommitted(false);
 						this.#stateMachine.onCancel();
+						// Arm the settle ease (cancel direction): the morph
+						// + title crossfade retreat to the current page over
+						// TITLE_CROSSFADE_MS.
+						this.#armSettleEaseFromGesture(false);
 					} else {
 						this.#landAtRest();
 					}
@@ -737,11 +1086,17 @@ export class NavPipelineOrchestrator {
 						executor.onCommit(intent.releaseVelocity);
 						getMobilePagerStore().setCommitted(true);
 						this.#stateMachine.onCommit();
+						// Arm the settle ease (commit direction): the morph
+						// + title crossfade advance toward the back-target
+						// over TITLE_CROSSFADE_MS, holding at progress 1
+						// until the navigation lands.
+						this.#armSettleEaseFromGesture(true);
 					} else if (executor.state.progress > 0) {
 						this.#commitStartRaw = this.#publication.progress;
 						executor.onCancel(intent.releaseVelocity);
 						getMobilePagerStore().setCommitted(false);
 						this.#stateMachine.onCancel();
+						this.#armSettleEaseFromGesture(false);
 					} else {
 						this.#landAtRest();
 					}
@@ -922,11 +1277,14 @@ export class NavPipelineOrchestrator {
 	 *  (reached this tab by a forward nav from a thread / profile /
 	 *  etc.), the target is that deep page's pathname so commit-settle
 	 *  dispatches `history.back()` to it (via `hopForHref` returning
-	 *  `'back'` in `#dispatchNav`). The slide reveals the previous tab
-	 *  panel as a visual proxy; on commit the deep page route mounts and
-	 *  the tab host unmounts. TODO(5b3): overlay the deep page's cached
-	 *  snapshot in the left panel during the slide so the visual matches
-	 *  the landing page. Otherwise falls back to the spatially-previous
+	 *  `'back'` in `#dispatchNav`). When `fromTabIndex >= 1` the slide
+	 *  reveals the previous tab's panel as a visual proxy; when
+	 *  `fromTabIndex === 0` (the leftmost tab) there is no panel to the
+	 *  left, so the slide reveals empty space until the deep page mounts
+	 *  on commit. TODO(5b3): overlay the deep page's cached snapshot in
+	 *  the left panel during the slide so the visual matches the landing
+	 *  page (covers both the wrong-proxy and the empty-space cases).
+	 *  Otherwise falls back to the spatially-previous
 	 *  tab root. The deep page's tab association is not consulted: the
 	 *  user came from that page, so `history.back()` returns to it
 	 *  regardless of which tab it belongs to. */
@@ -985,9 +1343,23 @@ export class NavPipelineOrchestrator {
 			inputs.fromTabIndex >= 0 &&
 			toTabIndex >= 0 &&
 			Math.abs(toTabIndex - inputs.fromTabIndex) > 1;
-		const distance = multiPanel
-			? Math.abs(toTabIndex - inputs.fromTabIndex) * inputs.viewportWidth
-			: inputs.viewportWidth;
+		// At the leftmost tab (fromTabIndex === 0) a backward-to-deep-page
+		// gesture has no panel to the left to reveal (the 3-panel track's
+		// panel 0 is leftmost), so a slide would reveal empty space. Suppress
+		// the track slide (distance = 0); coverProgress still drives the
+		// FAB/Header morph, and history.back() lands on the deep page on
+		// commit. The clean visual fix is the 5b3 deep-snapshot overlay;
+		// this avoids the empty-space artifact until then.
+		const suppressSlide =
+			inputs.bidirectional === true &&
+			inputs.fromTabIndex === 0 &&
+			direction === 'backward' &&
+			toData.tag !== 'tab';
+		const distance = suppressSlide
+			? 0
+			: multiPanel
+				? Math.abs(toTabIndex - inputs.fromTabIndex) * inputs.viewportWidth
+				: inputs.viewportWidth;
 		return {
 			...plan,
 			pageTrack: {
@@ -1069,10 +1441,10 @@ export class NavPipelineOrchestrator {
 		// The in-flight flag + dispatch target persist until the
 		// navigation lands. They are cleared in `#landAtRest` (called
 		// from `onSvelteKitAfterNavigate` on the destination route)
-		// or `unmount` (called from the host's `onDestroy` when the
-		// host route unmounts during the navigation). For the `goto`
-		// path, `goto`'s promise resolves after the navigation lands
-		// so the `.finally` cleanup is safe; the `history.back` /
+		// or `releaseInputs` (called from the host's `onDestroy` when
+		// the host route unmounts during the navigation). For the
+		// `goto` path, `goto`'s promise resolves after the navigation
+		// lands so the `.finally` cleanup is safe; the `history.back` /
 		// `history.forward` paths have no promise to await, so they
 		// rely on the lifecycle hooks to clear.
 		if (hop === 'back') {
@@ -1091,6 +1463,13 @@ export class NavPipelineOrchestrator {
 	/** Return to at-rest without dispatching. */
 	#landAtRest(): void {
 		const inputs = this.#mountInputs;
+		// Record whether this land carried an orchestrator-dispatched nav
+		// (a gesture commit or a tab-click commit) so the next
+		// `notifyHeaderState` can skip the tap-scrub arm for that landing.
+		// The executor's slide already drove the search-layout visual to its
+		// post-land position; arming a fresh scrub would jump the track back
+		// to the pre-slide endpoint and re-animate.
+		this.#lastLandWasPipelineCommit = this.#navDispatchInFlight;
 		this.#pendingGesture = null;
 		this.#pendingTabExit = null;
 		this.#navDispatchInFlight = false;
@@ -1230,9 +1609,9 @@ export class NavPipelineOrchestrator {
 	 *  no-op reset (the orchestrator is at rest). For a navigation AWAY
 	 *  from the host route (a tab-click exit / a gesture settle), the host's
 	 *  `onDestroy` runs before `afterNavigate` (Svelte 5 lifecycle: old
-	 *  `onDestroy` -> new route mounts -> `afterNavigate`), so the
-	 *  singleton is already null and this call is skipped; the cleanup is
-	 *  handled by `onDestroy` -> `unmount()`.
+	 *  `onDestroy` -> new route mounts -> `afterNavigate`), so the active
+	 *  slot is already null and this call is skipped; the cleanup is
+	 *  handled by `onDestroy` -> `releaseInputs()`.
 	 *
 	 *  Guards: a forward-enter (`playEnterAnimation`) or an in-flight
 	 *  gesture / tab-click that the orchestrator did NOT dispatch (an
@@ -1251,6 +1630,18 @@ export class NavPipelineOrchestrator {
 		// spent. Without this clear the stale intent leaks to the next
 		// consumed dispatch, which then wrongly replaces history.
 		getMobilePagerStore().setReplaceStateIntent(false);
+		// Commit settle awaitTitle clear: a commit settle holds at
+		// progress 1 until the navigation lands. The land clears the
+		// await: an in-flight rAF endSettles at u=1 on its next tick (no
+		// premature morph snap), a completed rAF endSettles now.
+		if (this.#settleActive && this.#settleAwaitTitle) {
+			if (this.#settleRafId !== undefined) {
+				this.#settleAwaitTitle = false;
+				this.#settleAwaitTitlePub = false;
+			} else {
+				this.#endSettleEase();
+			}
+		}
 		if (this.#isEnterAnimation) return;
 		if (
 			!this.#navDispatchInFlight &&
@@ -1279,18 +1670,611 @@ export class NavPipelineOrchestrator {
 	}
 
 	// -----------------------------------------------------------------------
+	// Route-swap family-change ease (the FAB family-swap motion).
+
+	/** Compute the FAB family of `pathname`, or null when the route does
+	 *  not mount a FAB atom directly. */
+	#familyOf(pathname: string): FabFamily | null {
+		return getFabRouteAttributes(pathname)?.family ?? null;
+	}
+
+	/** Resolve the destination's FAB kind when an in-flight pipeline
+	 *  transition targets a list-family route, mirroring the FAB layer's
+	 *  `pilotTransitionListKind` derivation. Returns null at rest or when
+	 *  the in-flight target's family is not 'list'. Read by the
+	 *  family-swap ease's per-tick gate so a pipeline transition to a
+	 *  list family (driven by `trackFractionalIndex`) cancels the ease
+	 *  the same way a live drag does. */
+	#pilotTransitionListKind(): 'discussions' | 'messages' | null {
+		const target = this.#publication.toPathname;
+		if (target === null) return null;
+		const attrs = getFabRouteAttributes(target);
+		if (attrs === null || attrs.family !== 'list') return null;
+		if (attrs.kind === 'discussions') return 'discussions';
+		if (attrs.kind === 'messages') return 'messages';
+		return null;
+	}
+
+	/** Detect a family change between the route stored in
+	 *  `#previousFamily` and the route now configuring, and start the
+	 *  family-swap ease on a real change. No-op on the first configure
+	 *  (#previousFamily === null) and on a same-family re-configure (a
+	 *  tab swap within the list family). Reads #lastRenderedScale (the
+	 *  visible pre-swap scale) as the ease's anchor so the trajectory is
+	 *  continuous with the pre-swap render regardless of the at-rest
+	 *  pager publication's timing. */
+	#detectFamilyChange(newPathname: string): void {
+		const newFamily = this.#familyOf(newPathname);
+		const prev = this.#previousFamily;
+		this.#previousFamily = newFamily;
+		if (prev === null) return;
+		if (prev === newFamily) return;
+		this.#startFamilySwapEase(this.#lastRenderedScale);
+	}
+
+	/** Start the family-swap ease from `fromScale` to the destination
+	 *  family's resting scale (captured on the first tick from
+	 *  `#computeFabRestingScale`). Cancels any in-flight ease first (a
+	 *  second family swap mid-ease); the caller passes the current
+	 *  visible scale as `fromScale` so the trajectory stays continuous.
+	 *  Pins the published `familySwapScale` to `fromScale` immediately
+	 *  so the swap frame does not snap before the first tick. The ease
+	 *  runs on the orchestrator's own rAF (distinct from the executor's
+	 *  gesture rAF); one rAF owner per consumer of the FAB scale's
+	 *  motion. Reduced-motion snaps (no rAF integration). */
+	#startFamilySwapEase(fromScale: number): void {
+		if (!browser) return;
+		// Reduced-motion: drop familySwapScale so the FAB falls through to
+		// the destination family's resting scale immediately. No rAF.
+		if (this.#driver?.prefersReducedMotion() ?? false) {
+			this.#stopFamilySwapEase();
+			return;
+		}
+		if (this.#familySwapRafId !== undefined) {
+			cancelAnimationFrame(this.#familySwapRafId);
+		}
+		this.#familySwapFromScale = fromScale;
+		this.#familySwapToScale = fromScale;
+		this.#familySwapToScaleCaptured = false;
+		// The clock starts on the FIRST tick, not here: configure can run
+		// during a SvelteKit navigation whose DOM work delays the first rAF
+		// by many frames. Starting the clock here would make the first
+		// tick compute a large elapsed `u` and skip the early-ease scale
+		// range. Pinning familySwapScale to fromScale holds the FAB at the
+		// pre-swap scale during that gap, then the ease runs the full curve
+		// from the first real frame.
+		this.#familySwapStartTs = 0;
+		this.#publishFamilySwapScale(fromScale);
+		this.#lastRenderedScale = fromScale;
+		const tick = (): void => {
+			// A higher-priority driver took over mid-ease: a live drag
+			// (coverProgress drives the FAB) or a pipeline transition to a
+			// list family (trackFractionalIndex drives the FAB). Hand the
+			// scale back to the live / track signal.
+			if (this.#liveDragging || this.#pilotTransitionListKind() !== null) {
+				this.#stopFamilySwapEase();
+				return;
+			}
+			const now = performance.now();
+			if (!this.#familySwapToScaleCaptured) {
+				// By the first tick the new mountInputs have settled and
+				// #computeFabRestingScale reads the destination family's
+				// resting publication; capture it as the ease target once
+				// and start the clock on this frame so the full
+				// TRACK_TRANSITION_MS curve plays.
+				this.#familySwapToScale = this.#computeFabRestingScale();
+				this.#familySwapToScaleCaptured = true;
+				this.#familySwapStartTs = now;
+			}
+			const u = Math.min((now - this.#familySwapStartTs) / TRACK_TRANSITION_MS, 1);
+			const eased = 2 * u - u * u;
+			const scale =
+				this.#familySwapFromScale + (this.#familySwapToScale - this.#familySwapFromScale) * eased;
+			this.#publishFamilySwapScale(scale);
+			this.#lastRenderedScale = scale;
+			if (u >= 1) {
+				// The ease can reach u=1 while a parallel pipeline slide is
+				// still in flight (e.g. a forward-enter whose slide duration
+				// matches TRACK_TRANSITION_MS but whose rAF started one
+				// frame later). Hold at the destination scale until the
+				// slide rests (coverProgress returns to 0 via the host's
+				// at-rest $effect) so the resting formula's transient
+				// mid-slide value never becomes the published scale for
+				// that gap frame. A family swap with no parallel slide
+				// has coverProgress 0 throughout, so it clears at u=1.
+				if (getMobilePagerStore().coverProgress !== 0) {
+					this.#publishFamilySwapScale(this.#familySwapToScale);
+					this.#lastRenderedScale = this.#familySwapToScale;
+					this.#familySwapRafId = requestAnimationFrame(tick);
+					return;
+				}
+				this.#publishFamilySwapScale(null);
+				this.#familySwapRafId = undefined;
+				return;
+			}
+			this.#familySwapRafId = requestAnimationFrame(tick);
+		};
+		this.#familySwapRafId = requestAnimationFrame(tick);
+	}
+
+	/** Cancel the family-swap ease and hand the published FAB scale back
+	 *  to the resting / live formula. Idempotent. */
+	#stopFamilySwapEase(): void {
+		if (this.#familySwapRafId !== undefined) {
+			cancelAnimationFrame(this.#familySwapRafId);
+			this.#familySwapRafId = undefined;
+		}
+		this.#publishFamilySwapScale(null);
+	}
+
+	/** Publish `value` (or clear it) to the pager store's
+	 *  `familySwapScale` field. The FAB layer reads this in precedence
+	 *  over its resting-scale formula. */
+	#publishFamilySwapScale(value: number | null): void {
+		getMobilePagerStore().setFamilySwapScale(value);
+	}
+
+	/** Compute the FAB's resting scale from the orchestrator's currently
+	 *  published signals + the active route's FAB family, mirroring the
+	 *  FAB layer's `foregroundFraction` -> `scaleFromFraction` pipeline.
+	 *  Used to capture the ease target on the first tick (against the
+	 *  destination route's at-rest publication) and to track
+	 *  `#lastRenderedScale` after every `#republishToPager` (against the
+	 *  in-flight publication) so the next family-swap ease anchors at
+	 *  the visible pre-swap scale.
+	 *
+	 *  The dynamic kind (/activity, resolved from the gesture source tab)
+	 *  resolves its FAB kind from the live fractional index, matching
+	 *  the FAB layer's dynamic branch: at rest on /activity the resolved
+	 *  kind is whichever list FAB sits at the published fractional index
+	 *  (typically messages at index 1); when no FAB would render (a
+	 *  fresh deep-link with no prior retained FAB) the scale is 0. */
+	#computeFabRestingScale(): number {
+		const inputs = this.#mountInputs;
+		if (inputs === null) return 0;
+		const attrs = getFabRouteAttributes(inputs.fromPathname);
+		if (attrs === null) return 0;
+		const family = attrs.family;
+		const pager = getMobilePagerStore();
+		// Match the FAB layer's foregroundFraction gate exactly: a pipeline
+		// transition whose destination does not resolve to a list FAB kind
+		// (an overlay/compose route, or the dynamic /activity kind, or a
+		// no-FAB route) drives foregroundFraction to 0 so the FAB scales
+		// out. `#pilotTransitionListKind` returns null for all those cases;
+		// the track-fractional-index path (a tab-host slide between two
+		// list kinds) takes precedence on list routes and is handled by
+		// the family === 'list' branch below.
+		const transitionTarget = this.#publication.toPathname;
+		if (
+			transitionTarget !== null &&
+			this.#pilotTransitionListKind() === null &&
+			pager.trackFractionalIndex === null
+		) {
+			return 0;
+		}
+		if (family === 'list') {
+			const fabTabIndex = this.#listFabTabIndex(attrs.kind, pager);
+			if (fabTabIndex === null) return 0;
+			const trackFrac = pager.trackFractionalIndex;
+			if (trackFrac !== null) {
+				return scaleFromFraction(tabFraction(trackFrac, fabTabIndex));
+			}
+			const restActiveTab = pager.active ? pager.fractionalIndex : inputs.fromTabIndex;
+			return scaleFromFraction(tabFraction(restActiveTab, fabTabIndex));
+		}
+		return scaleFromFraction(pager.coverProgress ?? 0);
+	}
+
+	/** Resolve the FAB list-kind's tab index for `kind`. Returns null
+	 *  when no FAB renders at rest (the dynamic kind on /activity at the
+	 *  resting index, matching the FAB layer's dynamic branch). */
+	#listFabTabIndex(
+		kind: 'discussions' | 'messages' | 'dynamic' | 'deep' | null,
+		pager: ReturnType<typeof getMobilePagerStore>
+	): number | null {
+		if (kind === 'discussions') return FAB_KIND_CONFIGS.discussions.tabIndex;
+		if (kind === 'messages') return FAB_KIND_CONFIGS.messages.tabIndex;
+		if (kind === 'dynamic') {
+			// /activity resolves its FAB kind from the gesture source tab.
+			// At rest the fractional index is 1 (activity's tab position);
+			// when the index is exactly 1 no FAB renders via the dynamic
+			// branch. Off-rest (a drag in flight) the index dips toward 0
+			// (discussions) or rises toward 2 (messages).
+			const trackFrac = pager.trackFractionalIndex;
+			const sliding = trackFrac !== null && Math.abs(trackFrac - Math.round(trackFrac)) > 0.01;
+			const index = sliding && trackFrac !== null ? trackFrac : pager.fractionalIndex;
+			if (pager.active && Math.abs(index - 1) > 0.01) {
+				return index < 1
+					? FAB_KIND_CONFIGS.discussions.tabIndex
+					: FAB_KIND_CONFIGS.messages.tabIndex;
+			}
+			return null;
+		}
+		return null;
+	}
+
+	// -----------------------------------------------------------------------
+	// Settle ease (the Header morph + title crossfade owner).
+
+	/** Arm the settle ease from `startProgress` toward `targetProgress` with
+	 *  the latched endpoint identity (`latched`), over `durationMs`.
+	 *  Reduced-motion snaps. `awaitTitle` true holds the settle at progress
+	 *  1 after the rAF completes (a commit settle waiting for the
+	 *  navigation to land); the afterNavigate hook + the title-change
+	 *  watcher clear it via `#endSettleEase` when the nav lands. The
+	 *  direction (`forward` / `back`) selects the title-span slide axis.
+	 *
+	 *  `durationMs`: the settle ease duration. A gesture-release settle
+	 *  passes the executor's velocity-matched commit duration so the Header
+	 *  morph / title crossfade tracks the slide end-to-end (§5 unified
+	 *  following-visual model). A non-gesture settle (tab-click, plain title
+	 *  change) passes `TITLE_CROSSFADE_MS`: those transitions are discrete
+	 *  navs with no finger-release velocity to match.
+	 *
+	 *  Cancels any in-flight settle first (a rapid back-to-back nav). */
+	#armSettleEase(
+		latched: HeaderSettleTransition,
+		startProgress: number,
+		targetProgress: 0 | 1,
+		awaitTitle: boolean,
+		direction: 'forward' | 'back',
+		durationMs: number = TITLE_CROSSFADE_MS
+	): void {
+		if (!browser) return;
+		const safeDuration = Math.max(1, durationMs);
+		this.#cancelSettleEaseRaf();
+		this.#settleStartProgress = startProgress;
+		this.#settleTargetProgress = targetProgress;
+		this.#settleAwaitTitle = awaitTitle;
+		this.#settleActive = true;
+		this.#settleProgress = startProgress;
+		this.#settleLatched = latched;
+		this.#settleDirection = direction;
+		this.#settleAwaitTitlePub = awaitTitle;
+		// Reduced-motion: snap to target with no rAF. The awaitTitle flag
+		// still holds for a commit settle (the nav-landing clear governs
+		// endSettle); a non-gesture / cancel settle ends immediately.
+		if (this.#driver?.prefersReducedMotion() ?? false) {
+			this.#settleProgress = targetProgress;
+			if (!awaitTitle) this.#endSettleEase();
+			return;
+		}
+		this.#settleStartTs = 0;
+		const tick = (): void => {
+			const now = performance.now();
+			if (this.#settleStartTs === 0) this.#settleStartTs = now;
+			const u = Math.min((now - this.#settleStartTs) / safeDuration, 1);
+			const eased = 2 * u - u * u;
+			const progress =
+				this.#settleStartProgress +
+				(this.#settleTargetProgress - this.#settleStartProgress) * eased;
+			this.#settleProgress = progress;
+			if (u >= 1) {
+				this.#settleRafId = undefined;
+				// Commit settle: hold at target, wait for the nav-landed
+				// clear. Cancel / non-gesture settle: end now (no nav
+				// landing to wait for; the rAF reaching u=1 is the
+				// end-of-animation signal).
+				if (!this.#settleAwaitTitle) this.#endSettleEase();
+				return;
+			}
+			this.#settleRafId = requestAnimationFrame(tick);
+		};
+		this.#settleRafId = requestAnimationFrame(tick);
+	}
+
+	/** Cancel the settle rAF (no endSettle). Used by interrupt paths
+	 *  (re-arm, drag-cancel, host destroy) where the settle state is
+	 *  either overwritten by a fresh arm or cleared by releaseInputs. */
+	#cancelSettleEaseRaf(): void {
+		if (this.#settleRafId !== undefined) {
+			cancelAnimationFrame(this.#settleRafId);
+			this.#settleRafId = undefined;
+		}
+	}
+
+	/** End the active settle: drop `settleActive` and clear the latched
+	 *  record. The publication's `settleProgress` stays at its last value
+	 *  (1 for commit, 0 for cancel) so the morph derivation's rest branch
+	 *  produces the same value the settle branch ended at (no snap). */
+	#endSettleEase(): void {
+		if (!this.#settleActive) return;
+		this.#cancelSettleEaseRaf();
+		this.#settleActive = false;
+		this.#settleAwaitTitle = false;
+		this.#settleLatched = null;
+		this.#settleAwaitTitlePub = false;
+	}
+
+	/** Arm the settle ease for a gesture release (commit or cancel).
+	 *  Outgoing = current page, incoming = the gesture's commit target.
+	 *  The start progress is the executor's live raw at release so the
+	 *  morph is continuous across the drag-to-settle boundary (no snap).
+	 *  `committed` true → target 1 + awaitTitle; false → target 0, no
+	 *  await.
+	 *
+	 *  The settle ease duration is the executor's velocity-matched commit
+	 *  duration (`commitStart.durationMs`) so the Header morph / title
+	 *  crossfade tracks the slide end-to-end. A fast release (~120ms) and
+	 *  the Header settle finish together; a slow release (~600ms) and they
+	 *  run together too. The cancel branch falls back to
+	 *  `TITLE_CROSSFADE_MS` because a cancel snaps back from a
+	 *  sub-threshold position with no velocity-matched slide to track. */
+	#armSettleEaseFromGesture(committed: boolean): void {
+		if (!browser) return;
+		const inputs = this.#mountInputs;
+		const pending = this.#pendingGesture;
+		const executor = this.#executor;
+		if (inputs === null || pending === null || executor === null) return;
+		const back = pending.to;
+		const t = this.#headerT;
+		const outgoingTitle = t ? (resolveDeepHeaderTitle(inputs.fromPathname, t) ?? '') : '';
+		const incomingTitle = t ? (resolveDeepHeaderTitle(back, t) ?? '') : '';
+		const outgoingHasTabs = inputs.fromTabIndex >= 0;
+		const incomingHasTabs = getCurrentTabIndex(back) >= 0;
+		const latched: HeaderSettleTransition = {
+			outgoingTitle,
+			incomingTitle,
+			outgoingHasTabs,
+			incomingHasTabs
+		};
+		const startProgress = this.#publication.progress;
+		const commitDurationMs = executor.state.commitStart?.durationMs ?? TITLE_CROSSFADE_MS;
+		this.#armSettleEase(
+			latched,
+			startProgress,
+			committed ? 1 : 0,
+			committed, // awaitTitle only on a commit (cancel has no nav)
+			'back',
+			committed ? commitDurationMs : TITLE_CROSSFADE_MS
+		);
+	}
+
+	// -----------------------------------------------------------------------
+	// Root<->search tap-scrub ease.
+
+	/** Arm the tap-scrub ease from `fromValue` to `toValue` over
+	 *  TITLE_CROSSFADE_MS with the constant-deceleration ease `s(u) = 2u -
+	 *  u²` (the same curve the executor's commit loop uses). Reduced-motion
+	 *  snaps. Sets the start value synchronously so the Header's reactive
+	 *  consumers (searchProgress / tabProgress) see tapMorph !== null in
+	 *  the same flush and read the start value before the first rAF tick.
+	 *  Latches scrubSource / scrubTargetTabs / scrubTerminal for the clear
+	 *  watch in `notifyHeaderState`. */
+	#armTapScrubEase(fromValue: number, toValue: number, source: string, targetTabs: boolean): void {
+		if (!browser) return;
+		this.#cancelTapScrubRaf();
+		this.#scrubSource = source;
+		this.#scrubTargetTabs = targetTabs;
+		this.#scrubTerminal = toValue;
+		this.#scrubFromValue = fromValue;
+		this.#scrubToValue = toValue;
+		this.#scrubStartTs = 0;
+		const pager = getMobilePagerStore();
+		this.#searchScrubbing = true;
+		pager.setTapMorph(fromValue);
+		// Reduced-motion: snap to target with no rAF.
+		if (this.#driver?.prefersReducedMotion() ?? false) {
+			pager.setTapMorph(toValue);
+			this.#finishTapScrubEase();
+			return;
+		}
+		const tick = (): void => {
+			const now = performance.now();
+			if (this.#scrubStartTs === 0) this.#scrubStartTs = now;
+			const u = Math.min((now - this.#scrubStartTs) / TITLE_CROSSFADE_MS, 1);
+			const eased = 2 * u - u * u;
+			getMobilePagerStore().setTapMorph(
+				this.#scrubFromValue + (this.#scrubToValue - this.#scrubFromValue) * eased
+			);
+			if (u >= 1) {
+				this.#finishTapScrubEase();
+				return;
+			}
+			this.#tapScrubRafId = requestAnimationFrame(tick);
+		};
+		this.#tapScrubRafId = requestAnimationFrame(tick);
+	}
+
+	/** Cancel the tap-scrub rAF (no clear). Used by interrupt paths
+	 *  (drag-cancel, host destroy). */
+	#cancelTapScrubRaf(): void {
+		if (this.#tapScrubRafId !== undefined) {
+			cancelAnimationFrame(this.#tapScrubRafId);
+			this.#tapScrubRafId = undefined;
+		}
+	}
+
+	/** Finish the tap-scrub ease: drop searchScrubbing and clear tapMorph
+	 *  so the morph / trackMorph derivations fall through to the rest
+	 *  branch (the destination route's at-rest value). Idempotent. */
+	#finishTapScrubEase(): void {
+		this.#cancelTapScrubRaf();
+		this.#scrubSource = '';
+		this.#searchScrubbing = false;
+		getMobilePagerStore().setTapMorph(null);
+	}
+
+	// -----------------------------------------------------------------------
+	// Header-state detection (settle + tap-scrub arm triggers).
+
+	/** Receive the live Header state (path / title / hasTabs / isSearch)
+	 *  from the Header's reactive `$effect.pre` notification. The
+	 *  orchestrator owns the detection: a gesture-release settle is armed
+	 *  directly from `#interpretIntent`; a non-gesture title change arms
+	 *  the settle ease here; a root<->search ENTER flip arms the tap-scrub
+	 *  ease here. The Header is in a component scope so SvelteKit's
+	 *  `$app/state` `page` reactivity reaches it; the orchestrator
+	 *  singleton module does not, so the Header is the orchestrator's
+	 *  sensor for path / title / hasTabs / isSearch and calls this method
+	 *  on every change. The orchestrator tracks the previous values,
+	 *  classifies the transition, and arms the appropriate ease. Also
+	 *  handles the tap-scrub clear watch (terminal + redirect) and the
+	 *  drag-cancel, since the orchestrator's reactive scope does not see
+	 *  pager.dragging / pager.tapMorph flips. */
+	notifyHeaderState(
+		newPath: string,
+		newTitle: string,
+		currentHasTabs: boolean,
+		currentIsSearch: boolean,
+		t: TranslationDict
+	): void {
+		if (!browser) return;
+		this.#headerT = t;
+		if (!this.#headerStateInitialized) {
+			this.#prevHeaderTitle = newTitle;
+			this.#prevHeaderHasTabs = currentHasTabs;
+			this.#prevHeaderIsSearch = currentIsSearch;
+			this.#headerStateInitialized = true;
+			return;
+		}
+		const pager = getMobilePagerStore();
+		// Clear watch + drag-cancel for an in-flight tap-scrub (the
+		// Header's notification covers both, since the orchestrator's
+		// reactive watchers do not fire on a singleton module scope).
+		if (pager.tapMorph !== null) {
+			const atTerminal = Math.abs(pager.tapMorph - this.#scrubTerminal) < 0.001;
+			if (
+				(pager.dragging && pager.tapMorph !== null) ||
+				(atTerminal && currentHasTabs === this.#scrubTargetTabs) ||
+				newPath !== this.#scrubSource
+			) {
+				this.#finishTapScrubEase();
+			}
+		}
+		// Settle arm: title change. Skip while a drag or an in-flight
+		// settle owns the morph (the in-flight settle handles the absorb /
+		// re-arm below).
+		if (pager.dragging) {
+			this.#prevHeaderTitle = newTitle;
+			this.#prevHeaderHasTabs = currentHasTabs;
+			this.#prevHeaderIsSearch = currentIsSearch;
+			return;
+		}
+		if (this.#settleActive) {
+			// A title arrived mid-settle: the awaited nav landed (clear
+			// awaitTitle so an in-flight rAF endSettles at u=1; a
+			// completed rAF endSettles now), OR a rapid back-to-back nav
+			// re-arms toward a new title.
+			if (newTitle === this.#resolveSettleIncomingTitle()) {
+				if (this.#settleAwaitTitle) {
+					if (this.#settleRafId !== undefined) {
+						this.#settleAwaitTitle = false;
+						this.#settleAwaitTitlePub = false;
+					} else {
+						this.#endSettleEase();
+					}
+				}
+				this.#prevHeaderTitle = newTitle;
+				this.#prevHeaderHasTabs = currentHasTabs;
+				this.#prevHeaderIsSearch = currentIsSearch;
+				return;
+			}
+			// A different title arrived mid-settle: re-arm toward the new
+			// title so a rapid back-to-back nav cannot strand the header
+			// on a stale title.
+			if (
+				newTitle !== this.#resolveSettleIncomingTitle() &&
+				newTitle !== this.#resolveSettleOutgoingTitle()
+			) {
+				const prevLatched = this.#readSettleLatched();
+				if (prevLatched !== null) {
+					const latched: HeaderSettleTransition = {
+						outgoingTitle: prevLatched.incomingTitle,
+						incomingTitle: newTitle,
+						outgoingHasTabs: prevLatched.incomingHasTabs,
+						incomingHasTabs: currentHasTabs
+					};
+					this.#armSettleEase(latched, 0, 1, false, this.#resolveNavDirection());
+				}
+			}
+			this.#prevHeaderTitle = newTitle;
+			this.#prevHeaderHasTabs = currentHasTabs;
+			this.#prevHeaderIsSearch = currentIsSearch;
+			return;
+		}
+		// tap-scrub arm: ANY navigation that flipped `isSearch` (one side
+		// is /search) AND did not land via the orchestrator's own commit
+		// dispatch. Covers root<->search (the search-button tap), deep<->
+		// search (/profile <-> /search, /messages/<id> <-> /search,
+		// /search <-> /bookmarks, etc.), and any other isSearch flip the
+		// orchestrator does not intercept pre-nav. The orchestrator owns
+		// this motion on its rAF (§5: no CSS transitions in this layer);
+		// the Header's horizontal-track / search-button / scope-tab-bar
+		// readers follow `pager.tapMorph` while the scrub runs.
+		//
+		// The scrub values are `isSearch`-based (1 = not search, 0 =
+		// search). This represents the search-layout position the Header
+		// consumes (searchProgress = 1 - tapMorph) and drives both the
+		// root<->search and the deep<->search trajectories; the hasTabs
+		// signal cannot drive the latter (it is false at /profile and
+		// /search).
+		//
+		// Skipped when `#lastLandWasPipelineCommit` is true: the
+		// just-landed navigation was a pipeline gesture/tab-click commit,
+		// and the executor's slide already drove the search-layout visual
+		// to its post-land position (transitionTarget / backMorph during
+		// the slide; `isSearch` at rest after). Arming a fresh scrub would
+		// re-animate from the opposite endpoint and jump the track.
+		const prevIsSearch = this.#prevHeaderIsSearch;
+		const justLandedViaPipelineCommit = this.#lastLandWasPipelineCommit;
+		this.#lastLandWasPipelineCommit = false;
+		if (
+			currentIsSearch !== prevIsSearch &&
+			pager.transitionTarget === null &&
+			!justLandedViaPipelineCommit
+		) {
+			const fromValue = prevIsSearch ? 0 : 1;
+			const toValue = currentIsSearch ? 0 : 1;
+			this.#armTapScrubEase(fromValue, toValue, newPath, currentHasTabs);
+		}
+		// Idle: arm the crossfade on any title change (including an empty
+		// incoming title for a tab-root landing and an empty outgoing
+		// title for a forward-from-tab click).
+		if (newTitle !== this.#prevHeaderTitle) {
+			const latched: HeaderSettleTransition = {
+				outgoingTitle: this.#prevHeaderTitle,
+				incomingTitle: newTitle,
+				outgoingHasTabs: this.#prevHeaderHasTabs,
+				incomingHasTabs: currentHasTabs
+			};
+			this.#armSettleEase(latched, 0, 1, false, this.#resolveNavDirection());
+		}
+		this.#prevHeaderTitle = newTitle;
+		this.#prevHeaderHasTabs = currentHasTabs;
+		this.#prevHeaderIsSearch = currentIsSearch;
+	}
+
+	#resolveSettleIncomingTitle(): string {
+		return this.#settleLatched?.incomingTitle ?? '';
+	}
+
+	#resolveSettleOutgoingTitle(): string {
+		return this.#settleLatched?.outgoingTitle ?? '';
+	}
+
+	#readSettleLatched(): HeaderSettleTransition | null {
+		return this.#settleLatched;
+	}
+
+	#resolveNavDirection(): 'forward' | 'back' {
+		return getNavigationStore().direction === 'backward' ? 'back' : 'forward';
+	}
+
+	// -----------------------------------------------------------------------
 	// Reactive publication to the pager store.
 
 	/** Reset the pager store to the at-rest publication. Called from two
-	 *  sites: `mount()` (to publish the at-rest state with the freshly
+	 *  sites: `configure()` (to publish the at-rest state with the freshly
 	 *  captured mount inputs) and the host's `$effect` when the
 	 *  orchestrator's plan transitions back to null (no transition in
 	 *  flight). */
 	resetPagerStore(): void {
 		const pager = getMobilePagerStore();
-		// No at-rest state to publish before mount (#mountInputs captures
-		// the host route's tab data in mount()); skip so the init $effect
-		// does not publish a placeholder fractionalIndex: -1 before mount
+		// No at-rest state to publish before configure (#mountInputs
+		// captures the host route's tab data in configure()); skip so the
+		// init $effect does not publish a placeholder fractionalIndex: -1
+		// before configure
 		// runs.
 		if (this.#mountInputs === null) return;
 		const inputs = this.#mountInputs;
@@ -1307,12 +2291,11 @@ export class NavPipelineOrchestrator {
 				backMorph: null,
 				targetIndex: null,
 				coverProgress: 0,
-				transitionTarget: null
+				transitionTarget: null,
+				committed: null
 			});
-			return;
-		}
-		const fromIdx = inputs?.fromTabIndex ?? -1;
-		if (inputs?.bidirectional === true) {
+		} else if (inputs?.bidirectional === true) {
+			const fromIdx = inputs?.fromTabIndex ?? -1;
 			// Tab host at rest (NavPipelineTabHost): the active tab is the
 			// pill's resting index, active: true so the FAB reads the live
 			// fractionalIndex, backMorph: null so the Header stays in
@@ -1326,24 +2309,37 @@ export class NavPipelineOrchestrator {
 				targetIndex: null,
 				coverProgress: 0,
 				transitionTarget: null,
-				trackFractionalIndex: fromIdx
+				trackFractionalIndex: fromIdx,
+				committed: null
 			});
-			return;
+		} else {
+			const fromIdx = inputs?.fromTabIndex ?? -1;
+			// Deep page at rest (Family B without centerTab): no pill highlight
+			// (fromTabIndex is -1 for routes with no tab association), active:
+			// false so the FAB falls back to the URL-derived tab index,
+			// backMorph: 0 so the Header is in normal (hamburger) mode.
+			pager.set({
+				fractionalIndex: fromIdx,
+				dragging: false,
+				active: false,
+				backMorph: 0,
+				targetIndex: null,
+				coverProgress: 0,
+				transitionTarget: null,
+				committed: null
+			});
 		}
-		// Deep page at rest (Family B without centerTab): no pill highlight
-		// (fromTabIndex is -1 for routes with no tab association), active:
-		// false so the FAB falls back to the URL-derived tab index,
-		// backMorph: 0 so the Header is in normal (hamburger) mode.
-		pager.set({
-			fractionalIndex: fromIdx,
-			dragging: false,
-			active: false,
-			backMorph: 0,
-			targetIndex: null,
-			coverProgress: 0,
-			transitionTarget: null,
-			committed: null
-		});
+		// At-rest maintenance: capture the FAB's resting scale against the
+		// just-published at-rest signals so the next route-swap family-change
+		// ease anchors at the visible scale. Skipped during configure
+		// (#mounted is still false here; configure sets it true after
+		// #detectFamilyChange) because the ease must anchor at the pre-swap
+		// scale captured by releaseInputs, not the destination route's
+		// at-rest scale. Skipped while the family-swap ease runs (its tick
+		// maintains #lastRenderedScale at the eased value).
+		if (this.#mounted && this.#familySwapRafId === undefined) {
+			this.#lastRenderedScale = this.#computeFabRestingScale();
+		}
 	}
 
 	/** Refresh the from-pathname (and from-tag) after a same-host route
@@ -1409,12 +2405,17 @@ export class NavPipelineOrchestrator {
 
 	/** Republish the current publication to the pager store. Three modes:
 	 *
-	 *  Thread mode (centerTab set): publishes `backMorph: null,
-	 *  targetIndex: null, fractionalIndex: centerTab` (constant) so the
-	 *  Header stays in back-arrow mode and the tab-bar pill stays
-	 *  highlighted at centerTab throughout the gesture. `coverProgress`
-	 *  is the raw slide fraction; the FAB layer resolves the
-	 *  destination's family/kind to decide whether the FAB scales in.
+	 *  Thread mode (centerTab set): publishes `backMorph: null` so the
+	 *  Header stays in root mode (hamburger + tab bar - centerTab routes
+	 *  carry a pillTarget, so `resolveHeaderMode` returns 'root', not
+	 *  'deep'). The tab-bar pill interpolates from `centerTab` toward the
+	 *  gesture's target tab (a tab-click exit to a different tab) so the
+	 *  highlight tracks the slide instead of jumping at landing; for a
+	 *  same-tab back-swipe the target equals `centerTab` so the pill
+	 *  holds. `targetIndex` stays null (the pill uses the fractionalIndex
+	 *  path, not the deep-swipe path). `coverProgress` is the raw slide
+	 *  fraction; the FAB layer resolves the destination's family/kind to
+	 *  decide whether the FAB scales in.
 	 *
 	 *  Tab-host mode (no centerTab, bidirectional): interpolates
 	 *  `fractionalIndex` between `fromTabIndex` and `toTabIndex`
@@ -1440,8 +2441,19 @@ export class NavPipelineOrchestrator {
 		const centerTab = inputs?.centerTab;
 		const coverProgress = rawDragFraction;
 		if (centerTab !== undefined) {
+			// The pill interpolates from centerTab toward the gesture's
+			// target tab so a tab-click exit to a different tab tracks the
+			// slide (a same-tab back-swipe targets centerTab, so the pill
+			// holds). backMorph stays null so the Header does not morph
+			// (centerTab routes are in root mode end to end); targetIndex
+			// stays null so the pill uses the fractionalIndex path.
+			const toIdx = this.#gestureToTabIndex ?? -1;
+			const pillProgress =
+				toIdx >= 0
+					? Math.max(0, rawDragFraction - PILL_EXPANSION_THRESHOLD) / (1 - PILL_EXPANSION_THRESHOLD)
+					: 0;
 			pager.set({
-				fractionalIndex: centerTab,
+				fractionalIndex: toIdx >= 0 ? centerTab + (toIdx - centerTab) * pillProgress : centerTab,
 				dragging: publication.inFlight && this.#liveDragging,
 				active: true,
 				backMorph: null,
@@ -1449,6 +2461,15 @@ export class NavPipelineOrchestrator {
 				coverProgress,
 				transitionTarget: publication.toPathname
 			});
+			// Track the FAB's resting scale against the just-published
+			// signals so the next route-swap family-change ease anchors at
+			// the visible pre-swap scale (the orchestrator is the sole
+			// owner of this tracking). Skipped while the family-swap ease
+			// runs (its tick maintains #lastRenderedScale at the eased
+			// value; a parallel slide publication must not overwrite it).
+			if (this.#familySwapRafId === undefined) {
+				this.#lastRenderedScale = this.#computeFabRestingScale();
+			}
 			return;
 		}
 		// No centerTab: tab host (bidirectional) or deep page. Both modes
@@ -1483,24 +2504,50 @@ export class NavPipelineOrchestrator {
 			transitionTarget: publication.toPathname,
 			trackFractionalIndex: trackFrac
 		});
+		// Track the FAB's resting scale against the just-published signals
+		// (see the centerTab branch above for rationale + the ease-running
+		// guard).
+		if (this.#familySwapRafId === undefined) {
+			this.#lastRenderedScale = this.#computeFabRestingScale();
+		}
 	}
 }
 
-/** The module singleton. The host constructs a fresh orchestrator on
- *  each mount and assigns it via `setNavPipelineOrchestrator`;
- *  `+layout.svelte` reads it via `getNavPipelineOrchestrator` so the
- *  SvelteKit nav hooks reach the active orchestrator. */
+/** The global singleton orchestrator. Constructed eagerly at module
+ *  load so its `$state` / `$derived` fields bind to the module scope
+ *  rather than the first host's component context (Svelte 5 rune
+ *  ownership: reactive fields instantiated inside a component script
+ *  are tied to that component and turn inert on its destroy, surfacing
+ *  as `derived_inert` warnings and stale reads on the next host). One
+ *  instance is shared by every mobile host for the app's lifetime. */
+const globalOrchestrator: NavPipelineOrchestrator = new NavPipelineOrchestrator();
+
+/** Get the global singleton orchestrator. Every mobile host
+ *  (`NavPipelineHost` / `NavPipelineTabHost`) shares this instance; a
+ *  route swap rebinds the inputs in place via `configure` /
+ *  `releaseInputs` without reconstructing. */
+export function getGlobalNavPipelineOrchestrator(): NavPipelineOrchestrator {
+	return globalOrchestrator;
+}
+
+/** The active-slot pointer. With the global singleton, this is either the
+ *  singleton (a host has called `configure`) or null (between
+ *  `releaseInputs` and the next `configure`). `+layout.svelte` reads it via
+ *  `getNavPipelineOrchestrator` so the SvelteKit nav hooks skip processing
+ *  during the gap frame. */
 let active: NavPipelineOrchestrator | null = null;
 
-/** Get the active orchestrator (or null if no host is mounted). */
+/** Get the active orchestrator (or null during the gap between
+ *  `releaseInputs` and the next `configure`). */
 export function getNavPipelineOrchestrator(): NavPipelineOrchestrator | null {
 	return active;
 }
 
-/** Set the active orchestrator (a mount). A non-null `orch` displaces any
- *  prior active. Pass the host's own orchestrator to
- *  `releaseNavPipelineOrchestrator` on destroy / desktop-unmount (not
- *  null) so a newer mount that landed first is not orphaned. */
+/** Set the active orchestrator (a host has called `configure`). With the
+ *  shared singleton the displacing-unmount branch never fires
+ *  (`active === orch` always holds when both come from
+ *  `getGlobalNavPipelineOrchestrator`); the branch is retained for the
+ *  in-process test path that constructs orchestrators directly. */
 export function setNavPipelineOrchestrator(orch: NavPipelineOrchestrator | null): void {
 	if (orch !== null && active !== null && active !== orch) {
 		active.unmount();
@@ -1508,16 +2555,17 @@ export function setNavPipelineOrchestrator(orch: NavPipelineOrchestrator | null)
 	active = orch;
 }
 
-/** Release the active slot iff it still points at `orch` (a host's destroy
- *  / desktop-unmount). Identity-checked so a newer mount is not cleared by
- *  an older host's teardown. */
+/** Release the active slot iff it still points at `orch` (a host's
+ *  destroy). With the shared singleton both hosts hold the same instance,
+ *  so the identity check distinguishes the destroy-the-current-host case
+ *  from a newer host that has already configured. */
 export function releaseNavPipelineOrchestrator(orch: NavPipelineOrchestrator): void {
 	if (active === orch) {
 		active = null;
 	}
 }
 
-/** Test-only: clear the singleton. */
+/** Test-only: clear the active slot. */
 export function __resetNavPipelineOrchestrator(): void {
 	active = null;
 }

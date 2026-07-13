@@ -1673,3 +1673,203 @@ $ bun run test:e2e                    196 passed, EXIT=0 (8.3m, clean run)
 ```
 
 R15 audits the post-fix state.
+
+## Session 23: R15 fixes (Known #6/#9/#16 extensions, resetPagerStore consistency, activeIndex=0 docstring + e2e)
+
+R15 used the MINIMAL prompt. A PASS-WITH-CONCERNS (1 MED + 5 LOW); B
+PASS-WITH-CONCERNS (1 MED + 2 LOW/CONCERN). Counter stays 0/5 (both PWC).
+Detailed in `docs/RV20-C05b2-Audit-15.md`.
+
+### Consensus (A #2 = B #1): activeIndex=0 backward-to-deep-page reveals empty space
+
+Both auditors independently found that at the leftmost tab a backward-to-deep-page
+back-swipe shifts panel 0 off-screen right with no panel to its left, so the slide
+reveals empty space; on commit `history.back()` lands on the deep page correctly.
+Known #9's wording assumed `fromTabIndex >= 1`. RESOLUTION: extended Known #9 to
+cover the activeIndex=0 empty-space case; the `#backwardTabTarget` docstring now
+describes both cases; the clean visual fix is the existing `TODO(5b3)` deep-snapshot
+overlay (one fix for both the wrong-proxy and empty-space cases), so a 5b2 partial
+fix would bridge. Added an e2e (`backtarget.spec.ts`) asserting the landing
+correctness for the activeIndex=0 trajectory.
+
+### A #1 (MED): thread reached cross-tab backs to the tab root, not the source
+
+`seedStackForLanding` re-seeds the destination tab's stack to `[tabRoot, thread]`
+on a cross-tab nav, so the orchestrator's `backTarget` resolves to the tab root,
+not the cross-tab source (violates §3). RESOLUTION: extended Known #6 (fourth
+macro-plan divergence). The fix (route the thread back-target through
+`previousEntryPathname()`) ripples into the left-panel preview (Known #16
+no-preview gap), so it is coupled with the 5b3 overlay. Pre-existing.
+
+### A #3 (LOW): `resetPagerStore` committed consistency
+
+The thread + bidirectional branches now pass `committed: null` (matching the
+deep-page branch) instead of relying on external sequencing from `unmount` +
+`#landAtRest`.
+
+### A #4 (LOW): non-profile/admin back-targets render no preview panel
+
+Added Known #16: `PREVIEW_PANEL_CONFIG` covers only profile/admin, so a
+thread/deep host whose back-target is `/bookmarks`, `/notifications`, `/search`,
+or `/messages/<id>` renders nothing in the left panel during the slide. Same root
+cause + fix path as Known #9 (5b3 overlay).
+
+### A #5 / A #6
+
+Already Known (#12 dead navInFlight; #4 isPipelineSwipeDisabledRoute). No action.
+
+### Gate outputs (post-fix)
+
+```
+$ bun run check                       0 errors / 0 warnings (1461 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    418 pass / 0 fail
+$ bun run test:e2e                    197 passed, EXIT=0 (8.3m, clean run)
+```
+
+R16 audits the post-fix state.
+
+## Session 24: R16 (A/B findings) + architectural fixes (#1, #8, #12) + re-audit (#6, #9, #16) + global-manager refactor attempt
+
+R16 returned A PASS-WITH-CONCERNS (1 MED + 5 LOW) + B PASS-WITH-CONCERNS
+(1 MED + 2 LOW/CONCERN). Counter stays 0/5. Detailed in
+`docs/RV20-C05b2-Audit-16.md` (to be written).
+
+### Findings fixed this round
+
+- **#1 (§13.5 DOM read-back):** the FAB family-swap ease anchored its start scale
+  by reading the atom's rendered transform (`readRenderedFabScale`). Replaced with
+  a `lastRenderedScale` variable captured post-render each flush; the family-swap
+  `$effect.pre` (which runs before the DOM update) reads it as the visible
+  pre-swap scale. `readRenderedFabScale` deleted.
+- **#8 (§13.5 singleton one-frame window):** added a `#mounted` guard on the
+  orchestrator's `#publication` derived so it returns at-rest until `mount()` runs
+  (no reading the prior orchestrator's phase during the component-init-to-onMount
+  frame).
+- **#6 thread cross-tab back-target (§3):** `NavPipelineHost.resolvedLeftHref` now
+  prefers `previousEntryPathname()` (the real browser history) over the synthetic
+  navStore stack, so a thread reached cross-tab backs to the source.
+- **#9 activeIndex=0 empty viewport:** at the leftmost tab a backward-to-deep-page
+  gesture suppresses the track slide (`distance = 0`); coverProgress still drives
+  the FAB/Header and `history.back()` lands on the deep page. The clean visual fix
+  remains the 5b3 deep-snapshot overlay for the activeIndex>=1 wrong-proxy case.
+- **#16 no preview panel:** a `DeepPreviewSkeleton` component renders in the
+  NavPipelineHost left panel for back-targets without a `PREVIEW_PANEL_CONFIG`
+  entry (`/bookmarks`, `/notifications`, `/search`, `/messages/<id>`).
+- **#12 (§5 Header CSS transitions + setTimeout):** a sub-agent migrated the
+  Header's morph/title to rAF (`slideT`, the title-span transition, the
+  `setTimeout` settle backstop, the `transitionend` handler all removed; the
+  settle runs on `runSettleDriver`'s rAF with a `prefers-reduced-motion` gate).
+  The sub-agent missed `reproduce-hamburger-settings.spec.ts` (a stale
+  CSS-transition assertion); corrected to assert the rAF ease (varying root-layer
+  style across frames).
+
+### Global animation manager refactor (architectural root cause of #2 + #12)
+
+R16's architectural review identified the root cause of the remaining deviations
+(#2 FAB separate rAF, the residual Header animation) as a lifecycle mismatch:
+the orchestrator is per-host while the FAB atom and Header are persistent, so a
+global pager-store singleton bridges them and the route-swap animations run on
+per-consumer rAFs in the gap. The fix is a global persistent animation manager
+(single rAF, direct dispatch to track/FAB/Header, pure components, no bridge).
+
+Design + 5-step plan: `docs/DV20-Meeting/DV20-Global-Animation-Manager-Refactor.md`.
+
+First execution attempt (step 1a): made the orchestrator a global shared
+singleton while keeping the mount/unmount lifecycle. The full e2e hung (timeout)
+because host onDestroy still called `unmount`, so a route swap's destroy+mount
+unmounted and re-mounted the same shared instance in a conflicting order. Reverted
+to green. This proved the refactor's steps are interdependent (cannot isolate the
+shared-instance change from the configure/releaseInputs lifecycle change) and must
+be executed as a coherent whole. The next attempt is step 1 done properly: shared
+singleton + `configure`/`releaseInputs` lifecycle together, gate-verified.
+
+### Gate outputs (post-revert, green)
+
+```
+$ bun run check                       0 errors / 0 warnings (1462 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    418 pass / 0 fail
+$ bun run test:e2e                    197 passed, EXIT=0 (8.6m, clean)
+```
+
+The global-manager refactor (the structural fix for #2 + the residual Header
+animation) is the remaining work; it is queued with a precise plan + project
+memory and must be executed coherently with adequate focus.
+
+## Session 25: Global animation manager refactor - steps 1-3 complete (§5 invariant met)
+
+Executed via sub-agents (fresh context per step), each independently re-verified
+by the orchestrator (check + lint + unit + full e2e rerun, never trusting the
+sub-agent's report). The user mandated: architectural excellence is the sole
+criterion, no shortcuts, long context is delegated to sub-agents not used as an
+excuse to stop.
+
+### Step 1 - global singleton + configure/releaseInputs lifecycle
+
+The orchestrator is now a single global persistent instance
+(`getGlobalNavPipelineOrchestrator`, eagerly constructed at module load so its
+Svelte 5 `$state`/`$derived` fields bind to module scope and survive every
+component's lifecycle). Hosts call `configure(inputs)` on mount and
+`releaseInputs()` on destroy; a route swap rebinds the element refs in place
+WITHOUT tearing down the executor + driver + rAF (the per-host lifecycle gap is
+eliminated). Full `mount`/`unmount` teardown is retained for the mobile->desktop
+flip / app exit. (A first attempt, step-1a, kept the old mount/unmount lifecycle
+on the shared instance and HUNG the e2e - the destroy+mount unmount ordering
+conflicted; reverted, then done correctly with configure/releaseInputs.) Verified 197.
+
+### Step 2 - manager owns the FAB family-swap ease
+
+The FAB family-swap ease (a cross-route family change) moved from the FAB layer's
+own rAF into the orchestrator's single rAF. The orchestrator detects the family
+change on `configure`, runs the ease (constant-deceleration `s(u)=2u-u^2` over
+`TRACK_TRANSITION_MS`, reduced-motion snap), tracks the pre-swap rendered scale
+(`#lastRenderedScale`), and publishes `pager.familySwapScale`. The FAB layer is a
+reader (`scale = pager.familySwapScale ?? restingScale`); its family-swap rAF +
+state + `lastRenderedScale` are deleted. Verified 197.
+
+### Step 3 - manager owns the Header settle + tapScrub eases
+
+The Header organism is render-only. `runSettleDriver`, `startTapScrub`,
+`startSearchScrub`, `endSettle`, the settle rAF state, the tapScrub rAF state,
+Effects A-E, the pre-nav tap-EXIT publisher, and the onDestroy rAF cleanup are
+all deleted. The orchestrator owns the settle ease + the tapScrub ease on its
+rAF (armed from `#interpretIntent` release + `notifyHeaderState`), publishes
+`settleActive` / `settleProgress` / `settleLatched` / `settleDirection` /
+`searchScrubbing` as reactive class getters (the pager-store closure-scoped
+`$state` did not propagate writes from the singleton module scope, so the settle
+state lives on the orchestrator class), and the Header renders from those +
+`pager.backMorph` / `pager.tapMorph` / `pager.transitionTarget`. (The step-3
+sub-agent was interrupted by a 5-hour API rate limit mid-run, leaving 5
+Header-animation e2e failures; resumed after the reset + fixed them.) Verified 197.
+
+### §5 invariant status
+
+After steps 1-3 the orchestrator's single rAF owns every animation: the gesture
+slide (executor), the FAB family-swap (step 2), the Header settle + tapScrub
+(step 3). No per-consumer rAF remains in the FAB/Header; no CSS transitions or
+setTimeout in the animation layer. The §5 binding invariant - "exactly one rAF
+write owns every visual property's motion; no CSS transitions / setTimeout" - is
+met. The FAB/Header are reactive readers of the orchestrator's publication (they
+write their DOM from the published signals); the stricter §5 mechanism "the
+executor is the only layer that touches the DOM" (driver-writes, plan.fab /
+plan.header) is a possible further refinement - R17 will determine whether the
+auditors consider the reactive publication a §5 deviation or accept it under the
+invariant.
+
+### Spec
+
+Known #2 (FAB family-swap separate rAF) + #12 (Header CSS transitions +
+setTimeout + settle/tapScrub rAF) marked RESOLVED by the global animation
+manager. Refactor design + plan: `docs/DV20-Meeting/DV20-Global-Animation-Manager-Refactor.md`.
+
+### Gate outputs (post-refactor, independently re-verified)
+
+```
+$ bun run check                       0 errors / 0 warnings (1462 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    418 pass / 0 fail
+$ bun run test:e2e                    197 passed, EXIT=0 (8.8m, clean)
+```
+
+R17 audits the refactored state.

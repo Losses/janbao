@@ -221,5 +221,48 @@ test('Bug4: global page (search) back-swipe shows the Discussions preview panel 
 	expect(metrics.hasOverlay, 'no loading overlay should be visible').toBe(false);
 });
 
+/**
+ * activeIndex=0 backward-to-deep-page trajectory. Land on `/bookmarks` (a deep
+ * page, not a tab root), tap the discussions tab to navigate to `/` (now the
+ * leftmost tab, activeIndex=0, with `/bookmarks` as the previous history
+ * entry), then commit a rightward back-swipe. The CONTRACT being asserted is
+ * the landing: history.back() must return to the deep page (`/bookmarks`), not
+ * pop a tab. The in-slide visual proxy is intentionally imperfect here -
+ * Known #9: at the leftmost tab there is no panel to the left, so the slide
+ * reveals empty space; the 5b3 deep-snapshot overlay is the planned fix. This
+ * test asserts only the landing URL, not the proxy visual.
+ */
+test('activeIndex=0 backward-to-deep-page: back-swipe on / commits to prior deep history entry (/bookmarks)', async ({ page, context }) => {
+	await prepareContext(context);
+
+	// 1. Land on a deep page that is NOT a tab root. `/bookmarks` becomes the
+	//    previous history entry after the tab tap below.
+	await page.goto('/bookmarks');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+
+	// 2. SPA-navigate to `/` (the discussions tab root). On a deep page the
+	//    Header's tab bar is faded (the title layer covers the tab links), so
+	//    drive the nav via the dev goto hook, which fires the same SvelteKit
+	//    navigation a tab tap does. The orchestrator consumes the tab-root
+	//    target and `#dispatchNav('/')` pushes `/` (`hopForHref` returns 'push'
+	//    on the deep-linked single-entry history), giving history
+	//    `[/bookmarks, /]`: activeIndex=0 with `/bookmarks` as the previous
+	//    entry - the `backSwipeShouldPopHistory` precondition.
+	await openSidebarAndGoto(page, '/');
+	await page.waitForTimeout(300);
+
+	// 3. Rightward back-swipe past the commit threshold (dx=260 > SWIPE_COMMIT).
+	//    swipeBack drives a real CDP touch swipe, the only path detectSwipe
+	//    recognises (it rejects pointerType 'mouse').
+	await swipeBack(page);
+
+	// 4. The gesture commits and history.back() lands on `/bookmarks` (the deep
+	//    previous entry), proving the activeIndex=0 path pops history rather
+	//    than switching to a (non-existent) panel to the left.
+	await page.waitForURL('/bookmarks');
+	expect(new URL(page.url()).pathname).toBe('/bookmarks');
+});
+
 
 

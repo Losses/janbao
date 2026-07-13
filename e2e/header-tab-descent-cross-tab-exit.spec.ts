@@ -6,30 +6,21 @@ import { prepareContext, waitForHydration } from './helpers';
  *
  * The mobile Header's tabs layer sits at translateY(-100%) on a deep page and
  * descends to translateY(0%) when the route returns to a tab route (the "Tab
- * descent" animation). The descent is a CSS `transform 200ms ease-out` transition
- * on the layer; the value it animates toward is `morph`, derived in Header.svelte.
- *
- * The layer transition (`slideT` in Header.svelte) suppresses only during a live
- * drag or a root↔search tap scrub, where `morph` is driven 1:1 by the finger or
- * the scrubber. It does not suppress during an in-flight navigation, so the
- * back-to-tab landing descent animates the same way as the forward direction.
- * This is branch-agnostic: both NavPipelineHost exit branches (same-panel slide
- * and cross-tab chip) call setPendingNav → executePendingNav → navInFlight at the
- * landing, and the tabs layer animates there in both.
- *
- * The forward direction (tab route → deep page, e.g. /messages/inbox →
- * /bookmarks) animates the same way: the tab route does not mount
- * NavPipelineHost, navInFlight is never set, and the Effect-C settle drives
- * morph with the transition enabled.
+ * descent" animation). The descent is rAF-driven: on the post-landing title
+ * change Effect C arms a settle and `runSettleDriver`'s rAF interpolates
+ * `settleProgress` 0→1 with the constant-deceleration ease `2u - u²` over
+ * TITLE_CROSSFADE_MS. The morph derivation reads `settleProgress` directly and
+ * the layer transform follows `morph` 1:1, so the descent animates through real
+ * intermediate values every frame. No CSS transition is involved.
  *
  * Tests:
  *   - CALIBRATION: documents the symmetry - the forward and the back landing
- *     flushes both keep the CSS transition (slideT !== 'none'), sampled via the
- *     internal per-flush probe window.__headerMorphProbe. navInFlight is asserted set
- *     at the back landing as a witness that the slideT gate is independent of
- *     the navInFlight signal.
+ *     flushes both arm a settle (settling === true at the flush, with the
+ *     rAF mid-animation), sampled via the internal per-flush probe
+ *     window.__headerMorphProbe. navInFlight is asserted at the back landing as
+ *     a witness that the rAF settle is independent of the navInFlight signal.
  *   - DEFECT: across multiple messages↔bookmarks cycles the back landing flush
- *     must keep the transition (the gate never suppresses at a tab-root landing).
+ *     must arm a settle (the rAF owns the descent, never a static snap).
  */
 
 test.beforeEach(async ({ context }) => {
@@ -55,7 +46,6 @@ interface HeaderSnap {
 	t: number;
 	path: string;
 	morph: number;
-	slideT: string;
 	settling: boolean;
 	currentHasTabs: boolean;
 	navInFlight: boolean;
@@ -136,7 +126,7 @@ function pathChangeIndices(frames: SettleFrame[]): number[] {
 interface LandingFlush {
 	t: number;
 	morph: number;
-	slideNone: boolean; // slideT contained 'none' at this flush
+	settling: boolean; // the rAF settle owns the descent at this flush
 	navInFlight: boolean;
 }
 
@@ -155,7 +145,7 @@ function landings(snaps: HeaderSnap[], dir: 'in' | 'out'): LandingFlush[] {
 		out.push({
 			t: snaps[i].t,
 			morph: snaps[i].morph,
-			slideNone: snaps[i].slideT.includes('none'),
+			settling: snaps[i].settling,
 			navInFlight: snaps[i].navInFlight
 		});
 	}
@@ -235,16 +225,16 @@ test('CALIBRATION: forward and back descents both keep their transition (documen
 
 	expect(fwdLanding, 'forward landing flush captured').toBeDefined();
 	expect(backLanding, 'back landing flush captured').toBeDefined();
-	// Symmetry: forward and back both keep the CSS transition at the landing
-	// flush. navInFlight is set at the back landing (the slideT gate does not
-	// read navInFlight; executePendingNav sets it regardless) - asserted as a
-	// witness that the gate is independent of the navInFlight signal.
-	expect((fwdLanding as LandingFlush).slideNone, 'forward landing keeps the transition').toBe(false);
-	expect((backLanding as LandingFlush).slideNone, 'back landing keeps the transition').toBe(false);
+	// Symmetry: forward and back both arm a settle at the landing flush (the
+	// rAF owns the descent, no static snap). navInFlight is not set at the back
+	// landing (the pipeline publishes pager.committed instead) - asserted as a
+	// witness that the rAF settle is independent of the navInFlight signal.
+	expect((fwdLanding as LandingFlush).settling, 'forward landing arms the settle rAF').toBe(true);
+	expect((backLanding as LandingFlush).settling, 'back landing arms the settle rAF').toBe(true);
 	expect((backLanding as LandingFlush).navInFlight, 'pipeline does not set navInFlight (replaced by pager.committed)').toBe(false);
 });
 
-test(`DEFECT: back descent from a NavPipelineHost deep page to a tab route must not suppress the transition at landing (${BACK_CYCLES} cycles)`, async ({
+test(`DEFECT: back descent from a NavPipelineHost deep page to a tab route must arm the settle rAF at landing (${BACK_CYCLES} cycles)`, async ({
 	page
 }) => {
 	await page.goto('/messages/inbox');
@@ -266,28 +256,28 @@ test(`DEFECT: back descent from a NavPipelineHost deep page to a tab route must 
 
 	console.log(`observed ${backObserved} back path-changes, ${backIn.length} back landing flushes`);
 	for (const l of backIn) {
-		console.log(`  back landing t=${Math.round(l.t)} morph=${l.morph.toFixed(2)} slideNone=${l.slideNone} navInFlight=${l.navInFlight}`);
+		console.log(`  back landing t=${Math.round(l.t)} morph=${l.morph.toFixed(2)} settling=${l.settling} navInFlight=${l.navInFlight}`);
 	}
 
 	expect(backIn.length, 'captured a back landing flush per cycle').toBeGreaterThanOrEqual(BACK_CYCLES - 1);
 
-	// The slideT gate must not suppress at a back-to-tab landing flush, so the
-	// descent animates. navInFlight is set at every GPL exit landing; the slideT
-	// gate does not read it (the CALIBRATION `navInFlight===true` witness confirms
-	// the signal is set at the landing).
-	const suppressed = backIn.filter((l) => l.slideNone);
+	// The settle rAF must be armed at every back-to-tab landing flush so the
+	// descent animates rather than snapping. A regression that drops Effect C's
+	// settle arming on a tab-root landing (or zero-settling-at-landing because
+	// the rAF already finished pre-nav) lands a `settling === false` here.
+	const notSettling = backIn.filter((l) => !l.settling);
 	expect(
-		suppressed.length,
-		`back landing must keep slideT animated (not 'none'). ${suppressed.length}/${backIn.length} landings suppressed the transition`
+		notSettling.length,
+		`back landing must arm the settle rAF. ${notSettling.length}/${backIn.length} landings had settling=false (snap to rest)`
 	).toBe(0);
 
 	// Trajectory: the descent must animate through real intermediate computed
-	// translateY values, not a single-frame jump. The `slideNone` check above
-	// proves the transition is enabled (the string is not 'none'); this proves the
-	// tabs layer actually moved. A regression where slideT stays '200ms' but the
-	// transform commits in a single frame (zero intermediate delta) leaves zero
-	// values in the (-38, -2) px band and fails here. `installSampler` records the
-	// live m42 every animation frame.
+	// translateY values, not a single-frame jump. The `settling` check above
+	// proves the rAF owns the descent; this proves the tabs layer actually moved.
+	// A regression where settling is true but the rAF never publishes intermediate
+	// `settleProgress` values (zero intermediate delta) leaves zero values in the
+	// (-38, -2) px band and fails here. `installSampler` records the live m42
+	// every animation frame.
 	const intermediatePx = new Set<number>();
 	for (const f of frames) {
 		const px = f.rootComputedPx;

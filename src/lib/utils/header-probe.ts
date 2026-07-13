@@ -2,7 +2,7 @@
  * DEV-ONLY Header morph-state probe sink.
  *
  * Header.svelte pushes a per-flush snapshot of its tab-morph state machine
- * (morph / slideT / settling / navInFlight / ...) to window.__headerMorphProbe on every
+ * (morph / settling / navInFlight / ...) to window.__headerMorphProbe on every
  * reactive flush (gated on DEV + browser, so it never ships). An e2e sampler
  * reads the log to correlate a tabs-layer jump with the exact derived values
  * that produced it. The per-flush cadence is paint-independent: it captures the
@@ -30,7 +30,6 @@ export interface HeaderStateSnapshot {
 	t: number;
 	path: string;
 	morph: number;
-	slideT: string;
 	rootLayerStyle: string;
 	layerDownStyle: string;
 	settling: boolean;

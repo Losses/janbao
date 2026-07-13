@@ -67,7 +67,17 @@ test.describe('Hamburger to Arrow back animation stutter bug', () => {
 		expect(transitionFrame.titleTexts).toContain('账号设置');
 		expect(transitionFrame.titleTexts).toContain('');
 
-		// 2. The transition styles must not be disabled during this slide (no transition: none on rootLayer)
-		expect(transitionFrame.rootLayer).toContain('transition: transform 200ms ease-out');
+		// 2. The morph animates via the Header's rAF settle (no CSS transition on
+		// the root layer): the root layer's style must vary across the sampled
+		// frames, proving the rAF publishes intermediate morph values (no sudden
+		// snap / jump).
+		const rootLayerStyles = states
+			.filter((s) => s && typeof s.rootLayer === 'string' && s.rootLayer.length > 0)
+			.map((s) => s.rootLayer);
+		const uniqueRootLayers = new Set(rootLayerStyles).size;
+		expect(
+			uniqueRootLayers,
+			'the morph must animate (varying root-layer style) across the back navigation'
+		).toBeGreaterThan(3);
 	});
 });
