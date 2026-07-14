@@ -17,7 +17,6 @@ import {
 	countEntries,
 	enforceCap,
 	evictExpired,
-	findLatestWithSnippet,
 	invalidateEntries,
 	readEntry,
 	serializeKey,
@@ -225,33 +224,6 @@ describe('PageCacheStore logic: entry cap', () => {
 		capture(state, '/b', undefined, { data: 2 }, 1100);
 		enforceCap(state, 5);
 		expect(countEntries(state)).toBe(2);
-	});
-});
-
-describe('PageCacheStore logic: latest with snippet', () => {
-	test('returns null when no entry has a snippet', () => {
-		const state = newState();
-		capture(state, '/a', undefined, { data: 1 });
-		expect(findLatestWithSnippet(state)).toBeNull();
-	});
-
-	test('returns the entry whose capture included a snippet', () => {
-		const state = newState();
-		const snippet = (() => {}) as never;
-		capture(state, '/a', undefined, { data: 1 });
-		capture(state, '/b', undefined, { data: 2, snippet }, 1100);
-		const latest = findLatestWithSnippet(state);
-		expect(latest?.data).toEqual(2);
-	});
-
-	test('returns the most recent when multiple entries have snippets', () => {
-		const state = newState();
-		const s1 = (() => {}) as never;
-		const s2 = (() => {}) as never;
-		capture(state, '/a', undefined, { data: 1, snippet: s1 }, 1000);
-		capture(state, '/b', undefined, { data: 2, snippet: s2 }, 2000);
-		const latest = findLatestWithSnippet(state);
-		expect(latest?.data).toEqual(2);
 	});
 });
 

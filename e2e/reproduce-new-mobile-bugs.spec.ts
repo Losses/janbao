@@ -236,11 +236,10 @@ test.describe('Compose-as-module-child fix (FAB, Messages, chip)', () => {
 			await page.waitForURL('/post/discussion');
 		});
 		// DV20 5b2 Phase 1: the discrete list -> compose family swap is eased by
-		// the FAB layer's rAF family-swap ease (the inline scale advances each
-		// frame), not the `.fab-transition` CSS class (armed only for a GPL
-		// `pendingNav` exit slide). The behavioural guard is `animated`
-		// (scale delta > 0.1); the class-active `transitionFrames` signal no
-		// longer fires for this discrete swap.
+		// the orchestrator's per-frame publication of `pager.familySwapScale`
+		// (the inline scale advances each frame via the FAB layer's reactive
+		// `style:transform` binding). The FAB atom carries no CSS transition
+		// directive. The behavioural guard is `animated` (scale delta > 0.1).
 		expect(cap.animated, 'FAB atom scale eased across the swap').toBe(true);
 	});
 

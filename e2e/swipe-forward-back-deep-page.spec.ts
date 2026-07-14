@@ -385,9 +385,9 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 			loadingChip: !!document.querySelector('.loading-overlay')
 		}));
 		await held.release();
-		// The thread renders NavPipelineHost, not MobileTabPager, so the tab
-		// pager's back chip is structurally impossible here.
-		expect(has.backChip, 'the MobileTabPager back chip must never appear on a thread').toBe(false);
+		// The thread renders NavPipelineHost, not the tab host, so the tab
+		// host's back chip is structurally impossible here.
+		expect(has.backChip, 'the back chip must never appear on a thread').toBe(false);
 		// Discussions cache is warm (we came from `/`), so NavPipelineHost's own
 		// loading chip must not show either - the real discussions preview does.
 		expect(has.loadingChip, 'no loading chip on a warm-cache thread back-swipe').toBe(false);

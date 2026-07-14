@@ -130,24 +130,6 @@ export function invalidateEntries(state: PageCacheState, pathname?: string, subK
 	delete state[key];
 }
 
-/**
- * The most recent entry whose capture included a `snippet`. The only consumer
- * is the dead `MobileTabPager`'s deep-page back-swipe preview (MobileTabPager
- * is unmounted, pending 5b3 deletion), which does not know the destination
- * thread's pathname at gesture start. Returns
- * `null` when no snippet has been captured. O(N) where N is bounded
- * by the entry cap.
- */
-export function findLatestWithSnippet(state: PageCacheState): CapturedEntry | null {
-	let latest: CapturedEntry | null = null;
-	for (const entry of Object.values(state)) {
-		if (entry.snippet && (!latest || entry.capturedAt > latest.capturedAt)) {
-			latest = entry;
-		}
-	}
-	return latest;
-}
-
 /** Evict entries whose `capturedAt` is older than the TTL. */
 export function evictExpired(state: PageCacheState, ttlMs: number, now: number): void {
 	const threshold = now - ttlMs;

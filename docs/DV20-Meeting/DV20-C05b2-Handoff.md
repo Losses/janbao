@@ -1,100 +1,149 @@
 # DV20 Cycle 5b2 - Handoff Document
 
-**Date:** 2026-07-12 (updated end-of-session). **For:** the next agent continuing
-the DV20 5b2 audit loop.
+**Date:** 2026-07-14. **For:** the next agent continuing the DV20 5b2 audit loop.
+**Status:** R1-R23 complete + all fixes applied. Counter: 0/5 (no clean round
+yet). R24 auditors were launched but hit the 5-hour API rate limit; re-launch
+them after 2026-07-14 19:03.
 
-## Current state
+## 1. The user's design vision (READ THIS FIRST)
 
-DV20 Cycle 5b2: every route that was on `GesturePageLayout` or `MobileTabPager`
-mounts `NavPipelineHost` or `NavPipelineTabHost`. The new pipeline (all-rAF
-executor, unified following-visual model, state-machine authority) is the SOLE
-transition mechanism for every mobile route.
+The user described their animation architecture vision early in the session:
 
-**Audit loop progress: R1-R14 complete. Counter: 0/5 (no clean round yet).**
-R15 is the next audit round. The convergence trend is favorable: R13 returned one
-HIGH (re-traced down to MED) + comment concerns; R14 returned one MED (a real
-gap in the R13 fix, now fixed) + LOW concerns. No HIGH in R14. The findings are
-shrinking each round.
+> Global animation manager computes the plan, dispatches progress (0..1) to each
+> component, each component computes its own visual values from the progress.
+> Interruption: rollback = reverse-play; new target = finish the current then
+> play the new (or accelerate the remainder).
 
-**Gate (green, re-verified R14 post-fix):**
+This is the architecture. It is NOW implemented:
 
-- `bun run check`: 0 errors / 0 warnings (1461 files)
-- `bun run lint`: EXIT=0
-- `bun test src/lib/utils src/lib/stores`: 418 pass / 0 fail
-- `bun run test:e2e`: 196 passed, EXIT=0 (clean run, 8.3m)
+- The orchestrator (a global persistent singleton) owns a single set of rAF
+  channels (executor gesture slide, family-swap, settle, tap-scrub). Each owns
+  one motion channel.
+- It publishes progress signals (via the pager store + the state machine's
+  reactive getters) to the FAB layer, the Header, the MobileTabBar, the
+  SearchTabBar, the BurgerArrowIcon - all reactive readers that compute their own
+  visual from the signals.
+- Interruption: gesture re-grab tracks 1:1 from the current visual (no jump);
+  discrete nav (tab-click) interrupting an in-flight animation accelerates the
+  current to completion, then plays the new (the "finish-then-new" policy via
+  #accelerateInFlight + #queuedDiscreteNav).
 
-**Spec:** `docs/DV20-Meeting/DV20-C05b2-spec.md` - 15 Known conditions (updated
-in R13/R14: #4 list, #8, #12, #15 rewritten).
-**Journal:** `docs/DV20-C05b2-Journal.md` - Sessions 1-22 (R13 = Session 21,
-R14 = Session 22).
-**Audit files:** `docs/RV20-C05b2-Audit-{01..14}.md`.
+The user explicitly REJECTED the "driver-writes" model (the manager writing DOM
+directly, components as pure renderers). Their design has components computing
+from progress. Do NOT pursue driver-writes.
 
-## Documents to read FIRST
+## 2. What the user demands (non-negotiable)
 
-1. `docs/DV20-Meeting/DV20-C05b2-spec.md` (the cycle spec + 15 Known conditions).
-2. `docs/DV20-Plan.md` (the macro architecture; §5, §6, §13 are the bar).
-3. `docs/RV20-C05b2-Audit-13.md` + `docs/RV20-C05b2-Audit-14.md` (the 2 most
-   recent rounds; what was found + fixed).
-4. `docs/DV20-C05b2-Journal.md` Session 21 + 22 (R13 + R14 detail).
-5. This handoff.
+- **Architecture excellence is the SOLE criterion.** No shortcuts. Any behavior
+  violating it must be corrected.
+- **No CSS transitions. No setTimeout in the animation layer.** Anywhere. In ANY
+  component. The user explicitly overrode the spec's §9 "nested sub-pager
+  exception" for SearchScopePager - its CSS transition was eliminated and replaced
+  with an rAF-driven scope-switch.
+- **No "partially resolved" or "honest-unresolved" as an excuse to skip work.**
+  Either solve it or report the genuine blocker to the user directly. Do NOT
+  silently mark items as unresolved.
+- **No bridges.** If two mechanisms exist for the same concern, UNIFY them (delete
+  one), do NOT bridge with a third.
+- **No stopping before 5/5.** The user authorized autonomous rolling: fix -> gate
+  -> audit without interruption. Only interrupt for an architect-level decision
+  (a macro-plan deviation needing sign-off).
+- **Long context is NOT an excuse to stop.** Delegate to sub-agents (fresh
+  context). The orchestrator independently verifies (re-run check + lint + e2e;
+  never trust the sub-agent's report).
+- **Communication: written technical Chinese (规范书面汉语), not spoken.** No
+  calques (根因, 墙钟), no coined two-character tokens (改码, 写盘), no casual
+  verbs (弄, 搞, 收紧), no em-dashes (U+2014), no figurative metaphors. Complete
+  sentences. Run pre-send noun + structural scans.
 
-**Do NOT read during an audit:** the Journal or prior Audit files are FORBIDDEN
-for auditors (they lead the auditor). The orchestrator reads them for context.
+## 3. Current state of the code
 
-## What changed in R13 + R14 (this session)
+### Gate (green, last verified 2026-07-14)
 
-- **`replaceStateIntent` comprehensive clear (R13 + R14).** The side-channel
-  intent (`Header.onBack` sets it before `goto(replaceState:true)`) is now cleared
-  on every path that ends a back-cycle: `#dispatchNav` `.finally` (R12, consumed
-  dispatch), `onSvelteKitAfterNavigate` top (R13, every navigation landing),
-  `#landAtRest` (R14, cancel-after-regrab with no landing), and `unmount` (R14,
-  route-swap displacement + mobile->desktop flip). The R13 clear alone missed the
-  cancel path (no navigation lands on a cancel) - the R14 MED finding.
-- **GPL comment sweep (15 refs, R13).** NavPipelineHost (8), orchestrator (2),
-  route-config (3) + test (1), Header slideT gate (1). Rewrote each to current
-  behavior; no active comment references GesturePageLayout as a live comparator.
-- **Lint gate unblocked (R13).** The prior handoff + Audit-12 had prettier +
-  21 em-dash violations; the prior session's "EXIT=0" was the masked tail exit.
-- **E2e flake stabilization (R13).** Set `retries: 2` in `playwright.config.ts`.
-  The full sequential suite (~196 specs, one fresh dev server) degrades the dev
-  server over ~10 min, so timing-sensitive specs intermittently time out late in
-  the run (different specs each run, all pass in isolation). `retries: 2` passes
-  intermittent flakes (marked flaky) while a real regression still fails every
-  attempt. The existing `trace: 'on-first-retry'` was dead under `retries: 0`.
-- **Header Effect D docstring (R13).** Rewrote to describe the current
-  termination signal (`pager.committed === null`); labeled the dead `navInFlight`
-  term as a legacy always-false signal (Known #12).
-- **Known #4 / #8 / #12 / #15 updated (R13 + R14).** #4: added
-  `/messages/add/[userId]` to the mis-classified list. #8: documented the
-  pager-store displacement clear one-frame window. #12: documented the
-  `tapMorph` rAF + root<->search forward-enter overlap with `backMorph` (arbitrated
-  by `trackMorph`). #15: rewritten - the side-channel is implemented + the leak
-  is fixed (no longer a TODO).
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    411 pass / 0 fail
+$ bun run test:e2e                    201 passed + 1 flaky (fab.spec.ts:442,
+                                     passes on retry) = 202 total
+```
 
-## R13 + R14 findings classified as Known (not defects - assess as known)
+### What exists
 
-- **Deep-link back-swipe pushes the back-target (R14 B #1).** Spec-compliant per
-  §6 (`hopForHref` decides; deep-link = 'push'). The gesture carries no caller
-  `replaceState` intent (only `Header.onBack` sets it, Known #15), so it uses the
-  default push. The push preserves the navigation model the synthetic stack
-  encodes. The back-arrow's replace is a distinct mechanism (Known #15).
-- **centerTab thread back-swipe Header morph (R14 B #2).** The `centerTab` branch
-  publishes `backMorph: null`, so the Header stays in back-arrow mode during the
-  slide and morphs on landing (Effect C); deep-page back-swipes morph smoothly.
-  Documented intentional behavior (orchestrator comments; part of the Header
-  animation layer, Known #12). Changing it risks the enter animation.
-- **root<->search forward enter dual rAF (R13 B #3 = Known #12).** The `tapMorph`
-  rAF and `backMorph` run concurrently during a tap-induced forward enter;
-  `trackMorph` arbitrates (prefers `backMorph` while `transitionTarget !== null`),
-  so only one drives at a time. No fighting (unlike DV18/DV19).
-- **Pager-store displacement clear one-frame window (R13 A #2 = Known #8).** No
-  visible artifact (FAB URL fallback + Header `backMorph === null` compensate).
+- **Global singleton orchestrator** (`getGlobalNavPipelineOrchestrator`), eagerly
+  constructed at module load. `configure`/`releaseInputs` lifecycle (hosts rebind
+  inputs; executor/driver/rAF persist). `unmount` for mobile->desktop flip only.
+- **Four orchestrator-owned rAF channels:** executor gesture slide (velocity-
+  matched commit/cancel), family-swap ease, settle ease (velocity-matched for
+  gesture releases), tap-scrub ease. Each with a `prefers-reduced-motion` gate.
+- **State machine (§13.5) sole authority:** macro phase + plan + FROM/TO +
+  direction + settle/tap-scrub micro state all live on `NavStateMachine`. The
+  orchestrator's `#publication` is a `$derived` read-through.
+- **Reactive readers:** FAB layer (`FloatingActionButtonLayer`), Header
+  organism, MobileTabBar, SearchTabBar, BurgerArrowIcon. Zero CSS transitions in
+  any of them. All compute their visual from the orchestrator's published signals.
+- **SearchScopePager** has its own rAF (scope-switch animation, rAF-driven, no
+  CSS transition). Macro §9 sanctions this as a nested motion channel; the 5b2
+  spec acknowledges it.
+- **Finish-then-new interruption:** `#accelerateInFlight` shortens the in-flight
+  commit; `#queuedDiscreteNav` replays on `#landAtRest`.
+- **§6 backward gesture:** `#backwardTabTarget` always targets
+  `previousEntryPathname()` (temporal-previous). `backSwipeShouldPopHistory`
+  deleted.
+- **§13.3 commit duration:** velocity-matched solver (`solveCommitDuration`).
+  `TAB_CLICK_COMMIT_MS` deleted. Tab-click/forward-enter use the solver's default
+  (`COMMIT_T_DEFAULT_MS`). Cancel settle ALSO uses the velocity-matched duration
+  (fixed in R23).
+- **Forward deep-to-deep slide:** intercepted by `onSvelteKitBeforeNavigate`.
+  Uses a workaround axis override (`right` instead of `left`) because the 2-panel
+  host has no right panel. Documented as Known #5.
+- **Deep-snapshot overlay:** NavPipelineTabHost renders the deep target's preview
+  panel (or DeepPreviewSkeleton) in the revealed space during a backward-to-deep
+  slide. activeIndex=0 uses suppress-slide (no panel to reveal).
 
-## What the next agent must do
+### What was deleted
 
-### 1. Launch R15 with the MINIMAL prompt (no scope framing)
+- `MobileTabPager.svelte` (dead, zero imports). Deleted in R23.
+- `GesturePageLayout.svelte` (dead, zero imports). Deleted in R23.
+- `nav-coordinator.ts` (Layer 4 stub, never wired). Deleted earlier.
+- `backSwipeShouldPopHistory` function. Deleted (macro §6 divergence resolved).
+- `TAB_CLICK_COMMIT_MS` constant. Deleted (§13.3 divergence resolved).
+- `readRenderedFabScale` function. Deleted (DOM read-back eliminated).
+- `discreteNavInFlight` + `.fab-transition` CSS class. Deleted.
+- `pager.committed` field. Deleted (dead, zero readers).
 
-Two independent auditors (background). Prompt (verbatim):
+### Known conditions (current, all in spec)
+
+1. `isPipelineSwipeDisabledRoute` mis-classification (5b3-deletion, dissolves
+   with DualColumnLayout).
+2. DualColumnLayout mobile routes `/discussions/pN` (5b3-deletion).
+3. `pointercancel` treated as regular release (5b3-deletion, fix coupled to
+   detectSwipe rework).
+4. Forward deep-to-deep slide axis override (2-panel geometry limitation; 3-panel
+   fix or coordinator preload is future work).
+5. `backParent` consumer dissolution timeline (spec-code drift; dissolves in 5b3).
+
+SearchScopePager's rAF is documented in the spec's §5 status section as a §9-
+sanctioned nested motion channel (not a Known condition).
+
+### Audit trail
+
+- Audit files: `docs/RV20-C05b2-Audit-{13..23}.md` (all written).
+- Journal: `docs/DV20-C05b2-Journal.md` (Sessions 1-25).
+- Spec: `docs/DV20-Meeting/DV20-C05b2-spec.md` (Known conditions + Global
+  animation manager section + step rollout).
+- Plan: `docs/DV20-Plan.md` (§4, §5, §6, §9, §13).
+
+## 4. What the next agent must do
+
+### Immediate: re-launch R24
+
+R24 auditors hit the rate limit. Re-launch 2 independent auditors with the
+MINIMAL prompt (below). The convergence bar is **5 consecutive PASS votes** (2 per
+round). If R24 returns 2x PASS, counter goes to 2/5. Then R25 (4/5), R26 (5/5
+convergence).
+
+### The MINIMAL auditor prompt
 
 ```
 You are an independent code auditor for the Janbao forum's mobile navigation/gesture
@@ -102,8 +151,7 @@ architecture (project "DV20", Cycle 5b2). Find ANY defect empirically in the cur
 state of the code.
 
 Read `docs/DV20-Meeting/DV20-C05b2-spec.md` (the cycle spec, including its "Known 5b2
-conditions" section) and `docs/DV20-Plan.md` (the macro architecture). These define
-what the system IS and the bar.
+conditions" section) and `docs/DV20-Plan.md` (the macro architecture).
 
 FORBIDDEN: Do NOT read any `docs/DV*-C*-Journal.md` or `docs/RV*-C*-Audit-*.md`. Do NOT
 mutate any file. Do NOT run the e2e suite.
@@ -111,64 +159,81 @@ mutate any file. Do NOT run the e2e suite.
 Read the code. Form your own judgment. Find ANY defect empirically.
 
 VERDICT: PASS (zero concerns) | PASS-WITH-CONCERNS | FAIL.
-FINDINGS: each with severity (HIGH/MED/LOW/CONCERN), file:line, one-line summary, concrete
-failure scenario, classification (real behavior defect | comment/doc inaccuracy | missing
-coverage | architecture/bridge concern).
+FINDINGS: each with severity, file:line, summary, failure scenario, classification.
 
-Be honest. If you cannot determine something, say "undetermined." Do not pad, invent, or
-infer the desired answer.
+Be honest.
 ```
 
-### 2. Triage both verdicts. Fix ALL confirmed findings before R16.
+### If R24 returns PWC: fix ALL findings, re-gate, launch R25
 
-Real defects: root cause + grep the same class + preventive test (if
-constructible; the orchestrator is `.svelte.ts` so not unit-testable under
-`bun:test` - e2e or code-inspection verification). Comment inaccuracies: always a
-concern, fix them. Scope/5b3 items: document as Known. **No carrying.**
+Do NOT carry findings across rounds. Fix everything. Re-run the full e2e gate
+(`bun run test:e2e`, all specs). Launch the next round.
 
-Independently re-trace every auditor scenario before accepting it (R13's HIGH was
-re-traced to MED - the auditor's concrete path did not hold). Verify each
-fix empirically.
+### If a finding needs the user's decision: report directly
 
-### 3. Run the FULL e2e suite (`bun run test:e2e`, all specs, ~196 tests)
+Only for genuine architect-level decisions (a macro-plan deviation needing
+sign-off, e.g., deleting an architectural Layer, or a scope call the spec doesn't
+resolve). Everything else: handle autonomously.
 
-With `retries: 2` a clean run is 196 passed (or 195 + 1 flaky-on-retry). Do NOT
-narrow to a 6-spec sweep - that misses broken tests in other specs.
+## 5. Key files
 
-### 4. Convergence bar
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts` (~3000 lines) - the
+  universal orchestrator. All rAF channels, the interruption policy, the
+  SvelteKit nav hooks, the pager-store publication.
+- `src/lib/stores/nav-state-machine.svelte.ts` + `nav-state-machine-logic.ts` -
+  the state machine (§13.5 sole authority).
+- `src/lib/stores/nav-executor.svelte.ts` + `nav-executor-logic.ts` - the
+  executor (velocity-matched commit/cancel solver).
+- `src/lib/stores/mobile-pager.svelte.ts` - the pager store (the signal
+  dispatch bridge).
+- `src/lib/components/templates/NavPipelineHost.svelte` - the deep-page/thread/
+  compose host.
+- `src/lib/components/templates/NavPipelineTabHost.svelte` - the 3-tab host.
+- `src/lib/components/organisms/Header.svelte` - the Header (reactive reader of
+  the orchestrator's settle/tap-scrub/getters + pager.backMorph/tapMorph).
+- `src/lib/components/templates/FloatingActionButtonLayer.svelte` - the FAB
+  layer (reactive reader of pager signals; the family-swap gate).
+- `src/lib/components/templates/SearchScopePager.svelte` - the search scope
+  sub-pager (own rAF, no CSS transition).
+- `src/lib/utils/history-nav.ts` - `previousEntryPathname`, `hopForHref`,
+  `isTabRootPath`.
+- `src/lib/utils/gesture-constants.ts` - constants (no TAB_CLICK_COMMIT_MS).
 
-5 consecutive PASS votes (2 per round). PASS-WITH-CONCERNS is not PASS; any
-concern resets the counter. R15 starts at 0/5. If R15 returns 2x PASS, the
-counter goes to 2/5; R16 to 4/5; R17 to 5/5 (convergence).
+## 6. Key lessons from this session
 
-## Key files
+1. **The user's design is: manager dispatches progress, components compute.**
+   Not driver-writes. Do NOT pursue driver-writes.
+2. **The user does NOT accept "nested sub-pager exception" for CSS transitions.**
+   SearchScopePager's CSS was eliminated. Any remaining CSS transition anywhere
+   must be eliminated.
+3. **No "honest-unresolved" as a skip.** The user caught the sub-agent marking
+   items unresolved without solving or reporting. Either solve or report to the
+   user directly.
+4. **The convergence loop is autonomous.** No stop-checks. Use sub-agents for
+   context limits; independently verify their work.
+5. **Comment accuracy is ALWAYS a concern.** No references to superseded
+   implementations (GesturePageLayout, MobileTabPager, LoadingChip, pendingNav,
+   the sampler, TAB_CLICK_COMMIT_MS, backSwipeShouldPopHistory).
+6. **No em-dashes (U+2014).** In ANY file.
+7. **The step-1a hang proved the orchestrator's steps are interdependent.** The
+   shared singleton + configure/releaseInputs lifecycle (not mount/unmount) is
+   the correct design. The executor/driver/rAF persist across route swaps.
+8. **The flaky `fab.spec.ts:442` test** ("Family B back: thread -> list") is a
+   pre-existing CDP touch-dispatch timing flake. It passes on retry. It is NOT a
+   regression. Do NOT chase it.
 
-- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts` - the universal
-  orchestrator. `#dispatchNav` (replaceState intent), `#landAtRest` +
-  `onSvelteKitAfterNavigate` + `unmount` (the 4 intent-clear sites),
-  `onSvelteKitBeforeNavigate` (consumes only tab-root targets), `#republishToPager`
-  (centerTab vs deep-page backMorph publication).
-- `src/lib/stores/mobile-pager.svelte.ts` - the pager store (`set()` does NOT
-  touch `replaceStateIntent`, so it persists across `resetPagerStore`/`mount()` -
-  the reason the explicit clears are needed).
-- `src/lib/components/organisms/Header.svelte` - Effect D (settle ends on
-  `pager.committed === null`), `trackMorph` (arbitrates `backMorph` vs
-  `tapMorph`), `onBack` (the only writer of `replaceStateIntent`). CSS transitions
-  - `setTimeout` are Known #12.
-- `src/lib/utils/history-nav.ts` - `hopForHref` (reads the Navigation API; decides
-  back/forward/push), `isTabRootPath`.
-- `playwright.config.ts` - `retries: 2`, `workers: 1`, `fullyParallel: false`.
+## 7. Documents to read FIRST (in order)
 
-## Loop protocol reminders (from memory + prior session lessons)
+1. This handoff.
+2. `docs/DV20-Meeting/DV20-C05b2-spec.md` (the spec, esp. "Global animation
+   manager" + "Known 5b2 conditions").
+3. `docs/DV20-Plan.md` (§4, §5, §6, §9, §13).
+4. `docs/RV20-C05b2-Audit-{22,23}.md` (the 2 most recent rounds).
+5. Project memory: `audit-loop-autonomous-rolling`, `communication-style-
+objective-respectful`, `dv20-global-animation-manager-refactor`.
 
-- Minimal prompt only. No scope framing in the auditor prompt.
-- Orchestrator independently re-traces every auditor scenario; verify every fix
-  empirically (never trust the report).
-- Comment accuracy is always a concern (code comments, not .md prose).
-- No em-dashes (U+2014) in any file covered by eslint `local/no-emdash`.
-- Communication: written technical Chinese, no calques (根因/墙钟), no coined
-  two-char tokens (改码/写盘), no casual verbs (弄/搞/收紧), no parenthetical
-  afterthoughts, no chatty closers. Run the pre-send noun + structural scans.
-- The loop is autonomous: rolling fix -> gate -> audit without stop-checks. Only
-  interrupt for a genuine architect-level decision (a macro-plan deviation needing
-  sign-off, or a scope call the spec does not resolve).
+## 8. The convergence path
+
+If R24 returns clean (2/2), the counter goes to 2/5. Then R25 (4/5), R26 (5/5
+convergence). At 5/5, Cycle 5b2 is done. Cycle 5b3 (delete DualColumnLayout +
+backParent + swipe.ts) follows.

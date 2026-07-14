@@ -2,7 +2,7 @@
 	/**
 	 * AppShell - The persistent app chrome (just the Header, which carries the
 	 * MobileTabBar). Rendered once by the root layout so the Header - and thus
-	 * the tab bar and its CSS transitions - survives navigation across the
+	 * the tab bar - survives navigation across the
 	 * `(tabs)` branch and standalone pages (discussion thread, search, profile,
 	 * ...). Without this, each page's DualColumnLayout would re-mount its own
 	 * Header and the tab-switch animation would be lost on cross-branch nav.

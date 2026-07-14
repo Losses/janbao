@@ -15,9 +15,6 @@ export const PILL_EXPANSION_THRESHOLD = 0.5; // 50% drag distance to begin activ
 // Minimum horizontal drag (px) for a swipe to commit (navigate to the
 // target). Below this the gesture cancels (snaps back to rest).
 // Consumer: the orchestrator's release gate.
-// The dead GesturePageLayout file defines its own local `const SWIPE_COMMIT = 60`
-// (GesturePageLayout.svelte:275; unmounted, pending 5b3 deletion); it does not
-// import this constant.
 export const SWIPE_COMMIT = 60;
 // OS edge-swipe collision guard (px margin matching modern iOS/Android
 // bezel-less native triggers). `detectSwipe` and the 5b1 pointer-bridge

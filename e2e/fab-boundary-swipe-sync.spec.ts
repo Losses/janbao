@@ -12,20 +12,21 @@ import {
  *
  * At the FIRST and LAST tab, a swipe toward the boundary with no neighbour (a
  * void swipe) rubber-bands the track: follow() applies a 0.4x factor, so the
- * MobileTabPager publishes a fractionalIndex briefly outside [0,2]. The
+ * global nav-pipeline orchestrator publishes a `trackFractionalIndex` (and
+ * `fractionalIndex`) briefly outside [0,2] from the track translate. The
  * MobileTabBar pill tracks that motion live, since its closeness reads the
- * unclamped fractionalIndex. The FAB's Family A sampler must track the same
- * motion: sampleFraction returns the raw -m41 / panelWidth with no input
- * clamp, and tabFraction clamps only the OUTPUT to [0,1]. The FAB's
- * foregroundFraction therefore equals the pill's closeness frame for frame,
- * and a boundary void-swipe dips the FAB along with the pill.
+ * unclamped `fractionalIndex`. The FAB layer is a reactive reader of the same
+ * publication: `scale = $derived(pager.familySwapScale ?? restingScale)`, and
+ * `tabFraction(trackFractionalIndex, tabIndex)` clamps only the OUTPUT to
+ * [0,1]. The FAB's foregroundFraction therefore equals the pill's closeness
+ * frame for frame, and a boundary void-swipe dips the FAB along with the pill.
  *
  * Each test drives a void-swipe at one boundary and asserts the FAB scale
  * varied (delta > 0.1). A delta near 0 means the FAB is pinned at its resting
  * scale and is not tracking the boundary rubber-band. captureFabTransition
  * samples [data-testid="fab"]'s resolved scale across the gesture. Family A is
- * a same-document SPA nav, so the FAB atom and its sampler both survive the
- * non-committing void-swipe.
+ * a same-document SPA nav, so the FAB atom and the orchestrator's per-frame
+ * publication both survive the non-committing void-swipe.
  */
 
 test.beforeEach(async ({ context }) => {

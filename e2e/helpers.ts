@@ -507,7 +507,7 @@ export async function captureExitPreview(
 				const inter = Math.max(0, Math.min(rect.right, vw) - Math.max(rect.left, 0));
 				const cov = vw > 0 ? inter / vw : 0;
 				if (cov <= 0.4) continue;
-				// Identity: `data-tab-panel` (MobileTabPager + NavPipelineHost
+				// Identity: `data-tab-panel` (NavPipelineTabHost + NavPipelineHost
 				// preview sections).
 				const key = s.getAttribute('data-tab-panel') as PreviewTab;
 				if (!state.seen.includes(key)) state.seen.push(key);
@@ -552,22 +552,20 @@ export async function captureExitPreview(
 }
 
 // --- FAB route-transition capture -------------------------------------------
-// Samples `[data-testid="fab"]`'s computed scale and whether the
-// `.fab-transition` class is active, each frame for ~700ms across `trigger`.
-// The FAB atom binds `transform: scale(s) translateY(y)`; since DV20 5b2 the
-// discrete family swap is eased by the FAB layer's rAF (the inline scale
-// changes each frame), and `.fab-transition` (transform 200ms ease-out) is
-// armed only for a NavPipelineHost `pendingNav` exit slide. So a discrete
-// swap that eases the scale shows many distinct descending frames with the
-// class ABSENT (the rAF drives the inline value); a snap shows a one-frame
-// jump. `animated` (scale delta > 0.1) is the behavioural signal;
-// `transitionFrames` (class active) only fires for the GPL exit-slide path.
-// The FAB atom carries no transitionend the test can await.
+// Samples `[data-testid="fab"]`'s computed scale each frame for ~700ms across
+// `trigger`. The FAB atom binds `transform: scale(s) translateY(y)`; since
+// DV20 5b2 the scale is driven by the global nav-pipeline orchestrator's
+// per-frame publication (`pager.familySwapScale` / `pager.trackFractionalIndex`),
+// which the FAB layer reads reactively (`scale = $derived(pager.familySwapScale
+// ?? restingScale)`). A discrete swap that eases the scale therefore shows
+// many distinct descending frames (the orchestrator publishes a new value each
+// frame); a snap shows a one-frame jump. `animated` (scale delta > 0.1) is the
+// behavioural signal. The FAB atom carries no CSS transition directive and no
+// transitionend the test can await.
 
 interface FabFrame {
 	t: number;
 	scale: number;
-	tr: boolean;
 }
 interface FabSamplerWindow extends Window {
 	__fabFrames?: { frames: FabFrame[]; done: boolean };
@@ -575,7 +573,6 @@ interface FabSamplerWindow extends Window {
 
 export interface FabTransitionCapture {
 	animated: boolean;
-	transitionFrames: number;
 	delta: number;
 	firstScale: number | null;
 	lastScale: number | null;
@@ -598,8 +595,7 @@ export async function captureFabTransition(
 				const scale = m ? Number(m[1].split(',')[0]) : 1;
 				state.frames.push({
 					t: Math.round(performance.now() - start),
-					scale,
-					tr: el.classList.contains('fab-transition')
+					scale
 				});
 			}
 			if (performance.now() - start > 700) {
@@ -621,7 +617,6 @@ export async function captureFabTransition(
 		const delta = scales.length ? Math.max(...scales) - Math.min(...scales) : 0;
 		return {
 			animated: delta > 0.1,
-			transitionFrames: f.filter((x) => x.tr).length,
 			delta,
 			firstScale: scales[0] ?? null,
 			lastScale: scales[scales.length - 1] ?? null,
@@ -630,7 +625,7 @@ export async function captureFabTransition(
 	});
 }
 
-// --- MobileTabPager switch capture ------------------------------------------
+// --- tab-host switch capture ------------------------------------------------
 // Samples the pager track's m41 (px) plus the `data-tab-panel` of the section
 // covering the viewport centre, each frame across `trigger`. A clean tab switch
 // slides the track through intermediate m41 values and the centered-panel

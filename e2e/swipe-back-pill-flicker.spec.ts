@@ -18,7 +18,8 @@ import { prepareContext, swipeBack, openSidebarAndGoto, waitForHydration } from 
  * it clears `pendingNav` and dispatches history.back()/goto(), but the route
  * hasn't swapped yet, so the effect briefly sees an "idle" state and resets,
  * collapsing the pill (closeness→0, round(-1)≠0 → inactive). Once the route
- * swaps, the homepage MobileTabPager sets active:true and the pill re-expands.
+ * swaps, the tab host / orchestrator publishes `active:true` for the homepage
+ * tab and the pill re-expands.
  *
  * Faithfulness: the back-swipe is a real CDP touch gesture (detectSwipe rejects
  * mouse), and /bookmarks is reached via the dev __e2eGoto hook - the same

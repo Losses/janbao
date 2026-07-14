@@ -16,8 +16,8 @@ import {
  * the sticky Header's hide-on-down / reveal-on-up animation, so on these routes
  * it must react to the CONTAINER's scroll, not the window's. Pre-fix it only
  * attached its scroll listener to `window`, which never scrolls here, so the
- * Header stayed pinned forever - visibly different from the homepage (whose
- * MobileTabPager scrolls the window and hides the Header correctly).
+ * Header stayed pinned forever - visibly different from the homepage (where the
+ * pipeline tab host's scrolled panel hides the Header correctly).
  *
  * The reported repro is "enter the thread directly at mobile size" (a hard
  * deep-link, no beforeNavigate), so these tests hard-load the URL.

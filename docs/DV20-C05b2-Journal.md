@@ -1873,3 +1873,220 @@ $ bun run test:e2e                    197 passed, EXIT=0 (8.8m, clean)
 ```
 
 R17 audits the refactored state.
+
+## Session 26: R24 audit (A/B PWC, comment-accuracy + orphaned thread-snapshot code) + fixes
+
+R24 ran two independent auditors with the minimal non-leading prompt (spec +
+plan only; forbidden journal/audit reads, mutation, e2e). Both returned
+PASS-WITH-CONCERNS with the SAME six code-comment-accuracy concerns, all one
+defect class: `.ts` / `.svelte.ts` / `.test.ts` comments describing the
+R23-deleted `GesturePageLayout.svelte` and `MobileTabPager.svelte` as "unmounted,
+pending 5b3 deletion". Counter stays 0/5.
+
+The orchestrator's mandatory sibling grep (search-for-similar-bugs) found a
+seventh reference of the same class that both auditors missed:
+`NavPipelineTabHost.svelte:6` ("Replaces MobileTabPager on the (tabs) layout").
+
+### Findings (7 locations, all CONCERN, comment accuracy)
+
+- gesture-constants.ts (SWIPE_COMMIT GPL citation)
+- route-data.ts (backParent docstring: GPL.resolvedLeftHref as a second consumer)
+- page-cache-shapes.ts (ThreadSnapshotCacheData docstring naming MobileTabPager)
+- page-cache.svelte.ts (getLatestWithSnippet docstring, sole consumer MobileTabPager)
+- page-cache-logic.ts (findLatestWithSnippet docstring, identical claim)
+- navigation-logic.test.ts (shouldAnimateEnter present-tense citation)
+- NavPipelineTabHost.svelte:6 (orchestrator-found sibling)
+
+### Fixes
+
+Comment rewrites (4): removed all references to the deleted files. The
+route-data.ts backParent docstring was re-verified against the codebase: the GPL
+consumer is gone, leaving `isPipelineSwipeDisabledRoute` as the sole consumer, so
+"two consumers" became "one consumer" and "When BOTH" became "When that
+consumer".
+
+Dead-code deletion (the thread-snapshot machinery orphaned by the R23
+MobileTabPager deletion): `ThreadSnapshotCacheData` + `ThreadDiscussionShape` +
+`ThreadReplyShape` (page-cache-shapes.ts), `getLatestWithSnippet`
+(page-cache.svelte.ts), `findLatestWithSnippet` (page-cache-logic.ts), and the
+three "latest with snippet" tests + import (page-cache.test.ts). Verified dead
+before deletion: zero production writers, zero readers. The cache entry's
+`snippet` field is left in place: it is a general-purpose field defined by
+DV20-Plan section 7, and removing it requires a section 7 check to avoid a spec
+divergence. It was not flagged by either auditor.
+
+### Gate outputs (post-fix, independently re-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    408 pass / 0 fail
+$ bun run test:e2e                    201 passed + 1 flaky (fab.spec.ts:442,
+                                     pre-existing CDP touch flake; passes on
+                                     retry within the run)
+```
+
+Unit count 411 to 408, exactly the three deleted snippet tests. e2e identical to
+the pre-fix state. No behavioral regression.
+
+R25 audits the post-R24-fix state.
+
+## Session 27: R25 audit (A FAIL / B PWC: invisible latent direction inconsistency + 3 comment-accuracy concerns) + fixes
+
+R25 ran two independent auditors (minimal non-leading prompt). A returned FAIL
+(2 concerns); B returned PASS-WITH-CONCERNS (2 concerns). Counter stays 0/5.
+
+The orchestrator adjudicated the one cross-auditor disagreement (A's finding 1,
+the hardcoded `'back'` settle direction in `#armSettleEaseFromGesture`): A
+called it a visible logic bug; B called it invisible. Reading the code, B is
+correct on visibility: forward gesture releases are tab-to-tab, both titles
+resolve to '' via `resolveDeepHeaderTitle` (tab roots are not in its table), so
+the title crossfade takes the equal-titles branch and the direction is
+invisible. It is nonetheless the only arm path that hardcoded the direction, so
+for architectural consistency it now derives from `pending.direction`
+(behavior-identical for every reachable case).
+
+### Findings (4 concerns)
+
+- A1: hardcoded `'back'` settle direction (invisible latent inconsistency).
+- A2: `PendingTabExit` / `#pendingTabExit` / `#queuedDiscreteNav` docblocks
+  described a tab-click-only slot; the discrete-nav branch sets it for tab-click
+  exits and forward deep-to-deep.
+- B1: `suppressSlide` comment framed the activeIndex===0 behavior as a temporary
+  workaround pending a 5b3 overlay (the spec lists it as resolved).
+- B2: `route-config.ts` family-enum comment referenced the past Cycle 4.
+
+### Fixes
+
+- A1: `pending.direction === 'forward' ? 'forward' : 'back'` in
+  `#armSettleEaseFromGesture`.
+- A2: renamed `PendingTabExit` to `PendingDiscreteNav` and `#pendingTabExit` to
+  `#pendingDiscreteNav` (interface, field, local var); rewrote the three
+  docblocks to "tab-click exit or forward deep-to-deep".
+- B1: rewritten as the resolution for the activeIndex===0 geometry.
+- B2: rewritten as a permanent consumer config that selects the FAB scale
+  driver.
+
+The fix work was delegated to a sub-agent; the orchestrator independently
+re-ran the full gate (check / lint / unit / e2e) and re-read every changed
+region.
+
+### Gate outputs (post-fix, independently re-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    408 pass / 0 fail
+$ bun run test:e2e                    201 passed + 1 flaky (fab.spec.ts:442)
+```
+
+e2e identical to the pre-fix state. No behavioral regression.
+
+R26 audits the post-R25-fix state.
+
+## Session 28: R26 audit (A/B PWC: 2 non-pipeline-landing logic bugs + e2e stale-comment cluster) + fixes
+
+R26 ran two independent auditors. A returned PASS-WITH-CONCERNS (3 concerns); B
+returned PASS-WITH-CONCERNS (2 concerns). Counter stays 0/5.
+
+B found two real logic bugs sharing one root cause: the orchestrator's cleanup
+(onSvelteKitAfterNavigate) runs only for pipeline destinations. A gesture commit
+landing on a non-pipeline route (e.g. /drafts) leaves transient state
+orphaned: #queuedDiscreteNav leaks and fires as a phantom redirect on the next
+pipeline landing (B1); an awaitTitle settle stays active and emits a one-frame
+stale morph (B2, self-healing). The orchestrator verified both by reading
+configure (forceReset resets only the macro phase), releaseInputs (clears
+#pendingDiscreteNav but not #queuedDiscreteNav), #landAtRest, and the layout
+hook.
+
+B's suggested "configure clears" would break pipeline-landing finish-then-new
+(configure runs before #landAtRest). Fix: in #onExecutorSettle's commit path,
+when the target is non-pipeline, clear #queuedDiscreteNav and end the settle
+(the landing hook would have consumed them). Pipeline targets are unaffected.
+
+A found a stale-comment cluster in e2e that earlier rounds missed (the R24
+sibling grep was src/-only): MobileTabPager references, the deleted
+.fab-transition class, the deleted Family A sampler / sampleFraction, and the
+FloatingActionButton atom's "rAF on the layer" wording.
+
+### Fixes
+
+- B1/B2: imported isNavPipelineRoute; in #onExecutorSettle, non-pipeline commit
+  targets clear #queuedDiscreteNav + #endSettleEase.
+- A1/A2/A3 + siblings: rewrote the e2e docstrings/comments and the FAB atom
+  docstring to describe the current mechanism; removed the tautological
+  .fab-transition assertion block in fab.spec.ts and the orphaned FabFrame.tr /
+  FabTransitionCapture.transitionFrames probe fields in helpers.ts (no
+  consumers).
+
+The comment cleanup was delegated to a sub-agent; the orchestrator independently
+re-ran the full gate, re-grepped, and spot-checked the rewrites.
+
+### Test feasibility note
+
+B1/B2's scenario is timing-dependent (gesture commit to a non-pipeline target
+with a tab tap mid-commit) and the orchestrator's runes class cannot run under
+bun:test. Verified by reasoning + the regression e2e.
+
+### Gate outputs (post-fix, independently re-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    408 pass / 0 fail
+$ bun run test:e2e                    201 passed + 1 flaky (fab.spec.ts:430)
+```
+
+e2e identical to the pre-fix state. No behavioral regression.
+
+R27 audits the post-R26-fix state.
+
+## Session 29: R27 audit (A/B PWC: 5 comment/dead-code concerns, no logic bug) + fixes
+
+R27 ran two independent auditors. A returned PASS-WITH-CONCERNS (2 concerns + 1
+observation); B returned PASS-WITH-CONCERNS (2 concerns). Counter stays 0/5.
+Notably no logic bug this round: the R26 non-pipeline-landing fixes held and no
+new functional defect was found.
+
+### Findings (5)
+
+- A1: playEnterAnimation docstring "~200ms" vs the solver default
+  COMMIT_T_DEFAULT_MS (300).
+- A2: CommitInput.durationOverrideMs docstring referenced the deleted
+  TAB_CLICK_COMMIT_MS / 200ms duration-200; the sole caller is now
+  #accelerateInFlight.
+- A3: (tabs)/+layout.svelte desktop-flip comment mis-described the execution
+  order (the host's child-onMount matchMedia handler fires first and recovers;
+  the layout's call is a fallback no-op).
+- B1: AppShell.svelte docstring claimed the MobileTabBar carries CSS transitions
+  (it is rAF-driven).
+- B2: LoadingChip.svelte carried dead gesture code (dragging/scale/maxWidth/
+  textMaxWidth props, .dragging CSS, dead transitions) from the removed
+  cross-tab overlay; no caller passes any of them.
+
+### Fixes
+
+- A1: docstring now reads "~300ms (COMMIT_T_DEFAULT_MS)".
+- A2: durationOverrideMs docstring rewritten to describe #accelerateInFlight as
+  the sole user; 5b1/200ms/tab-click/duration-200 references removed.
+- A3: comment rewritten to describe the host-fires-first flow; the cheap
+  fallback call kept (defense in depth).
+- B1: the "and its CSS transitions" phrase removed.
+- B2: LoadingChip rewritten as a static loading pill (icon/label/expanded/
+  pulsing/opacity; scale hardcoded 1.15; no transitions).
+
+The fix work was delegated to a sub-agent; the orchestrator independently re-ran
+the full gate, re-grepped, and spot-checked every rewrite.
+
+### Gate outputs (post-fix, independently re-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    408 pass / 0 fail
+$ bun run test:e2e                    201 passed + 1 flaky (fab.spec.ts:430)
+```
+
+e2e identical to the pre-fix state. No behavioral regression.
+
+R28 audits the post-R27-fix state.

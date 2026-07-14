@@ -47,18 +47,15 @@ export interface RouteData {
 	/**
 	 * TRANSITIONAL (migration-era). Must be removed when its consumers
 	 * dissolve; do NOT leave it standing as a permanent field. The route's
-	 * structural parent in the site hierarchy. It exists ONLY to feed two
-	 * transitional consumers during the migration; it has no clean target-
+	 * structural parent in the site hierarchy. It exists ONLY to feed one
+	 * transitional consumer during the migration; it has no clean target-
 	 * architecture use (the mobile app has no breadcrumb, and the preview
-	 * panel is `PREVIEW_PANEL_CONFIG`, not this field). Its two consumers
-	 * are both transitional:
+	 * panel is `PREVIEW_PANEL_CONFIG`, not this field). Its sole consumer
+	 * is transitional:
 	 *   - `isPipelineSwipeDisabledRoute` reads `backParent !== undefined`
 	 *     to mark the deep-route set; that classifier dissolves in 5b3
 	 *     when DualColumnLayout's detectSwipe is removed.
-	 *   - `GesturePageLayout.resolvedLeftHref` reads `backParent` for the
-	 *     "/" edge-case substitution; GPL is unmounted (a dead file pending
-	 *     5b3 deletion), so this consumer is inert and dissolves with it.
-	 * When BOTH consumers are gone (end of Cycle 5), remove this field
+	 * When that consumer is gone (end of Cycle 5), remove this field
 	 * from the record and the registry. NOT the back-target (the
 	 * back-target is the route-stack entry behind the current one, §6).
 	 */

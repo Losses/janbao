@@ -13,18 +13,12 @@
  *   - `SearchScopeCacheData`      - one of the four `/search?scope=`
  *                                   result sets (carries its own
  *                                   `(q, sort)` for freshness checks)
- *   - `ThreadSnapshotCacheData`   - the `/discussion/<id>/<slug>`
- *                                   capture written before navigating
- *                                   away, read by the back-swipe
- *                                   preview overlay
  *
  * A consumer that reads `pageCache.get(pathname)` casts `entry.data`
  * to one of these. The route-keyed lookup guarantees the shape.
  */
 
 import type { MentionedUsersMap } from '$lib/types/mentions';
-import type { TranslationDict } from '$lib/types/translation';
-import type { UserInfoSummary } from '$lib/types/api';
 import type { DiscussionListItem } from '$lib/server/db/dao/discussions';
 import type { ActivityListItem, ConversationListItem } from '$lib/types/api';
 import type {
@@ -82,53 +76,4 @@ export interface SearchScopeCacheData {
 	usedFallback: boolean;
 	q: string;
 	sort: SearchSort;
-}
-
-/**
- * The thread snapshot written by the discussion page's `beforeNavigate`
- * and read by the dead `MobileTabPager`'s deep-preview overlay (MobileTabPager
- * is unmounted, pending 5b3 deletion). The render
- * closure (`Snippet`) is stored alongside on the same cache entry.
- */
-export interface ThreadSnapshotCacheData {
-	pathname: string;
-	discussion: ThreadDiscussionShape;
-	opReply: ThreadReplyShape | null;
-	replies: ThreadReplyShape[];
-	mentionedUsers: MentionedUsersMap;
-	t: TranslationDict;
-	user: UserInfoSummary | null;
-	theme: string | null;
-	canCreate: boolean;
-	canUpdate: boolean;
-	canDelete: boolean;
-	currentPage: number;
-	totalPages: number;
-	replyDraft: string | null;
-}
-
-/** The discussion fields the thread snapshot captures. */
-export interface ThreadDiscussionShape {
-	id: number;
-	title: string;
-	slug: string;
-	categorySlug: string;
-	isPinned: boolean;
-	isBookmarked: boolean;
-}
-
-/** The reply fields the thread snapshot captures (OP + each reply). */
-export interface ThreadReplyShape {
-	id: number;
-	contentJson: string;
-	createdAt: Date;
-	updatedAt: Date;
-	editedAt: Date | null;
-	editedBy: number | null;
-	editedByDisplayName: string | null;
-	editedByUsername: string | null;
-	authorId: number;
-	authorDisplayName: string;
-	authorUsername: string;
-	authorAvatarUrl: string | null;
 }

@@ -17,10 +17,11 @@
  *   - `FAB_ROUTE_ATTRIBUTES`      family + kind per route where the FAB
  *                                  atom mounts (including Family B/C
  *                                  routes that keep the atom at scale
- *                                  0). Family enum is consumed by the
- *                                  FAB layer's family selection; it
- *                                  dissolves in Cycle 4's all-rAF
- *                                  executor.
+ *                                  0). The family enum selects the FAB
+ *                                  layer's scale driver (list-family
+ *                                  tracks the tab fractional index;
+ *                                  overlay/compose track coverProgress);
+ *                                  it is a permanent consumer config.
  *   - `TAB_BAR_CONFIG`            the pill target per route (§3's
  *                                  tab-bar consumer config).
  *   - `PREVIEW_PANEL_CONFIG`      the back-preview snippet component
@@ -89,8 +90,8 @@ export const FAB_KIND_CONFIGS: Record<FabListKind, FabKindConfig> = {
 };
 
 // ---------------------------------------------------------------------------
-// FAB route attributes (§3 consumer config #2; the family enum dissolves
-// in Cycle 4's all-rAF executor).
+// FAB route attributes (§3 consumer config #2; the family enum is a
+// permanent consumer detail that selects the FAB scale driver).
 //
 // `family` selects the FAB layer's scale driver; `kind` selects the icon/href
 // (or `'dynamic'` for the Activity route's spatially-resolved FAB, or

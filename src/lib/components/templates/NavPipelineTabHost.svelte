@@ -3,10 +3,10 @@
 	//
 	// The pipeline tab host. Renders the three primary tab panels in a
 	// 3-panel track and drives the swipe via the NavPipelineOrchestrator
-	// (rAF, no CSS transition). Replaces MobileTabPager on the (tabs)
-	// layout. The orchestrator handles both rightward (previous tab /
-	// back-target) and leftward (next tab) gestures; tab taps are
-	// pipeline commits intercepted by `onSvelteKitBeforeNavigate`.
+	// (rAF, no CSS transition) on the (tabs) layout. The orchestrator
+	// handles both rightward (previous tab / back-target) and leftward
+	// (next tab) gestures; tab taps are pipeline commits intercepted by
+	// `onSvelteKitBeforeNavigate`.
 
 	import { onMount, onDestroy } from 'svelte';
 	import { browser } from '$app/environment';

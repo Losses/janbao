@@ -91,10 +91,10 @@ test.beforeEach(async ({ context }) => {
 //   - the literal `style` does NOT contain the substring `function(` (the
 //     serialization-defect signature),
 //   - the scale matches the route family: 1 on list routes, 0 on overlay/compose,
-//   - the atom's class string matches the family classification so the
-//     overlay-vs-compose distinction (overlay: pointer-events-none present AND
-//     fab-transition absent; compose: both present; list: neither) is asserted,
-//     not just the atom's transform serialization.
+//   - the atom's class string carries the pointer-events-none gate so the
+//     family classification (list: interactive at scale 1; overlay/compose:
+//     non-interactive at scale 0) is asserted, not just the atom's transform
+//     serialization.
 //
 // Route coverage: list (`/`, `/messages/inbox`); compose (`/post/discussion`,
 // `/messages/new`); overlay (`/discussion/<id>/<slug>`, the id+slug resolved
@@ -162,38 +162,26 @@ test.describe('SSR style serialization: FAB transform resolves in the server ren
 
 	/**
 	 * Assert the family-specific class-string classification for the FAB atom:
-	 *   - list:      pointer-events-none ABSENT, fab-transition ABSENT
-	 *   - overlay:   pointer-events-none PRESENT, fab-transition ABSENT
-	 *   - compose:   pointer-events-none PRESENT, fab-transition ABSENT
-	 *   - error page scale 0: pointer-events-none PRESENT, fab-transition ABSENT
-	 * The fab-transition class is armed only for a NavPipelineHost
-	 * `pendingNav` exit slide, not on a deep-link SSR render, so every family
-	 * rests WITHOUT the class. The pointer-events-none gate (scale < 0.01) is
-	 * what a scale-only assertion cannot see: overlay/compose/error rest at
-	 * scale 0 and must be non-interactive; list rests at scale 1 and is
-	 * interactive.
+	 * the only class-string signal SSR carries is the `pointer-events-none`
+	 * gate (the atom has no CSS transition directive, so no transition class
+	 * is ever present). The pointer-events-none gate is what a scale-only
+	 * assertion cannot see: overlay/compose/error rest at scale 0 and must be
+	 * non-interactive; list rests at scale 1 and is interactive.
 	 */
 	function expectFamilyClass(cls: string | null, family: SsrFabFamily): void {
 		expect(cls, 'FAB atom must carry a class string in SSR').not.toBeNull();
 		const hasPe = cls?.includes('pointer-events-none') ?? false;
-		const hasTransition = cls?.includes('fab-transition') ?? false;
 		switch (family) {
 			case 'list':
 				expect(hasPe, 'list FAB must NOT be pointer-events-none at scale 1').toBe(false);
-				expect(hasTransition, 'list FAB must NOT enable fab-transition').toBe(false);
 				break;
 			case 'overlay':
 			case 'error-scale-0':
 				expect(hasPe, 'overlay/error FAB at scale 0 must be pointer-events-none').toBe(true);
-				expect(hasTransition, 'overlay/error FAB must NOT enable fab-transition').toBe(false);
 				break;
 			case 'compose':
-				// Compose rests at scale 0 (pointer-events-none). The fab-transition
-				// class is armed only for a GPL `pendingNav` exit slide, not on a
-				// deep-link SSR render, so a deep-linked compose route does NOT
-				// carry the class at rest.
+				// Compose rests at scale 0 (pointer-events-none).
 				expect(hasPe, 'compose FAB at scale 0 must be pointer-events-none').toBe(true);
-				expect(hasTransition, 'compose FAB must NOT enable fab-transition at SSR rest').toBe(false);
 				break;
 		}
 	}
@@ -241,8 +229,8 @@ test.describe('SSR style serialization: FAB transform resolves in the server ren
 	// discussions list SSR (the homepage renders `/discussion/<id>/<slug>` links)
 	// so the assertion tracks whatever the seed currently exposes, rather than a
 	// hardcoded id that happens to exist today. The overlay family rests the FAB
-	// at scale 0 with pointer-events-none present AND fab-transition ABSENT
-	// (the same class-string shape as the compose family at SSR rest).
+	// at scale 0 with pointer-events-none present (the same class-string shape
+	// as the compose family at SSR rest).
 	test('SSR style: overlay discussion deep-link renders scale(0) with overlay-family classes', async ({
 		request
 	}) => {

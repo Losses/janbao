@@ -63,11 +63,13 @@
 			const wasMobile = isMobile;
 			isMobile = mq.matches;
 			if (wasMobile && !isMobile) {
-				// A mobile->desktop flip: land an in-flight committed transition
-				// before NavPipelineTabHost is torn down (the same recovery
-				// NavPipelineHost does in its own breakpoint handler). A
-				// route-away unmount does NOT do this, so the user's fresh nav
-				// wins.
+				// A mobile->desktop flip: NavPipelineTabHost's own breakpoint
+				// handler (registered first via child onMount) recovers an
+				// in-flight committed transition and tears the host down before
+				// this layout handler runs, so the orchestrator is usually
+				// already released here. This call is a fallback for the case
+				// where the host's handler did not fire; a route-away unmount
+				// does NOT recover, so the user's fresh nav wins.
 				getNavPipelineOrchestrator()?.recoverDesktopFlipNav();
 			}
 			if (!isMobile) {

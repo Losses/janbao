@@ -6,7 +6,7 @@ import { prepareContext, waitForHydration } from './helpers';
  * the ROOT layout (so top-level deep pages like `/discussion/*` - which are NOT
  * under `(tabs)` - also get list data for their swipe previews). These tests pin
  * the behaviours that must NOT change:
- *   - every tab page still renders its list (data still reaches MobileTabPager),
+ *   - every tab page still renders its list (data still reaches the tab host),
  *   - a non-app route (login) still loads (the root load's new tab fetch must not
  *     crash routes that don't need it),
  *   - a logged-out (guest) visitor still sees the discussions list (the guest
@@ -17,7 +17,7 @@ import { prepareContext, waitForHydration } from './helpers';
  */
 
 test.describe('root layout provides tab data', () => {
-	test('each tab page renders its list (data flows through to MobileTabPager)', async ({ page, context }) => {
+	test('each tab page renders its list (data flows through to the tab host)', async ({ page, context }) => {
 		await prepareContext(context);
 
 		await page.goto('/');
@@ -47,7 +47,7 @@ test.describe('root layout provides tab data', () => {
 
 	test('a logged-out (guest) visitor hits the login wall, not a crash', async ({ page }) => {
 		// No auth cookie. The forum gates content behind auth, so `/` renders a
-		// login wall for guests (no MobileTabPager). The point of this guard: the
+		// login wall for guests (no tab host). The point of this guard: the
 		// root load's new tab fetch must not throw on a guest request - the page
 		// must still load (200), whatever it renders.
 		const response = await page.goto('/');

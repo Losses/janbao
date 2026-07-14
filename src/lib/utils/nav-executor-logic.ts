@@ -165,11 +165,11 @@ export interface CommitInput {
 	readonly now: number;
 	/** Optional explicit duration (ms). When set, `solveCommitDuration`
 	 *  skips the velocity-matched solver and uses this duration
-	 *  directly. Cycle 5b1's orchestrator uses this for tab-click
-	 *  exits (a discrete nav, not a finger release) so the slide
-	 *  matches the 200ms duration of the non-pilot routes' CSS
-	 *  `duration-200`. Untyped for gesture commits (the velocity-matched
-	 *  solver runs). */
+	 *  directly. The orchestrator sets it only for an accelerated
+	 *  in-flight commit (`#accelerateInFlight`), shortening the remainder
+	 *  of a commit a discrete navigation interrupted. Undefined for
+	 *  gesture commits, tab-click / forward-enter commits, and
+	 *  `playEnterAnimation` (the velocity-matched solver runs). */
 	readonly durationOverrideMs?: number;
 }
 

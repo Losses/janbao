@@ -12,7 +12,7 @@ hold." The findings are a fragile invariant, a stale comment, and dead code.
   velocity-matched, so the settle should use the same duration. Fixed: both commit
   and cancel branches now use `commitDurationMs`.
 - **A F2 (NITPICK):** Stale comment at the commit-settle arm call site ("over
-  `TITLE_CROSSFADE_MS`" — actually uses `commitDurationMs`). Fixed.
+  `TITLE_CROSSFADE_MS`" - actually uses `commitDurationMs`). Fixed.
 
 ## B findings
 

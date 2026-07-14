@@ -119,13 +119,13 @@ test('handleAfterNavigate clears direction', () => {
 });
 
 // --- Tab-tap return must not leave a stale thread entry ----------------------
-// GesturePageLayout.shouldAnimateEnter plays the list→thread slide-in only when
-// the discussion was reached from `/`: after a forward push, the entry below the
-// stack top must be '/'. Returning to the list (via a tab-bar tap → switchTab,
-// or any cross-tab navigation landing on a tab root) must therefore reset that
-// tab's stack to its root - not carry a stale thread from a prior visit, which
-// would make the next list→thread push see prevPath = the stale thread and
-// suppress the animation. These mirror the e2e in enter-animation.spec.ts.
+// The list→thread enter slide plays only when the discussion was reached from
+// `/`: after a forward push, the entry below the stack top must be '/'.
+// Returning to the list (via a tab-bar tap → switchTab, or any cross-tab
+// navigation landing on a tab root) must therefore reset that tab's stack to
+// its root - not carry a stale thread from a prior visit, which would make the
+// next list→thread push see prevPath = the stale thread and suppress the
+// animation. These mirror the e2e in enter-animation.spec.ts.
 
 test('switchTab to a tab root resets that tab stack to the root', () => {
 	let s = initialNavState();

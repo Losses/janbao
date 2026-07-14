@@ -85,6 +85,7 @@ import { getFabRouteAttributes, FAB_KIND_CONFIGS, MOBILE_TABS } from '$lib/utils
 import { getCurrentTabIndex } from '$lib/utils/route-config';
 import { scaleFromFraction, tabFraction, type FabFamily } from '$lib/utils/fab-scale';
 import { hopForHref, isTabRootPath, previousEntryPathname } from '$lib/utils/history-nav';
+import { isNavPipelineRoute } from '$lib/utils/nav-pipeline-gate';
 import {
 	HEADER_MORPH_THRESHOLD,
 	PILL_EXPANSION_THRESHOLD,
@@ -138,12 +139,13 @@ interface PendingGestureTransition {
 	readonly boundary: boolean;
 }
 
-/** A pending tab-click transition (a host-route -> tab-root nav the
- *  orchestrator cancelled in `onSvelteKitBeforeNavigate`). Carries
- *  the deferred dispatch target (the FULL url: pathname + search) so
- *  commit-settle can fire the SvelteKit `goto` on the exact URL the
- *  tab-click targeted. */
-interface PendingTabExit {
+/** A pending discrete navigation the orchestrator cancelled in
+ *  `onSvelteKitBeforeNavigate`: either a tab-click exit (a host-route
+ *  -> tab-root nav) or a forward deep-to-deep nav on a 2-panel host.
+ *  Carries the deferred dispatch target (the FULL url: pathname +
+ *  search) so commit-settle can fire the SvelteKit `goto` on the exact
+ *  URL the discrete nav targeted. */
+interface PendingDiscreteNav {
 	readonly target: string;
 }
 
@@ -305,19 +307,19 @@ export class NavPipelineOrchestrator {
 	 *  target; `startProgress` is the track's progress at gesture start,
 	 *  read by the live-drag loop. Null at rest and after settle. */
 	#pendingGesture: PendingGestureTransition | null = null;
-	/** A pending tab-click transition. The orchestrator cancelled the
-	 *  SvelteKit nav; `target` is the dispatch target fired on
-	 *  commit-settle. Null at rest. */
-	#pendingTabExit: PendingTabExit | null = null;
-	/** A queued discrete navigation (tab-click) that arrived while a
-	 *  commit slide was in flight. The orchestrator accelerated the
-	 *  in-flight commit to completion; when the commit settles,
-	 *  dispatches its own nav, and the nav lands, `#landAtRest` fires
-	 *  this queued goto so `onSvelteKitBeforeNavigate` intercepts it on
-	 *  the landed host and plays the tab-click transition from progress
-	 *  0 (the finish-then-new interruption policy). Null when no
-	 *  discrete nav is queued. */
-	#queuedDiscreteNav: PendingTabExit | null = null;
+	/** A pending discrete nav (tab-click exit or forward deep-to-deep)
+	 *  the orchestrator cancelled; `target` is the dispatch target fired
+	 *  on commit-settle. Null at rest. */
+	#pendingDiscreteNav: PendingDiscreteNav | null = null;
+	/** A queued discrete navigation (tab-click or forward deep-to-deep)
+	 *  that arrived while a commit slide was in flight. The orchestrator
+	 *  accelerated the in-flight commit to completion; when the commit
+	 *  settles, dispatches its own nav, and the nav lands, `#landAtRest`
+	 *  fires this queued goto so `onSvelteKitBeforeNavigate` intercepts
+	 *  it on the landed host and plays the transition from progress 0
+	 *  (the finish-then-new interruption policy). Null when no discrete
+	 *  nav is queued. */
+	#queuedDiscreteNav: PendingDiscreteNav | null = null;
 	/** True while the forward-enter animation (playEnterAnimation) is
 	 *  active. The afterNavigate guard and the resize guard read it to
 	 *  avoid landing the orchestrator or mutating the plan mid-enter. */
@@ -716,7 +718,7 @@ export class NavPipelineOrchestrator {
 		this.#mountInputs = null;
 		this.#mounted = false;
 		this.#pendingGesture = null;
-		this.#pendingTabExit = null;
+		this.#pendingDiscreteNav = null;
 		this.#navDispatchInFlight = false;
 		this.#dispatchTarget = null;
 		this.#gestureToTabIndex = null;
@@ -770,7 +772,11 @@ export class NavPipelineOrchestrator {
 		// (old width). The next transition picks up the new width.
 		// Also guards the forward-enter animation (#isEnterAnimation drives
 		// the executor rAF without setting either pending slot).
-		if (this.#pendingGesture !== null || this.#pendingTabExit !== null || this.#isEnterAnimation)
+		if (
+			this.#pendingGesture !== null ||
+			this.#pendingDiscreteNav !== null ||
+			this.#isEnterAnimation
+		)
 			return;
 		this.#mountInputs = {
 			...current,
@@ -784,7 +790,7 @@ export class NavPipelineOrchestrator {
 	 *  is mounted so `viewportEl.clientWidth` is available) when the
 	 *  route is reached via a forward SPA navigation from the backTarget.
 	 *  The track starts at `translateX(0)` (left panel visible) and
-	 *  slides to `translateX(-W)` (centre visible) over ~200ms via
+	 *  slides to `translateX(-W)` (centre visible) over ~300ms (COMMIT_T_DEFAULT_MS) via
 	 *  the executor's rAF. The easing is the executor's constant-deceleration
 	 *  `s(u) = 2u - u²` (Plan §5). No
 	 *  navigation is dispatched on settle (the route has already landed). */
@@ -799,7 +805,7 @@ export class NavPipelineOrchestrator {
 		// reachable if a beforeNavigate fires during mount), it owns the
 		// host now: skip the enter so the in-flight transition is not
 		// clobbered.
-		if (this.#pendingGesture !== null || this.#pendingTabExit !== null) return;
+		if (this.#pendingGesture !== null || this.#pendingDiscreteNav !== null) return;
 		const plan: TransitionPlan = {
 			pageTrack: {
 				axis: 'left',
@@ -814,7 +820,7 @@ export class NavPipelineOrchestrator {
 			commitPhysics: this.#driver?.prefersReducedMotion() ? 'snap' : 'momentum'
 		};
 		this.#pendingGesture = null;
-		this.#pendingTabExit = null;
+		this.#pendingDiscreteNav = null;
 		// Capture the in-flight raw BEFORE resetting the progress
 		// (consistent with #beginGesture / onSvelteKitBeforeNavigate).
 		// playEnterAnimation runs synchronously after configure in the
@@ -908,7 +914,7 @@ export class NavPipelineOrchestrator {
 		// snaps back to FROM - dispatching the back-target on a cancel would
 		// navigate the user to a destination they explicitly cancelled.
 		if (this.#executor?.activePlan?.progressDirection !== 0) return;
-		const target = this.#pendingTabExit?.target ?? this.#pendingGesture?.to;
+		const target = this.#pendingDiscreteNav?.target ?? this.#pendingGesture?.to;
 		if (target !== undefined && !this.#navDispatchInFlight) {
 			this.#dispatchNav(target);
 		}
@@ -926,7 +932,7 @@ export class NavPipelineOrchestrator {
 		this.#executor = null;
 		this.#driver = null;
 		this.#pendingGesture = null;
-		this.#pendingTabExit = null;
+		this.#pendingDiscreteNav = null;
 		this.#queuedDiscreteNav = null;
 		this.#navDispatchInFlight = false;
 		this.#dispatchTarget = null;
@@ -1305,7 +1311,7 @@ export class NavPipelineOrchestrator {
 		// A gesture claims the transition: drop any in-flight tab-click so
 		// #onExecutorSettle dispatches THIS gesture's target, not the
 		// tab-click's. The two pending slots are mutually exclusive.
-		this.#pendingTabExit = null;
+		this.#pendingDiscreteNav = null;
 		// Capture the in-flight raw BEFORE resetting the progress so a
 		// re-grab mid-commit continues coverProgress from the live value.
 		const rawStart = this.#progress;
@@ -1440,8 +1446,10 @@ export class NavPipelineOrchestrator {
 		// panel 0 is leftmost), so a slide would reveal empty space. Suppress
 		// the track slide (distance = 0); coverProgress still drives the
 		// FAB/Header morph, and history.back() lands on the deep page on
-		// commit. The clean visual fix is the 5b3 deep-snapshot overlay;
-		// this avoids the empty-space artifact until then.
+		// commit. This is the resolution for the activeIndex === 0 case:
+		// the deep-snapshot overlay covers activeIndex >= 1, but panel 0
+		// has no left neighbour to reveal, so the slide is suppressed here
+		// rather than proxied.
 		const suppressSlide =
 			inputs.bidirectional === true &&
 			inputs.fromTabIndex === 0 &&
@@ -1494,8 +1502,8 @@ export class NavPipelineOrchestrator {
 
 	#onExecutorSettle(progressDirection: 0 | 1): void {
 		const pendingGesture = this.#pendingGesture;
-		const pendingTabExit = this.#pendingTabExit;
-		if (pendingGesture === null && pendingTabExit === null) {
+		const pendingDiscreteNav = this.#pendingDiscreteNav;
+		if (pendingGesture === null && pendingDiscreteNav === null) {
 			// Nothing to dispatch (a stray settle). Land at-rest.
 			this.#landAtRest();
 			return;
@@ -1511,10 +1519,23 @@ export class NavPipelineOrchestrator {
 		// sets `navDispatchInFlight` so the orchestrator's
 		// `onSvelteKitBeforeNavigate` passes it through without
 		// re-cancelling.
-		const target = pendingTabExit?.target ?? pendingGesture?.to;
+		const target = pendingDiscreteNav?.target ?? pendingGesture?.to;
 		if (target === undefined || target === null) {
 			this.#landAtRest();
 			return;
+		}
+		// A commit landing on a non-pipeline route never triggers the
+		// orchestrator's afterNavigate hook (the singleton is not active
+		// there), so clear the transient post-commit state the hook would
+		// have consumed: the queued discrete nav (its finish-then-new replay
+		// cannot run on a non-pipeline route) and the awaitTitle settle (its
+		// await cannot resolve without the landing hook). The settle ease
+		// already morphed the title across the commit slide, so ending it
+		// here is seamless. Pipeline targets skip this: their landing fires
+		// #landAtRest, which consumes the queued nav and ends the settle.
+		if (!isNavPipelineRoute(target)) {
+			this.#queuedDiscreteNav = null;
+			this.#endSettleEase();
 		}
 		// Commit: dispatch the SvelteKit navigation. The slide reveals the
 		// left panel (the target's real panel when cached, or its skeleton);
@@ -1565,7 +1586,7 @@ export class NavPipelineOrchestrator {
 		// later non-pipeline nav does not mis-read it as a commit.
 		this.#lastLandWasPipelineCommit = false;
 		this.#pendingGesture = null;
-		this.#pendingTabExit = null;
+		this.#pendingDiscreteNav = null;
 		this.#navDispatchInFlight = false;
 		this.#dispatchTarget = null;
 		this.#isEnterAnimation = false;
@@ -1740,7 +1761,7 @@ export class NavPipelineOrchestrator {
 		this.#gestureToTabIndex = toTabIndex;
 		// The full URL (pathname + search) so a tab-click to e.g. /?q=foo
 		// dispatches to that exact URL, not the bare pathname.
-		this.#pendingTabExit = { target: to + toSearch };
+		this.#pendingDiscreteNav = { target: to + toSearch };
 		this.#navDispatchInFlight = false;
 		this.#dispatchTarget = null;
 		navigation.cancel();
@@ -1819,7 +1840,7 @@ export class NavPipelineOrchestrator {
 		if (this.#isEnterAnimation) return;
 		if (
 			!this.#navDispatchInFlight &&
-			(this.#pendingGesture !== null || this.#pendingTabExit !== null)
+			(this.#pendingGesture !== null || this.#pendingDiscreteNav !== null)
 		) {
 			return;
 		}
@@ -2230,7 +2251,11 @@ export class NavPipelineOrchestrator {
 			startProgress,
 			committed ? 1 : 0,
 			committed, // awaitTitle only on a commit (cancel has no nav)
-			'back',
+			// Derive from the gesture direction. Maps TransitionDirection
+			// 'backward' to the settle enum 'back'; 'forward' to 'forward'.
+			// Forward tab-to-tab has empty equal titles, so the crossfade
+			// direction is invisible there.
+			pending.direction === 'forward' ? 'forward' : 'back',
 			commitDurationMs
 		);
 	}
@@ -2747,7 +2772,11 @@ export class NavPipelineOrchestrator {
 	updateBackTarget(backTarget: string): void {
 		const inputs = this.#mountInputs;
 		if (inputs === null) return;
-		if (this.#pendingGesture !== null || this.#pendingTabExit !== null || this.#isEnterAnimation)
+		if (
+			this.#pendingGesture !== null ||
+			this.#pendingDiscreteNav !== null ||
+			this.#isEnterAnimation
+		)
 			return;
 		const toData = getRouteData(backTarget);
 		this.#mountInputs = {

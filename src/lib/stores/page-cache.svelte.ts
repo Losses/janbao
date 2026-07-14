@@ -48,7 +48,6 @@ import {
 	countEntries,
 	DEFAULT_MAX_ENTRIES,
 	DEFAULT_TTL_MS,
-	findLatestWithSnippet,
 	invalidateEntries,
 	readEntry
 } from './page-cache-logic';
@@ -111,17 +110,7 @@ export class PageCacheStore {
 	}
 
 	/**
-	 * The most recent entry whose capture included a `snippet`. The only consumer
-	 * is the dead `MobileTabPager`'s deep-page back-swipe preview (MobileTabPager
-	 * is unmounted, pending 5b3 deletion), which does not know the destination
-	 * thread's pathname at gesture start. Returns `null` when no snippet has been
-	 * captured.
-	 */
-	getLatestWithSnippet(): PageCacheEntry | null {
-		return findLatestWithSnippet(this.#state);
-	}
-
-	/**
+	 * Remove entries. With no arguments, clears every entry. With	/**
 	 * Remove entries. With no arguments, clears every entry. With
 	 * `pathname` only, removes every entry under that pathname
 	 * (including all its subKeys). With both, removes the single
