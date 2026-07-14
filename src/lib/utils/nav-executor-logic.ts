@@ -201,11 +201,13 @@ export function solveCommitDuration(input: CommitInput, currentProgress: number)
 		// the caller returns idle with progress = target.
 		return { durationMs: 0, progressVelocity: 0, snapped: true };
 	}
-	// Explicit duration override (Cycle 5b1's tab-click path): skip the
-	// velocity-matched solver and use the supplied duration directly.
-	// The integrator's `progressVelocity` is unused when the caller
-	// supplies a duration; pass through the velocity-derived value for
-	// diagnostic continuity only.
+	// Explicit duration override: skip the velocity-matched solver and
+	// use the supplied duration directly. The orchestrator's
+	// `#accelerateInFlight` is the only caller that supplies this
+	// (shortening an in-flight commit so a queued discrete navigation
+	// can replay sooner). The integrator's `progressVelocity` is unused
+	// when the caller supplies a duration; pass through the
+	// velocity-derived value for diagnostic continuity only.
 	const distancePx = Math.max(Math.abs(input.plan.pageTrack.distance), 1);
 	const clampedVelPx = clamp(
 		input.releaseVelocityPxPerMs,

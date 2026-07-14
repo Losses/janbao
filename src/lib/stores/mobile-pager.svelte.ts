@@ -26,7 +26,7 @@
  * The store carries ONLY the per-frame gesture signals the FAB layer, the
  * MobileTabBar, and the SearchTabBar read (`coverProgress`, `tapMorph`,
  * `backMorph`, `trackFractionalIndex`, `transitionTarget`, `familySwapScale`,
- * `committed`, `replaceStateIntent`, `fractionalIndex`, `dragging`, `active`,
+ * `replaceStateIntent`, `fractionalIndex`, `dragging`, `active`,
  * `targetIndex`). The Header's settle ease state (the post-release /
  * post-title-change crossfade) and the `searchScrubbing` flag are owned by the
  * pipeline orchestrator as private class `$state` exposed via reactive
@@ -68,12 +68,6 @@ interface PagerUpdate {
 	 * `trackTranslateX(plan, executor.progress)`; null on non-tab-host routes.
 	 * Optional so non-publishing writers compile without touching it. */
 	trackFractionalIndex?: number | null;
-	/** Whether the last gesture release was a commit (true) or cancel
-	 * (false). Set synchronously by the orchestrator's release gate via
-	 * `setCommitted` so the Header's settle state machine can classify the
-	 * release direction. null at rest / before any gesture. Preserved across
-	 * the drag `pager.set` calls (like `tapMorph`). */
-	committed?: boolean | null;
 	/** The orchestrator-driven family-swap eased FAB scale, published each
 	 * rAF tick while a route-swap family change eases on the orchestrator's
 	 * own rAF. null when no family-swap ease is in flight; the FAB layer
@@ -81,13 +75,24 @@ interface PagerUpdate {
 	 * resting scale. Optional so non-publishing writers (SearchScopePager)
 	 * compile without touching it. */
 	familySwapScale?: number | null;
+	/** The icon-morph value at the non-search endpoint of an in-flight
+	 * root<->search / deep<->search tap scrub (0 when that endpoint is a
+	 * tab root, 1 when it is a deep page). Published once at scrub arm
+	 * time and cleared when the scrub finishes. Read by the Header's
+	 * `iconProgress` derivation so the hamburger <-> back-arrow morph is
+	 * continuous with the track scrub: `iconProgress = tapMorph *
+	 * scrubIconEndpoint`. The search endpoint contributes 0 (the search
+	 * layer's hamburger), so the lerp runs from `scrubIconEndpoint` at
+	 * tapMorph=1 (non-search side) toward 0 at tapMorph=0 (search side).
+	 * null at rest / when no scrub is in flight. */
+	scrubIconEndpoint?: number | null;
 }
 
 type SetPagerFn = (update: PagerUpdate) => void;
 type SetTapMorphFn = (value: number | null) => void;
-type SetCommittedFn = (value: boolean | null) => void;
 type SetReplaceStateIntentFn = (value: boolean) => void;
 type SetFamilySwapScaleFn = (value: number | null) => void;
+type SetScrubIconEndpointFn = (value: number | null) => void;
 
 interface PagerStore extends PagerUpdate {
 	targetIndex: number | null;
@@ -95,14 +100,14 @@ interface PagerStore extends PagerUpdate {
 	tapMorph: number | null;
 	transitionTarget: string | null;
 	trackFractionalIndex: number | null;
-	committed: boolean | null;
 	familySwapScale: number | null;
+	scrubIconEndpoint: number | null;
 	replaceStateIntent: boolean;
 	set: SetPagerFn;
 	setTapMorph: SetTapMorphFn;
-	setCommitted: SetCommittedFn;
 	setReplaceStateIntent: SetReplaceStateIntentFn;
 	setFamilySwapScale: SetFamilySwapScaleFn;
+	setScrubIconEndpoint: SetScrubIconEndpointFn;
 }
 
 export function createPagerStore(): PagerStore {
@@ -115,8 +120,8 @@ export function createPagerStore(): PagerStore {
 	let tapMorph = $state<number | null>(null);
 	let transitionTarget = $state<string | null>(null);
 	let trackFractionalIndex = $state<number | null>(null);
-	let committed = $state<boolean | null>(null);
 	let familySwapScale = $state<number | null>(null);
+	let scrubIconEndpoint = $state<number | null>(null);
 	let replaceStateIntent = $state(false);
 
 	function set(update: PagerUpdate): void {
@@ -128,7 +133,6 @@ export function createPagerStore(): PagerStore {
 		coverProgress = update.coverProgress ?? null;
 		transitionTarget = update.transitionTarget ?? null;
 		trackFractionalIndex = update.trackFractionalIndex ?? null;
-		committed = update.committed !== undefined ? update.committed : committed;
 		// tapMorph is omitted by the drag $effect's pager.set calls; preserve
 		// it so an in-flight tap scrub is not clobbered. The tap publisher
 		// writes via setTapMorph.
@@ -142,14 +146,19 @@ export function createPagerStore(): PagerStore {
 		// cancels, or tears down (releaseInputs / unmount).
 		familySwapScale =
 			update.familySwapScale !== undefined ? update.familySwapScale : familySwapScale;
+		// scrubIconEndpoint is owned exclusively by the orchestrator's
+		// tap-scrub ease (published via setScrubIconEndpoint). Preserve it
+		// across pager.set calls so resetPagerStore and the in-flight drag
+		// publications do not clobber a value an in-flight scrub just
+		// published. The orchestrator clears the field explicitly via
+		// setScrubIconEndpoint(null) when the scrub finishes, cancels, or
+		// tears down (releaseInputs / unmount).
+		scrubIconEndpoint =
+			update.scrubIconEndpoint !== undefined ? update.scrubIconEndpoint : scrubIconEndpoint;
 	}
 
 	function setTapMorph(value: number | null): void {
 		tapMorph = value;
-	}
-
-	function setCommitted(value: boolean | null): void {
-		committed = value;
 	}
 
 	function setReplaceStateIntent(value: boolean): void {
@@ -158,6 +167,10 @@ export function createPagerStore(): PagerStore {
 
 	function setFamilySwapScale(value: number | null): void {
 		familySwapScale = value;
+	}
+
+	function setScrubIconEndpoint(value: number | null): void {
+		scrubIconEndpoint = value;
 	}
 
 	return {
@@ -188,20 +201,20 @@ export function createPagerStore(): PagerStore {
 		get trackFractionalIndex() {
 			return trackFractionalIndex;
 		},
-		get committed() {
-			return committed;
-		},
 		get familySwapScale() {
 			return familySwapScale;
+		},
+		get scrubIconEndpoint() {
+			return scrubIconEndpoint;
 		},
 		get replaceStateIntent() {
 			return replaceStateIntent;
 		},
 		set,
 		setTapMorph,
-		setCommitted,
 		setReplaceStateIntent,
-		setFamilySwapScale
+		setFamilySwapScale,
+		setScrubIconEndpoint
 	};
 }
 

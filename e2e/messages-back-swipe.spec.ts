@@ -1119,14 +1119,14 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 	// `solveCommitDuration` (nav-executor-logic) computes
 	// T = 2 * |Δprogress| / |progressVelocity|, clamped to
 	// [COMMIT_T_MIN_MS, COMMIT_T_MAX_MS]; a faster release velocity yields
-	// a shorter commit slide. This test drives a fast flick (touchmoves
-	// dispatched back-to-back, high px/ms) and a slow drag (touchmoves
-	// dispatched with deliberate spacing, low px/ms), then asserts the
-	// slow release's commit slide produces MORE rAF frames than the fast
-	// release's. Counting commit-phase frames (sampled between touchEnd
-	// and the URL landing) isolates the commit slide from the drag phase
-	// and the settle phase, so the assertion tracks the solver's behaviour
-	// directly.
+	// a shorter commit slide. This test drives a fast flick and a slow
+	// drag (varied via the CDP `timestamp` parameter so the swipe action's
+	// releaseVelocity window sees a steep or shallow slope), then asserts
+	// the slow release's commit slide produces MORE rAF frames than the
+	// fast release's. Counting commit-phase frames (sampled between
+	// touchEnd and the URL landing) isolates the commit slide from the
+	// drag phase and the settle phase, so the assertion tracks the
+	// solver's behaviour directly.
 
 	interface VelocityCommitCapture {
 		/** rAF frames captured between touchEnd and the URL landing, where
@@ -1209,27 +1209,22 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		const y = 400;
 		const startX = 120;
 		const endX = 320;
-		// CDP `Input.dispatchTouchEvent` accepts a `timestamp` in seconds.
-		// The default `timestamp: 0` produces PointerEvents whose
-		// `timeStamp` is 0 for every event, which collapses the swipe
-		// action's releaseVelocity window (dt = 0 -> velocity 0). For this
-		// test we pass explicit timestamps (in seconds, anchored at the
-		// touchStart wall-clock) so the swipe action's releaseVelocity
-		// sees a slope we control directly. The fast variant spaces the
-		// touchmoves 4ms apart (a 50ms total drag -> high px/ms); the slow
-		// variant spaces them 40ms apart (a 520ms total drag -> low
-		// px/ms). The wall-clock dispatch is the same in both variants
-		// (CDP round-trip overhead dominates either way), so the test
-		// depends on the synthetic timestamps, not on Playwright timing.
-		// CDP `timestamp` is interpreted as absolute seconds since the
-		// UNIX epoch; Chrome derives event.timeStamp (ms, relative to
-		// performance.timeOrigin) from it. Anchoring at Date.now()/1000
-		// produces realistic event.timeStamp values that the swipe
-		// action's releaseVelocity window can differentiate.
+		// CDP `Input.dispatchTouchEvent` accepts a `timestamp` in seconds,
+		// interpreted as absolute seconds since the UNIX epoch. The default
+		// `timestamp: 0` produces PointerEvents whose `timeStamp` is 0 for
+		// every event, which collapses the swipe action's releaseVelocity
+		// window (dt = 0 -> velocity 0). For this test we pass explicit
+		// timestamps anchored at `Date.now()/1000` so Chrome derives
+		// realistic `event.timeStamp` values that the releaseVelocity
+		// window can differentiate. The fast variant spaces the touchmoves
+		// 4ms apart (a 56ms total drag -> multi-px/ms slope); the slow
+		// variant spaces them 40ms apart (a 520ms total drag -> sub-1
+		// px/ms slope). The wall-clock dispatch is identical in both
+		// variants (CDP round-trip overhead dominates either way), so the
+		// velocity the solver sees comes from the synthetic timestamps,
+		// not from Playwright timing.
 		const originSec = Date.now() / 1000;
 		const stepCount = 14;
-		// Fast drag: 4ms per step -> 56ms total. Slow drag: 40ms per step
-		// -> 520ms total. Both span the same x distance (startX..endX).
 		const stepSec = fast ? 0.004 : 0.04;
 		const dispatchCdp = (
 			type: 'touchStart' | 'touchMove' | 'touchEnd',

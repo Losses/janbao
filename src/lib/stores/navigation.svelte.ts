@@ -1,6 +1,6 @@
 import { setContext, getContext } from 'svelte';
 import { goto } from '$app/navigation';
-import { hopForHref, backSwipeShouldPopHistory } from '$lib/utils/history-nav';
+import { hopForHref } from '$lib/utils/history-nav';
 import {
 	initialNavState,
 	initNav,
@@ -219,21 +219,18 @@ class NavigationStore {
 	}
 
 	/**
-	 * Performs a backward step safely. Checks if history needs popping,
-	 * otherwise falls back to a spatial hop matching the previous tab or root.
+	 * Performs a backward step safely. Per macro §6 a backward step always
+	 * targets the previous history entry; the hop-vs-push decision is the
+	 * generic `hopForHref` check on the fallback href (back / forward / push).
 	 */
 	navigateBackward(fallbackHref: string) {
-		if (backSwipeShouldPopHistory()) {
+		const hop = hopForHref(fallbackHref);
+		if (hop === 'back') {
 			history.back();
+		} else if (hop === 'forward') {
+			history.forward();
 		} else {
-			const hop = hopForHref(fallbackHref);
-			if (hop === 'back') {
-				history.back();
-			} else if (hop === 'forward') {
-				history.forward();
-			} else {
-				void goto(fallbackHref, { replaceState: true });
-			}
+			void goto(fallbackHref, { replaceState: true });
 		}
 	}
 

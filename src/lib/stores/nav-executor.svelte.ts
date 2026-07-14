@@ -183,10 +183,13 @@ export class NavExecutor {
 	 *  exactly once per commit.
 	 *
 	 *  `durationOverrideMs` (optional): skip the velocity-matched
-	 *  solver and use the supplied duration directly. Cycle 5b1's
-	 *  orchestrator uses this for tab-click exits so the slide matches
-	 *  the non-pilot routes' 200ms CSS duration; gesture commits leave
-	 *  it undefined so the velocity-matched solver runs. */
+	 *  solver and use the supplied duration directly. The
+	 *  orchestrator's `#accelerateInFlight` passes a shortened
+	 *  duration so a queued discrete navigation can replay sooner
+	 *  (the finish-then-new interruption policy). Gesture commits
+	 *  and tab-click / forward-enter commits leave it undefined so
+	 *  the velocity-matched solver runs (a tab-click passes release
+	 *  velocity 0, which the solver maps to `COMMIT_T_DEFAULT_MS`). */
 	onCommit(releaseVelocityPxPerMs: number, durationOverrideMs?: number): void {
 		if (this.#plan === null) return;
 		this.#settled = false;

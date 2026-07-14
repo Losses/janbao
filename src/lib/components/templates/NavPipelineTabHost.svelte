@@ -69,13 +69,14 @@
 	const panelCount = MOBILE_TABS.length;
 
 	// Backward-to-deep-page deep-snapshot overlay. When a backward gesture
-	// on the tab host targets a deep page (via `backSwipeShouldPopHistory`),
-	// the slide reveals the panel at `activeIndex - 1`. Without this overlay
-	// that panel shows the previous TAB's content (a visual proxy for the
-	// deep destination). The overlay covers the revealed panel with the
-	// deep target's preview panel (or a skeleton), so the slide's visual
-	// matches the deep page the user will land on. On commit,
-	// `history.back()` lands on the deep page and the real content mounts.
+	// on the tab host targets a deep page (the history entry behind the
+	// current tab per macro §6), the slide reveals the panel at
+	// `activeIndex - 1`. Without this overlay that panel shows the previous
+	// TAB's content (a visual proxy for the deep destination). The overlay
+	// covers the revealed panel with the deep target's preview panel (or a
+	// skeleton), so the slide's visual matches the deep page the user will
+	// land on. On commit, `history.back()` lands on the deep page and the
+	// real content mounts.
 	const deepSnapshotTarget = $derived.by<string | null>(() => {
 		const target = publication.inFlight ? publication.toPathname : null;
 		if (target === null) return null;

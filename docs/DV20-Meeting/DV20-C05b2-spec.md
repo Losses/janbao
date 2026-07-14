@@ -29,7 +29,7 @@ Roll the new pipeline out to every remaining route that mounts `GesturePageLayou
 2. The FAB atom carries NO CSS transition. The FAB scale is driven either by the orchestrator's `coverProgress` (during a within-route transition) or by a rAF family-swap ease in the FAB layer (during a cross-route family swap). No `setTimeout`, no `discreteNavInFlight`, no `.fab-transition` CSS class.
 3. The `NavStateMachine` is the sole authority (§13.5). Consumers read its phase + plan. The orchestrator does not hold a private `#publication`.
 4. `MobileTabPager` is no longer mounted. The three tab roots share a persistent pipeline host in the `(tabs)` layout. The `LoadingChip` cross-tab overlay is removed everywhere.
-5. `GesturePageLayout` is no longer mounted on any route (but not yet deleted; 5b3 deletes it). `DualColumnLayout`'s `swipeDisabled` gate simplifies (always true on pipeline routes).
+5. `GesturePageLayout` and `MobileTabPager` are deleted (5b2; both were dead with zero imports once every route mounted the pipeline host). `DualColumnLayout`'s `swipeDisabled` gate simplifies (always true on pipeline routes).
 6. `isGesturePageLayoutRoute` is renamed; `isNavPipelinePilotRoute` is generalized to cover all pipeline routes.
 7. E2E: the pilot's 4-spec sweep stays green; new specs cover deep-page enter/exit, compose enter/exit, tab swipe, and cross-family FAB animations.
 
@@ -106,7 +106,14 @@ load) owns the animation layer for the app's mobile lifetime:
    `settleActive` / `settleProgress` / `settleLatched` / `settleDirection`); a
    fourth drives the tap-scrub ease (publishing `searchScrubbing` while
    scrubbing the root<->search morph). Each motion channel has exactly one rAF
-   owner; no consumer runs its own.
+   owner; no consumer runs its own. This principle governs the **top-level
+   gesture layer** (the slide / FAB / Header consumers driven by the
+   orchestrator's publication). Macro §9 sanctions nested sub-pagers with
+   their own local state machines: `SearchScopePager` runs its own rAF for its
+   internal scope switch (a §9-sanctioned nested motion channel that composes
+   under the top-level orchestrator via `shouldClaim`, not a violation of the
+   single-owner principle, which applies to the top-level gesture layer the
+   orchestrator owns).
 3. **`configure` / `releaseInputs` lifecycle.** The host calls `configure` in
    `onMount` (capture inputs, `forceReset` the singleton state machine, publish
    at-rest, detect a family change and arm the family-swap ease) and
@@ -259,7 +266,17 @@ gaps (backward tab swipe + tab-host mid-commit re-grab e2e added in
 `fab-boundary-swipe-sync`; backward-to-deep-page covered by `backtarget`);
 and the skeleton `{:else}` drift (dead `ActivitySkeleton` /
 `DiscussionsSkeleton` branches and components removed; `MessagesSkeleton`
-kept, legitimately reachable via the `/messages/[id]` array shadow).
+kept, legitimately reachable via the `/messages/[id]` array shadow). The
+three macro-plan divergences (old Known #3) are also resolved:
+`backSwipeShouldPopHistory` is deleted (a backward gesture targets the
+history-previous entry, with a spatial-previous fallback only when no
+history exists); forward deep-to-deep nav is intercepted by
+`onSvelteKitBeforeNavigate` and played as a `{detail, detail}` pipeline
+slide (left panel renders the destination skeleton); and
+`TAB_CLICK_COMMIT_MS` is removed (the tab-click / forward-enter commit
+passes release velocity 0 to the solver, which returns
+`COMMIT_T_DEFAULT_MS`; the Header settle reads the resulting
+`commitStart.durationMs` so no desync).
 
 1. **`isPipelineSwipeDisabledRoute` latent mis-classification (5b3-deletion).**
    The function returns `false` for `/search`, `/bookmarks`, `/notifications`,
@@ -270,7 +287,7 @@ kept, legitimately reachable via the `/messages/[id]` array shadow).
    gated off by its own `swipeBaseline < 0` check (those routes resolve
    `getCurrentTabIndex` to -1), so the pipeline wins pointer capture
    consistently. Fixing the classifier in isolation would leave it reading a
-   `backParent` field whose own dissolution is also tracked (see #6) and
+   `backParent` field whose own dissolution is also tracked (see #4) and
    would not change any user-visible behaviour. **Resolution:** the classifier
    and `DualColumnLayout.swipeDisabled` dissolve together in 5b3 when
    `DualColumnLayout`'s `detectSwipe` is removed.
@@ -285,54 +302,7 @@ kept, legitimately reachable via the `/messages/[id]` array shadow).
    `DualColumnLayout` (5b3 scope) because they have no other host.
    **Resolution:** migrate when `DualColumnLayout` is deleted in 5b3.
 
-3. **Macro-plan divergences retained (macro-plan deviation, assessed C05b2).**
-   Three intentional deviations from the macro plan, each with a concrete
-   blocker confirmed during C05b2 Task 6:
-
-   - `backSwipeShouldPopHistory` (§6 says it is deleted). The orchestrator's
-     `#backwardTabTarget` retains it to decide a backward-to-deep-page
-     back-swipe (pop to the deep page in history) vs. a spatial switch to the
-     previous tab root. **Concrete blocker:** `hopForHref` operates on a
-     TARGET pathname (returns back/forward/push based on whether the target
-     matches a history neighbour). The backward-to-deep-page distinction is
-     not about the target but about the gesture's direction: a rightward
-     gesture on a tab host must choose between the spatially-previous tab
-     (slide left panel, always a push) and the history-previous deep page
-     (slide toward the deep snapshot overlay, a pop). Encoding this in
-     `hopForHref` would require it to know the gesture direction + the
-     spatial tab layout, which is outside its role as a generic history
-     navigation helper. **Resolution:** lands when the tab host's slide
-     geometry is restructured to always target the history-previous entry
-     (not the spatial-previous tab), making the spatial switch and the
-     history pop the same operation.
-   - Forward deep-to-deep navigation (e.g. `/profile` -> `/profile/settings`)
-     is plain SvelteKit nav, not a pipeline slide.
-     `onSvelteKitBeforeNavigate` consumes only tab-root targets, and
-     `playEnterAnimation`'s `shouldEnter` requires the prior stack entry to
-     equal the route's `leftHref`; the `{detail,detail}` resolver is exercised
-     by gesture back-swipes only. **Concrete blocker:** the `{detail,detail}`
-     resolver's geometry for a forward slide requires the destination deep
-     page's content to be available in the left panel during the slide (either
-     cached or pre-loaded). NavPipelineHost's left panel renders tab panels
-     today; rendering a deep destination requires the coordinator (Layer 4) to
-     preload the destination's data before the slide begins, which is a
-     coordinator scope expansion. **Resolution:** lands when the macro plan
-     takes up forward deep-to-deep as a transition class with its own preload
-     contract.
-   - `TAB_CLICK_COMMIT_MS` (§13.3 "no hardcoded commit duration"). A tab-click
-     exit and a forward enter are discrete navs with no finger-release
-     velocity to match, so their commit uses a fixed 200ms
-     (`TRACK_TRANSITION_MS`) to align with the Header title crossfade.
-     Gesture commits use the velocity-matched solver per §5. **Concrete
-     blocker:** the solver's zero-velocity fallback (`COMMIT_T_DEFAULT_MS` =
-     300ms) would desync the tab-click slide from the Header title crossfade
-     (200ms). Using the solver's default for tab-clicks moves the hardcode
-     from `TAB_CLICK_COMMIT_MS` to `COMMIT_T_DEFAULT_MS` without eliminating
-     it. **Resolution:** the fixed commit dissolves when the tab-click commit
-     is reworked to derive from the title-crossfade end (so the slide and the
-     crossfade share one timing source instead of two aligned constants).
-
-4. **`pointercancel` treated as a regular release (5b3-deletion).**
+3. **`pointercancel` treated as a regular release (5b3-deletion).**
    `detectSwipe` routes `pointercancel` through its terminal path to `onEnd`,
    so the pointer bridge forwards it as a `pointerup` and the release gate
    commits vs cancels by offset. A `pointercancel` past the commit threshold
@@ -348,32 +318,42 @@ kept, legitimately reachable via the `/messages/[id]` array shadow).
    `DualColumnLayout`'s `detectSwipe` is removed and the pipeline owns the
    gesture layer end-to-end).
 
-5. **`SearchScopePager` nested CSS transition (macro-plan deviation, macro
-   §9).** The nested scope pager inside `/search`'s `NavPipelineHost` centre
-   panel drives its scope-switch via `detectSwipe` + a
-   `transition-transform duration-200` CSS class, with `shouldClaim` +
-   `exclusive` boundary handoff to the parent orchestrator. **Why retained:**
-   macro §9 sanctions nested sub-pagers as a distinct class from top-level
-   transition pairs, so this is outside 5b2's "no CSS transitions in the
-   gesture layer" binding (which targets the top-level transition mechanism).
-   It was not in 5b2's migration set. **Resolution:** migrate when the macro
-   plan takes up nested sub-pagers as a transition class.
-
-6. **`backParent` consumer dissolution timeline (spec-code drift on
+4. **`backParent` consumer dissolution timeline (spec-code drift on
    5b1-skipped item #5).** The spec's 5b1-skipped item #5 ("at end of 5b2,
    both consumers are gone; 5b3 removes the field") overstates the current
-   code: `isPipelineSwipeDisabledRoute` still reads `backParent !==
-undefined` (see #1), so one consumer remains at end of 5b2. The field
-   cannot be removed until both the classifier and `DualColumnLayout`'s
-   `detectSwipe` are addressed in 5b3. **Why documented rather than
-   softened:** the 5b1-skipped item #5 text is forward-looking (it tracks
-   the field's dissolution plan). **Resolution:** the drift dissolves in 5b3
-   when the classifier and `DualColumnLayout`'s `detectSwipe` are removed
-   and the field is deleted.
+   code: `isPipelineSwipeDisabledRoute` still reads `backParent !== undefined`
+   (see #1), so one consumer remains at end of 5b2. The field cannot be
+   removed until both the classifier and `DualColumnLayout`'s `detectSwipe`
+   are addressed in 5b3. **Why documented rather than softened:** the
+   5b1-skipped item #5 text is forward-looking (it tracks the field's
+   dissolution plan). **Resolution:** the drift dissolves in 5b3 when the
+   classifier and `DualColumnLayout`'s `detectSwipe` are removed and the
+   field is deleted.
+
+5. **Forward deep-to-deep slide axis override (macro-plan deviation).** A
+   forward `{detail, detail}` navigation (e.g. `/profile` ->
+   `/profile/settings`, or a sidebar link `/messages/<id>` ->
+   `/discussion/<id>`) on the 2-panel `NavPipelineHost` slides visually
+   **backward** (axis `right`, destination skeleton revealed from the left
+   panel) for what is semantically a forward push. **Why retained:** the
+   `{detail, detail}` resolver returns axis `left` for a forward push, but
+   `NavPipelineHost`'s track is 2 panels wide (centre + left; no right
+   panel), so a leftward slide would reveal empty space. The axis override
+   to `right` lets the destination skeleton (rendered by
+   `NavPipelineHost`'s `forwardDeepTarget` branch) be revealed. The title
+   crossfade direction is derived independently from `navStore.direction`
+   in `#resolveNavDirection`, so the title still enters from the right
+   (matching the forward semantic). The slide direction and the title
+   direction therefore disagree visually for this transition only.
+   **Resolution:** the clean fix is a 3-panel track (a right-panel
+   destination slot, mirroring `NavPipelineTabHost`'s 3-panel geometry)
+   OR a coordinator-driven preload (Layer 4) that places the destination
+   in a right panel so the resolver's native `left` axis works. Either
+   lands in a future cycle.
 
 ## Out of scope (5b3)
 
-- Deleting `GesturePageLayout` / `MobileTabPager` / `swipe.ts` / `DualColumnLayout`.
+- Deleting `swipe.ts` / `DualColumnLayout`. (`GesturePageLayout` and `MobileTabPager` were deleted in 5b2 once every route had migrated to the pipeline host; both were dead, zero imports.)
 - Removing `backParent` from `RouteData`.
 - Offline unification (Cycle 6).
 

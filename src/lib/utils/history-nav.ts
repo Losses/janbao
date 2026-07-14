@@ -81,32 +81,6 @@ export function previousEntryPathname(): string | null {
 }
 
 /**
- * Should a back-swipe performed on a TAB page pop real history
- * (`history.back()`) instead of switching to the spatially-previous tab?
- *
- * True iff the entry behind the current tab is a DEEP page - i.e. the user
- * reached this tab by forward-navigating from a thread / profile / bookmarks /
- * search / ... (any non-tab-root route). In that case "back" must return to that
- * originating page; switching to the previous tab root would strand it (the deep
- * page sits between the current tab and the previous tab root in history, and a
- * spatial tab switch would push the root on top of it, leaving the deep page
- * buried). When the previous entry IS a tab root (normal tab <-> tab use), the
- * spatial switch is correct and this returns false.
- *
- * The discriminator is `isTabRootPath` (config-driven), so this is agnostic to
- * WHICH deep route is involved and WHICH tab it is associated with. The deep
- * page's tab association is irrelevant: the user arrived at this tab FROM that
- * page, so `history.back()` returns to it regardless of whether it belongs to
- * the spatially-previous tab, the current tab, or no tab at all (a global route
- * like /bookmarks). Only the entry's deep-page-vs-tab-root nature matters.
- */
-export function backSwipeShouldPopHistory(): boolean {
-	const prev = previousEntryPathname();
-	if (prev === null) return false;
-	return !isTabRootPath(prev);
-}
-
-/**
  * Pathname of an entry URL, or null if it is missing. Absolute URLs (real
  * Navigation API entries) resolve via URL(); relative references (a tab href
  * like "/activity", which URL() rejects without an origin) are used verbatim

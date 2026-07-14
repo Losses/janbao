@@ -248,7 +248,7 @@ test('activeIndex=0 backward-to-deep-page: back-swipe on / commits to prior deep
 	//    target and `#dispatchNav('/')` pushes `/` (`hopForHref` returns 'push'
 	//    on the deep-linked single-entry history), giving history
 	//    `[/bookmarks, /]`: activeIndex=0 with `/bookmarks` as the previous
-	//    entry - the `backSwipeShouldPopHistory` precondition.
+	//    entry - the backward-gesture targets the previous entry (macro §6).
 	await openSidebarAndGoto(page, '/');
 	await page.waitForTimeout(300);
 

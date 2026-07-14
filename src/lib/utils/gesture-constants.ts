@@ -31,11 +31,9 @@ export const EDGE_DEAD_ZONE = 40;
 // Deep-title crossfade (Header.svelte unified title state machine). The vertical
 // slide between outgoing/incoming titles on a drag-release or non-gesture nav.
 export const TITLE_CROSSFADE_MS = 200;
-// The pipeline's discrete-slide duration: the tab-click commit
-// (`TAB_CLICK_COMMIT_MS` in the orchestrator) and the cross-route FAB
-// family-swap ease (in `FloatingActionButtonLayer`). Equals the title
-// crossfade so a discrete slide and the Header title crossfade play as
-// one handoff.
+// The pipeline's cross-route FAB family-swap ease duration (in
+// `FloatingActionButtonLayer`). Equals the title crossfade so a discrete
+// family-swap and the Header title crossfade play as one handoff.
 export const TRACK_TRANSITION_MS = TITLE_CROSSFADE_MS;
 // morph progress at or below this is "no meaningful gesture" (cancelled near the
 // origin, or no preceding drag). Effect B treats it as a non-settle release.

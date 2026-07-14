@@ -11,9 +11,9 @@ import {
  * list, not the thread" bug. The flow is generic: ANY NavPipelineHost deep
  * page that forward-swipes into a tab must, on the subsequent back-swipe,
  * return to that deep page. A discussion thread is used as the concrete deep
- * page (the reported repro); the fix itself is route-agnostic (see
- * backSwipeShouldPopHistory in history-nav.ts), so this also covers a profile /
- * bookmarks / search page forwarded into a tab.
+ * page (the reported repro); the fix itself is route-agnostic (a backward
+ * gesture always targets the previous history entry per macro §6), so this
+ * also covers a profile / bookmarks / search page forwarded into a tab.
  *
  * Two invariants are asserted, each of which the bug broke:
  *  1. A forward swipe ADVANCES - it must push the tab onto history, not REPLACE

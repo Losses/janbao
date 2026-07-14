@@ -84,12 +84,7 @@ import { getRouteData } from '$lib/utils/route-data';
 import { getFabRouteAttributes, FAB_KIND_CONFIGS, MOBILE_TABS } from '$lib/utils/route-config';
 import { getCurrentTabIndex } from '$lib/utils/route-config';
 import { scaleFromFraction, tabFraction, type FabFamily } from '$lib/utils/fab-scale';
-import {
-	hopForHref,
-	isTabRootPath,
-	backSwipeShouldPopHistory,
-	previousEntryPathname
-} from '$lib/utils/history-nav';
+import { hopForHref, isTabRootPath, previousEntryPathname } from '$lib/utils/history-nav';
 import {
 	HEADER_MORPH_THRESHOLD,
 	PILL_EXPANSION_THRESHOLD,
@@ -103,14 +98,6 @@ import type { HeaderSettleTransition } from '$lib/utils/header-probe';
 import type { TranslationDict } from '$lib/types/translation';
 import type { RouteTag } from '$lib/utils/route-data';
 import type { TransitionPlan } from '$lib/utils/nav-resolvers';
-
-/** Commit duration for a tab-click exit and a forward-enter. Equals
- *  `TRACK_TRANSITION_MS` (200ms); the easing is the executor's
- *  constant-deceleration `s(u)=2u-u²` (no CSS timing function), so the
- *  slide is the all-rAF ease. Used by `onSvelteKitBeforeNavigate`
- *  (tab-click) and `playEnterAnimation`. Gesture commits use the
- *  velocity-matched solver instead. */
-const TAB_CLICK_COMMIT_MS = TRACK_TRANSITION_MS;
 
 /** The host's track / FAB / Header element refs as supplied to the
  *  driver each `write`. Mirrors the structural shape of
@@ -463,9 +450,18 @@ export class NavPipelineOrchestrator {
 	#previousFamily: FabFamily | null = null;
 	/** The foregroundFraction seed captured when a gesture's
 	 *  `#cancelAllAnimationEases` interrupts a running family-swap ease.
-	 *  Inverted from the eased scale via `seedFraction = (easedScale + 1) /
-	 *  2` (the inverse of `scaleFromFraction(f) = clamp(2f - 1, 0, 1)`).
-	 *  While non-null, `#republishToPager` publishes a SEEDED
+	 *  Inverted from the eased scale so the FAB's first post-interrupt
+	 *  frame matches the eased scale, then advances toward 1 as the slide
+	 *  reveals the destination. Two formulas, selected by the current
+	 *  host's family: Family B / C (source family is overlay or compose)
+	 *  uses `seed = (easedScale + 1) / 2` (the inverse of
+	 *  `scaleFromFraction(f) = clamp(2f - 1, 0, 1)`; the FAB reads
+	 *  `foregroundFraction = coverProgress` directly). Family A (source
+	 *  family is 'list') uses `seed = (1 - easedScale) / 2` because the
+	 *  FAB layer's gate inverts for a list-source gesture targeting an
+	 *  overlay / deep route (`foregroundFraction = 1 - coverProgress`),
+	 *  so the seed must satisfy `1 - seed = (easedScale + 1) / 2`. While
+	 *  non-null, `#republishToPager` publishes a SEEDED
 	 *  `coverProgress = seed + (1 - seed) * rawDragFraction` so the FAB
 	 *  scales continuously from the eased value (at rawDragFraction 0) up
 	 *  to 1 (at rawDragFraction 1) as the slide reveals the destination.
@@ -481,12 +477,14 @@ export class NavPipelineOrchestrator {
 	// ---------------------------------------------------------------------
 	// Settle ease state. The orchestrator owns the Header's post-release /
 	// post-title-change crossfade. The rAF below eases the settle progress
-	// toward `#settleTargetProgress` over TITLE_CROSSFADE_MS with the
-	// constant-deceleration curve `s(u) = 2u - u²` (the same curve the
-	// executor's commit loop and the tap-scrub ease use). Each tick writes
-	// the eased progress to the state machine (the §13.5 authority); the
-	// Header reads it via the orchestrator's publication. Reduced-motion
-	// snaps (no rAF integration).
+	// toward `#settleTargetProgress` over the duration passed to
+	// `#armSettleEase` (the velocity-matched commit duration for a
+	// gesture-release settle, `TITLE_CROSSFADE_MS` for a non-gesture
+	// settle) with the constant-deceleration curve `s(u) = 2u - u²` (the
+	// same curve the executor's commit loop and the tap-scrub ease use).
+	// Each tick writes the eased progress to the state machine (the §13.5
+	// authority); the Header reads it via the orchestrator's publication.
+	// Reduced-motion snaps (no rAF integration).
 	#settleRafId: number | undefined;
 	/** The eased settle progress's start value (the release position for a
 	 *  gesture-release settle, 0 for a non-gesture title-change settle). */
@@ -568,6 +566,14 @@ export class NavPipelineOrchestrator {
 	 *  second header-state notification within the same navigation does
 	 *  not re-consume the flag). */
 	#lastLandWasPipelineCommit = false;
+	/** True when `playEnterAnimation` armed the settle ease for a forward
+	 *  enter. Read AND cleared at the top of the next `notifyHeaderState`
+	 *  call so the live-title change that arrives after the URL swap (the
+	 *  page's `headerTitle` lands asynchronously via SvelteKit's data
+	 *  load) does NOT re-arm the settle and reset the morph mid-slide.
+	 *  Without this the live title's idle re-arm would cancel the
+	 *  in-flight settle and snap the morph back to its start value. */
+	#enterAnimationArmedSettle = false;
 
 	constructor(clock: ClockFn = defaultClock) {
 		this.#clock = clock;
@@ -739,8 +745,7 @@ export class NavPipelineOrchestrator {
 			backMorph: null,
 			targetIndex: null,
 			coverProgress: 0,
-			transitionTarget: null,
-			committed: null
+			transitionTarget: null
 		});
 		getMobilePagerStore().setReplaceStateIntent(false);
 		this.#lifecycle.deactivate();
@@ -843,8 +848,47 @@ export class NavPipelineOrchestrator {
 		// tick, so there is no in-flight position to continue from.
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
 		executor.onDragStart(plan, startProgress, 0);
-		executor.onCommit(0, TAB_CLICK_COMMIT_MS);
+		// No finger-release velocity on a forward-enter: pass 0 and let the
+		// velocity-matched solver pick the default duration
+		// (`COMMIT_T_DEFAULT_MS`). The Header settle reads the resulting
+		// `commitStart.durationMs` and matches it (R17), so no desync.
+		executor.onCommit(0);
 		this.#stateMachine.onCommit();
+		// Arm the settle ease so the Header morph + title crossfade track
+		// the slide. The defensive arm is required because the Header's
+		// `notifyHeaderState` `$effect.pre` may have fired during the gap
+		// frame (releaseInputs -> configure) when `#mounted` was false and
+		// early-returned, leaving the title change unprocessed. Arming here
+		// makes the enter's morph / crossfade independent of
+		// notifyHeaderState arriving after configure. The latched endpoints
+		// are derived from `inputs.backTarget` (the source route) and
+		// `inputs.fromPathname` (the host route) so the morph runs from the
+		// source's tab-ness to the host route's tab-ness (e.g. tab mode at
+		// the source tab root easing into deep mode on a thread / deep
+		// page). Titles use `resolveDeepHeaderTitle`; dynamic-title routes
+		// (threads, /profile/[userId], /category/[slug]) resolve to null
+		// and contribute an empty title, so the crossfade shows the static
+		// back-target title easing toward an empty incoming span until the
+		// settle ends and the live `page.data.headerTitle` takes over.
+		// `#enterAnimationArmedSettle` is set so the next
+		// `notifyHeaderState` (fired when the live title lands) skips its
+		// own re-arm and does not reset the in-flight morph.
+		const t = this.#headerT;
+		if (t !== null) {
+			const outgoingTitle = resolveDeepHeaderTitle(inputs.backTarget, t) ?? '';
+			const incomingTitle = resolveDeepHeaderTitle(inputs.fromPathname, t) ?? '';
+			const outgoingHasTabs = getCurrentTabIndex(inputs.backTarget) >= 0;
+			const incomingHasTabs = getCurrentTabIndex(inputs.fromPathname) >= 0;
+			const latched: HeaderSettleTransition = {
+				outgoingTitle,
+				incomingTitle,
+				outgoingHasTabs,
+				incomingHasTabs
+			};
+			const commitDurationMs = executor.state.commitStart?.durationMs ?? TITLE_CROSSFADE_MS;
+			this.#armSettleEase(latched, 0, 1, false, 'forward', commitDurationMs);
+			this.#enterAnimationArmedSettle = true;
+		}
 	}
 
 	/** Land an in-flight COMMIT transition when the platform flips mobile ->
@@ -928,6 +972,7 @@ export class NavPipelineOrchestrator {
 		this.#prevHeaderIsSearch = false;
 		this.#headerT = null;
 		this.#lastLandWasPipelineCommit = false;
+		this.#enterAnimationArmedSettle = false;
 		this.#mountInputs = null;
 		this.#mounted = false;
 		this.#lifecycle.deactivate();
@@ -943,8 +988,7 @@ export class NavPipelineOrchestrator {
 			backMorph: null,
 			targetIndex: null,
 			coverProgress: 0,
-			transitionTarget: null,
-			committed: null
+			transitionTarget: null
 		});
 		// Clear the settle / tap-scrub publications so the next mount
 		// starts at rest. The state machine owns these (§13.5); the
@@ -957,6 +1001,7 @@ export class NavPipelineOrchestrator {
 		});
 		this.#stateMachine.setSearchScrubbing(false);
 		getMobilePagerStore().setTapMorph(null);
+		getMobilePagerStore().setScrubIconEndpoint(null);
 		// Clear the replaceState side-channel on a mobile -> desktop flip
 		// so the intent does not survive the host that set it. Route-swap
 		// displacement clears the same channel via releaseInputs.
@@ -1109,11 +1154,10 @@ export class NavPipelineOrchestrator {
 					if (executor.state.progress !== 0) {
 						this.#commitStartRaw = this.#publication.progress;
 						executor.onCancel(intent.releaseVelocity);
-						getMobilePagerStore().setCommitted(false);
 						this.#stateMachine.onCancel();
 						// Arm the settle ease (cancel direction): the morph
 						// + title crossfade retreat to the current page over
-						// TITLE_CROSSFADE_MS.
+						// the velocity-matched cancel duration.
 						this.#armSettleEaseFromGesture(false);
 					} else {
 						this.#landAtRest();
@@ -1140,17 +1184,15 @@ export class NavPipelineOrchestrator {
 					if (shouldCommit) {
 						this.#commitStartRaw = this.#publication.progress;
 						executor.onCommit(intent.releaseVelocity);
-						getMobilePagerStore().setCommitted(true);
 						this.#stateMachine.onCommit();
 						// Arm the settle ease (commit direction): the morph
 						// + title crossfade advance toward the back-target
-						// over TITLE_CROSSFADE_MS, holding at progress 1
-						// until the navigation lands.
+						// over the velocity-matched commit duration,
+						// holding at progress 1 until the navigation lands.
 						this.#armSettleEaseFromGesture(true);
 					} else if (executor.state.progress > 0) {
 						this.#commitStartRaw = this.#publication.progress;
 						executor.onCancel(intent.releaseVelocity);
-						getMobilePagerStore().setCommitted(false);
 						this.#stateMachine.onCancel();
 						this.#armSettleEaseFromGesture(false);
 					} else {
@@ -1245,16 +1287,15 @@ export class NavPipelineOrchestrator {
 		this.#liveDragging = true;
 		const from = inputs.fromPathname;
 		const fromTag = inputs.fromTag;
-		// Resolve the target for this direction. Backward targets the
-		// previous tab (bidirectional hosts) or the mount-supplied
-		// back-target (thread / deep-page hosts); forward targets the next
-		// tab. For bidirectional hosts, when the history entry behind the
-		// current tab is a DEEP page (the tab was reached by a forward nav
-		// from a thread / profile / etc.), the backward gesture targets
-		// that deep page so commit-settle dispatches `history.back()` to
-		// it via `#dispatchNav`'s `hopForHref` check; the spatial switch
-		// to the previous tab root would strand the originating page
-		// between the two tabs in history.
+		// Resolve the target for this direction. A backward gesture always
+		// targets the previous history entry (the temporal-previous): on a
+		// bidirectional host that is `previousEntryPathname()` (the entry
+		// behind the current tab, whether it is the spatially-previous tab
+		// or a deep page the user came from); on a non-bidirectional host
+		// it is the mount-supplied back-target. Forward targets the next
+		// tab. Macro §6: a backward gesture always goes where the user
+		// came from; the hop-vs-push decision is the generic `hopForHref`
+		// check at dispatch time.
 		const target: string | null =
 			direction === 'backward'
 				? inputs.bidirectional === true
@@ -1321,39 +1362,30 @@ export class NavPipelineOrchestrator {
 		return MOBILE_TABS[nextIdx].href;
 	}
 
-	/** Resolve the previous-tab target for a rightward (backward) gesture on
-	 *  a bidirectional host. Returns null when the active tab is the first
-	 *  tab (no previous neighbour). Used only for bidirectional hosts (the
-	 *  tab pager); non-bidirectional hosts (thread / deep-page host) use
-	 *  the mount-supplied `backTarget` instead. */
-	#prevTabTarget(inputs: PipelineMountInputs): string | null {
+	/** Resolve the backward-gesture target for a bidirectional host. Per
+	 *  macro §6 a backward gesture targets the previous history entry
+	 *  (the temporal-previous): the entry behind the current tab, whether
+	 *  that is the spatially-previous tab root (the common tab-to-tab
+	 *  case, where spatial = temporal) or a deep page the user forward-
+	 *  navigated from (the uncommon case, where spatial != temporal). On
+	 *  commit, `#dispatchNav`'s `hopForHref` check decides history.back()
+	 *  vs goto; for a deep page that sits behind the current tab it
+	 *  returns `'back'`, so the user returns to where they came from.
+	 *
+	 *  When there is no previous entry (a hard-load of this tab with no
+	 *  prior navigation history), the gesture falls back to the
+	 *  spatially-previous tab root so the user is not stranded: every tab
+	 *  has a bidirectional connection to its spatial neighbour (macro §6:
+	 *  "all route types should have bidirectional connections"). The
+	 *  target is thus history-driven whenever a previous entry exists
+	 *  with no deep-page-vs-tab discrimination; the spatial layout is
+	 *  consulted only for the no-history edge case. */
+	#backwardTabTarget(inputs: PipelineMountInputs): string | null {
+		const prev = previousEntryPathname();
+		if (prev !== null) return prev;
 		const prevIdx = inputs.fromTabIndex - 1;
 		if (prevIdx < 0) return null;
 		return MOBILE_TABS[prevIdx].href;
-	}
-
-	/** Resolve the backward-gesture target for a bidirectional host.
-	 *  When the history entry behind the current tab is a DEEP page
-	 *  (reached this tab by a forward nav from a thread / profile /
-	 *  etc.), the target is that deep page's pathname so commit-settle
-	 *  dispatches `history.back()` to it (via `hopForHref` returning
-	 *  `'back'` in `#dispatchNav`). When `fromTabIndex >= 1` the slide
-	 *  reveals the previous tab's panel as a visual proxy; when
-	 *  `fromTabIndex === 0` (the leftmost tab) there is no panel to the
-	 *  left, so the slide reveals empty space until the deep page mounts
-	 *  on commit. TODO(5b3): overlay the deep page's cached snapshot in
-	 *  the left panel during the slide so the visual matches the landing
-	 *  page (covers both the wrong-proxy and the empty-space cases).
-	 *  Otherwise falls back to the spatially-previous
-	 *  tab root. The deep page's tab association is not consulted: the
-	 *  user came from that page, so `history.back()` returns to it
-	 *  regardless of which tab it belongs to. */
-	#backwardTabTarget(inputs: PipelineMountInputs): string | null {
-		if (backSwipeShouldPopHistory()) {
-			const deepTarget = previousEntryPathname();
-			if (deepTarget !== null) return deepTarget;
-		}
-		return this.#prevTabTarget(inputs);
 	}
 
 	/** Resolve a transition plan for the locked FROM/TO/direction. */
@@ -1540,7 +1572,6 @@ export class NavPipelineOrchestrator {
 		this.#liveDragging = false;
 		this.#gestureToTabIndex = null;
 		this.#executor?.onLand();
-		getMobilePagerStore().setCommitted(null);
 		// Family-swap seed: a gesture that interrupted a mid-ease
 		// family-swap set #fabDragSeedFraction. On a cancel landing (no
 		// route swap, no configure), re-arm the ease from
@@ -1626,13 +1657,19 @@ export class NavPipelineOrchestrator {
 		if (this.#isPilotFrom(inputs, to)) {
 			return false;
 		}
-		// Only own transitions to a tab root (a tab-click exit or a
-		// back-swipe equivalent). Transitions to other deep routes
-		// (e.g. `/messages/<id>` -> `/discussion/<id>` via a sidebar
-		// link) pass through to the root layout hooks; the slide
-		// geometry is not meaningful for those (no pre-rendered
-		// sibling, no Family A pill to drive).
-		if (!isTabRootPath(to)) {
+		// Own transitions to a tab root (a tab-click exit) AND every
+		// detail -> detail nav (a push like /profile -> /profile/settings,
+		// or a sidebar link like /messages/<id> -> /discussion/<id>). All
+		// detail -> detail navs are intercepted; none pass through. The
+		// slide uses the 2-panel track geometry in every case: the
+		// destination renders its skeleton in the left panel and the
+		// resolver-derived axis selects the slide direction; the
+		// axis-override block below handles the 2-panel forward case
+		// (no right panel) so the destination skeleton is revealed.
+		const toRouteData = getRouteData(to);
+		const isForwardDeepToDeep =
+			!isTabRootPath(to) && inputs.fromTag === 'detail' && toRouteData.tag === 'detail';
+		if (!isTabRootPath(to) && !isForwardDeepToDeep) {
 			return false;
 		}
 		// Finish-then-new interruption policy: a discrete tab-click
@@ -1651,16 +1688,27 @@ export class NavPipelineOrchestrator {
 			navigation.cancel();
 			return true;
 		}
-		// A tab-click exit (pipeline route -> tab-root). Drive the slide
-		// plan via the executor and dispatch on settle. The direction
-		// depends on the target's relative tab position: a higher index
-		// is forward (leftward slide), a lower index is backward
-		// (rightward slide). For non-bidirectional hosts the target is
-		// always at a lower index (the back-target).
+		// Cancel any running settle / tap-scrub / family-swap ease so a
+		// tab-click or forward-deep-to-deep nav arriving while a settle
+		// is still running does not leave that settle's rAF ticking
+		// underneath the new slide. Matches `#beginGesture`'s gesture-path
+		// behavior (a re-grab mid-transition cancels every ease before
+		// starting the drag). Skipped on the `phase === 'committing'`
+		// branch above: that path accelerates the in-flight commit
+		// (settle included) instead of starting a fresh slide.
+		this.#cancelAllAnimationEases();
+		// A discrete nav (tab-click exit or forward deep-to-deep). Drive
+		// the slide plan via the executor and dispatch on settle. The
+		// direction: a forward deep-to-deep is a push ('forward'); a
+		// tab-click is forward only when the target tab is at a higher
+		// index than the source (bidirectional host), else backward.
 		const toPathname = to;
 		const toTabIndex = this.#tabIndexFor(toPathname);
-		const direction: TransitionDirection =
-			inputs.bidirectional === true && toTabIndex > inputs.fromTabIndex ? 'forward' : 'backward';
+		const direction: TransitionDirection = isForwardDeepToDeep
+			? 'forward'
+			: inputs.bidirectional === true && toTabIndex > inputs.fromTabIndex
+				? 'forward'
+				: 'backward';
 		// Synthesize a "tap" intent so the resolver produces a commit plan.
 		const intent = {
 			...initialIntentState(),
@@ -1668,7 +1716,25 @@ export class NavPipelineOrchestrator {
 			target: toPathname,
 			startedAt: this.#clock()
 		};
-		const plan = this.#resolvePlan(inputs, intent, direction, toPathname, toTabIndex);
+		const resolvedPlan = this.#resolvePlan(inputs, intent, direction, toPathname, toTabIndex);
+		// Forward deep-to-deep on a 2-panel host: the {detail,detail}
+		// resolver returns axis='left' for forward, but a 2-panel track
+		// has no panel to the right of centre, so a leftward slide
+		// reveals empty space. The destination skeleton renders in the
+		// left panel (NavPipelineHost's forwardDeepTarget branch); override
+		// the axis to 'right' so the slide reveals it. The title crossfade
+		// direction is derived independently from navStore.direction
+		// (forward for a push) in #resolveNavDirection, so the title still
+		// enters from the right. A coordinator-driven preload (Layer 4)
+		// that places the destination in a right panel would let the
+		// resolver's native 'left' axis work; that is beyond this fix.
+		const plan =
+			isForwardDeepToDeep && resolvedPlan.pageTrack.axis === 'left'
+				? {
+						...resolvedPlan,
+						pageTrack: { ...resolvedPlan.pageTrack, axis: 'right' as const }
+					}
+				: resolvedPlan;
 		this.#pendingGesture = null;
 		this.#liveDragging = false;
 		this.#gestureToTabIndex = toTabIndex;
@@ -1702,7 +1768,11 @@ export class NavPipelineOrchestrator {
 		// target's real panel (cached) or its skeleton in the left slot,
 		// so the slide reveals the correct content. Dispatch on settle.
 		this.#executor?.onDragStart(plan, startProgress, 0);
-		this.#executor?.onCommit(0, TAB_CLICK_COMMIT_MS);
+		// No finger-release velocity on a tab-click: pass 0 and let the
+		// velocity-matched solver pick the default duration
+		// (`COMMIT_T_DEFAULT_MS`). The Header settle reads the resulting
+		// `commitStart.durationMs` and matches it (R17), so no desync.
+		this.#executor?.onCommit(0);
 		this.#stateMachine.onCommit();
 		return true;
 	}
@@ -2130,9 +2200,11 @@ export class NavPipelineOrchestrator {
 	 *  duration (`commitStart.durationMs`) so the Header morph / title
 	 *  crossfade tracks the slide end-to-end. A fast release (~120ms) and
 	 *  the Header settle finish together; a slow release (~600ms) and they
-	 *  run together too. The cancel branch falls back to
-	 *  `TITLE_CROSSFADE_MS` because a cancel snaps back from a
-	 *  sub-threshold position with no velocity-matched slide to track. */
+	 *  run together too. Both the commit and the cancel settle read the
+	 *  same duration: the executor solves a velocity-matched duration for
+	 *  the cancel slide too (a sub-threshold release still animates back
+	 *  over a velocity-matched curve), so the Header morph / title
+	 *  crossfade tracks the cancel slide end-to-end as well. */
 	#armSettleEaseFromGesture(committed: boolean): void {
 		if (!browser) return;
 		const inputs = this.#mountInputs;
@@ -2159,7 +2231,7 @@ export class NavPipelineOrchestrator {
 			committed ? 1 : 0,
 			committed, // awaitTitle only on a commit (cancel has no nav)
 			'back',
-			committed ? commitDurationMs : TITLE_CROSSFADE_MS
+			commitDurationMs
 		);
 	}
 
@@ -2173,8 +2245,24 @@ export class NavPipelineOrchestrator {
 	 *  consumers (searchProgress / tabProgress) see tapMorph !== null in
 	 *  the same flush and read the start value before the first rAF tick.
 	 *  Latches scrubSource / scrubTargetTabs / scrubTerminal for the clear
-	 *  watch in `notifyHeaderState`. */
-	#armTapScrubEase(fromValue: number, toValue: number, source: string, targetTabs: boolean): void {
+	 *  watch in `notifyHeaderState`.
+	 *
+	 *  `nonSearchIconValue` is the icon-morph value at the scrub's
+	 *  non-search endpoint (0 for a tab root, 1 for a deep page). Published
+	 *  to the pager store as `scrubIconEndpoint` so the Header's
+	 *  `iconProgress` derivation lerps the hamburger <-> back-arrow morph
+	 *  continuously across the URL swap frame (`iconProgress = tapMorph *
+	 *  scrubIconEndpoint`). The search endpoint contributes 0 (the
+	 *  search-layer hamburger), so a tab<->search scrub passes 0 (the
+	 *  icon stays a hamburger at both endpoints) and a deep<->search scrub
+	 *  passes 1 (the icon eases between back-arrow and hamburger). */
+	#armTapScrubEase(
+		fromValue: number,
+		toValue: number,
+		source: string,
+		targetTabs: boolean,
+		nonSearchIconValue: number
+	): void {
 		if (!browser) return;
 		this.#cancelTapScrubRaf();
 		this.#scrubSource = source;
@@ -2186,6 +2274,7 @@ export class NavPipelineOrchestrator {
 		const pager = getMobilePagerStore();
 		this.#stateMachine.setSearchScrubbing(true);
 		pager.setTapMorph(fromValue);
+		pager.setScrubIconEndpoint(nonSearchIconValue);
 		// Reduced-motion: snap to target with no rAF.
 		if (this.#driver?.prefersReducedMotion() ?? false) {
 			pager.setTapMorph(toValue);
@@ -2219,13 +2308,16 @@ export class NavPipelineOrchestrator {
 	}
 
 	/** Finish the tap-scrub ease: drop searchScrubbing and clear tapMorph
-	 *  so the morph / trackMorph derivations fall through to the rest
-	 *  branch (the destination route's at-rest value). Idempotent. */
+	 *  and scrubIconEndpoint so the morph / trackMorph / iconProgress
+	 *  derivations fall through to the rest branch (the destination
+	 *  route's at-rest value). Idempotent. */
 	#finishTapScrubEase(): void {
 		this.#cancelTapScrubRaf();
 		this.#scrubSource = '';
 		this.#stateMachine.setSearchScrubbing(false);
-		getMobilePagerStore().setTapMorph(null);
+		const pager = getMobilePagerStore();
+		pager.setTapMorph(null);
+		pager.setScrubIconEndpoint(null);
 	}
 
 	/** Accelerate the in-flight commit to completion so a queued discrete
@@ -2289,7 +2381,27 @@ export class NavPipelineOrchestrator {
 			cancelAnimationFrame(this.#familySwapRafId);
 			this.#familySwapRafId = undefined;
 			const easedScale = this.#lastRenderedScale;
-			this.#fabDragSeedFraction = (easedScale + 1) / 2;
+			// The seed must produce a `coverProgress` whose FAB-layer
+			// reading equals the eased scale at the moment of
+			// interruption. Family B / C (source family is overlay or
+			// compose) reads `foregroundFraction = coverProgress`
+			// directly, so the inverse of
+			// `scaleFromFraction(f) = clamp(2f - 1, 0, 1)` gives
+			// `seed = (easedScale + 1) / 2`. Family A (source family is
+			// 'list') inverts the FAB layer's gate for a gesture whose
+			// target is an overlay / deep page
+			// (`foregroundFraction = 1 - coverProgress`), so the seed
+			// must satisfy `1 - seed = (easedScale + 1) / 2`, i.e.
+			// `seed = (1 - easedScale) / 2`. The route-swap family
+			// change that armed this ease moved the family from a
+			// non-list route to the current host; when the current
+			// host's family is 'list' the gesture's back-target is the
+			// non-list previous route and the FAB gate will invert, so
+			// pick the list-source formula.
+			const inputs = this.#mountInputs;
+			const sourceFamily = inputs !== null ? this.#familyOf(inputs.fromPathname) : null;
+			this.#fabDragSeedFraction =
+				sourceFamily === 'list' ? (1 - easedScale) / 2 : (easedScale + 1) / 2;
 			this.#publishFamilySwapScale(null);
 		}
 	}
@@ -2318,7 +2430,29 @@ export class NavPipelineOrchestrator {
 		currentIsSearch: boolean,
 		t: TranslationDict
 	): void {
+		// Consume the enter-animation settle flag on the VERY NEXT call,
+		// before any early-return below, so it is read + cleared exactly
+		// once regardless of which branch fires. The flag is set by
+		// `playEnterAnimation` after arming the settle for a forward
+		// enter; its purpose is "skip the live-title re-arm for the enter
+		// animation's own settle". The local is read in the idle-arm
+		// branch at the bottom of this method; consuming it here at the
+		// top makes the flag fire exactly once on the next call after
+		// `playEnterAnimation` set it, so a call that hits an early
+		// return (the gap-frame `!#mounted` guard, the
+		// `#headerStateInitialized` first-call seed, the `pager.dragging`
+		// drag-active branch, or the `settleActive` mid-settle branch)
+		// still spends the flag instead of leaking it to a later call.
+		const enterAnimationArmedSettle = this.#enterAnimationArmedSettle;
+		this.#enterAnimationArmedSettle = false;
 		if (!browser) return;
+		// Always update the translation dict before the `!#mounted` guard
+		// below so the gesture-release settle arming (which reads
+		// `#headerT` via `resolveDeepHeaderTitle` in
+		// `#armSettleEaseFromGesture`) sees the current dict even after a
+		// gap-frame call (releaseInputs -> the next configure) that hit the
+		// guard and early-returned.
+		this.#headerT = t;
 		// Header persists in AppShell; on a mobile -> desktop flip the
 		// orchestrator's `unmount` tears down the host inputs and clears
 		// `#mounted`. The Header's `$effect.pre` keeps firing on
@@ -2326,7 +2460,6 @@ export class NavPipelineOrchestrator {
 		// re-arm eases (the settle / tap-scrub rAFs would tick against
 		// torn-down state). No-op until the next `configure`.
 		if (!this.#mounted) return;
-		this.#headerT = t;
 		if (!this.#headerStateInitialized) {
 			this.#prevHeaderTitle = newTitle;
 			this.#prevHeaderHasTabs = currentHasTabs;
@@ -2431,6 +2564,16 @@ export class NavPipelineOrchestrator {
 		// signal cannot drive the latter (it is false at /profile and
 		// /search).
 		//
+		// The icon-morph endpoint (`nonSearchIconValue`) is the icon
+		// value at the non-search side of the scrub: 0 when that side is
+		// a tab root (icon = hamburger at both endpoints, so the morph
+		// holds at hamburger throughout), 1 when it is a deep page (icon
+		// = back-arrow at the deep endpoint, hamburger at /search, so the
+		// morph eases between them across the scrub). The non-search
+		// endpoint is the previous route when the URL just landed on
+		// /search (`prevIsSearch === false`) and the current route when
+		// the URL just left /search (`prevIsSearch === true`).
+		//
 		// Skipped when `#lastLandWasPipelineCommit` is true: the
 		// just-landed navigation was a pipeline gesture/tab-click commit,
 		// and the executor's slide already drove the search-layout visual
@@ -2447,12 +2590,25 @@ export class NavPipelineOrchestrator {
 		) {
 			const fromValue = prevIsSearch ? 0 : 1;
 			const toValue = currentIsSearch ? 0 : 1;
-			this.#armTapScrubEase(fromValue, toValue, newPath, currentHasTabs);
+			// The non-search endpoint's hasTabs: when the URL just landed
+			// on /search the non-search side is the previous route (read
+			// `#prevHeaderHasTabs`, captured before this call updates it);
+			// when the URL just left /search the non-search side is the
+			// current route (`currentHasTabs`).
+			const nonSearchHasTabs = prevIsSearch ? currentHasTabs : this.#prevHeaderHasTabs;
+			const nonSearchIconValue = nonSearchHasTabs ? 0 : 1;
+			this.#armTapScrubEase(fromValue, toValue, newPath, currentHasTabs, nonSearchIconValue);
 		}
 		// Idle: arm the crossfade on any title change (including an empty
 		// incoming title for a tab-root landing and an empty outgoing
-		// title for a forward-from-tab click).
-		if (newTitle !== this.#prevHeaderTitle) {
+		// title for a forward-from-tab click). Skipped when
+		// `playEnterAnimation` just armed the settle for a forward enter:
+		// the live title arriving here would re-arm with startProgress=0
+		// and snap the morph back to the source route's tab-ness. The
+		// enter's settle continues to its target; the live title takes
+		// over when the settle ends and the morph derivation reverts to
+		// its rest branch.
+		if (newTitle !== this.#prevHeaderTitle && !enterAnimationArmedSettle) {
 			const latched: HeaderSettleTransition = {
 				outgoingTitle: this.#prevHeaderTitle,
 				incomingTitle: newTitle,
@@ -2512,8 +2668,7 @@ export class NavPipelineOrchestrator {
 				backMorph: null,
 				targetIndex: null,
 				coverProgress: 0,
-				transitionTarget: null,
-				committed: null
+				transitionTarget: null
 			});
 		} else if (inputs?.bidirectional === true) {
 			const fromIdx = inputs?.fromTabIndex ?? -1;
@@ -2530,8 +2685,7 @@ export class NavPipelineOrchestrator {
 				targetIndex: null,
 				coverProgress: 0,
 				transitionTarget: null,
-				trackFractionalIndex: fromIdx,
-				committed: null
+				trackFractionalIndex: fromIdx
 			});
 		} else {
 			const fromIdx = inputs?.fromTabIndex ?? -1;
@@ -2546,8 +2700,7 @@ export class NavPipelineOrchestrator {
 				backMorph: 0,
 				targetIndex: null,
 				coverProgress: 0,
-				transitionTarget: null,
-				committed: null
+				transitionTarget: null
 			});
 		}
 		// At-rest maintenance: capture the FAB's resting scale against the
@@ -2641,9 +2794,18 @@ export class NavPipelineOrchestrator {
 	 *  Tab-host mode (no centerTab, bidirectional): interpolates
 	 *  `fractionalIndex` between `fromTabIndex` and `toTabIndex`
 	 *  (threshold-absorbed by `PILL_EXPANSION_THRESHOLD`) so the pill
-	 *  follows the slide, but publishes `backMorph: null` so the Header
-	 *  never morphs toward the back-arrow (tab-to-tab transitions stay
-	 *  in hamburger mode end to end).
+	 *  follows the slide. Two sub-cases by destination:
+	 *    - Tab-to-tab (target is a tab root): publishes `backMorph: null`
+	 *      so the Header stays in hamburger mode end to end.
+	 *    - Backward-to-deep-page (target is a deep page reached via
+	 *      `previousEntryPathname`): the pill HOLDS at `fromTabIndex`
+	 *      (the spatial-previous tab the resolver assumed is NOT where
+	 *      the user is going), and publishes `backMorph: rawDragFraction`
+	 *      so the Header morph reveals the back-arrow during the slide
+	 *      (the destination is a deep page, matching NavPipelineHost's
+	 *      backward behaviour). On landing the deep page's `configure`
+	 *      publishes its own pill (`centerTab` for a thread, -1 for a
+	 *      deep page).
 	 *
 	 *  Deep-page mode (no centerTab, not bidirectional): same pill
 	 *  interpolation, plus `backMorph: rawDragFraction` so the Header
@@ -2699,17 +2861,29 @@ export class NavPipelineOrchestrator {
 			}
 			return;
 		}
-		// No centerTab: tab host (bidirectional) or deep page. Both modes
-		// share the pill interpolation; only backMorph differs (null for the
-		// tab host so the Header stays in hamburger mode, the raw slide
-		// fraction for a deep page so the Header morphs).
+		// No centerTab: tab host (bidirectional) or deep page. The pill
+		// interpolation is shared; the backMorph publication differs by
+		// destination (see the docstring above for the four sub-cases).
 		const fromIdx = inputs?.fromTabIndex ?? -1;
 		const toIdx = this.#gestureToTabIndex ?? inputs?.toTabIndex ?? -1;
+		const bidirectional = inputs?.bidirectional === true;
+		// Backward-to-deep-page on a bidirectional host: the in-flight
+		// target is a deep page (the user is leaving the tab host via
+		// history.back to /profile, /bookmarks, etc.). The resolver's
+		// `toTabIndex = fromTabIndex - 1` (the spatial-previous tab) does
+		// NOT match the actual destination, so the pill must HOLD at
+		// fromIdx and the Header morph must reveal the back-arrow over the
+		// slide. Forward gestures on a bidirectional host always target a
+		// tab root (`#nextTabTarget`), so a deep-page target implies a
+		// backward gesture.
+		const targetPath = publication.toPathname;
+		const targetIsDeepPage = targetPath !== null && !isTabRootPath(targetPath);
+		const holdPillAtFromIdx = bidirectional && targetIsDeepPage;
+		const pillToIdx = holdPillAtFromIdx ? fromIdx : toIdx;
 		const pillProgress =
-			toIdx >= 0
+			pillToIdx >= 0
 				? Math.max(0, rawDragFraction - PILL_EXPANSION_THRESHOLD) / (1 - PILL_EXPANSION_THRESHOLD)
 				: 0;
-		const bidirectional = inputs?.bidirectional === true;
 		// The tab host's 1:1 track fractional position, published for the
 		// Family A FAB (it follows the slide across a drag, a re-grab, and
 		// the boundary rubber-band). Computed from the executor's
@@ -2721,12 +2895,22 @@ export class NavPipelineOrchestrator {
 			bidirectional && this.#executor !== null && viewportWidth > 0
 				? -trackTranslateX(plan, this.#executor.state.progress) / viewportWidth
 				: null;
+		// backMorph: raw slide fraction on a deep-page host OR a
+		// backward-to-deep-page gesture on a bidirectional host (the
+		// destination is a deep page, so the Header morph must reveal the
+		// back-arrow during the slide). null for tab-to-tab on a
+		// bidirectional host (tab-to-tab stays in hamburger mode).
+		const backMorphValue = bidirectional && !targetIsDeepPage ? null : rawDragFraction;
+		// targetIndex: null when the pill is held at fromIdx (a held pill
+		// has no destination tab to highlight) or when the resolved
+		// toTabIndex is -1 (no tab association).
+		const targetIndexValue = holdPillAtFromIdx || pillToIdx < 0 ? null : pillToIdx;
 		pager.set({
-			fractionalIndex: toIdx >= 0 ? fromIdx + (toIdx - fromIdx) * pillProgress : fromIdx,
+			fractionalIndex: pillToIdx >= 0 ? fromIdx + (pillToIdx - fromIdx) * pillProgress : fromIdx,
 			dragging: publication.inFlight && this.#liveDragging,
 			active: true,
-			backMorph: bidirectional ? null : rawDragFraction,
-			targetIndex: toIdx >= 0 ? toIdx : null,
+			backMorph: backMorphValue,
+			targetIndex: targetIndexValue,
 			coverProgress,
 			transitionTarget: publication.toPathname,
 			trackFractionalIndex: trackFrac

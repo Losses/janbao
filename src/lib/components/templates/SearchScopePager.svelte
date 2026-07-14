@@ -5,6 +5,13 @@
 	 * centre panel (MOBILE ONLY). A drag switches scope 1:1; `?scope=` drives
 	 * `activeIndex` (URL = source of truth).
 	 *
+	 * Animation (DV20 §5): the panel track has NO CSS transition. `visualIndex`
+	 * is the authoritative visual position; during a drag it follows the finger
+	 * 1:1, and on release or a URL-driven switch a self-owned rAF eases it to
+	 * `activeIndex` with the constant-deceleration curve `2u - u²` (the same ease
+	 * the orchestrator's commit / tap-scrub rAFs use). `prefers-reduced-motion`
+	 * snaps. The rAF, not CSS, owns every frame of the motion.
+	 *
 	 * Boundary handoff: `detectSwipe` is given `shouldClaim` + `exclusive`. At the
 	 * leftmost scope a rightward drag (the back-swipe direction) YIELDS
 	 * (`shouldClaim` returns false → reset to idle, no claim, no stop-prop) so the
@@ -27,8 +34,10 @@
 	import { onMount, untrack } from 'svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
+	import { browser } from '$app/environment';
 	import type { Action } from 'svelte/action';
 	import { detectSwipe } from '$lib/actions/swipe';
+	import { REDUCED_MOTION_QUERY } from '$lib/utils/nav-dom-driver-live';
 	import { getSearchPagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
@@ -64,7 +73,14 @@
 	}
 
 	let activeIndex = $state(untrack(() => scopeIndex(data.scope)));
-	let dragOffset = $state<number | null>(null);
+	/** Authoritative visual position of the panel track in scope units
+	 *  (0 = discussions visible, 1 = activities, ...). During a drag it
+	 *  follows the finger 1:1; on release or a URL-driven switch the settle
+	 *  rAF eases it to `activeIndex`. The rAF below owns every frame. */
+	let visualIndex = $state(untrack(() => scopeIndex(data.scope)));
+	/** Finger-down flag: true during a drag (1:1 follow, underline stretches),
+	 *  false during a settle. Published as the pager store's `dragging`. */
+	let isDragging = $state(false);
 	let viewportWidth = $state(0);
 	let panelEls = $state<(HTMLElement | null)[]>(SEARCH_SCOPES.map(() => null));
 
@@ -78,7 +94,10 @@
 		lastScope = s;
 		untrack(() => {
 			const i = scopeIndex(s);
-			if (i !== activeIndex) activeIndex = i;
+			if (i !== activeIndex) {
+				activeIndex = i;
+				settleTo(i);
+			}
 		});
 	});
 
@@ -122,13 +141,14 @@
 		}
 	});
 
-	// Publish drag progress to the search pager store so SearchTabBar's underline
-	// tracks the finger. backMorph stays null: scope switching does not morph the
-	// header (only the NavPipelineHost back-swipe does, via the primary store).
+	// Publish the visual position to the search pager store so SearchTabBar's
+	// underline tracks the track continuously, during both a drag and a settle.
+	// backMorph stays null: scope switching does not morph the header (only the
+	// NavPipelineHost back-swipe does, via the primary store).
 	$effect(() => {
 		pager.set({
-			fractionalIndex: activeIndex - (dragOffset ?? 0) / (viewportWidth || 1),
-			dragging: dragOffset !== null,
+			fractionalIndex: visualIndex,
+			dragging: isDragging,
 			active: true,
 			backMorph: null
 		});
@@ -137,6 +157,7 @@
 	onMount(() => {
 		pager.set({ fractionalIndex: activeIndex, dragging: false, active: true, backMorph: null });
 		return () => {
+			cancelSettle();
 			pager.set({ fractionalIndex: 0, dragging: false, active: false, backMorph: null });
 			scrollChrome.setOverride(null);
 		};
@@ -164,22 +185,82 @@
 		return deltaX;
 	}
 
+	// ---------------------------------------------------------------------
+	// Scope-switch settle (DV20 §5). The panel track reads `visualIndex`;
+	// this self-owned rAF eases it to `activeIndex` after a drag release or
+	// a URL-driven switch. One rAF per motion channel, the same invariant
+	// the orchestrator upholds.
+	// ---------------------------------------------------------------------
+
+	const SCOPE_SETTLE_MS = 200;
+	let settleRafId: number | undefined;
+
+	function cancelSettle(): void {
+		if (settleRafId !== undefined) {
+			cancelAnimationFrame(settleRafId);
+			settleRafId = undefined;
+		}
+	}
+
+	function prefersReducedMotion(): boolean {
+		if (!browser) return false;
+		return window.matchMedia(REDUCED_MOTION_QUERY).matches;
+	}
+
+	/** Ease `visualIndex` to `target` over `SCOPE_SETTLE_MS` with the
+	 *  constant-deceleration curve `2u - u²` (the ease the orchestrator's
+	 *  commit and tap-scrub rAFs use). Cancels any in-flight settle first
+	 *  so a re-grab or a new target mid-settle interrupts cleanly. Reduced
+	 *  motion snaps to the target with no rAF. */
+	function settleTo(target: number): void {
+		if (!browser) return;
+		cancelSettle();
+		if (visualIndex === target) return;
+		if (prefersReducedMotion()) {
+			visualIndex = target;
+			return;
+		}
+		const from = visualIndex;
+		let startTs = 0;
+		const tick = (): void => {
+			const now = performance.now();
+			if (startTs === 0) startTs = now;
+			const u = Math.min((now - startTs) / SCOPE_SETTLE_MS, 1);
+			const eased = 2 * u - u * u;
+			visualIndex = from + (target - from) * eased;
+			if (u >= 1) {
+				settleRafId = undefined;
+				return;
+			}
+			settleRafId = requestAnimationFrame(tick);
+		};
+		settleRafId = requestAnimationFrame(tick);
+	}
+
 	function swipeMove(deltaX: number): void {
 		scrollChrome.show();
-		dragOffset = follow(deltaX);
+		// A re-grab mid-settle interrupts the easing rAF and resumes 1:1 follow
+		// from the current pointer position. The track anchors at `activeIndex`
+		// for deltaX = 0 (DV20 §5 interruption).
+		cancelSettle();
+		isDragging = true;
+		visualIndex = activeIndex - follow(deltaX) / (viewportWidth || 1);
 	}
 
 	function swipeEnd(deltaX: number, _velocity: number, reversed: boolean): void {
+		isDragging = false;
 		if (deltaX >= SWIPE_COMMIT && activeIndex > 0 && !reversed) {
 			switchTo(activeIndex - 1);
 		} else if (deltaX <= -SWIPE_COMMIT && activeIndex < LAST && !reversed) {
 			switchTo(activeIndex + 1);
+		} else {
+			settleTo(activeIndex);
 		}
-		dragOffset = null;
 	}
 
 	function switchTo(index: number): void {
 		activeIndex = index;
+		settleTo(index);
 		const params = new SvelteURLSearchParams();
 		if (data.query) params.set('q', data.query);
 		params.set('scope', SEARCH_SCOPES[index]);
@@ -197,16 +278,9 @@
 		void goto(`/search?${params.toString()}`, { replaceState: true, noScroll: true });
 	}
 
-	const trackTranslateX = $derived(
-		dragOffset === null
-			? `-${activeIndex * STEP_PERCENT}%`
-			: `calc(-${activeIndex * STEP_PERCENT}% + ${dragOffset}px)`
-	);
-	const trackStyle = $derived(
-		dragOffset !== null
-			? `transform: translateX(${trackTranslateX}); transition: none`
-			: `transform: translateX(${trackTranslateX})`
-	);
+	// The panel track reads `visualIndex` (the rAF-driven visual position)
+	// directly. No transition property: the settle rAF owns every frame.
+	const trackStyle = $derived(`transform: translateX(-${visualIndex * STEP_PERCENT}%)`);
 
 	const measureViewport: Action<HTMLElement> = (node) => {
 		const update = () => {
@@ -253,10 +327,7 @@
 	use:detectSwipe={{ onMove: swipeMove, onEnd: swipeEnd, shouldClaim, exclusive: true }}
 	use:measureViewport
 >
-	<div
-		class="flex h-full w-[400%] items-start transition-transform duration-200"
-		style={trackStyle}
-	>
+	<div class="flex h-full w-[400%] items-start" style={trackStyle}>
 		<section
 			bind:this={panelEls[0]}
 			data-scope-panel="discussions"

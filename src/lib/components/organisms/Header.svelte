@@ -141,13 +141,24 @@
 		return currentHasTabs ? 1 : 0;
 	});
 
-	// Freeze the icon morph during a search transition. The icon's morph is a
-	// root↔deep animation; on a root↔search tap scrub the icon must stay a
-	// hamburger at both endpoints. Freeze on `isSearch` (search-mode rest) OR
-	// on `searchScrubbing` while on a tab-root page. The `currentHasTabs`
-	// term scopes the scrub freeze to tab-root pages, so a scrub in flight
-	// when the route is a deep page does not freeze the icon there.
-	const iconProgress = $derived(isSearch || (searchScrubbing && currentHasTabs) ? 0 : 1 - morph);
+	// The icon morph (hamburger <-> back-arrow) during a tap scrub.
+	// `iconProgress` is 0 (hamburger) at the search endpoint of the scrub;
+	// at the non-search endpoint it is `scrubIconEndpoint` (0 for a tab
+	// root, 1 for a deep page). `pager.tapMorph` eases 1 -> 0 across the
+	// scrub (1 = non-search side, 0 = search side), so lerping by tapMorph
+	// (`tapMorph * scrubIconEndpoint`) keeps the morph continuous with the
+	// horizontal track scrub: a tab<->search scrub holds the hamburger
+	// (scrubIconEndpoint = 0), a deep<->search scrub eases the back-arrow
+	// into the hamburger (scrubIconEndpoint = 1). Outside a scrub the
+	// morph reads `isSearch` (hamburger on /search) or `1 - morph` (the
+	// root<->deep vertical morph at rest / during a drag / settle).
+	const iconProgress = $derived.by(() => {
+		if (searchScrubbing && pager.tapMorph !== null) {
+			const endpoint = pager.scrubIconEndpoint ?? 0;
+			return pager.tapMorph * endpoint;
+		}
+		return isSearch || (searchScrubbing && currentHasTabs) ? 0 : 1 - morph;
+	});
 
 	// Title view model. The drag branch hardcodes direction 'back' (a
 	// back-swipe always slides the current title down and brings the back

@@ -161,11 +161,7 @@ export default defineConfig(
 		}
 	},
 	{
-		files: [
-			'src/lib/components/templates/GesturePageLayout.svelte',
-			'src/lib/components/templates/MobileTabPager.svelte',
-			'src/lib/components/organisms/MobileTabBar.svelte'
-		],
+		files: ['src/lib/components/organisms/MobileTabBar.svelte'],
 		rules: {
 			'no-restricted-imports': [
 				'error',

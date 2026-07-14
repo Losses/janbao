@@ -156,6 +156,17 @@
 		return target;
 	});
 	const leftPanelPathname = $derived(crossTabPanelPath ?? resolvedLeftHref);
+	// Forward deep-to-deep: the in-flight transition targets a deep page
+	// (a detail -> detail push intercepted by the orchestrator). The left
+	// panel renders a skeleton for the destination; the real content mounts
+	// on landing. Null when no transition is in flight or the target is a
+	// tab root (a tab-click exit handled by the panel branches below).
+	const forwardDeepTarget = $derived.by<string | null>(() => {
+		const target = transitionTarget;
+		if (target === null) return null;
+		if (isTabRootPath(target)) return null;
+		return target;
+	});
 	// The left panel's tab label.
 	const leftPanelTab = $derived(
 		MOBILE_TABS.find((tab) => tab.href === leftPanelPathname)?.labelKey ?? null
@@ -535,7 +546,14 @@
 					     route's message-row array replaces
 					     page.data.messages, so the panel cannot render and
 					     MessagesSkeleton stands in until the back-swipe lands. -->
-					{#if leftPanelPathname === '/activity'}
+					{#if forwardDeepTarget !== null}
+						<!-- Forward deep-to-deep: the slide reveals the
+						     destination's skeleton in the left panel; the
+						     real content mounts on landing. Preloading the
+						     destination's data is a coordinator / Layer 4
+						     concern. -->
+						<DeepPreviewSkeleton />
+					{:else if leftPanelPathname === '/activity'}
 						<ActivityPanel
 							activities={page.data.activity.activities}
 							currentPage={page.data.activity.page}

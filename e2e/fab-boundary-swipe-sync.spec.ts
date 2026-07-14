@@ -33,10 +33,10 @@ test.beforeEach(async ({ context }) => {
 });
 
 // Discussions FAB (tab 0, the first tab). swipeBack swipes rightward toward the
-// non-existent previous tab, so follow() rubber-bands. On a fresh landing
-// previousEntryPathname() is null, so backSwipeShouldPopHistory() is false and
-// swipeMove takes the follow() branch rather than the deep-preview or back-chip
-// branch.
+// non-existent previous tab, so the track rubber-bands. On a fresh landing
+// previousEntryPathname() is null (no history entry behind the current tab),
+// so the backward gesture has no target and the gesture is a boundary
+// void-swipe (no navigation).
 test('Family A boundary: FAB tracks the void-swipe rubber-band on the first tab (discussions)', async ({
 	page
 }) => {
