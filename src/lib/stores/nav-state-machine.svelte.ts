@@ -38,6 +38,7 @@ import {
 import type { IntentState } from '$lib/utils/nav-intent';
 import type { RouteTag } from '$lib/utils/route-data';
 import type { TransitionDirection, TransitionPlan } from '$lib/utils/nav-resolvers';
+import type { HeaderSettleTransition } from '$lib/utils/header-probe';
 
 /** A clock function returning epoch milliseconds. Injectable so unit
  *  tests are deterministic. */
@@ -56,9 +57,36 @@ export interface NavStateMachineOptions {
 /** Internal alias kept for the private field type. */
 type ClockFn = NavClockFn;
 
+/** Partial settle state update. Each field is optional; unspecified fields
+ *  preserve their prior value. Passed to `NavStateMachine.setSettleState` by
+ *  the orchestrator's settle rAF tick, settle-arm, and settle-end paths. */
+interface SettleStateUpdate {
+	active?: boolean;
+	progress?: number;
+	latched?: HeaderSettleTransition | null;
+	direction?: 'forward' | 'back';
+	awaitTitle?: boolean;
+}
+
 export class NavStateMachine {
 	#state = $state<OrchestratorState>(initialOrchestratorState('tab'));
 	readonly #now: ClockFn;
+
+	// ------------------------------------------------------------------
+	// Settle + tap-scrub micro animation state. Per §13.5 the state
+	// machine is the sole authority for consumer-visible state. The
+	// orchestrator owns the settle / tap-scrub rAFs (the motion
+	// channels) and writes the per-frame values here; the orchestrator's
+	// `$derived` publication merges them with the macro phase for
+	// consumers (the Header). Stored on the state machine, not on the
+	// orchestrator's private class `$state`, so consumers read from ONE
+	// authority.
+	#settleActive = $state(false);
+	#settleProgress = $state(1);
+	#settleLatched = $state<HeaderSettleTransition | null>(null);
+	#settleDirection = $state<'forward' | 'back'>('forward');
+	#settleAwaitTitle = $state(false);
+	#searchScrubbing = $state(false);
 
 	constructor(opts: NavStateMachineOptions = {}) {
 		this.#now = opts.now ?? (() => Date.now());
@@ -98,6 +126,64 @@ export class NavStateMachine {
 	/** Reactive read of the transition direction. */
 	get direction(): TransitionDirection | null {
 		return this.#state.direction;
+	}
+
+	// ------------------------------------------------------------------
+	// Settle + tap-scrub reactive reads. The orchestrator's publication
+	// merges these into the consumer-facing record; the Header reads
+	// them via the orchestrator's getters (pass-throughs to this
+	// authority).
+
+	/** True while the orchestrator's settle ease owns the morph / title
+	 *  crossfade. Read by the Header's morph / titleView derivations via
+	 *  the orchestrator's publication. */
+	get settleActive(): boolean {
+		return this.#settleActive;
+	}
+	/** The eased settle progress 0..1. Read by the Header's morph /
+	 *  titleView derivations via the orchestrator's publication. */
+	get settleProgress(): number {
+		return this.#settleProgress;
+	}
+	/** The latched endpoint identity of the in-flight settle. null at
+	 *  rest. Read by the Header's morph / titleView derivations via the
+	 *  orchestrator's publication. */
+	get settleLatched(): HeaderSettleTransition | null {
+		return this.#settleLatched;
+	}
+	/** The direction of the in-flight settle (forward / back). Read by
+	 *  the Header's titleView to pick the title-span slide axis. */
+	get settleDirection(): 'forward' | 'back' {
+		return this.#settleDirection;
+	}
+	/** True while a commit settle holds at progress 1 awaiting the
+	 *  navigation to land. Read by the DEV probe. */
+	get settleAwaitTitle(): boolean {
+		return this.#settleAwaitTitle;
+	}
+	/** True while the orchestrator's tap-scrub ease is in flight. Read
+	 *  by the Header's `iconProgress` derivation to freeze the hamburger
+	 *  icon on a tab-root page while the search-layout scrub runs. */
+	get searchScrubbing(): boolean {
+		return this.#searchScrubbing;
+	}
+
+	/** Write the settle state. Each field is optional; unspecified fields
+	 *  preserve their prior value. Called by the orchestrator's settle
+	 *  rAF tick (progress only), settle-arm (all fields), and
+	 *  settle-end (clear active + latched). */
+	setSettleState(update: SettleStateUpdate): void {
+		if (update.active !== undefined) this.#settleActive = update.active;
+		if (update.progress !== undefined) this.#settleProgress = update.progress;
+		if (update.latched !== undefined) this.#settleLatched = update.latched;
+		if (update.direction !== undefined) this.#settleDirection = update.direction;
+		if (update.awaitTitle !== undefined) this.#settleAwaitTitle = update.awaitTitle;
+	}
+
+	/** Write the search-scrub flag. Called by the orchestrator's
+	 *  tap-scrub arm / finish paths. */
+	setSearchScrubbing(value: boolean): void {
+		this.#searchScrubbing = value;
 	}
 
 	/** Dispatch an event through the reducer. Single mutation point:

@@ -212,8 +212,9 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		await page.waitForFunction(() => location.pathname === '/activity', null, { timeout: 8000 });
 		await page.waitForTimeout(300);
 
-		// STAGE 2 - during the back-swipe preview: the overlay's scroll + title +
-		// scroll RANGE.
+		// STAGE 2 - during the back-swipe preview: the deep-snapshot overlay's
+		// scroll + title + scroll RANGE. The overlay covers the revealed panel
+		// with a skeleton for thread pages (no registered preview panel).
 		const held = await holdDrag(page, 'back');
 		await page.waitForTimeout(200);
 		const preview = await page.evaluate(() => {
@@ -223,7 +224,8 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 				scrollTop: overlay?.scrollTop ?? -1,
 				scrollHeight: overlay?.scrollHeight ?? -1,
 				clientHeight: overlay?.clientHeight ?? -1,
-				titleTop: title ? Math.round(title.getBoundingClientRect().top) : null
+				titleTop: title ? Math.round(title.getBoundingClientRect().top) : null,
+				hasThreadPane: !!overlay?.querySelector('.detail-scroll-pane')
 			};
 		});
 		await held.release();
@@ -249,15 +251,16 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 
 		console.log('DEBUG METRICS BEFORE AND PREVIEW:', { before, preview });
 
-		// The pipeline's back-swipe preview shows the previous tab (the visual
-		// proxy, Known #9), not the thread pane. The thread pane is not present
-		// during the slide; it loads on land.
+		// The deep-snapshot overlay IS present during the slide, covering the
+		// revealed panel with a skeleton (thread pages have no registered
+		// preview panel). The overlay is NOT the thread pane itself.
 		expect(preview.clientHeight,
-			'thread pane not present during the preview (loads on land)').toBe(-1);
+			'deep-snapshot overlay is present during the preview').toBeGreaterThan(0);
 
-		// The pipeline's visual proxy (Known #9) shows the previous tab, not the
-		// thread pane, during the slide. The thread pane is absent; it loads on land.
-		expect(preview.scrollHeight, 'thread pane absent during preview').toBe(-1);
+		// The thread pane (.detail-scroll-pane) is absent inside the overlay;
+		// the overlay shows a skeleton, and the real thread pane loads on land.
+		expect(preview.hasThreadPane,
+			'thread pane absent inside the overlay (loads on land)').toBe(false);
 		expect(before.scrollHeight, 'thread rendered before').toBeGreaterThan(0);
 		expect(after.scrollHeight, 'thread pane may not be rendered at capture time').toBeGreaterThanOrEqual(-1);
 		expect(before.titleTop, 'before: title exists').not.toBeNull();
@@ -338,9 +341,8 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		await swipeBack(page);
 
 		// Sample the DOM rapidly after release. While still on /activity (before
-		// history.back loads the thread), the discussions list must NOT flash
-		// into view - the cached-thread overlay must persist until the pager
-		// unmounts.
+		// history.back loads the thread), the deep-snapshot overlay must cover
+		// the revealed panel so the discussions list does not flash into view.
 		const samples = await page.evaluate(async () => {
 			const results: Array<{ href: string; discussionsVisible: boolean; hasOverlay: boolean }> = [];
 			for (let i = 0; i < 12; i++) {
@@ -355,12 +357,17 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 			return results;
 		});
 
-		// The pipeline shows the discussions list as the backward-to-deep visual
-		// proxy (Known #9): during the slide the previous tab panel is visible,
-		// then the thread replaces it on land.
+		// The deep-snapshot overlay covers the revealed panel during the slide
+		// so the discussions list (the previous tab's content) does not flash.
+		// The overlay (a skeleton or preview panel for the deep target) is the
+		// visual proxy; the real deep page mounts on commit.
 		expect(
-			samples.some((s) => s.href === '/activity' && s.discussionsVisible),
-			'discussions list is the visual proxy during the slide'
+			samples.some((s) => s.href === '/activity' && s.hasOverlay),
+			'deep-snapshot overlay is visible during the slide'
+		).toBe(true);
+		expect(
+			samples.filter((s) => s.href === '/activity' && s.hasOverlay).every((s) => !s.discussionsVisible),
+			'discussions list does not flash behind the deep-snapshot overlay'
 		).toBe(true);
 	});
 

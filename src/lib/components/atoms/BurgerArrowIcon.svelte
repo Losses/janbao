@@ -19,22 +19,21 @@
 	 * translate/length are ANALYTICALLY FITTED (not eye-tuned) so both arms meet
 	 * at one sharp tip on the stem; only SPLAY (arrowhead size) is a free knob.
 	 *
-	 * Each bar is a fixed <line> reshaped via CSS `transform` (transitionable,
-	 * unlike SVG geometry attributes), so the morph settles with the same 200ms
-	 * ease-out discipline as the tab-pill clip when `dragging` is false, and
-	 * tracks the finger with no transition while dragging.
+	 * Each bar is a fixed <line> reshaped via CSS `transform` (animation-friendly,
+	 * unlike SVG geometry attributes). The `progress` prop is driven 1:1 by the
+	 * orchestrator's `iconProgress` (which reads `pager.backMorph` during a drag,
+	 * `settleProgress` during a settle); the orchestrator's single rAF owns every
+	 * motion of the morph, so this atom carries no CSS transition. §5: zero CSS
+	 * transitions in the animation layer.
 	 */
 	interface BurgerArrowIconProps {
 		/** 0 = hamburger, 1 = back arrow. Clamped to [0, 1]. */
 		progress: number;
-		/** True while a pointer is dragging: drop the CSS transition for 1:1 follow. */
-		dragging: boolean;
 	}
 
-	let { progress, dragging }: BurgerArrowIconProps = $props();
+	let { progress }: BurgerArrowIconProps = $props();
 
 	const p = $derived(Math.max(0, Math.min(1, progress)));
-	const transition = $derived(dragging ? 'none' : 'transform 200ms ease-out');
 
 	// MDI mdiMenu geometry: 24px box, bars 18 wide (x 3..21), 2 thick, centred at
 	// y 7/12/17 (stem at 12, arms +/-5). Flat ends match the original hamburger.
@@ -70,16 +69,16 @@
 	const STEM_SHIFT = RIGHT - SHAFT_RIGHT;
 
 	const groupStyle = $derived(
-		`transform-box: view-box; transform-origin: 12px ${STEM}px; transform: rotate(${180 * p}deg); transition: ${transition}`
+		`transform-box: view-box; transform-origin: 12px ${STEM}px; transform: rotate(${180 * p}deg)`
 	);
 	const stemStyle = $derived(
-		`transform-box: view-box; transform-origin: ${LEFT}px ${STEM}px; transform: translate(${STEM_SHIFT * p}px, 0) scaleX(${1 - (1 - SHAFT_SCALE) * p}); transition: ${transition}`
+		`transform-box: view-box; transform-origin: ${LEFT}px ${STEM}px; transform: translate(${STEM_SHIFT * p}px, 0) scaleX(${1 - (1 - SHAFT_SCALE) * p})`
 	);
 	const topStyle = $derived(
-		`transform-box: view-box; transform-origin: 12px ${TOP}px; transform: rotate(${45 * p}deg) translate(${TX * p}px, ${-TY * p}px) scaleX(${1 - (1 - ARM_END) * p}); transition: ${transition}`
+		`transform-box: view-box; transform-origin: 12px ${TOP}px; transform: rotate(${45 * p}deg) translate(${TX * p}px, ${-TY * p}px) scaleX(${1 - (1 - ARM_END) * p})`
 	);
 	const botStyle = $derived(
-		`transform-box: view-box; transform-origin: 12px ${BOT}px; transform: rotate(${-45 * p}deg) translate(${TX * p}px, ${TY * p}px) scaleX(${1 - (1 - ARM_END) * p}); transition: ${transition}`
+		`transform-box: view-box; transform-origin: 12px ${BOT}px; transform: rotate(${-45 * p}deg) translate(${TX * p}px, ${TY * p}px) scaleX(${1 - (1 - ARM_END) * p})`
 	);
 </script>
 

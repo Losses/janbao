@@ -139,6 +139,9 @@ const FAB_ROUTE_ATTRIBUTES: readonly FabRouteAttributes[] = [
 	// Family C: compose forms (publish coverProgress for the FAB scale).
 	{ pattern: /^\/post\/discussion$/, family: 'compose', kind: 'discussions' },
 	{ pattern: /^\/messages\/new$/, family: 'compose', kind: 'messages' },
+	// /messages/add/[userId] shares MessageCompose with /messages/new; the
+	// FAB atom stays mounted at scale 0 (compose family, no visible FAB).
+	{ pattern: /^\/messages\/add\//, family: 'compose', kind: 'messages' },
 
 	// Family B 'deep': non-FAB deep routes whose atom stays mounted at scale 0
 	// so coverProgress drives the scale across the list<->deep boundary.
@@ -318,13 +321,14 @@ export function backTargetListKind(backTargetHref: string | null): FabListKind {
  * `/profile`, and `/messages/add/[userId]` mount a NavPipelineHost but
  * this function returns FALSE for them (the first four carry
  * `kind: 'deep'`, failing the overlay branch; `/messages/add/[userId]`
- * has no FAB route attribute at all; all five have no declared
- * `backParent`, failing the deep-route branch). Sub-pages of `/profile`
- * and the entire `/admin/*` tree declare `backParent`, so they return
- * TRUE; the latent-bug set is these five leaf routes. The race does not
- * manifest because NavPipelineHost wins the pointer capture consistently;
- * the function and the bug dissolve in 5b3 when `DualColumnLayout`'s
- * detectSwipe is removed.
+ * carries a compose-family attribute, also failing the overlay branch;
+ * all five have no declared `backParent`, failing the deep-route
+ * branch). Sub-pages of `/profile` and the entire `/admin/*` tree
+ * declare `backParent`, so they return TRUE; the latent-bug set is
+ * these five leaf routes. The race does not manifest because
+ * NavPipelineHost wins the pointer capture consistently; the function
+ * and the bug dissolve in 5b3 when `DualColumnLayout`'s detectSwipe is
+ * removed.
  */
 export function isPipelineSwipeDisabledRoute(pathname: string): boolean {
 	const attrs = getFabRouteAttributes(pathname);

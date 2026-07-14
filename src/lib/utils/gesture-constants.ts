@@ -1,6 +1,16 @@
 // Designer Parameters for Gesture Animations
 // Put here to avoid circular dependency chains between components and tabs configuration.
-export const HEADER_MORPH_THRESHOLD = 0.2; // 20% drag distance to complete Header morph / Tab collapse
+// First 20% of the drag distance. Two uses:
+//   1. Track slide deadzone on non-bidirectional hosts
+//      (`NavPipelineOrchestrator.#thresholdAbsorbedProgress`): the track
+//      does not move for the first 20% of a drag so a gesture beginning
+//      mid-transition does not snap back.
+//   2. Search tab-bar clip-collapse (`Header.svelte` `tabProgress`):
+//      `1 - min(1, morph / THRESHOLD)` so the SearchTabBar row collapses
+//      within the first 20% of a root<->search scrub.
+// The Header back-arrow morph is NOT threshold-absorbed: it ramps 0..1
+// across the full drag via `pager.backMorph`.
+export const HEADER_MORPH_THRESHOLD = 0.2;
 export const PILL_EXPANSION_THRESHOLD = 0.5; // 50% drag distance to begin active tab pill expansion
 // Minimum horizontal drag (px) for a swipe to commit (navigate to the
 // target). Below this the gesture cancels (snaps back to rest).

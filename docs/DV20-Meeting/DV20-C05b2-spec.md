@@ -97,13 +97,16 @@ load) owns the animation layer for the app's mobile lifetime:
    the new host's `configure`, during which the SvelteKit nav hooks skip
    processing.
 2. **One rAF per motion channel, all owned by the orchestrator.** The
-   executor's rAF drives the gesture slide (the track, the cover-progress-driven
-   FAB, and the Header morph). A separate orchestrator-owned rAF drives the
-   family-swap ease (publishing `pager.familySwapScale`); a third drives the
-   settle ease (publishing `settleActive` / `settleProgress` / `settleLatched` /
-   `settleDirection`); a fourth drives the tap-scrub ease (publishing
-   `searchScrubbing` while scrubbing the root<->search morph). Each motion
-   channel has exactly one rAF owner; no consumer runs its own.
+   executor owns the gesture slide (the track, the cover-progress-driven FAB,
+   and the Header morph): during a live drag the track transform is written
+   synchronously per `pointermove` (the executor stops its rAF), and during a
+   commit / cancel slide the executor's rAF owns the motion. A separate
+   orchestrator-owned rAF drives the family-swap ease (publishing
+   `pager.familySwapScale`); a third drives the settle ease (publishing
+   `settleActive` / `settleProgress` / `settleLatched` / `settleDirection`); a
+   fourth drives the tap-scrub ease (publishing `searchScrubbing` while
+   scrubbing the root<->search morph). Each motion channel has exactly one rAF
+   owner; no consumer runs its own.
 3. **`configure` / `releaseInputs` lifecycle.** The host calls `configure` in
    `onMount` (capture inputs, `forceReset` the singleton state machine, publish
    at-rest, detect a family change and arm the family-swap ease) and
@@ -163,6 +166,24 @@ load) owns the animation layer for the app's mobile lifetime:
   (`#tapScrubRafId` / `searchScrubbing`) moved into the orchestrator. The
   Header reads the published getters and derives every visual from them; the
   CSS transitions and `setTimeout` backstop in the Header were deleted.
+- **Step 4 - sub-component CSS transitions removed (R18).** The four
+  reactive readers under the Header / MobileTabBar / SearchTabBar still
+  carried CSS `transition:` strings that competed with the orchestrator's
+  single-rAF publication during gesture / settle / commit slides. R18
+  removed them: `BurgerArrowIcon`'s line-element `transition: transform
+200ms ease-out` (driven 1:1 by `iconProgress` from the orchestrator's
+  settle / drag publication), `MobileTabBar`'s `labelStyle` `transition`
+  - the pill anchor's `transition-colors duration-200` (the bar
+    re-derives `closeness` + `labelStyle` per frame from the orchestrator's
+    `fractionalIndex`), `SearchTabBar`'s underline `transition: left 200ms
+ease-out, width 200ms ease-out` + the cell `transition-colors
+duration-200` (the underline follows the SEARCH pager publication each
+    frame), and the Header outer `<header>` `transition-transform
+duration-200` (the hide-on-scroll `translateY` is a reactive read of
+    the scroll-chrome store, whose own rAF-throttled scroll listener
+    publishes each frame). The `BurgerArrowIcon` `dragging` prop
+    dissolved in the same step (it gated the CSS transition; with the
+    transition gone the prop has no consumer).
 
 ### §5 invariant status
 
@@ -171,7 +192,10 @@ gesture/navigation layer at any instant, exactly one rAF write owns its
 motion, decided solely by the orchestrator's phase. CSS transitions and
 `setTimeout` alignment do not exist in this layer." Status after the refactor:
 
-- **Track slide during a gesture / commit / scrub:** owned by the executor's
+- **Track slide during a live drag:** written synchronously per `pointermove`
+  (the executor calls `onDragMove` -> `#publish()` and keeps its rAF stopped).
+  CSS-transition-free.
+- **Track slide during a commit / cancel / scrub:** owned by the executor's
   rAF (unchanged). CSS-transition-free.
 - **FAB scale during a within-route transition:** owned by the executor's rAF
   via `coverProgress` / `fractionalIndex` (unchanged). CSS-transition-free.
@@ -179,9 +203,15 @@ motion, decided solely by the orchestrator's phase. CSS transitions and
   family-swap rAF via `pager.familySwapScale`. CSS-transition-free; no
   DOM read-back (the FAB layer's `readRenderedFabScale` was deleted along with
   the FAB's own rAF).
-- **Header morph / title crossfade during a drag / commit:** owned by the
-  executor's rAF via `pager.backMorph` / `pager.tapMorph` (unchanged).
-  CSS-transition-free.
+- **Header morph / title crossfade during a gesture drag / commit:** owned
+  by the executor's rAF via `pager.backMorph` / `pager.tapMorph`. The morph
+  runs DURING the slide (the gesture's coverProgress drives the back-arrow
+  reveal frame-by-frame as the panels move). CSS-transition-free.
+- **Header morph / title crossfade on a tab-click commit:** owned by the
+  orchestrator's settle rAF via the `settleProgress` getter. The morph runs
+  POST-LANDING (the slide is a discrete nav with no live coverProgress to
+  drive the morph, so the settle ease owns the crossfade after the route
+  lands). CSS-transition-free.
 - **Header title crossfade during a settle:** owned by the orchestrator's
   settle rAF via the `settleProgress` getter. CSS-transition-free; the
   `setTimeout` settle backstop is deleted.
@@ -189,13 +219,17 @@ motion, decided solely by the orchestrator's phase. CSS transitions and
   tap-scrub rAF via the `searchScrubbing` flag and `pager.tapMorph`.
   CSS-transition-free; the Header's `startTapScrub` rAF is deleted.
 
-The residual inline-style CSS transitions on the Header's search-track,
-search-button, and tab-bar transforms fire only outside an orchestrator
-transition (their condition list collapses to `'none'` during
-`searchScrubbing`, `tapMorph`, `navInFlight`, or an active
-`transitionTarget`). They cover programmatic URL changes that arrive without a
-gesture or a tap (direct URL entry, an external link); the macro plan folds
-them into the executor when those paths become orchestrator-driven.
+The Header's search-track, search-button, and tab-bar transforms are pure
+reactive style bindings with no CSS transition (R17 removed the last residual
+inline-style transitions; R18 removed the last sub-component transitions -
+`BurgerArrowIcon`'s line-element transform transition, `MobileTabBar`'s label
+
+- pill transitions, `SearchTabBar`'s underline + cell transitions, and the
+  Header outer `transition-transform duration-200`; every frame is driven by the
+  orchestrator's rAF publication). The programmatic URL changes that arrive
+  without a gesture or a tap (direct URL entry, an external link) update the
+  reactive derivations on the next flush; the macro plan folds them into the
+  executor when those paths become orchestrator-driven.
 
 ## Known 5b2 conditions (intentional deviations, not defects)
 
@@ -253,33 +287,51 @@ in the previous section.
    `DualColumnLayout` (5b3 scope) because they have no other host.
    **Resolution:** migrate when `DualColumnLayout` is deleted in 5b3.
 
-4. **Macro-plan divergences retained (macro-plan deviation).** Three
-   intentional deviations from the macro plan, each with a stated rationale:
+4. **Macro-plan divergences retained (macro-plan deviation, assessed C05b2).**
+   Three intentional deviations from the macro plan, each with a concrete
+   blocker confirmed during C05b2 Task 6:
 
    - `backSwipeShouldPopHistory` (§6 says it is deleted). The orchestrator's
      `#backwardTabTarget` retains it to decide a backward-to-deep-page
      back-swipe (pop to the deep page in history) vs. a spatial switch to the
-     previous tab root. The generic `hopForHref` does not encode that
-     distinction; without this check a backward-to-deep-page gesture would
-     land on the tab root instead of the deep page the user came from.
-     **Resolution:** §6's deletion lands when the deep-page back-target
-     disambiguation is encoded in `hopForHref` itself (a cycle after 5b3).
+     previous tab root. **Concrete blocker:** `hopForHref` operates on a
+     TARGET pathname (returns back/forward/push based on whether the target
+     matches a history neighbour). The backward-to-deep-page distinction is
+     not about the target but about the gesture's direction: a rightward
+     gesture on a tab host must choose between the spatially-previous tab
+     (slide left panel, always a push) and the history-previous deep page
+     (slide toward the deep snapshot overlay, a pop). Encoding this in
+     `hopForHref` would require it to know the gesture direction + the
+     spatial tab layout, which is outside its role as a generic history
+     navigation helper. **Resolution:** lands when the tab host's slide
+     geometry is restructured to always target the history-previous entry
+     (not the spatial-previous tab), making the spatial switch and the
+     history pop the same operation.
    - Forward deep-to-deep navigation (e.g. `/profile` -> `/profile/settings`)
      is plain SvelteKit nav, not a pipeline slide.
      `onSvelteKitBeforeNavigate` consumes only tab-root targets, and
      `playEnterAnimation`'s `shouldEnter` requires the prior stack entry to
      equal the route's `leftHref`; the `{detail,detail}` resolver is exercised
-     by gesture back-swipes only. **Resolution:** wiring forward deep-to-deep
-     as a pipeline transition is a transition-type scope expansion beyond
-     5b2's "every transition that was on GesturePageLayout / MobileTabPager"
-     charter; it lands when the macro plan takes up forward deep-to-deep.
+     by gesture back-swipes only. **Concrete blocker:** the `{detail,detail}`
+     resolver's geometry for a forward slide requires the destination deep
+     page's content to be available in the left panel during the slide (either
+     cached or pre-loaded). NavPipelineHost's left panel renders tab panels
+     today; rendering a deep destination requires the coordinator (Layer 4) to
+     preload the destination's data before the slide begins, which is a
+     coordinator scope expansion. **Resolution:** lands when the macro plan
+     takes up forward deep-to-deep as a transition class with its own preload
+     contract.
    - `TAB_CLICK_COMMIT_MS` (§13.3 "no hardcoded commit duration"). A tab-click
      exit and a forward enter are discrete navs with no finger-release
      velocity to match, so their commit uses a fixed 200ms
      (`TRACK_TRANSITION_MS`) to align with the Header title crossfade.
-     Gesture commits use the velocity-matched solver per §5.
-     **Resolution:** the fixed commit dissolves when the tab-click commit is
-     reworked to derive from the title-crossfade end (so the slide and the
+     Gesture commits use the velocity-matched solver per §5. **Concrete
+     blocker:** the solver's zero-velocity fallback (`COMMIT_T_DEFAULT_MS` =
+     300ms) would desync the tab-click slide from the Header title crossfade
+     (200ms). Using the solver's default for tab-clicks moves the hardcode
+     from `TAB_CLICK_COMMIT_MS` to `COMMIT_T_DEFAULT_MS` without eliminating
+     it. **Resolution:** the fixed commit dissolves when the tab-click commit
+     is reworked to derive from the title-crossfade end (so the slide and the
      crossfade share one timing source instead of two aligned constants).
 
 5. **Trajectory coverage gaps (coverage gap).** No dedicated e2e covers the
@@ -295,30 +347,27 @@ in the previous section.
    specs; pair them with the 5b3 deletion sweep so they assert against the
    pipeline-only world.
 
-6. **Backward-to-deep-page visual proxy (5b3-deletion).** When the tab host's
-   backward gesture targets a deep page (via `backSwipeShouldPopHistory`), the
-   slide reveals the PREVIOUS TAB's panel as a visual proxy when
-   `fromTabIndex >= 1` (the tab host has only its three tab panels). At
-   `fromTabIndex === 0` (the leftmost tab) the orchestrator suppresses the
-   track slide (`distance = 0`), so only `coverProgress` drives the FAB and
-   Header morph and no empty-space artifact is visible; `history.back()` still
-   lands on the deep page on commit. On the `/activity` tab (the dynamic-kind
-   tab) the same gesture also scales the FAB IN toward "discussions" during
-   the slide (the dynamic-kind branch follows `trackFractionalIndex` without
-   consulting the destination's family), then scales it OUT post-land via the
-   family-swap ease; the other two tabs scale the FAB OUT (the user is leaving
-   a list with a real FAB). In every case `history.back()` lands on the deep
-   page on commit, so the deep content replaces the proxy at the slide's end.
-   **Why retained:** the clean visual fix is the deep-snapshot overlay (a
-   pre-rendered snapshot of the destination deep page composited as a panel
-   surrogate during the slide), which is 5b3 scope. A 5b2 partial fix for the
-   `fromTabIndex >= 1` wrong-proxy case would trade a wrong-proxy for a
-   no-slide (the same suppress-track trick used at the leftmost tab), which
-   diverges from the back-swipe feel on every other tab and violates the
-   unify-don't-bridge principle. **Resolution:** the 5b3 deep-snapshot overlay
-   covers the `fromTabIndex >= 1` wrong-proxy and the `/activity` FAB-scale-in
-   cases (the overlay carries the destination's FAB state too); the
-   `fromTabIndex === 0` empty-space case is already handled in 5b2.
+6. **Backward-to-deep-page visual proxy (resolved in C05b2).** When the tab
+   host's backward gesture targets a deep page (via `backSwipeShouldPopHistory`),
+   the slide reveals the deep target's preview panel (or a skeleton) via a
+   deep-snapshot overlay composited over the revealed panel, covering the
+   adjacent tab's wrong-content proxy. For `activeIndex >= 1` the overlay is
+   positioned absolutely at panel `activeIndex - 1` inside the track, carries
+   `data-deep-preview`, and renders `getPreviewPanel(deepTarget)` when
+   registered or `DeepPreviewSkeleton` as the fallback. For `activeIndex === 0`
+   there is no revealed panel to cover (the slide distance is 0 and
+   `deepSnapshotPanelIndex` is -1, placing the overlay off-screen), so the
+   suppress-slide approach applies instead; both are improvements over the
+   empty-space artifact, but they are different mechanisms. On commit
+   `history.back()` lands on the deep page and the real content mounts. The
+   `/activity` FAB-scale-in artifact is also resolved: the FAB layer's
+   `foregroundFraction` gate fires for any non-tab-root target whose family has
+   no list FAB (the backward-to-deep-page case). For routes whose resting scale
+   is 1 (`/`, `/messages/inbox`) the FAB scales OUT via `1 - coverProgress`; for
+   routes whose resting scale is 0 (`/activity`, whose dynamic-kind branch
+   returns null at rest) the gate returns 0 so the FAB stays hidden. Tab-to-tab
+   transitions (including to `/activity`) pass through the gate because the
+   target IS a tab root.
 
 7. **`pointercancel` treated as a regular release (5b3-deletion).**
    `detectSwipe` routes `pointercancel` through its terminal path to `onEnd`,
@@ -375,6 +424,29 @@ undefined` (see #2), so one consumer remains at end of 5b2. The field
     the field's dissolution plan). **Resolution:** the drift dissolves in 5b3
     when the classifier and `DualColumnLayout`'s `detectSwipe` are removed
     and the field is deleted.
+
+11. **FAB + Header are reactive readers, not driver-written (macro-plan
+    deviation, §5, assessed C05b2).** §5 says "the executor writes the
+    per-frame visual state for every consumer; it is the only layer that
+    touches the DOM." The FAB layer and the Header are reactive Svelte
+    components that read the orchestrator's publication (`pager.backMorph`,
+    `pager.coverProgress`, `orchestrator.settleProgress`, etc.) and write
+    their own DOM via Svelte's `style=` binding. The executor + driver
+    write only the page-track transform. **Why retained:** the FAB has four
+    motion channels (transition progress via the executor rAF, family-swap
+    via the orchestrator's family-swap rAF, resting scale from the URL-
+    derived family, scroll-hide translateY from the scroll-chrome store).
+    The Header has six (drag morph, settle morph, tap-scrub, title
+    crossfade, search-track, tab-bar). Each channel would need to be
+    individually rewired from a reactive Svelte binding to an imperative
+    `driver.write()` call, with the driver becoming the sole DOM writer.
+    A single channel migration leaves the consumer half-migrated (some
+    transforms driver-written, others reactive), which the task forbids.
+    **Resolution:** lands when the driver-writes-everything refactor (4a
+    through 4d) is executed as a dedicated cycle: resolver plan functions
+    for every channel, the driver extended to write every consumer's
+    transforms, the FAB + Header stripped to static structure, and the
+    pager-store bridge deleted.
 
 ## Out of scope (5b3)
 

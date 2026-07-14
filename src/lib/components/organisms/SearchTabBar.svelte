@@ -13,6 +13,11 @@
 	 * producing a stretch that grows past one cell then settles back - never
 	 * contracting below one cell. Cells are equal-width so the math is closed-form
 	 * (percentages of the strip, no measurement).
+	 *
+	 * RENDER-ONLY (DV20 §5): the orchestrator's SEARCH-pager publication drives
+	 * the underline position each frame and the cell color is a pure function of
+	 * the active index. No CSS transition: the rAF's per-frame publication owns
+	 * every motion.
 	 */
 	import { untrack } from 'svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
@@ -57,9 +62,7 @@
 	const underline = $derived(searchUnderline(f, pager.dragging, dragDir, N));
 
 	const underlineStyle = $derived(
-		`left: ${underline.left.toFixed(2)}%; width: ${underline.width.toFixed(2)}%; transition: ${
-			pager.dragging ? 'none' : 'left 200ms ease-out, width 200ms ease-out'
-		};`
+		`left: ${underline.left.toFixed(2)}%; width: ${underline.width.toFixed(2)}%;`
 	);
 
 	function switchScope(scope: SearchScope): void {
@@ -82,7 +85,7 @@
 			data-scope-tab={s}
 			class="flex-1 bg-transparent px-2 py-2 text-sm font-medium {active
 				? 'text-accent'
-				: 'text-neutral-content/70'} {pager.dragging ? '' : 'transition-colors duration-200'}"
+				: 'text-neutral-content/70'}"
 			aria-current={active ? 'page' : undefined}
 			onclick={() => switchScope(s)}
 		>

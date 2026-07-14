@@ -7,18 +7,17 @@ import { prepareContext, waitForHydration } from './helpers';
  * The mobile Header's tabs layer sits at translateY(-100%) on a deep page and
  * descends to translateY(0%) when the route returns to a tab route (the "Tab
  * descent" animation). The descent is rAF-driven: on the post-landing title
- * change Effect C arms a settle and `runSettleDriver`'s rAF interpolates
- * `settleProgress` 0→1 with the constant-deceleration ease `2u - u²` over
- * TITLE_CROSSFADE_MS. The morph derivation reads `settleProgress` directly and
- * the layer transform follows `morph` 1:1, so the descent animates through real
- * intermediate values every frame. No CSS transition is involved.
+ * change the orchestrator's settle rAF interpolates `settleProgress` 0→1 with
+ * the constant-deceleration ease `2u - u²` over TITLE_CROSSFADE_MS. The morph
+ * derivation reads `settleProgress` directly and the layer transform follows
+ * `morph` 1:1, so the descent animates through real intermediate values every
+ * frame. No CSS transition is involved.
  *
  * Tests:
  *   - CALIBRATION: documents the symmetry - the forward and the back landing
  *     flushes both arm a settle (settling === true at the flush, with the
  *     rAF mid-animation), sampled via the internal per-flush probe
- *     window.__headerMorphProbe. navInFlight is asserted at the back landing as
- *     a witness that the rAF settle is independent of the navInFlight signal.
+ *     window.__headerMorphProbe.
  *   - DEFECT: across multiple messages↔bookmarks cycles the back landing flush
  *     must arm a settle (the rAF owns the descent, never a static snap).
  */
@@ -48,7 +47,6 @@ interface HeaderSnap {
 	morph: number;
 	settling: boolean;
 	currentHasTabs: boolean;
-	navInFlight: boolean;
 	pendingNav: string | null;
 }
 
@@ -127,7 +125,6 @@ interface LandingFlush {
 	t: number;
 	morph: number;
 	settling: boolean; // the rAF settle owns the descent at this flush
-	navInFlight: boolean;
 }
 
 /** Find every flush where currentHasTabs flipped (the layer committed to its new
@@ -145,8 +142,7 @@ function landings(snaps: HeaderSnap[], dir: 'in' | 'out'): LandingFlush[] {
 		out.push({
 			t: snaps[i].t,
 			morph: snaps[i].morph,
-			settling: snaps[i].settling,
-			navInFlight: snaps[i].navInFlight
+			settling: snaps[i].settling
 		});
 	}
 	return out;
@@ -226,12 +222,9 @@ test('CALIBRATION: forward and back descents both keep their transition (documen
 	expect(fwdLanding, 'forward landing flush captured').toBeDefined();
 	expect(backLanding, 'back landing flush captured').toBeDefined();
 	// Symmetry: forward and back both arm a settle at the landing flush (the
-	// rAF owns the descent, no static snap). navInFlight is not set at the back
-	// landing (the pipeline publishes pager.committed instead) - asserted as a
-	// witness that the rAF settle is independent of the navInFlight signal.
+	// rAF owns the descent, no static snap).
 	expect((fwdLanding as LandingFlush).settling, 'forward landing arms the settle rAF').toBe(true);
 	expect((backLanding as LandingFlush).settling, 'back landing arms the settle rAF').toBe(true);
-	expect((backLanding as LandingFlush).navInFlight, 'pipeline does not set navInFlight (replaced by pager.committed)').toBe(false);
 });
 
 test(`DEFECT: back descent from a NavPipelineHost deep page to a tab route must arm the settle rAF at landing (${BACK_CYCLES} cycles)`, async ({
@@ -256,7 +249,7 @@ test(`DEFECT: back descent from a NavPipelineHost deep page to a tab route must 
 
 	console.log(`observed ${backObserved} back path-changes, ${backIn.length} back landing flushes`);
 	for (const l of backIn) {
-		console.log(`  back landing t=${Math.round(l.t)} morph=${l.morph.toFixed(2)} settling=${l.settling} navInFlight=${l.navInFlight}`);
+		console.log(`  back landing t=${Math.round(l.t)} morph=${l.morph.toFixed(2)} settling=${l.settling}`);
 	}
 
 	expect(backIn.length, 'captured a back landing flush per cycle').toBeGreaterThanOrEqual(BACK_CYCLES - 1);

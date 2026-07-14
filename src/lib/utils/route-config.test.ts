@@ -47,13 +47,14 @@ describe('getFabRouteAttributes - the FAB atom-mount registry', () => {
 		expect(getFabRouteAttributes('/post/discussion')?.kind).toBe('discussions');
 		expect(getFabRouteAttributes('/messages/new')?.family).toBe('compose');
 		expect(getFabRouteAttributes('/messages/new')?.kind).toBe('messages');
+		expect(getFabRouteAttributes('/messages/add/55')?.family).toBe('compose');
+		expect(getFabRouteAttributes('/messages/add/55')?.kind).toBe('messages');
 	});
 	test('routes that do not mount the FAB atom return null', () => {
-		// /messages/add/<uid>, /categories, /drafts, /post/editDiscussion/<id>,
+		// /categories, /drafts, /post/editDiscussion/<id>,
 		// /entry/*, /avatar/*, /api/*, /upload, /offline/* (offline routes mount
 		// DualColumnLayout only and do not participate in the FAB layer).
 		const none = [
-			'/messages/add/55',
 			'/categories',
 			'/category/news',
 			'/drafts',

@@ -12,7 +12,8 @@
 	import { browser } from '$app/environment';
 	import { page } from '$app/state';
 	import { getRouteData } from '$lib/utils/route-data';
-	import { MOBILE_TABS, getCurrentTabIndex } from '$lib/utils/route-config';
+	import { MOBILE_TABS, getCurrentTabIndex, getPreviewPanel } from '$lib/utils/route-config';
+	import { isTabRootPath } from '$lib/utils/history-nav';
 	import { viewportLock } from '$lib/stores/viewport-lock.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
@@ -25,9 +26,11 @@
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
 	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
+	import DeepPreviewSkeleton from '$lib/components/panels/DeepPreviewSkeleton.svelte';
 	import type { PageUrlBuilder, TabsLayoutData } from '$lib/types/tabs';
 	import type { TranslationDict } from '$lib/types/translation';
 	import type { UserInfoSummary } from '$lib/types/api';
+	import type { Component } from 'svelte';
 
 	interface NavPipelineTabHostProps {
 		data: TabsLayoutData;
@@ -63,6 +66,30 @@
 	const publication = $derived(orchestrator.publication);
 	const publicationPlan = $derived(publication.plan);
 	const publicationInFlight = $derived(publication.inFlight);
+	const panelCount = MOBILE_TABS.length;
+
+	// Backward-to-deep-page deep-snapshot overlay. When a backward gesture
+	// on the tab host targets a deep page (via `backSwipeShouldPopHistory`),
+	// the slide reveals the panel at `activeIndex - 1`. Without this overlay
+	// that panel shows the previous TAB's content (a visual proxy for the
+	// deep destination). The overlay covers the revealed panel with the
+	// deep target's preview panel (or a skeleton), so the slide's visual
+	// matches the deep page the user will land on. On commit,
+	// `history.back()` lands on the deep page and the real content mounts.
+	const deepSnapshotTarget = $derived.by<string | null>(() => {
+		const target = publication.inFlight ? publication.toPathname : null;
+		if (target === null) return null;
+		if (isTabRootPath(target)) return null;
+		return target;
+	});
+	const deepSnapshotPanelIndex = $derived(activeIndex - 1);
+	const deepSnapshotOverlayLeft = $derived(`${deepSnapshotPanelIndex * (100 / panelCount)}%`);
+	const deepSnapshotOverlayWidth = $derived(`${100 / panelCount}%`);
+	const deepSnapshotPreviewPanel = $derived.by<Component | null>(() => {
+		const target = deepSnapshotTarget;
+		if (target === null) return null;
+		return getPreviewPanel(target);
+	});
 
 	// Per-panel scroll restore + scroll-chrome registration.
 	$effect(() => {
@@ -122,7 +149,6 @@
 		}
 	});
 
-	const panelCount = MOBILE_TABS.length;
 	const discussionsBuildPageUrl: PageUrlBuilder = (p) => (p === 1 ? '/' : `/discussions/p${p}`);
 
 	// Active tab data resolution: the active tab reads its own page-load
@@ -163,13 +189,16 @@
 
 	const viewportStyle =
 		'touch-action: pan-y pinch-zoom; height: 100%; overflow: clip; position: relative; width: 100%; flex: 1 1 auto;';
-	const trackStyle = $derived(`width: ${panelCount * 100}%; display: flex; height: 100%;`);
+	const trackStyle = $derived(
+		`width: ${panelCount * 100}%; display: flex; height: 100%; position: relative;`
+	);
 	const sectionStyle =
 		'overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y pinch-zoom;';
 
 	const initialTrackTransform = $derived(`transform: translateX(-${activeIndex * STEP_PERCENT}%);`);
 
 	let orchestratorMounted = $state(false);
+	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	onMount(() => {
 		const fromPathname = page.url.pathname;
 		const fromData = getRouteData(fromPathname);
@@ -203,7 +232,32 @@
 		});
 		if (viewportEl) ro.observe(viewportEl);
 
+		// Mobile -> desktop breakpoint handler. Matches NavPipelineHost: on
+		// the flip, land an in-flight committed transition
+		// (`recoverDesktopFlipNav`) then full-teardown the orchestrator
+		// (`unmount`) so the settle + tap-scrub rAFs are cancelled and do
+		// not keep ticking into the desktop view. The `(tabs)` layout's own
+		// mq handler flips `isMobile` which destroys this host in the next
+		// microtask; this handler runs synchronously in the same mq event
+		// (child onMount registers before parent onMount) so the full
+		// teardown lands before the destroy. The desktop -> mobile flip
+		// back re-creates this host; its `onMount.configure` reconstructs
+		// the executor + driver (`if (this.#driver === null)`) on the
+		// persisted singleton.
+		const mq = window.matchMedia(MOBILE_BREAKPOINT);
+		const handleBreakpoint = (): void => {
+			if (!mq.matches && orchestratorMounted) {
+				orchestrator.recoverDesktopFlipNav();
+				orchestrator.unmount();
+				releaseNavPipelineOrchestrator(orchestrator);
+				orchestratorMounted = false;
+				if (trackEl) trackEl.style.transform = '';
+			}
+		};
+		mq.addEventListener('change', handleBreakpoint);
+
 		return () => {
+			mq.removeEventListener('change', handleBreakpoint);
 			ro.disconnect();
 			// Route-away destroy: light teardown. The singleton's executor
 			// + driver persist for the next mobile host's configure.
@@ -313,5 +367,25 @@
 				/>
 			</div>
 		</section>
+		{#if deepSnapshotTarget !== null}
+			{@const DeepPreview = deepSnapshotPreviewPanel}
+			<!-- Deep-snapshot overlay: covers the revealed panel (at
+			     deepSnapshotPanelIndex) with the deep target's preview
+			     panel or a skeleton, so the slide shows the destination's
+			     content instead of the previous tab's panel. -->
+			<div
+				class="deep-snapshot-overlay"
+				data-deep-preview={deepSnapshotTarget}
+				style={`position: absolute; top: 0; left: ${deepSnapshotOverlayLeft}; width: ${deepSnapshotOverlayWidth}; height: 100%;`}
+			>
+				<div class="gpl-card" style={sectionStyle}>
+					{#if DeepPreview}
+						<DeepPreview />
+					{:else}
+						<DeepPreviewSkeleton />
+					{/if}
+				</div>
+			</div>
+		{/if}
 	</div>
 </div>

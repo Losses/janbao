@@ -48,6 +48,7 @@
 		backTargetListKind,
 		getCurrentTabIndex
 	} from '$lib/utils/route-config';
+	import { isTabRootPath } from '$lib/utils/history-nav';
 	import type { FabListKind } from '$lib/utils/route-config';
 	import {
 		scaleFromFraction,
@@ -237,20 +238,48 @@
 	const foregroundFraction = $derived.by(() => {
 		const cfg = displayConfig;
 		if (cfg === null) return 0;
-		// A pilot detail-page transition scales the FAB in only when the
-		// destination shows a FAB at rest. For a destination without one (the
-		// forward-enter to the conversation; a tab-click to /activity from the
-		// pilot route), the FAB stays at 0 throughout. On the tab pager
-		// (NavPipelineTabHost) the published track fractional index is live, so
-		// it drives the FAB scale across the slide even when the destination
-		// has no resting FAB (e.g. /activity). Gate the override on the index
-		// being absent so the tab-host signal takes precedence on list routes.
+		// A pipeline transition whose destination shows no resting FAB
+		// scales the FAB OUT. Two cases:
+		//   1. Non-tab host (trackFractionalIndex is null): the destination
+		//      has no list FAB (a compose, overlay, or dynamic-kind tab). The
+		//      source family is overlay/compose (resting scale 0), so a
+		//      direct return 0 is continuous with the at-rest scale.
+		//   2. Tab host + backward-to-deep-page (target is NOT a tab root):
+		//      the track would otherwise drive the FAB IN toward the previous
+		//      tab's kind; the deep destination has no FAB, so scale OUT.
+		//      When the source route's tab matches the retained config's tab
+		//      (resting scale 1, e.g. / or /messages/inbox), ease out via
+		//      `1 - coverProgress` so `scaleFromFraction` ramps the FAB from
+		//      1 to 0 over the first half of the slide (matching the handoff
+		//      curve, continuous at the gate's first firing). When the source
+		//      route's tab differs from the retained config's tab (resting
+		//      scale 0, e.g. /activity whose dynamic-kind branch returns null
+		//      at rest and retainedConfig carries a different list kind),
+		//      return 0 so the FAB stays hidden (both endpoints have no FAB).
+		// Tab-to-tab transitions on the tab host (including to /activity,
+		// whose kind is dynamic) pass through: the target IS a tab root,
+		// so the track index drives the FAB.
 		if (
 			pager.transitionTarget !== null &&
 			pilotTransitionListKind === null &&
-			pager.trackFractionalIndex === null
-		)
+			(pager.trackFractionalIndex === null || !isTabRootPath(pager.transitionTarget))
+		) {
+			if (cfg.family === 'list') {
+				// The source route's resting FAB fraction (URL-derived,
+				// stable during the gesture). On /activity the dynamic-kind
+				// branch returns null at rest and retainedConfig carries a
+				// different list kind, so this fraction is 0; `1 -
+				// coverProgress` would jump the visible scale from 0 to ~1
+				// on the first frame (a FAB flash). Return 0 so the FAB
+				// stays hidden when the source has no FAB at rest.
+				const sourceTab = getCurrentTabIndex(page.url.pathname);
+				if (sourceTab >= 0 && tabFraction(sourceTab, cfg.tabIndex) === 0) {
+					return 0;
+				}
+				return 1 - (pager.coverProgress ?? 0);
+			}
 			return 0;
+		}
 		if (cfg.family === 'list') {
 			const trackFrac = pager.trackFractionalIndex;
 			if (trackFrac !== null) {

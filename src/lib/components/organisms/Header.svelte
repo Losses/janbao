@@ -5,18 +5,18 @@
 	 * Desktop: logo + navigation links (Activity / Messages / Search).
 	 *
 	 * Mobile: a 2-panel horizontal track (root panel + search panel, mirrors the
-	 * NavPipelineTabHost pattern). The search button is a SINGLE absolutely-positioned
-	 * `<a>` that slides from the right edge to the left edge via a `left` CSS
-	 * transition: one icon, no duplicate. Entering search slides the track left
-	 * (root content exits left, search content pushes in from the right) while the
-	 * search button independently travels right-to-left, stopping at the
-	 * hamburger's position.
+	 * NavPipelineTabHost pattern). The search button is a SINGLE
+	 * absolutely-positioned `<a>` whose `left` is a reactive `style` binding
+	 * (no CSS transition): one icon, no duplicate. Entering search slides the
+	 * track left (root content exits left, search content pushes in from the
+	 * right) while the search button independently travels right-to-left,
+	 * stopping at the hamburger's position.
 	 *
 	 * The root↔deep vertical morph (BurgerArrowIcon + title) lives INSIDE panel 0
 	 * but is FROZEN during a search transition (the tabs must exit horizontally
 	 * with the track, never float up vertically).
 	 *
-	 * The SearchTabBar row clip-expands (max-height 0 → auto) rather than jumping.
+	 * The SearchTabBar row clip-expands (max-height 0 → 3rem) rather than jumping.
 	 *
 	 * RENDER-ONLY (DV20 step 3): the Header is a reader of the pipeline
 	 * orchestrator's reactive class fields. The orchestrator owns the
@@ -26,8 +26,10 @@
 	 * `orchestrator.settleLatched`, `orchestrator.settleActive`,
 	 * `orchestrator.settleDirection`, `pager.tapMorph`, and
 	 * `orchestrator.searchScrubbing` and derives every visual from them.
-	 * No Header-owned rAF, no Header-owned animation state. §5: one rAF
-	 * (the orchestrator's) owns every motion.
+	 * No Header-owned rAF, no Header-owned animation state, no CSS transitions
+	 * in this layer. §5: one rAF (the orchestrator's) owns every motion; the
+	 * hide-on-scroll `translateY` is a reactive read of the scroll-chrome
+	 * store (its own rAF-throttled scroll listener publishes each frame).
 	 */
 	import { untrack } from 'svelte';
 	import { page } from '$app/state';
@@ -244,7 +246,6 @@
 			latchedSettle: settleLatched,
 			effectiveTabsOut: tabsOut,
 			effectiveTabsIn: tabsIn,
-			navInFlight: navStore.navInFlight,
 			pendingNav: navStore.pendingNav ? navStore.pendingNav.href : null,
 			dragging,
 			backMorph: pager.backMorph
@@ -434,7 +435,7 @@
 
 <header
 	bind:this={headerEl}
-	class="sticky top-0 z-40 mx-auto w-full max-w-[960px] px-0 transition-transform duration-200 md:mt-6 md:px-6"
+	class="sticky top-0 z-40 mx-auto w-full max-w-[960px] px-0 md:mt-6 md:px-6"
 	class:scroll-chrome-scrolling={scrolling}
 	style:transform="translateY({translateY}px)"
 >
@@ -482,7 +483,7 @@
 						onclick={onLeftButton}
 						aria-label={isDeep ? tNav['back'] : tNav['menu']}
 					>
-						<BurgerArrowIcon progress={iconProgress} {dragging} />
+						<BurgerArrowIcon progress={iconProgress} />
 					</button>
 					<div class="relative h-10 flex-1">
 						<div class="absolute inset-0 flex items-center justify-center" style={rootLayerStyle}>
@@ -557,7 +558,9 @@
 			</div>
 
 			<!-- Single search button: slides from right (root) to left (search =
-			     hamburger position) via `left` transition. Always rendered; ONE icon. -->
+			     hamburger position) via the reactive `searchButtonStyle` binding
+			     (no CSS transition; the orchestrator's rAF publication drives
+			     `searchProgress` each frame). Always rendered; ONE icon. -->
 			<a
 				href="/search"
 				class="absolute top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center text-neutral-content/80 hover:bg-neutral-content/10 hover:text-neutral-content"

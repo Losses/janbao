@@ -7,6 +7,12 @@
 	 * to the next, the source pill's label collapses (width -> 0, text clipped by
 	 * overflow) and the target's expands, in sync with the finger (no opacity
 	 * fade). The Messages pill shows a solid unread dot (never a count).
+	 *
+	 * RENDER-ONLY (DV20 §5): the orchestrator publishes `fractionalIndex` (and
+	 * `targetIndex` / `backMorph` for a deep-page swipe) each frame on its single
+	 * rAF; this bar re-derives `closeness` + `labelStyle` per frame from those
+	 * signals. No CSS transition: the rAF's per-frame publication drives both the
+	 * label max-width / margin and the pill background color.
 	 */
 	import { page } from '$app/state';
 	import { env } from '$env/dynamic/public';
@@ -47,8 +53,6 @@
 	// every non-tab page would highlight Discussions.
 	const urlIndex = $derived(getCurrentTabIndex(currentPath));
 	const fractionalIndex = $derived(pager.active ? pager.fractionalIndex : urlIndex);
-	const dragging = $derived(pager.dragging);
-	const labelTransition = 'max-width 200ms ease-out, margin-left 200ms ease-out';
 
 	// Deep-page back/forward swipe detection: when we are swiping to/from a deep
 	// page, we directly transition the target tab instead of sliding intermediate tabs.
@@ -72,7 +76,7 @@
 
 	function labelStyle(index: number): string {
 		const c = closeness(index);
-		return `max-width: ${(c * 8).toFixed(2)}rem; margin-left: ${(c * 0.375).toFixed(3)}rem; transition: ${dragging ? 'none' : labelTransition}`;
+		return `max-width: ${(c * 8).toFixed(2)}rem; margin-left: ${(c * 0.375).toFixed(3)}rem;`;
 	}
 </script>
 
@@ -85,9 +89,7 @@
 		<a
 			href={item.href}
 			data-tab-nav
-			class="flex items-center rounded-full px-2.5 py-1.5 {dragging
-				? ''
-				: 'transition-colors duration-200'} {pillActive
+			class="flex items-center rounded-full px-2.5 py-1.5 {pillActive
 				? 'bg-neutral-content/15 text-accent'
 				: 'text-neutral-content/70'}"
 			aria-current={pillActive ? 'page' : undefined}

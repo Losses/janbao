@@ -694,7 +694,7 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		).toBeLessThan(150);
 	});
 
-	test('tab-click during gesture commit starts from current position (no backward jump)', async ({
+	test('tab-click during gesture commit finishes the commit (accelerated) before navigating', async ({
 		page,
 		context
 	}) => {
@@ -724,23 +724,53 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 
 		// Start a back-swipe and release past SWIPE_COMMIT to enter the
 		// commit phase, then immediately click a tab during the commit
-		// rAF window (~200ms). This exercises the R16/R17 fix: the
-		// tab-exit should start from the executor's current progress
-		// (mid-commit), not from 0 (which would snap the track backward).
+		// rAF window (~200ms). The finish-then-new interruption policy
+		// accelerates the in-flight commit to completion, then replays
+		// the tab-click on the landed host. Both the commit and the
+		// tab-click target /messages/inbox here, so the replay is a
+		// no-op (already at the target); the assertion verifies the
+		// commit itself completed.
 		await swipeBack(page);
 		await page.click('[data-tab-nav][href="/messages/inbox"]');
 		await page.waitForURL('**/messages/inbox', { timeout: 5000 });
 
-		// Assert no backward jump (reversals = 0 across the interrupt).
+		// The commit completed (accelerated) before the host swap: the
+		// track reached near the back-target visual (translateX close to
+		// 0 for a thread-host backward commit). After the swap the
+		// sampler may read the tab host's track at a different resting
+		// position, so the peak (max translateX) is the meaningful
+		// pre-swap signal.
 		const samples = (await page.evaluate(() => (window as any).__commitInterruptSamples)) as number[];
 		expect(samples.length, 'sampler should have captured frames').toBeGreaterThan(3);
-		let reversals = 0;
-		for (let i = 2; i < samples.length; i++) {
-			const prevDelta = samples[i - 1] - samples[i - 2];
-			const currDelta = samples[i] - samples[i - 1];
-			if (prevDelta * currDelta < 0) reversals++;
-		}
-		expect(reversals, `track should not reverse during interrupt (samples=${samples.slice(0, 10).join(',')})`).toBe(0);
+		const maxTx = Math.max(...samples);
+		expect(
+			maxTx,
+			`commit should reach near the back-target visual before landing (samples=${samples.slice(0, 10).join(',')})`
+		).toBeGreaterThan(-80);
+	});
+
+	test('tab-click to a different tab during gesture commit finishes the commit then navigates to the new tab', async ({
+		page,
+		context
+	}) => {
+		await prepareContext(context);
+		await page.goto('/messages/inbox');
+		await waitForHydration(page);
+
+		// Click a conversation to land on the pilot.
+		await page.click('a[href^="/messages/"]:not([href="/messages/new"]):not([href="/messages/inbox"])');
+		await page.waitForURL(/\/messages\/\d+/);
+		await page.waitForTimeout(500);
+
+		// Start a back-swipe toward /messages/inbox, then click the
+		// Discussions tab (/) during the commit window. The
+		// finish-then-new policy accelerates the commit to /messages/inbox
+		// first, then replays the tab-click to / on the tab host.
+		await swipeBack(page);
+		await page.click('[data-tab-nav][href="/"]');
+		// The commit lands on /messages/inbox, then the queued tab-click
+		// navigates to /.
+		await page.waitForURL('/', { timeout: 5000 });
 	});
 
 	// The gesture-during-tab-click-commit interrupt is not separately

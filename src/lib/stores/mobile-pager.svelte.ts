@@ -23,18 +23,16 @@
  * first/last-tab rubber-band). Published by the orchestrator from
  * `trackTranslateX(plan, executor.progress)`; null on non-tab-host routes.
  *
- * Settle / tapScrub / searchScrubbing state: the pipeline orchestrator owns
- * the Header's settle ease (the post-release / post-title-change crossfade),
- * the root<->search and deep<->search tap-scrub ease, and the
- * `searchScrubbing` flag that freezes the Header's hamburger icon on a
- * tab-root page while a tap scrub is in flight. The orchestrator publishes
- * the eased `settleProgress`,
- * `settleLatched` (the latched transition record), `settleActive` (the
- * "settling" branch selector), `settleDirection` (forward/back), and
- * `settleAwaitTitle` (true while a commit settle holds for the navigation to
- * land) through this store; the Header reads them and renders. The
- * orchestrator is the sole writer of these fields; `set()` preserves them so
- * the in-flight settle is not clobbered by the per-frame drag publication.
+ * The store carries ONLY the per-frame gesture signals the FAB layer, the
+ * MobileTabBar, and the SearchTabBar read (`coverProgress`, `tapMorph`,
+ * `backMorph`, `trackFractionalIndex`, `transitionTarget`, `familySwapScale`,
+ * `committed`, `replaceStateIntent`, `fractionalIndex`, `dragging`, `active`,
+ * `targetIndex`). The Header's settle ease state (the post-release /
+ * post-title-change crossfade) and the `searchScrubbing` flag are owned by the
+ * pipeline orchestrator as private class `$state` exposed via reactive
+ * getters; the Header reads them directly off the orchestrator singleton (see
+ * `NavPipelineOrchestrator.settleActive` / `.settleProgress` / `.settleLatched`
+ * / `.settleDirection` / `.settleAwaitTitle` / `.searchScrubbing`).
  *
  * Factory: two pagers exist - the PRIMARY tab pager (NavPipelineTabHost /
  * NavPipelineHost write; Header / MobileTabBar read) and the SEARCH scope
@@ -43,7 +41,6 @@
  * instances are created once at module load and returned by the getters.
  */
 import { setContext, getContext } from 'svelte';
-import type { HeaderSettleTransition } from '$lib/utils/header-probe';
 
 interface PagerUpdate {
 	fractionalIndex: number;
@@ -84,31 +81,6 @@ interface PagerUpdate {
 	 * resting scale. Optional so non-publishing writers (SearchScopePager)
 	 * compile without touching it. */
 	familySwapScale?: number | null;
-	/** Eased settle progress 0..1 published by the orchestrator's settle
-	 * rAF on the same constant-deceleration curve the executor's commit
-	 * loop uses. Read by the Header's morph / titleView derivations.
-	 * Optional so non-publishing writers compile without touching it. */
-	settleProgress?: number;
-	/** True while the orchestrator's settle ease is in flight (a
-	 * gesture-release or non-gesture title change crossfade). Selects the
-	 * Header's morph / titleView settle branch. */
-	settleActive?: boolean;
-	/** The latched endpoint identity of the in-flight settle (outgoing /
-	 * incoming title + tab-ness), frozen at settle-arm time so a live
-	 * `navStore.backTarget` flip mid-settle cannot reach the crossfade.
-	 * null at rest. */
-	settleLatched?: HeaderSettleTransition | null;
-	/** The direction of the in-flight settle (forward / back). Read by the
-	 * Header's titleView to choose which span slides up vs down. */
-	settleDirection?: 'forward' | 'back';
-	/** True while a commit settle holds at progress 1 awaiting the
-	 * navigation to land. Read by the DEV probe; the production render
-	 * uses `settleActive` + `settleLatched`. */
-	settleAwaitTitle?: boolean;
-	/** True while the orchestrator's tap-scrub ease is in flight (a
-	 * root<->search or deep<->search tap). The Header's `iconProgress`
-	 * freezes at the hamburger on a tab-root page while true. */
-	searchScrubbing?: boolean;
 }
 
 type SetPagerFn = (update: PagerUpdate) => void;
@@ -116,19 +88,6 @@ type SetTapMorphFn = (value: number | null) => void;
 type SetCommittedFn = (value: boolean | null) => void;
 type SetReplaceStateIntentFn = (value: boolean) => void;
 type SetFamilySwapScaleFn = (value: number | null) => void;
-
-/** The full settle state published atomically by the orchestrator each
- *  settle-arm / rAF tick / settle-end. Fields map 1:1 to the PagerUpdate
- *  settle entries; passing `undefined` preserves the prior value. */
-interface SettleStateUpdate {
-	progress?: number;
-	active?: boolean;
-	latched?: HeaderSettleTransition | null;
-	direction?: 'forward' | 'back';
-	awaitTitle?: boolean;
-}
-type SetSettleStateFn = (update: SettleStateUpdate) => void;
-type SetSearchScrubbingFn = (value: boolean) => void;
 
 interface PagerStore extends PagerUpdate {
 	targetIndex: number | null;
@@ -138,20 +97,12 @@ interface PagerStore extends PagerUpdate {
 	trackFractionalIndex: number | null;
 	committed: boolean | null;
 	familySwapScale: number | null;
-	settleProgress: number;
-	settleActive: boolean;
-	settleLatched: HeaderSettleTransition | null;
-	settleDirection: 'forward' | 'back';
-	settleAwaitTitle: boolean;
-	searchScrubbing: boolean;
 	replaceStateIntent: boolean;
 	set: SetPagerFn;
 	setTapMorph: SetTapMorphFn;
 	setCommitted: SetCommittedFn;
 	setReplaceStateIntent: SetReplaceStateIntentFn;
 	setFamilySwapScale: SetFamilySwapScaleFn;
-	setSettleState: SetSettleStateFn;
-	setSearchScrubbing: SetSearchScrubbingFn;
 }
 
 export function createPagerStore(): PagerStore {
@@ -166,12 +117,6 @@ export function createPagerStore(): PagerStore {
 	let trackFractionalIndex = $state<number | null>(null);
 	let committed = $state<boolean | null>(null);
 	let familySwapScale = $state<number | null>(null);
-	let settleProgress = $state(1);
-	let settleActive = $state(false);
-	let settleLatched = $state<HeaderSettleTransition | null>(null);
-	let settleDirection = $state<'forward' | 'back'>('forward');
-	let settleAwaitTitle = $state(false);
-	let searchScrubbing = $state(false);
 	let replaceStateIntent = $state(false);
 
 	function set(update: PagerUpdate): void {
@@ -197,22 +142,6 @@ export function createPagerStore(): PagerStore {
 		// cancels, or tears down (releaseInputs / unmount).
 		familySwapScale =
 			update.familySwapScale !== undefined ? update.familySwapScale : familySwapScale;
-		// Settle + searchScrubbing state is owned exclusively by the
-		// orchestrator's settle / tap-scrub eases (published via
-		// setSettleState / setSearchScrubbing). Preserve across pager.set so
-		// the per-frame drag publication and resetPagerStore do not clobber
-		// an in-flight settle. The orchestrator clears these explicitly via
-		// setSettleState / setSearchScrubbing when an ease ends, cancels, or
-		// tears down.
-		settleProgress = update.settleProgress !== undefined ? update.settleProgress : settleProgress;
-		settleActive = update.settleActive !== undefined ? update.settleActive : settleActive;
-		settleLatched = update.settleLatched !== undefined ? update.settleLatched : settleLatched;
-		settleDirection =
-			update.settleDirection !== undefined ? update.settleDirection : settleDirection;
-		settleAwaitTitle =
-			update.settleAwaitTitle !== undefined ? update.settleAwaitTitle : settleAwaitTitle;
-		searchScrubbing =
-			update.searchScrubbing !== undefined ? update.searchScrubbing : searchScrubbing;
 	}
 
 	function setTapMorph(value: number | null): void {
@@ -229,18 +158,6 @@ export function createPagerStore(): PagerStore {
 
 	function setFamilySwapScale(value: number | null): void {
 		familySwapScale = value;
-	}
-
-	function setSettleState(update: SettleStateUpdate): void {
-		if (update.progress !== undefined) settleProgress = update.progress;
-		if (update.active !== undefined) settleActive = update.active;
-		if (update.latched !== undefined) settleLatched = update.latched;
-		if (update.direction !== undefined) settleDirection = update.direction;
-		if (update.awaitTitle !== undefined) settleAwaitTitle = update.awaitTitle;
-	}
-
-	function setSearchScrubbing(value: boolean): void {
-		searchScrubbing = value;
 	}
 
 	return {
@@ -277,24 +194,6 @@ export function createPagerStore(): PagerStore {
 		get familySwapScale() {
 			return familySwapScale;
 		},
-		get settleProgress() {
-			return settleProgress;
-		},
-		get settleActive() {
-			return settleActive;
-		},
-		get settleLatched() {
-			return settleLatched;
-		},
-		get settleDirection() {
-			return settleDirection;
-		},
-		get settleAwaitTitle() {
-			return settleAwaitTitle;
-		},
-		get searchScrubbing() {
-			return searchScrubbing;
-		},
 		get replaceStateIntent() {
 			return replaceStateIntent;
 		},
@@ -302,9 +201,7 @@ export function createPagerStore(): PagerStore {
 		setTapMorph,
 		setCommitted,
 		setReplaceStateIntent,
-		setFamilySwapScale,
-		setSettleState,
-		setSearchScrubbing
+		setFamilySwapScale
 	};
 }
 

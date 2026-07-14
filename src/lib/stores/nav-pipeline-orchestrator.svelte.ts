@@ -242,8 +242,9 @@ export interface PipelineMountInputs {
  *  consumers (the host's `$effect` reads this and publishes to the
  *  pager store so the existing FAB / Header layers react). Per DV20
  *  §13.5 the NavStateMachine is the sole authority for the macro
- *  fields (plan, FROM/TO, direction, in-flight); only `progress` is
- *  the executor's per-frame contribution. */
+ *  fields (plan, FROM/TO, direction, in-flight) and the settle +
+ *  tap-scrub micro animation state; only `progress` is the executor's
+ *  per-frame contribution. */
 export interface OrchestratorPublication {
 	/** Null when at-rest; the resolved plan when transitioning. */
 	readonly plan: TransitionPlan | null;
@@ -257,6 +258,19 @@ export interface OrchestratorPublication {
 	readonly toPathname: string | null;
 	/** The transition direction. */
 	readonly direction: TransitionDirection | null;
+	/** True while the settle ease owns the morph / title crossfade. */
+	readonly settleActive: boolean;
+	/** The eased settle progress 0..1. */
+	readonly settleProgress: number;
+	/** The latched endpoint identity of the in-flight settle. null at rest. */
+	readonly settleLatched: HeaderSettleTransition | null;
+	/** The direction of the in-flight settle (forward / back). */
+	readonly settleDirection: 'forward' | 'back';
+	/** True while a commit settle holds at progress 1 awaiting the
+	 *  navigation to land. */
+	readonly settleAwaitTitle: boolean;
+	/** True while the tap-scrub ease is in flight. */
+	readonly searchScrubbing: boolean;
 }
 
 /** The clock function the intent classifier + executor use. */
@@ -308,6 +322,15 @@ export class NavPipelineOrchestrator {
 	 *  SvelteKit nav; `target` is the dispatch target fired on
 	 *  commit-settle. Null at rest. */
 	#pendingTabExit: PendingTabExit | null = null;
+	/** A queued discrete navigation (tab-click) that arrived while a
+	 *  commit slide was in flight. The orchestrator accelerated the
+	 *  in-flight commit to completion; when the commit settles,
+	 *  dispatches its own nav, and the nav lands, `#landAtRest` fires
+	 *  this queued goto so `onSvelteKitBeforeNavigate` intercepts it on
+	 *  the landed host and plays the tab-click transition from progress
+	 *  0 (the finish-then-new interruption policy). Null when no
+	 *  discrete nav is queued. */
+	#queuedDiscreteNav: PendingTabExit | null = null;
 	/** True while the forward-enter animation (playEnterAnimation) is
 	 *  active. The afterNavigate guard and the resize guard read it to
 	 *  avoid landing the orchestrator or mutating the plan mid-enter. */
@@ -337,9 +360,10 @@ export class NavPipelineOrchestrator {
 	 *  produces each tick. The `#publication` derived merges the two. */
 	#progress = $state(0);
 	/** Reactive publication: a read-through to the state machine's macro
-	 *  state (plan, FROM/TO, direction, in-flight phase) merged with the
-	 *  executor-driven `#progress`. Per DV20 §13.5 the state machine is
-	 *  the sole authority; this derived has no independent state. */
+	 *  state (plan, FROM/TO, direction, in-flight phase) and settle +
+	 *  tap-scrub micro state, merged with the executor-driven `#progress`.
+	 *  Per DV20 §13.5 the state machine is the sole authority; this
+	 *  derived has no independent state. */
 	readonly #publication = $derived.by<OrchestratorPublication>(() => {
 		// Guard: between releaseInputs (old host destroy) and configure
 		// (new host mount), #mountInputs is null and #mounted is false.
@@ -353,7 +377,13 @@ export class NavPipelineOrchestrator {
 				inFlight: false,
 				fromPathname: null,
 				toPathname: null,
-				direction: null
+				direction: null,
+				settleActive: this.#stateMachine.settleActive,
+				settleProgress: this.#stateMachine.settleProgress,
+				settleLatched: this.#stateMachine.settleLatched,
+				settleDirection: this.#stateMachine.settleDirection,
+				settleAwaitTitle: this.#stateMachine.settleAwaitTitle,
+				searchScrubbing: this.#stateMachine.searchScrubbing
 			};
 		}
 		const sm = this.#stateMachine.state;
@@ -363,7 +393,13 @@ export class NavPipelineOrchestrator {
 			inFlight: sm.macro.kind === 'transitioning',
 			fromPathname: sm.fromPathname,
 			toPathname: sm.toPathname,
-			direction: sm.direction
+			direction: sm.direction,
+			settleActive: this.#stateMachine.settleActive,
+			settleProgress: this.#stateMachine.settleProgress,
+			settleLatched: this.#stateMachine.settleLatched,
+			settleDirection: this.#stateMachine.settleDirection,
+			settleAwaitTitle: this.#stateMachine.settleAwaitTitle,
+			searchScrubbing: this.#stateMachine.searchScrubbing
 		};
 	});
 	/** The raw drag-fraction published at the moment a commit / cancel
@@ -425,16 +461,32 @@ export class NavPipelineOrchestrator {
 	 *  change (the trigger for the family-swap ease). Null before the
 	 *  first configure so the initial mount skips the ease. */
 	#previousFamily: FabFamily | null = null;
+	/** The foregroundFraction seed captured when a gesture's
+	 *  `#cancelAllAnimationEases` interrupts a running family-swap ease.
+	 *  Inverted from the eased scale via `seedFraction = (easedScale + 1) /
+	 *  2` (the inverse of `scaleFromFraction(f) = clamp(2f - 1, 0, 1)`).
+	 *  While non-null, `#republishToPager` publishes a SEEDED
+	 *  `coverProgress = seed + (1 - seed) * rawDragFraction` so the FAB
+	 *  scales continuously from the eased value (at rawDragFraction 0) up
+	 *  to 1 (at rawDragFraction 1) as the slide reveals the destination.
+	 *  `pager.familySwapScale` is cleared at capture time so the FAB reads
+	 *  its resting formula over the seeded foregroundFraction.
+	 *  `#lastRenderedScale` stays in sync with the visible scale via the
+	 *  seeded publication. `#landAtRest` (cancel case) re-arms the
+	 *  family-swap ease from `#lastRenderedScale`; `releaseInputs` (commit
+	 *  case) captures `#lastRenderedScale` for the next configure's ease
+	 *  anchor. Both clear the seed. */
+	#fabDragSeedFraction: number | null = null;
 
 	// ---------------------------------------------------------------------
 	// Settle ease state. The orchestrator owns the Header's post-release /
-	// post-title-change crossfade. The rAF below eases `settleProgress`
+	// post-title-change crossfade. The rAF below eases the settle progress
 	// toward `#settleTargetProgress` over TITLE_CROSSFADE_MS with the
 	// constant-deceleration curve `s(u) = 2u - u²` (the same curve the
-	// executor's commit loop and the tap-scrub ease use). Each tick
-	// publishes `settleProgress` (and the latched record at arm time) via
-	// the pager store; the Header reads these and renders the morph /
-	// title crossfade. Reduced-motion snaps (no rAF integration).
+	// executor's commit loop and the tap-scrub ease use). Each tick writes
+	// the eased progress to the state machine (the §13.5 authority); the
+	// Header reads it via the orchestrator's publication. Reduced-motion
+	// snaps (no rAF integration).
 	#settleRafId: number | undefined;
 	/** The eased settle progress's start value (the release position for a
 	 *  gesture-release settle, 0 for a non-gesture title-change settle). */
@@ -448,29 +500,9 @@ export class NavPipelineOrchestrator {
 	 *  navigation to land. The afterNavigate hook + the title-change
 	 *  watcher clear it; on clear, an in-flight rAF endSettles at u=1 on
 	 *  its tick (no premature morph snap), a completed rAF endSettles
-	 *  immediately. */
+	 *  immediately. Internal bookkeeping: the reactive publication of
+	 *  this flag lives on the state machine (`settleAwaitTitle`). */
 	#settleAwaitTitle = false;
-	/** True while the orchestrator's settle ease owns the morph / title
-	 *  crossfade (between arm and endSettle). Read by the Header's morph
-	 *  / titleView derivations via the orchestrator's public reactive
-	 *  getters (the orchestrator is the sole owner of settle state). */
-	#settleActive = $state(false);
-	/** The eased settle progress 0..1, published each rAF tick. Read by
-	 *  the Header's morph / titleView derivations. */
-	#settleProgress = $state(1);
-	/** The latched endpoint identity of the in-flight settle. null at
-	 *  rest. Read by the Header's morph / titleView derivations. */
-	#settleLatched = $state<HeaderSettleTransition | null>(null);
-	/** The direction of the in-flight settle (forward / back). Read by
-	 *  the Header's titleView to pick the title-span slide axis. */
-	#settleDirection = $state<'forward' | 'back'>('forward');
-	/** True while a commit settle holds at progress 1 awaiting the
-	 *  navigation to land. Read by the DEV probe. */
-	#settleAwaitTitlePub = $state(false);
-	/** True while the orchestrator's tap-scrub ease is in flight. Read by
-	 *  the Header's `iconProgress` derivation to freeze the hamburger icon
-	 *  on a tab-root page while the search-layout scrub runs. */
-	#searchScrubbing = $state(false);
 
 	// ---------------------------------------------------------------------
 	// tap-scrub ease state. The orchestrator owns the root<->search
@@ -521,13 +553,20 @@ export class NavPipelineOrchestrator {
 	 *  gesture-release settle arming can resolve the back-target title via
 	 *  `resolveDeepHeaderTitle`. */
 	#headerT: TranslationDict | null = null;
-	/** True when the most recent `#landAtRest` ran with `#navDispatchInFlight`
-	 *  true, i.e. the navigation landed via the orchestrator's own commit
-	 *  dispatch (a gesture commit or a tab-click commit). Read and cleared in
-	 *  `notifyHeaderState` so the tap-scrub arming can skip the just-landed
-	 *  pipeline commit (the executor's slide already drove the search-layout
-	 *  visual to its post-land position; arming a fresh scrub would re-animate
-	 *  it from the opposite endpoint and jump). */
+	/** True when the current in-flight navigation was dispatched by the
+	 *  orchestrator (a gesture commit or a tab-click commit). Set at
+	 *  dispatch time in `#dispatchNav` (BEFORE the navigation lands) so
+	 *  the Header's `notifyHeaderState` `$effect.pre` - which fires
+	 *  BEFORE `afterNavigate` - reads the CURRENT navigation's flag (a
+	 *  flag set at land time would be stale at header-notification time).
+	 *  Read in `notifyHeaderState` so the tap-scrub arming can skip the
+	 *  just-landed pipeline commit (the executor's slide already drove
+	 *  the search-layout visual to its post-land position; arming a
+	 *  fresh scrub would re-animate it from the opposite endpoint and
+	 *  jump). Cleared in `#landAtRest` (the navigation has landed) and
+	 *  in `notifyHeaderState` (defensive clear after the read so a
+	 *  second header-state notification within the same navigation does
+	 *  not re-consume the flag). */
 	#lastLandWasPipelineCommit = false;
 
 	constructor(clock: ClockFn = defaultClock) {
@@ -554,30 +593,36 @@ export class NavPipelineOrchestrator {
 	}
 
 	/** Reactive read of the in-flight settle flag. The Header reads this
-	 *  to select the morph / titleView settle branch. */
+	 *  to select the morph / titleView settle branch. Delegates to the
+	 *  state machine (the §13.5 authority) via the publication. */
 	get settleActive(): boolean {
-		return this.#settleActive;
+		return this.#publication.settleActive;
 	}
-	/** Reactive read of the eased settle progress. */
+	/** Reactive read of the eased settle progress. Delegates to the
+	 *  state machine via the publication. */
 	get settleProgress(): number {
-		return this.#settleProgress;
+		return this.#publication.settleProgress;
 	}
-	/** Reactive read of the latched settle record. */
+	/** Reactive read of the latched settle record. Delegates to the
+	 *  state machine via the publication. */
 	get settleLatched(): HeaderSettleTransition | null {
-		return this.#settleLatched;
+		return this.#publication.settleLatched;
 	}
-	/** Reactive read of the settle direction. */
+	/** Reactive read of the settle direction. Delegates to the state
+	 *  machine via the publication. */
 	get settleDirection(): 'forward' | 'back' {
-		return this.#settleDirection;
+		return this.#publication.settleDirection;
 	}
-	/** Reactive read of the awaitTitle flag (DEV probe consumer). */
+	/** Reactive read of the awaitTitle flag (DEV probe consumer).
+	 *  Delegates to the state machine via the publication. */
 	get settleAwaitTitle(): boolean {
-		return this.#settleAwaitTitlePub;
+		return this.#publication.settleAwaitTitle;
 	}
 	/** Reactive read of the search-scrub gate flag. The Header reads this
-	 *  to drop its horizontal-track CSS transitions during a tap scrub. */
+	 *  to freeze the hamburger icon during a tap scrub. Delegates to the
+	 *  state machine via the publication. */
 	get searchScrubbing(): boolean {
-		return this.#searchScrubbing;
+		return this.#publication.searchScrubbing;
 	}
 
 	/** Configure: capture the host's mount inputs, rebind the element
@@ -652,11 +697,16 @@ export class NavPipelineOrchestrator {
 		// Capture the FAB's current scale before clearing the inputs so the
 		// next configure's family-swap ease anchors at the visible pre-swap
 		// scale (the orchestrator is the sole owner of this tracking).
-		// Skipped while the family-swap ease runs (its tick maintains
+		// During a seeded drag (a gesture that interrupted a family-swap
+		// ease), `#lastRenderedScale` is kept in sync with the visible scale
+		// by the seeded publication in `#republishToPager`, so the resting
+		// formula re-derives the same value here. Skipped while a
+		// (non-interrupted) family-swap ease runs (its tick maintains
 		// #lastRenderedScale at the eased value, which IS the visible scale).
 		if (this.#familySwapRafId === undefined) {
 			this.#lastRenderedScale = this.#computeFabRestingScale();
 		}
+		this.#fabDragSeedFraction = null;
 		this.#mountInputs = null;
 		this.#mounted = false;
 		this.#pendingGesture = null;
@@ -674,10 +724,11 @@ export class NavPipelineOrchestrator {
 		// Do NOT cancel the settle / tap-scrub eases here: the Header
 		// persists across the route swap, and a settle in flight at the
 		// host's destroy (a commit settle awaiting its navigation landing)
-		// must continue until the navigation lands. The header-state
-		// watcher's `!this.#mounted` guard skips re-arming during the gap
-		// frame; the afterNavigate hook clears the awaitTitle once the
-		// navigation lands.
+		// must continue until the navigation lands. `notifyHeaderState`'s
+		// `!this.#mounted` guard skips re-arming during the gap frame
+		// (releaseInputs -> the next configure) AND on a mobile -> desktop
+		// flip (unmount); the afterNavigate hook clears the awaitTitle
+		// once the navigation lands.
 		// Clear the in-flight pager state so a stale fractionalIndex /
 		// transitionTarget does not drive the FAB on the destination
 		// route before that route's configure publishes its own state.
@@ -832,6 +883,7 @@ export class NavPipelineOrchestrator {
 		this.#driver = null;
 		this.#pendingGesture = null;
 		this.#pendingTabExit = null;
+		this.#queuedDiscreteNav = null;
 		this.#navDispatchInFlight = false;
 		this.#dispatchTarget = null;
 		this.#intent = initialIntentState();
@@ -854,13 +906,14 @@ export class NavPipelineOrchestrator {
 		this.#familySwapStartTs = 0;
 		this.#lastRenderedScale = 0;
 		this.#previousFamily = null;
+		this.#fabDragSeedFraction = null;
 		// Tear down the settle + tap-scrub eases and the header-state
 		// watchers so the next mount (a desktop -> mobile flip) starts
 		// clean. The first configure after the re-mount re-installs the
 		// watchers.
 		this.#cancelSettleEaseRaf();
 		this.#cancelTapScrubRaf();
-		this.#settleActive = false;
+		this.#stateMachine.setSettleState({ active: false });
 		this.#settleAwaitTitle = false;
 		this.#settleStartProgress = 0;
 		this.#settleStartTs = 0;
@@ -875,6 +928,7 @@ export class NavPipelineOrchestrator {
 		this.#prevHeaderIsSearch = false;
 		this.#headerT = null;
 		this.#lastLandWasPipelineCommit = false;
+		this.#mountInputs = null;
 		this.#mounted = false;
 		this.#lifecycle.deactivate();
 		this.#lifecycle.unmount();
@@ -893,13 +947,15 @@ export class NavPipelineOrchestrator {
 			committed: null
 		});
 		// Clear the settle / tap-scrub publications so the next mount
-		// starts at rest. The orchestrator owns these as class fields
-		// (the Header reads via the public reactive getters).
-		this.#settleProgress = 1;
-		this.#settleActive = false;
-		this.#settleLatched = null;
-		this.#settleAwaitTitlePub = false;
-		this.#searchScrubbing = false;
+		// starts at rest. The state machine owns these (§13.5); the
+		// Header reads via the orchestrator's publication.
+		this.#stateMachine.setSettleState({
+			progress: 1,
+			active: false,
+			latched: null,
+			awaitTitle: false
+		});
+		this.#stateMachine.setSearchScrubbing(false);
 		getMobilePagerStore().setTapMorph(null);
 		// Clear the replaceState side-channel on a mobile -> desktop flip
 		// so the intent does not survive the host that set it. Route-swap
@@ -1169,13 +1225,17 @@ export class NavPipelineOrchestrator {
 		} else {
 			return;
 		}
-		// A re-grab mid-transition (an in-flight gesture or tab-click)
-		// fires the §5 interrupt event so the state machine drops the
-		// in-flight phase + TO before this gesture's onResolved re-enters
-		// transitioning. The interrupt is required because the resolved
-		// handler preserves a 'committing' sub when re-resolved mid-commit;
-		// clearing it here lets the new drag re-enter 'dragging' so its
-		// drag-move/commit/cancel events track correctly.
+		// A re-grab mid-transition cancels every running animation ease
+		// (settle + tap-scrub) and fires the §5 interrupt event so the
+		// state machine drops the in-flight phase + TO before this
+		// gesture's onResolved re-enters transitioning. The drag owns the
+		// morph from the current visual position (no jump); each ease
+		// would otherwise keep ticking underneath the drag. The interrupt
+		// is required because the resolved handler preserves a 'committing'
+		// sub when re-resolved mid-commit; clearing it here lets the new
+		// drag re-enter 'dragging' so its drag-move/commit/cancel events
+		// track correctly.
+		this.#cancelAllAnimationEases();
 		if (this.#publication.inFlight) {
 			this.#stateMachine.onInterrupt(intent);
 		}
@@ -1433,9 +1493,13 @@ export class NavPipelineOrchestrator {
 	/** Dispatch the SvelteKit navigation. Per §9 the orchestrator
 	 *  coordinates; it does not bypass SvelteKit. `goto` /
 	 *  `history.back()` / `history.forward()` re-fire `beforeNavigate`;
-	 *  the in-flight flag lets that one pass. */
+	 *  the in-flight flag lets that one pass. Sets
+	 *  `#lastLandWasPipelineCommit` at dispatch time so the Header's
+	 *  `notifyHeaderState` `$effect.pre` (which fires BEFORE
+	 *  `afterNavigate`) reads the current navigation's flag. */
 	#dispatchNav(target: string): void {
 		this.#navDispatchInFlight = true;
+		this.#lastLandWasPipelineCommit = true;
 		this.#dispatchTarget = target;
 		const hop = hopForHref(target);
 		// The in-flight flag + dispatch target persist until the
@@ -1463,13 +1527,11 @@ export class NavPipelineOrchestrator {
 	/** Return to at-rest without dispatching. */
 	#landAtRest(): void {
 		const inputs = this.#mountInputs;
-		// Record whether this land carried an orchestrator-dispatched nav
-		// (a gesture commit or a tab-click commit) so the next
-		// `notifyHeaderState` can skip the tap-scrub arm for that landing.
-		// The executor's slide already drove the search-layout visual to its
-		// post-land position; arming a fresh scrub would jump the track back
-		// to the pre-slide endpoint and re-animate.
-		this.#lastLandWasPipelineCommit = this.#navDispatchInFlight;
+		// The pipeline-commit flag was set at `#dispatchNav` time so the
+		// Header's `notifyHeaderState` (firing before `afterNavigate`)
+		// could read it. The navigation has landed; clear the flag so a
+		// later non-pipeline nav does not mis-read it as a commit.
+		this.#lastLandWasPipelineCommit = false;
 		this.#pendingGesture = null;
 		this.#pendingTabExit = null;
 		this.#navDispatchInFlight = false;
@@ -1479,6 +1541,22 @@ export class NavPipelineOrchestrator {
 		this.#gestureToTabIndex = null;
 		this.#executor?.onLand();
 		getMobilePagerStore().setCommitted(null);
+		// Family-swap seed: a gesture that interrupted a mid-ease
+		// family-swap set #fabDragSeedFraction. On a cancel landing (no
+		// route swap, no configure), re-arm the ease from
+		// #lastRenderedScale (the seeded publication kept it at the
+		// visible scale, which at rest after the cancel snap is the eased
+		// value) so the FAB continues to the destination family's resting
+		// scale. On a commit landing, releaseInputs already captured
+		// #lastRenderedScale for the next configure's
+		// #detectFamilyChange; #familySwapRafId being defined means the
+		// re-arm happened, and this branch is a no-op. Same-family commit
+		// lands the FAB at the resting formula (no jump to zero: the
+		// gesture's slide already drove the visual).
+		if (this.#familySwapRafId === undefined && this.#fabDragSeedFraction !== null) {
+			this.#fabDragSeedFraction = null;
+			this.#startFamilySwapEase(this.#lastRenderedScale);
+		}
 		// Clear the replaceState side-channel: a cancel-after-regrab returns
 		// to rest WITHOUT dispatching (no navigation lands, so
 		// onSvelteKitAfterNavigate never fires), so the intent Header.onBack
@@ -1490,6 +1568,16 @@ export class NavPipelineOrchestrator {
 			this.#stateMachine.onLand(inputs.fromTag);
 		}
 		this.#progress = 0;
+		// Fire a queued discrete navigation (the finish-then-new policy).
+		// The in-flight commit completed and the nav landed; replay the
+		// queued tab-click so `onSvelteKitBeforeNavigate` intercepts it on
+		// the active host and plays the transition from progress 0. The
+		// queue is consumed exactly once (cleared before the goto fires).
+		const queuedNav = this.#queuedDiscreteNav;
+		this.#queuedDiscreteNav = null;
+		if (queuedNav !== null) {
+			void goto(queuedNav.target);
+		}
 	}
 
 	// -----------------------------------------------------------------------
@@ -1546,6 +1634,22 @@ export class NavPipelineOrchestrator {
 		// sibling, no Family A pill to drive).
 		if (!isTabRootPath(to)) {
 			return false;
+		}
+		// Finish-then-new interruption policy: a discrete tab-click
+		// arriving while a commit slide is in flight (a gesture commit,
+		// a prior tab-click commit, or a forward-enter) accelerates the
+		// in-flight to completion, then replays this tab-click on the
+		// landed host so its transition plays from progress 0. The
+		// finger-controlled drag path (#beginGesture) keeps the current
+		// behavior (track the finger from the current visual). The
+		// live-drag phase (executor phase 'live') is not accelerated: a
+		// finger is still controlling the track, so the discrete nav
+		// falls through to the from-visual handoff below.
+		if (this.#executor?.state.phase === 'committing') {
+			this.#accelerateInFlight();
+			this.#queuedDiscreteNav = { target: to + toSearch };
+			navigation.cancel();
+			return true;
 		}
 		// A tab-click exit (pipeline route -> tab-root). Drive the slide
 		// plan via the executor and dispatch on settle. The direction
@@ -1634,10 +1738,10 @@ export class NavPipelineOrchestrator {
 		// progress 1 until the navigation lands. The land clears the
 		// await: an in-flight rAF endSettles at u=1 on its next tick (no
 		// premature morph snap), a completed rAF endSettles now.
-		if (this.#settleActive && this.#settleAwaitTitle) {
+		if (this.#stateMachine.settleActive && this.#settleAwaitTitle) {
 			if (this.#settleRafId !== undefined) {
 				this.#settleAwaitTitle = false;
-				this.#settleAwaitTitlePub = false;
+				this.#stateMachine.setSettleState({ awaitTitle: false });
 			} else {
 				this.#endSettleEase();
 			}
@@ -1837,19 +1941,44 @@ export class NavPipelineOrchestrator {
 		const family = attrs.family;
 		const pager = getMobilePagerStore();
 		// Match the FAB layer's foregroundFraction gate exactly: a pipeline
-		// transition whose destination does not resolve to a list FAB kind
-		// (an overlay/compose route, or the dynamic /activity kind, or a
-		// no-FAB route) drives foregroundFraction to 0 so the FAB scales
-		// out. `#pilotTransitionListKind` returns null for all those cases;
-		// the track-fractional-index path (a tab-host slide between two
-		// list kinds) takes precedence on list routes and is handled by
-		// the family === 'list' branch below.
+		// transition whose destination shows no resting FAB scales the FAB
+		// OUT. Two cases: (1) non-tab host (trackFractionalIndex is null)
+		// targeting a non-list destination - source family is overlay/compose
+		// (resting scale 0), direct return 0; (2) tab host targeting a
+		// non-tab destination (backward-to-deep-page) - when the source
+		// route's tab matches the FAB's tab (resting scale 1, e.g. / or
+		// /messages/inbox), ease out via `1 - coverProgress` so the scale
+		// ramps 1 -> 0 over the first half of the slide (no jump at the
+		// gate's first firing); when the source route shows no FAB at rest
+		// (the dynamic kind at /activity's tab position 1, resting scale 0),
+		// return 0 so the FAB stays hidden. Tab-to-tab on the tab host
+		// passes through to the family === 'list' branch below.
 		const transitionTarget = this.#publication.toPathname;
 		if (
 			transitionTarget !== null &&
 			this.#pilotTransitionListKind() === null &&
-			pager.trackFractionalIndex === null
+			(pager.trackFractionalIndex === null || !isTabRootPath(transitionTarget))
 		) {
+			if (family === 'list') {
+				// Mirror the FAB layer's source-rest check
+				// (`tabFraction(sourceTab, cfg.tabIndex) === 0`). The
+				// source FAB's tab index resolves via #listFabTabIndex;
+				// null means the source route shows no FAB at rest (e.g.
+				// /activity's dynamic kind), in which case the FAB layer
+				// reads the retained config and tabFraction evaluates to 0
+				// anyway. Uses inputs.fromTabIndex (stable at configure
+				// time) rather than the live track fractional index (which
+				// moves during the slide) so the check holds across every
+				// frame.
+				const sourceFabTabIndex = this.#listFabTabIndex(attrs.kind, pager);
+				if (
+					sourceFabTabIndex === null ||
+					tabFraction(inputs.fromTabIndex, sourceFabTabIndex) === 0
+				) {
+					return 0;
+				}
+				return scaleFromFraction(1 - (pager.coverProgress ?? 0));
+			}
 			return 0;
 		}
 		if (family === 'list') {
@@ -1926,16 +2055,18 @@ export class NavPipelineOrchestrator {
 		this.#settleStartProgress = startProgress;
 		this.#settleTargetProgress = targetProgress;
 		this.#settleAwaitTitle = awaitTitle;
-		this.#settleActive = true;
-		this.#settleProgress = startProgress;
-		this.#settleLatched = latched;
-		this.#settleDirection = direction;
-		this.#settleAwaitTitlePub = awaitTitle;
+		this.#stateMachine.setSettleState({
+			active: true,
+			progress: startProgress,
+			latched,
+			direction,
+			awaitTitle
+		});
 		// Reduced-motion: snap to target with no rAF. The awaitTitle flag
 		// still holds for a commit settle (the nav-landing clear governs
 		// endSettle); a non-gesture / cancel settle ends immediately.
 		if (this.#driver?.prefersReducedMotion() ?? false) {
-			this.#settleProgress = targetProgress;
+			this.#stateMachine.setSettleState({ progress: targetProgress });
 			if (!awaitTitle) this.#endSettleEase();
 			return;
 		}
@@ -1948,7 +2079,7 @@ export class NavPipelineOrchestrator {
 			const progress =
 				this.#settleStartProgress +
 				(this.#settleTargetProgress - this.#settleStartProgress) * eased;
-			this.#settleProgress = progress;
+			this.#stateMachine.setSettleState({ progress });
 			if (u >= 1) {
 				this.#settleRafId = undefined;
 				// Commit settle: hold at target, wait for the nav-landed
@@ -1978,12 +2109,14 @@ export class NavPipelineOrchestrator {
 	 *  (1 for commit, 0 for cancel) so the morph derivation's rest branch
 	 *  produces the same value the settle branch ended at (no snap). */
 	#endSettleEase(): void {
-		if (!this.#settleActive) return;
+		if (!this.#stateMachine.settleActive) return;
 		this.#cancelSettleEaseRaf();
-		this.#settleActive = false;
 		this.#settleAwaitTitle = false;
-		this.#settleLatched = null;
-		this.#settleAwaitTitlePub = false;
+		this.#stateMachine.setSettleState({
+			active: false,
+			latched: null,
+			awaitTitle: false
+		});
 	}
 
 	/** Arm the settle ease for a gesture release (commit or cancel).
@@ -2051,7 +2184,7 @@ export class NavPipelineOrchestrator {
 		this.#scrubToValue = toValue;
 		this.#scrubStartTs = 0;
 		const pager = getMobilePagerStore();
-		this.#searchScrubbing = true;
+		this.#stateMachine.setSearchScrubbing(true);
 		pager.setTapMorph(fromValue);
 		// Reduced-motion: snap to target with no rAF.
 		if (this.#driver?.prefersReducedMotion() ?? false) {
@@ -2091,8 +2224,74 @@ export class NavPipelineOrchestrator {
 	#finishTapScrubEase(): void {
 		this.#cancelTapScrubRaf();
 		this.#scrubSource = '';
-		this.#searchScrubbing = false;
+		this.#stateMachine.setSearchScrubbing(false);
 		getMobilePagerStore().setTapMorph(null);
+	}
+
+	/** Accelerate the in-flight commit to completion so a queued discrete
+	 *  navigation can play afterward (the finish-then-new interruption
+	 *  policy). Re-commits the executor from its current progress with a
+	 *  shortened duration (100ms or half the remaining time, whichever is
+	 *  shorter) so the slide finishes quickly and smoothly using the same
+	 *  easing curve. Re-arms the settle ease from its current progress
+	 *  with the same shortened duration so the Header morph / title
+	 *  crossfade tracks the accelerated slide. The commit settles
+	 *  naturally via `#onExecutorSettle`, dispatching the in-flight's own
+	 *  nav target; the queued discrete nav fires on landing via
+	 *  `#landAtRest`. */
+	#accelerateInFlight(): void {
+		const executor = this.#executor;
+		if (executor === null) return;
+		const cs = executor.state.commitStart;
+		if (cs === null) return;
+		const now = this.#clock();
+		const elapsed = now - cs.t0;
+		const remaining = Math.max(1, cs.durationMs - elapsed);
+		const acceleratedMs = Math.max(1, Math.min(100, remaining / 2));
+		// Capture the current raw so the accelerated commit's publication
+		// is continuous with the in-flight's last frame.
+		this.#commitStartRaw = this.#progress;
+		executor.onCommit(0, acceleratedMs);
+		// Accelerate the settle ease so the morph + title crossfade track
+		// the accelerated slide (no visual desync between slide and header).
+		if (this.#stateMachine.settleActive && this.#stateMachine.settleLatched !== null) {
+			this.#armSettleEase(
+				this.#stateMachine.settleLatched,
+				this.#stateMachine.settleProgress,
+				this.#settleTargetProgress,
+				this.#settleAwaitTitle,
+				this.#stateMachine.settleDirection,
+				acceleratedMs
+			);
+		}
+	}
+
+	/** Centralized interruption: cancel every running animation ease
+	 *  (settle + tap-scrub + family-swap) so a new gesture owns the
+	 *  morph from the current visual position with no competing rAF
+	 *  underneath. Called from `#beginGesture` on every re-grab
+	 *  (from-rest or mid-transition). The Header's `notifyHeaderState`
+	 *  reactive watcher for `pager.dragging` is a safety net for edge
+	 *  cases where the gesture begins outside the orchestrator's pointer
+	 *  path; this method is the primary cancellation point.
+	 *
+	 *  The family-swap rAF is cancelled and `pager.familySwapScale` is
+	 *  cleared: the eased value is inverted into `#fabDragSeedFraction`
+	 *  so `#republishToPager` seeds the FAB's foregroundFraction from the
+	 *  eased value, letting the FAB scale continuously toward 1 as the
+	 *  slide reveals the destination. `#landAtRest` (cancel) re-arms the
+	 *  ease from `#lastRenderedScale`; `releaseInputs` (commit) captures
+	 *  `#lastRenderedScale` for the next configure. Both clear the seed. */
+	#cancelAllAnimationEases(): void {
+		this.#endSettleEase();
+		this.#finishTapScrubEase();
+		if (this.#familySwapRafId !== undefined) {
+			cancelAnimationFrame(this.#familySwapRafId);
+			this.#familySwapRafId = undefined;
+			const easedScale = this.#lastRenderedScale;
+			this.#fabDragSeedFraction = (easedScale + 1) / 2;
+			this.#publishFamilySwapScale(null);
+		}
 	}
 
 	// -----------------------------------------------------------------------
@@ -2120,6 +2319,13 @@ export class NavPipelineOrchestrator {
 		t: TranslationDict
 	): void {
 		if (!browser) return;
+		// Header persists in AppShell; on a mobile -> desktop flip the
+		// orchestrator's `unmount` tears down the host inputs and clears
+		// `#mounted`. The Header's `$effect.pre` keeps firing on
+		// navigations, but with no host mounted the orchestrator must not
+		// re-arm eases (the settle / tap-scrub rAFs would tick against
+		// torn-down state). No-op until the next `configure`.
+		if (!this.#mounted) return;
 		this.#headerT = t;
 		if (!this.#headerStateInitialized) {
 			this.#prevHeaderTitle = newTitle;
@@ -2151,7 +2357,12 @@ export class NavPipelineOrchestrator {
 			this.#prevHeaderIsSearch = currentIsSearch;
 			return;
 		}
-		if (this.#settleActive) {
+		if (this.#stateMachine.settleActive) {
+			// #lastLandWasPipelineCommit intentionally survives this
+			// early-return: the read-and-clear below (idle branch) is
+			// skipped when a title arrives mid-settle, so the flag
+			// persists until #landAtRest clears it on the navigation's
+			// afterNavigate landing.
 			// A title arrived mid-settle: the awaited nav landed (clear
 			// awaitTitle so an in-flight rAF endSettles at u=1; a
 			// completed rAF endSettles now), OR a rapid back-to-back nav
@@ -2160,7 +2371,7 @@ export class NavPipelineOrchestrator {
 				if (this.#settleAwaitTitle) {
 					if (this.#settleRafId !== undefined) {
 						this.#settleAwaitTitle = false;
-						this.#settleAwaitTitlePub = false;
+						this.#stateMachine.setSettleState({ awaitTitle: false });
 					} else {
 						this.#endSettleEase();
 					}
@@ -2172,7 +2383,11 @@ export class NavPipelineOrchestrator {
 			}
 			// A different title arrived mid-settle: re-arm toward the new
 			// title so a rapid back-to-back nav cannot strand the header
-			// on a stale title.
+			// on a stale title. Re-arm from the CURRENT settle progress so
+			// the morph (tab-bar transition) and the title crossfade
+			// continue from the in-flight position: the outgoing title
+			// span keeps its mid-settle offset and the new incoming title
+			// enters from below.
 			if (
 				newTitle !== this.#resolveSettleIncomingTitle() &&
 				newTitle !== this.#resolveSettleOutgoingTitle()
@@ -2185,7 +2400,13 @@ export class NavPipelineOrchestrator {
 						outgoingHasTabs: prevLatched.incomingHasTabs,
 						incomingHasTabs: currentHasTabs
 					};
-					this.#armSettleEase(latched, 0, 1, false, this.#resolveNavDirection());
+					this.#armSettleEase(
+						latched,
+						this.#stateMachine.settleProgress,
+						1,
+						false,
+						this.#resolveNavDirection()
+					);
 				}
 			}
 			this.#prevHeaderTitle = newTitle;
@@ -2246,15 +2467,15 @@ export class NavPipelineOrchestrator {
 	}
 
 	#resolveSettleIncomingTitle(): string {
-		return this.#settleLatched?.incomingTitle ?? '';
+		return this.#stateMachine.settleLatched?.incomingTitle ?? '';
 	}
 
 	#resolveSettleOutgoingTitle(): string {
-		return this.#settleLatched?.outgoingTitle ?? '';
+		return this.#stateMachine.settleLatched?.outgoingTitle ?? '';
 	}
 
 	#readSettleLatched(): HeaderSettleTransition | null {
-		return this.#settleLatched;
+		return this.#stateMachine.settleLatched;
 	}
 
 	#resolveNavDirection(): 'forward' | 'back' {
@@ -2439,7 +2660,13 @@ export class NavPipelineOrchestrator {
 		}
 		const inputs = this.#mountInputs;
 		const centerTab = inputs?.centerTab;
-		const coverProgress = rawDragFraction;
+		// When a gesture interrupted a family-swap ease, seed the FAB's
+		// foregroundFraction so it advances from the eased value toward 1
+		// as the slide reveals the destination. The seeded coverProgress
+		// drives the FAB via its resting formula; the pill interpolation
+		// and the Header morph still read the raw slide fraction.
+		const seed = this.#fabDragSeedFraction;
+		const coverProgress = seed !== null ? seed + (1 - seed) * rawDragFraction : rawDragFraction;
 		if (centerTab !== undefined) {
 			// The pill interpolates from centerTab toward the gesture's
 			// target tab so a tab-click exit to a different tab tracks the
