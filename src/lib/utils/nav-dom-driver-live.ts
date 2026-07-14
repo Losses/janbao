@@ -20,10 +20,11 @@
  * `setProperty`), so the same driver accepts a real `HTMLElement` in
  * production and a capturing stub in tests.
  *
- * The orchestrator (5b1) constructs this driver in `mount()` and hands
- * it to the `NavExecutor`, which writes through it every frame. Under
- * `bun:test` the reactive shell (`nav-executor.svelte.ts`) is not
- * constructed (it uses `$state`); the pure-logic half
+ * The orchestrator (5b1) constructs this driver lazily inside
+ * `configure()` (the `if (this.#driver === null)` first-call guard)
+ * and hands it to the `NavExecutor`, which writes through it every
+ * frame. Under `bun:test` the reactive shell (`nav-executor.svelte.ts`)
+ * is not constructed (it uses `$state`); the pure-logic half
  * (`nav-executor-logic.ts`) is exercised with a `MockNavDomDriver`.
  */
 

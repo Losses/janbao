@@ -137,7 +137,12 @@ describe('getRouteData - backParent (structural parent)', () => {
 		{ path: '/notifications', expected: undefined },
 		{ path: '/profile', expected: undefined },
 		{ path: '/categories', expected: undefined },
-		{ path: '/offline/123', expected: undefined }
+		{ path: '/offline/123', expected: undefined },
+		// Known #1 asymmetry: /messages/add/[userId] mounts NavPipelineHost via
+		// MessageCompose (same host as /messages/new) but does NOT declare a
+		// backParent, while /messages/new declares '/messages/inbox'. Pinned
+		// here so the asymmetry surfaces if either entry changes.
+		{ path: '/messages/add/55', expected: undefined }
 	];
 	for (const { path, expected } of cases) {
 		test(`${path} → backParent ${String(expected)}`, () => {

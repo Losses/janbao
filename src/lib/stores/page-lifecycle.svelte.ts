@@ -2,11 +2,12 @@
 /**
  * Reactive shell around the pure reducer in
  * `src/lib/utils/page-lifecycle-logic.ts`. Per `docs/DV20-Plan.md` §8:
- * owns the four-phase page lifecycle contract (`mount` / `activate` /
- * `deactivate` / `unmount`) for a single layout that mounts a gesture
- * surface, registers html-singleton teardowns (so `unmount` is the
- * single SSR-safe teardown path), and exposes the current phase
- * reactively.
+ * owns the page lifecycle contract (`activate` / `deactivate` / `unmount`
+ * on the controller surface; the pure reducer retains the `mount`
+ * transition for unit-test coverage of every (state, event) pair) for a
+ * single layout that mounts a gesture surface, registers html-singleton
+ * teardowns (so `unmount` is the single SSR-safe teardown path), and
+ * exposes the current phase reactively.
  *
  * The shell is a thin `$state` wrapper: every transition delegates to
  * the pure reducer so the totality (every transition defined;
@@ -14,8 +15,9 @@
  * even though this file uses `$state`.
  *
  * The orchestrator (5b1) constructs this controller and calls
- * `mount()` / `activate()` / `deactivate()` / `unmount()` from the
- * host's `onMount` / `onDestroy`.
+ * `activate()` / `deactivate()` / `unmount()` from the host's lifecycle
+ * hooks (the `mount` phase is unused in production: the orchestrator
+ * activates directly on first `configure`).
  */
 
 import { browser } from '$app/environment';
@@ -63,13 +65,6 @@ export class PageLifecycleController {
 	 *  In 5b1 the orchestrator does not read it (the publication is the authority). */
 	get phase(): PagePhase {
 		return this.#state.phase;
-	}
-
-	/** Mount: SSR + hydrate done; no listeners, no store writes. The
-	 *  first transition a layout runs. Idempotent if the layout
-	 *  somehow double-fires mount (the reducer no-ops the second). */
-	mount(): void {
-		this.#state = reduce(this.#state, 'mount');
 	}
 
 	/** Activate: DOM bound; acquire locks, publish the gesture track,

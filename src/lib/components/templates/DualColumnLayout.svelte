@@ -116,12 +116,19 @@
 	// Disabled wherever another gesture layer owns the horizontal drag:
 	// the pipeline tab host on pager routes, or NavPipelineHost on every
 	// route that mounts it (thread, conversation, deep page, and the
-	// compose forms). Config-driven via isPipelineSwipeDisabledRoute so
-	// adding a pipeline route needs no edit here. Also disabled off-tab
-	// (swipeBaseline < 0) and on desktop. If this were enabled on a
-	// pipeline route too, both detectSwipe nodes would race to
-	// setPointerCapture on the same bubbled touch, and main (higher in
-	// the DOM) would win and override the pipeline's 1:1 + reveal.
+	// compose forms). `isPipelineSwipeDisabledRoute` drives the deep-route
+	// set (routes whose structural parent is declared in the registry),
+	// but the five latent-bug routes (`/search`, `/bookmarks`,
+	// `/notifications`, `/profile`, `/messages/add/[userId]`) return FALSE
+	// there and are additionally gated by the `swipeBaseline < 0` clause
+	// below: their `pillTarget` resolves to `'active'` or `'none'`, so
+	// `getCurrentTabIndex` returns -1. A new pipeline route with a
+	// non-`'active'`/`'none'` pillTarget and no declared `backParent` would
+	// need checking here. Also disabled off-tab (`swipeBaseline < 0`) and
+	// on desktop. If this were enabled on a pipeline route too, both
+	// detectSwipe nodes would race to setPointerCapture on the same
+	// bubbled touch, and main (higher in the DOM) would win and override
+	// the pipeline's 1:1 + reveal.
 	const swipeDisabled = $derived(
 		isPagerRoute(page.url.pathname) ||
 			isPipelineSwipeDisabledRoute(page.url.pathname) ||

@@ -12,13 +12,16 @@
  *      `detectSwipe` through its onUp listener, reaching the
  *      orchestrator as `onPointerUp`).
  *   3. Executor + driver -> elements: `configure({ resolveElements, ... })`
- *      constructs (once) a `LiveNavDomDriver` whose `resolveElements` reads
- *      the host's track `bind:this` plus the FAB / Header via DOM queries;
- *      the executor writes the per-frame visual to those elements.
+ *      constructs (once) a `LiveNavDomDriver` whose `resolveElements` returns
+ *      `{ pageTrack: trackEl, fab: null, header: null }` - the FAB and Header
+ *      are reactive readers of the pager store / orchestrator publication;
+ *      the executor never writes to them. The executor writes the per-frame
+ *      track translate to the resolved `pageTrack` element.
  *   4. Lifecycle: the host calls `configure` / `releaseInputs` from its
  *      onMount / onDestroy and releases the html-singletons (viewport-lock)
- *      directly with a `browser` guard. The mobile -> desktop flip and app
- *      exit use the full `mount` / `unmount` teardown.
+ *      directly with a `browser` guard. Route swaps use `configure` /
+ *      `releaseInputs` (no executor / driver / rAF teardown); the mobile
+ *      -> desktop flip and app exit use the full `unmount` teardown.
  *
  * Per the DV20 spec's binding "UNIFY, DO NOT BRIDGE" constraint: this
  * orchestrator is the SOLE transition mechanism for EVERY transition
@@ -141,10 +144,10 @@ interface PendingGestureTransition {
 
 /** A pending discrete navigation the orchestrator cancelled in
  *  `onSvelteKitBeforeNavigate`: either a tab-click exit (a host-route
- *  -> tab-root nav) or a forward deep-to-deep nav on a 2-panel host.
- *  Carries the deferred dispatch target (the FULL url: pathname +
- *  search) so commit-settle can fire the SvelteKit `goto` on the exact
- *  URL the discrete nav targeted. */
+ *  -> tab-root nav) or a deep-to-deep nav on a 2-panel host. Carries
+ *  the deferred dispatch target (the FULL url: pathname + search) so
+ *  commit-settle can fire the SvelteKit `goto` on the exact URL the
+ *  discrete nav targeted. */
 interface PendingDiscreteNav {
 	readonly target: string;
 }
@@ -307,12 +310,12 @@ export class NavPipelineOrchestrator {
 	 *  target; `startProgress` is the track's progress at gesture start,
 	 *  read by the live-drag loop. Null at rest and after settle. */
 	#pendingGesture: PendingGestureTransition | null = null;
-	/** A pending discrete nav (tab-click exit or forward deep-to-deep)
-	 *  the orchestrator cancelled; `target` is the dispatch target fired
-	 *  on commit-settle. Null at rest. */
+	/** A pending discrete nav (tab-click exit or deep-to-deep) the
+	 *  orchestrator cancelled; `target` is the dispatch target fired on
+	 *  commit-settle. Null at rest. */
 	#pendingDiscreteNav: PendingDiscreteNav | null = null;
-	/** A queued discrete navigation (tab-click or forward deep-to-deep)
-	 *  that arrived while a commit slide was in flight. The orchestrator
+	/** A queued discrete navigation (tab-click or deep-to-deep) that
+	 *  arrived while a commit slide was in flight. The orchestrator
 	 *  accelerated the in-flight commit to completion; when the commit
 	 *  settles, dispatches its own nav, and the nav lands, `#landAtRest`
 	 *  fires this queued goto so `onSvelteKitBeforeNavigate` intercepts
@@ -572,9 +575,11 @@ export class NavPipelineOrchestrator {
 	 *  enter. Read AND cleared at the top of the next `notifyHeaderState`
 	 *  call so the live-title change that arrives after the URL swap (the
 	 *  page's `headerTitle` lands asynchronously via SvelteKit's data
-	 *  load) does NOT re-arm the settle and reset the morph mid-slide.
-	 *  Without this the live title's idle re-arm would cancel the
-	 *  in-flight settle and snap the morph back to its start value. */
+	 *  load) does NOT cancel the in-flight settle via the IDLE re-arm
+	 *  branch (which would snap the morph back to its start value). The
+	 *  mid-settle re-arm branch is not gated by this flag: it re-latches
+	 *  the settle's title endpoint from the current settleProgress, which
+	 *  is continuous (no snap), so it may still fire on a forward enter. */
 	#enterAnimationArmedSettle = false;
 
 	constructor(clock: ClockFn = defaultClock) {
@@ -636,13 +641,13 @@ export class NavPipelineOrchestrator {
 	/** Configure: capture the host's mount inputs, rebind the element
 	 *  resolver, forceReset the shared state machine to at-rest on this
 	 *  route's tag, reset the publication, and run the lifecycle
-	 *  `activate`. Construct-once: the executor + driver + lifecycle
-	 *  `mount` are built on the first configure and reused across every
-	 *  subsequent configure; only the per-host inputs + element-resolver
-	 *  are rebound. The route-swap pairing is `releaseInputs` (old host)
-	 *  -> `configure` (new host) on the same singleton; no rAF is
-	 *  cancelled and no lifecycle `unmount` runs between them, so the
-	 *  persistent FAB / Header layers see a continuous signal. */
+	 *  `activate`. Construct-once: the executor + driver are built on the
+	 *  first configure and reused across every subsequent configure; only
+	 *  the per-host inputs + element-resolver are rebound. The route-swap
+	 *  pairing is `releaseInputs` (old host) -> `configure` (new host) on
+	 *  the same singleton; no rAF is cancelled and no lifecycle `unmount`
+	 *  runs between them, so the persistent FAB / Header layers see a
+	 *  continuous signal. */
 	configure(inputs: PipelineMountInputs): void {
 		this.#mountInputs = inputs;
 		this.#elementResolver = inputs.resolveElements;
@@ -681,18 +686,6 @@ export class NavPipelineOrchestrator {
 		this.#detectFamilyChange(inputs.fromPathname);
 		this.#mounted = true;
 		this.#lifecycle.activate();
-	}
-
-	/** Mount: configure the inputs and run the one-time lifecycle
-	 *  `mount` (SSR + hydrate done). Used for the initial setup or after
-	 *  a full `unmount` (mobile -> desktop flip); route swaps call
-	 *  `configure` directly so the executor + driver persist across the
-	 *  swap. The lifecycle `mount` is idempotent so a re-mount after a
-	 *  desktop -> mobile flip (which calls `unmount` then `mount`) is
-	 *  safe. */
-	mount(inputs: PipelineMountInputs): void {
-		this.configure(inputs);
-		this.#lifecycle.mount();
 	}
 
 	/** Release the host's inputs and run the lifecycle `deactivate`. The
@@ -1688,9 +1681,12 @@ export class NavPipelineOrchestrator {
 		// axis-override block below handles the 2-panel forward case
 		// (no right panel) so the destination skeleton is revealed.
 		const toRouteData = getRouteData(to);
-		const isForwardDeepToDeep =
-			!isTabRootPath(to) && inputs.fromTag === 'detail' && toRouteData.tag === 'detail';
-		if (!isTabRootPath(to) && !isForwardDeepToDeep) {
+		const isDeepToDeep =
+			!isTabRootPath(to) &&
+			isNavPipelineRoute(to) &&
+			inputs.fromTag === 'detail' &&
+			toRouteData.tag === 'detail';
+		if (!isTabRootPath(to) && !isDeepToDeep) {
 			return false;
 		}
 		// Finish-then-new interruption policy: a discrete tab-click
@@ -1710,23 +1706,26 @@ export class NavPipelineOrchestrator {
 			return true;
 		}
 		// Cancel any running settle / tap-scrub / family-swap ease so a
-		// tab-click or forward-deep-to-deep nav arriving while a settle
-		// is still running does not leave that settle's rAF ticking
+		// tab-click or deep-to-deep nav arriving while a settle is still
+		// running does not leave that settle's rAF ticking
 		// underneath the new slide. Matches `#beginGesture`'s gesture-path
 		// behavior (a re-grab mid-transition cancels every ease before
 		// starting the drag). Skipped on the `phase === 'committing'`
 		// branch above: that path accelerates the in-flight commit
 		// (settle included) instead of starting a fresh slide.
 		this.#cancelAllAnimationEases();
-		// A discrete nav (tab-click exit or forward deep-to-deep). Drive
-		// the slide plan via the executor and dispatch on settle. The
-		// direction: a forward deep-to-deep is a push ('forward'); a
-		// tab-click is forward only when the target tab is at a higher
-		// index than the source (bidirectional host), else backward.
+		// A discrete nav (tab-click exit or deep-to-deep). Drive the
+		// slide plan via the executor and dispatch on settle. The
+		// direction: a deep-to-deep is a push ('forward') or a pop
+		// ('backward') per `navigation.type`; a tab-click is forward
+		// only when the target tab is at a higher index than the source
+		// (bidirectional host), else backward.
 		const toPathname = to;
 		const toTabIndex = this.#tabIndexFor(toPathname);
-		const direction: TransitionDirection = isForwardDeepToDeep
-			? 'forward'
+		const direction: TransitionDirection = isDeepToDeep
+			? navigation.type === 'popstate'
+				? 'backward'
+				: 'forward'
 			: inputs.bidirectional === true && toTabIndex > inputs.fromTabIndex
 				? 'forward'
 				: 'backward';
@@ -1738,19 +1737,19 @@ export class NavPipelineOrchestrator {
 			startedAt: this.#clock()
 		};
 		const resolvedPlan = this.#resolvePlan(inputs, intent, direction, toPathname, toTabIndex);
-		// Forward deep-to-deep on a 2-panel host: the {detail,detail}
-		// resolver returns axis='left' for forward, but a 2-panel track
-		// has no panel to the right of centre, so a leftward slide
-		// reveals empty space. The destination skeleton renders in the
-		// left panel (NavPipelineHost's forwardDeepTarget branch); override
-		// the axis to 'right' so the slide reveals it. The title crossfade
+		// Deep-to-deep on a 2-panel host: the {detail,detail} resolver
+		// returns axis='left' for a forward push, but a 2-panel track has
+		// no panel to the right of centre, so a leftward slide reveals
+		// empty space. The destination skeleton renders in the left panel
+		// (NavPipelineHost's forwardDeepTarget branch); override the axis
+		// to 'right' so the slide reveals it. The title crossfade
 		// direction is derived independently from navStore.direction
 		// (forward for a push) in #resolveNavDirection, so the title still
 		// enters from the right. A coordinator-driven preload (Layer 4)
 		// that places the destination in a right panel would let the
 		// resolver's native 'left' axis work; that is beyond this fix.
 		const plan =
-			isForwardDeepToDeep && resolvedPlan.pageTrack.axis === 'left'
+			isDeepToDeep && resolvedPlan.pageTrack.axis === 'left'
 				? {
 						...resolvedPlan,
 						pageTrack: { ...resolvedPlan.pageTrack, axis: 'right' as const }

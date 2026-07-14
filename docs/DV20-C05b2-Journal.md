@@ -2090,3 +2090,112 @@ $ bun run test:e2e                    201 passed + 1 flaky (fab.spec.ts:430)
 e2e identical to the pre-fix state. No behavioral regression.
 
 R28 audits the post-R27-fix state.
+
+## Session 30: R28 audit (A/B PWC: 13 comment/dead-code/test-coverage concerns + 2 nitpicks, no logic bug) + fixes
+
+R28 ran two independent auditors. A returned PASS-WITH-CONCERNS (7 concerns + 1
+nitpick); B returned PASS-WITH-CONCERNS (6 concerns + 1 nitpick). Counter stays
+0/5. No logic bug this round.
+
+### Findings (13 concerns + 2 nitpicks)
+
+- F1: NavPipelineHost isMobile hydration-pattern divergence (matchMedia at init
+  on client vs data.isMobile on server).
+- F2: fab.spec.ts stale FAB-architecture comments.
+- F3/F4: route-config.test.ts latent-bug set undercounted (four, not five) and
+  missing /messages/add/55 assertion.
+- F5: app.css orphan .scroll-chrome-scrolling rule + dead class binding + unused
+  scrolling derived in Header.
+- F6: route-data.test.ts backParent cases omitted /messages/add/55.
+- F7: DualColumnLayout comment overstated classifier coverage.
+- C1: orchestrator class docstring FAB/Header DOM-query claim.
+- C2: orchestrator docstring mount/unmount teardown claim.
+- C3: orchestrator mount() + page-lifecycle mount() dead methods.
+- C4: nav-pipeline-pointer "single-sourced EDGE_DEAD_ZONE" claim.
+- C5: nav-dom-driver-live mount() construction claim.
+- C6: spec FAB-reader docstring omitted trackFractionalIndex / transitionTarget.
+- Nitpicks: spec Family B deep route count (19 -> 24) and /profile sub-route
+  count (12 -> 13).
+
+### Fixes
+
+- F1 (orchestrator-run): isMobile seeds from page.data.isMobile (SSR + first
+  client render agree); the existing onMount sync flips to matchMedia;
+  shouldEnter is now $derived.by so the forward-enter animation reads the
+  post-flip viewport. getIsMobile removed.
+- C3 + C2 + C5: removed the dead mount() methods (orchestrator + page-lifecycle);
+  rewrote the class / driver docstrings to the configure/releaseInputs/unmount
+  lifecycle.
+- C1, C4, C6, F2, F7: comment rewrites to the current architecture.
+- F3, F4, F6: test comment + assertions added (values verified against the
+  source).
+- F5: removed the orphan CSS rule, the class binding, and the unused scrolling
+  derived.
+- Nitpicks: spec route counts corrected.
+
+The bulk of the fix was delegated to a sub-agent; F1 was implemented by the
+orchestrator (the risky one). The orchestrator independently re-ran the full
+gate, re-grepped (mount callers, scroll-chrome-scrolling, Header scrolling), and
+verified the F1 e2e-safety.
+
+### Gate outputs (post-fix, independently re-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    409 pass / 0 fail
+$ bun run test:e2e                    201 passed + 1 flaky (fab.spec.ts:430)
+```
+
+F1's hydration change (mobile layout resolves on onMount) is e2e-safe: enter
+animation, mobile routes, and hide-on-scroll all pass unchanged. No behavioral
+regression.
+
+R29 audits the post-R28-fix state.
+
+## Session 31: R29 audit (A/B PWC: non-pipeline detail-target interception logic bug + naming/direction + docstring) + fixes
+
+R29 ran two independent auditors. A returned PASS-WITH-CONCERNS (2 concerns + 1
+nitpick); B returned PASS-WITH-CONCERNS (1 concern). Counter stays 0/5. Finding
+count down sharply from R28's thirteen.
+
+### Findings (3 concerns + 1 nitpick)
+
+- B1 (logic defect): onSvelteKitBeforeNavigate intercepted every detail->detail
+  nav, including non-pipeline targets (/entry/signout, /categories, /drafts),
+  because unmatched pathnames fall through to DEFAULT_ROUTE_DATA (tag 'detail').
+  Users saw an unwanted ~300ms skeleton slide before plain pages.
+- A1 (naming/metadata): isForwardDeepToDeep was direction-agnostic (matched
+  forward AND backward detail-to-deep) but named "Forward" and hardcoded
+  direction='forward'. Same root as B1.
+- A2 (docstring scope): #enterAnimationArmedSettle docstring overstated the
+  guard (it gates only the IDLE re-arm branch, not the mid-settle re-arm).
+- Nitpick: spec end-state #2 said the family-swap rAF is in the FAB layer (it is
+  on the orchestrator).
+
+### Fixes
+
+- B1 + A1: renamed isForwardDeepToDeep -> isDeepToDeep, added isNavPipelineRoute(to)
+  to the guard (non-pipeline detail targets pass through), and derived direction
+  from navigation.type (popstate -> backward, else forward). The slide is
+  unchanged: the axis-override forces 'right' for every deep-to-deep nav.
+- A2: rewrote the docstring to scope the guard to the IDLE re-arm branch.
+- Nitpick: corrected the spec end-state #2 wording.
+
+Delegated to a sub-agent; the orchestrator independently re-ran the full gate,
+re-grepped (isForwardDeepToDeep residue 0; isDeepToDeep 4 refs), re-read the
+changed block, and confirmed the direction change is slide-neutral.
+
+### Gate outputs (post-fix, independently re-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    409 pass / 0 fail
+$ bun run test:e2e                    201 passed + 1 flaky (fab.spec.ts:430)
+```
+
+B1 + A1 e2e-safe: every detail-to-deep slide and plain navigation to non-pipeline
+targets pass unchanged. No behavioral regression.
+
+R30 audits the post-R29-fix state.

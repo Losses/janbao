@@ -106,12 +106,15 @@ export const navPipelinePointer: Action<HTMLElement, NavPipelinePointerParams> =
 	const onPointerDownCapture = (event: PointerEvent): void => {
 		if (params.disabled()) return;
 		if (event.pointerType === 'mouse') return;
-		// Mirror detectSwipe's EXACT edge check (EDGE_DEAD_ZONE px, < / >,
+		// Mirror detectSwipe's EXACT edge check (40 px, < / >,
 		// window.innerWidth) so the capture records as primary only a
 		// pointer detectSwipe will claim. All three edge checks -
-		// detectSwipe, this capture, and the classifier's isEdgeReserve -
-		// use the same strict operators via the single-sourced
-		// EDGE_DEAD_ZONE.
+		// detectSwipe and this capture read `EDGE_DEAD_ZONE` from
+		// `gesture-constants.ts`; the classifier's `isEdgeReserve` reads
+		// `DEFAULT_EDGE_DEAD_ZONE` from `nav-intent.ts`. They agree at the
+		// value 40 with the same strict operators, but the two constants
+		// are separately defined - changing one requires changing the
+		// other.
 		if (event.clientX < EDGE_DEAD_ZONE || event.clientX > window.innerWidth - EDGE_DEAD_ZONE) {
 			return;
 		}

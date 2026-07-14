@@ -193,15 +193,17 @@ describe('isPagerRoute - positional query over MOBILE_TAB_DEFS', () => {
 });
 
 describe('isPipelineSwipeDisabledRoute - DualColumnLayout yield gate', () => {
-	// Masked latent bug: `/search`, `/bookmarks`, `/notifications`, and
-	// `/profile` mount a NavPipelineHost but the function returns FALSE
-	// because they carry `kind: 'deep'` (failing the overlay branch) and
-	// have no declared `backParent` (failing the deep-route branch). Sub-
-	// pages of `/profile` and the `/admin/*` tree declare `backParent`,
-	// so they return TRUE; the latent-bug set is the four leaf routes
-	// only. The race does not manifest (NavPipelineHost wins pointer
-	// capture); the function and the bug dissolve in 5b3 when the
-	// DualColumnLayout detectSwipe is removed.
+	// Masked latent bug: `/search`, `/bookmarks`, `/notifications`,
+	// `/profile`, and `/messages/add/[userId]` mount a NavPipelineHost but
+	// the function returns FALSE because the first four carry
+	// `kind: 'deep'` (failing the overlay branch) and `/messages/add/[userId]`
+	// carries a compose-family attribute (also failing the overlay branch);
+	// all five have no declared `backParent` (failing the deep-route branch).
+	// Sub-pages of `/profile` and the `/admin/*` tree declare `backParent`,
+	// so they return TRUE; the latent-bug set is these five leaf routes.
+	// The race does not manifest (NavPipelineHost wins pointer capture);
+	// the function and the bug dissolve in 5b3 when the DualColumnLayout
+	// detectSwipe is removed.
 	test('true for thread / conversation routes (Family B overlay, non-deep kind)', () => {
 		expect(isPipelineSwipeDisabledRoute('/discussion/123')).toBe(true);
 		expect(isPipelineSwipeDisabledRoute('/discussion/123/slug/p1')).toBe(true);
@@ -225,6 +227,7 @@ describe('isPipelineSwipeDisabledRoute - DualColumnLayout yield gate', () => {
 		expect(isPipelineSwipeDisabledRoute('/bookmarks')).toBe(false);
 		expect(isPipelineSwipeDisabledRoute('/notifications')).toBe(false);
 		expect(isPipelineSwipeDisabledRoute('/profile')).toBe(false);
+		expect(isPipelineSwipeDisabledRoute('/messages/add/55')).toBe(false);
 		expect(isPipelineSwipeDisabledRoute('/admin/user-groups')).toBe(true);
 	});
 	test('false for tab roots, tab-internal pagination, offline routes, unmatched', () => {

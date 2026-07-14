@@ -61,11 +61,11 @@
 	let { leftHref, centerTab, children }: NavPipelineHostProps = $props();
 
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
-	const getIsMobile = (): boolean => {
-		if (typeof window === 'undefined') return page.data.isMobile ?? false;
-		return window.matchMedia(MOBILE_BREAKPOINT).matches;
-	};
-	let isMobile = $state(getIsMobile());
+	// isMobile seeds from the server's UA-derived value so SSR and the first
+	// client render agree (no hydration mismatch); onMount's sync flips it to
+	// the live matchMedia value (the repo pattern used by the (tabs) layout
+	// and the search page).
+	let isMobile = $state(page.data.isMobile ?? false);
 
 	// Forward enter animation: if this mount is a forward SPA navigation
 	// from `leftHref` (e.g. user tapped a conversation in /messages/inbox),
@@ -74,17 +74,18 @@
 	// (before render) via `navStore.activeStack` so there is no
 	// first-paint flash.
 	const navStore = getNavigationStore();
-	const shouldEnter: boolean = (() => {
+	// Forward enter animation: play only on a FORWARD SPA nav from leftHref
+	// (a popstate-back sets direction='backward' and must skip the slide-in).
+	// A $derived so it re-evaluates after onMount's sync flips isMobile to
+	// the live matchMedia value; the onMount enter check reads the post-flip
+	// value, not the UA-derived seed.
+	const shouldEnter = $derived.by<boolean>(() => {
 		if (!isMobile) return false;
-		// Only play the enter animation on a FORWARD navigation (SPA nav
-		// from leftHref). A popstate-back (OS-back to this route after a
-		// pipeline-consumed nav) sets direction='backward' and must skip
-		// the slide-in.
 		if (navStore.direction !== 'forward') return false;
 		const stack = navStore.activeStack;
 		if (stack.length < 2) return false;
 		return stack[stack.length - 2].pathname === leftHref;
-	})();
+	});
 
 	// The resolved back-target: follows the live navigation stack so a
 	// back-swipe lands on the correct entry (the tab root or structural

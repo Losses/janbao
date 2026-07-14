@@ -16,12 +16,14 @@
  * runes loader is unavailable there).
  *
  * The orchestrator (`nav-pipeline-orchestrator.svelte.ts`) constructs
- * a `PageLifecycleController(browser)` and calls `mount` / `activate`
- * / `deactivate` / `unmount` from the pilot host's lifecycle hooks;
- * every transition flows through `reduce` and `planUnmount` here, so
- * the reducer is exercised by production. The lifecycle-adjacent
- * html-singleton stores (`viewport-lock`, `scroll-chrome`) inline their
- * own refcounts; the
+ * a `PageLifecycleController(browser)` and calls `activate` /
+ * `deactivate` / `unmount` from the host's lifecycle hooks (the `mount`
+ * transition is retained on the reducer for unit-test completeness but
+ * is not driven from production: the orchestrator activates directly on
+ * first `configure`); every transition flows through `reduce` and
+ * `planUnmount` here, so the reducer is exercised by production. The
+ * lifecycle-adjacent html-singleton stores (`viewport-lock`,
+ * `scroll-chrome`) inline their own refcounts; the
  * `HttpSingletonClassController` below is the canonical template a
  * future consolidation would route them through, and is exercised by
  * the unit suite.

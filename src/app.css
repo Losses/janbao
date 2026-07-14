@@ -219,11 +219,6 @@ header nav {
 	color: var(--fallback-bc, oklch(var(--bc) / 1)) !important;
 }
 
-/* Suppress header/chrome transition during natural scrolling to prevent lag/damping */
-.scroll-chrome-scrolling {
-	transition: none !important;
-}
-
 /* Reply anchors: offset native hash scrolling (full-page loads, and any
  * scrollIntoView) by the sticky header so the target lands just below the app
  * bar. The mobile landAtAnchor offset technique applies the same offset for

@@ -12,13 +12,13 @@ Roll the new pipeline out to every remaining route that mounts `GesturePageLayou
 
 - **Discussion thread** (`/discussion/[discussionId]/[slug]/[[page]]`): the 5b1 pilot. Verify after shared-component changes.
 - **Compose routes** (Family C): `/post/discussion`, `/messages/new`, `/messages/add/[userId]` (the last two share `MessageCompose`).
-- **Deep pages** (Family B 'deep', 19 routes): `/search`, `/bookmarks`, `/notifications`, `/profile/*` (12 sub-routes), `/admin/*` (6 sub-routes).
+- **Deep pages** (Family B 'deep', 24 routes): `/search`, `/bookmarks`, `/notifications`, the `/profile` tree (`/profile` + 13 sub-routes), the `/admin` tree (`/admin` + 6 sub-routes).
 - **Tab roots** (Family A, served by NavPipelineTabHost): `/`, `/activity`, `/messages/inbox`.
 
 ### 5b1-skipped items (explicitly included)
 
 1. **NavStateMachine vestigial → authority (§13.5).** The orchestrator feeds the state machine events but reads `#publication` instead. 5b2 promotes the state machine to the single authority; consumers read its phase + plan, not a private publication.
-2. **FAB atom CSS transition → rAF.** The `.fab-transition { transition: transform 200ms ease-out }` CSS class + `discreteNavInFlight` 280ms `setTimeout` latch are replaced with an rAF-driven family-swap ease in the FAB layer.
+2. **FAB atom CSS transition → rAF.** The `.fab-transition { transition: transform 200ms ease-out }` CSS class + `discreteNavInFlight` 280ms `setTimeout` latch are replaced with an rAF-driven family-swap ease on the orchestrator (the FAB layer reads `pager.familySwapScale` reactively).
 3. **Skeleton branches audited.** The eager-load model is permanent (the root layout's `Promise.allSettled` always returns truthy `EMPTY_*` objects on rejection, never null). The dead `ActivitySkeleton` and `DiscussionsSkeleton` `{:else}` branches and their component files are removed; only `MessagesSkeleton` remains, reachable via the `/messages/[id]` route shadowing the layout's `messages` field with its message-row array (the preview cannot render an array, so the skeleton stands in until the back-swipe lands).
 4. **`isGesturePageLayoutRoute` rename.** The function covers NavPipelineHost routes too; renamed to `isPipelineRoute` (or similar).
 5. **`backParent` consumer audit.** As routes migrate off GPL, `backParent`'s GPL consumer dissolves per route. At end of 5b2, both consumers are gone; 5b3 removes the field.
@@ -26,7 +26,7 @@ Roll the new pipeline out to every remaining route that mounts `GesturePageLayou
 ## End state
 
 1. Every route that was on `GesturePageLayout` or `MobileTabPager` now mounts `NavPipelineHost` (or a pipeline tab host for the three tab roots). The new pipeline is the SOLE transition mechanism for every mobile route that was on those two hosts. Routes still rendered only by `DualColumnLayout` (e.g. the paginated discussions list `/discussions/pN`, whose tab-switch gesture DualColumnLayout's `detectSwipe` + CSS transition drives) are out of scope until `DualColumnLayout` is deleted in 5b3; see Known condition #2. Every migrated transition (back-swipe, tab-click, cross-tab, deep-link landing, forward enter, tab swipe) is driven by one progress through the executor's rAF.
-2. The FAB atom carries NO CSS transition. The FAB scale is driven either by the orchestrator's `coverProgress` (during a within-route transition) or by a rAF family-swap ease in the FAB layer (during a cross-route family swap). No `setTimeout`, no `discreteNavInFlight`, no `.fab-transition` CSS class.
+2. The FAB atom carries NO CSS transition. The FAB scale is driven either by the orchestrator's `coverProgress` (during a within-route transition) or by the orchestrator's family-swap rAF publishing `pager.familySwapScale`, which the FAB layer reads reactively (during a cross-route family swap). No `setTimeout`, no `discreteNavInFlight`, no `.fab-transition` CSS class.
 3. The `NavStateMachine` is the sole authority (§13.5). Consumers read its phase + plan. The orchestrator does not hold a private `#publication`.
 4. `MobileTabPager` is no longer mounted. The three tab roots share a persistent pipeline host in the `(tabs)` layout. The `LoadingChip` cross-tab overlay is removed everywhere.
 5. `GesturePageLayout` and `MobileTabPager` are deleted (5b2; both were dead with zero imports once every route mounted the pipeline host). `DualColumnLayout`'s `swipeDisabled` gate simplifies (always true on pipeline routes).
@@ -36,7 +36,7 @@ Roll the new pipeline out to every remaining route that mounts `GesturePageLayou
 ## Constraints
 
 - **UNIFY, DO NOT BRIDGE (binding).** Every route's transition is the new pipeline. No CSS transitions or `setTimeout` in the animation layer. The `.fab-transition` CSS class and `discreteNavInFlight` `setTimeout` are the last CSS-driven animation; 5b2 eliminates them.
-- **Unified following-visual model (binding).** Every visual (panels, FAB, header) is a pure function of the slide progress and the transition target. During a cross-route family swap, the FAB layer's rAF ease is driven by the family swap (the target family's resting scale), not a CSS transition.
+- **Unified following-visual model (binding).** Every visual (panels, FAB, header) is a pure function of the slide progress and the transition target. During a cross-route family swap, the orchestrator's family-swap rAF publishes `pager.familySwapScale` (the target family's resting scale), which the FAB layer reads reactively, not a CSS transition.
 - **The state machine is the only authority (§13.5).** Consumers read the phase + plan from the state machine. The orchestrator does not hold a private `#publication`.
 - **No CSS-transition + setTimeout alignment shortcuts (§13.3).** The pilot's slide AND the FAB family-swap animation are rAF-driven. Zero CSS transitions, zero `setTimeout` in the animation layer.
 - **One route at a time (batched).** Each phase migrates a group of routes with its own e2e gate. A phase is done only when the gate is green.
@@ -45,9 +45,9 @@ Roll the new pipeline out to every remaining route that mounts `GesturePageLayou
 
 ## Phased approach
 
-1. **FAB family-swap → rAF** (shared component; no route migration). Replace `discreteNavInFlight` + CSS with a rAF family-swap ease in the FAB layer. All existing e2e must pass.
+1. **FAB family-swap → rAF** (shared component; no route migration). Replace `discreteNavInFlight` + CSS with an rAF family-swap ease on the orchestrator (the FAB layer reads `pager.familySwapScale` reactively). All existing e2e must pass.
 2. **NavStateMachine → authority.** Promote the state machine to the sole authority.
-3. **Deep pages migration** (~19 routes). Batch by route group (profile, admin, standalone deep pages).
+3. **Deep pages migration** (24 routes). Batch by route group (profile, admin, standalone deep pages).
 4. **Compose routes migration** (2 routes: `/post/discussion`, `/messages/new`).
 5. **MobileTabPager → pipeline tab swipe.** Replace the tab pager with a persistent pipeline host in the `(tabs)` layout.
 6. **Discussion thread verify.** The 5b1 pilot after shared-component changes.
@@ -126,10 +126,12 @@ load) owns the animation layer for the app's mobile lifetime:
    mobile -> desktop flip and the app exit call the full `unmount` teardown.
 4. **FAB layer is a reactive reader.** The FAB layer derives its scale from
    `pager.familySwapScale ?? restingScale` (restingScale is itself derived from
-   `pager.coverProgress`, `pager.fractionalIndex`, and the URL-derived family).
-   It runs no rAF of its own and performs no DOM read-back. The orchestrator
-   tracks `#lastRenderedScale` itself across `releaseInputs` so the family-swap
-   ease anchors at the visible pre-swap scale.
+   `pager.coverProgress`, `pager.fractionalIndex`, `pager.trackFractionalIndex`
+   (the primary Family A input), `pager.transitionTarget` (gates the deep-page
+   scale-out), and the URL-derived family). It runs no rAF of its own and
+   performs no DOM read-back. The orchestrator tracks `#lastRenderedScale`
+   itself across `releaseInputs` so the family-swap ease anchors at the visible
+   pre-swap scale.
 5. **Header organism is a reactive reader.** The Header derives its morph,
    title crossfade, search-track / search-button / tab-bar transforms, and
    settle/tap-scrub state from manager-published signals

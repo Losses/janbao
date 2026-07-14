@@ -72,7 +72,6 @@
 	const tNav = $derived(t.nav);
 	const currentPath = $derived(page.url.pathname);
 	const translateY = $derived(scrollChrome.translateY);
-	const scrolling = $derived(scrollChrome.scrolling);
 
 	const currentHasTabs = $derived(getCurrentTabIndex(currentPath) >= 0);
 	const targetHasTabs = $derived(
@@ -447,7 +446,6 @@
 <header
 	bind:this={headerEl}
 	class="sticky top-0 z-40 mx-auto w-full max-w-[960px] px-0 md:mt-6 md:px-6"
-	class:scroll-chrome-scrolling={scrolling}
 	style:transform="translateY({translateY}px)"
 >
 	<div class="bg-neutral text-neutral-content shadow-md md:shadow-none">

@@ -19,14 +19,14 @@ import {
  * Two composed drivers on a single `transform: scale(s) translateY(y)`:
  *   - scale (route transition): scale 1 at rest on a list route, 0 at rest on
  *     overlay / compose routes, scaling through the first/last 50% of a route
- *     transition. Family A (tab swipe) reads the live `pager.fractionalIndex`
- *     during the drag and the rAF sampler during the snap. Family B
- *     (thread/conversation enter/exit) is sampler-driven in BOTH directions:
- *     the thread route's NavPipelineHost pins `fractionalIndex = centerTab`
- *     for the whole back-swipe drag, so the sampler reads the actual GPL track
- *     `m41` each frame to follow the finger. Family C (compose) eases the
- *     discrete swap via the FAB layer's rAF family-swap ease (the inline
- *     scale changes each frame over 200ms).
+ *     transition. The FAB layer is a pure reactive reader
+ *     (`scale = $derived(pager.familySwapScale ?? restingScale)`) with no rAF
+ *     and no DOM read-back; every motion channel is published by the
+ *     orchestrator each frame. Family A (tab swipe) reads
+ *     `pager.trackFractionalIndex`; Family B (thread/conversation enter/exit)
+ *     reads `pager.coverProgress`; Family C (compose) reads
+ *     `pager.familySwapScale`, eased by the orchestrator's family-swap rAF
+ *     over TRACK_TRANSITION_MS (200ms) on a cross-family route swap.
  *   - translateY (scroll hide): slides off the bottom edge in lockstep with
  *     the Header's hide-on-scroll (driven by the shared scroll-chrome store).
  *
@@ -379,9 +379,11 @@ test('Family A: tab swipe scales the FAB out as a monotonic trajectory', async (
 });
 
 // Family B forward: tapping a discussion card slides the thread in over the
-// list (NavPipelineHost enter animation). The sampler reads the GPL track m41
-// and drives foregroundFraction 1 -> 0, so the FAB scale ramps down across the
-// slide (first-half disappear) and rests near 0 on the thread.
+// list (NavPipelineHost enter animation). The orchestrator's executor
+// publishes `pager.coverProgress` 0 -> 1 each frame; the FAB's reactive
+// `foregroundFraction = 1 - coverProgress` (a list-source gesture targeting an
+// overlay/deep route) drives the scale down across the slide (first-half
+// disappear) and rests near 0 on the thread.
 test('Family B forward: list -> thread scales the FAB out as a monotonic trajectory', async ({
 	page
 }) => {
@@ -480,7 +482,8 @@ test('Family B back: thread -> list scales the FAB in as a monotonic trajectory'
 
 // Family C forward: tapping the FAB on a list route navigates to the compose
 // page. The atom stays mounted and the discrete foregroundFraction swap
-// (1 -> 0) is eased by the FAB layer's rAF family-swap ease. Assert the ease
+// (1 -> 0) is eased by the orchestrator's family-swap rAF (it publishes
+// `pager.familySwapScale` each tick over TRACK_TRANSITION_MS). Assert the ease
 // produced a monotonic trajectory with a mid-window 0.5 crossing (NOT an
 // instant jump to 0).
 test('Family C forward: list -> compose scales the FAB out as a monotonic trajectory', async ({
@@ -564,10 +567,10 @@ test('Family C forward (messages): inbox -> compose scales the FAB out as a mono
 });
 
 // Family C back: navigating back from the compose page to the list drives the
-// foregroundFraction 0 -> 1, eased by the FAB layer's rAF family-swap ease
-// (scale-in). Reach the compose page via SPA navigation from the list so
-// history.back() returns to `/` (a hard goto('/post/discussion') has no back
-// history).
+// foregroundFraction 0 -> 1, eased by the orchestrator's family-swap rAF
+// (scale-in; it publishes `pager.familySwapScale` each tick). Reach the
+// compose page via SPA navigation from the list so history.back() returns to
+// `/` (a hard goto('/post/discussion') has no back history).
 test('Family C back: compose -> list scales the FAB in as a monotonic trajectory', async ({
 	page
 }) => {
@@ -881,9 +884,11 @@ const SAMPLER_WINDOW_MS = 1800;
  *
  * getComputedStyle is used (rather than reading `style.transform` directly)
  * because it resolves the transform string to a `matrix(a, b, c, d, tx, ty)`
- * form, so the sampler reads the scale component `a` directly. The FAB
- * layer's rAF family-swap ease writes a new inline `style.transform` each
- * frame, so the resolved value advances every frame across the ease.
+ * form, so the sampler reads the scale component `a` directly. The
+ * orchestrator's family-swap rAF publishes `pager.familySwapScale` each tick;
+ * the FAB layer's reactive `scale` derived writes a new inline
+ * `style.transform` each frame, so the resolved value advances every frame
+ * across the ease.
  * miss the easing trajectory.
  */
 async function sampleFabScale(
