@@ -1114,4 +1114,251 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 			`reduced-motion commit must snap, not slide (movingFrames=${movingFrames})`
 		).toBeLessThanOrEqual(3);
 	});
+
+	// Velocity-matched commit coverage. The velocity-matched solver in
+	// `solveCommitDuration` (nav-executor-logic) computes
+	// T = 2 * |Δprogress| / |progressVelocity|, clamped to
+	// [COMMIT_T_MIN_MS, COMMIT_T_MAX_MS]; a faster release velocity yields
+	// a shorter commit slide. This test drives a fast flick (touchmoves
+	// dispatched back-to-back, high px/ms) and a slow drag (touchmoves
+	// dispatched with deliberate spacing, low px/ms), then asserts the
+	// slow release's commit slide produces MORE rAF frames than the fast
+	// release's. Counting commit-phase frames (sampled between touchEnd
+	// and the URL landing) isolates the commit slide from the drag phase
+	// and the settle phase, so the assertion tracks the solver's behaviour
+	// directly.
+
+	interface VelocityCommitCapture {
+		/** rAF frames captured between touchEnd and the URL landing, where
+		 * the track was still moving (|delta from previous| > 5px). A
+		 * longer commit produces more moving frames. */
+		commitMovingFrames: number;
+		totalFrames: number;
+		commitFrameCount: number;
+		endT: number;
+		firstFrameT: number | null;
+		lastFrameT: number | null;
+		firstCommitM41: number | null;
+		lastCommitM41: number | null;
+		minCommitM41: number | null;
+		maxCommitM41: number | null;
+		ptrMoveCount: number;
+		ptrFirstT: number | null;
+		ptrLastT: number | null;
+		ptrFirstX: number | null;
+		ptrLastX: number | null;
+		computedReleaseVel: number | null;
+	}
+
+	interface VelocitySamplerWindow extends Window {
+		__velSampler?: {
+			frames: { t: number; m41: number }[];
+			armed: boolean;
+			touchEndT: number | null;
+		};
+	}
+
+	async function captureVelocityCommit(
+		page: import('@playwright/test').Page,
+		fast: boolean
+	): Promise<VelocityCommitCapture> {
+		await page.evaluate(() => {
+			const w = window as unknown as VelocitySamplerWindow;
+			w.__velSampler = { frames: [], armed: false, touchEndT: null };
+			// Capture every pointermove + pointerup event's clientX + timeStamp
+			// so the test can verify the releaseVelocity window saw the
+			// intended fast / slow trajectory. The swipe action's onMove
+			// pushes samples into its own array via event.timeStamp; this
+			// listener is read-only and lets the test inspect the same data.
+			(window as unknown as { __ptrEvents?: { x: number; t: number; type: string }[] }).__ptrEvents = [];
+			const ptrListener = (e: PointerEvent): void => {
+				const arr = (window as unknown as { __ptrEvents?: { x: number; t: number; type: string }[] }).__ptrEvents!;
+				arr.push({ x: e.clientX, t: e.timeStamp, type: e.type });
+			};
+			document.addEventListener('pointermove', ptrListener, { capture: true });
+			document.addEventListener('pointerup', ptrListener, { capture: true });
+			const tick = (): void => {
+				const s = w.__velSampler!;
+				if (s.armed) {
+					const track = document.querySelector('[data-testid="nav-pipeline-track"]');
+					if (track) {
+						let m41 = 0;
+						try {
+							m41 = new DOMMatrix(getComputedStyle(track).transform).m41;
+						} catch {
+							m41 = 0;
+						}
+						s.frames.push({ t: performance.now(), m41: Math.round(m41) });
+					}
+				}
+				requestAnimationFrame(tick);
+			};
+			requestAnimationFrame(tick);
+		});
+		// Arm the sampler just before the drag starts so the touchEnd
+		// marker lands inside the captured window.
+		await page.evaluate(() => {
+			(window as unknown as VelocitySamplerWindow).__velSampler!.armed = true;
+		});
+
+		const client = await page.context().newCDPSession(page);
+		await client.send('Emulation.setTouchEmulationEnabled', {
+			enabled: true,
+			maxTouchPoints: 5
+		});
+		const y = 400;
+		const startX = 120;
+		const endX = 320;
+		// CDP `Input.dispatchTouchEvent` accepts a `timestamp` in seconds.
+		// The default `timestamp: 0` produces PointerEvents whose
+		// `timeStamp` is 0 for every event, which collapses the swipe
+		// action's releaseVelocity window (dt = 0 -> velocity 0). For this
+		// test we pass explicit timestamps (in seconds, anchored at the
+		// touchStart wall-clock) so the swipe action's releaseVelocity
+		// sees a slope we control directly. The fast variant spaces the
+		// touchmoves 4ms apart (a 50ms total drag -> high px/ms); the slow
+		// variant spaces them 40ms apart (a 520ms total drag -> low
+		// px/ms). The wall-clock dispatch is the same in both variants
+		// (CDP round-trip overhead dominates either way), so the test
+		// depends on the synthetic timestamps, not on Playwright timing.
+		// CDP `timestamp` is interpreted as absolute seconds since the
+		// UNIX epoch; Chrome derives event.timeStamp (ms, relative to
+		// performance.timeOrigin) from it. Anchoring at Date.now()/1000
+		// produces realistic event.timeStamp values that the swipe
+		// action's releaseVelocity window can differentiate.
+		const originSec = Date.now() / 1000;
+		const stepCount = 14;
+		// Fast drag: 4ms per step -> 56ms total. Slow drag: 40ms per step
+		// -> 520ms total. Both span the same x distance (startX..endX).
+		const stepSec = fast ? 0.004 : 0.04;
+		const dispatchCdp = (
+			type: 'touchStart' | 'touchMove' | 'touchEnd',
+			x: number,
+			state: string,
+			tSec: number
+		) =>
+			client.send('Input.dispatchTouchEvent', {
+				type,
+				touchPoints: [{ state, x, y, id: 1 }] as unknown as never,
+				modifiers: 0,
+				timestamp: originSec + tSec
+			});
+		await dispatchCdp('touchStart', startX, 'touchPressed', 0);
+		for (let i = 1; i <= stepCount; i++) {
+			const x = Math.round(startX + (endX - startX) * (i / stepCount));
+			await dispatchCdp('touchMove', x, 'touchMoved', i * stepSec);
+		}
+		// Stamp the touchEnd timestamp in page-clock (performance.now) so
+		// the filter on captured frames uses one clock.
+		await page.evaluate(() => {
+			const s = (window as unknown as VelocitySamplerWindow).__velSampler!;
+			s.touchEndT = performance.now();
+		});
+		await dispatchCdp('touchEnd', endX, 'touchReleased', stepCount * stepSec);
+		await client.detach();
+		await page.waitForURL('**/messages/inbox', { timeout: 5000 });
+		// Allow the settle rAF to land so the sampler captures the whole
+		// commit slide.
+		await page.waitForTimeout(300);
+		await page.evaluate(() => {
+			(window as unknown as VelocitySamplerWindow).__velSampler!.armed = false;
+		});
+
+		return page.evaluate(() => {
+			const s = (window as unknown as VelocitySamplerWindow).__velSampler!;
+			const endT = s.touchEndT ?? 0;
+			// Commit-phase frames only: those at or after touchEnd.
+			const commitFrames = s.frames.filter((f) => f.t >= endT);
+			let moving = 0;
+			for (let i = 1; i < commitFrames.length; i++) {
+				if (Math.abs(commitFrames[i].m41 - commitFrames[i - 1].m41) > 5) moving++;
+			}
+			const ptr = (window as unknown as { __ptrEvents?: { x: number; t: number; type: string }[] }).__ptrEvents ?? [];
+			// Compute the releaseVelocity from the captured pointer samples
+			// using the same 80ms trailing window as the swipe action, so the
+			// test can see whether the fast / slow variants produced the
+			// intended velocity delta.
+			const moves = ptr.filter((p) => p.type === 'pointermove');
+			const ups = ptr.filter((p) => p.type === 'pointerup');
+			let computedVel = null;
+			if (moves.length >= 2 && ups.length > 0) {
+				const last = moves[moves.length - 1];
+				const cutoff = last.t - 80;
+				let i = 0;
+				while (i < moves.length - 2 && moves[i].t < cutoff) i++;
+				const first = moves[i];
+				const dt = last.t - first.t;
+				computedVel = dt > 0 ? (last.x - first.x) / dt : null;
+			}
+			return {
+				commitMovingFrames: moving,
+				totalFrames: s.frames.length,
+				commitFrameCount: commitFrames.length,
+				endT: Math.round(endT),
+				firstFrameT: s.frames[0] ? Math.round(s.frames[0].t) : null,
+				lastFrameT: s.frames.length ? Math.round(s.frames[s.frames.length - 1].t) : null,
+				firstCommitM41: commitFrames[0]?.m41 ?? null,
+				lastCommitM41: commitFrames[commitFrames.length - 1]?.m41 ?? null,
+				minCommitM41: commitFrames.length ? Math.min(...commitFrames.map((f) => f.m41)) : null,
+				maxCommitM41: commitFrames.length ? Math.max(...commitFrames.map((f) => f.m41)) : null,
+				ptrMoveCount: moves.length,
+				ptrFirstT: moves[0]?.t ?? null,
+				ptrLastT: moves[moves.length - 1]?.t ?? null,
+				ptrFirstX: moves[0]?.x ?? null,
+				ptrLastX: moves[moves.length - 1]?.x ?? null,
+				computedReleaseVel: computedVel === null ? null : Math.round(computedVel * 1000) / 1000
+			};
+		});
+	}
+
+	test('velocity-matched commit: fast flick yields fewer commit frames than slow drag', async ({
+		page,
+		context
+	}) => {
+		await prepareContext(context);
+		await page.goto('/');
+		await waitForHydration(page);
+		await page.locator('a[data-tab-nav][href="/messages/inbox"]').click();
+		await page.waitForURL('/messages/inbox');
+		await page.waitForTimeout(200);
+		await page
+			.locator('a[href^="/messages/"]:not([href="/messages/inbox"]):not([href="/messages/new"])')
+			.first()
+			.click();
+		await page.waitForURL(/\/messages\/\d+/);
+		await page.waitForSelector('.detail-scroll-pane');
+		await page.waitForTimeout(500);
+
+		const fast = await captureVelocityCommit(page, true);
+
+		// Re-enter the pilot for the slow variant. The fast swipe landed on
+		// /messages/inbox; click the same conversation to return to the
+		// pilot route.
+		await page
+			.locator('a[href^="/messages/"]:not([href="/messages/inbox"]):not([href="/messages/new"])')
+			.first()
+			.click();
+		await page.waitForURL(/\/messages\/\d+/);
+		await page.waitForSelector('.detail-scroll-pane');
+		await page.waitForTimeout(500);
+
+		const slow = await captureVelocityCommit(page, false);
+
+		// The relative assertion (slow > fast) tracks the velocity-matched
+		// solver: a slow release's commit slide integrates over more rAF
+		// ticks than a fast release's. The fast variant's 4ms step spacing
+		// yields a multi-px/ms releaseVelocity (near
+		// COMMIT_VELOCITY_CLAMP), so the solver's T = 2 * |Δprogress| /
+		// |progressVel| lands near COMMIT_T_MIN_MS. The slow variant's
+		// 40ms spacing yields a sub-1 px/ms velocity; the solver's T
+		// exceeds COMMIT_T_MAX_MS and clamps. The result is a 3x commit
+		// frame delta (slow ~21 moving frames vs fast ~7), well above the
+		// rAF-sampling noise floor.
+		expect(
+			slow.commitMovingFrames,
+			`slow drag commit must produce more moving frames than fast flick ` +
+				`(fast=${fast.commitMovingFrames}, slow=${slow.commitMovingFrames}, ` +
+				`fastVel=${fast.computedReleaseVel}, slowVel=${slow.computedReleaseVel})`
+		).toBeGreaterThan(fast.commitMovingFrames);
+	});
 });

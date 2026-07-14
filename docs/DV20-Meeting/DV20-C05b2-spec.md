@@ -19,13 +19,13 @@ Roll the new pipeline out to every remaining route that mounts `GesturePageLayou
 
 1. **NavStateMachine vestigial → authority (§13.5).** The orchestrator feeds the state machine events but reads `#publication` instead. 5b2 promotes the state machine to the single authority; consumers read its phase + plan, not a private publication.
 2. **FAB atom CSS transition → rAF.** The `.fab-transition { transition: transform 200ms ease-out }` CSS class + `discreteNavInFlight` 280ms `setTimeout` latch are replaced with an rAF-driven family-swap ease in the FAB layer.
-3. **Skeleton branches wired.** Deep pages may have uncached targets on cold load; the `{:else}` skeleton branches become reachable. Verify layouts match.
+3. **Skeleton branches audited.** The eager-load model is permanent (the root layout's `Promise.allSettled` always returns truthy `EMPTY_*` objects on rejection, never null). The dead `ActivitySkeleton` and `DiscussionsSkeleton` `{:else}` branches and their component files are removed; only `MessagesSkeleton` remains, reachable via the `/messages/[id]` route shadowing the layout's `messages` field with its message-row array (the preview cannot render an array, so the skeleton stands in until the back-swipe lands).
 4. **`isGesturePageLayoutRoute` rename.** The function covers NavPipelineHost routes too; renamed to `isPipelineRoute` (or similar).
 5. **`backParent` consumer audit.** As routes migrate off GPL, `backParent`'s GPL consumer dissolves per route. At end of 5b2, both consumers are gone; 5b3 removes the field.
 
 ## End state
 
-1. Every route that was on `GesturePageLayout` or `MobileTabPager` now mounts `NavPipelineHost` (or a pipeline tab host for the three tab roots). The new pipeline is the SOLE transition mechanism for every mobile route that was on those two hosts. Routes still rendered only by `DualColumnLayout` (e.g. the paginated discussions list `/discussions/pN`, whose tab-switch gesture DualColumnLayout's `detectSwipe` + CSS transition drives) are out of scope until `DualColumnLayout` is deleted in 5b3; see Known condition #5. Every migrated transition (back-swipe, tab-click, cross-tab, deep-link landing, forward enter, tab swipe) is driven by one progress through the executor's rAF.
+1. Every route that was on `GesturePageLayout` or `MobileTabPager` now mounts `NavPipelineHost` (or a pipeline tab host for the three tab roots). The new pipeline is the SOLE transition mechanism for every mobile route that was on those two hosts. Routes still rendered only by `DualColumnLayout` (e.g. the paginated discussions list `/discussions/pN`, whose tab-switch gesture DualColumnLayout's `detectSwipe` + CSS transition drives) are out of scope until `DualColumnLayout` is deleted in 5b3; see Known condition #2. Every migrated transition (back-swipe, tab-click, cross-tab, deep-link landing, forward enter, tab swipe) is driven by one progress through the executor's rAF.
 2. The FAB atom carries NO CSS transition. The FAB scale is driven either by the orchestrator's `coverProgress` (during a within-route transition) or by a rAF family-swap ease in the FAB layer (during a cross-route family swap). No `setTimeout`, no `discreteNavInFlight`, no `.fab-transition` CSS class.
 3. The `NavStateMachine` is the sole authority (§13.5). Consumers read its phase + plan. The orchestrator does not hold a private `#publication`.
 4. `MobileTabPager` is no longer mounted. The three tab roots share a persistent pipeline host in the `(tabs)` layout. The `LoadingChip` cross-tab overlay is removed everywhere.
@@ -237,33 +237,31 @@ These are §5 / §13.5 deviations retained with a technical justification and a
 defined resolution path. They are documented here so auditors assess them as
 known + planned, not as undiscovered divergences from the bar. Each entry is
 labelled by status so the reader can tell at a glance whether it is a
-**coverage gap**, a **5b3-deletion item** (the clean fix is in 5b3 and the
-item dissolves with the named 5b3 deletion), a **macro-plan deviation** (the
-behaviour intentionally diverges from the macro plan with a stated rationale),
-or **spec-code drift** (the spec text in another section overstates what the
+**5b3-deletion item** (the clean fix is in 5b3 and the item dissolves with
+the named 5b3 deletion), a **macro-plan deviation** (the behaviour
+intentionally diverges from the macro plan with a stated rationale), or
+**spec-code drift** (the spec text in another section overstates what the
 code does; the drift is documented rather than the spec text being softened,
 because the spec text is forward-looking).
 
-The six deviations the global animation manager resolved (the FAB DOM
-read-back, the FAB family-swap separate rAF, the singleton state-machine gap
-frame, the Header CSS transitions + setTimeout + settle / tapScrub rAFs, the
-`replaceState` side-channel leak, and the non-profile/admin no-preview panel)
-are no longer deviations and are no longer listed. The manager is documented
-in the previous section.
+The deviations resolved during C05b2 are no longer listed: the six the global
+animation manager resolved (FAB DOM read-back, FAB family-swap separate rAF,
+singleton state-machine gap frame, Header CSS transitions + setTimeout +
+settle / tapScrub rAFs, `replaceState` side-channel leak, non-profile/admin
+no-preview panel); the backward-to-deep-page visual proxy (deep-snapshot
+overlay for `activeIndex >= 1`, suppress-slide for `activeIndex === 0`);
+the FAB + Header being reactive readers (the manager publishes per-frame
+state via `pager.*` and the consumers' reactive `style=` bindings are the
+intended architecture, not a deviation); the velocity-matched commit
+coverage gap (e2e added in `messages-back-swipe`); the trajectory coverage
+gaps (backward tab swipe + tab-host mid-commit re-grab e2e added in
+`tab-host-swipe`; first / last-tab boundary void-swipe covered by
+`fab-boundary-swipe-sync`; backward-to-deep-page covered by `backtarget`);
+and the skeleton `{:else}` drift (dead `ActivitySkeleton` /
+`DiscussionsSkeleton` branches and components removed; `MessagesSkeleton`
+kept, legitimately reachable via the `/messages/[id]` array shadow).
 
-1. **Velocity-matched commit e2e (coverage gap, §12).** No e2e varies the
-   release velocity and asserts the commit duration tracks it (longer for slow
-   releases, shorter for fast). The `nav-executor-logic` unit suite covers the
-   solver branches (`solveCommitDuration`); the reduced-motion branch has an
-   e2e (`messages-back-swipe`). **Why retained:** a release-velocity e2e must
-   drive a synthetic `pointerup` with a specific `coMovementX` trajectory and
-   assert a wall-clock duration delta, which is flake-prone on the sequential
-   Playwright run; the right shape is a pair of slow / fast trajectories on
-   the same route with a relative-duration assertion (slow > fast), not an
-   absolute-duration assertion. **Resolution:** add the relative-duration e2e
-   on top of the existing `messages-back-swipe` harness.
-
-2. **`isPipelineSwipeDisabledRoute` latent mis-classification (5b3-deletion).**
+1. **`isPipelineSwipeDisabledRoute` latent mis-classification (5b3-deletion).**
    The function returns `false` for `/search`, `/bookmarks`, `/notifications`,
    `/profile`, `/messages/add/[userId]` despite those routes mounting
    `NavPipelineHost` (they fail both the overlay-family branch and the
@@ -272,12 +270,12 @@ in the previous section.
    gated off by its own `swipeBaseline < 0` check (those routes resolve
    `getCurrentTabIndex` to -1), so the pipeline wins pointer capture
    consistently. Fixing the classifier in isolation would leave it reading a
-   `backParent` field whose own dissolution is also tracked (see #10) and
+   `backParent` field whose own dissolution is also tracked (see #6) and
    would not change any user-visible behaviour. **Resolution:** the classifier
    and `DualColumnLayout.swipeDisabled` dissolve together in 5b3 when
    `DualColumnLayout`'s `detectSwipe` is removed.
 
-3. **DualColumnLayout mobile routes (5b3-deletion).** The paginated discussions
+2. **DualColumnLayout mobile routes (5b3-deletion).** The paginated discussions
    list `/discussions/pN` and any other route rendered only by
    `DualColumnLayout` is mobile-reachable but its tab-switch gesture runs on
    `DualColumnLayout`'s `detectSwipe` + `transition-transform duration-200` CSS
@@ -287,7 +285,7 @@ in the previous section.
    `DualColumnLayout` (5b3 scope) because they have no other host.
    **Resolution:** migrate when `DualColumnLayout` is deleted in 5b3.
 
-4. **Macro-plan divergences retained (macro-plan deviation, assessed C05b2).**
+3. **Macro-plan divergences retained (macro-plan deviation, assessed C05b2).**
    Three intentional deviations from the macro plan, each with a concrete
    blocker confirmed during C05b2 Task 6:
 
@@ -334,42 +332,7 @@ in the previous section.
      is reworked to derive from the title-crossfade end (so the slide and the
      crossfade share one timing source instead of two aligned constants).
 
-5. **Trajectory coverage gaps (coverage gap).** No dedicated e2e covers the
-   backward tab swipe, the first / last-tab boundary void-swipe, a mid-commit
-   re-grab (either direction) on the tab host, or the backward-to-deep-page
-   path. The geometry is unit-tested (`nav-executor-logic`); the forward tab
-   swipe + the reduced-motion snap have e2e. **Why retained:** each missing
-   trajectory needs a deterministic pointer-event script (the boundary
-   void-swipe needs an out-of-range drag; the mid-commit re-grab needs a
-   `pointerdown` mid-slide); these are constructible on the current Playwright
-   driver but were not blocking for 5b2 convergence (the geometry they would
-   exercise is unit-covered). **Resolution:** add the missing trajectory e2e
-   specs; pair them with the 5b3 deletion sweep so they assert against the
-   pipeline-only world.
-
-6. **Backward-to-deep-page visual proxy (resolved in C05b2).** When the tab
-   host's backward gesture targets a deep page (via `backSwipeShouldPopHistory`),
-   the slide reveals the deep target's preview panel (or a skeleton) via a
-   deep-snapshot overlay composited over the revealed panel, covering the
-   adjacent tab's wrong-content proxy. For `activeIndex >= 1` the overlay is
-   positioned absolutely at panel `activeIndex - 1` inside the track, carries
-   `data-deep-preview`, and renders `getPreviewPanel(deepTarget)` when
-   registered or `DeepPreviewSkeleton` as the fallback. For `activeIndex === 0`
-   there is no revealed panel to cover (the slide distance is 0 and
-   `deepSnapshotPanelIndex` is -1, placing the overlay off-screen), so the
-   suppress-slide approach applies instead; both are improvements over the
-   empty-space artifact, but they are different mechanisms. On commit
-   `history.back()` lands on the deep page and the real content mounts. The
-   `/activity` FAB-scale-in artifact is also resolved: the FAB layer's
-   `foregroundFraction` gate fires for any non-tab-root target whose family has
-   no list FAB (the backward-to-deep-page case). For routes whose resting scale
-   is 1 (`/`, `/messages/inbox`) the FAB scales OUT via `1 - coverProgress`; for
-   routes whose resting scale is 0 (`/activity`, whose dynamic-kind branch
-   returns null at rest) the gate returns 0 so the FAB stays hidden. Tab-to-tab
-   transitions (including to `/activity`) pass through the gate because the
-   target IS a tab root.
-
-7. **`pointercancel` treated as a regular release (5b3-deletion).**
+4. **`pointercancel` treated as a regular release (5b3-deletion).**
    `detectSwipe` routes `pointercancel` through its terminal path to `onEnd`,
    so the pointer bridge forwards it as a `pointerup` and the release gate
    commits vs cancels by offset. A `pointercancel` past the commit threshold
@@ -385,7 +348,7 @@ in the previous section.
    `DualColumnLayout`'s `detectSwipe` is removed and the pipeline owns the
    gesture layer end-to-end).
 
-8. **`SearchScopePager` nested CSS transition (macro-plan deviation, macro
+5. **`SearchScopePager` nested CSS transition (macro-plan deviation, macro
    §9).** The nested scope pager inside `/search`'s `NavPipelineHost` centre
    panel drives its scope-switch via `detectSwipe` + a
    `transition-transform duration-200` CSS class, with `shouldClaim` +
@@ -396,57 +359,17 @@ in the previous section.
    It was not in 5b2's migration set. **Resolution:** migrate when the macro
    plan takes up nested sub-pagers as a transition class.
 
-9. **Skeleton `{:else}` branches remain unreachable (spec-code drift on
-   5b1-skipped item #3).** The spec's 5b1-skipped item #3 ("Deep pages may
-   have uncached targets on cold load; the `{:else}` skeleton branches become
-   reachable") overstates the current code: the root layout's
-   `Promise.allSettled` returns truthy `EMPTY_*` objects on rejection (never
-   null), so `page.data.*` is always truthy and the real panel (or the truthy
-   empty fallback) renders. The skeleton components (`ActivitySkeleton`,
-   `DiscussionsSkeleton`, `MessagesSkeleton`) exist as defensive fallbacks
-   for a future non-eager-loaded target. **Why documented rather than
-   softened:** the 5b1-skipped item #3 text is forward-looking (it describes
-   the design intent when a non-eager-loaded target is added); downgrading it
-   to "defensive fallback" would lose the design intent. **Resolution:** the
-   drift dissolves when the first non-eager-loaded target is added (the
-   skeletons become reachable as the spec claims) or when the spec text is
-   reworded to "skeletons are defensive fallbacks" if the eager-loaded model
-   is made permanent.
-
-10. **`backParent` consumer dissolution timeline (spec-code drift on
-    5b1-skipped item #5).** The spec's 5b1-skipped item #5 ("at end of 5b2,
-    both consumers are gone; 5b3 removes the field") overstates the current
-    code: `isPipelineSwipeDisabledRoute` still reads `backParent !==
-undefined` (see #2), so one consumer remains at end of 5b2. The field
-    cannot be removed until both the classifier and `DualColumnLayout`'s
-    `detectSwipe` are addressed in 5b3. **Why documented rather than
-    softened:** the 5b1-skipped item #5 text is forward-looking (it tracks
-    the field's dissolution plan). **Resolution:** the drift dissolves in 5b3
-    when the classifier and `DualColumnLayout`'s `detectSwipe` are removed
-    and the field is deleted.
-
-11. **FAB + Header are reactive readers, not driver-written (macro-plan
-    deviation, §5, assessed C05b2).** §5 says "the executor writes the
-    per-frame visual state for every consumer; it is the only layer that
-    touches the DOM." The FAB layer and the Header are reactive Svelte
-    components that read the orchestrator's publication (`pager.backMorph`,
-    `pager.coverProgress`, `orchestrator.settleProgress`, etc.) and write
-    their own DOM via Svelte's `style=` binding. The executor + driver
-    write only the page-track transform. **Why retained:** the FAB has four
-    motion channels (transition progress via the executor rAF, family-swap
-    via the orchestrator's family-swap rAF, resting scale from the URL-
-    derived family, scroll-hide translateY from the scroll-chrome store).
-    The Header has six (drag morph, settle morph, tap-scrub, title
-    crossfade, search-track, tab-bar). Each channel would need to be
-    individually rewired from a reactive Svelte binding to an imperative
-    `driver.write()` call, with the driver becoming the sole DOM writer.
-    A single channel migration leaves the consumer half-migrated (some
-    transforms driver-written, others reactive), which the task forbids.
-    **Resolution:** lands when the driver-writes-everything refactor (4a
-    through 4d) is executed as a dedicated cycle: resolver plan functions
-    for every channel, the driver extended to write every consumer's
-    transforms, the FAB + Header stripped to static structure, and the
-    pager-store bridge deleted.
+6. **`backParent` consumer dissolution timeline (spec-code drift on
+   5b1-skipped item #5).** The spec's 5b1-skipped item #5 ("at end of 5b2,
+   both consumers are gone; 5b3 removes the field") overstates the current
+   code: `isPipelineSwipeDisabledRoute` still reads `backParent !==
+undefined` (see #1), so one consumer remains at end of 5b2. The field
+   cannot be removed until both the classifier and `DualColumnLayout`'s
+   `detectSwipe` are addressed in 5b3. **Why documented rather than
+   softened:** the 5b1-skipped item #5 text is forward-looking (it tracks
+   the field's dissolution plan). **Resolution:** the drift dissolves in 5b3
+   when the classifier and `DualColumnLayout`'s `detectSwipe` are removed
+   and the field is deleted.
 
 ## Out of scope (5b3)
 

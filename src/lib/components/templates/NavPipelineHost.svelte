@@ -35,9 +35,7 @@
 	} from '$lib/stores/nav-pipeline-orchestrator.svelte';
 	import { navPipelinePointer } from '$lib/actions/nav-pipeline-pointer';
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
-	import ActivitySkeleton from '$lib/components/panels/ActivitySkeleton.svelte';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
-	import DiscussionsSkeleton from '$lib/components/panels/DiscussionsSkeleton.svelte';
 	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
 	import MessagesSkeleton from '$lib/components/panels/MessagesSkeleton.svelte';
 	import DeepPreviewSkeleton from '$lib/components/panels/DeepPreviewSkeleton.svelte';
@@ -521,47 +519,42 @@
 				}}
 			>
 				<div class="gpl-card">
-					<!-- When the slide reveals another tab, the left panel renders
-					     that tab's real panel from the
-					     eager-loaded root-layout data. The skeleton is a spec-
-					     mandated fallback for a target whose data is absent;
-					     currently unreachable because the root layout's
-					     Promise.allSettled returns truthy EMPTY_* objects on
-					     rejection (never null), so page.data.* is always
-					     truthy and the panel always renders - the real list, or
-					     the truthy-but-empty EMPTY_* on a partial-load failure
-					     (never the skeleton). The panels render with
-					     paginate={true} to match the landing tab page
-					     (TabDiscussionsPanel / TabActivityPanel), so the
-					     preview is faithful when totalPages > 1. -->
+					<!-- When the slide reveals another tab, the left panel
+					     renders that tab's real panel from the eager-loaded
+					     root-layout data. Activity and Discussions lists are
+					     always present: the root layout's Promise.allSettled
+					     returns truthy EMPTY_* objects on rejection (never
+					     null), so page.data.activity and page.data.home are
+					     always truthy and the panel renders the real list, or
+					     the truthy-but-empty EMPTY_* on a partial-load failure.
+					     The panels render with paginate={true} to match the
+					     landing tab page (TabDiscussionsPanel /
+					     TabActivityPanel), so the preview is faithful when
+					     totalPages > 1. The messages case additionally guards
+					     against the array shadow: on `/messages/[id]` the
+					     route's message-row array replaces
+					     page.data.messages, so the panel cannot render and
+					     MessagesSkeleton stands in until the back-swipe lands. -->
 					{#if leftPanelPathname === '/activity'}
-						{#if page.data.activity}
-							<ActivityPanel
-								activities={page.data.activity.activities}
-								currentPage={page.data.activity.page}
-								totalPages={page.data.activity.totalPages}
-								activityDraft={page.data.activity.activityDraft}
-								mentionedUsers={page.data.activity.mentionedUsers}
-								t={page.data.t}
-								user={page.data.user}
-								paginate={true}
-							/>
-						{:else}
-							<ActivitySkeleton />
-						{/if}
+						<ActivityPanel
+							activities={page.data.activity.activities}
+							currentPage={page.data.activity.page}
+							totalPages={page.data.activity.totalPages}
+							activityDraft={page.data.activity.activityDraft}
+							mentionedUsers={page.data.activity.mentionedUsers}
+							t={page.data.t}
+							user={page.data.user}
+							paginate={true}
+						/>
 					{:else if leftPanelPathname === '/'}
-						{#if page.data.home}
-							<DiscussionsPanel
-								discussions={page.data.home.discussions}
-								currentPage={page.data.home.page}
-								totalPages={page.data.home.totalPages}
-								t={page.data.t}
-								buildPageUrl={discussionsBuildPageUrl}
-								paginate={true}
-							/>
-						{:else}
-							<DiscussionsSkeleton />
-						{/if}
+						<DiscussionsPanel
+							discussions={page.data.home.discussions}
+							currentPage={page.data.home.page}
+							totalPages={page.data.home.totalPages}
+							t={page.data.t}
+							buildPageUrl={discussionsBuildPageUrl}
+							paginate={true}
+						/>
 					{:else if leftPanelPathname === '/messages/inbox'}
 						{#if page.data.messages && !Array.isArray(page.data.messages)}
 							<MessagesPanel
@@ -572,10 +565,11 @@
 								paginate={true}
 							/>
 						{:else}
-							<!-- The inbox list object is the root-layout `messages`
-							     data; on `/messages/[id]` that key is shadowed by the
-							     route's message-row array, so the preview falls back to
-							     a skeleton and the real inbox loads on land. -->
+							<!-- The inbox list object is the root-layout
+							     `messages` data; on `/messages/[id]` that key
+							     is shadowed by the route's message-row array,
+							     so the preview falls back to a skeleton and
+							     the real inbox loads on land. -->
 							<MessagesSkeleton />
 						{/if}
 					{:else}
