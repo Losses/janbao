@@ -157,15 +157,18 @@
 		return target;
 	});
 	const leftPanelPathname = $derived(crossTabPanelPath ?? resolvedLeftHref);
-	// Forward deep-to-deep: the in-flight transition targets a deep page
-	// (a detail -> detail push intercepted by the orchestrator). The left
-	// panel renders a skeleton for the destination; the real content mounts
-	// on landing. Null when no transition is in flight or the target is a
-	// tab root (a tab-click exit handled by the panel branches below).
+	// Forward deep-to-deep: the in-flight transition is a detail -> detail
+	// push intercepted by the orchestrator (the source is a deep page). The
+	// left panel renders a skeleton for the destination; the real content
+	// mounts on landing. Null when no transition is in flight, the target is
+	// a tab root, or the source is a tab root (a tab -> deep forward-enter:
+	// the left panel shows the source's panel via leftPanelPathname below,
+	// not a destination skeleton).
 	const forwardDeepTarget = $derived.by<string | null>(() => {
 		const target = transitionTarget;
 		if (target === null) return null;
 		if (isTabRootPath(target)) return null;
+		if (isTabRootPath(resolvedLeftHref)) return null;
 		return target;
 	});
 	// The left panel's tab label.

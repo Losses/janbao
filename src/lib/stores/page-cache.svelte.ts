@@ -110,7 +110,6 @@ export class PageCacheStore {
 	}
 
 	/**
-	 * Remove entries. With no arguments, clears every entry. With	/**
 	 * Remove entries. With no arguments, clears every entry. With
 	 * `pathname` only, removes every entry under that pathname
 	 * (including all its subKeys). With both, removes the single

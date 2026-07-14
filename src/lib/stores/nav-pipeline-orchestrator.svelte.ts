@@ -915,11 +915,12 @@ export class NavPipelineOrchestrator {
 
 	/** Unmount: full teardown. Stops the rAF, drops the plan + executor +
 	 *  driver, and runs the lifecycle `unmount`. Used for the mobile ->
-	 *  desktop flip (the host stays mounted but the gesture surface
-	 *  leaves the mobile breakpoint) and the app exit. Route swaps do
-	 *  NOT call this; they call `releaseInputs` so the singleton's
-	 *  executor + driver persist for the next host's `configure`.
-	 *  Idempotent. */
+	 *  desktop flip only (the host stays mounted but the gesture surface
+	 *  leaves the mobile breakpoint; both hosts' breakpoint handlers
+	 *  call this). Route swaps do NOT call this; they call
+	 *  `releaseInputs` so the singleton's executor + driver persist for
+	 *  the next host's `configure`. App exit abandons the singleton to
+	 *  the browser (no teardown runs). Idempotent. */
 	unmount(): void {
 		this.#executor?.stop();
 		this.#executor = null;
@@ -2019,10 +2020,11 @@ export class NavPipelineOrchestrator {
 	 *
 	 *  The dynamic kind (/activity, resolved from the gesture source tab)
 	 *  resolves its FAB kind from the live fractional index, matching
-	 *  the FAB layer's dynamic branch: at rest on /activity the resolved
-	 *  kind is whichever list FAB sits at the published fractional index
-	 *  (typically messages at index 1); when no FAB would render (a
-	 *  fresh deep-link with no prior retained FAB) the scale is 0. */
+	 *  the FAB layer's dynamic branch: at rest on /activity the fractional
+	 *  index is 1 (activity's tab position) and no FAB renders, so the
+	 *  scale is 0; off-rest (a drag in flight) the index dips toward 0
+	 *  (discussions) or rises toward 2 (messages), and the scale follows
+	 *  that list FAB. */
 	#computeFabRestingScale(): number {
 		const inputs = this.#mountInputs;
 		if (inputs === null) return 0;

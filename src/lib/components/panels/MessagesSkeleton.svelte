@@ -7,8 +7,10 @@
 	 * row's blocks (avatar + name line + preview line). Composes `Skeleton`
 	 * boxes so the placeholder color and animation stay consistent with the
 	 * shared atom. Used as the defensive fallback in NavPipelineHost's
-	 * `/messages/inbox` preview branch (unreachable while the inbox is
-	 * eager-loaded by the root layout; present for a future non-eager target).
+	 * `/messages/inbox` preview branch: on `/messages/[id]` the route's
+	 * message-row array shadows the root layout's eager-loaded inbox
+	 * object, so the preview cannot render the list and falls back to
+	 * this skeleton until the back-swipe lands.
 	 */
 	const rows = [0, 1, 2, 3, 4, 5];
 </script>

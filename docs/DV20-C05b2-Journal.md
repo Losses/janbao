@@ -2199,3 +2199,81 @@ B1 + A1 e2e-safe: every detail-to-deep slide and plain navigation to non-pipelin
 targets pass unchanged. No behavioral regression.
 
 R30 audits the post-R29-fix state.
+
+## Session 32: R30 audit (A PASS / B PWC: forwardDeepTarget mis-fire) + fix
+
+R30 ran two independent auditors. A returned PASS (zero concerns) - the first
+clean PASS in the loop. B returned PASS-WITH-CONCERNS (1 concern). Counter stays
+0/5 (a clean round needs both PASS).
+
+### A: PASS
+
+A verified every end-state, the global animation manager, the five Known
+conditions, no gesture-layer CSS transitions or setTimeout, reduced-motion
+handling, and comment accuracy. Zero concerns.
+
+### B1 (concern + visible defect): forwardDeepTarget mis-fire
+
+NavPipelineHost's forwardDeepTarget fired for any non-tab-root transitionTarget,
+but playEnterAnimation (a tab -> deep forward-enter) publishes toPathname during
+the in-flight slide, so forwardDeepTarget fired for tab -> deep forward-enters
+too, rendering DeepPreviewSkeleton over the source's panel for ~150ms (e.g.
+tapping a conversation flashed a skeleton over the inbox list). The e2e missed
+it (forward-enter specs sample only the track transform).
+
+Fixed: forwardDeepTarget now also requires the source (resolvedLeftHref) to NOT
+be a tab root. Tab -> deep forward-enters fall through to the leftPanelPathname
+branches (source's panel); deep-to-deep intercepts still reveal the destination
+skeleton. Docstring updated.
+
+Implemented by the orchestrator directly (one derivation + comment); full gate
+re-run independently.
+
+### Gate outputs (post-fix, independently re-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    409 pass / 0 fail
+$ bun run test:e2e                    201 passed + 1 flaky (fab.spec.ts:430)
+```
+
+forwardDeepTarget change e2e-safe. No behavioral regression.
+
+R31 audits the post-R30-fix state.
+
+## Session 33: R31 audit (A/B PWC: 2 docstring concerns) + fixes
+
+R31 ran two independent auditors. Both returned PASS-WITH-CONCERNS (1 concern
+each). Counter stays 0/5. No logic defect - only comment accuracy.
+
+### Findings (2 concerns)
+
+- A1: #computeFabRestingScale docstring (orchestrator:2020-2025) claimed /activity
+  shows a list FAB (typically messages at index 1) at rest, but the code returns
+  0 (no FAB) at rest (index 1 -> null). The inline #listFabTabIndex comment was
+  correct; the outer docstring disagreed and misidentified the tab.
+- B1: page-cache.svelte.ts invalidate docstring was garbled (a duplicated
+  sentence with a stray mid-line /** from the R24 getLatestWithSnippet deletion;
+  prettier/eslint do not parse JSDoc content).
+
+### Fixes
+
+- A1: rewrote the docstring to match the inline comment (at rest, index 1, no
+  FAB, scale 0; off-rest, index dips toward 0 or rises toward 2).
+- B1: restored the single clean docstring.
+
+Both comment-only. Orchestrator-run; full gate re-run independently.
+
+### Gate outputs (post-fix, independently re-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    409 pass / 0 fail
+$ bun run test:e2e                    201 passed + 1 flaky (fab.spec.ts:430)
+```
+
+Comment-only changes; e2e confirms no regression.
+
+R32 audits the post-R31-fix state.
