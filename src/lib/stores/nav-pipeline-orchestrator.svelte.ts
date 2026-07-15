@@ -217,9 +217,10 @@ export interface PipelineMountInputs {
 	 *  page is centered on, e.g. 0 for discussions). When set, the
 	 *  orchestrator publishes `backMorph: null, targetIndex: null,
 	 *  fractionalIndex: centerTab` (constant) to the pager store so
-	 *  the Header stays in back-arrow mode and the pill stays on the
-	 *  thread's tab throughout the gesture. When undefined, the
-	 *  morph/pill values apply (deep page or tab host). */
+	 *  the Header stays in root mode end to end (tab bar visible,
+	 *  hamburger icon) and the pill stays on the thread's tab
+	 *  throughout the gesture. When undefined, the morph/pill values
+	 *  apply (deep page or tab host). */
 	readonly centerTab?: number;
 	/** When true the orchestrator claims BOTH rightward and leftward
 	 *  drags (`NavPipelineTabHost`, the three tab roots). Rightward
@@ -263,6 +264,11 @@ export interface OrchestratorPublication {
 	readonly settleAwaitTitle: boolean;
 	/** True while the tap-scrub ease is in flight. */
 	readonly searchScrubbing: boolean;
+	/** True when the most recent dispatch was a deep-to-deep
+	 *  interception. Read by the destination host's `shouldEnter` to
+	 *  suppress `playEnterAnimation` (the orchestrator already animated
+	 *  the slide on the source host). See `#lastDispatchWasDeepToDeep`. */
+	readonly lastDispatchWasDeepToDeep: boolean;
 }
 
 /** The clock function the intent classifier + executor use. */
@@ -375,7 +381,8 @@ export class NavPipelineOrchestrator {
 				settleLatched: this.#stateMachine.settleLatched,
 				settleDirection: this.#stateMachine.settleDirection,
 				settleAwaitTitle: this.#stateMachine.settleAwaitTitle,
-				searchScrubbing: this.#stateMachine.searchScrubbing
+				searchScrubbing: this.#stateMachine.searchScrubbing,
+				lastDispatchWasDeepToDeep: this.#lastDispatchWasDeepToDeep
 			};
 		}
 		const sm = this.#stateMachine.state;
@@ -391,7 +398,8 @@ export class NavPipelineOrchestrator {
 			settleLatched: this.#stateMachine.settleLatched,
 			settleDirection: this.#stateMachine.settleDirection,
 			settleAwaitTitle: this.#stateMachine.settleAwaitTitle,
-			searchScrubbing: this.#stateMachine.searchScrubbing
+			searchScrubbing: this.#stateMachine.searchScrubbing,
+			lastDispatchWasDeepToDeep: this.#lastDispatchWasDeepToDeep
 		};
 	});
 	/** The raw drag-fraction published at the moment a commit / cancel
@@ -581,6 +589,38 @@ export class NavPipelineOrchestrator {
 	 *  the settle's title endpoint from the current settleProgress, which
 	 *  is continuous (no snap), so it may still fire on a forward enter. */
 	#enterAnimationArmedSettle = false;
+	/** Handshake flag: true when the most recent dispatch was a
+	 *  deep-to-deep interception (the orchestrator cancelled a
+	 *  detail -> detail nav and armed the slide on the SOURCE host).
+	 *  Read by the DESTINATION host's `shouldEnter` `$derived`
+	 *  (NavPipelineHost.svelte) to suppress `playEnterAnimation`: a
+	 *  deep-to-deep target always has `stack[length-2].pathname ===
+	 *  leftHref` (the source deep page is the destination's
+	 *  back-target), so the generic forward-enter heuristic would
+	 *  otherwise play a SECOND slide on the destination host (the
+	 *  orchestrator already animated the slide on the source host).
+	 *
+	 *  Lifecycle of the flag (the handshake):
+	 *   - SET to true in `onSvelteKitBeforeNavigate`'s deep-to-deep
+	 *     branch, where the orchestrator cancels the nav and arms the
+	 *     slide on the source host. Survives the source host's
+	 *     `releaseInputs` (onDestroy) and the destination host's
+	 *     `configure` (onMount) - intentionally NOT cleared in either,
+	 *     unlike `#pendingDiscreteNav` / `#navDispatchInFlight` /
+	 *     `#lastLandWasPipelineCommit` which are cleared by
+	 *     `releaseInputs`, `goto.finally`, or `notifyHeaderState`'s
+	 *     `$effect.pre` and so do not reliably reach the destination's
+	 *     `shouldEnter`.
+	 *   - READ by the destination host's `shouldEnter` at onMount (via
+	 *     the publication's `lastDispatchWasDeepToDeep` field) to
+	 *     suppress the enter animation.
+	 *   - CLEARED to false in `#landAtRest`, which runs in
+	 *     `onSvelteKitAfterNavigate` AFTER the destination host's
+	 *     onMount (so the flag is still true when `shouldEnter` reads
+	 *     it). A deep-to-deep target is always a pipeline route (the
+	 *     `isDeepToDeep` guard requires `isNavPipelineRoute(to)`), so
+	 *     `#landAtRest` is guaranteed to run for it. */
+	#lastDispatchWasDeepToDeep = false;
 
 	constructor(clock: ClockFn = defaultClock) {
 		this.#clock = clock;
@@ -988,6 +1028,7 @@ export class NavPipelineOrchestrator {
 		this.#headerT = null;
 		this.#lastLandWasPipelineCommit = false;
 		this.#enterAnimationArmedSettle = false;
+		this.#lastDispatchWasDeepToDeep = false;
 		this.#mountInputs = null;
 		this.#mounted = false;
 		this.#lifecycle.deactivate();
@@ -1172,7 +1213,9 @@ export class NavPipelineOrchestrator {
 						this.#stateMachine.onCancel();
 						// Arm the settle ease (cancel direction): the morph
 						// + title crossfade retreat to the current page over
-						// the velocity-matched cancel duration.
+						// the cancel slide's solver-computed duration
+						// (velocity-matched for a reversed release;
+						// COMMIT_T_DEFAULT_MS for a drag-direction release).
 						this.#armSettleEaseFromGesture(false);
 					} else {
 						this.#landAtRest();
@@ -1594,6 +1637,12 @@ export class NavPipelineOrchestrator {
 		// could read it. The navigation has landed; clear the flag so a
 		// later non-pipeline nav does not mis-read it as a commit.
 		this.#lastLandWasPipelineCommit = false;
+		// Clear the deep-to-deep handshake flag: the destination host has
+		// read it in `shouldEnter` (its onMount ran before afterNavigate
+		// fired this landing), so the flag's job is done. A subsequent
+		// non-deep-to-deep forward nav (a tab -> deep enter) must NOT
+		// inherit a stale true value.
+		this.#lastDispatchWasDeepToDeep = false;
 		this.#pendingGesture = null;
 		this.#pendingDiscreteNav = null;
 		this.#navDispatchInFlight = false;
@@ -1777,6 +1826,11 @@ export class NavPipelineOrchestrator {
 		// The full URL (pathname + search) so a tab-click to e.g. /?q=foo
 		// dispatches to that exact URL, not the bare pathname.
 		this.#pendingDiscreteNav = { target: to + toSearch };
+		// Arm the deep-to-deep handshake flag so the destination host's
+		// `shouldEnter` suppresses `playEnterAnimation` (the slide was
+		// already animated on this source host). Cleared in `#landAtRest`
+		// after the destination mounts; see `#lastDispatchWasDeepToDeep`.
+		this.#lastDispatchWasDeepToDeep = isDeepToDeep;
 		this.#navDispatchInFlight = false;
 		this.#dispatchTarget = null;
 		navigation.cancel();
@@ -2238,10 +2292,10 @@ export class NavPipelineOrchestrator {
 	 *  crossfade tracks the slide end-to-end. A fast release (~120ms) and
 	 *  the Header settle finish together; a slow release (~600ms) and they
 	 *  run together too. Both the commit and the cancel settle read the
-	 *  same duration: the executor solves a velocity-matched duration for
-	 *  the cancel slide too (a sub-threshold release still animates back
-	 *  over a velocity-matched curve), so the Header morph / title
-	 *  crossfade tracks the cancel slide end-to-end as well. */
+	 *  same duration: the executor solves the cancel slide's duration too
+	 *  (velocity-matched for a reversed release, COMMIT_T_DEFAULT_MS for a
+	 *  drag-direction release), so the Header morph / title crossfade
+	 *  tracks the cancel slide end-to-end as well. */
 	#armSettleEaseFromGesture(committed: boolean): void {
 		if (!browser) return;
 		const inputs = this.#mountInputs;
@@ -2700,8 +2754,8 @@ export class NavPipelineOrchestrator {
 		if (centerTab !== undefined) {
 			// Thread route (the overlay family): the pill stays on centerTab
 			// at rest, active: true so the FAB reads fractionalIndex,
-			// backMorph: null so the Header stays in back-arrow mode for
-			// the deep route.
+			// backMorph: null so the Header stays in root mode end to end
+			// (tab bar visible, hamburger icon) for the thread route.
 			pager.set({
 				fractionalIndex: centerTab,
 				dragging: false,

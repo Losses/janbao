@@ -2371,3 +2371,100 @@ $ bun run test:e2e                    200 passed + 2 flaky (fab.spec.ts:432
 F4 e2e-safe (configure not reached on tab-to-tab). No behavioral regression.
 
 R34 audits the post-R33-fix state.
+
+## Session 36: R34 audit (A/B PWC: double-slide regression + centerTab comment) + fixes; F5 independently re-examined
+
+R34 ran two independent auditors. Both returned PASS-WITH-CONCERNS (1 each).
+Counter stays 0/5.
+
+### Findings
+
+- A CONCERN 1 (functional): double slide on intra-tree forward deep-to-deep
+  (/profile/settings -> /profile/password). The orchestrator's interception slide
+  - the destination host's playEnterAnimation both fired. This was UNMASKED by the
+    R33 F4 fix (configure resets the executor): before F4 the destination's enter
+    no-op'd on stale executor state, masking the double slide. A real regression
+    from F4.
+- B1 (comment): two centerTab comments claimed "back-arrow mode"; the Header is
+  in root mode end to end.
+
+### Fixes
+
+- CONCERN 1: added #lastDispatchWasDeepToDeep (set in the deep-to-deep
+  interception, published, read by the destination's shouldEnter to suppress
+  playEnterAnimation, cleared in #landAtRest which always runs for a pipeline
+  deep-to-deep target). New preventive e2e intra-tree-deep-to-deep.spec.ts.
+- B1: comments corrected to "root mode end to end".
+
+### Reflection items (resolved)
+
+- F5: independently re-examined. Four alternative fixes attempted and rejected
+  (direct seed corrupts effectiveKind; keep-familySwapScale delays + violates 1:1;
+  lerp violates 1:1; separate-field lerp violates 1:1 or only delays). Root cause:
+  familySwapScale and trackFractionalIndex drive the FAB via different formulae;
+  no bridge preserves both effectiveKind and 1:1 tracking. Infeasibility
+  independently confirmed.
+- snippet field: DV20-Plan section 7 mandates it. Retained with doc comments
+  (not dead code to delete).
+
+Delegated to a sub-agent; the orchestrator independently re-ran the full gate,
+re-verified the handshake (set/publish/read/clear sites), and confirmed the F5
+alternatives were genuinely attempted.
+
+### Gate outputs (post-fix, independently re-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    409 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (fab.spec.ts:432)
+```
+
+CONCERN 1 handshake e2e-safe (new intra-tree spec passes; no regression). The
+R33 extra flake (fab-release-snap:192) did not recur (confirmed timing jitter).
+
+R35 audits the post-R34-fix state.
+
+## Session 37: R35 audit (A/B PWC: 2 comment concerns) + fixes
+
+R35 ran two independent auditors. Both returned PASS-WITH-CONCERNS (1 each).
+Counter stays 0/5. No logic defect. A independently verified the R34
+#lastDispatchWasDeepToDeep handshake timing is correct.
+
+### Findings
+
+- A1: isNavPipelineRoute JSDoc omitted /messages/add/[userId] from the compose
+  routes (the code matches it).
+- B1: two comments claimed the cancel settle runs over a "velocity-matched"
+  duration; typical cancels (drag-direction release) get COMMIT_T_DEFAULT_MS, only
+  reversed cancels are velocity-matched.
+- A nitpick: spec Phased approach said "2 routes" for compose; Routes to migrate
+  lists 3.
+
+### Fixes
+
+- A1: comment now lists all three compose routes.
+- B1: comments now state the cancel duration is solver-computed (velocity-matched
+  for a reversed release, COMMIT_T_DEFAULT_MS for a drag-direction release).
+- nitpick: spec step 4 corrected to 3 routes.
+
+### Open item (pending user)
+
+The snippet field is write-only in production (its reader, MobileTabPager, was
+deleted). DV20-Plan section 7 lists it but the description matches the deleted
+MobileTabPager preview mechanism, so section 7 is likely stale and the field is
+likely dead. Delete-the-field-and-update-section-7 is pending the user's decision
+(it touches the spec's binding entry-shape).
+
+### Gate outputs (post-fix, independently re-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    409 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (fab.spec.ts:432)
+```
+
+Comment/doc-only; e2e confirms no regression.
+
+R36 audits the post-R35-fix state.

@@ -27,7 +27,8 @@
  *    `/notifications`.
  *  - The profile tree `/profile` and all sub-routes.
  *  - The admin tree `/admin` and all sub-routes.
- *  - The compose routes `/post/discussion`, `/messages/new`.
+ *  - The compose routes `/post/discussion`, `/messages/new`, and
+ *    `/messages/add/[userId]`.
  *  - The three tab roots `/`, `/activity`, `/messages/inbox` (these
  *    mount `NavPipelineTabHost`).
  *

@@ -48,7 +48,7 @@ Roll the new pipeline out to every remaining route that mounts `GesturePageLayou
 1. **FAB family-swap → rAF** (shared component; no route migration). Replace `discreteNavInFlight` + CSS with an rAF family-swap ease on the orchestrator (the FAB layer reads `pager.familySwapScale` reactively). All existing e2e must pass.
 2. **NavStateMachine → authority.** Promote the state machine to the sole authority.
 3. **Deep pages migration** (24 routes). Batch by route group (profile, admin, standalone deep pages).
-4. **Compose routes migration** (2 routes: `/post/discussion`, `/messages/new`).
+4. **Compose routes migration** (3 routes: `/post/discussion`, `/messages/new`, `/messages/add/[userId]`).
 5. **MobileTabPager → pipeline tab swipe.** Replace the tab pager with a persistent pipeline host in the `(tabs)` layout.
 6. **Discussion thread verify.** The 5b1 pilot after shared-component changes.
 7. **`isGesturePageLayoutRoute` rename + `backParent` audit.** Prepare for 5b3.

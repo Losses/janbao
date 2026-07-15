@@ -74,18 +74,6 @@
 	// (before render) via `navStore.activeStack` so there is no
 	// first-paint flash.
 	const navStore = getNavigationStore();
-	// Forward enter animation: play only on a FORWARD SPA nav from leftHref
-	// (a popstate-back sets direction='backward' and must skip the slide-in).
-	// A $derived so it re-evaluates after onMount's sync flips isMobile to
-	// the live matchMedia value; the onMount enter check reads the post-flip
-	// value, not the UA-derived seed.
-	const shouldEnter = $derived.by<boolean>(() => {
-		if (!isMobile) return false;
-		if (navStore.direction !== 'forward') return false;
-		const stack = navStore.activeStack;
-		if (stack.length < 2) return false;
-		return stack[stack.length - 2].pathname === leftHref;
-	});
 
 	// The resolved back-target: follows the live navigation stack so a
 	// back-swipe lands on the correct entry (the tab root or structural
@@ -134,6 +122,29 @@
 	// off with no jump). The content swap is expected - the panel reflects
 	// whichever transition is in flight.
 	const publication = $derived(orchestrator.publication);
+	// Forward enter animation: play only on a FORWARD SPA nav from leftHref
+	// (a popstate-back sets direction='backward' and must skip the slide-in).
+	// A $derived so it re-evaluates after onMount's sync flips isMobile to
+	// the live matchMedia value; the onMount enter check reads the post-flip
+	// value, not the UA-derived seed.
+	// Suppressed when the orchestrator's `lastDispatchWasDeepToDeep`
+	// publication is true: a deep-to-deep nav (e.g. /profile/settings ->
+	// /profile/password) was intercepted on the source host and the slide
+	// already played there. Without this guard the generic forward-enter
+	// heuristic (stack[length-2].pathname === leftHref) is true for the
+	// destination (the source deep page is its back-target) and
+	// `playEnterAnimation` would play a second slide. The orchestrator
+	// sets the flag in the interception branch and clears it in
+	// `#landAtRest` (which runs in afterNavigate, AFTER this onMount
+	// read), so the flag is still true here.
+	const shouldEnter = $derived.by<boolean>(() => {
+		if (!isMobile) return false;
+		if (navStore.direction !== 'forward') return false;
+		const stack = navStore.activeStack;
+		if (stack.length < 2) return false;
+		if (publication.lastDispatchWasDeepToDeep) return false;
+		return stack[stack.length - 2].pathname === leftHref;
+	});
 	// Stable views of the publication's plan / in-flight flag. The
 	// orchestrator publishes a new publication object each frame of a
 	// drag (the progress advances), but the plan reference and the

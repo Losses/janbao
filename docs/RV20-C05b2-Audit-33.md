@@ -15,6 +15,7 @@ src/` now returns zero.
 ## B's findings
 
 ### B1, B2 (CONCERN, comment accuracy)
+
 - `gesture-constants.ts` `TRACK_TRANSITION_MS` docstring said the family-swap
   ease runs in the FAB layer; it runs on the orchestrator's rAF (the layer reads
   `pager.familySwapScale` reactively). Rewritten.
@@ -22,23 +23,26 @@ src/` now returns zero.
   "Effect B". Deleted (dead code).
 
 ### B3 (CONCERN, comment accuracy)
+
 - `mobile-pager.svelte.ts` docstring said the settle/search-scrub state is "owned
   by the orchestrator as private class `$state`"; it lives on `NavStateMachine`
   (the orchestrator's getters are `$derived` pass-throughs). Rewritten.
 
 ### B4 / F4 (CONCERN, functional, fixed)
+
 - `playEnterAnimation` could no-op when the singleton executor's state was stale
   at `configure` time. A prior commit that settled (activePlan set, progress=1)
   but whose navigation was cancelled before landing left the executor holding
   progress=1; `configure` reset only the orchestrator's `#progress`, not the
   executor's state, so the next host's `playEnterAnimation` read progress=1 via
   `#startProgressFromCurrentVisual` and `startCommit`'s `state.progress ===
-  target` guard returned idle (no slide). Fixed: `configure` now calls
+target` guard returned idle (no slide). Fixed: `configure` now calls
   `executor.onLand()` (verified to only stop the rAF, clear activePlan, and reset
   the state record - no side effects; the family-swap/settle/tap-scrub eases live
   on the orchestrator and are unaffected).
 
 ### B5 / F5 (CONCERN, functional, documented limitation)
+
 - `#fabDragSeedFraction` does not cover a Family-A-to-tab gesture (tab-to-tab,
   both list family) interrupting a family-swap ease: the FAB layer's
   `foregroundFraction` reads `trackFractionalIndex` for tab-to-tab, which the
