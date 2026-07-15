@@ -251,7 +251,7 @@ const ROUTE_ENTRIES: readonly RouteEntry[] = [
 	{
 		pattern: /^\/profile\/settings$/,
 		tag: 'detail',
-		backParent: '/',
+		backParent: '/profile',
 		snapshotCapture: false,
 		fab: false
 	},

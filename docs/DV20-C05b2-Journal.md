@@ -2687,3 +2687,169 @@ by the gate plus a structural trace (the race is too narrow for a dedicated
 e2e).
 
 R40 audits the post-R39-fix state.
+
+## Session 42: R40 audit (A/B PWC: 3 stale docstrings + 1 disproven logic-bug claim) + fixes
+
+R40 ran two independent auditors. A returned PASS-WITH-CONCERNS (2 docstring
+concerns); B returned PASS-WITH-CONCERNS (1 docstring concern + 1 logic-bug
+claim). Counter stays 0/5.
+
+### Findings + dispositions
+
+- A1: `mobile-pager.dragging` docstring referenced the removed CSS transition.
+  Fixed.
+- A2: `#cancelAllAnimationEases` docstring's misleading "safety net" claim.
+  Fixed.
+- B1: `BurgerArrowIcon.progress` docstring omitted the tap-scrub driver. Fixed.
+- B2 (logic-bug claim, DISPROVEN): a cross-host deep->tab nav was reported to
+  leave the title/morph settle un-armed. An attempted fix (arm the settle in the
+  discrete-nav branch) broke `header-tab-descent-cross-tab-exit`'s CALIBRATION,
+  which asserts `settling === true` at the deep->tab landing flush - proving the
+  settle IS armed at landing. Reverted; the claim is a false positive. A comment
+  was added in the discrete-nav branch referencing the CALIBRATION test.
+
+### Gate outputs (post-fix, independently re-run 2026-07-15)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (exit 0)
+```
+
+Docstring / comment fixes only; e2e confirms no regression. The B2 fix attempt
+broke the deep->tab settle CALIBRATION test and was reverted (the e2e gate
+caught the incorrect fix).
+
+R41 audits the post-R40-fix state.
+
+## Session 43: R41 audit (A/B PWC: 3 logic defects + 6 stale comments) + fixes
+
+R41 ran two independent auditors. A returned PASS-WITH-CONCERNS (4 concern: 2
+logic + 2 docstring); B returned PASS-WITH-CONCERNS (5 concern: 1 logic + 4
+comment). Counter stays 0/5.
+
+### Findings
+
+- A1 (logic): the `Header` morph dragging branch used `morph = backMorph`
+  directly; on a tab-host backward swipe toward a deep page this ran the wrong
+  direction (1 -> 0 -> 1 -> 0 double reversal).
+- A2 (docstring): `HeaderVisual.morph` docstring inverted the semantics.
+- A3 (logic): `forwardDeepTarget`'s `isTabRootPath(resolvedLeftHref)` check read
+  the back-target and over-suppressed the skeleton for forward deep-to-deep.
+- A4 (docstring): `FloatingActionButton` referenced the deleted family swap.
+- B1 (comment): `#cancelAllAnimationEases` docstring mis-stated its callers and
+  the settle-cancellation sites.
+- B2 (comment): `playEnterAnimation` comment over-generalised the centerTab
+  case.
+- B3 (comment): the finish-then-new policy docstring omitted the cancel-slide
+  case.
+- B4 (docstring): `fab-boundary-swipe-sync.spec.ts` header referenced deleted
+  infrastructure.
+- B5 (logic): `#beginGesture` `toTabIndex` used `fromTabIndex - 1` for the
+  bidirectional-backward case, giving -1 on tab 0 (empty-space reveal).
+
+### Fixes
+
+- A1: morph = `currentHasTabs ? 1 - backMorph : backMorph` (non-null backMorph).
+- A2: docstring corrected to 1 = root/tab, 0 = deep/search.
+- A3: gate on `!lastDispatchWasDeepToDeep` instead of `isTabRootPath(back)`.
+- A4: FAB driver list trimmed to scale + translateY.
+- B1-B4: docstrings / comments rewritten to current behaviour.
+- B5: bidirectional-backward `toTabIndex` uses `#tabIndexFor(to)`; the
+  knock-on `#republishToPager` comment updated.
+
+The implementation was delegated to a fresh-context sub-agent (the
+orchestrator-side context had grown long) and independently re-verified (diff
+of the three logic fixes + a full gate re-run by the orchestrator).
+
+### Gate outputs (post-fix, independently re-run 2026-07-15)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (exit 0)
+```
+
+The three logic fixes have no dedicated preventive e2e (verified structurally
+
+- no e2e regression); the flaky test is the known `fab.spec.ts:435` CDP-touch
+  class on an untouched path.
+
+R42 audits the post-R41-fix state.
+
+## Session 44: R42 audit (A/B PWC: core logic clean; 8 fixed + 1 disproven) + fixes
+
+R42 ran two independent auditors. A returned PASS-WITH-CONCERNS (4 concern); B
+returned PASS-WITH-CONCERNS (5 concern, all stale comments). B confirmed the
+core animation logic is clean (no logic bug in gesture/commit/cancel, FAB scale
+math, settle/tap-scrub, deep-to-deep handshake, or finish-then-new). Counter
+stays 0/5.
+
+### Findings + dispositions
+
+- A1 (logic, latent): `#lastDispatchWasDeepToDeep` was a plain field read
+  inside the `#publication` `$derived`; made `$state` (now load-bearing since
+  `forwardDeepTarget` reads it reactively).
+- A2 (logic): `#enterAnimationArmedSettle` was dead for normal motion (consumed
+  before the idle-arm read it); restructured to persist through the settle and
+  actually suppress a post-enter idle re-arm.
+- A3 (claimed logic, DISPROVEN): the FAB boundary dip is intended behavior
+  (`fab-boundary-swipe-sync.spec.ts` asserts delta > 0.1; `fab-boundary-swipe-
+clamp` memory). Fix reverted.
+- A4 (geometry): backward-to-higher-tab touch inversion documented as Known
+  condition #6 (3-panel layout + macro §6 temporal-previous).
+- B1-B5 (comments): the recurring `coverProgress` comment class (FAB scale
+  driver) rewritten to `fabScale(publication.progress, ...)` across
+  NavPipelineHost, Header, nav-resolvers (5), route-config, nav-executor-logic
+  - test.
+
+### Gate outputs (post-fix, independently re-run 2026-07-15)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (exit 0)
+```
+
+The implementation was delegated to a fresh-context sub-agent and independently
+re-verified by the orchestrator (gate re-run, A3 revert confirmed, `$state` +
+Known-condition changes checked).
+
+R43 audits the post-R42-fix state.
+
+## Session 45: R43 audit (A/B PWC: 4 minor findings, cleanest round) + fixes
+
+R43 ran two independent auditors. A returned PASS-WITH-CONCERNS (3 concern); B
+returned PASS-WITH-CONCERNS (1 concern). Counter stays 0/5. Both verified the
+core architecture and all six Known conditions are correct; the four findings
+are all minor.
+
+### Findings + fixes
+
+- A1 (data): `/profile/settings` `backParent` was `'/'` (should be `'/profile'`
+  per spec §3 + adjacent routes; masked in 5b2). Fixed; `route-data.test.ts`
+  updated.
+- A2 (comment): NavPipelineTabHost deep-snapshot overlay comment did not
+  qualify the `activeIndex === 0` suppress-slide case. Fixed.
+- A3 (dead data): `FabKindConfig.tabIndex` was propagated but never passed to
+  the FAB atom (no consumer; the atom is an `<a href>`). Removed from the
+  config, interface, three propagation sites, and the docstrings.
+- B1 (comment): the orchestrator class-level docstring (two instances) claimed
+  app exit calls `unmount()`; only the mobile->desktop flip does. Fixed.
+
+### Gate outputs (post-fix, independently re-run 2026-07-15)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    201 passed + 2 flaky (exit 0)
+```
+
+Delegated to a fresh-context sub-agent; independently re-verified by the
+orchestrator. The flaky tests are the known CDP-touch class.
+
+R44 audits the post-R43-fix state.

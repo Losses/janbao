@@ -115,7 +115,7 @@ describe('getRouteData - backParent (structural parent)', () => {
 	}
 	const cases: readonly ParentCase[] = [
 		// Routes with a declared structural parent.
-		{ path: '/profile/settings', expected: '/' },
+		{ path: '/profile/settings', expected: '/profile' },
 		{ path: '/profile/55/sunny', expected: '/profile' },
 		{ path: '/profile/comments/55/sunny', expected: '/profile/55/sunny' },
 		{ path: '/profile/discussions/55/sunny', expected: '/profile/55/sunny' },

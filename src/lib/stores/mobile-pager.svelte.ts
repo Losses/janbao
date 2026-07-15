@@ -5,8 +5,9 @@
  *
  * `fractionalIndex` is the active panel plus a fractional drag offset (e.g.
  * 0.5 = halfway from panel 0 to panel 1); at rest it equals the active index.
- * `dragging` is true while a pointer is actively dragging (the bar drops its
- * CSS transition then so the indicator follows 1:1). `active` marks that a
+ * `dragging` is true while a pointer is actively dragging; consumers gate
+ * their drag-time behavior on it (the Header morph derivation picks the drag
+ * branch; the SearchTabBar stretches its underline). `active` marks that a
  * pager is mounted and driving - until then the bar falls back to the URL so a
  * deep link renders correctly before hydration.
  *

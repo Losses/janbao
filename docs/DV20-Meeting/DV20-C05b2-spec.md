@@ -212,8 +212,13 @@ motion, decided solely by the orchestrator's phase. CSS transitions and
   hosts, so the FAB reacts from the first pixel while the track absorbs the
   deadzone). The FAB exits in the first half of the transition if FROM has a FAB
   and enters in the second half if TO has a FAB; at rest it is 1 on a FAB route
-  and 0 elsewhere. CSS-transition-free; no separate family-swap rAF, no
-  `familySwapScale`, no `#lastRenderedScale`, no DOM read-back.
+  and 0 elsewhere. On a boundary void-swipe (first/last tab rubber-band, where
+  FROM === TO and no route change occurs) the FAB reacts to the raw progress by
+  design: it is not a tab-to-tab swap, but the FAB's "reacts from the first
+  pixel" rule applies uniformly, so the scale dips along the rubber-band (e2e
+  `fab-boundary-swipe-sync` asserts scale delta > 0.1). CSS-transition-free; no
+  separate family-swap rAF, no `familySwapScale`, no `#lastRenderedScale`, no
+  DOM read-back.
 - **Header morph / title crossfade during a gesture drag / commit:** owned
   by the executor's rAF via `pager.backMorph` / `pager.tapMorph`. The morph
   runs DURING the slide (the gesture's coverProgress drives the back-arrow
@@ -354,6 +359,28 @@ passes release velocity 0 to the solver, which returns
    OR a coordinator-driven preload (Layer 4) that places the destination
    in a right panel so the resolver's native `left` axis works. Either
    lands in a future cycle.
+
+6. **Backward gesture on a bidirectional tab host to a higher-indexed tab
+   (macro-plan deviation).** A backward gesture on a bidirectional tab host
+   (`NavPipelineTabHost`) can target a HIGHER-indexed tab when that
+   higher-indexed tab is the temporal-previous entry (the user previously
+   navigated forward from it). Per macro §6 the backward gesture must target
+   the temporal-previous entry (where the user came from), not the
+   spatial-previous tab. The higher-indexed tab sits at `[2W, 3W]` in the
+   3-panel track layout and can only be revealed by a leftward track
+   translate (axis `left`), so the track translates leftward while the
+   finger moves rightward for this one case: the content moves against the
+   finger. **Why retained:** this is a geometry consequence of the 3-panel
+   track layout (panel index strictly determines translate direction; a
+   higher index is always leftward-revealed). The macro-plan mandate
+   (target the temporal-previous) takes priority over the
+   spatial-direction coincidence. The pill still interpolates toward the
+   target tab and the FAB scale follows `fabScale`, so only the
+   finger-vs-content direction is inverted. **Resolution:** none planned;
+   the deviation is intrinsic to revealing a higher-indexed panel from a
+   lower one within a single 3-panel track. A nested-sub-pager
+   architecture (macro §9) would dissolve the case by giving each tab its
+   own track; out of scope for 5b3.
 
 ## Out of scope (5b3)
 

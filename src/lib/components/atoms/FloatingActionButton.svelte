@@ -10,11 +10,10 @@
 	 * (FloatingActionButtonLayer); the atom is viewport-agnostic.
 	 *
 	 * The atom carries NO CSS transition. Every motion that affects the
-	 * transform (route-transition scale, scroll-hide translateY, cross-family
-	 * family swap) is driven by the global nav-pipeline orchestrator's
-	 * per-frame publication; the layer is a reactive reader and the atom has
-	 * no transition directive. The layer binds the eased scale through the
-	 * inline `style:transform` binding.
+	 * transform (route-transition scale, scroll-hide translateY) is driven by
+	 * the global nav-pipeline orchestrator's per-frame publication; the layer
+	 * is a reactive reader and the atom has no transition directive. The layer
+	 * binds the eased scale through the inline `style:transform` binding.
 	 *
 	 * Visibility gates (both feed `pointer-events` and `aria-hidden`):
 	 *   - scale hidden: `scale < 0.01` (route-transition scale-out)

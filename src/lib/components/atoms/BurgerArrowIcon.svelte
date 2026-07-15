@@ -21,8 +21,9 @@
 	 *
 	 * Each bar is a fixed <line> reshaped via CSS `transform` (animation-friendly,
 	 * unlike SVG geometry attributes). The `progress` prop is driven 1:1 by the
-	 * orchestrator's `iconProgress` (which reads `pager.backMorph` during a drag,
-	 * `settleProgress` during a settle); the orchestrator's single rAF owns every
+	 * orchestrator's `iconProgress`, which reads `pager.backMorph` during a drag,
+	 * `settleProgress` during a settle, and `pager.tapMorph * scrubIconEndpoint`
+	 * during a root<->search tap-scrub; the orchestrator's single rAF owns every
 	 * motion of the morph, so this atom carries no CSS transition. §5: zero CSS
 	 * transitions in the animation layer.
 	 */

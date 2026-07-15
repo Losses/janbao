@@ -623,7 +623,8 @@ describe('track geometry helpers (interrupt handoff)', () => {
 		// the new plan's span starting at that visual (§5 "No jump").
 		// `trackTranslateX` is linear, so the inverse extends past [0, 1];
 		// downstream consumers tolerate the out-of-range value (the raw
-		// coverProgress the FAB/Header read is clamped at its own site).
+		// progress the FAB reads via `publication.progress` and the Header
+		// reads via `pager.coverProgress` is clamped at its own site).
 		const plan = trackPlan('left', 375, 0); // travelled span [0, -375]
 		expect(progressAtTranslateX(plan, 100)).toBeCloseTo(-100 / 375, 7); // above 0 -> negative
 		expect(progressAtTranslateX(plan, -500)).toBeCloseTo(500 / 375, 7); // below -375 -> past 1

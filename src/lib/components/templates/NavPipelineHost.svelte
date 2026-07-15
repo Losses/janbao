@@ -191,7 +191,13 @@
 		// below, so it must not be classified as a forward deep-to-deep.
 		if (publication.direction !== 'forward') return null;
 		if (isTabRootPath(target)) return null;
-		if (isTabRootPath(resolvedLeftHref)) return null;
+		// Only a deep-to-deep interception (`lastDispatchWasDeepToDeep` true)
+		// renders the destination skeleton. A tab -> deep `playEnterAnimation`
+		// (the flag false) shows the source panel via `leftPanelPathname`
+		// below. The handshake flag is set in the orchestrator's
+		// deep-to-deep interception branch and is the authoritative signal
+		// that the slide already played on the source host.
+		if (!publication.lastDispatchWasDeepToDeep) return null;
 		return target;
 	});
 	// The left panel's tab label.
@@ -520,9 +526,9 @@
 	// Initial track transform: at-rest at the resting translate. The
 	// driver overwrites this on the first frame; setting it inline at
 	// SSR time means the server-rendered HTML has the centre panel
-	// filling the viewport (the FAB SSR style test asserts scale(0)
-	// which the resting state produces via the FAB layer reading
-	// pager.coverProgress at 0).
+	// filling the viewport. The FAB layer's at-rest scale reads
+	// `getRouteData(page.url.pathname).fab ? 1 : 0` (1 on a FAB route,
+	// 0 on a non-FAB route), not the pager store.
 	// The track's resting transform: CSS `translateX(-50%)` so the
 	// centre panel fills the viewport at SSR, before the browser
 	// measures viewportWidth. The driver writes px-based transforms via

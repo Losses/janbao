@@ -402,8 +402,9 @@ export function trackTranslateX(plan: TransitionPlan, progress: number): number 
  *  spans the previous tab); extrapolating keeps the track continuous
  *  while the drag proceeds. Out-of-range progress is safe downstream:
  *  `trackTranslateX` is linear, the commit solver scales by
- *  `|target - progress|`, and the raw `coverProgress` the FAB/Header
- *  read is clamped at its own publish site (the orchestrator), so only
+ *  `|target - progress|`, and the raw progress the FAB reads
+ *  (`publication.progress`) and the Header reads (`pager.coverProgress`)
+ *  is clamped at its own publish site (the orchestrator), so only
  *  the track translateX carries the out-of-range value transiently. */
 export function progressAtTranslateX(plan: TransitionPlan, tx: number): number {
 	const sign = plan.pageTrack.axis === 'left' ? -1 : 1;

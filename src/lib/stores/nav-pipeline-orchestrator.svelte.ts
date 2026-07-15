@@ -21,7 +21,8 @@
  *      onMount / onDestroy and releases the html-singletons (viewport-lock)
  *      directly with a `browser` guard. Route swaps use `configure` /
  *      `releaseInputs` (no executor / driver / rAF teardown); the mobile
- *      -> desktop flip and app exit use the full `unmount` teardown.
+ *      -> desktop flip uses the full `unmount` teardown (app exit
+ *      abandons the singleton to the browser; no teardown runs).
  *
  * Per the DV20 spec's binding "UNIFY, DO NOT BRIDGE" constraint: this
  * orchestrator is the SOLE transition mechanism for EVERY transition
@@ -47,7 +48,8 @@
  * + driver + rAF, so the persistent FAB and Header layers (consumers of the
  * orchestrator's publication) read a continuous signal across the swap
  * instead of seeing a per-host lifecycle gap. The mobile -> desktop flip
- * and the app exit call the full `unmount()` teardown.
+ * calls the full `unmount()` teardown; app exit abandons the singleton to
+ * the browser (no teardown runs).
  *
  * Per DV20 §13.5 the `NavStateMachine` is the sole authority for the
  * macro transition state (phase, plan, FROM/TO, direction). The
@@ -517,15 +519,28 @@ export class NavPipelineOrchestrator {
 	 *  second header-state notification within the same navigation does
 	 *  not re-consume the flag). */
 	#lastLandWasPipelineCommit = false;
-	/** True when `playEnterAnimation` armed the settle ease for a forward
-	 *  enter. Read AND cleared at the top of the next `notifyHeaderState`
-	 *  call so the live-title change that arrives after the URL swap (the
-	 *  page's `headerTitle` lands asynchronously via SvelteKit's data
-	 *  load) does NOT cancel the in-flight settle via the IDLE re-arm
-	 *  branch (which would snap the morph back to its start value). The
-	 *  mid-settle re-arm branch is not gated by this flag: it re-latches
-	 *  the settle's title endpoint from the current settleProgress, which
-	 *  is continuous (no snap), so it may still fire on a forward enter. */
+	/** True while a forward enter's settle ease owns the morph and the
+	 *  live `headerTitle` has not yet taken over. Set in
+	 *  `playEnterAnimation` after the settle arm; read in the IDLE
+	 *  re-arm branch of `notifyHeaderState` to suppress a fresh arm
+	 *  for the first live-title change that lands after the enter
+	 *  settle ends (the page's `headerTitle` resolves asynchronously
+	 *  via SvelteKit's data load). Without the suppression the idle
+	 *  branch would arm from startProgress=0, snapping the morph back
+	 *  to its start value after the enter settle already transitioned
+	 *  it to the host route's tab-ness.
+	 *
+	 *  Cleared by: (a) the idle re-arm branch when it suppresses an
+	 *  arm (the flag is spent); (b) `#armSettleEase` at the start of
+	 *  any settle arm (a mid-settle re-arm, a gesture-release settle,
+	 *  a discrete-nav settle, or an unsuppressed idle re-arm all
+	 *  supersede the enter's settle); (c) the mid-settle branch in
+	 *  `notifyHeaderState` when the live title already matches the
+	 *  settle's incoming title (the live title has taken over); (d)
+	 *  `releaseInputs` / `unmount` (host teardown). The mid-settle
+	 *  re-arm is not gated by this flag: it re-latches from the
+	 *  current settleProgress, which is continuous (no snap), so it
+	 *  fires freely on a forward enter and clears the flag via (b). */
 	#enterAnimationArmedSettle = false;
 	/** Handshake flag: true when the most recent dispatch was a
 	 *  deep-to-deep interception (the orchestrator cancelled a
@@ -557,8 +572,14 @@ export class NavPipelineOrchestrator {
 	 *     onMount (so the flag is still true when `shouldEnter` reads
 	 *     it). A deep-to-deep target is always a pipeline route (the
 	 *     `isDeepToDeep` guard requires `isNavPipelineRoute(to)`), so
-	 *     `#landAtRest` is guaranteed to run for it. */
-	#lastDispatchWasDeepToDeep = false;
+	 *     `#landAtRest` is guaranteed to run for it.
+	 *
+	 *  Backed by `$state` because the `#publication` `$derived.by`
+	 *  reads it to publish `lastDispatchWasDeepToDeep` for the
+	 *  destination host's `shouldEnter`; Svelte 5 `$derived` only
+	 *  re-runs on `$state` / `$derived` reads, so the `$state` backing
+	 *  is what makes the derived re-publish on a write. */
+	#lastDispatchWasDeepToDeep = $state(false);
 
 	constructor(clock: ClockFn = defaultClock) {
 		this.#clock = clock;
@@ -689,6 +710,11 @@ export class NavPipelineOrchestrator {
 		this.#navDispatchInFlight = false;
 		this.#dispatchTarget = null;
 		this.#gestureToTabIndex = null;
+		// Spend the enter-arm flag so it cannot leak across the route
+		// swap (the flag belongs to this host's forward enter; the
+		// destination host's title changes are unrelated and must not
+		// be suppressed).
+		this.#enterAnimationArmedSettle = false;
 		// Do NOT cancel the settle / tap-scrub eases here: the Header
 		// persists across the route swap, and a settle in flight at the
 		// host's destroy (a commit settle awaiting its navigation landing)
@@ -775,8 +801,12 @@ export class NavPipelineOrchestrator {
 			// During the enter, coverProgress ramps 0 to 1 (the executor's
 			// commit rAF publishes it). The FAB layer reads the
 			// orchestrator's publication directly (progress + FROM/TO FAB
-			// presence) to drive its scale via the half-mapping; the
-			// centerTab branch's backMorph = null drives the Header.
+			// presence) to drive its scale via the half-mapping. The Header
+			// morph is driven by `backMorph`: the centerTab (thread-host)
+			// branch publishes `backMorph: null` so the Header stays in root
+			// mode end to end; a deep-page enter (no centerTab) publishes
+			// `backMorph: rawDragFraction` via `#republishToPager` so the
+			// morph tracks the slide.
 			progressDirection: 0,
 			commitPhysics: this.#driver?.prefersReducedMotion() ? 'snap' : 'momentum'
 		};
@@ -837,9 +867,12 @@ export class NavPipelineOrchestrator {
 		// and contribute an empty title, so the crossfade shows the static
 		// back-target title easing toward an empty incoming span until the
 		// settle ends and the live `page.data.headerTitle` takes over.
-		// `#enterAnimationArmedSettle` is set so the next
-		// `notifyHeaderState` (fired when the live title lands) skips its
-		// own re-arm and does not reset the in-flight morph.
+		// `#enterAnimationArmedSettle` is set so the FIRST idle re-arm
+		// in `notifyHeaderState` after the enter settle ends (fired when
+		// the live title lands) is suppressed and does not re-arm the
+		// morph from startProgress=0 (which would snap it back to the
+		// source route's tab-ness). See the flag's own docstring for the
+		// full clear-site list.
 		const t = this.#headerT;
 		if (t !== null) {
 			const outgoingTitle = resolveDeepHeaderTitle(inputs.backTarget, t) ?? '';
@@ -1298,7 +1331,7 @@ export class NavPipelineOrchestrator {
 		const toTabIndex =
 			direction === 'backward'
 				? inputs.bidirectional === true
-					? inputs.fromTabIndex - 1
+					? this.#tabIndexFor(to)
 					: inputs.toTabIndex
 				: this.#tabIndexFor(to);
 		this.#gestureToTabIndex = toTabIndex;
@@ -1457,7 +1490,12 @@ export class NavPipelineOrchestrator {
 		const pendingGesture = this.#pendingGesture;
 		const pendingDiscreteNav = this.#pendingDiscreteNav;
 		if (pendingGesture === null && pendingDiscreteNav === null) {
-			// Nothing to dispatch (a stray settle). Land at-rest.
+			// The enter-completion path: `playEnterAnimation` clears both
+			// pending slots before its `onCommit`, so the enter's settle
+			// reaches this branch on every forward enter (no gesture or
+			// discrete nav to dispatch). Also covers a genuinely stray
+			// settle (no enter, no pending transition). Land at-rest with
+			// nothing to dispatch.
 			this.#landAtRest();
 			return;
 		}
@@ -1669,14 +1707,16 @@ export class NavPipelineOrchestrator {
 		}
 		// Finish-then-new interruption policy: a discrete tab-click
 		// arriving while a commit slide is in flight (a gesture commit,
-		// a prior tab-click commit, or a forward-enter) accelerates the
-		// in-flight to completion, then replays this tab-click on the
-		// landed host so its transition plays from progress 0. The
-		// finger-controlled drag path (#beginGesture) keeps the current
-		// behavior (track the finger from the current visual). The
-		// live-drag phase (executor phase 'live') is not accelerated: a
-		// finger is still controlling the track, so the discrete nav
-		// falls through to the from-visual handoff below.
+		// a prior tab-click commit, a forward-enter, or a cancel slide;
+		// the executor's onCancel delegates to onCommit with
+		// progressDirection 1, so phase === 'committing' holds here)
+		// accelerates the in-flight to completion, then replays this
+		// tab-click on the landed host so its transition plays from
+		// progress 0. The finger-controlled drag path (#beginGesture)
+		// keeps the current behavior (track the finger from the current
+		// visual). The live-drag phase (executor phase 'live') is not
+		// accelerated: a finger is still controlling the track, so the
+		// discrete nav falls through to the from-visual handoff below.
 		if (this.#executor?.state.phase === 'committing') {
 			this.#accelerateInFlight();
 			this.#queuedDiscreteNav = { target: to + toSearch };
@@ -1777,12 +1817,17 @@ export class NavPipelineOrchestrator {
 		// `commitStart.durationMs` and matches it (R17), so no desync.
 		this.#executor?.onCommit(0);
 		this.#stateMachine.onCommit();
+		// The title / morph settle for this discrete nav is armed at landing
+		// (not in this branch), so a cross-host tab landing (deep / search ->
+		// tab root) crossfades rather than snaps. `header-tab-descent-cross-
+		// tab-exit`'s CALIBRATION asserts settling === true at the deep->tab
+		// landing flush; arming the settle here instead breaks that timing.
 		return true;
 	}
 
 	/** Called from `+layout.svelte`'s `afterNavigate` for pipeline-route
 	 *  sources / destinations. For a host-internal param navigation
-	 *  (`/messages/1` -> `/messages/2`) or the initial arrival this is a
+	 *  (`/messages/123/p1` -> `/messages/123/p2`) or the initial arrival this is a
 	 *  no-op reset (the orchestrator is at rest). For a navigation AWAY
 	 *  from the host route (a tab-click exit / a gesture settle), the host's
 	 *  `onDestroy` runs before `afterNavigate` (Svelte 5 lifecycle: old
@@ -1876,6 +1921,12 @@ export class NavPipelineOrchestrator {
 		if (!browser) return;
 		const safeDuration = Math.max(1, durationMs);
 		this.#cancelSettleEaseRaf();
+		// Any settle arm supersedes the forward-enter settle's hold on
+		// the morph, so spend `#enterAnimationArmedSettle` here. The
+		// one caller that must re-arm the flag (`playEnterAnimation`,
+		// just below) sets it AFTER this call returns, so the ordering
+		// is clear-then-set and the flag ends up true for the enter.
+		this.#enterAnimationArmedSettle = false;
 		this.#settleStartProgress = startProgress;
 		this.#settleTargetProgress = targetProgress;
 		this.#settleAwaitTitle = awaitTitle;
@@ -2117,13 +2168,22 @@ export class NavPipelineOrchestrator {
 	}
 
 	/** Centralized interruption: cancel every running animation ease
-	 *  (settle + tap-scrub) so a new gesture owns the morph from the
-	 *  current visual position with no competing rAF underneath. Called
-	 *  from `#beginGesture` on every re-grab (from-rest or
-	 *  mid-transition). The Header's `notifyHeaderState` reactive watcher
-	 *  for `pager.dragging` is a safety net for edge cases where the
-	 *  gesture begins outside the orchestrator's pointer path; this
-	 *  method is the primary cancellation point. */
+	 *  (settle + tap-scrub) so a new gesture or a fresh discrete nav owns
+	 *  the morph from the current visual position with no competing rAF
+	 *  underneath. Called from `#beginGesture` on every re-grab (from-rest
+	 *  or mid-transition) AND from the `onSvelteKitBeforeNavigate`
+	 *  discrete-nav path (a tab-click or deep-to-deep nav arriving outside
+	 *  the `phase === 'committing'` finish-then-new branch). This is ONE
+	 *  of several settle-cancellation sites, not the sole point: the
+	 *  settle ease is also ended by `#armSettleEase`'s own
+	 *  `#cancelSettleEaseRaf` (a rapid back-to-back re-arm),
+	 *  `#onExecutorSettle`'s `#endSettleEase` for a non-pipeline commit
+	 *  target, `onSvelteKitAfterNavigate`'s `#endSettleEase` on a
+	 *  nav-landed awaitTitle clear, the settle rAF tick's `#endSettleEase`
+	 *  when u reaches 1 on a non-await settle, and `unmount`'s
+	 *  `#cancelSettleEaseRaf`. (`notifyHeaderState` finishes an in-flight
+	 *  tap-scrub when it sees `pager.dragging`, but it does not end the
+	 *  settle, so it is not a safety net for the settle.) */
 	#cancelAllAnimationEases(): void {
 		this.#endSettleEase();
 		this.#finishTapScrubEase();
@@ -2153,21 +2213,6 @@ export class NavPipelineOrchestrator {
 		currentIsSearch: boolean,
 		t: TranslationDict
 	): void {
-		// Consume the enter-animation settle flag on the VERY NEXT call,
-		// before any early-return below, so it is read + cleared exactly
-		// once regardless of which branch fires. The flag is set by
-		// `playEnterAnimation` after arming the settle for a forward
-		// enter; its purpose is "skip the live-title re-arm for the enter
-		// animation's own settle". The local is read in the idle-arm
-		// branch at the bottom of this method; consuming it here at the
-		// top makes the flag fire exactly once on the next call after
-		// `playEnterAnimation` set it, so a call that hits an early
-		// return (the gap-frame `!#mounted` guard, the
-		// `#headerStateInitialized` first-call seed, the `pager.dragging`
-		// drag-active branch, or the `settleActive` mid-settle branch)
-		// still spends the flag instead of leaking it to a later call.
-		const enterAnimationArmedSettle = this.#enterAnimationArmedSettle;
-		this.#enterAnimationArmedSettle = false;
 		if (!browser) return;
 		// Always update the translation dict before the `!#mounted` guard
 		// below so the gesture-release settle arming (which reads
@@ -2232,6 +2277,11 @@ export class NavPipelineOrchestrator {
 						this.#endSettleEase();
 					}
 				}
+				// The live title already matches the settle's incoming
+				// title, so the morph is showing the correct endpoint;
+				// spend the enter-arm flag (the live title has taken
+				// over, no idle re-arm to suppress).
+				this.#enterAnimationArmedSettle = false;
 				this.#prevHeaderTitle = newTitle;
 				this.#prevHeaderHasTabs = currentHasTabs;
 				this.#prevHeaderIsSearch = currentIsSearch;
@@ -2324,21 +2374,26 @@ export class NavPipelineOrchestrator {
 		}
 		// Idle: arm the crossfade on any title change (including an empty
 		// incoming title for a tab-root landing and an empty outgoing
-		// title for a forward-from-tab click). Skipped when
-		// `playEnterAnimation` just armed the settle for a forward enter:
-		// the live title arriving here would re-arm with startProgress=0
-		// and snap the morph back to the source route's tab-ness. The
-		// enter's settle continues to its target; the live title takes
-		// over when the settle ends and the morph derivation reverts to
-		// its rest branch.
-		if (newTitle !== this.#prevHeaderTitle && !enterAnimationArmedSettle) {
-			const latched: HeaderSettleTransition = {
-				outgoingTitle: this.#prevHeaderTitle,
-				incomingTitle: newTitle,
-				outgoingHasTabs: this.#prevHeaderHasTabs,
-				incomingHasTabs: currentHasTabs
-			};
-			this.#armSettleEase(latched, 0, 1, false, this.#resolveNavDirection());
+		// title for a forward-from-tab click). Suppressed when
+		// `playEnterAnimation` armed the settle for a forward enter and
+		// the live title is only now arriving (after the enter settle
+		// ended): re-arming with startProgress=0 would snap the morph
+		// back to the source route's tab-ness. The flag is spent on the
+		// first title change it suppresses; the enter's settle has
+		// already transitioned the morph to the host route's tab-ness,
+		// so the live title is already the morph's rest-branch value.
+		if (newTitle !== this.#prevHeaderTitle) {
+			if (this.#enterAnimationArmedSettle) {
+				this.#enterAnimationArmedSettle = false;
+			} else {
+				const latched: HeaderSettleTransition = {
+					outgoingTitle: this.#prevHeaderTitle,
+					incomingTitle: newTitle,
+					outgoingHasTabs: this.#prevHeaderHasTabs,
+					incomingHasTabs: currentHasTabs
+				};
+				this.#armSettleEase(latched, 0, 1, false, this.#resolveNavDirection());
+			}
 		}
 		this.#prevHeaderTitle = newTitle;
 		this.#prevHeaderHasTabs = currentHasTabs;
@@ -2572,13 +2627,13 @@ export class NavPipelineOrchestrator {
 		const bidirectional = inputs?.bidirectional === true;
 		// Backward-to-deep-page on a bidirectional host: the in-flight
 		// target is a deep page (the user is leaving the tab host via
-		// history.back to /profile, /bookmarks, etc.). The resolver's
-		// `toTabIndex = fromTabIndex - 1` (the spatial-previous tab) does
-		// NOT match the actual destination, so the pill must HOLD at
-		// fromIdx and the Header morph must reveal the back-arrow over the
-		// slide. Forward gestures on a bidirectional host always target a
-		// tab root (`#nextTabTarget`), so a deep-page target implies a
-		// backward gesture.
+		// history.back to /profile, /bookmarks, etc.). The resolved
+		// `toTabIndex` is `#tabIndexFor(to)`, which returns -1 for a deep
+		// page, so the pill has no destination tab to interpolate toward
+		// and must HOLD at fromIdx while the Header morph reveals the
+		// back-arrow over the slide. Forward gestures on a bidirectional
+		// host always target a tab root (`#nextTabTarget`), so a deep-page
+		// target implies a backward gesture.
 		const targetPath = publication.toPathname;
 		const targetIsDeepPage = targetPath !== null && !isTabRootPath(targetPath);
 		const holdPillAtFromIdx = bidirectional && targetIsDeepPage;

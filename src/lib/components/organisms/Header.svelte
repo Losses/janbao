@@ -90,9 +90,11 @@
 	// Settle / tap-scrub state comes straight from the orchestrator's
 	// reactive class getters. The orchestrator owns the settle ease
 	// (the post-release / post-title-change morph + title crossfade),
-	// the tap-scrub ease, and the `searchScrubbing` flag; these are
-	// class `$state` fields on the orchestrator singleton, read by the
-	// Header via the public getters. `orchestrator.settleLatched` carries
+	// the tap-scrub ease, and the `searchScrubbing` flag; the
+	// underlying `$state` fields live on the `NavStateMachine` singleton
+	// (the §13.5 authority), exposed by the orchestrator via `$derived`
+	// pass-throughs in its `#publication` and read by the Header through
+	// the public getters. `orchestrator.settleLatched` carries
 	// the endpoint identity frozen at settle-arm; `orchestrator.settleDirection`
 	// selects the title-span slide axis.
 	const settleActive = $derived(orchestrator.settleActive);
@@ -130,7 +132,20 @@
 	// scrub): tapMorph drives the horizontal track via `trackMorph` below.
 	const morph = $derived.by(() => {
 		if (dragging) {
-			return isDeepToDeep ? 0 : (pager.backMorph ?? (currentHasTabs ? 1 : 0));
+			if (isDeepToDeep) return 0;
+			// morph semantics: 1 = tab/root (hamburger), 0 = deep (back-arrow).
+			// A backward swipe on a tab host toward a deep page must run 1 -> 0,
+			// but `pager.backMorph` is the slide progress 0 -> 1 (the reverse
+			// direction), so invert it on a tab host (currentHasTabs): morph =
+			// 1 - backMorph. On a deep host (no tabs) morph follows backMorph
+			// directly (0 -> 1 = deep -> back-target, correct direction). When
+			// backMorph is null (no in-flight publication) fall back to the
+			// static tab-ness.
+			const bm = pager.backMorph;
+			if (bm !== null) {
+				return currentHasTabs ? 1 - bm : bm;
+			}
+			return currentHasTabs ? 1 : 0;
 		}
 		if (settleActive && settleLatched) {
 			const outgoing = settleLatched.outgoingHasTabs ? 1 : 0;

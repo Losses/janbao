@@ -11,7 +11,7 @@
  *
  * The configs in this file:
  *
- *   - `FAB_KIND_CONFIGS`          the FAB icon / href / tabIndex per
+ *   - `FAB_KIND_CONFIGS`          the FAB icon / href per
  *                                  concrete list kind (the rendering
  *                                  details for `fab: true` routes).
  *   - `FAB_ROUTE_ATTRIBUTES`      family + kind per route where the FAB
@@ -61,9 +61,9 @@ export type { MobileTabLabelKey, PathMatcher } from './tab-config';
 // ---------------------------------------------------------------------------
 // FAB icon/href config (§3 consumer config #1).
 //
-// The FAB's icon, label, href, and tabIndex per concrete list kind. The
-// resolver (Layer 3) reads only the core `fab` boolean; the FAB layer
-// reads this for rendering.
+// The FAB's icon, label, and href per concrete list kind. The resolver
+// (Layer 3) reads only the core `fab` boolean; the FAB layer reads this
+// for rendering.
 
 export type FabListKind = 'discussions' | 'messages';
 
@@ -73,21 +73,18 @@ export interface FabKindConfig {
 	readonly label: FabLabelResolver;
 	readonly href: string;
 	readonly icon: string;
-	readonly tabIndex: number;
 }
 
 export const FAB_KIND_CONFIGS: Record<FabListKind, FabKindConfig> = {
 	discussions: {
-		label: (t) => t.nav.discussions ?? 'New discussion',
+		label: (t) => t.nav.discussions,
 		href: '/post/discussion',
-		icon: mdiPlus,
-		tabIndex: 0
+		icon: mdiPlus
 	},
 	messages: {
-		label: (t) => t.nav.messages ?? 'New message',
+		label: (t) => t.nav.messages,
 		icon: mdiEmailPlus,
-		href: '/messages/new',
-		tabIndex: 2
+		href: '/messages/new'
 	}
 };
 
@@ -141,7 +138,9 @@ const FAB_ROUTE_ATTRIBUTES: readonly FabRouteAttributes[] = [
 	{ pattern: /^\/discussion\//, family: 'overlay', kind: 'discussions' },
 	{ pattern: /^\/messages\/\d/, family: 'overlay', kind: 'messages' },
 
-	// Family C: compose forms (publish coverProgress for the FAB scale).
+	// Family C: compose forms (the FAB scale is fabScale(publication.progress,
+	// fromHasFab, toHasFab), driven by the orchestrator's publication.progress
+	// and FROM/TO RouteData.fab).
 	{ pattern: /^\/post\/discussion$/, family: 'compose', kind: 'discussions' },
 	{ pattern: /^\/messages\/new$/, family: 'compose', kind: 'messages' },
 	// /messages/add/[userId] shares MessageCompose with /messages/new; the
@@ -149,7 +148,9 @@ const FAB_ROUTE_ATTRIBUTES: readonly FabRouteAttributes[] = [
 	{ pattern: /^\/messages\/add\//, family: 'compose', kind: 'messages' },
 
 	// Family B 'deep': non-FAB deep routes whose atom stays mounted at scale 0
-	// so coverProgress drives the scale across the list<->deep boundary.
+	// so fabScale(publication.progress, fromHasFab, toHasFab) drives the scale
+	// across the list<->deep boundary (orchestrator's publication.progress
+	// and FROM/TO RouteData.fab).
 	{ pattern: /^\/bookmarks$/, family: 'overlay', kind: 'deep' },
 	{ pattern: /^\/search$/, family: 'overlay', kind: 'deep' },
 	{ pattern: /^\/notifications$/, family: 'overlay', kind: 'deep' },

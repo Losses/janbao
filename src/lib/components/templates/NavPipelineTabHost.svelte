@@ -76,7 +76,11 @@
 	// covers the revealed panel with the deep target's preview panel (or a
 	// skeleton), so the slide's visual matches the deep page the user will
 	// land on. On commit, `history.back()` lands on the deep page and the
-	// real content mounts.
+	// real content mounts. When `activeIndex === 0` the orchestrator's
+	// `suppressSlide` branch sets `distance = 0` (no slide); the overlay
+	// mounts at `left: -33.33%` (`deepSnapshotPanelIndex * (100 /
+	// panelCount)` = `-1 * 33.33%`) and stays offscreen, never revealed -
+	// panel 0 has no left neighbour to slide into view.
 	const deepSnapshotTarget = $derived.by<string | null>(() => {
 		const target = publication.inFlight ? publication.toPathname : null;
 		if (target === null) return null;

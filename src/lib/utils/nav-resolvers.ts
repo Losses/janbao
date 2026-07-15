@@ -30,10 +30,10 @@
  * Each resolver produces a page-track plan (axis + distance). The
  * `TransitionPlan` also carries OPTIONAL `fab` / `header` per-frame
  * functions a consumer may bind; the pipeline hosts omit them (the
- * FAB / Header react through their own layers reading the pager
- * store). The plan is resolved ONCE per gesture (FROM and TO locked
- * at gesture start); the live offset streams separately to the
- * executor.
+ * FAB layer reads the orchestrator's publication directly, and the
+ * Header reacts through its own layer reading the pager store). The
+ * plan is resolved ONCE per gesture (FROM and TO locked at gesture
+ * start); the live offset streams separately to the executor.
  *
  * Pure (runes-free). The orchestrator imports the `TransitionPlan` and
  * `TransitionDirection` types from this module (the wrapper imports
@@ -78,8 +78,8 @@ export interface FabVisual {
 }
 
 /** The Header's per-frame visual state, returned by a plan's Header
- *  function. `morph` is the back-arrow / mode-morph progress (0 = root
- *  mode, 1 = deep or search mode). `titleCrossfade` is the title-swap
+ *  function. `morph` is the back-arrow / mode-morph progress (1 = root /
+ *  tab mode, 0 = deep or search mode). `titleCrossfade` is the title-swap
  *  progress (0 = old title, 1 = new title). */
 export interface HeaderVisual {
 	readonly morph: number;
@@ -107,10 +107,11 @@ export type ProgressDirection = 0 | 1;
  *  `header` fields are OPTIONAL: a resolver supplies them only when a
  *  consumer is bound to drive that visual through the executor. The
  *  pipeline hosts pass `fab: null, header: null` element refs to
- *  the driver, so the resolvers omit these fields and the
- *  FAB / Header react through their own layers reading the pager
- *  store. A future consumer that binds a FAB / Header element would
- *  receive the per-frame writes the plan's fns produce. */
+ *  the driver, so the resolvers omit these fields; the FAB layer
+ *  reads the orchestrator's publication directly and the Header
+ *  reacts through its own layer reading the pager store. A future
+ *  consumer that binds a FAB / Header element would receive the
+ *  per-frame writes the plan's fns produce. */
 export interface TransitionPlan {
 	readonly pageTrack: PageTrackPlan;
 	readonly fab?: FabPlanFn;
@@ -208,8 +209,9 @@ function commitPhysicsFor(reducedMotion: boolean): CommitPhysics {
 //
 // Spatial axis resolved by tab position. Forward (toTabIndex >
 // fromTabIndex) slides the track left; backward slides it right. The
-// FAB / Header react through their own layers reading the pager store
-// (the plan carries no `fab` / `header` fns).
+// FAB layer reads the orchestrator's publication directly and the
+// Header reacts through its own layer reading the pager store (the
+// plan carries no `fab` / `header` fns).
 
 export const tabTabResolver: Resolver = (input: ResolverInput): TransitionPlan => {
 	const axis: PageTrackAxis = input.toTabIndex > input.fromTabIndex ? 'left' : 'right';
@@ -225,7 +227,8 @@ export const tabTabResolver: Resolver = (input: ResolverInput): TransitionPlan =
 //
 // Deep-to-deep (thread to profile, settings to sub-settings). Axis
 // follows intent + stack (forward push left, backward pop right).
-// Both endpoints are detail routes; the FAB / Header layers read the
+// Both endpoints are detail routes; the FAB layer reads the
+// orchestrator's publication directly and the Header layer reads the
 // pager store for their per-frame state.
 
 export const detailDetailResolver: Resolver = (input: ResolverInput): TransitionPlan => {
@@ -258,8 +261,9 @@ export const searchSearchResolver: Resolver = (input: ResolverInput): Transition
 // Resolver 4: {tab, detail}.
 //
 // List-to-detail enter slide and detail-to-list back slide. Axis
-// follows intent + stack. The FAB / Header react through their own
-// layers reading the pager store.
+// follows intent + stack. The FAB layer reads the orchestrator's
+// publication directly and the Header reacts through its own layer
+// reading the pager store.
 
 export const tabDetailResolver: Resolver = (input: ResolverInput): TransitionPlan => {
 	const axis = crossTagAxis(input.direction);

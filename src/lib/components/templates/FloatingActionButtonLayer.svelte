@@ -57,14 +57,11 @@
 	const FAB_HEIGHT_PX = 56;
 	const BOTTOM_CLEARANCE_PX = 16;
 
-	type FabKind = 'discussions' | 'messages';
-
 	interface FabConfig {
-		readonly kind: FabKind;
+		readonly kind: FabListKind;
 		readonly href: string;
 		readonly label: string;
 		readonly icon: string;
-		readonly tabIndex: number;
 	}
 
 	/** Resolve the current route's resting FAB config, or null when the
@@ -84,8 +81,7 @@
 				kind: resolvedKind,
 				href: kindConfig.href,
 				label: kindConfig.label(t),
-				icon: kindConfig.icon,
-				tabIndex: kindConfig.tabIndex
+				icon: kindConfig.icon
 			};
 		}
 
@@ -95,8 +91,7 @@
 				kind: attrs.kind,
 				href: kindConfig.href,
 				label: kindConfig.label(t),
-				icon: kindConfig.icon,
-				tabIndex: kindConfig.tabIndex
+				icon: kindConfig.icon
 			};
 		}
 
@@ -131,7 +126,6 @@
 					return {
 						...cfg,
 						kind: toKind,
-						tabIndex: kc.tabIndex,
 						href: kc.href,
 						label: kc.label(t),
 						icon: kc.icon
@@ -144,7 +138,18 @@
 
 	/** FAB scale: a pure function of the orchestrator's transition progress
 	 *  + FROM/TO FAB presence. At rest, visible iff the current route shows
-	 *  a FAB. */
+	 *  a FAB.
+	 *
+	 *  Boundary void-swipe (first/last tab rubber-band, where the
+	 *  orchestrator publishes `fromPathname === toPathname` and no route
+	 *  change occurs): the FAB still reads the raw published progress and
+	 *  dips along the rubber-band BY DESIGN. The FAB "reacts from the
+	 *  first pixel" rule applies uniformly to every in-flight
+	 *  publication, so a tab-to-tab swap and a boundary void-swipe both
+	 *  vary the scale from the first drag frame. The e2e
+	 *  `fab-boundary-swipe-sync` spec asserts the dip (scale delta > 0.1
+	 *  during a first/last-tab void-swipe); the FAB MUST vary along the
+	 *  boundary dip to satisfy that assertion. */
 	const scale = $derived.by(() => {
 		const pub = publication;
 		if (pub.inFlight && pub.fromPathname && pub.toPathname) {
