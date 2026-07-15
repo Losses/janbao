@@ -18,23 +18,19 @@
  * back to a URL-derived default so a deep link SSRs in the right mode without
  * waiting for hydration.
  *
- * `trackFractionalIndex` is the tab-host track's 1:1 fractional position (the
- * Family A FAB reads it to follow the slide across a drag, a re-grab, and the
- * first/last-tab rubber-band). Published by the orchestrator from
- * `trackTranslateX(plan, executor.progress)`; null on non-tab-host routes.
- *
- * The store carries ONLY the per-frame gesture signals the FAB layer, the
- * MobileTabBar, and the SearchTabBar read (`coverProgress`, `tapMorph`,
- * `backMorph`, `trackFractionalIndex`, `transitionTarget`, `familySwapScale`,
+ * The store carries the per-frame gesture signals the MobileTabBar and the
+ * SearchTabBar read, plus the Header morph signals (`coverProgress`,
+ * `tapMorph`, `backMorph`, `transitionTarget`, `scrubIconEndpoint`,
  * `replaceStateIntent`, `fractionalIndex`, `dragging`, `active`,
- * `targetIndex`). The Header's settle ease state (the post-release /
- * post-title-change crossfade) and the `searchScrubbing` flag live on
- * `NavStateMachine` (private class `$state`); the orchestrator's getters
- * are `$derived` pass-throughs of those fields via its `#publication`,
- * and the Header reads them directly off the orchestrator singleton
- * (see `NavPipelineOrchestrator.settleActive` / `.settleProgress` /
- * `.settleLatched` / `.settleDirection` / `.settleAwaitTitle` /
- * `.searchScrubbing`).
+ * `targetIndex`). The FAB layer reads the orchestrator's publication
+ * directly (not these fields). The Header's settle ease state (the
+ * post-release / post-title-change crossfade) and the `searchScrubbing`
+ * flag live on `NavStateMachine` (private class `$state`); the
+ * orchestrator's getters are `$derived` pass-throughs of those fields via
+ * its `#publication`, and the Header reads them directly off the
+ * orchestrator singleton (see `NavPipelineOrchestrator.settleActive` /
+ * `.settleProgress` / `.settleLatched` / `.settleDirection` /
+ * `.settleAwaitTitle` / `.searchScrubbing`).
  *
  * Factory: two pagers exist - the PRIMARY tab pager (NavPipelineTabHost /
  * NavPipelineHost write; Header / MobileTabBar read) and the SEARCH scope
@@ -50,33 +46,21 @@ interface PagerUpdate {
 	active: boolean;
 	backMorph: number | null;
 	targetIndex?: number | null;
-	/** The slide-progress signal the FAB layer reads to drive its scale,
-	 * published by the pipeline orchestrator as the raw slide fraction. null =
-	 * not published, so the FAB falls back to its resting fraction. Optional so
-	 * non-publishing writers (SearchScopePager) compile without touching it. */
+	/** The slide-progress signal the Header reads for its morph
+	 * derivation, published by the pipeline orchestrator as the raw slide
+	 * fraction. null = not published. Optional so non-publishing writers
+	 * (SearchScopePager) compile without touching it. */
 	coverProgress?: number | null;
 	/** tap-morph progress 0..1 (DV17): continuous morph signal consumed by the
 	 * search track/Tab group and the search-page Page-slide headroom on a tap.
 	 * null = no tap scrub in flight (rest, drag). Optional so non-publishing
 	 * writers compile without touching it. */
 	tapMorph?: number | null;
-	/** The target pathname of an in-flight pilot detail-page transition; null at
-	 * rest. Read by the FAB layer to resolve the destination's FAB family/kind
-	 * during the slide. Optional so non-pilot writers compile without touching
-	 * it. */
+	/** The target pathname of an in-flight pilot detail-page transition;
+	 * null at rest. Read by the Header to resolve the back-arrow reveal
+	 * during the slide. Optional so non-pilot writers compile without
+	 * touching it. */
 	transitionTarget?: string | null;
-	/** The tab-host track's 1:1 fractional position the Family A FAB reads to
-	 * follow the slide. Published by the orchestrator from
-	 * `trackTranslateX(plan, executor.progress)`; null on non-tab-host routes.
-	 * Optional so non-publishing writers compile without touching it. */
-	trackFractionalIndex?: number | null;
-	/** The orchestrator-driven family-swap eased FAB scale, published each
-	 * rAF tick while a route-swap family change eases on the orchestrator's
-	 * own rAF. null when no family-swap ease is in flight; the FAB layer
-	 * then falls through to its coverProgress / trackFractionalIndex-based
-	 * resting scale. Optional so non-publishing writers (SearchScopePager)
-	 * compile without touching it. */
-	familySwapScale?: number | null;
 	/** The icon-morph value at the non-search endpoint of an in-flight
 	 * root<->search / deep<->search tap scrub (0 when that endpoint is a
 	 * tab root, 1 when it is a deep page). Published once at scrub arm
@@ -93,7 +77,6 @@ interface PagerUpdate {
 type SetPagerFn = (update: PagerUpdate) => void;
 type SetTapMorphFn = (value: number | null) => void;
 type SetReplaceStateIntentFn = (value: boolean) => void;
-type SetFamilySwapScaleFn = (value: number | null) => void;
 type SetScrubIconEndpointFn = (value: number | null) => void;
 
 interface PagerStore extends PagerUpdate {
@@ -101,14 +84,11 @@ interface PagerStore extends PagerUpdate {
 	coverProgress: number | null;
 	tapMorph: number | null;
 	transitionTarget: string | null;
-	trackFractionalIndex: number | null;
-	familySwapScale: number | null;
 	scrubIconEndpoint: number | null;
 	replaceStateIntent: boolean;
 	set: SetPagerFn;
 	setTapMorph: SetTapMorphFn;
 	setReplaceStateIntent: SetReplaceStateIntentFn;
-	setFamilySwapScale: SetFamilySwapScaleFn;
 	setScrubIconEndpoint: SetScrubIconEndpointFn;
 }
 
@@ -121,8 +101,6 @@ export function createPagerStore(): PagerStore {
 	let coverProgress = $state<number | null>(null);
 	let tapMorph = $state<number | null>(null);
 	let transitionTarget = $state<string | null>(null);
-	let trackFractionalIndex = $state<number | null>(null);
-	let familySwapScale = $state<number | null>(null);
 	let scrubIconEndpoint = $state<number | null>(null);
 	let replaceStateIntent = $state(false);
 
@@ -134,20 +112,10 @@ export function createPagerStore(): PagerStore {
 		targetIndex = update.targetIndex !== undefined ? update.targetIndex : null;
 		coverProgress = update.coverProgress ?? null;
 		transitionTarget = update.transitionTarget ?? null;
-		trackFractionalIndex = update.trackFractionalIndex ?? null;
 		// tapMorph is omitted by the drag $effect's pager.set calls; preserve
 		// it so an in-flight tap scrub is not clobbered. The tap publisher
 		// writes via setTapMorph.
 		tapMorph = update.tapMorph !== undefined ? update.tapMorph : tapMorph;
-		// familySwapScale is owned exclusively by the orchestrator's
-		// family-swap ease (published via setFamilySwapScale). Preserve it
-		// across pager.set calls so resetPagerStore (fired from configure
-		// and the host's at-rest $effect) does not clear a value an
-		// in-flight ease just published. The orchestrator clears the field
-		// explicitly via setFamilySwapScale(null) when the ease completes,
-		// cancels, or tears down (releaseInputs / unmount).
-		familySwapScale =
-			update.familySwapScale !== undefined ? update.familySwapScale : familySwapScale;
 		// scrubIconEndpoint is owned exclusively by the orchestrator's
 		// tap-scrub ease (published via setScrubIconEndpoint). Preserve it
 		// across pager.set calls so resetPagerStore and the in-flight drag
@@ -165,10 +133,6 @@ export function createPagerStore(): PagerStore {
 
 	function setReplaceStateIntent(value: boolean): void {
 		replaceStateIntent = value;
-	}
-
-	function setFamilySwapScale(value: number | null): void {
-		familySwapScale = value;
 	}
 
 	function setScrubIconEndpoint(value: number | null): void {
@@ -200,12 +164,6 @@ export function createPagerStore(): PagerStore {
 		get transitionTarget() {
 			return transitionTarget;
 		},
-		get trackFractionalIndex() {
-			return trackFractionalIndex;
-		},
-		get familySwapScale() {
-			return familySwapScale;
-		},
 		get scrubIconEndpoint() {
 			return scrubIconEndpoint;
 		},
@@ -215,7 +173,6 @@ export function createPagerStore(): PagerStore {
 		set,
 		setTapMorph,
 		setReplaceStateIntent,
-		setFamilySwapScale,
 		setScrubIconEndpoint
 	};
 }

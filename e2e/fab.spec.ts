@@ -308,12 +308,15 @@ test('messages inbox shows the FAB at scale 1', async ({ page }) => {
 	expect(transform.scale).toBeCloseTo(1, 1);
 });
 
-test('activity tab has no FAB', async ({ page }) => {
+test('activity tab has no visible FAB at rest', async ({ page }) => {
 	await page.goto('/activity');
 	await waitForHydration(page);
 	await page.waitForTimeout(300);
-	const fab = await page.$('[data-testid="fab"]');
-	expect(fab, 'no FAB should render on the Activity tab').toBeNull();
+	// The atom mounts at scale 0 so it can scale in during a swipe from
+	// /activity to a FAB route (the half-mapping publishes scale > 0 in
+	// the second half of the transition). At rest the atom is invisible.
+	const transform = await readFabTransform(page);
+	expect(transform.scale, 'FAB must rest at scale 0 on the Activity tab').toBeCloseTo(0, 1);
 });
 
 // Family B / C: the atom stays mounted on an overlay or compose route, resting

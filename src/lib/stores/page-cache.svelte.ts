@@ -1,12 +1,12 @@
 // src/lib/stores/page-cache.svelte.ts
 /**
- * Unified PageCacheStore - the single authority for cached page data,
- * render snippets, and scroll positions across the mobile navigation /
- * gesture layer (per `docs/DV20-Plan.md` §7).
+ * Unified PageCacheStore - the single authority for cached page data
+ * and scroll positions across the mobile navigation / gesture layer
+ * (per `docs/DV20-Plan.md` §7).
  *
  * Consolidates four concerns into one keyed store:
  *   - per-tab list payloads       (keyed by tab root href)
- *   - thread data + render Snippet (keyed by thread pathname)
+ *   - thread data                 (keyed by thread pathname)
  *   - per-pathname scroll positions (keyed by the pathname)
  *   - per-scope search results     (keyed by `/search`, subKey = scope)
  *
@@ -14,9 +14,6 @@
  *
  *   - `data`      the page's server payload, opaque to the store.
  *                 `null` for scroll-only captures.
- *   - `snippet`   a Svelte render closure for deep pages that capture
- *                 one (e.g. the thread preview). Non-serializable; its
- *                 lifetime is bounded by the producing page's mount.
  *   - `scrollTop` the per-route scroll position, colocated with the
  *                 data so a stale scrollTop can never apply to the
  *                 wrong content (§7).

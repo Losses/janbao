@@ -29,15 +29,7 @@ export const EDGE_DEAD_ZONE = 40;
 // Deep-title crossfade (Header.svelte unified title state machine). The vertical
 // slide between outgoing/incoming titles on a drag-release or non-gesture nav.
 export const TITLE_CROSSFADE_MS = 200;
-// The pipeline's cross-route FAB family-swap ease duration. The ease
-// runs on the orchestrator's own rAF (`#startFamilySwapEase`),
-// publishing `pager.familySwapScale`; the FAB layer is a reactive
-// reader (`scale = $derived(pager.familySwapScale ?? restingScale)`),
-// with no rAF of its own. Equals the title crossfade so a discrete
-// family-swap and the Header title crossfade play as one handoff.
-export const TRACK_TRANSITION_MS = TITLE_CROSSFADE_MS;
 // Boundary void-swipe rubber-band factor. On the first/last tab a swipe toward
 // the absent neighbour moves the track at this fraction of the drag distance,
-// then snaps back on release. The orchestrator publishes trackFractionalIndex
-// so the FAB dips along with the pill.
+// then snaps back on release.
 export const BOUNDARY_RUBBER_BAND_FACTOR = 0.4;

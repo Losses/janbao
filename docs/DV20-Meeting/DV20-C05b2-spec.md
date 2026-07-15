@@ -26,7 +26,7 @@ Roll the new pipeline out to every remaining route that mounts `GesturePageLayou
 ## End state
 
 1. Every route that was on `GesturePageLayout` or `MobileTabPager` now mounts `NavPipelineHost` (or a pipeline tab host for the three tab roots). The new pipeline is the SOLE transition mechanism for every mobile route that was on those two hosts. Routes still rendered only by `DualColumnLayout` (e.g. the paginated discussions list `/discussions/pN`, whose tab-switch gesture DualColumnLayout's `detectSwipe` + CSS transition drives) are out of scope until `DualColumnLayout` is deleted in 5b3; see Known condition #2. Every migrated transition (back-swipe, tab-click, cross-tab, deep-link landing, forward enter, tab swipe) is driven by one progress through the executor's rAF.
-2. The FAB atom carries NO CSS transition. The FAB scale is driven either by the orchestrator's `coverProgress` (during a within-route transition) or by the orchestrator's family-swap rAF publishing `pager.familySwapScale`, which the FAB layer reads reactively (during a cross-route family swap). No `setTimeout`, no `discreteNavInFlight`, no `.fab-transition` CSS class.
+2. The FAB atom carries NO CSS transition. The FAB scale is `fabScale(progress, fromHasFab, toHasFab)` driven by the same single transition progress that drives the page-track slide and the FROM / TO `RouteData.fab` booleans; the FAB exits in the first half of the transition if FROM has a FAB and enters in the second half if TO has a FAB. No `familySwapScale`, no `#lastRenderedScale`, no separate family-swap rAF, no `setTimeout`, no `discreteNavInFlight`, no `.fab-transition` CSS class.
 3. The `NavStateMachine` is the sole authority (§13.5). Consumers read its phase + plan. The orchestrator does not hold a private `#publication`.
 4. `MobileTabPager` is no longer mounted. The three tab roots share a persistent pipeline host in the `(tabs)` layout. The `LoadingChip` cross-tab overlay is removed everywhere.
 5. `GesturePageLayout` and `MobileTabPager` are deleted (5b2; both were dead with zero imports once every route mounted the pipeline host). `DualColumnLayout`'s `swipeDisabled` gate simplifies (always true on pipeline routes).
@@ -125,13 +125,13 @@ load) owns the animation layer for the app's mobile lifetime:
    frame publishes at-rest instead of the prior route's in-flight state. The
    mobile -> desktop flip and the app exit call the full `unmount` teardown.
 4. **FAB layer is a reactive reader.** The FAB layer derives its scale from
-   `pager.familySwapScale ?? restingScale` (restingScale is itself derived from
-   `pager.coverProgress`, `pager.fractionalIndex`, `pager.trackFractionalIndex`
-   (the primary Family A input), `pager.transitionTarget` (gates the deep-page
-   scale-out), and the URL-derived family). It runs no rAF of its own and
-   performs no DOM read-back. The orchestrator tracks `#lastRenderedScale`
-   itself across `releaseInputs` so the family-swap ease anchors at the visible
-   pre-swap scale.
+   `fabScale(progress, fromHasFab, toHasFab)` where `progress` is the same
+   single transition signal that drives the page-track slide and
+   `fromHasFab` / `toHasFab` are the FROM / TO `RouteData.fab` booleans. The
+   FAB exits in the first half of the transition if FROM has a FAB and
+   enters in the second half if TO has a FAB. It runs no rAF of its own
+   and performs no DOM read-back; there is no `familySwapScale`, no
+   `#lastRenderedScale`, and no separate family-swap rAF.
 5. **Header organism is a reactive reader.** The Header derives its morph,
    title crossfade, search-track / search-button / tab-bar transforms, and
    settle/tap-scrub state from manager-published signals
@@ -161,14 +161,13 @@ load) owns the animation layer for the app's mobile lifetime:
   orchestrator's rAF channels cannot be torn down across a route swap while
   the persistent Header is mid-settle. Reverted to the `releaseInputs`
   definition that preserves the executor / driver / rAF.
-- **Step 2 - orchestrator owns the FAB family-swap ease.** The family-swap
-  rAF moved into the orchestrator (`#startFamilySwapEase` /
-  `#stopFamilySwapEase` / `#publishFamilySwapScale`), armed on a family change
-  detected at `configure` time. The orchestrator publishes
-  `pager.familySwapScale` each tick; the FAB layer reads it reactively. The
-  orchestrator's `#lastRenderedScale` (captured in `releaseInputs` before the
-  inputs clear) is the anchor, so the DOM read-back the FAB layer used to do
-  is gone.
+- **Step 2 - FAB scale driven by the single transition progress.** The FAB
+  scale is `fabScale(progress, fromHasFab, toHasFab)` driven by the same
+  single transition progress as the page-track slide and the FROM / TO
+  `RouteData.fab` booleans; the FAB exits in the first half if FROM has a
+  FAB and enters in the second half if TO has a FAB. No separate
+  family-swap rAF, no `familySwapScale`, no `#lastRenderedScale`, no DOM
+  read-back.
 - **Step 3 - orchestrator owns the Header settle + tap-scrub eases.** The
   settle rAF (`settleActive` / `settleProgress` / `settleLatched` /
   `settleDirection` / `#settleAwaitTitle`) and the tap-scrub rAF
@@ -208,10 +207,12 @@ motion, decided solely by the orchestrator's phase. CSS transitions and
   rAF (unchanged). CSS-transition-free.
 - **FAB scale during a within-route transition:** owned by the executor's rAF
   via `coverProgress` / `fractionalIndex` (unchanged). CSS-transition-free.
-- **FAB scale during a cross-route family swap:** owned by the orchestrator's
-  family-swap rAF via `pager.familySwapScale`. CSS-transition-free; no
-  DOM read-back (the FAB layer's `readRenderedFabScale` was deleted along with
-  the FAB's own rAF).
+- **FAB scale during a cross-route family swap:** driven by the same single
+  transition progress as the page-track slide via
+  `fabScale(progress, fromHasFab, toHasFab)` (the FAB exits in the first
+  half if FROM has a FAB and enters in the second half if TO has a FAB).
+  CSS-transition-free; no separate family-swap rAF, no `familySwapScale`,
+  no `#lastRenderedScale`, no DOM read-back.
 - **Header morph / title crossfade during a gesture drag / commit:** owned
   by the executor's rAF via `pager.backMorph` / `pager.tapMorph`. The morph
   runs DURING the slide (the gesture's coverProgress drives the back-arrow

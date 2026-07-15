@@ -84,16 +84,14 @@ import {
 	type TransitionDirection
 } from '$lib/utils/nav-resolvers';
 import { getRouteData } from '$lib/utils/route-data';
-import { getFabRouteAttributes, FAB_KIND_CONFIGS, MOBILE_TABS } from '$lib/utils/route-config';
+import { MOBILE_TABS } from '$lib/utils/route-config';
 import { getCurrentTabIndex } from '$lib/utils/route-config';
-import { scaleFromFraction, tabFraction, type FabFamily } from '$lib/utils/fab-scale';
 import { hopForHref, isTabRootPath, previousEntryPathname } from '$lib/utils/history-nav';
 import { isNavPipelineRoute } from '$lib/utils/nav-pipeline-gate';
 import {
 	HEADER_MORPH_THRESHOLD,
 	PILL_EXPANSION_THRESHOLD,
 	SWIPE_COMMIT,
-	TRACK_TRANSITION_MS,
 	BOUNDARY_RUBBER_BAND_FACTOR,
 	TITLE_CROSSFADE_MS
 } from '$lib/utils/gesture-constants';
@@ -128,7 +126,8 @@ interface PendingGestureTransition {
 	readonly startProgress: number;
 	/** The raw drag fraction at gesture start (the commit's last
 	 *  published raw for a re-grab, 0 for from-rest). The live-drag's
-	 *  coverProgress starts from here so the FAB doesn't jump. */
+	 *  published progress starts from here so the slide (and the FAB
+	 *  half-mapping that reads it) does not jump on a re-grab. */
 	readonly rawStart: number;
 	/** The gesture's transition direction. 'backward' = rightward
 	 *  (toward the previous tab / back-target); 'forward' = leftward
@@ -422,70 +421,6 @@ export class NavPipelineOrchestrator {
 	 *  destination, not the at-rest `mountInputs.toTabIndex`. Cleared on
 	 *  land / unmount. */
 	#gestureToTabIndex: number | null = null;
-	/** The rAF handle for the route-swap family-change ease. The
-	 *  orchestrator owns the FAB family-swap motion on this rAF (a
-	 *  distinct loop from the executor's gesture rAF, which is
-	 *  gesture-only). Started by `configure` on a real family change,
-	 *  cancelled on completion, on a higher-priority driver taking over
-	 *  (live drag / pipeline transition to a list family), and on
-	 *  `releaseInputs` / `unmount`. */
-	#familySwapRafId: number | undefined;
-	/** The eased family-swap scale's starting value (the FAB's
-	 *  pre-swap rendered scale, captured before the route swap). */
-	#familySwapFromScale = 0;
-	/** The eased family-swap scale's target (the destination family's
-	 *  resting scale, captured on the first tick once the new
-	 *  mountInputs have settled). */
-	#familySwapToScale = 0;
-	/** True after the first tick has captured `#familySwapToScale`. The
-	 *  clock starts on that first tick so the full TRACK_TRANSITION_MS
-	 *  curve plays regardless of the gap between `configure` arming the
-	 *  ease and the first rAF. */
-	#familySwapToScaleCaptured = false;
-	/** The wall-clock start time of the ease (set on the first tick). */
-	#familySwapStartTs = 0;
-	/** The last FAB scale value the orchestrator published (either the
-	 *  eased value while a family-swap ease runs, or the resting-scale
-	 *  projection of the orchestrator's published coverProgress /
-	 *  trackFractionalIndex / fractionalIndex at the end of every
-	 *  `#republishToPager`). Read by `configure` to anchor the next
-	 *  family-swap ease at the visible pre-swap scale, immune to the
-	 *  reactive race where the destination route's at-rest publication
-	 *  snaps the FAB to the new family's resting scale before the ease's
-	 *  first tick. Survives `releaseInputs` (the route-swap gap between
-	 *  a host's destroy and the next host's configure) since the
-	 *  orchestrator singleton persists. */
-	#lastRenderedScale = 0;
-	/** The FAB family of the route the orchestrator was last configured
-	 *  for. Compared on each `configure` to detect a route-swap family
-	 *  change (the trigger for the family-swap ease). Null before the
-	 *  first configure so the initial mount skips the ease. */
-	#previousFamily: FabFamily | null = null;
-	/** The foregroundFraction seed captured when a gesture's
-	 *  `#cancelAllAnimationEases` interrupts a running family-swap ease.
-	 *  Inverted from the eased scale so the FAB's first post-interrupt
-	 *  frame matches the eased scale, then advances toward 1 as the slide
-	 *  reveals the destination. Two formulas, selected by the current
-	 *  host's family: Family B / C (source family is overlay or compose)
-	 *  uses `seed = (easedScale + 1) / 2` (the inverse of
-	 *  `scaleFromFraction(f) = clamp(2f - 1, 0, 1)`; the FAB reads
-	 *  `foregroundFraction = coverProgress` directly). Family A (source
-	 *  family is 'list') uses `seed = (1 - easedScale) / 2` because the
-	 *  FAB layer's gate inverts for a list-source gesture targeting an
-	 *  overlay / deep route (`foregroundFraction = 1 - coverProgress`),
-	 *  so the seed must satisfy `1 - seed = (easedScale + 1) / 2`. While
-	 *  non-null, `#republishToPager` publishes a SEEDED
-	 *  `coverProgress = seed + (1 - seed) * rawDragFraction` so the FAB
-	 *  scales continuously from the eased value (at rawDragFraction 0) up
-	 *  to 1 (at rawDragFraction 1) as the slide reveals the destination.
-	 *  `pager.familySwapScale` is cleared at capture time so the FAB reads
-	 *  its resting formula over the seeded foregroundFraction.
-	 *  `#lastRenderedScale` stays in sync with the visible scale via the
-	 *  seeded publication. `#landAtRest` (cancel case) re-arms the
-	 *  family-swap ease from `#lastRenderedScale`; `releaseInputs` (commit
-	 *  case) captures `#lastRenderedScale` for the next configure's ease
-	 *  anchor. Both clear the seed. */
-	#fabDragSeedFraction: number | null = null;
 
 	// ---------------------------------------------------------------------
 	// Settle ease state. The orchestrator owns the Header's post-release /
@@ -626,11 +561,11 @@ export class NavPipelineOrchestrator {
 		this.#clock = clock;
 	}
 
-	/** Reactive publication for downstream consumers. The host reads
-	 *  this in a `$effect` and writes the pager store so the FAB
-	 *  layer (Family B reader of `coverProgress`) and the Header
-	 *  layer (reader of `backMorph`) react to the orchestrator's
-	 *  state. */
+	/** Reactive publication for downstream consumers. The FAB layer reads
+	 *  this directly (`progress` + FROM/TO FAB presence drive its
+	 *  half-mapping scale); the host reads this in a `$effect` and writes
+	 *  the pager store so the Header layer (reader of `backMorph` /
+	 *  `coverProgress`) reacts to the orchestrator's state. */
 	get publication(): OrchestratorPublication {
 		return this.#publication;
 	}
@@ -720,8 +655,8 @@ export class NavPipelineOrchestrator {
 		// rAF, clears `activePlan`, and resets the state record to
 		// `initialExecutorState()` - no side effects outside the
 		// executor - so it is safe to call here on every configure.
-		// The family-swap / settle / tap-scrub eases live on the
-		// orchestrator (not the executor) and are unaffected.
+		// The settle / tap-scrub eases live on the orchestrator (not the
+		// executor) and are unaffected.
 		this.#executor.onLand();
 		// Reset the state machine (the singleton authority) to at-rest on
 		// this route's tag so a stale phase from the prior host does not
@@ -733,12 +668,6 @@ export class NavPipelineOrchestrator {
 		// Publish the at-rest pager state now that #mountInputs is set,
 		// independent of the host reset $effect's timing.
 		this.resetPagerStore();
-		// Detect a route-swap family change (the trigger for the family-swap
-		// ease). Computed AFTER #mountInputs + resetPagerStore so the new
-		// family is resolved against the destination route's pathname and
-		// the pager store reflects the at-rest publication the FAB layer
-		// reads. Skipped on the first configure (#previousFamily === null).
-		this.#detectFamilyChange(inputs.fromPathname);
 		this.#mounted = true;
 		this.#lifecycle.activate();
 	}
@@ -750,19 +679,6 @@ export class NavPipelineOrchestrator {
 	 *  `#mountInputs` becomes null and `#mounted` becomes false (the
 	 *  guard in `#publication`). */
 	releaseInputs(): void {
-		// Capture the FAB's current scale before clearing the inputs so the
-		// next configure's family-swap ease anchors at the visible pre-swap
-		// scale (the orchestrator is the sole owner of this tracking).
-		// During a seeded drag (a gesture that interrupted a family-swap
-		// ease), `#lastRenderedScale` is kept in sync with the visible scale
-		// by the seeded publication in `#republishToPager`, so the resting
-		// formula re-derives the same value here. Skipped while a
-		// (non-interrupted) family-swap ease runs (its tick maintains
-		// #lastRenderedScale at the eased value, which IS the visible scale).
-		if (this.#familySwapRafId === undefined) {
-			this.#lastRenderedScale = this.#computeFabRestingScale();
-		}
-		this.#fabDragSeedFraction = null;
 		this.#mountInputs = null;
 		this.#mounted = false;
 		this.#pendingGesture = null;
@@ -770,13 +686,6 @@ export class NavPipelineOrchestrator {
 		this.#navDispatchInFlight = false;
 		this.#dispatchTarget = null;
 		this.#gestureToTabIndex = null;
-		// Cancel the family-swap ease: the route swap that releaseInputs
-		// tears down for is either the source of the family change (the
-		// new host's configure will re-arm a fresh ease anchored at
-		// #lastRenderedScale) or a route-away (no further FAB motion
-		// needed). #lastRenderedScale + #previousFamily survive so the
-		// next configure can detect the change.
-		this.#stopFamilySwapEase();
 		// Do NOT cancel the settle / tap-scrub eases here: the Header
 		// persists across the route swap, and a settle in flight at the
 		// host's destroy (a commit settle awaiting its navigation landing)
@@ -786,7 +695,7 @@ export class NavPipelineOrchestrator {
 		// flip (unmount); the afterNavigate hook clears the awaitTitle
 		// once the navigation lands.
 		// Clear the in-flight pager state so a stale fractionalIndex /
-		// transitionTarget does not drive the FAB on the destination
+		// transitionTarget does not drive the Header on the destination
 		// route before that route's configure publishes its own state.
 		getMobilePagerStore().set({
 			fractionalIndex: 0,
@@ -861,8 +770,9 @@ export class NavPipelineOrchestrator {
 				restingTranslate: 0
 			},
 			// During the enter, coverProgress ramps 0 to 1 (the executor's
-			// commit rAF publishes it); the FAB layer's foregroundFraction
-			// gate hides the FAB (the destination is a non-list family). The
+			// commit rAF publishes it). The FAB layer reads the
+			// orchestrator's publication directly (progress + FROM/TO FAB
+			// presence) to drive its scale via the half-mapping; the
 			// centerTab branch's backMorph = null drives the Header.
 			progressDirection: 0,
 			commitPhysics: this.#driver?.prefersReducedMotion() ? 'snap' : 'momentum'
@@ -994,18 +904,6 @@ export class NavPipelineOrchestrator {
 		this.#liveDragging = false;
 		this.#prevWasDrag = false;
 		this.#gestureToTabIndex = null;
-		// Tear down the family-swap ease + the family-tracking fields so
-		// the next mount (a desktop -> mobile flip re-entering mobile)
-		// sees no stale ease and treats its first configure as a
-		// first-mount (#previousFamily === null -> skip the ease).
-		this.#stopFamilySwapEase();
-		this.#familySwapFromScale = 0;
-		this.#familySwapToScale = 0;
-		this.#familySwapToScaleCaptured = false;
-		this.#familySwapStartTs = 0;
-		this.#lastRenderedScale = 0;
-		this.#previousFamily = null;
-		this.#fabDragSeedFraction = null;
 		// Tear down the settle + tap-scrub eases and the header-state
 		// watchers so the next mount (a desktop -> mobile flip) starts
 		// clean. The first configure after the re-mount re-installs the
@@ -1034,9 +932,9 @@ export class NavPipelineOrchestrator {
 		this.#lifecycle.deactivate();
 		this.#lifecycle.unmount();
 		// Clear the in-flight pager state so a stale fractionalIndex /
-		// transitionTarget does not drive the FAB on the destination route
-		// before that route publishes its own state (mirrors the at-rest
-		// pager publication each host sets on configure).
+		// transitionTarget does not drive the Header on the destination
+		// route before that route publishes its own state (mirrors the
+		// at-rest pager publication each host sets on configure).
 		getMobilePagerStore().set({
 			fractionalIndex: 0,
 			dragging: false,
@@ -1651,22 +1549,6 @@ export class NavPipelineOrchestrator {
 		this.#liveDragging = false;
 		this.#gestureToTabIndex = null;
 		this.#executor?.onLand();
-		// Family-swap seed: a gesture that interrupted a mid-ease
-		// family-swap set #fabDragSeedFraction. On a cancel landing (no
-		// route swap, no configure), re-arm the ease from
-		// #lastRenderedScale (the seeded publication kept it at the
-		// visible scale, which at rest after the cancel snap is the eased
-		// value) so the FAB continues to the destination family's resting
-		// scale. On a commit landing, releaseInputs already captured
-		// #lastRenderedScale for the next configure's
-		// #detectFamilyChange; #familySwapRafId being defined means the
-		// re-arm happened, and this branch is a no-op. Same-family commit
-		// lands the FAB at the resting formula (no jump to zero: the
-		// gesture's slide already drove the visual).
-		if (this.#familySwapRafId === undefined && this.#fabDragSeedFraction !== null) {
-			this.#fabDragSeedFraction = null;
-			this.#startFamilySwapEase(this.#lastRenderedScale);
-		}
 		// Clear the replaceState side-channel: a cancel-after-regrab returns
 		// to rest WITHOUT dispatching (no navigation lands, so
 		// onSvelteKitAfterNavigate never fires), so the intent Header.onBack
@@ -1722,6 +1604,23 @@ export class NavPipelineOrchestrator {
 		if (this.#dispatchTarget !== null && to !== null && to + toSearch === this.#dispatchTarget) {
 			return false;
 		}
+		// Orphan-prevention: clear a queued discrete nav (the
+		// finish-then-new policy's queue) on any EXTERNAL nav. By this
+		// point the nav has already passed both dispatch-reentry checks
+		// above (`#navDispatchInFlight` and the `#dispatchTarget` match),
+		// so it is not the orchestrator's own dispatch. The replay goto
+		// fired from `#landAtRest` re-enters here with
+		// `#navDispatchInFlight === true` and returns above, so the
+		// legitimate finish-then-new replay is never cleared here.
+		// For the legitimate case: `#landAtRest` already consumed the
+		// queue (fired the replay goto) before any next external nav
+		// arrives, so this clears null (no-op).
+		// For the orphan case: the commit's goto was cancelled by a
+		// competing external nav (session-timeout redirect, user URL,
+		// app-level goto) before it landed, so `#landAtRest` never ran
+		// and the queue persisted. This clear prevents the next
+		// pipeline route's `#landAtRest` from firing a phantom redirect.
+		this.#queuedDiscreteNav = null;
 		// Only own transitions FROM the host route (a tab-click exit or
 		// a back-swipe equivalent). Transitions TO the host route
 		// (deep-link landings) fall through; the afterNavigate hook
@@ -1770,7 +1669,7 @@ export class NavPipelineOrchestrator {
 			navigation.cancel();
 			return true;
 		}
-		// Cancel any running settle / tap-scrub / family-swap ease so a
+		// Cancel any running settle / tap-scrub ease so a
 		// tab-click or deep-to-deep nav arriving while a settle is still
 		// running does not leave that settle's rAF ticking
 		// underneath the new slide. Matches `#beginGesture`'s gesture-path
@@ -1931,256 +1830,6 @@ export class NavPipelineOrchestrator {
 		// desync the resolver's pill interpolation.
 		if (!isTabRootPath(pathname)) return -1;
 		return MOBILE_TABS.findIndex((tab) => tab.href === pathname);
-	}
-
-	// -----------------------------------------------------------------------
-	// Route-swap family-change ease (the FAB family-swap motion).
-
-	/** Compute the FAB family of `pathname`, or null when the route does
-	 *  not mount a FAB atom directly. */
-	#familyOf(pathname: string): FabFamily | null {
-		return getFabRouteAttributes(pathname)?.family ?? null;
-	}
-
-	/** Resolve the destination's FAB kind when an in-flight pipeline
-	 *  transition targets a list-family route, mirroring the FAB layer's
-	 *  `pilotTransitionListKind` derivation. Returns null at rest or when
-	 *  the in-flight target's family is not 'list'. Read by the
-	 *  family-swap ease's per-tick gate so a pipeline transition to a
-	 *  list family (driven by `trackFractionalIndex`) cancels the ease
-	 *  the same way a live drag does. */
-	#pilotTransitionListKind(): 'discussions' | 'messages' | null {
-		const target = this.#publication.toPathname;
-		if (target === null) return null;
-		const attrs = getFabRouteAttributes(target);
-		if (attrs === null || attrs.family !== 'list') return null;
-		if (attrs.kind === 'discussions') return 'discussions';
-		if (attrs.kind === 'messages') return 'messages';
-		return null;
-	}
-
-	/** Detect a family change between the route stored in
-	 *  `#previousFamily` and the route now configuring, and start the
-	 *  family-swap ease on a real change. No-op on the first configure
-	 *  (#previousFamily === null) and on a same-family re-configure (a
-	 *  tab swap within the list family). Reads #lastRenderedScale (the
-	 *  visible pre-swap scale) as the ease's anchor so the trajectory is
-	 *  continuous with the pre-swap render regardless of the at-rest
-	 *  pager publication's timing. */
-	#detectFamilyChange(newPathname: string): void {
-		const newFamily = this.#familyOf(newPathname);
-		const prev = this.#previousFamily;
-		this.#previousFamily = newFamily;
-		if (prev === null) return;
-		if (prev === newFamily) return;
-		this.#startFamilySwapEase(this.#lastRenderedScale);
-	}
-
-	/** Start the family-swap ease from `fromScale` to the destination
-	 *  family's resting scale (captured on the first tick from
-	 *  `#computeFabRestingScale`). Cancels any in-flight ease first (a
-	 *  second family swap mid-ease); the caller passes the current
-	 *  visible scale as `fromScale` so the trajectory stays continuous.
-	 *  Pins the published `familySwapScale` to `fromScale` immediately
-	 *  so the swap frame does not snap before the first tick. The ease
-	 *  runs on the orchestrator's own rAF (distinct from the executor's
-	 *  gesture rAF); one rAF owner per consumer of the FAB scale's
-	 *  motion. Reduced-motion snaps (no rAF integration). */
-	#startFamilySwapEase(fromScale: number): void {
-		if (!browser) return;
-		// Reduced-motion: drop familySwapScale so the FAB falls through to
-		// the destination family's resting scale immediately. No rAF.
-		if (this.#driver?.prefersReducedMotion() ?? false) {
-			this.#stopFamilySwapEase();
-			return;
-		}
-		if (this.#familySwapRafId !== undefined) {
-			cancelAnimationFrame(this.#familySwapRafId);
-		}
-		this.#familySwapFromScale = fromScale;
-		this.#familySwapToScale = fromScale;
-		this.#familySwapToScaleCaptured = false;
-		// The clock starts on the FIRST tick, not here: configure can run
-		// during a SvelteKit navigation whose DOM work delays the first rAF
-		// by many frames. Starting the clock here would make the first
-		// tick compute a large elapsed `u` and skip the early-ease scale
-		// range. Pinning familySwapScale to fromScale holds the FAB at the
-		// pre-swap scale during that gap, then the ease runs the full curve
-		// from the first real frame.
-		this.#familySwapStartTs = 0;
-		this.#publishFamilySwapScale(fromScale);
-		this.#lastRenderedScale = fromScale;
-		const tick = (): void => {
-			// A higher-priority driver took over mid-ease: a live drag
-			// (coverProgress drives the FAB) or a pipeline transition to a
-			// list family (trackFractionalIndex drives the FAB). Hand the
-			// scale back to the live / track signal.
-			if (this.#liveDragging || this.#pilotTransitionListKind() !== null) {
-				this.#stopFamilySwapEase();
-				return;
-			}
-			const now = performance.now();
-			if (!this.#familySwapToScaleCaptured) {
-				// By the first tick the new mountInputs have settled and
-				// #computeFabRestingScale reads the destination family's
-				// resting publication; capture it as the ease target once
-				// and start the clock on this frame so the full
-				// TRACK_TRANSITION_MS curve plays.
-				this.#familySwapToScale = this.#computeFabRestingScale();
-				this.#familySwapToScaleCaptured = true;
-				this.#familySwapStartTs = now;
-			}
-			const u = Math.min((now - this.#familySwapStartTs) / TRACK_TRANSITION_MS, 1);
-			const eased = 2 * u - u * u;
-			const scale =
-				this.#familySwapFromScale + (this.#familySwapToScale - this.#familySwapFromScale) * eased;
-			this.#publishFamilySwapScale(scale);
-			this.#lastRenderedScale = scale;
-			if (u >= 1) {
-				// The ease can reach u=1 while a parallel pipeline slide is
-				// still in flight (e.g. a forward-enter whose slide duration
-				// matches TRACK_TRANSITION_MS but whose rAF started one
-				// frame later). Hold at the destination scale until the
-				// slide rests (coverProgress returns to 0 via the host's
-				// at-rest $effect) so the resting formula's transient
-				// mid-slide value never becomes the published scale for
-				// that gap frame. A family swap with no parallel slide
-				// has coverProgress 0 throughout, so it clears at u=1.
-				if (getMobilePagerStore().coverProgress !== 0) {
-					this.#publishFamilySwapScale(this.#familySwapToScale);
-					this.#lastRenderedScale = this.#familySwapToScale;
-					this.#familySwapRafId = requestAnimationFrame(tick);
-					return;
-				}
-				this.#publishFamilySwapScale(null);
-				this.#familySwapRafId = undefined;
-				return;
-			}
-			this.#familySwapRafId = requestAnimationFrame(tick);
-		};
-		this.#familySwapRafId = requestAnimationFrame(tick);
-	}
-
-	/** Cancel the family-swap ease and hand the published FAB scale back
-	 *  to the resting / live formula. Idempotent. */
-	#stopFamilySwapEase(): void {
-		if (this.#familySwapRafId !== undefined) {
-			cancelAnimationFrame(this.#familySwapRafId);
-			this.#familySwapRafId = undefined;
-		}
-		this.#publishFamilySwapScale(null);
-	}
-
-	/** Publish `value` (or clear it) to the pager store's
-	 *  `familySwapScale` field. The FAB layer reads this in precedence
-	 *  over its resting-scale formula. */
-	#publishFamilySwapScale(value: number | null): void {
-		getMobilePagerStore().setFamilySwapScale(value);
-	}
-
-	/** Compute the FAB's resting scale from the orchestrator's currently
-	 *  published signals + the active route's FAB family, mirroring the
-	 *  FAB layer's `foregroundFraction` -> `scaleFromFraction` pipeline.
-	 *  Used to capture the ease target on the first tick (against the
-	 *  destination route's at-rest publication) and to track
-	 *  `#lastRenderedScale` after every `#republishToPager` (against the
-	 *  in-flight publication) so the next family-swap ease anchors at
-	 *  the visible pre-swap scale.
-	 *
-	 *  The dynamic kind (/activity, resolved from the gesture source tab)
-	 *  resolves its FAB kind from the live fractional index, matching
-	 *  the FAB layer's dynamic branch: at rest on /activity the fractional
-	 *  index is 1 (activity's tab position) and no FAB renders, so the
-	 *  scale is 0; off-rest (a drag in flight) the index dips toward 0
-	 *  (discussions) or rises toward 2 (messages), and the scale follows
-	 *  that list FAB. */
-	#computeFabRestingScale(): number {
-		const inputs = this.#mountInputs;
-		if (inputs === null) return 0;
-		const attrs = getFabRouteAttributes(inputs.fromPathname);
-		if (attrs === null) return 0;
-		const family = attrs.family;
-		const pager = getMobilePagerStore();
-		// Match the FAB layer's foregroundFraction gate exactly: a pipeline
-		// transition whose destination shows no resting FAB scales the FAB
-		// OUT. Two cases: (1) non-tab host (trackFractionalIndex is null)
-		// targeting a non-list destination - source family is overlay/compose
-		// (resting scale 0), direct return 0; (2) tab host targeting a
-		// non-tab destination (backward-to-deep-page) - when the source
-		// route's tab matches the FAB's tab (resting scale 1, e.g. / or
-		// /messages/inbox), ease out via `1 - coverProgress` so the scale
-		// ramps 1 -> 0 over the first half of the slide (no jump at the
-		// gate's first firing); when the source route shows no FAB at rest
-		// (the dynamic kind at /activity's tab position 1, resting scale 0),
-		// return 0 so the FAB stays hidden. Tab-to-tab on the tab host
-		// passes through to the family === 'list' branch below.
-		const transitionTarget = this.#publication.toPathname;
-		if (
-			transitionTarget !== null &&
-			this.#pilotTransitionListKind() === null &&
-			(pager.trackFractionalIndex === null || !isTabRootPath(transitionTarget))
-		) {
-			if (family === 'list') {
-				// Mirror the FAB layer's source-rest check
-				// (`tabFraction(sourceTab, cfg.tabIndex) === 0`). The
-				// source FAB's tab index resolves via #listFabTabIndex;
-				// null means the source route shows no FAB at rest (e.g.
-				// /activity's dynamic kind), in which case the FAB layer
-				// reads the retained config and tabFraction evaluates to 0
-				// anyway. Uses inputs.fromTabIndex (stable at configure
-				// time) rather than the live track fractional index (which
-				// moves during the slide) so the check holds across every
-				// frame.
-				const sourceFabTabIndex = this.#listFabTabIndex(attrs.kind, pager);
-				if (
-					sourceFabTabIndex === null ||
-					tabFraction(inputs.fromTabIndex, sourceFabTabIndex) === 0
-				) {
-					return 0;
-				}
-				return scaleFromFraction(1 - (pager.coverProgress ?? 0));
-			}
-			return 0;
-		}
-		if (family === 'list') {
-			const fabTabIndex = this.#listFabTabIndex(attrs.kind, pager);
-			if (fabTabIndex === null) return 0;
-			const trackFrac = pager.trackFractionalIndex;
-			if (trackFrac !== null) {
-				return scaleFromFraction(tabFraction(trackFrac, fabTabIndex));
-			}
-			const restActiveTab = pager.active ? pager.fractionalIndex : inputs.fromTabIndex;
-			return scaleFromFraction(tabFraction(restActiveTab, fabTabIndex));
-		}
-		return scaleFromFraction(pager.coverProgress ?? 0);
-	}
-
-	/** Resolve the FAB list-kind's tab index for `kind`. Returns null
-	 *  when no FAB renders at rest (the dynamic kind on /activity at the
-	 *  resting index, matching the FAB layer's dynamic branch). */
-	#listFabTabIndex(
-		kind: 'discussions' | 'messages' | 'dynamic' | 'deep' | null,
-		pager: ReturnType<typeof getMobilePagerStore>
-	): number | null {
-		if (kind === 'discussions') return FAB_KIND_CONFIGS.discussions.tabIndex;
-		if (kind === 'messages') return FAB_KIND_CONFIGS.messages.tabIndex;
-		if (kind === 'dynamic') {
-			// /activity resolves its FAB kind from the gesture source tab.
-			// At rest the fractional index is 1 (activity's tab position);
-			// when the index is exactly 1 no FAB renders via the dynamic
-			// branch. Off-rest (a drag in flight) the index dips toward 0
-			// (discussions) or rises toward 2 (messages).
-			const trackFrac = pager.trackFractionalIndex;
-			const sliding = trackFrac !== null && Math.abs(trackFrac - Math.round(trackFrac)) > 0.01;
-			const index = sliding && trackFrac !== null ? trackFrac : pager.fractionalIndex;
-			if (pager.active && Math.abs(index - 1) > 0.01) {
-				return index < 1
-					? FAB_KIND_CONFIGS.discussions.tabIndex
-					: FAB_KIND_CONFIGS.messages.tabIndex;
-			}
-			return null;
-		}
-		return null;
 	}
 
 	// -----------------------------------------------------------------------
@@ -2454,51 +2103,16 @@ export class NavPipelineOrchestrator {
 	}
 
 	/** Centralized interruption: cancel every running animation ease
-	 *  (settle + tap-scrub + family-swap) so a new gesture owns the
-	 *  morph from the current visual position with no competing rAF
-	 *  underneath. Called from `#beginGesture` on every re-grab
-	 *  (from-rest or mid-transition). The Header's `notifyHeaderState`
-	 *  reactive watcher for `pager.dragging` is a safety net for edge
-	 *  cases where the gesture begins outside the orchestrator's pointer
-	 *  path; this method is the primary cancellation point.
-	 *
-	 *  The family-swap rAF is cancelled and `pager.familySwapScale` is
-	 *  cleared: the eased value is inverted into `#fabDragSeedFraction`
-	 *  so `#republishToPager` seeds the FAB's foregroundFraction from the
-	 *  eased value, letting the FAB scale continuously toward 1 as the
-	 *  slide reveals the destination. `#landAtRest` (cancel) re-arms the
-	 *  ease from `#lastRenderedScale`; `releaseInputs` (commit) captures
-	 *  `#lastRenderedScale` for the next configure. Both clear the seed. */
+	 *  (settle + tap-scrub) so a new gesture owns the morph from the
+	 *  current visual position with no competing rAF underneath. Called
+	 *  from `#beginGesture` on every re-grab (from-rest or
+	 *  mid-transition). The Header's `notifyHeaderState` reactive watcher
+	 *  for `pager.dragging` is a safety net for edge cases where the
+	 *  gesture begins outside the orchestrator's pointer path; this
+	 *  method is the primary cancellation point. */
 	#cancelAllAnimationEases(): void {
 		this.#endSettleEase();
 		this.#finishTapScrubEase();
-		if (this.#familySwapRafId !== undefined) {
-			cancelAnimationFrame(this.#familySwapRafId);
-			this.#familySwapRafId = undefined;
-			const easedScale = this.#lastRenderedScale;
-			// The seed must produce a `coverProgress` whose FAB-layer
-			// reading equals the eased scale at the moment of
-			// interruption. Family B / C (source family is overlay or
-			// compose) reads `foregroundFraction = coverProgress`
-			// directly, so the inverse of
-			// `scaleFromFraction(f) = clamp(2f - 1, 0, 1)` gives
-			// `seed = (easedScale + 1) / 2`. Family A (source family is
-			// 'list') inverts the FAB layer's gate for a gesture whose
-			// target is an overlay / deep page
-			// (`foregroundFraction = 1 - coverProgress`), so the seed
-			// must satisfy `1 - seed = (easedScale + 1) / 2`, i.e.
-			// `seed = (1 - easedScale) / 2`. The route-swap family
-			// change that armed this ease moved the family from a
-			// non-list route to the current host; when the current
-			// host's family is 'list' the gesture's back-target is the
-			// non-list previous route and the FAB gate will invert, so
-			// pick the list-source formula.
-			const inputs = this.#mountInputs;
-			const sourceFamily = inputs !== null ? this.#familyOf(inputs.fromPathname) : null;
-			this.#fabDragSeedFraction =
-				sourceFamily === 'list' ? (1 - easedScale) / 2 : (easedScale + 1) / 2;
-			this.#publishFamilySwapScale(null);
-		}
 	}
 
 	// -----------------------------------------------------------------------
@@ -2752,10 +2366,10 @@ export class NavPipelineOrchestrator {
 		const inputs = this.#mountInputs;
 		const centerTab = inputs?.centerTab;
 		if (centerTab !== undefined) {
-			// Thread route (the overlay family): the pill stays on centerTab
-			// at rest, active: true so the FAB reads fractionalIndex,
-			// backMorph: null so the Header stays in root mode end to end
-			// (tab bar visible, hamburger icon) for the thread route.
+			// Thread route: the pill stays on centerTab at rest, active:
+			// true so the live fractionalIndex is published, backMorph:
+			// null so the Header stays in root mode end to end (tab bar
+			// visible, hamburger icon) for the thread route.
 			pager.set({
 				fractionalIndex: centerTab,
 				dragging: false,
@@ -2768,10 +2382,10 @@ export class NavPipelineOrchestrator {
 		} else if (inputs?.bidirectional === true) {
 			const fromIdx = inputs?.fromTabIndex ?? -1;
 			// Tab host at rest (NavPipelineTabHost): the active tab is the
-			// pill's resting index, active: true so the FAB reads the live
-			// fractionalIndex, backMorph: null so the Header stays in
-			// hamburger mode (tab-to-tab transitions never morph toward
-			// the back-arrow).
+			// pill's resting index, active: true so the live fractionalIndex
+			// is published, backMorph: null so the Header stays in hamburger
+			// mode (tab-to-tab transitions never morph toward the
+			// back-arrow).
 			pager.set({
 				fractionalIndex: fromIdx,
 				dragging: false,
@@ -2779,15 +2393,15 @@ export class NavPipelineOrchestrator {
 				backMorph: null,
 				targetIndex: null,
 				coverProgress: 0,
-				transitionTarget: null,
-				trackFractionalIndex: fromIdx
+				transitionTarget: null
 			});
 		} else {
 			const fromIdx = inputs?.fromTabIndex ?? -1;
-			// Deep page at rest (Family B without centerTab): no pill highlight
-			// (fromTabIndex is -1 for routes with no tab association), active:
-			// false so the FAB falls back to the URL-derived tab index,
-			// backMorph: 0 so the Header is in normal (hamburger) mode.
+			// Deep page at rest (no centerTab, not bidirectional): no pill
+			// highlight (fromTabIndex is -1 for routes with no tab
+			// association), active: false so the pager reports no live
+			// drag, backMorph: 0 so the Header is in normal (hamburger)
+			// mode.
 			pager.set({
 				fractionalIndex: fromIdx,
 				dragging: false,
@@ -2797,17 +2411,6 @@ export class NavPipelineOrchestrator {
 				coverProgress: 0,
 				transitionTarget: null
 			});
-		}
-		// At-rest maintenance: capture the FAB's resting scale against the
-		// just-published at-rest signals so the next route-swap family-change
-		// ease anchors at the visible scale. Skipped during configure
-		// (#mounted is still false here; configure sets it true after
-		// #detectFamilyChange) because the ease must anchor at the pre-swap
-		// scale captured by releaseInputs, not the destination route's
-		// at-rest scale. Skipped while the family-swap ease runs (its tick
-		// maintains #lastRenderedScale at the eased value).
-		if (this.#mounted && this.#familySwapRafId === undefined) {
-			this.#lastRenderedScale = this.#computeFabRestingScale();
 		}
 	}
 
@@ -2887,8 +2490,9 @@ export class NavPipelineOrchestrator {
 	 *  same-tab back-swipe the target equals `centerTab` so the pill
 	 *  holds. `targetIndex` stays null (the pill uses the fractionalIndex
 	 *  path, not the deep-swipe path). `coverProgress` is the raw slide
-	 *  fraction; the FAB layer resolves the destination's family/kind to
-	 *  decide whether the FAB scales in.
+	 *  fraction; the Header reads it for the morph derivation. The FAB
+	 *  layer reads the orchestrator's publication directly (progress +
+	 *  FROM/TO FAB presence) for its scale, NOT these pager fields.
 	 *
 	 *  Tab-host mode (no centerTab, bidirectional): interpolates
 	 *  `fractionalIndex` between `fromTabIndex` and `toTabIndex`
@@ -2908,10 +2512,12 @@ export class NavPipelineOrchestrator {
 	 *
 	 *  Deep-page mode (no centerTab, not bidirectional): same pill
 	 *  interpolation, plus `backMorph: rawDragFraction` so the Header
-	 *  morph and the FAB scale track the finger.
+	 *  morph tracks the finger.
 	 *
-	 *  `transitionTarget` carries the in-flight destination so the FAB
-	 *  layer can resolve that kind. */
+	 *  `transitionTarget` carries the in-flight destination so the
+	 *  Header's morph derivation can resolve the back-arrow reveal. The
+	 *  FAB layer does NOT read these pager fields; it reads the
+	 *  orchestrator's publication directly. */
 	#republishToPager(rawDragFraction: number): void {
 		const pager = getMobilePagerStore();
 		const publication = this.#publication;
@@ -2921,13 +2527,6 @@ export class NavPipelineOrchestrator {
 		}
 		const inputs = this.#mountInputs;
 		const centerTab = inputs?.centerTab;
-		// When a gesture interrupted a family-swap ease, seed the FAB's
-		// foregroundFraction so it advances from the eased value toward 1
-		// as the slide reveals the destination. The seeded coverProgress
-		// drives the FAB via its resting formula; the pill interpolation
-		// and the Header morph still read the raw slide fraction.
-		const seed = this.#fabDragSeedFraction;
-		const coverProgress = seed !== null ? seed + (1 - seed) * rawDragFraction : rawDragFraction;
 		if (centerTab !== undefined) {
 			// The pill interpolates from centerTab toward the gesture's
 			// target tab so a tab-click exit to a different tab tracks the
@@ -2946,18 +2545,9 @@ export class NavPipelineOrchestrator {
 				active: true,
 				backMorph: null,
 				targetIndex: null,
-				coverProgress,
+				coverProgress: rawDragFraction,
 				transitionTarget: publication.toPathname
 			});
-			// Track the FAB's resting scale against the just-published
-			// signals so the next route-swap family-change ease anchors at
-			// the visible pre-swap scale (the orchestrator is the sole
-			// owner of this tracking). Skipped while the family-swap ease
-			// runs (its tick maintains #lastRenderedScale at the eased
-			// value; a parallel slide publication must not overwrite it).
-			if (this.#familySwapRafId === undefined) {
-				this.#lastRenderedScale = this.#computeFabRestingScale();
-			}
 			return;
 		}
 		// No centerTab: tab host (bidirectional) or deep page. The pill
@@ -2983,17 +2573,6 @@ export class NavPipelineOrchestrator {
 			pillToIdx >= 0
 				? Math.max(0, rawDragFraction - PILL_EXPANSION_THRESHOLD) / (1 - PILL_EXPANSION_THRESHOLD)
 				: 0;
-		// The tab host's 1:1 track fractional position, published for the
-		// Family A FAB (it follows the slide across a drag, a re-grab, and
-		// the boundary rubber-band). Computed from the executor's
-		// authoritative progress + the plan geometry so the FAB reads the
-		// orchestrator's published signal (§5: no DOM read-back). null on a
-		// deep page (no tab-host track).
-		const viewportWidth = inputs?.viewportWidth ?? 0;
-		const trackFrac =
-			bidirectional && this.#executor !== null && viewportWidth > 0
-				? -trackTranslateX(plan, this.#executor.state.progress) / viewportWidth
-				: null;
 		// backMorph: raw slide fraction on a deep-page host OR a
 		// backward-to-deep-page gesture on a bidirectional host (the
 		// destination is a deep page, so the Header morph must reveal the
@@ -3010,16 +2589,9 @@ export class NavPipelineOrchestrator {
 			active: true,
 			backMorph: backMorphValue,
 			targetIndex: targetIndexValue,
-			coverProgress,
-			transitionTarget: publication.toPathname,
-			trackFractionalIndex: trackFrac
+			coverProgress: rawDragFraction,
+			transitionTarget: publication.toPathname
 		});
-		// Track the FAB's resting scale against the just-published signals
-		// (see the centerTab branch above for rationale + the ease-running
-		// guard).
-		if (this.#familySwapRafId === undefined) {
-			this.#lastRenderedScale = this.#computeFabRestingScale();
-		}
 	}
 }
 

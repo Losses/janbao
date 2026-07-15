@@ -7,8 +7,6 @@
  * consumers.
  */
 
-import type { Snippet } from 'svelte';
-
 /**
  * The opaque shape of a page's server payload as far as the store is
  * concerned. The store does not inspect or narrow `data`; consumers
@@ -37,16 +35,10 @@ export interface PageCacheSource {
 }
 
 /**
- * The cache entry value. Exactly `docs/DV20-Plan.md` §7.
+ * The cache entry value.
  */
 export interface PageCacheEntry {
 	data: UnknownPageData | null;
-	/** A render closure for deep pages that capture one. Mandated by
-	 *  DV20-Plan §7 (the cache entry shape). No production caller
-	 *  currently writes a snippet; the field is retained because the
-	 *  spec requires it, so a deep-page capture site can populate it
-	 *  without a schema change. */
-	snippet?: Snippet;
 	scrollTop: number;
 	source: PageCacheSource;
 	capturedAt: number;
@@ -62,9 +54,6 @@ export interface PageCacheEntry {
  */
 export interface PageCacheCaptureInput {
 	data?: UnknownPageData | null;
-	/** Optional render closure; see `PageCacheEntry.snippet` (DV20-Plan
-	 *  §7 mandates the field). */
-	snippet?: Snippet;
 	scrollTop?: number;
 	source?: PageCacheSource;
 }

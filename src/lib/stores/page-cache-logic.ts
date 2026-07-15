@@ -95,7 +95,6 @@ export function captureEntry(
 	const merged: CapturedEntry = {
 		key,
 		data: input.data !== undefined ? input.data : (existing?.data ?? null),
-		snippet: input.snippet !== undefined ? input.snippet : existing?.snippet,
 		scrollTop: input.scrollTop !== undefined ? input.scrollTop : (existing?.scrollTop ?? 0),
 		source: input.source ?? existing?.source ?? ({ route: pathname } satisfies PageCacheSource),
 		capturedAt: now

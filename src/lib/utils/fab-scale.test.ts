@@ -1,64 +1,47 @@
 import { describe, test, expect } from 'bun:test';
-import {
-	scaleFromFraction,
-	tabFraction,
-	hideProgress,
-	translateYFromHideProgress
-} from './fab-scale';
+import { fabScale, hideProgress, translateYFromHideProgress } from './fab-scale';
 
-describe('scaleFromFraction', () => {
-	test('f <= 0.5 -> 0 (disappear in the first half)', () => {
-		expect(scaleFromFraction(0)).toBe(0);
-		expect(scaleFromFraction(0.25)).toBe(0);
-		expect(scaleFromFraction(0.5)).toBe(0);
+describe('fabScale', () => {
+	test('at rest (progress = 1): visible route -> 1, hidden route -> 0', () => {
+		expect(fabScale(1, true, true)).toBe(1);
+		expect(fabScale(1, false, false)).toBe(0);
 	});
 
-	test('f >= 1 -> 1 (appear completes at full foreground)', () => {
-		expect(scaleFromFraction(1)).toBe(1);
-		expect(scaleFromFraction(1.5)).toBe(1);
+	test('both have FAB: dips to 0 at the midpoint', () => {
+		expect(fabScale(0, true, true)).toBe(1);
+		expect(fabScale(0.25, true, true)).toBe(0.5);
+		expect(fabScale(0.5, true, true)).toBe(0);
+		expect(fabScale(0.75, true, true)).toBe(0.5);
+		expect(fabScale(1, true, true)).toBe(1);
 	});
 
-	test('linear 0 -> 1 over f in [0.5, 1]', () => {
-		expect(scaleFromFraction(0.5)).toBe(0);
-		expect(scaleFromFraction(0.625)).toBe(0.25);
-		expect(scaleFromFraction(0.75)).toBe(0.5);
-		expect(scaleFromFraction(0.875)).toBe(0.75);
-		expect(scaleFromFraction(1)).toBe(1);
+	test('from only: exit first half, stay 0', () => {
+		expect(fabScale(0, true, false)).toBe(1);
+		expect(fabScale(0.25, true, false)).toBe(0.5);
+		expect(fabScale(0.5, true, false)).toBe(0);
+		expect(fabScale(0.75, true, false)).toBe(0);
+		expect(fabScale(1, true, false)).toBe(0);
 	});
 
-	test('clamps negatives', () => {
-		expect(scaleFromFraction(-1)).toBe(0);
-	});
-});
-
-describe('tabFraction', () => {
-	test('sample === tabIndex -> 1 (fully foreground)', () => {
-		expect(tabFraction(0, 0)).toBe(1);
-		expect(tabFraction(2, 2)).toBe(1);
-		expect(tabFraction(1.5, 1.5)).toBe(1);
+	test('to only: stay 0, enter second half', () => {
+		expect(fabScale(0, false, true)).toBe(0);
+		expect(fabScale(0.25, false, true)).toBe(0);
+		expect(fabScale(0.5, false, true)).toBe(0);
+		expect(fabScale(0.75, false, true)).toBe(0.5);
+		expect(fabScale(1, false, true)).toBe(1);
 	});
 
-	test('sample one tab away -> 0 (fully covered)', () => {
-		expect(tabFraction(1, 0)).toBe(0);
-		expect(tabFraction(0, 1)).toBe(0);
-		expect(tabFraction(3, 2)).toBe(0);
+	test('neither: always 0', () => {
+		expect(fabScale(0, false, false)).toBe(0);
+		expect(fabScale(0.5, false, false)).toBe(0);
+		expect(fabScale(1, false, false)).toBe(0);
 	});
 
-	test('linear between integer tabs', () => {
-		expect(tabFraction(0.25, 0)).toBe(0.75);
-		expect(tabFraction(0.5, 0)).toBe(0.5);
-		expect(tabFraction(0.75, 0)).toBe(0.25);
-	});
-
-	test('clamps beyond one tab away', () => {
-		expect(tabFraction(2, 0)).toBe(0);
-		expect(tabFraction(-1, 0)).toBe(0);
-	});
-
-	test('fractional tab index interpolates symmetrically', () => {
-		// Between tab 0 and tab 1: distance from 0.5 to either is 0.5 -> 0.5.
-		expect(tabFraction(0.5, 0)).toBe(0.5);
-		expect(tabFraction(0.5, 1)).toBe(0.5);
+	test('clamps outside [0, 1] progress', () => {
+		expect(fabScale(-0.5, true, true)).toBe(1);
+		expect(fabScale(1.5, true, true)).toBe(1);
+		expect(fabScale(-1, true, false)).toBe(1);
+		expect(fabScale(2, false, true)).toBe(1);
 	});
 });
 

@@ -17,11 +17,13 @@
  *   - `FAB_ROUTE_ATTRIBUTES`      family + kind per route where the FAB
  *                                  atom mounts (including Family B/C
  *                                  routes that keep the atom at scale
- *                                  0). The family enum selects the FAB
- *                                  layer's scale driver (list-family
- *                                  tracks the tab fractional index;
- *                                  overlay/compose track coverProgress);
- *                                  it is a permanent consumer config.
+ *                                  0). The `family` enum is read by
+ *                                  `isPipelineSwipeDisabledRoute`
+ *                                  (`family === 'overlay'`) and is
+ *                                  marked for dissolution in §3; it is
+ *                                  not consumed by the FAB layer's scale
+ *                                  computation (which reads
+ *                                  `RouteData.fab` booleans + `fabScale`).
  *   - `TAB_BAR_CONFIG`            the pill target per route (§3's
  *                                  tab-bar consumer config).
  *   - `PREVIEW_PANEL_CONFIG`      the back-preview snippet component
@@ -90,15 +92,17 @@ export const FAB_KIND_CONFIGS: Record<FabListKind, FabKindConfig> = {
 };
 
 // ---------------------------------------------------------------------------
-// FAB route attributes (§3 consumer config #2; the family enum is a
-// permanent consumer detail that selects the FAB scale driver).
+// FAB route attributes (§3 consumer config #2; the `family` enum is
+// marked for dissolution in §3).
 //
-// `family` selects the FAB layer's scale driver; `kind` selects the icon/href
-// (or `'dynamic'` for the Activity route's spatially-resolved FAB, or
-// `'deep'` for the non-FAB deep routes whose atom stays mounted at scale
-// 0 across the list<->deep boundary). Together they preserve the
-// per-route rendering that the FAB layer needs; nothing here is a
-// concept the core `RouteData` record holds.
+// `family` is read by `isPipelineSwipeDisabledRoute`
+// (`family === 'overlay'`); it is not consumed by the FAB layer's scale
+// computation (which uses `RouteData.fab` booleans + `fabScale`).
+// `kind` selects the icon/href (or `'dynamic'` for the Activity route's
+// spatially-resolved FAB, or `'deep'` for the non-FAB deep routes whose
+// atom stays mounted at scale 0 across the list<->deep boundary).
+// Together they preserve the per-route rendering that the FAB layer
+// needs; nothing here is a concept the core `RouteData` record holds.
 
 // `FabFamily` is the canonical FAB family enum, owned by
 // `fab-scale.ts` (the FAB layer's pure scale maths). Imported here so

@@ -70,9 +70,9 @@
 	// Forward enter animation: if this mount is a forward SPA navigation
 	// from `leftHref` (e.g. user tapped a conversation in /messages/inbox),
 	// slide the track from the left-panel position (translateX(0)) to the
-	// centre rest (translateX(-50%)) over ~200ms. Computed at script init
-	// (before render) via `navStore.activeStack` so there is no
-	// first-paint flash.
+	// centre rest (translateX(-50%)) over ~300ms (COMMIT_T_DEFAULT_MS).
+	// Computed at script init (before render) via `navStore.activeStack`
+	// so there is no first-paint flash.
 	const navStore = getNavigationStore();
 
 	// The resolved back-target: follows the live navigation stack so a
@@ -122,28 +122,35 @@
 	// off with no jump). The content swap is expected - the panel reflects
 	// whichever transition is in flight.
 	const publication = $derived(orchestrator.publication);
-	// Forward enter animation: play only on a FORWARD SPA nav from leftHref
-	// (a popstate-back sets direction='backward' and must skip the slide-in).
-	// A $derived so it re-evaluates after onMount's sync flips isMobile to
-	// the live matchMedia value; the onMount enter check reads the post-flip
-	// value, not the UA-derived seed.
+	// Forward enter animation: play only on a FORWARD SPA nav whose previous
+	// entry is this route's resolved back-target (a popstate-back sets
+	// direction='backward' and must skip the slide-in). A $derived so it
+	// re-evaluates after onMount's sync flips isMobile to the live matchMedia
+	// value; the onMount enter check reads the post-flip value, not the
+	// UA-derived seed.
+	// The check uses `resolvedLeftHref` (which follows the live navigation
+	// stack via `previousEntryPathname()` / `navStore.backTarget`) rather
+	// than the static `leftHref` prop: a route like `/profile/edit` has
+	// `leftHref = /profile/settings` (its structural parent), but the user
+	// may have arrived from `/` or `/messages/inbox`. Matching against the
+	// resolved back-target makes the enter slide play for every real
+	// source route, so the FAB scale (which reads the orchestrator's
+	// publication during the enter) transitions across every list -> deep
+	// boundary, not only the structural one.
 	// Suppressed when the orchestrator's `lastDispatchWasDeepToDeep`
 	// publication is true: a deep-to-deep nav (e.g. /profile/settings ->
 	// /profile/password) was intercepted on the source host and the slide
-	// already played there. Without this guard the generic forward-enter
-	// heuristic (stack[length-2].pathname === leftHref) is true for the
-	// destination (the source deep page is its back-target) and
-	// `playEnterAnimation` would play a second slide. The orchestrator
-	// sets the flag in the interception branch and clears it in
-	// `#landAtRest` (which runs in afterNavigate, AFTER this onMount
-	// read), so the flag is still true here.
+	// already played there. The orchestrator sets the flag in the
+	// interception branch and clears it in `#landAtRest` (which runs in
+	// afterNavigate, AFTER this onMount read), so the flag is still true
+	// here.
 	const shouldEnter = $derived.by<boolean>(() => {
 		if (!isMobile) return false;
 		if (navStore.direction !== 'forward') return false;
 		const stack = navStore.activeStack;
 		if (stack.length < 2) return false;
 		if (publication.lastDispatchWasDeepToDeep) return false;
-		return stack[stack.length - 2].pathname === leftHref;
+		return stack[stack.length - 2].pathname === resolvedLeftHref;
 	});
 	// Stable views of the publication's plan / in-flight flag. The
 	// orchestrator publishes a new publication object each frame of a

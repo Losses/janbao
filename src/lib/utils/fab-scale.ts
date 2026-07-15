@@ -5,11 +5,11 @@
  *
  * Two independent drivers compose as ONE `transform: scale(s) translateY(y)`:
  *
- *   - Route-transition driver: `s = scaleFromFraction(foregroundFraction)`.
- *     foregroundFraction is the live gesture/page progress 0..1 (1 = the
- *     source list is fully foreground, 0 = fully covered). scale maps it over the second half of its range: the FAB disappears over the
- *     first 50% of a transition and appears over the last 50%, tracking the finger
- *     across the whole drag (see scaleFromFraction).
+ *   - Route-transition driver: `s = fabScale(progress, fromHasFab,
+ *     toHasFab)`. The FAB exits in the first half of the transition
+ *     (0 -> 0.5) if the FROM route shows a FAB, and enters in the second
+ *     half (0.5 -> 1) if the TO route shows a FAB. `progress` is the
+ *     same signal that drives the page-track slide.
  *   - Scroll driver: `p = hideProgress(translateY, headerHeight)`,
  *     `y = p * (fabHeight + bottomClearance)`. Mirrors the Header's hide-on-scroll.
  *
@@ -33,34 +33,40 @@ function clamp(value: number, range: ClampRange): number {
 }
 
 /**
- * foregroundFraction -> scale, symmetric half/half: the FAB disappears over the
- * first 50% of foregroundFraction (1 -> 0) and appears over the last 50%
- * (0 -> 1). This timing is what lets a cross-FAB tab swap (e.g. messages ->
- * discussions) play the source FAB's disappear in the first half and the
- * destination FAB's appear in the second half of the SAME transition, handing
- * off through scale 0 at the midpoint. A curve that maps the full [0,1] range
- * would lose this handoff and make the swap snap.
- */
-export function scaleFromFraction(fraction: number): number {
-	return clamp(2 * fraction - 1, SCALE_RANGE);
-}
-
-/**
- * Fraction of tab `tabIndex`'s surface covered at the published track
- * fractional index. 1 when the tab is fully foreground, 0 when fully away,
- * linear in between. Used by the Family A (list) path and the list resting
- * fraction.
- */
-export function tabFraction(trackFractionalIndex: number, tabIndex: number): number {
-	return clamp(1 - Math.abs(trackFractionalIndex - tabIndex), SCALE_RANGE);
-}
-
-/**
- * The FAB transition family a route belongs to. Mirrors the layer's FabConfig
- * `family` discriminant so pure helpers can branch on it without importing the
- * Svelte component.
+ * The FAB family a route belongs to. Read by `route-config.ts`'s
+ * `isPipelineSwipeDisabledRoute` (`family === 'overlay'`); not consumed
+ * by the FAB layer's scale computation (which uses the FROM/TO
+ * `RouteData.fab` booleans + `fabScale`).
  */
 export type FabFamily = 'list' | 'overlay' | 'compose';
+
+/**
+ * The single-progress FAB scale, gated on FROM / TO FAB presence. The FAB
+ * exits in the first half of the transition if FROM has a FAB, and enters
+ * in the second half if TO has a FAB. At rest (no transition in flight)
+ * the caller passes `progress = 1` with `fromHasFab = toHasFab =
+ * currentRouteHasFab` (or short-circuits to `currentRouteHasFab ? 1 : 0`).
+ *
+ *   - both have FAB:   progress < 0.5 ? 1 - progress*2 : (progress - 0.5)*2
+ *                      (exit then enter; dips to 0 at the midpoint)
+ *   - from only:       max(0, 1 - progress*2)
+ *                      (exit first half, stay 0)
+ *   - to only:         max(0, (progress - 0.5)*2)
+ *                      (stay 0, enter second half)
+ *   - neither:         0
+ */
+export function fabScale(progress: number, fromHasFab: boolean, toHasFab: boolean): number {
+	if (fromHasFab && toHasFab) {
+		return clamp(progress < 0.5 ? 1 - progress * 2 : (progress - 0.5) * 2, SCALE_RANGE);
+	}
+	if (fromHasFab) {
+		return clamp(Math.max(0, 1 - progress * 2), SCALE_RANGE);
+	}
+	if (toHasFab) {
+		return clamp(Math.max(0, (progress - 0.5) * 2), SCALE_RANGE);
+	}
+	return 0;
+}
 
 /**
  * Scroll-hide progress for the FAB's translateY. `translateY` is the shared

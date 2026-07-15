@@ -73,7 +73,7 @@ interface RouteData {
 	// record and the registry. NOT the back-target (that is the route-stack entry
 	// behind the current one, §6).
 	backParent?: string;
-	// Whether the page captures its data + render snippet into the cache on leave.
+	// Whether the page captures its data into the cache on leave.
 	// Read by the coordinator (Layer 4).
 	snapshotCapture: boolean;
 	// Whether the FAB is visible on this page. The resolver (Layer 3) reads the
@@ -192,7 +192,6 @@ Replaces `list-cache`, `deep-page-snapshot`, `page-scroll`, and `search-cache`. 
 ```ts
 interface PageCacheEntry {
 	data: UnknownPageData; // the page's server payload; opaque to the store
-	snippet?: Snippet; // a render closure for deep pages that capture one
 	scrollTop: number; // colocated with data; eliminates the separate scroll store
 	source: { route: string; query?: string; sort?: string; page?: number };
 	capturedAt: number;
