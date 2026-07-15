@@ -20,7 +20,7 @@
  * `setProperty`), so the same driver accepts a real `HTMLElement` in
  * production and a capturing stub in tests.
  *
- * The orchestrator (5b1) constructs this driver lazily inside
+ * The orchestrator constructs this driver lazily inside
  * `configure()` (the `if (this.#driver === null)` first-call guard)
  * and hands it to the `NavExecutor`, which writes through it every
  * frame. Under `bun:test` the reactive shell (`nav-executor.svelte.ts`)

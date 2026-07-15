@@ -18,8 +18,8 @@
  *
  * This module is exercised by its own unit suite
  * (`nav-executor-logic.test.ts`) using a `MockNavDomDriver`. The
- * reactive shell wires the rAF loop; the orchestrator (5b1) connects
- * its phase events to the shell's boundary methods.
+ * reactive shell wires the rAF loop; the orchestrator connects its
+ * phase events to the shell's boundary methods.
  */
 
 import type { TransitionPlan } from './nav-resolvers';

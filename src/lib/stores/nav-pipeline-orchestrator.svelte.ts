@@ -668,6 +668,21 @@ export class NavPipelineOrchestrator {
 				onTick: (progress) => this.#onExecutorTick(progress)
 			});
 		}
+		// Reset the executor's animation state so a stale prior commit
+		// cannot leak into this host. If a prior commit settled
+		// (activePlan set, progress = 1) but the navigation was
+		// cancelled before landing (`#landAtRest` / `executor.onLand()`
+		// never ran), the executor still holds progress = 1 with an
+		// active plan. The next host's `playEnterAnimation` would then
+		// read that stale state via `#startProgressFromCurrentVisual`,
+		// return 1, and the enter slide would no-op (`startCommit`'s
+		// `state.progress === target` guard). `onLand()` only stops the
+		// rAF, clears `activePlan`, and resets the state record to
+		// `initialExecutorState()` - no side effects outside the
+		// executor - so it is safe to call here on every configure.
+		// The family-swap / settle / tap-scrub eases live on the
+		// orchestrator (not the executor) and are unaffected.
+		this.#executor.onLand();
 		// Reset the state machine (the singleton authority) to at-rest on
 		// this route's tag so a stale phase from the prior host does not
 		// leak into the derived publication. The `forceReset` bypasses

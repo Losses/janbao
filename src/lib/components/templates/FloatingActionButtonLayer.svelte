@@ -283,6 +283,25 @@
 		if (cfg.family === 'list') {
 			const trackFrac = pager.trackFractionalIndex;
 			if (trackFrac !== null) {
+				// Known continuity gap: when a Family-A-to-tab gesture
+				// (a tab-to-tab swipe, both endpoints list family)
+				// interrupts a running family-swap ease, the seed
+				// (`#fabDragSeedFraction` in the orchestrator) only
+				// feeds the `coverProgress`-based branches above. This
+				// branch derives the FAB scale from the orchestrator's
+				// 1:1 `trackFractionalIndex` signal, which is not
+				// seeded because that signal also drives `effectiveKind`
+				// (the visual kind swap at trackFrac = 1) and the
+				// `displayConfig` gate; publishing a fractional seed
+				// here would corrupt both, and the seed would only
+				// bridge one frame anyway (the first `onDragMove`
+				// overwrites `trackFractionalIndex` with the real
+				// finger position). At gesture start `trackFrac` is the
+				// rest tab, so `tabFraction(restTab, cfg.tabIndex)` is
+				// 0 or 1: the FAB snaps from the mid-ease scale to
+				// that binary value, then tracks the finger 1:1. The
+				// 1:1 finger-tracking invariant takes precedence over a
+				// continuity bridge here.
 				return tabFraction(trackFrac, cfg.tabIndex);
 			}
 			// Resting / SSR: the route's known tab position. `pager.active`

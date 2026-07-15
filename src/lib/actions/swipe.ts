@@ -365,9 +365,9 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 
 		// OS edge-swipe collision guard: reject a pointer in the edge
 		// gutter (EDGE_DEAD_ZONE px) so the app's back-swipe does not
-		// collide with the OS edge-back gesture. Shared with the 5b1
-		// pointer bridge's capture listener (which mirrors this exact
-		// check).
+		// collide with the OS edge-back gesture. Shared with the
+		// pipeline pointer-bridge's capture listener (which mirrors this
+		// exact check; both mobile hosts mount it).
 		if (event.clientX < EDGE_DEAD_ZONE || event.clientX > window.innerWidth - EDGE_DEAD_ZONE) {
 			return;
 		}

@@ -42,7 +42,7 @@ export interface HeaderWrite {
  *  per frame (during drag events and during the commit rAF loop) and
  *  hands it to `NavDomDriver.write`. The `fab` / `header` fields are
  *  optional: when a plan supplies no per-frame fn for a consumer (the
- *  Cycle 5b1 pilot omits both), `buildVisual` sets the field to
+ *  pipeline hosts omit both), `buildVisual` sets the field to
  *  `undefined` and the driver skips that write branch. */
 export interface NavVisualWrite {
 	readonly pageTrack: PageTrackWrite;

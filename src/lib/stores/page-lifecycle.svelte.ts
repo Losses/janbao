@@ -14,7 +14,7 @@
  * out-of-sequence calls are no-ops) has unit coverage under `bun:test`
  * even though this file uses `$state`.
  *
- * The orchestrator (5b1) constructs this controller and calls
+ * The orchestrator constructs this controller and calls
  * `activate()` / `deactivate()` / `unmount()` from the host's lifecycle
  * hooks (the `mount` phase is unused in production: the orchestrator
  * activates directly on first `configure`).
@@ -45,9 +45,9 @@ export class PageLifecycleController {
 	#state = $state<PageLifecycleState>(initialLifecycleState());
 	/** Teardowns registered by the lifecycle-adjacent stores. Each is
 	 *  typically a release callback for an html-singleton refcount
-	 *  (e.g. `() => htmlSingleton.release()`). In 5b1 no store
-	 *  registers a teardown here (the host releases html-singletons
-	 *  inline in `onDestroy`); the unit suite exercises `planUnmount`
+	 *  (e.g. `() => htmlSingleton.release()`). No store registers a
+	 *  teardown here (the host releases html-singletons inline in
+	 *  `onDestroy`); the unit suite exercises `planUnmount`
 	 *  directly. */
 	#teardowns: VoidHandler[] = [];
 	/** The `browser` flag from `$app/environment`, captured at
@@ -62,7 +62,7 @@ export class PageLifecycleController {
 
 	/** Reactive read of the current phase. In the integrated pipeline
 	 *  consumers read this in a `$derived` to register as dependents.
-	 *  In 5b1 the orchestrator does not read it (the publication is the authority). */
+	 *  The orchestrator does not read it (the publication is the authority). */
 	get phase(): PagePhase {
 		return this.#state.phase;
 	}
@@ -102,7 +102,7 @@ export class PageLifecycleController {
 	 *  the browser. The teardown is gated on the `browser` flag, so a
 	 *  teardown registered here is SSR-safe without a per-call
 	 *  `if (!browser)` guard (memory: `svelte-ondestroy-runs-in-ssr`).
-	 *  In 5b1 no caller registers (the host releases html-singletons
+	 *  No caller registers (the host releases html-singletons
 	 *  inline); a future consolidation could route them here. */
 	registerTeardown(fn: VoidHandler): void {
 		this.#teardowns.push(fn);

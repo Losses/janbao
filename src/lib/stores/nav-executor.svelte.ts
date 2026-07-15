@@ -80,8 +80,9 @@ export type NavExecutorTickFn = (progress: number, liveOffset: number) => void;
 
 /** Constructor options for `NavExecutor`. */
 export interface NavExecutorOptions {
-	/** The driver the executor writes through. The 5b1 orchestrator
-	 *  supplies a `LiveNavDomDriver`; unit tests use a `MockNavDomDriver`. */
+	/** The driver the executor writes through. The orchestrator (the
+	 *  global singleton) supplies a `LiveNavDomDriver`; unit tests use a
+	 *  `MockNavDomDriver`. */
 	readonly driver: NavDomDriver;
 	/** Optional clock override for deterministic tests. */
 	readonly now?: NavExecutorClockFn;
@@ -117,8 +118,8 @@ function defaultNow(): number {
 }
 
 /** The Layer 5 executor reactive shell. Holds the executor's
- *  `$state<ExecutorState>`. The orchestrator (5b1) drives it through
- *  the boundary methods. */
+ *  `$state<ExecutorState>`. The orchestrator drives it through the
+ *  boundary methods. */
 export class NavExecutor {
 	#state = $state<ExecutorState>(initialExecutorState());
 	#plan = $state<TransitionPlan | null>(null);

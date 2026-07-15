@@ -17,8 +17,9 @@ export const PILL_EXPANSION_THRESHOLD = 0.5; // 50% drag distance to begin activ
 // Consumer: the orchestrator's release gate.
 export const SWIPE_COMMIT = 60;
 // OS edge-swipe collision guard (px margin matching modern iOS/Android
-// bezel-less native triggers). `detectSwipe` and the 5b1 pointer-bridge
-// capture listener import this; the classifier's `isEdgeReserve` uses
+// bezel-less native triggers). `detectSwipe` and the pipeline
+// pointer-bridge capture listener (mounted by both mobile hosts)
+// import this; the classifier's `isEdgeReserve` uses
 // `DEFAULT_EDGE_DEAD_ZONE` ({left:40,right:40}) defined in
 // `nav-intent.ts` - same value, separately defined. All three agree at
 // the boundary with strict `<` / `>` (an inclusive `<=` would kill a
@@ -28,13 +29,13 @@ export const EDGE_DEAD_ZONE = 40;
 // Deep-title crossfade (Header.svelte unified title state machine). The vertical
 // slide between outgoing/incoming titles on a drag-release or non-gesture nav.
 export const TITLE_CROSSFADE_MS = 200;
-// The pipeline's cross-route FAB family-swap ease duration (in
-// `FloatingActionButtonLayer`). Equals the title crossfade so a discrete
+// The pipeline's cross-route FAB family-swap ease duration. The ease
+// runs on the orchestrator's own rAF (`#startFamilySwapEase`),
+// publishing `pager.familySwapScale`; the FAB layer is a reactive
+// reader (`scale = $derived(pager.familySwapScale ?? restingScale)`),
+// with no rAF of its own. Equals the title crossfade so a discrete
 // family-swap and the Header title crossfade play as one handoff.
 export const TRACK_TRANSITION_MS = TITLE_CROSSFADE_MS;
-// morph progress at or below this is "no meaningful gesture" (cancelled near the
-// origin, or no preceding drag). Effect B treats it as a non-settle release.
-export const GESTURE_MORPH_EPSILON = 0.001;
 // Boundary void-swipe rubber-band factor. On the first/last tab a swipe toward
 // the absent neighbour moves the track at this fraction of the drag distance,
 // then snaps back on release. The orchestrator publishes trackFractionalIndex

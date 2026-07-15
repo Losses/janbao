@@ -2254,7 +2254,7 @@ each). Counter stays 0/5. No logic defect - only comment accuracy.
   0 (no FAB) at rest (index 1 -> null). The inline #listFabTabIndex comment was
   correct; the outer docstring disagreed and misidentified the tab.
 - B1: page-cache.svelte.ts invalidate docstring was garbled (a duplicated
-  sentence with a stray mid-line /** from the R24 getLatestWithSnippet deletion;
+  sentence with a stray mid-line /\*\* from the R24 getLatestWithSnippet deletion;
   prettier/eslint do not parse JSDoc content).
 
 ### Fixes
@@ -2277,3 +2277,97 @@ $ bun run test:e2e                    201 passed + 1 flaky (fab.spec.ts:430)
 Comment-only changes; e2e confirms no regression.
 
 R32 audits the post-R31-fix state.
+
+## Session 34: R32 audit (A PASS / B PWC: 2 docstring concerns) + fixes
+
+R32 ran two independent auditors. A returned PASS (zero concerns, 1 .md nitpick).
+B returned PASS-WITH-CONCERNS (2 concerns). Counter stays 0/5.
+
+### A: PASS
+
+A verified every end-state and binding constraint empirically (no gesture-layer
+CSS transitions/setTimeout, singleton lifecycle, state-machine authority, four
+orchestrator rAF channels, FAB/Header reactive readers, Known conditions,
+velocity-matched commit, family-swap anchoring, seed-fraction inversion). Zero
+concerns. One accepted nitpick: the spec says the orchestrator "does not hold a
+private #publication" while the code declares #publication as a $derived
+read-through (in spirit no violation; .md spec-code drift, left as-is).
+
+### B (2 concerns)
+
+- B1: unmount() docstring claimed "and the app exit"; unmount is only called
+  from the mobile->desktop breakpoint handlers (route-away/app-exit use
+  releaseInputs or abandon).
+- B2: MessagesSkeleton docstring claimed "unreachable ... future non-eager
+  target"; it is reached today via the /messages/[id] array shadow.
+
+### Fixes
+
+- B1: docstring now scopes unmount to the mobile->desktop flip; notes route swaps
+  use releaseInputs and app exit abandons the singleton.
+- B2: docstring now describes the array-shadow reachability.
+
+Both comment-only; orchestrator-run, full gate re-run independently (prettier
+reformatted the journal after the Session 33 append).
+
+### Gate outputs (post-fix, independently re-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    409 pass / 0 fail
+$ bun run test:e2e                    201 passed + 1 flaky (fab.spec.ts:430)
+```
+
+Comment-only changes; e2e confirms no regression.
+
+R33 audits the post-R32-fix state.
+
+## Session 35: R33 audit (A/B PWC: 9 concerns incl. 2 functional) + fixes
+
+R33 ran two independent auditors. Both returned PASS-WITH-CONCERNS (A: 4; B: 5).
+Counter stays 0/5. Nine concerns including two functional defects.
+
+### Findings
+
+- A: four stale "5b1"/"pilot" labels (the orchestrator/pointer-bridge/hosts
+  labeled as prior-cycle-specific). Repo-wide grep found fifteen total.
+- B1/B2 (comments): TRACK_TRANSITION_MS docstring (family-swap ease location);
+  GESTURE_MORPH_EPSILON dead code + non-existent "Effect B" reference.
+- B3 (comment): mobile-pager settle-state ownership (NavStateMachine, not
+  orchestrator class $state).
+- B4/F4 (functional): playEnterAnimation no-op on stale executor state (a prior
+  cancelled commit left progress=1; configure did not reset the executor).
+- B5/F5 (functional): #fabDragSeedFraction does not cover Family-A-to-tab
+  (tab-to-tab reads trackFractionalIndex, not coverProgress) -> FAB jumps when a
+  tab-to-tab gesture interrupts a family-swap ease.
+
+### Fixes
+
+- Stale "5b1": all fifteen rewritten to the current singleton/every-host
+  architecture; grep now zero.
+- B1/B2/B3: docstrings rewritten; GESTURE_MORPH_EPSILON deleted.
+- F4: configure now calls executor.onLand() (verified side-effect-free; resets
+  stale executor state so a cancelled prior commit cannot no-op the next enter).
+- F5: documented as a justified limitation - a continuity bridge is infeasible
+  because seeding trackFractionalIndex would corrupt effectiveKind/displayConfig
+  and bridge only one frame; the jump is the cost of the 1:1 finger-tracking
+  invariant (the user's explicit design), which takes precedence.
+
+The bulk was delegated to a sub-agent; the orchestrator independently re-ran the
+full gate, re-grepped, re-read the F4/F5 changes, and isolated the new e2e flake.
+
+### Gate outputs (post-fix, independently re-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    409 pass / 0 fail
+$ bun run test:e2e                    200 passed + 2 flaky (fab.spec.ts:432
+                                     pre-existing; fab-release-snap:192 timing
+                                     jitter, passes 3/3 in isolation)
+```
+
+F4 e2e-safe (configure not reached on tab-to-tab). No behavioral regression.
+
+R34 audits the post-R33-fix state.

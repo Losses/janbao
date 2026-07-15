@@ -28,11 +28,13 @@
  * `backMorph`, `trackFractionalIndex`, `transitionTarget`, `familySwapScale`,
  * `replaceStateIntent`, `fractionalIndex`, `dragging`, `active`,
  * `targetIndex`). The Header's settle ease state (the post-release /
- * post-title-change crossfade) and the `searchScrubbing` flag are owned by the
- * pipeline orchestrator as private class `$state` exposed via reactive
- * getters; the Header reads them directly off the orchestrator singleton (see
- * `NavPipelineOrchestrator.settleActive` / `.settleProgress` / `.settleLatched`
- * / `.settleDirection` / `.settleAwaitTitle` / `.searchScrubbing`).
+ * post-title-change crossfade) and the `searchScrubbing` flag live on
+ * `NavStateMachine` (private class `$state`); the orchestrator's getters
+ * are `$derived` pass-throughs of those fields via its `#publication`,
+ * and the Header reads them directly off the orchestrator singleton
+ * (see `NavPipelineOrchestrator.settleActive` / `.settleProgress` /
+ * `.settleLatched` / `.settleDirection` / `.settleAwaitTitle` /
+ * `.searchScrubbing`).
  *
  * Factory: two pagers exist - the PRIMARY tab pager (NavPipelineTabHost /
  * NavPipelineHost write; Header / MobileTabBar read) and the SEARCH scope

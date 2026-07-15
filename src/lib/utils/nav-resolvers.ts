@@ -29,7 +29,7 @@
  *
  * Each resolver produces a page-track plan (axis + distance). The
  * `TransitionPlan` also carries OPTIONAL `fab` / `header` per-frame
- * functions a consumer may bind; the Cycle 5b1 pilot omits them (the
+ * functions a consumer may bind; the pipeline hosts omit them (the
  * FAB / Header react through their own layers reading the pager
  * store). The plan is resolved ONCE per gesture (FROM and TO locked
  * at gesture start); the live offset streams separately to the
@@ -58,7 +58,7 @@ export type PageTrackAxis = 'left' | 'right';
  *
  *  `restingTranslate` is the track's translateX (px) at progress=0. Most
  *  plans leave it at 0 (a single-panel track where progress=0 means
- *  translateX=0). The multi-panel pilot (Cycle 5b1) sets it to
+ *  translateX=0). The multi-panel tab host sets it to
  *  `-viewportWidth` so the centre panel (the right half of the 2*W
  *  track) fills the viewport at rest and the left panel sits
  *  off-screen. */
@@ -106,8 +106,8 @@ export type ProgressDirection = 0 | 1;
 /** The plan a resolver produces. §4's binding shape. The `fab` and
  *  `header` fields are OPTIONAL: a resolver supplies them only when a
  *  consumer is bound to drive that visual through the executor. The
- *  Cycle 5b1 pilot passes `fab: null, header: null` element refs to
- *  the driver, so the pilot's resolvers omit these fields and the
+ *  pipeline hosts pass `fab: null, header: null` element refs to
+ *  the driver, so the resolvers omit these fields and the
  *  FAB / Header react through their own layers reading the pager
  *  store. A future consumer that binds a FAB / Header element would
  *  receive the per-frame writes the plan's fns produce. */
