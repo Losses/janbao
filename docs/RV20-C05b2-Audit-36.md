@@ -13,13 +13,13 @@ the Known conditions, and the deep-to-deep handshake. Zero concerns.
 
 ### A's observations (non-blocking)
 
-1. `(tabs)/+layout.svelte:67-73` — the `recoverDesktopFlipNav()` call is dead
+1. `(tabs)/+layout.svelte:67-73` - the `recoverDesktopFlipNav()` call is dead
    (the host's handler fires first via child onMount, releases the orchestrator,
    so the call is always a no-op). Fixed: the dead call + comment were removed
    during the FAB refactor.
 2. Spec "app exit calls full unmount" vs code "app exit abandons the singleton"
-   — spec-code drift (.md nitpick).
-3. Mid-settle re-arm title text jump — documented tradeoff, not a defect.
+   - spec-code drift (.md nitpick).
+3. Mid-settle re-arm title text jump - documented tradeoff, not a defect.
 
 ## B's finding
 
@@ -33,9 +33,9 @@ that fixed the orchestrator's docstring). Fixed: changed to "~300ms
 ## Work done alongside R36 (the FAB scale unification + snippet + shouldEnter)
 
 - FAB scale unified to `fabScale(progress, fromHasFab, toHasFab)` (single progress
-  + FROM/TO FAB booleans). Deleted 250+ lines of FAB-specific signals
-  (trackFractionalIndex, familySwapScale, family-swap ease, #lastRenderedScale,
-  #fabDragSeedFraction). F5 eliminated.
+  - FROM/TO FAB booleans). Deleted 250+ lines of FAB-specific signals
+    (trackFractionalIndex, familySwapScale, family-swap ease, #lastRenderedScale,
+    #fabDragSeedFraction). F5 eliminated.
 - snippet field deleted (dead code, §7 updated).
 - shouldEnter fixed (leftHref → resolvedLeftHref, enabling playEnterAnimation for
   all real forward enters, preventing the FAB scale jump).

@@ -235,8 +235,11 @@ export interface PipelineMountInputs {
  *  pager store so the existing FAB / Header layers react). Per DV20
  *  §13.5 the NavStateMachine is the sole authority for the macro
  *  fields (plan, FROM/TO, direction, in-flight) and the settle +
- *  tap-scrub micro animation state; only `progress` is the executor's
- *  per-frame contribution. */
+ *  tap-scrub micro animation state; `progress` is the executor's
+ *  per-frame contribution. `lastDispatchWasDeepToDeep` is the one
+ *  orchestrator-private field carried here, so the destination host's
+ *  `shouldEnter` can read the deep-to-deep handshake without a back
+ *  channel. */
 export interface OrchestratorPublication {
 	/** Null when at-rest; the resolved plan when transitioning. */
 	readonly plan: TransitionPlan | null;
@@ -1459,8 +1462,9 @@ export class NavPipelineOrchestrator {
 			return;
 		}
 		if (progressDirection === 1) {
-			// Cancel: the user released below threshold; return to rest
-			// without dispatching a nav.
+			// Cancel: the user released below threshold; return to rest.
+			// #landAtRest dispatches any discrete nav queued by the
+			// finish-then-new policy while this cancel slide was in flight.
 			this.#landAtRest();
 			return;
 		}
@@ -1527,7 +1531,7 @@ export class NavPipelineOrchestrator {
 		}
 	}
 
-	/** Return to at-rest without dispatching. */
+	/** Return to at-rest, then dispatch any queued finish-then-new discrete nav. */
 	#landAtRest(): void {
 		const inputs = this.#mountInputs;
 		// The pipeline-commit flag was set at `#dispatchNav` time so the
@@ -1549,12 +1553,12 @@ export class NavPipelineOrchestrator {
 		this.#liveDragging = false;
 		this.#gestureToTabIndex = null;
 		this.#executor?.onLand();
-		// Clear the replaceState side-channel: a cancel-after-regrab returns
-		// to rest WITHOUT dispatching (no navigation lands, so
-		// onSvelteKitAfterNavigate never fires), so the intent Header.onBack
-		// set would leak to the next consumed dispatch without this clear.
-		// (#landAtRest also runs after a normal landing, so this is
-		// defense-in-depth alongside the onSvelteKitAfterNavigate clear.)
+		// Clear the replaceState side-channel: the intent Header.onBack set
+		// must not leak to a later dispatch. #landAtRest runs on a cancel, a
+		// normal landing, and immediately before a queued finish-then-new
+		// goto, so this is defense-in-depth alongside the
+		// onSvelteKitAfterNavigate clear (the primary site when a navigation
+		// lands).
 		getMobilePagerStore().setReplaceStateIntent(false);
 		if (inputs !== null) {
 			this.#stateMachine.onLand(inputs.fromTag);
@@ -1599,27 +1603,37 @@ export class NavPipelineOrchestrator {
 		// the search a tab-click preserved, so goto('/?q=foo') re-enters
 		// with to='/' + toSearch='?q=foo' and matches.
 		if (this.#navDispatchInFlight) {
+			// A navigation arriving while our own dispatch is in flight is
+			// either our dispatch's re-entry (it matches #dispatchTarget below)
+			// or an external nav superseding it. The supersede cancels our goto,
+			// so #landAtRest will not run to consume a queued finish-then-new
+			// nav; clear it here to prevent a phantom redirect on a later
+			// landing.
+			if (
+				!(this.#dispatchTarget !== null && to !== null && to + toSearch === this.#dispatchTarget)
+			) {
+				this.#queuedDiscreteNav = null;
+			}
 			return false;
 		}
 		if (this.#dispatchTarget !== null && to !== null && to + toSearch === this.#dispatchTarget) {
 			return false;
 		}
 		// Orphan-prevention: clear a queued discrete nav (the
-		// finish-then-new policy's queue) on any EXTERNAL nav. By this
-		// point the nav has already passed both dispatch-reentry checks
-		// above (`#navDispatchInFlight` and the `#dispatchTarget` match),
-		// so it is not the orchestrator's own dispatch. The replay goto
-		// fired from `#landAtRest` re-enters here with
-		// `#navDispatchInFlight === true` and returns above, so the
-		// legitimate finish-then-new replay is never cleared here.
-		// For the legitimate case: `#landAtRest` already consumed the
-		// queue (fired the replay goto) before any next external nav
-		// arrives, so this clears null (no-op).
-		// For the orphan case: the commit's goto was cancelled by a
+		// finish-then-new policy's queue) on an external nav that reached
+		// here. The supersede-while-in-flight case is handled inside the
+		// `#navDispatchInFlight` branch above; this clear covers an external
+		// nav arriving after the goto's `.finally` cleared the in-flight flag
+		// but before `#landAtRest` consumed the queue. The replay goto fired
+		// from `#landAtRest` re-enters with `#navDispatchInFlight === false`
+		// (cleared in `#landAtRest` before the replay fires), so it passes
+		// both re-entry checks and is processed here as a fresh discrete nav;
+		// by then `#landAtRest` already consumed the queue, so this clears
+		// null. For the orphan case: the commit's goto was cancelled by a
 		// competing external nav (session-timeout redirect, user URL,
-		// app-level goto) before it landed, so `#landAtRest` never ran
-		// and the queue persisted. This clear prevents the next
-		// pipeline route's `#landAtRest` from firing a phantom redirect.
+		// app-level goto) before it landed, so `#landAtRest` never ran and
+		// the queue persisted; this clear prevents the next pipeline route's
+		// `#landAtRest` from firing a phantom redirect.
 		this.#queuedDiscreteNav = null;
 		// Only own transitions FROM the host route (a tab-click exit or
 		// a back-swipe equivalent). Transitions TO the host route

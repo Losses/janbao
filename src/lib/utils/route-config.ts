@@ -116,7 +116,7 @@ import type { FabFamily } from './fab-scale';
  * that keeps the atom mounted at scale 0; `null` covers the static list
  * FAB kinds (`'discussions'` / `'messages'`).
  */
-export type FabRouteKind = FabListKind | 'dynamic' | 'deep' | null;
+export type FabRouteKind = FabListKind | 'dynamic' | 'deep';
 
 export interface FabRouteAttributes {
 	readonly pattern: RegExp;

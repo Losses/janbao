@@ -213,8 +213,10 @@ describe('solveCommitDuration: velocity-to-duration mapping', () => {
 
 	test('fast release produces a shorter duration than slow release', () => {
 		const distance = 375;
-		const fast = solveCommitDuration(baseCommitInput({ releaseVelocityPxPerMs: 4 }), 0);
-		const slow = solveCommitDuration(baseCommitInput({ releaseVelocityPxPerMs: 0.2 }), 0);
+		// axis='left' commits advance as the finger moves leftward, so the
+		// committing release velocity is negative.
+		const fast = solveCommitDuration(baseCommitInput({ releaseVelocityPxPerMs: -4 }), 0);
+		const slow = solveCommitDuration(baseCommitInput({ releaseVelocityPxPerMs: -0.2 }), 0);
 		// Same distance, different |velocity|: fast < slow.
 		expect(fast.durationMs).toBeLessThan(slow.durationMs);
 		expect(fast.durationMs).toBeGreaterThanOrEqual(COMMIT_T_MIN_MS);
@@ -230,11 +232,11 @@ describe('solveCommitDuration: velocity-to-duration mapping', () => {
 		// Above the clamp, the duration solve sees COMMIT_VELOCITY_CLAMP_PX_PER_MS.
 		const distance = 375;
 		const clamped = solveCommitDuration(
-			baseCommitInput({ releaseVelocityPxPerMs: COMMIT_VELOCITY_CLAMP_PX_PER_MS }),
+			baseCommitInput({ releaseVelocityPxPerMs: -COMMIT_VELOCITY_CLAMP_PX_PER_MS }),
 			0
 		);
 		const above = solveCommitDuration(
-			baseCommitInput({ releaseVelocityPxPerMs: COMMIT_VELOCITY_CLAMP_PX_PER_MS * 10 }),
+			baseCommitInput({ releaseVelocityPxPerMs: -COMMIT_VELOCITY_CLAMP_PX_PER_MS * 10 }),
 			0
 		);
 		expect(above.durationMs).toBe(clamped.durationMs);
@@ -246,7 +248,7 @@ describe('solveCommitDuration: velocity-to-duration mapping', () => {
 		// Very high velocity with small distance would yield T < T_MIN.
 		const result = solveCommitDuration(
 			baseCommitInput({
-				releaseVelocityPxPerMs: COMMIT_VELOCITY_CLAMP_PX_PER_MS,
+				releaseVelocityPxPerMs: -COMMIT_VELOCITY_CLAMP_PX_PER_MS,
 				plan: planStub({ axis: 'left', distance: 50, progressDirection: 0 })
 			}),
 			0
@@ -256,9 +258,10 @@ describe('solveCommitDuration: velocity-to-duration mapping', () => {
 	});
 
 	test('velocity pointing away from target falls back to COMMIT_T_DEFAULT_MS', () => {
-		// progressDirection = 0 (committing toward 1), current progress = 0.5,
-		// release velocity negative (moving leftward while committing rightward).
-		const result = solveCommitDuration(baseCommitInput({ releaseVelocityPxPerMs: -2 }), 0.5);
+		// progressDirection = 0 (committing toward 1), current progress = 0.5.
+		// For axis='left' the commit advances leftward, so a rightward (positive)
+		// release points away from the target (progress would decrease).
+		const result = solveCommitDuration(baseCommitInput({ releaseVelocityPxPerMs: 2 }), 0.5);
 		expect(result.durationMs).toBe(COMMIT_T_DEFAULT_MS);
 	});
 
@@ -273,31 +276,40 @@ describe('solveCommitDuration: velocity-to-duration mapping', () => {
 	});
 
 	test('reversed cancel velocity falls back to COMMIT_T_DEFAULT_MS', () => {
-		// progressDirection = 1 (cancel, target = 0), currentProgress = 0.5,
-		// release velocity positive (moving rightward while the cancel
-		// targets 0 = leftward): directionSign = -1, progressVelocity > 0,
-		// so directionSign * progressVelocity <= 0 fires. The branch is
-		// plan-agnostic; this mirrors the commit-direction reversal above.
+		// progressDirection = 1 (cancel, target = 0), currentProgress = 0.5.
+		// For axis='left' the cancel retreats rightward (progress decreases),
+		// so a leftward (negative) release points away from target 0 and
+		// falls back to T_DEFAULT.
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 1 });
-		const result = solveCommitDuration(baseCommitInput({ releaseVelocityPxPerMs: 2, plan }), 0.5);
+		const result = solveCommitDuration(baseCommitInput({ releaseVelocityPxPerMs: -2, plan }), 0.5);
 		expect(result.durationMs).toBe(COMMIT_T_DEFAULT_MS);
 	});
 
-	test('progressVelocity sign matches the release velocity sign', () => {
-		const positive = solveCommitDuration(baseCommitInput({ releaseVelocityPxPerMs: 2 }), 0);
-		const negative = solveCommitDuration(baseCommitInput({ releaseVelocityPxPerMs: -2 }), 0);
-		expect(positive.progressVelocity).toBeGreaterThan(0);
-		expect(negative.progressVelocity).toBeLessThan(0);
+	test('progressVelocity sign is axis-adjusted (positive = progress advancing)', () => {
+		// axis='left' (default): a leftward (negative) release advances progress.
+		const leftAdvance = solveCommitDuration(baseCommitInput({ releaseVelocityPxPerMs: -2 }), 0);
+		// axis='right': a rightward (positive) release advances progress.
+		const rightPlan = planStub({ axis: 'right', distance: 375, progressDirection: 0 });
+		const rightAdvance = solveCommitDuration(
+			baseCommitInput({ releaseVelocityPxPerMs: 2, plan: rightPlan }),
+			0
+		);
+		expect(leftAdvance.progressVelocity).toBeGreaterThan(0);
+		expect(rightAdvance.progressVelocity).toBeGreaterThan(0);
+		// The opposite (away) directions are negative.
+		expect(
+			solveCommitDuration(baseCommitInput({ releaseVelocityPxPerMs: 2 }), 0).progressVelocity
+		).toBeLessThan(0);
 	});
 
 	test('cancel plan (progressDirection 1) solves duration toward target 0', () => {
 		// progressDirection = 1 means the plan snaps back to FROM (target=0).
-		// Current progress = 0.7, release velocity negative (moving leftward
-		// toward 0). Direction-matched.
+		// Current progress = 0.7. For axis='left' the cancel retreats rightward,
+		// so a rightward (positive) release is direction-matched toward 0.
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 1 });
-		const result = solveCommitDuration(baseCommitInput({ releaseVelocityPxPerMs: -2, plan }), 0.7);
+		const result = solveCommitDuration(baseCommitInput({ releaseVelocityPxPerMs: 2, plan }), 0.7);
 		expect(result.snapped).toBe(false);
-		// deltaProgress = 0.7, velocity in progress/ms = -2/375.
+		// deltaProgress = 0.7, velocity in progress/ms = 2/375.
 		// T = 2*0.7 / (2/375) = 0.7 * 375 = 262.5ms.
 		expect(result.durationMs).toBeCloseTo((2 * 0.7 * 375) / 2, 5);
 	});

@@ -57,7 +57,7 @@
 	const FAB_HEIGHT_PX = 56;
 	const BOTTOM_CLEARANCE_PX = 16;
 
-	type FabKind = 'discussions' | 'messages' | null;
+	type FabKind = 'discussions' | 'messages';
 
 	interface FabConfig {
 		readonly kind: FabKind;
@@ -88,8 +88,6 @@
 				tabIndex: kindConfig.tabIndex
 			};
 		}
-
-		if (attrs.kind === null) return null;
 
 		if (attrs.kind === 'discussions' || attrs.kind === 'messages') {
 			const kindConfig = FAB_KIND_CONFIGS[attrs.kind];
@@ -124,7 +122,6 @@
 		const cfg = fabConfig ?? retainedConfig;
 		if (cfg === null) return null;
 		const pub = publication;
-		if (cfg.kind === null) return cfg;
 		if (pub.inFlight && pub.fromPathname && pub.toPathname && pub.progress >= 0.5) {
 			const toAttrs = getFabRouteAttributes(pub.toPathname);
 			if (toAttrs !== null && (toAttrs.kind === 'discussions' || toAttrs.kind === 'messages')) {

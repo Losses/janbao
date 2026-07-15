@@ -62,8 +62,8 @@ export const COMMIT_VELOCITY_CLAMP_PX_PER_MS = 5;
  *  `TransitionSub`):
  *  - `'idle'`: no transition in flight, OR reduced-motion snap, OR
  *    post-interrupt handoff point.
- *  - `'live'`: the drag is live (orchestrator sub `dragging` or
- *    `scrubbing`); each pointermove publishes directly.
+ *  - `'live'`: the drag is live (orchestrator sub `dragging`); each
+ *    pointermove publishes directly.
  *  - `'committing'`: the commit rAF loop is integrating (orchestrator
  *    sub `committing` or `cancelling`).
  *
@@ -182,8 +182,9 @@ function clamp(value: number, lo: number, hi: number): number {
 
 /** Result of `solveCommitDuration`. `durationMs` is the settle
  *  duration (clamped, or `COMMIT_T_DEFAULT_MS` for the fallback
- *  branches); `progressVelocity` is the release velocity normalized
- *  to unit progress per ms (signed); `snapped` is true when
+ *  branches); `progressVelocity` is the release velocity normalized to
+ *  unit progress per ms, axis-adjusted so a positive value means progress
+ *  is advancing toward the commit target; `snapped` is true when
  *  `reducedMotion` selected the snap path, in which case the caller
  *  short-circuits and does not run the integrator. */
 export interface SolvedCommit {
@@ -214,7 +215,15 @@ export function solveCommitDuration(input: CommitInput, currentProgress: number)
 		-COMMIT_VELOCITY_CLAMP_PX_PER_MS,
 		COMMIT_VELOCITY_CLAMP_PX_PER_MS
 	);
-	const progressVelocity = clampedVelPx / distancePx;
+	// Normalize the screen-space release velocity to progress-space. The track
+	// follows the finger, and `trackTranslateX` advances leftward (negative) as
+	// progress increases for `axis='left'`, rightward (positive) for `'right'`,
+	// so a leftward (negative) release is progress-positive on `axis='left'`.
+	// Without this sign the gate below mis-fires for `axis='left'` commits
+	// (forward tab swipes) and routes them to T_DEFAULT instead of the
+	// velocity-matched solve.
+	const axisSign = input.plan.pageTrack.axis === 'left' ? -1 : 1;
+	const progressVelocity = (clampedVelPx * axisSign) / distancePx;
 	if (input.durationOverrideMs !== undefined) {
 		return {
 			durationMs: input.durationOverrideMs,

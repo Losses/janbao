@@ -506,6 +506,11 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 		// Assert that the preview tab attribute is null (non-tab list)
 		const previewTab = await leftSection.getAttribute('data-tab-panel');
 		expect(previewTab).toBeNull();
+		// A1 regression guard: a backward deep-to-deep back-swipe must render the
+		// back-target's cached preview panel (the SettingsMenuPanel, which holds
+		// the Edit Account link), NOT the DeepPreviewSkeleton placeholder. The
+		// forward-deep skeleton branch is forward-only.
+		await expect(leftSection.locator('a[href="/profile/edit"]')).toBeVisible();
 
 		// Clean up touch
 		await client.send('Input.dispatchTouchEvent', {

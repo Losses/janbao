@@ -26,8 +26,10 @@ export const SWIPE_COMMIT = 60;
 // gesture `detectSwipe` claims at x = EDGE_DEAD_ZONE).
 export const EDGE_DEAD_ZONE = 40;
 
-// Deep-title crossfade (Header.svelte unified title state machine). The vertical
-// slide between outgoing/incoming titles on a drag-release or non-gesture nav.
+// Deep-title crossfade duration, owned by the orchestrator's settle / tap-scrub
+// rAF eases. The vertical slide between the outgoing and incoming titles on a
+// drag-release or a non-gesture nav; the Header reads the published progress
+// and owns no rAF itself.
 export const TITLE_CROSSFADE_MS = 200;
 // Boundary void-swipe rubber-band factor. On the first/last tab a swipe toward
 // the absent neighbour moves the track at this fraction of the drag distance,

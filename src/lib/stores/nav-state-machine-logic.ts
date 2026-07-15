@@ -36,9 +36,8 @@ import type { TransitionPlan } from '$lib/utils/nav-resolvers';
  *  reducer can emit the correct landing state. */
 export type AtRestOn = 'tab' | 'deep' | 'search';
 
-/** The sub-phase while transitioning. Per §6: dragging, committing,
- *  cancelling, scrubbing. */
-export type TransitionSub = 'dragging' | 'committing' | 'cancelling' | 'scrubbing';
+/** The sub-phase while transitioning: dragging, committing, cancelling. */
+export type TransitionSub = 'dragging' | 'committing' | 'cancelling';
 
 /** Macro phase kind. Per §2/§6: at-rest, intent (classified, plan not
  *  locked), resolving (reserved for async resolution),
@@ -297,8 +296,8 @@ export function reduce(
 		}
 		case 'interrupt': {
 			// §5 interruption: a new intent arrives mid-transition, during
-			// any transitioning sub (dragging, committing, cancelling, or
-			// scrubbing). Cancel the in-flight transition and re-enter
+			// any transitioning sub (dragging, committing, or cancelling).
+			// Cancel the in-flight transition and re-enter
 			// `intent`. FROM is unchanged (the user is still on the FROM
 			// page); TO/direction are abandoned and must be cleared so an
 			// `intent` phase never carries a stale destination (mirrors

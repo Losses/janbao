@@ -185,6 +185,11 @@
 	const forwardDeepTarget = $derived.by<string | null>(() => {
 		const target = transitionTarget;
 		if (target === null) return null;
+		// Only a forward deep-to-deep push renders the destination skeleton in
+		// the left panel. A backward deep-to-deep back-swipe reveals the
+		// back-target, whose cached preview panel renders via leftPanelPathname
+		// below, so it must not be classified as a forward deep-to-deep.
+		if (publication.direction !== 'forward') return null;
 		if (isTabRootPath(target)) return null;
 		if (isTabRootPath(resolvedLeftHref)) return null;
 		return target;

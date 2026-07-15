@@ -312,9 +312,8 @@ describe('reducer: totality (out-of-sequence events are no-ops)', () => {
 		expect(s4).toBe(s3);
 	});
 
-	test('isInFlight is true for every reachable transitioning sub', () => {
-		// `scrubbing` is unreachable in Cycle 3 (no event produces it);
-		// the three reachable subs are dragging, committing, cancelling.
+	test('isInFlight is true for every transitioning sub', () => {
+		// The transitioning subs are dragging, committing, and cancelling.
 		const s0 = initialOrchestratorState('deep');
 		const s1 = reduce(s0, intentEvent(), NOW);
 		const s2 = reduce(s1, resolvedEvent(), NOW + 10);

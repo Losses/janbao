@@ -8,14 +8,14 @@ the deleted family-swap mechanism (A), and one logic defect in the
 
 ## A's findings (4 CONCERN, stale comments from the FAB refactor)
 
-1. `orchestrator:1655` — `#cancelAllAnimationEases` comment lists "family-swap
+1. `orchestrator:1655` - `#cancelAllAnimationEases` comment lists "family-swap
    ease" (deleted; only settle + tap-scrub remain). Fixed: removed the reference.
-2. `route-config.ts:17-24` — file header claims `family` "selects the FAB layer's
+2. `route-config.ts:17-24` - file header claims `family` "selects the FAB layer's
    scale driver" and is "permanent." Inaccurate: the FAB scale is now
    `fabScale(progress, RouteData.fab)`; family is only read by
    `isPipelineSwipeDisabledRoute` and marked for dissolution in §3. Fixed.
-3. `route-config.ts:96` — same inaccuracy (inline). Fixed.
-4. `fab-scale.ts:51-55` — `FabFamily` docstring claims it "mirrors the layer's
+3. `route-config.ts:96` - same inaccuracy (inline). Fixed.
+4. `fab-scale.ts:51-55` - `FabFamily` docstring claims it "mirrors the layer's
    FabConfig `family` discriminant." FabConfig has no `family` field. Fixed.
 
 ## B's finding (1 CONCERN, logic defect, fixed)

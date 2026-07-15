@@ -6,7 +6,7 @@ Cycle 5b1 cut over ONE pilot route (`/messages/[id]`) to the new all-rAF pipelin
 
 ## Scope
 
-Roll the new pipeline out to every remaining route that mounts `GesturePageLayout` (~25 routes), replace `MobileTabPager` (the tab swipe), and migrate the FAB family-swap animation from CSS to rAF. The four wiring points (SvelteKit hooks, pointer bridge, executor binding, lifecycle) apply to every route.
+Roll the new pipeline out to every remaining route that mounts `GesturePageLayout` (~25 routes), replace `MobileTabPager` (the tab swipe), and replace the FAB atom's CSS-transition scale animation with an rAF-driven `fabScale(progress, fromHasFab, toHasFab)` on the orchestrator. The four wiring points (SvelteKit hooks, pointer bridge, executor binding, lifecycle) apply to every route.
 
 ### Routes to migrate
 
@@ -18,7 +18,7 @@ Roll the new pipeline out to every remaining route that mounts `GesturePageLayou
 ### 5b1-skipped items (explicitly included)
 
 1. **NavStateMachine vestigial → authority (§13.5).** The orchestrator feeds the state machine events but reads `#publication` instead. 5b2 promotes the state machine to the single authority; consumers read its phase + plan, not a private publication.
-2. **FAB atom CSS transition → rAF.** The `.fab-transition { transition: transform 200ms ease-out }` CSS class + `discreteNavInFlight` 280ms `setTimeout` latch are replaced with an rAF-driven family-swap ease on the orchestrator (the FAB layer reads `pager.familySwapScale` reactively).
+2. **FAB atom CSS transition → rAF.** The `.fab-transition { transition: transform 200ms ease-out }` CSS class + `discreteNavInFlight` 280ms `setTimeout` latch are replaced with an rAF-driven scale on the orchestrator. The FAB layer computes `fabScale(progress, fromHasFab, toHasFab)` reactively from the published transition progress and the FROM / TO `RouteData.fab` booleans.
 3. **Skeleton branches audited.** The eager-load model is permanent (the root layout's `Promise.allSettled` always returns truthy `EMPTY_*` objects on rejection, never null). The dead `ActivitySkeleton` and `DiscussionsSkeleton` `{:else}` branches and their component files are removed; only `MessagesSkeleton` remains, reachable via the `/messages/[id]` route shadowing the layout's `messages` field with its message-row array (the preview cannot render an array, so the skeleton stands in until the back-swipe lands).
 4. **`isGesturePageLayoutRoute` rename.** The function covers NavPipelineHost routes too; renamed to `isPipelineRoute` (or similar).
 5. **`backParent` consumer audit.** As routes migrate off GPL, `backParent`'s GPL consumer dissolves per route. At end of 5b2, both consumers are gone; 5b3 removes the field.
@@ -36,7 +36,7 @@ Roll the new pipeline out to every remaining route that mounts `GesturePageLayou
 ## Constraints
 
 - **UNIFY, DO NOT BRIDGE (binding).** Every route's transition is the new pipeline. No CSS transitions or `setTimeout` in the animation layer. The `.fab-transition` CSS class and `discreteNavInFlight` `setTimeout` are the last CSS-driven animation; 5b2 eliminates them.
-- **Unified following-visual model (binding).** Every visual (panels, FAB, header) is a pure function of the slide progress and the transition target. During a cross-route family swap, the orchestrator's family-swap rAF publishes `pager.familySwapScale` (the target family's resting scale), which the FAB layer reads reactively, not a CSS transition.
+- **Unified following-visual model (binding).** Every visual (panels, FAB, header) is a pure function of the slide progress and the transition target. The FAB layer computes `fabScale(progress, fromHasFab, toHasFab)` reactively from the published transition progress and the FROM / TO `RouteData.fab` booleans, not a CSS transition.
 - **The state machine is the only authority (§13.5).** Consumers read the phase + plan from the state machine. The orchestrator does not hold a private `#publication`.
 - **No CSS-transition + setTimeout alignment shortcuts (§13.3).** The pilot's slide AND the FAB family-swap animation are rAF-driven. Zero CSS transitions, zero `setTimeout` in the animation layer.
 - **One route at a time (batched).** Each phase migrates a group of routes with its own e2e gate. A phase is done only when the gate is green.
@@ -45,7 +45,7 @@ Roll the new pipeline out to every remaining route that mounts `GesturePageLayou
 
 ## Phased approach
 
-1. **FAB family-swap → rAF** (shared component; no route migration). Replace `discreteNavInFlight` + CSS with an rAF family-swap ease on the orchestrator (the FAB layer reads `pager.familySwapScale` reactively). All existing e2e must pass.
+1. **FAB scale → rAF** (shared component; no route migration). Replace `discreteNavInFlight` + CSS with an rAF-driven FAB scale on the orchestrator; the FAB layer computes `fabScale(progress, fromHasFab, toHasFab)` from the published transition progress and the FROM / TO `RouteData.fab` booleans. All existing e2e must pass.
 2. **NavStateMachine → authority.** Promote the state machine to the sole authority.
 3. **Deep pages migration** (24 routes). Batch by route group (profile, admin, standalone deep pages).
 4. **Compose routes migration** (3 routes: `/post/discussion`, `/messages/new`, `/messages/add/[userId]`).
@@ -97,15 +97,16 @@ load) owns the animation layer for the app's mobile lifetime:
    the new host's `configure`, during which the SvelteKit nav hooks skip
    processing.
 2. **One rAF per motion channel, all owned by the orchestrator.** The
-   executor owns the gesture slide (the track, the cover-progress-driven FAB,
-   and the Header morph): during a live drag the track transform is written
-   synchronously per `pointermove` (the executor stops its rAF), and during a
-   commit / cancel slide the executor's rAF owns the motion. A separate
-   orchestrator-owned rAF drives the family-swap ease (publishing
-   `pager.familySwapScale`); a third drives the settle ease (publishing
-   `settleActive` / `settleProgress` / `settleLatched` / `settleDirection`); a
-   fourth drives the tap-scrub ease (publishing `searchScrubbing` while
-   scrubbing the root<->search morph). Each motion channel has exactly one rAF
+   executor owns the gesture slide (the track and the Header morph): during a
+   live drag the track transform is written synchronously per `pointermove` (the
+   executor stops its rAF), and during a commit / cancel slide the executor's
+   rAF owns the motion. The FAB scale is a reactive reader: the FAB layer
+   computes `fabScale(progress, fromHasFab, toHasFab)` from the published
+   transition progress and the FROM / TO `RouteData.fab` booleans. A second
+   orchestrator-owned rAF drives the settle ease (publishing `settleActive` /
+   `settleProgress` / `settleLatched` / `settleDirection`); a third drives the
+   tap-scrub ease (publishing `searchScrubbing` while scrubbing the root<->search
+   morph). Each motion channel has exactly one rAF
    owner; no consumer runs its own. This principle governs the **top-level
    gesture layer** (the slide / FAB / Header consumers driven by the
    orchestrator's publication). Macro §9 sanctions nested sub-pagers with
@@ -116,10 +117,8 @@ load) owns the animation layer for the app's mobile lifetime:
    orchestrator owns).
 3. **`configure` / `releaseInputs` lifecycle.** The host calls `configure` in
    `onMount` (capture inputs, `forceReset` the singleton state machine, publish
-   at-rest, detect a family change and arm the family-swap ease) and
-   `releaseInputs` in `onDestroy` (capture the visible FAB scale into
-   `#lastRenderedScale` for the next configure's family-swap anchor, clear the
-   in-flight pager state, drop the inputs) WITHOUT tearing down the executor,
+   at-rest) and `releaseInputs` in `onDestroy` (clear the in-flight pager state,
+   drop the inputs) WITHOUT tearing down the executor,
    the driver, the rAF loops, or the lifecycle `mount`. The `#mounted` guard
    returns at-rest from the publication while inputs are absent, so the gap
    frame publishes at-rest instead of the prior route's in-flight state. The
@@ -201,18 +200,20 @@ motion, decided solely by the orchestrator's phase. CSS transitions and
 `setTimeout` alignment do not exist in this layer." Status after the refactor:
 
 - **Track slide during a live drag:** written synchronously per `pointermove`
-  (the executor calls `onDragMove` -> `#publish()` and keeps its rAF stopped).
+  (the orchestrator calls `executor.onDragMove`, then `#publish`; the executor
+  keeps its commit rAF stopped).
   CSS-transition-free.
 - **Track slide during a commit / cancel / scrub:** owned by the executor's
   rAF (unchanged). CSS-transition-free.
-- **FAB scale during a within-route transition:** owned by the executor's rAF
-  via `coverProgress` / `fractionalIndex` (unchanged). CSS-transition-free.
-- **FAB scale during a cross-route family swap:** driven by the same single
-  transition progress as the page-track slide via
-  `fabScale(progress, fromHasFab, toHasFab)` (the FAB exits in the first
-  half if FROM has a FAB and enters in the second half if TO has a FAB).
-  CSS-transition-free; no separate family-swap rAF, no `familySwapScale`,
-  no `#lastRenderedScale`, no DOM read-back.
+- **FAB scale:** a reactive reader. The FAB layer computes
+  `fabScale(publication.progress, fromHasFab, toHasFab)` from the raw drag
+  progress the orchestrator publishes and the FROM / TO `RouteData.fab` booleans
+  (the page-track slide applies the threshold absorption on non-bidirectional
+  hosts, so the FAB reacts from the first pixel while the track absorbs the
+  deadzone). The FAB exits in the first half of the transition if FROM has a FAB
+  and enters in the second half if TO has a FAB; at rest it is 1 on a FAB route
+  and 0 elsewhere. CSS-transition-free; no separate family-swap rAF, no
+  `familySwapScale`, no `#lastRenderedScale`, no DOM read-back.
 - **Header morph / title crossfade during a gesture drag / commit:** owned
   by the executor's rAF via `pager.backMorph` / `pager.tapMorph`. The morph
   runs DURING the slide (the gesture's coverProgress drives the back-arrow
@@ -363,7 +364,7 @@ passes release velocity 0 to the solver, which returns
 ## Deliverables
 
 - The wiring: every route mounts `NavPipelineHost` (or the pipeline tab host). All four wiring points per route.
-- The FAB family-swap rAF animation (replacing CSS + setTimeout).
+- The rAF-driven FAB scale (`fabScale(progress, fromHasFab, toHasFab)`, replacing the CSS + setTimeout family-swap animation).
 - The NavStateMachine promoted to authority.
 - MobileTabPager replaced by the pipeline tab host.
 - `docs/DV20-C05b2-Journal.md` (incremental, honest, real evidence).

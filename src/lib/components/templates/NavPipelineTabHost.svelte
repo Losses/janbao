@@ -273,8 +273,8 @@
 	let held = false;
 	const releaseOrchestrator = (): void => {
 		if (!orchestratorMounted) return;
-		releaseNavPipelineOrchestrator(orchestrator);
 		orchestrator.releaseInputs();
+		releaseNavPipelineOrchestrator(orchestrator);
 		orchestratorMounted = false;
 	};
 

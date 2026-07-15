@@ -2468,3 +2468,222 @@ $ bun run test:e2e                    202 passed + 1 flaky (fab.spec.ts:432)
 Comment/doc-only; e2e confirms no regression.
 
 R36 audits the post-R35-fix state.
+
+## Session 38: R36 audit (A PASS / B PWC: 1 comment concern) + fixes; FAB scale unification landed alongside
+
+R36 ran two independent auditors. A returned PASS (0 concerns, 3 non-blocking
+observations); B returned PASS-WITH-CONCERNS (1 concern). Any concern resets the
+counter, so it stays 0/5.
+
+### Findings
+
+- A observations (non-blocking): (1) `recoverDesktopFlipNav()` in
+  `(tabs)/+layout.svelte` is dead, because the host handler fires first via the
+  child onMount and releases the orchestrator, so the call is always a no-op;
+  (2) the spec says "app exit calls full unmount" while the code abandons the
+  singleton (spec-code drift); (3) a mid-settle re-arm title text jump is a
+  documented tradeoff, not a defect.
+- B1 (comment, fixed): `NavPipelineHost.svelte:73` said the forward enter runs
+  over ~200ms; the actual duration is `COMMIT_T_DEFAULT_MS = 300`.
+
+### Fixes (R36 findings plus the FAB scale unification done alongside)
+
+- B1: the comment now reads "~300ms (`COMMIT_T_DEFAULT_MS`)".
+- A observation 1: the dead `recoverDesktopFlipNav()` call and its comment were
+  removed.
+- FAB scale unified to `fabScale(progress, fromHasFab, toHasFab)` on a single
+  progress signal plus FROM/TO FAB booleans (`RouteData.fab`). Deleted 250+ lines
+  of FAB-specific signals and machinery: `trackFractionalIndex`,
+  `familySwapScale`, the family-swap ease rAF (`#startFamilySwapEase` /
+  `#stopFamilySwapEase` / `#publishFamilySwapScale`), `#lastRenderedScale`,
+  `#fabDragSeedFraction`, `#detectFamilyChange`, `#previousFamily`,
+  `#computeFabRestingScale`, `#listFabTabIndex`, `#familyOf`,
+  `#pilotTransitionListKind`, and `TRACK_TRANSITION_MS`. F5 eliminated. The unit
+  tests for the deleted `scaleFromFraction` and `tabFraction` helpers were removed
+  with them, consistent with the unit count dropping from 409 (R34/R35) to 406.
+- snippet field deleted from the cache entry shape (dead code; its reader
+  `MobileTabPager` was deleted in R23); DV20-Plan section 7 updated.
+- shouldEnter changed from the static `leftHref` prop to `resolvedLeftHref`, so
+  `playEnterAnimation` runs for every real forward enter and the FAB has progress
+  to animate. This prevents the forward-enter FAB scale jump the unification
+  initially caused.
+
+### Known behavior change
+
+`/activity` no longer shows a dynamic FAB during transitions. `RouteData.fab` is
+false for `/activity`, so the half-mapping treats it as no-FAB. Approved by the
+user.
+
+### Gate outputs (post-fix, independently re-run 2026-07-15)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (fab.spec.ts:432)
+```
+
+R37 audits the post-unification code.
+
+## Session 39: R37 audit (A/B PWC: 4 stale comments + 1 queuedNav orphan defect) + fixes; first audit of the unified FAB scale
+
+R37 ran two independent auditors. Both returned PASS-WITH-CONCERNS. A found four
+stale comments left by the FAB refactor; B found one logic defect in the
+`#queuedDiscreteNav` orphan path. Counter stays 0/5.
+
+### Findings
+
+- A (4 stale comments referencing the deleted family-swap mechanism):
+  (1) `orchestrator:1655` `#cancelAllAnimationEases` comment still listed a
+  "family-swap ease" that was deleted, leaving only settle and tap-scrub;
+  (2) `route-config.ts:17-24` header claimed `family` "selects the FAB layer's
+  scale driver" and is "permanent", but the FAB scale is now
+  `fabScale(progress, RouteData.fab)` and `family` is read only by
+  `isPipelineSwipeDisabledRoute`;
+  (3) `route-config.ts:96` carried the same inaccuracy inline;
+  (4) `fab-scale.ts:51-55` `FabFamily` docstring claimed it mirrors a
+  `FabConfig.family` discriminant that no longer exists.
+- B (1 logic defect): when the finish-then-new policy queues a discrete nav and
+  the commit's goto is cancelled by a competing external navigation
+  (session-timeout, user URL, or app-level goto) before it lands, `#landAtRest`
+  never runs, so `#queuedDiscreteNav` persists on the singleton and the next
+  pipeline route fires a phantom redirect.
+
+### Fixes
+
+- A: all four comments rewritten to describe the unified
+  `fabScale(progress, fromHasFab, toHasFab)` mechanism; `family` is documented as
+  read only by `isPipelineSwipeDisabledRoute` and marked for dissolution in §3.
+- B: clear `#queuedDiscreteNav` in `onSvelteKitBeforeNavigate` after the
+  dispatch-reentry checks, so any external nav invalidates the prior queue. The
+  legitimate finish-then-new goto returns at the earlier dispatch-reentry check
+  (its target matches `#dispatchTarget`) and is unaffected.
+- Spec nitpicks (`.md`): the "Global animation manager" section, end-state #2,
+  the §5 invariant, and Step 2 all described the old `familySwapScale` /
+  `#lastRenderedScale` / `#startFamilySwapEase` mechanism; updated to the unified
+  `fabScale` mechanism.
+
+### Backfill note (2026-07-15)
+
+Sessions 38 and 39 were missing from the journal and are written retroactively
+from `RV20-C05b2-Audit-36.md` and `RV20-C05b2-Audit-37.md`. The gate was
+independently re-run this session. Re-running lint caught a prettier formatting
+violation in `RV20-C05b2-Audit-36.md` that the prior gate record did not reflect;
+the file was reformatted (content unchanged) and lint now exits 0.
+
+### Gate outputs (post-fix, independently re-run 2026-07-15)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (fab.spec.ts:432)
+```
+
+R38 audits the post-R37-fix state.
+
+## Session 40: R38 audit (A/B PWC: 8 comment/dead-code/order concerns + stale spec) + fixes
+
+R38 ran two independent auditors. A returned PASS-WITH-CONCERNS (4 concern + 2
+nitpicks); B returned PASS-WITH-CONCERNS (4 concern). Counter stays 0/5. No
+logic defect: every concern is comment / docstring / dead-code / teardown-order
+accuracy, or stale spec text referencing the deleted family-swap mechanism.
+
+### Findings
+
+- A (4 concern): three `#landAtRest` "without dispatching" comments are wrong
+  because the method dispatches a queued finish-then-new nav (orchestrator
+  :1530, :1461-1465, :1552-1557); `FloatingActionButtonLayer.svelte:92`
+  `attrs.kind === null` is a dead branch. Plus 2 spec nitpicks (:204 control
+  flow written backwards; :211-215 "same progress" oversimplified).
+- B (4 concern): `TransitionSub` held an unreachable `'scrubbing'`
+  (nav-state-machine-logic.ts:39-41); the executor `'live'` docstring paired it
+  with `scrubbing` (nav-executor-logic.ts:64-66); `TITLE_CROSSFADE_MS` named a
+  stale Header.svelte owner (gesture-constants.ts:29-31); the two pipeline
+  hosts tore down the orchestrator in opposite orders (NavPipelineTabHost vs
+  NavPipelineHost).
+- Orchestrator verification found a broader stale-spec class R37 had not swept:
+  nine spots still described the deleted family-swap / cover-progress-FAB
+  mechanism as current (scope, constraints, phased step, motion channels,
+  lifecycle, §5 FAB bullets, deliverable).
+
+### Fixes
+
+- A1-A3: rewrote the three `#landAtRest` comments to state the queued-nav
+  dispatch.
+- A4: removed `null` from `FabRouteKind` and the local `FabKind`; deleted the
+  two dead `kind === null` branches.
+- B1: removed `'scrubbing'` from `TransitionSub`; fixed the type, interrupt, and
+  test comments.
+- B2/B3: the executor `'live'` docstring and `TITLE_CROSSFADE_MS` comment
+  corrected to current owners.
+- B4: unified `NavPipelineTabHost.releaseOrchestrator` order with
+  `NavPipelineHost`.
+- Spec: nine stale references rewritten to the unified `fabScale` mechanism; the
+  §5 control-flow and progress wording corrected.
+
+### Gate outputs (post-fix, independently re-run 2026-07-15)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    201 passed + 2 flaky (exit 0)
+```
+
+The only behavior-adjacent fix is the B4 teardown-order reorder; e2e matches
+the pre-fix run (201 + 2 flaky), so no regression. Both flaky tests are the
+known CDP-touch class.
+
+R39 audits the post-R38-fix state.
+
+## Session 41: R39 audit (A/B PWC: 3 logic bugs + 3 comment/test accuracies) + fixes
+
+R39 ran two independent auditors. A returned PASS-WITH-CONCERNS (3 concern, two
+logic bugs); B returned PASS-WITH-CONCERNS (3 concern, one logic gap). Counter
+stays 0/5. R39 found real defects the prior rounds missed.
+
+### Findings
+
+- A1 (logic): `NavPipelineHost.forwardDeepTarget` classified a backward
+  deep-to-deep as forward (no direction check), so the left panel showed a
+  skeleton instead of the cached preview panel.
+- A2 (logic): `solveCommitDuration` computed `progressVelocity` without
+  axis-normalizing, so `axis='left'` forward commits always fell back to
+  COMMIT_T_DEFAULT_MS instead of the velocity-matched solve.
+- A3 (test): the velocity unit tests pinned the A2 bug; the comments
+  mis-described the direction.
+- B1 (comment): the orphan-prevention comment mis-stated the replay re-entry.
+- B2 (logic gap): the `#queuedDiscreteNav` orphan clear at 1624 was unreachable
+  when an external nav superseded the in-flight commit goto (gated by the
+  `#navDispatchInFlight` short-circuit).
+- B3 (docstring): the publication docstring omitted `lastDispatchWasDeepToDeep`.
+
+### Fixes
+
+- A1: `forwardDeepTarget` gated on `publication.direction === 'forward'`; the
+  Bug 12 e2e was augmented to assert the cached panel renders (preventive).
+- A2: `progressVelocity` axis-normalized via `axisSign`; seven velocity unit
+  tests rewritten to the physical committing direction.
+- A3: the test comments corrected.
+- B1: the orphan-prevention comment rewritten.
+- B2: the `#navDispatchInFlight` branch clears `#queuedDiscreteNav` on an
+  external supersede (a non-match on `#dispatchTarget`); the own re-entry is
+  unaffected.
+- B3: the publication docstring names `lastDispatchWasDeepToDeep`.
+
+### Gate outputs (post-fix, independently re-run 2026-07-15)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (exit 0)
+```
+
+The three logic fixes are behavior-relevant; e2e confirms no regression. A1
+has a preventive e2e (Bug 12), A2 the rewritten unit suite, and B2 is verified
+by the gate plus a structural trace (the race is too narrow for a dedicated
+e2e).
+
+R40 audits the post-R39-fix state.
