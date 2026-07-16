@@ -71,8 +71,12 @@
 	// from `leftHref` (e.g. user tapped a conversation in /messages/inbox),
 	// slide the track from the left-panel position (translateX(0)) to the
 	// centre rest (translateX(-33.333%)) over ~300ms (COMMIT_T_DEFAULT_MS).
-	// Computed at script init (before render) via `navStore.activeStack`
-	// so there is no first-paint flash.
+	// The enter check (`shouldEnter` below) is a lazy `$derived.by` that
+	// reads `navStore.activeStack`; it is evaluated in onMount, not at
+	// script init. The no-first-paint-flash comes from onMount's
+	// synchronous `translateX(0px)` seed on the track (written before the
+	// executor's rAF starts the slide), not from eager script-init
+	// evaluation.
 	const navStore = getNavigationStore();
 
 	// The resolved back-target: follows the live navigation stack so a
@@ -305,7 +309,7 @@
 	// Keep the orchestrator's from-pathname in sync with same-route param
 	// changes (/messages/123 -> /messages/456) that reuse this host
 	// without remounting, so a subsequent tab-exit is still owned
-	// (#isPilotFrom matches the live pathname, not the stale mount one).
+	// (#isPipelineFrom matches the live pathname, not the stale mount one).
 	$effect(() => {
 		const pathname = page.url.pathname;
 		// Skip during an in-flight transition (the dispatch's URL change

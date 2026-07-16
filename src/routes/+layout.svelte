@@ -23,7 +23,7 @@
 	import { getPageCacheStore, type PageCacheStore } from '$lib/stores/page-cache.svelte';
 	import { getCurrentScrollY } from '$lib/utils/get-current-scroll-y';
 	import { isTabRootPath } from '$lib/utils/history-nav';
-	import { isPilotTransition } from '$lib/utils/nav-pipeline-gate';
+	import { isPipelineTransition } from '$lib/utils/nav-pipeline-gate';
 	import { getNavPipelineOrchestrator } from '$lib/stores/nav-pipeline-orchestrator.svelte';
 
 	interface LayoutProps {
@@ -82,15 +82,15 @@
 		if (from && !isTabRootPath(from.url.pathname)) {
 			pageCache.capture(from.url.pathname, undefined, { scrollTop: getCurrentScrollY() });
 		}
-		// The pilot orchestrator owns the transition when the source or
-		// destination is the pilot route. When it consumes the
+		// The pipeline orchestrator owns the transition when the source or
+		// destination is the pipeline route. When it consumes the
 		// navigation (cancels + drives the slide plan via the executor),
 		// the root layout's navStore hooks are skipped for this
 		// navigation so they do not double-write navStore state.
 		const orchestrator = getNavPipelineOrchestrator();
 		if (
 			orchestrator !== null &&
-			isPilotTransition(from?.url.pathname ?? null, to?.url.pathname ?? null)
+			isPipelineTransition(from?.url.pathname ?? null, to?.url.pathname ?? null)
 		) {
 			const consumed = orchestrator.onSvelteKitBeforeNavigate({
 				from: from ? { url: { pathname: from.url.pathname, search: from.url.search } } : null,
@@ -134,8 +134,8 @@
 
 	afterNavigate(() => {
 		navStore.handleAfterNavigate();
-		// Clear the pilot orchestrator's state on every navigation's
-		// landing (the orchestrator is a no-op when not pilot-mounted).
+		// Clear the pipeline orchestrator's state on every navigation's
+		// landing (the orchestrator is a no-op when not pipeline-mounted).
 		const orchestrator = getNavPipelineOrchestrator();
 		if (orchestrator !== null) {
 			orchestrator.onSvelteKitAfterNavigate();

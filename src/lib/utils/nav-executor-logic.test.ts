@@ -605,7 +605,7 @@ describe('track geometry helpers (interrupt handoff)', () => {
 	});
 
 	test('forward-enter progress maps to back-swipe progress via absolute position', () => {
-		// The pilot's two plans share one track with opposite progress
+		// The pipeline host's two plans share one track with opposite progress
 		// conventions: enter slides 0 -> -W (progress 0 -> 1); back-swipe
 		// slides -W -> 0 (progress 0 -> 1). An interrupt must start the
 		// back-swipe at the enter's current visual position.

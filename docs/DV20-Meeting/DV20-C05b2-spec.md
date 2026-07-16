@@ -121,8 +121,9 @@ load) owns the animation layer for the app's mobile lifetime:
    drop the inputs) WITHOUT tearing down the executor,
    the driver, the rAF loops, or the lifecycle `mount`. The `#mounted` guard
    returns at-rest from the publication while inputs are absent, so the gap
-   frame publishes at-rest instead of the prior route's in-flight state. The
-   mobile -> desktop flip and the app exit call the full `unmount` teardown.
+   frame publishes at-rest instead of the prior route's in-flight state. Only
+   the mobile -> desktop flip calls the full `unmount` teardown; app exit
+   abandons the singleton.
 4. **FAB layer is a reactive reader.** The FAB layer derives its scale from
    `fabScale(progress, fromHasFab, toHasFab)` where `progress` is the same
    single transition signal that drives the page-track slide and

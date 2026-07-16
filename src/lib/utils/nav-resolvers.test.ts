@@ -12,7 +12,7 @@
  *   - Cross-tag axes follow direction (forward -> left, backward -> right).
  *   - The {search, search} resolver is reserved (distance 0).
  *   - progressDirection follows intent.micro (committed / cancelled).
- *   - The resolvers omit `fab` / `header` (the pilot drives those
+ *   - The resolvers omit `fab` / `header` (the pipeline orchestrator drives those
  *     layers through the pager store, not through the plan).
  */
 

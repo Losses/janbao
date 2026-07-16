@@ -3267,3 +3267,31 @@ $ bun run test:e2e                    199 passed + 4 flaky (exit 0)
 ```
 
 R59 audits the post-R58-fix state.
+
+## Session 61: R59 audit (A/B PWC: 2 narrow edge-case logic bugs + 1 nitpick) + fixes
+
+R59 ran two independent auditors (stripped prompt). A returned PASS-WITH-CONCERNS
+(1 concern + 1 nitpick); B returned PASS-WITH-CONCERNS (1 concern). Counter
+stays 0/5. Both are narrow edge-case logic bugs.
+
+### Findings + fixes
+
+- A2 (logic, narrow): `#prevHeaderTitle` goes stale across a non-pipeline detour.
+  Straightforward fix (update prev values in the `!#mounted` early-return) was
+  REVERTED: it breaks the gap frame (releaseInputs -> configure), where prev values
+  must freeze. Needs a different approach (e.g., reset `#headerStateInitialized`
+  in `releaseInputs`). Left open.
+- B1 (logic, FIXED): mid-settle re-arm hardcoded `targetProgress: 1`; now passes
+  `this.#settleTargetProgress`.
+- A-nitpick (spec): app-exit text corrected.
+
+### Gate outputs (post-fix, independently re-run 2026-07-16)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    408 pass / 0 fail
+$ bun run test:e2e                    201 passed + 2 flaky (exit 0)
+```
+
+R60 audits the post-R59-fix state.

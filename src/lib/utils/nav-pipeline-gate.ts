@@ -65,7 +65,7 @@ export function isNavPipelineRoute(pathname: string): boolean {
  *  hits this gate before NavPipelineHost mounts, so the orchestrator
  *  singleton is null and the layout hook falls through to plain
  *  SvelteKit nav (no slide). */
-export function isPilotTransition(from: string | null, to: string | null): boolean {
+export function isPipelineTransition(from: string | null, to: string | null): boolean {
 	if (from !== null && isNavPipelineRoute(from)) return true;
 	if (to !== null && isNavPipelineRoute(to)) return true;
 	return false;

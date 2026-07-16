@@ -95,7 +95,7 @@ export const navPipelinePointer: Action<HTMLElement, NavPipelinePointerParams> =
 		// peak vs final position for rebound and a precise trailing
 		// sample window for velocity); the orchestrator uses them to
 		// override the classifier's own estimates so the release gate
-		// matches the non-pilot routes' commit/cancel decision.
+		// matches the non-pipeline routes' commit/cancel decision.
 		params.orchestrator.onPointerUp(x, c.startY, velocity, reversed);
 	};
 

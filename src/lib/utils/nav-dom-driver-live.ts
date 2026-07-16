@@ -137,8 +137,8 @@ export class LiveNavDomDriver implements NavDomDriver {
 			header.style.setProperty('transform', `translateY(${h.translateY}px)`);
 			// CSS custom properties for a Header consumer that reads them
 			// via `var(--header-morph)` / `var(--header-title-crossfade)`.
-			// The pilot passes `header: null` in resolveElements AND the
-			// pilot's plan omits the `header` fn (so `visual.header` is
+			// The pipeline host passes `header: null` in resolveElements AND the
+			// pipeline host's plan omits the `header` fn (so `visual.header` is
 			// undefined); either condition skips this block. A consumer
 			// that binds a header element AND supplies a plan `header` fn
 			// receives these writes.

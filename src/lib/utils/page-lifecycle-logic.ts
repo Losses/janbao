@@ -339,7 +339,7 @@ export interface UnmountPlan {
  *  `svelte-ondestroy-runs-in-ssr`); instead the teardown work is gated
  *  on `isBrowser`, so it stays correct even if the caller runs during
  *  SSR. The orchestrator's `PageLifecycleController.unmount` calls
- *  this from the pilot host's teardown hook; the unit suite covers
+ *  this from the pipeline host's teardown hook; the unit suite covers
  *  the `isBrowser` branches directly. */
 export function planUnmount(state: PageLifecycleState, isBrowser: boolean): UnmountPlan {
 	return {

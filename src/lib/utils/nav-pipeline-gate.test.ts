@@ -8,7 +8,7 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { isNavPipelineRoute, isPilotTransition } from './nav-pipeline-gate';
+import { isNavPipelineRoute, isPipelineTransition } from './nav-pipeline-gate';
 
 describe('isNavPipelineRoute', () => {
 	test('matches a numeric conversation detail route', () => {
@@ -88,24 +88,24 @@ describe('isNavPipelineRoute', () => {
 	});
 });
 
-describe('isPilotTransition', () => {
+describe('isPipelineTransition', () => {
 	test('owns a transition FROM a pipeline route (gesture / tab-click exit)', () => {
-		expect(isPilotTransition('/messages/123', '/messages/inbox')).toBe(true);
-		expect(isPilotTransition('/messages/123', '/')).toBe(true);
-		expect(isPilotTransition('/bookmarks', '/')).toBe(true);
-		expect(isPilotTransition('/profile/settings', '/')).toBe(true);
+		expect(isPipelineTransition('/messages/123', '/messages/inbox')).toBe(true);
+		expect(isPipelineTransition('/messages/123', '/')).toBe(true);
+		expect(isPipelineTransition('/bookmarks', '/')).toBe(true);
+		expect(isPipelineTransition('/profile/settings', '/')).toBe(true);
 	});
 
 	test('owns a transition TO a pipeline route (deep-link landing)', () => {
-		expect(isPilotTransition('/messages/inbox', '/messages/123')).toBe(true);
-		expect(isPilotTransition('/', '/messages/123/p2')).toBe(true);
-		expect(isPilotTransition('/', '/bookmarks')).toBe(true);
+		expect(isPipelineTransition('/messages/inbox', '/messages/123')).toBe(true);
+		expect(isPipelineTransition('/', '/messages/123/p2')).toBe(true);
+		expect(isPipelineTransition('/', '/bookmarks')).toBe(true);
 	});
 
 	test('does not own a transition between two non-pipeline routes', () => {
-		expect(isPilotTransition('/discussion/123', '/entry/signin')).toBe(false);
-		expect(isPilotTransition(null, '/discussion/123')).toBe(false);
-		expect(isPilotTransition('/discussion/123', null)).toBe(false);
-		expect(isPilotTransition(null, null)).toBe(false);
+		expect(isPipelineTransition('/discussion/123', '/entry/signin')).toBe(false);
+		expect(isPipelineTransition(null, '/discussion/123')).toBe(false);
+		expect(isPipelineTransition('/discussion/123', null)).toBe(false);
+		expect(isPipelineTransition(null, null)).toBe(false);
 	});
 });

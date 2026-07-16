@@ -52,9 +52,9 @@ interface PagerUpdate {
 	 * null = no tap scrub in flight (rest, drag). Optional so non-publishing
 	 * writers compile without touching it. */
 	tapMorph?: number | null;
-	/** The target pathname of an in-flight pilot detail-page transition;
+	/** The target pathname of an in-flight pipeline detail-page transition;
 	 * null at rest. Read by the Header to resolve the back-arrow reveal
-	 * during the slide. Optional so non-pilot writers compile without
+	 * during the slide. Optional so non-pipeline writers compile without
 	 * touching it. */
 	transitionTarget?: string | null;
 	/** The icon-morph value at the non-search endpoint of an in-flight

@@ -6,7 +6,7 @@
  *   1. SvelteKit nav -> orchestrator: `onSvelteKitBeforeNavigate` /
  *      `onSvelteKitAfterNavigate` (called from `src/routes/+layout.svelte`'s
  *      hooks; `beforeNavigate` gated by
- *      `isPilotTransition && orchestrator !== null`, `afterNavigate`
+ *      `isPipelineTransition && orchestrator !== null`, `afterNavigate`
  *      gated by `orchestrator !== null`).
  *   2. Pointer -> intent: `onPointerDown` / `onPointerMove` /
  *      `onPointerUp` (called from the `navPipelinePointer` Svelte
@@ -158,27 +158,27 @@ interface PendingDiscreteNav {
 /** A URL record subset the layout hook extracts from SvelteKit's
  *  navigation event. Defined here so the orchestrator does not depend
  *  on the SvelteKit navigation type directly. */
-interface PilotNavUrl {
+interface NavPipelineUrl {
 	readonly pathname: string;
 	readonly search: string;
 }
 
-/** A `from`/`to` endpoint carried by `PilotBeforeNavigateEvent`. */
-interface PilotNavEndpoint {
-	readonly url: PilotNavUrl;
+/** A `from`/`to` endpoint carried by `NavPipelineBeforeNavigateEvent`. */
+interface NavPipelineEndpoint {
+	readonly url: NavPipelineUrl;
 }
 
 /** SvelteKit's navigation-cancel hook. */
-export type PilotCancelFn = () => void;
+export type NavPipelineCancelFn = () => void;
 
 /** The subset of the SvelteKit `BeforeNavigate` event the orchestrator
  *  reads. Defined here so the orchestrator does not depend on the
  *  SvelteKit navigation type directly (the layout hook adapts). */
-interface PilotBeforeNavigateEvent {
-	readonly from: PilotNavEndpoint | null;
-	readonly to: PilotNavEndpoint | null;
+interface NavPipelineBeforeNavigateEvent {
+	readonly from: NavPipelineEndpoint | null;
+	readonly to: NavPipelineEndpoint | null;
 	readonly type: string;
-	readonly cancel: PilotCancelFn;
+	readonly cancel: NavPipelineCancelFn;
 }
 
 /** The current viewport width (px). The host reads `window.innerWidth` /
@@ -587,12 +587,20 @@ export class NavPipelineOrchestrator {
 	 *   - READ by the destination host's `shouldEnter` at onMount (via
 	 *     the publication's `lastDispatchWasDeepToDeep` field) to
 	 *     suppress the enter animation.
-	 *   - CLEARED to false in `#landAtRest`, which runs in
-	 *     `onSvelteKitAfterNavigate` AFTER the destination host's
-	 *     onMount (so the flag is still true when `shouldEnter` reads
-	 *     it). A deep-to-deep target is always a pipeline route (the
-	 *     `isDeepToDeep` guard requires `isNavPipelineRoute(to)`), so
-	 *     `#landAtRest` is guaranteed to run for it.
+	 *   - CLEARED to false in three places. (a) `#landAtRest`, which
+	 *     runs in `onSvelteKitAfterNavigate` AFTER the destination
+	 *     host's onMount (so the flag is still true when `shouldEnter`
+	 *     reads it); a deep-to-deep target is always a pipeline route
+	 *     (the `isDeepToDeep` guard requires `isNavPipelineRoute(to)`),
+	 *     so `#landAtRest` is guaranteed to run for it on a normal
+	 *     landing. (b) The supersede branch in
+	 *     `onSvelteKitBeforeNavigate` (the `#navDispatchInFlight` true,
+	 *     target-mismatch case): an external nav cancels the in-flight
+	 *     goto so `#landAtRest` never runs; without this clear a stale
+	 *     true would suppress a later forward-enter slide in
+	 *     `shouldEnter`. (c) `unmount`, which resets every transient
+	 *     transition field so the next mount (a desktop -> mobile flip
+	 *     that re-enters mobile) starts clean.
 	 *
 	 *  Backed by `$state` because the `#publication` `$derived.by`
 	 *  reads it to publish `lastDispatchWasDeepToDeep` for the
@@ -1673,13 +1681,13 @@ export class NavPipelineOrchestrator {
 	 *  consumed the navigation (cancelled + started a slide plan); the
 	 *  layout hook does NOT also call the root layout's
 	 *  `navStore.handleBeforeNavigate` in that case. */
-	onSvelteKitBeforeNavigate(navigation: PilotBeforeNavigateEvent): boolean {
+	onSvelteKitBeforeNavigate(navigation: NavPipelineBeforeNavigateEvent): boolean {
 		const inputs = this.#mountInputs;
 		if (inputs === null) return false;
 		const from = navigation.from?.url.pathname ?? null;
 		const to = navigation.to?.url.pathname ?? null;
 		// The search (?q=... etc) of the target. Kept separate from `to`
-		// (pathname) because the path-based checks below (isPilotFrom,
+		// (pathname) because the path-based checks below (isPipelineFrom,
 		// isTabRootPath) need the bare pathname, while the deferred
 		// dispatch + re-entry match must carry the full URL.
 		const toSearch = navigation.to?.url.search ?? '';
@@ -1743,14 +1751,14 @@ export class NavPipelineOrchestrator {
 		// a back-swipe equivalent). Transitions TO the host route
 		// (deep-link landings) fall through; the afterNavigate hook
 		// clears the state.
-		if (from === null || !this.#isPilotFrom(inputs, from)) {
+		if (from === null || !this.#isPipelineFrom(inputs, from)) {
 			return false;
 		}
 		if (to === null) return false;
 		// Let the root layout hooks handle the navigation if the target
 		// is also the host route (e.g. a paged conversation step within
 		// the same route: `/messages/123/p1` -> `/messages/123/p2`).
-		if (this.#isPilotFrom(inputs, to)) {
+		if (this.#isPipelineFrom(inputs, to)) {
 			return false;
 		}
 		// Own transitions to a tab root (a tab-click exit) AND every
@@ -1939,7 +1947,7 @@ export class NavPipelineOrchestrator {
 		this.#landAtRest();
 	}
 
-	#isPilotFrom(inputs: PipelineMountInputs, from: string): boolean {
+	#isPipelineFrom(inputs: PipelineMountInputs, from: string): boolean {
 		// The host's own pathname. Compare by prefix so a paged URL
 		// (`/messages/123/p2`) still counts as the same host.
 		const hostPath = inputs.fromPathname.replace(/\/p\d+$/, '');
@@ -2365,7 +2373,11 @@ export class NavPipelineOrchestrator {
 			// The settle rAF's startProgress is the CURRENT settleProgress,
 			// so the title crossfade continues from the in-flight position:
 			// the outgoing title span keeps its mid-settle offset and the
-			// new incoming title enters from below. The morph derivation
+			// new incoming title enters from below. The re-arm passes
+			// `#settleTargetProgress` so the in-flight settle's direction
+			// survives the re-arm: a cancel settle (target 0) interrupted
+			// by a live-title resolution stays a cancel, and a commit
+			// settle (target 1) stays a commit. The morph derivation
 			// re-evaluates against the new latched endpoints
 			// (`outgoingHasTabs` is the prior incoming, `incomingHasTabs`
 			// is the current value), so the morph value can jump at the
@@ -2383,7 +2395,7 @@ export class NavPipelineOrchestrator {
 					this.#armSettleEase(
 						latched,
 						this.#stateMachine.settleProgress,
-						1,
+						this.#settleTargetProgress,
 						false,
 						this.#resolveNavDirection()
 					);
@@ -2557,7 +2569,7 @@ export class NavPipelineOrchestrator {
 	/** Refresh the from-pathname (and from-tag) after a same-host route
 	 *  change (e.g. /messages/123 -> /messages/456 on a thread host, or a
 	 *  tab swap on the tab pager) that reuses this host without remounting,
-	 *  so a subsequent tab-exit is still owned (#isPilotFrom matches the
+	 *  so a subsequent tab-exit is still owned (#isPipelineFrom matches the
 	 *  live pathname, not the stale mount pathname). Also refreshes
 	 *  `fromTabIndex` when the new pathname is a tab root so the tab
 	 *  pager's prev/next neighbour computation stays correct across tab
