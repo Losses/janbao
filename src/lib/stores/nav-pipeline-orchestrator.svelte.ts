@@ -357,10 +357,18 @@ export class NavPipelineOrchestrator {
 	 *  orchestrator's own `goto` / `history.back()` re-entry
 	 *  regardless of timer or popstate ordering. */
 	#dispatchTarget: string | null = null;
-	/** The executor-driven per-frame raw drag fraction in [0, 1]. The
-	 *  state machine owns the macro authority (phase, plan, FROM/TO,
-	 *  direction); this field owns the sub-frame progress the executor
-	 *  produces each tick. The `#publication` derived merges the two. */
+	/** The raw drag fraction in [0, 1]. The state machine owns the macro
+	 *  authority (phase, plan, FROM/TO, direction); this field owns the
+	 *  sub-frame progress the FAB layer reads. The orchestrator publishes
+	 *  it via `#publish(raw)` in two contexts: during live drags
+	 *  (per-pointermove, synchronously, via `#interpretIntent`) and
+	 *  during commit/cancel slides (per-executor-rAF-tick via
+	 *  `#onExecutorTick`). It is reset to 0 in `configure`,
+	 *  `#beginGesture`, `playEnterAnimation`,
+	 *  `onSvelteKitBeforeNavigate` (the discrete-nav branch),
+	 *  `#landAtRest`, and `unmount`. The executor does not write it
+	 *  directly. The `#publication` derived merges it with the macro
+	 *  state. */
 	#progress = $state(0);
 	/** Reactive publication: a read-through to the state machine's macro
 	 *  state (plan, FROM/TO, direction, in-flight phase) and settle +
@@ -1838,12 +1846,17 @@ export class NavPipelineOrchestrator {
 	/** Called from `+layout.svelte`'s `afterNavigate` for pipeline-route
 	 *  sources / destinations. For a host-internal param navigation
 	 *  (`/messages/123/p1` -> `/messages/123/p2`) or the initial arrival this is a
-	 *  no-op reset (the orchestrator is at rest). For a navigation AWAY
-	 *  from the host route (a tab-click exit / a gesture settle), the host's
-	 *  `onDestroy` runs before `afterNavigate` (Svelte 5 lifecycle: old
-	 *  `onDestroy` -> new route mounts -> `afterNavigate`), so the active
-	 *  slot is already null and this call is skipped; the cleanup is
-	 *  handled by `onDestroy` -> `releaseInputs()`.
+	 *  no-op reset (the orchestrator is at rest). For a pipeline-to-pipeline
+	 *  route swap (a tab-click exit / a gesture settle to another pipeline
+	 *  host), the new host's `configure` re-sets `active` (and `#mounted`)
+	 *  before `afterNavigate` fires, so this call runs through and
+	 *  `#landAtRest` clears the pending slots on the freshly configured host.
+	 *  For a navigation AWAY from the pipeline entirely (to a non-pipeline
+	 *  route where no host mounts), the host's `onDestroy` runs before
+	 *  `afterNavigate` (Svelte 5 lifecycle: old `onDestroy` -> new route
+	 *  mounts -> `afterNavigate`), the active slot is already null, and this
+	 *  call is skipped; the cleanup is handled by `onDestroy` ->
+	 *  `releaseInputs()`.
 	 *
 	 *  Guards: a forward-enter (`playEnterAnimation`) or an in-flight
 	 *  gesture / tab-click that the orchestrator did NOT dispatch (an

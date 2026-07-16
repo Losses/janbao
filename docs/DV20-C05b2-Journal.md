@@ -3115,3 +3115,87 @@ $ bun run test:e2e                    202 passed + 1 flaky (exit 0)
 Delegated to a fresh-context sub-agent; independently re-verified.
 
 R52 audits the post-R51-fix state.
+
+## Session 54: R52 audit (A/B PWC: 3 comment-accuracy concerns) + fixes
+
+R52 ran two independent auditors (stripped prompt). A returned PASS-WITH-CONCERNS
+(1 concern + 1 nitpick); B returned PASS-WITH-CONCERNS (2 concern). Counter stays
+0/5. R52 was the cleanest round in a while: all findings were comment accuracy.
+
+### Findings + fixes
+
+- A1 (comment): deep-to-deep axis override "enters from the right" (title is
+  vertical, enters from below). Fixed.
+- A-nitpick (spec Known #5): same wording. Fixed.
+- B1 (comment): `setSettleState` docstring omitted awaitTitle from the settle-end
+  clear list. Fixed.
+- B2 (comment): `resetPagerStore` deep-page "hamburger mode" (should be
+  back-arrow/deep). Fixed.
+
+### Gate outputs (post-fix, independently re-run 2026-07-16)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (exit 0)
+```
+
+Delegated to a fresh-context sub-agent; independently re-verified.
+
+R53 audits the post-R52-fix state.
+
+## Session 55: R53 audit (A clean PASS; B PWC: 1 comment concern) + fix
+
+R53 ran two independent auditors (stripped prompt). A returned PASS (0 concern);
+B returned PASS-WITH-CONCERNS (1 concern + 1 nitpick). Counter stays 0/5. R53
+was the closest to a clean round.
+
+### Findings + fix
+
+- A: PASS, no defect (1 nitpick shared with B).
+- B1 (comment): `#progress` field docstring said "executor-driven... the executor
+  produces each tick"; the orchestrator writes it, not the executor. Fixed.
+- B-nitpick / A-nitpick (spec §5): "commit morph owned by executor rAF via
+  backMorph"; during a commit the morph reads settleProgress. Fixed.
+
+### Gate outputs (post-fix, independently re-run 2026-07-16)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    201 passed + 2 flaky (exit 0)
+```
+
+Delegated to a fresh-context sub-agent; independently re-verified.
+
+R54 audits the post-R53-fix state.
+
+## Session 56: R54 audit (A/B PWC: 3 comment-accuracy concerns) + fixes
+
+R54 ran two independent auditors (stripped prompt). A returned PASS-WITH-CONCERNS
+(2 concern); B returned PASS-WITH-CONCERNS (1 concern). Counter stays 0/5.
+
+### Findings + fixes
+
+- A1 (comment): BurgerArrowIcon SPLAY comment values (7.4/10.49 vs actual 8/
+  11.31). Fixed.
+- A2 (comment): onSvelteKitAfterNavigate "skipped" claim for pipeline-to-pipeline
+  swaps. Fixed (runs through for pipeline swaps, skipped only for non-pipeline
+  routes).
+- B1 (comment): NavStateMachine "TWO mutation points" (actually FOUR: dispatch,
+  forceReset, setSettleState, setSearchScrubbing). Fixed.
+
+### Gate outputs (post-fix, independently re-run 2026-07-16)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (exit 0)
+```
+
+Delegated to a fresh-context sub-agent; independently re-verified.
+
+R55 audits the post-R54-fix state.

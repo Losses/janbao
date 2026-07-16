@@ -230,9 +230,13 @@ motion, decided solely by the orchestrator's phase. CSS transitions and
   reveal tracks the finger frame-by-frame as the panels move.
   CSS-transition-free.
 - **Header morph / title crossfade during a gesture commit:** owned by the
-  executor's rAF via `pager.backMorph`. The morph runs DURING the commit
-  slide (the published backMorph drives the back-arrow reveal frame-by-frame
-  as the panels move). CSS-transition-free.
+  orchestrator's settle rAF via `settleProgress` (running DURING the commit
+  slide, synchronized with the executor via the velocity-matched
+  `commitDurationMs`). During a gesture commit `#liveDragging` is false, so
+  the Header morph derivation's settle branch takes over (reading
+  `settleProgress`, not `pager.backMorph`); the back-arrow reveal is armed
+  at release by `#armSettleEaseFromGesture` and driven by the settle rAF,
+  NOT by the executor's rAF via `pager.backMorph`. CSS-transition-free.
 - **Header morph / title crossfade on a tab-click commit:** owned by the
   orchestrator's settle rAF via the `settleProgress` getter. The morph runs
   POST-LANDING (the slide is a discrete nav with no live backMorph to

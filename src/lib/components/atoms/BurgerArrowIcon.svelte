@@ -49,10 +49,10 @@
 	// Analytically FITTED (solved, not tuned by eye) so the two arms meet at a
 	// single sharp tip ON the stem (the tip x) and form a symmetric 45deg
 	// chevron. The transform math is inverted for a target tip; TY is fixed by
-	// the fit, TX + the arm length derive from SPLAY. SPLAY=7.4 makes each arm
-	// 10.49px, matching mdiArrowLeft's diagonal exactly. (Verified by endpoint
+	// the fit, TX + the arm length derive from SPLAY. SPLAY=8 makes each arm
+	// 11.31px, matching mdiArrowLeft's diagonal exactly. (Verified by endpoint
 	// computation: both arms' tips land exactly on the tip point, coincident.)
-	const SPLAY = 8; // each arm reaches ±SPLAY px from the stem at p=1 (arm = SPLAY*1.414 = 10.49)
+	const SPLAY = 8; // each arm reaches ±SPLAY px from the stem at p=1 (arm = SPLAY*1.414 = 11.31)
 	const TY = 1.2; // fixed by the fit (places the tip on the stem)
 	const TX = (8 - SPLAY / 2 + (5 - SPLAY / 2)) / 0.707 / 2;
 	const ARM_END = (SPLAY * 1.414) / 18; // arm length as a fraction of the bar at p=1

@@ -10,13 +10,16 @@
  * mobile gesture route mounts a pipeline host whose orchestrator feeds
  * this store; there is no parallel gesture state machine.
  *
- * The wrapper is a thin `$state` shell with TWO mutation points:
+ * The wrapper is a thin `$state` shell with FOUR mutation methods:
  * `dispatch()` delegates every transition event to the pure reducer
- * (the authority for the phase maths), and `forceReset()` performs a
+ * (the authority for the phase maths); `forceReset()` performs a
  * direct overwrite with `initialOrchestratorState(on)`, used by
  * `configure()` on a fresh host mount to clear state a prior route may
- * have left in any phase. The orchestrator reads the state through
- * `$derived` and register as dependents on the underlying `$state`.
+ * have left in any phase; `setSettleState()` writes the settle fields
+ * (active / progress / latched / direction / awaitTitle); and
+ * `setSearchScrubbing()` writes the search-scrub flag. The orchestrator
+ * reads the state through `$derived` and register as dependents on the
+ * underlying `$state`.
  *
  * Module-singleton pattern, matching the other stores in this
  * directory (e.g. `page-cache.svelte.ts`, `mobile-pager.svelte.ts`):
@@ -26,7 +29,10 @@
  *
  * This store stands alone as the state-machine authority; the
  * orchestrator dispatches events to it from SvelteKit's
- * `beforeNavigate` / `afterNavigate` hooks.
+ * `beforeNavigate` / `afterNavigate` hooks, calls `setSettleState`
+ * from the settle rAF tick / settle-arm / settle-end / awaitTitle-clear
+ * paths, and calls `setSearchScrubbing` from the tap-scrub arm / finish
+ * paths.
  */
 
 import { browser } from '$app/environment';
@@ -163,12 +169,13 @@ export class NavStateMachine {
 		this.#searchScrubbing = value;
 	}
 
-	/** Dispatch an event through the reducer. One of the wrapper's two
-	 *  mutation points (the other is `forceReset`, which assigns
-	 *  `#state` directly). Every transition event routes through here
-	 *  so the reducer stays the authority for the phase maths. The
-	 *  wrapper does not branch on event types itself; it builds the
-	 *  event payload and delegates. */
+	/** Dispatch an event through the reducer. One of the wrapper's four
+	 *  mutation methods: `dispatch` and `forceReset` both assign `#state`
+	 *  directly (whole-state), while `setSettleState` and
+	 *  `setSearchScrubbing` write individual `$state` fields. Every
+	 *  transition event routes through here so the reducer stays the
+	 *  authority for the phase maths. The wrapper does not branch on
+	 *  event types itself; it builds the event payload and delegates. */
 	dispatch(event: OrchestratorEvent): void {
 		// Replace the whole record so dependents on `state` / `macro`
 		// / `fromPathname` etc re-run. The reducer returns a fresh
