@@ -3199,3 +3199,29 @@ $ bun run test:e2e                    202 passed + 1 flaky (exit 0)
 Delegated to a fresh-context sub-agent; independently re-verified.
 
 R55 audits the post-R54-fix state.
+
+## Session 57: R55 audit (A/B PWC: 2 comment-accuracy concerns) + fixes
+
+R55 ran two independent auditors (stripped prompt). A returned PASS-WITH-CONCERNS
+(1 concern); B returned PASS-WITH-CONCERN (1 concern). Counter stays 0/5.
+
+### Findings + fixes
+
+- A1 (comment): `route-data.ts` ROUTE_ENTRIES docstring claimed `backParent` is
+  being "broadened" (actually being removed in 5b3). Fixed.
+- B1 (comment): `mobile-pager.svelte.ts` scrubIconEndpoint comment claimed
+  releaseInputs clears it (releaseInputs does not; only unmount +
+  #finishTapScrubEase). Fixed.
+
+### Gate outputs (post-fix, independently re-run 2026-07-16)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (exit 0)
+```
+
+Delegated to a fresh-context sub-agent; independently re-verified.
+
+R56 audits the post-R55-fix state.

@@ -104,9 +104,12 @@ interface RouteEntry {
  *   - 'detail': every other route, including the offline detail mirrors
  *     `/offline/bookmarks` and `/offline/[discussionId]`
  *
- * `backParent` coverage is scoped (see Plan-Journal entry
- * 2026-07-04 #1); broadening it to `/discussion/*`, `/messages/<id>`,
- * `/bookmarks`, etc. is a Cycle 5 concern.
+ * `backParent` coverage is limited: the field is transitional, retained
+ * only for the one remaining consumer `isPipelineSwipeDisabledRoute`,
+ * and slated for removal in Cycle 5b3 (see the field-level docstring
+ * above and Plan-Journal entry 2026-07-04 #1). It is NOT being
+ * broadened to `/discussion/*`, `/messages/<id>`, `/bookmarks`, etc.;
+ * those routes never gain a `backParent` entry.
  *
  * `snapshotCapture` is `true` on `/discussion/*` only; every other
  * route is `false`. Cycle 2's unified `PageCacheStore` broadens this.

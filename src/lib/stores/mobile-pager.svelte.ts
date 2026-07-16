@@ -115,7 +115,10 @@ export function createPagerStore(): PagerStore {
 		// publications do not clobber a value an in-flight scrub just
 		// published. The orchestrator clears the field explicitly via
 		// setScrubIconEndpoint(null) when the scrub finishes, cancels, or
-		// tears down (releaseInputs / unmount).
+		// tears down (unmount, or the tap-scrub finish path
+		// `#finishTapScrubEase`). `releaseInputs` intentionally does NOT
+		// clear it (the settle / tap-scrub eases continue across the host
+		// swap).
 		scrubIconEndpoint =
 			update.scrubIconEndpoint !== undefined ? update.scrubIconEndpoint : scrubIconEndpoint;
 	}

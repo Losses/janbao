@@ -179,7 +179,7 @@ The executor is browser-only. The initial server render is the resting state (no
 
 ## 6. State machine
 
-Macro phases (Layer 1): `at-rest-on-tab`, `at-rest-on-deep`, `intent`, `resolving`, `transitioning` (carrying the active resolver, the plan, the phase `dragging` | `committing` | `cancelling` | `scrubbing`), `landing`. Micro states (Layer 2, intent): `idle`, `deciding`, `drag-left`, `drag-right`, `committed`, `cancelled`.
+Macro phases (Layer 1): `at-rest-on-tab`, `at-rest-on-deep`, `intent`, `resolving`, `transitioning` (carrying the active resolver, the plan, the phase `dragging` | `committing` | `cancelling`), `landing`. (The tap-scrub is a separate orchestrator-owned rAF motion channel, not a `transitioning` sub-phase.) Micro states (Layer 2, intent): `idle`, `deciding`, `drag-left`, `drag-right`, `committed`, `cancelled`.
 
 The phase record carries `(from, to, startTime, liveOffset, releaseVelocity, direction)` and is the sole input to every consumer. The four duplicated `committed` predicates, the three "where are we going" strings (`resolvedLeftHref`, `lockedLeftHref`, `pendingTargetHref`), the stealth `navInFlight = false` writer, and the overloaded `pager.dragging` semantics (research line 2) are eliminated: there is one `phase` and one resolved `from`/`to`.
 

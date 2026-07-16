@@ -338,13 +338,15 @@ export class NavPipelineOrchestrator {
 	 *  active. The afterNavigate guard and the resize guard read it to
 	 *  avoid landing the orchestrator or mutating the plan mid-enter. */
 	#isEnterAnimation = false;
-	/** True while a rightward back-swipe gesture is in its live-drag
-	 *  phase. The classifier locks `micro='drag-right'` once the gesture
-	 *  is claimed, so a mid-gesture reversal (finger moves leftward
+	/** True during the live-drag phase of ANY gesture (backward or
+	 *  forward, on bidirectional hosts). The classifier locks micro to
+	 *  'drag-right' or 'drag-left' depending on direction once the
+	 *  gesture is claimed, so a mid-gesture reversal (finger reverses
 	 *  within the claimed gesture) stays live-dragging; the flag clears
 	 *  on release (committed / cancelled). Controls the pager store's
-	 *  `dragging` field: true during live drag only, NOT during the
-	 *  commit slide (dragOffset is nulled on release). */
+	 *  `dragging` field, republished each frame as
+	 *  `publication.inFlight && #liveDragging`: true during live drag
+	 *  only, NOT during the commit slide. */
 	#liveDragging = false;
 	/** True when the orchestrator's own dispatch (`goto` /
 	 *  `history.back()` / `history.forward()`) has fired and is
@@ -425,10 +427,10 @@ export class NavPipelineOrchestrator {
 	 *  tab-click / enter with no live drag). A sub-threshold cancel
 	 *  lands at rest immediately and bypasses this. */
 	#commitStartRaw = 0;
-	/** True iff the previous #interpretIntent call was for a rightward
-	 *  drag (micro === drag-right). Used to detect a gesture start
-	 *  (micro transitions into drag-right), including a re-grab
-	 *  mid-commit. */
+	/** True iff the previous #interpretIntent call was for any claimed
+	 *  drag (micro === 'drag-right' or 'drag-left' on bidirectional
+	 *  hosts). Used to detect a gesture start (micro transitions into a
+	 *  claimed drag direction), including a re-grab mid-commit. */
 	#prevWasDrag = false;
 	/** The gesture-resolved destination tab index, set by
 	 *  `#beginGesture` / `onSvelteKitBeforeNavigate` and read by
@@ -1292,9 +1294,11 @@ export class NavPipelineOrchestrator {
 		// Resolve the target for this direction. A backward gesture always
 		// targets the previous history entry (the temporal-previous): on a
 		// bidirectional host that is `previousEntryPathname()` (the entry
-		// behind the current tab, whether it is the spatially-previous tab
-		// or a deep page the user came from); on a non-bidirectional host
-		// it is the mount-supplied back-target. Forward targets the next
+		// behind the current tab, whether it is the spatially-previous tab,
+		// a deep page the user came from, or a higher-indexed tab when that
+		// tab is the temporal-previous (Known #6: the track reveals it
+		// leftward while the finger moves rightward)); on a non-bidirectional
+		// host it is the mount-supplied back-target. Forward targets the next
 		// tab. Macro §6: a backward gesture always goes where the user
 		// came from; the hop-vs-push decision is the generic `hopForHref`
 		// check at dispatch time.
@@ -1369,7 +1373,10 @@ export class NavPipelineOrchestrator {
 	 *  macro §6 a backward gesture targets the previous history entry
 	 *  (the temporal-previous): the entry behind the current tab, whether
 	 *  that is the spatially-previous tab root (the common tab-to-tab
-	 *  case, where spatial = temporal) or a deep page the user forward-
+	 *  case, where spatial = temporal), a higher-indexed tab whose entry
+	 *  is the temporal-previous (Known #6: a tab-to-tab case where
+	 *  spatial != temporal, because the track reveals it leftward while
+	 *  the finger moves rightward), or a deep page the user forward-
 	 *  navigated from (the uncommon case, where spatial != temporal). On
 	 *  commit, `#dispatchNav`'s `hopForHref` check decides history.back()
 	 *  vs goto; for a deep page that sits behind the current tab it
@@ -1535,9 +1542,12 @@ export class NavPipelineOrchestrator {
 		// have consumed: the queued discrete nav (its finish-then-new replay
 		// cannot run on a non-pipeline route) and the awaitTitle settle (its
 		// await cannot resolve without the landing hook). The settle ease
-		// already morphed the title across the commit slide, so ending it
-		// here is seamless. Pipeline targets skip this: their landing fires
-		// #landAtRest, which consumes the queued nav and ends the settle.
+		// is ended synchronously here because the landing hook will not run
+		// (the orchestrator is not active on the destination); the morph /
+		// title may snap to FROM values briefly until the goto lands, since
+		// the live currentHasTabs / title are still FROM's. Pipeline targets
+		// skip this: their landing fires #landAtRest, which consumes the
+		// queued nav and ends the settle.
 		if (!isNavPipelineRoute(target)) {
 			this.#queuedDiscreteNav = null;
 			this.#endSettleEase();
