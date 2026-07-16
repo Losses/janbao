@@ -2891,3 +2891,60 @@ re-verified (FAB-layer diff checked; gate re-run by the orchestrator; the
 `fab-boundary-swipe-sync` boundary spec passes for both tabs).
 
 R45 audits the post-R44-fix state.
+
+## Session 47: R45 audit (A PWC 1 comment; B clean PASS) + fix
+
+R45 ran two independent auditors. A returned PASS-WITH-CONCERNS (1 concern); B
+returned PASS (0 concerns). Counter stays 0/5 (A's concern resets the
+accumulator). R45 is the cleanest round so far.
+
+### Findings + dispositions
+
+- A1 (comment, two instances): the FAB `progress`-input docstring
+  (`FloatingActionButtonLayer.svelte` + `fab-scale.ts`) claimed `progress` is
+  "the same slide fraction that drives the page-track slide"; on non-bidirectional
+  hosts the FAB reads the raw `publication.progress` while the track reads the
+  threshold-absorbed `trackProgress` (FAB reacts from the first pixel, track
+  absorbs the deadzone, per spec §5). Fixed both docstrings.
+- B: PASS, no defect (architecture, §13.3/4/5, §5, all six Known conditions, and
+  the R42-R44 fixes all verified correct).
+
+### Gate outputs (post-fix, independently re-run 2026-07-15)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (exit 0)
+```
+
+R46 audits the post-R45-fix state.
+
+## Session 48: R46 audit (A/B PWC: comment/doc accuracy only) + fixes
+
+R46 ran two independent auditors. A returned PASS-WITH-CONCERNS (1 concern); B
+returned PASS-WITH-CONCERNS (2 concern + 1 nitpick). Counter stays 0/5. All
+findings were comment/doc accuracy - the documentation clean-up after the R44
+boundary-FAB fix.
+
+### Findings + fixes
+
+- A1/B1 (comment): `FloatingActionButtonLayer.svelte` "~20%" rubber-band figure
+  contradicted the cited 0.4 factor (40%). Fixed to "~40%" (two places).
+- B2 (docstring): `fab-boundary-swipe-sync.spec.ts` header claimed `fabScale`
+  "uniformly" but the boundary branch uses the proportional formula. Rewritten.
+- nitpick (spec §5): added a divergence sentence for the boundary case.
+
+### Gate outputs (post-fix, independently re-run 2026-07-15)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (exit 0)
+```
+
+Note: R47 onward uses a stripped audit prompt (no mechanism explanations) per the
+user's feedback that detailed mechanism paragraphs lead the auditor.
+
+R47 audits the post-R46-fix state.

@@ -152,7 +152,7 @@
 	 *  NOT via `fabScale`'s icon-handoff half-mapping. The half-mapping
 	 *  (`progress < 0.5 ? 1 - progress*2 : (progress-0.5)*2`) dips to
 	 *  exactly 0 at progress=0.5, fully hiding the FAB mid-rubber-band
-	 *  even though the track only rubber-bands ~20% (the track uses
+	 *  even though the track only rubber-bands ~40% (the track uses
 	 *  `BOUNDARY_RUBBER_BAND_FACTOR = 0.4`). Returning
 	 *  `1 - progress * BOUNDARY_RUBBER_BAND_FACTOR` (which reaches 0.6 at
 	 *  full drag, matching the track's reduced amplitude) keeps the FAB
@@ -170,7 +170,7 @@
 			// toPathname (same route, no real transition). React proportionally
 			// to the rubber-band instead of running fabScale's icon-handoff
 			// half-mapping (which would dip to 0 at the midpoint, an
-			// over-reaction to a ~20% track displacement).
+			// over-reaction to a ~40% track displacement).
 			if (pub.fromPathname === pub.toPathname) {
 				return fromHasFab ? 1 - pub.progress * BOUNDARY_RUBBER_BAND_FACTOR : 0;
 			}

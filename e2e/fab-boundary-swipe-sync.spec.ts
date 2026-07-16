@@ -12,14 +12,16 @@ import {
  *
  * At the FIRST and LAST tab, a swipe toward the boundary with no neighbour (a
  * void swipe) rubber-bands the track: follow() applies a 0.4x factor, so the
- * global nav-pipeline orchestrator publishes the raw drag progress on its
- * per-frame publication. The FAB layer is a reactive reader of that same
- * publication: it computes `fabScale(publication.progress, fromHasFab,
- * toHasFab)`, the single scale driver that handles same- and cross-family
- * transitions uniformly. The MobileTabBar pill holds still on a void-swipe
- * because `toIdx === fromIdx` (no neighbour to interpolate toward), while the
- * FAB dips along the raw progress because its scale reads the unclamped
- * publication directly.
+ * global nav-pipeline orchestrator publishes `fromPathname === toPathname`
+ * with the raw drag progress on its per-frame publication. The FAB layer is a
+ * reactive reader of that same publication. On a real transition it computes
+ * `fabScale(publication.progress, fromHasFab, toHasFab)` — the icon-handoff
+ * half-mapping that dips to 0 at progress=0.5 — but on a boundary void-swipe
+ * (the very condition this spec exercises) the FAB does NOT use `fabScale`;
+ * it reacts proportionally to the rubber-band via
+ * `1 - progress * BOUNDARY_RUBBER_BAND_FACTOR` (reaching 0.6 at full drag),
+ * so the FAB stays visible and tracks the reduced-amplitude drag from the
+ * first frame.
  *
  * Each test drives a void-swipe at one boundary and asserts the FAB scale
  * varied (delta > 0.1). A delta near 0 means the FAB is pinned at its resting

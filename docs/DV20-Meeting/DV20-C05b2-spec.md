@@ -216,7 +216,11 @@ motion, decided solely by the orchestrator's phase. CSS transitions and
   FROM === TO and no route change occurs) the FAB reacts to the raw progress by
   design: it is not a tab-to-tab swap, but the FAB's "reacts from the first
   pixel" rule applies uniformly, so the scale dips along the rubber-band (e2e
-  `fab-boundary-swipe-sync` asserts scale delta > 0.1). CSS-transition-free; no
+  `fab-boundary-swipe-sync` asserts scale delta > 0.1). Note the divergence:
+  on a boundary void-swipe the FAB uses the proportional rubber-band reaction
+  `1 - progress * BOUNDARY_RUBBER_BAND_FACTOR` (reaching 0.6 at full drag),
+  NOT the `fabScale` icon-handoff half-mapping, so it does not dip to 0.
+  CSS-transition-free; no
   separate family-swap rAF, no `familySwapScale`, no `#lastRenderedScale`, no
   DOM read-back.
 - **Header morph / title crossfade during a gesture drag / commit:** owned
