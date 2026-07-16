@@ -69,13 +69,14 @@ export type NavExecutorSettleFn = (progressDirection: 0 | 1) => void;
 
 /** Per-commit-frame callback. The executor fires this from `onCommit`
  *  (the synchronous first commit frame) and after each subsequent commit
- *  rAF sample so the orchestrator can publish progress to
- *  downstream consumers (the pager store, which the FAB / Header /
- *  fractionalIndex layers read). Without this callback the
- *  orchestrator's publication would freeze during the commit slide
- *  (the live-drag path publishes via the orchestrator's
- *  `#interpretIntent`, but the commit rAF is internal to the
- *  executor). */
+ *  rAF sample so the orchestrator can publish progress to downstream
+ *  consumers: the pager store (which the Header, via `backMorph` /
+ *  `tapMorph`, and the MobileTabBar, via `fractionalIndex`, read) and
+ *  the publication's `progress` (which the FAB reads directly, NOT via
+ *  the pager store). Without this callback the orchestrator's
+ *  publication would freeze during the commit slide (the live-drag path
+ *  publishes via the orchestrator's `#interpretIntent`, but the commit
+ *  rAF is internal to the executor). */
 export type NavExecutorTickFn = (progress: number, liveOffset: number) => void;
 
 /** Constructor options for `NavExecutor`. */

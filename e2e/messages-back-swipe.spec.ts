@@ -56,7 +56,7 @@ interface TrackSamplerCapture {
 	 * zero. */
 	fabScaleDelta: number;
 	/** Direction reversals in the FAB scale trajectory. A continuous
-	 *  ramp (no backward jumps) has zero reversals. A coverProgress
+	 *  ramp (no backward jumps) has zero reversals. A publication.progress
 	 *  discontinuity at the drag-to-commit boundary produces at least
 	 *  one reversal. */
 	fabReversals: number;
@@ -96,11 +96,12 @@ async function capturePilotBackSwipe(
 						m41 = 0;
 					}
 					// Sample the FAB atom's scale. The FAB layer reads
-					// `pager.coverProgress` reactively and writes the
-					// atom's `transform: scale(...)`. The e2e asserts
-					// the scale transitions during the commit slide so
-					// the FAB tracks the slide (rather than freezing
-					// at a stale value).
+					// the orchestrator's `publication.progress`
+					// reactively (via `fabScale(progress, fromHasFab,
+					// toHasFab)`) and writes the atom's `transform:
+					// scale(...)`. The e2e asserts the scale transitions
+					// during the commit slide so the FAB tracks the
+					// slide (rather than freezing at a stale value).
 					const fabEl = document.querySelector('[data-testid="fab"]');
 					let fabScale: number | null = null;
 					if (fabEl) {
@@ -255,7 +256,7 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		// The FAB scale must transition during the slide. The pilot's
 		// back-swipe goes from `/messages/<id>` (FAB hidden, scale 0)
 		// to `/messages/inbox` (FAB shown, scale 1); the orchestrator
-		// publishes `coverProgress` each commit rAF tick so the FAB
+		// publishes `publication.progress` each commit rAF tick so the FAB
 		// atom's scale ramps with the slide. A frozen publication
 		// (orchestrator not republishing during commit) leaves the
 		// scale stuck at its initial value (delta 0). The threshold
@@ -268,13 +269,13 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		).toBeGreaterThan(0.1);
 
 		// The FAB scale must ramp monotonically (no reversals). A
-		// coverProgress discontinuity at the drag-to-commit boundary
+		// publication.progress discontinuity at the drag-to-commit boundary
 		// (raw fraction vs threshold-absorbed progress) produces at
 		// least one FAB-scale reversal.
 		expect(
 			capture.fabReversals,
 			`FAB scale must ramp monotonically (reversals=${capture.fabReversals}; ` +
-				`coverProgress must be continuous across the drag-to-commit boundary)`
+				`publication.progress must be continuous across the drag-to-commit boundary)`
 		).toBe(0);
 
 		// The commit must dispatch the nav (settle -> goto). A regression
@@ -511,7 +512,7 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 
 		// The FAB scale must not reverse at the drag-to-commit
 		// boundary (#commitStartRaw lerps the publication from the
-		// live-drag raw so coverProgress does not jump backward).
+		// live-drag raw so publication.progress does not jump backward).
 		expect(
 			capture.fabReversals,
 			`FAB scale must not reverse for sub-threshold commit (reversals=${capture.fabReversals})`
@@ -586,7 +587,7 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		// The forward-enter's target is the conversation (overlay family, no
 		// resting FAB). The FAB scales 1->0 across the enter via the layer's
 		// family-swap ease, which holds at the destination scale (0) until the
-		// transition lands (coverProgress resets), so the FAB never spikes back
+		// transition lands (publication.progress resets), so the FAB never spikes back
 		// up after easing out. Sample the FAB scale across the enter and assert
 		// no flicker: once the scale first drops below 0.1 it stays below 0.5.
 		const fabSamples = (await page.evaluate(() => (window as any).__fabEnterSamples)) as number[];

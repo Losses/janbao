@@ -403,7 +403,7 @@ export function trackTranslateX(plan: TransitionPlan, progress: number): number 
  *  while the drag proceeds. Out-of-range progress is safe downstream:
  *  `trackTranslateX` is linear, the commit solver scales by
  *  `|target - progress|`, and the raw progress the FAB reads
- *  (`publication.progress`) and the Header reads (`pager.coverProgress`)
+ *  (`publication.progress`) and the Header reads via `pager.backMorph`
  *  is clamped at its own publish site (the orchestrator), so only
  *  the track translateX carries the out-of-range value transiently. */
 export function progressAtTranslateX(plan: TransitionPlan, tx: number): number {

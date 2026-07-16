@@ -13,20 +13,20 @@ import {
  * The FAB lives in AppShell (sibling of Header), mobile-only via md:hidden. It
  * stays mounted across list <-> thread <-> compose nav (Family B/C source-list
  * model: a thread or compose page is reached by forward nav FROM a list, so the
- * atom shows the SOURCE LIST's FAB at foregroundFraction 0 while the
- * destination page covers the list).
+ * atom shows the SOURCE LIST's FAB at scale 0 while the destination page
+ * covers the list).
  *
  * Two composed drivers on a single `transform: scale(s) translateY(y)`:
  *   - scale (route transition): scale 1 at rest on a list route, 0 at rest on
  *     overlay / compose routes, scaling through the first/last 50% of a route
- *     transition. The FAB layer is a pure reactive reader
- *     (`scale = $derived(pager.familySwapScale ?? restingScale)`) with no rAF
- *     and no DOM read-back; every motion channel is published by the
- *     orchestrator each frame. Family A (tab swipe) reads
- *     `pager.trackFractionalIndex`; Family B (thread/conversation enter/exit)
- *     reads `pager.coverProgress`; Family C (compose) reads
- *     `pager.familySwapScale`, eased by the orchestrator's family-swap rAF
- *     over TRACK_TRANSITION_MS (200ms) on a cross-family route swap.
+ *     transition. The FAB layer is a pure reactive reader of the
+ *     orchestrator's `publication.progress`, mapped through the single
+ *     half-mapping `fabScale(publication.progress, fromHasFab, toHasFab)`
+ *     (where `fromHasFab`/`toHasFab` come from `RouteData.fab`). There is no
+ *     separate rAF and no DOM read-back; every motion channel is published by
+ *     the orchestrator each frame, and the half-mapping covers Family A
+ *     (tab swipe), Family B (thread/conversation enter/exit) and Family C
+ *     (compose) uniformly.
  *   - translateY (scroll hide): slides off the bottom edge in lockstep with
  *     the Header's hide-on-scroll (driven by the shared scroll-chrome store).
  *
@@ -344,9 +344,10 @@ test('compose route shows the FAB at scale 0 (no flash of scale 1)', async ({ pa
 });
 
 // Family A: a tab swipe scales the FAB out as a TRAJECTORY (not a step). The
-// pager.fractionalIndex is continuous 1:1 with the finger, so the FAB scale
-// (derived from tabFraction(fractionalIndex, tabIndex)) ramps from 1 toward 0
-// across the drag and snaps the rest of the way on release.
+// orchestrator's `publication.progress` is continuous 1:1 with the finger, so
+// the FAB scale (derived from `fabScale(publication.progress, fromHasFab,
+// toHasFab)`) ramps from 1 toward 0 across the drag and snaps the rest of the
+// way on release.
 test('Family A: tab swipe scales the FAB out as a monotonic trajectory', async ({ page }) => {
 	await page.goto('/');
 	await waitForHydration(page);
@@ -383,8 +384,8 @@ test('Family A: tab swipe scales the FAB out as a monotonic trajectory', async (
 
 // Family B forward: tapping a discussion card slides the thread in over the
 // list (NavPipelineHost enter animation). The orchestrator's executor
-// publishes `pager.coverProgress` 0 -> 1 each frame; the FAB's reactive
-// `foregroundFraction = 1 - coverProgress` (a list-source gesture targeting an
+// publishes `publication.progress` 0 -> 1 each frame; the FAB layer's
+// `fabScale(progress, fromHasFab, toHasFab)` (a list-source gesture targeting an
 // overlay/deep route) drives the scale down across the slide (first-half
 // disappear) and rests near 0 on the thread.
 test('Family B forward: list -> thread scales the FAB out as a monotonic trajectory', async ({
@@ -428,10 +429,10 @@ test('Family B forward: list -> thread scales the FAB out as a monotonic traject
 });
 
 // Family B back: a back-swipe from the thread toward the list drives the
-// sampler the other way; foregroundFraction 0 -> 1 so the FAB scale ramps from
-// near 0 (thread covers at drag start) up toward 1 (list foreground at drag
-// end), with intermediate values present (the assertion that catches a pinned
-// scale at 1 from frame 1).
+// sampler the other way; `publication.progress` 0 -> 1 so the FAB scale ramps
+// from near 0 (thread covers at drag start) up toward 1 (list foreground at
+// drag end), with intermediate values present (the assertion that catches a
+// pinned scale at 1 from frame 1).
 test('Family B back: thread -> list scales the FAB in as a monotonic trajectory', async ({
 	page
 }) => {
@@ -484,11 +485,11 @@ test('Family B back: thread -> list scales the FAB in as a monotonic trajectory'
 });
 
 // Family C forward: tapping the FAB on a list route navigates to the compose
-// page. The atom stays mounted and the discrete foregroundFraction swap
-// (1 -> 0) is eased by the orchestrator's family-swap rAF (it publishes
-// `pager.familySwapScale` each tick over TRACK_TRANSITION_MS). Assert the ease
-// produced a monotonic trajectory with a mid-window 0.5 crossing (NOT an
-// instant jump to 0).
+// page. The atom stays mounted and the discrete progress swap (1 -> 0) is
+// eased by the orchestrator's per-frame publication of `publication.progress`
+// over the commit duration (`commitStart.durationMs`, velocity-matched).
+// Assert the ease produced a monotonic trajectory with a mid-window 0.5
+// crossing (NOT an instant jump to 0).
 test('Family C forward: list -> compose scales the FAB out as a monotonic trajectory', async ({
 	page
 }) => {
@@ -569,11 +570,11 @@ test('Family C forward (messages): inbox -> compose scales the FAB out as a mono
 	).toBe(true);
 });
 
-// Family C back: navigating back from the compose page to the list drives the
-// foregroundFraction 0 -> 1, eased by the orchestrator's family-swap rAF
-// (scale-in; it publishes `pager.familySwapScale` each tick). Reach the
-// compose page via SPA navigation from the list so history.back() returns to
-// `/` (a hard goto('/post/discussion') has no back history).
+// Family C back: navigating back from the compose page to the list drives
+// `publication.progress` 0 -> 1, eased by the orchestrator's per-frame
+// publication (scale-in). Reach the compose page via SPA navigation from the
+// list so history.back() returns to `/` (a hard goto('/post/discussion') has
+// no back history).
 test('Family C back: compose -> list scales the FAB in as a monotonic trajectory', async ({
 	page
 }) => {
@@ -888,10 +889,10 @@ const SAMPLER_WINDOW_MS = 1800;
  * getComputedStyle is used (rather than reading `style.transform` directly)
  * because it resolves the transform string to a `matrix(a, b, c, d, tx, ty)`
  * form, so the sampler reads the scale component `a` directly. The
- * orchestrator's family-swap rAF publishes `pager.familySwapScale` each tick;
- * the FAB layer's reactive `scale` derived writes a new inline
- * `style.transform` each frame, so the resolved value advances every frame
- * across the ease.
+ * orchestrator publishes a new `publication.progress` each frame; the FAB
+ * layer's reactive `scale` derived (from `fabScale(publication.progress,
+ * fromHasFab, toHasFab)`) writes a new inline `style.transform` each frame,
+ * so the resolved value advances every frame across the ease.
  * miss the easing trajectory.
  */
 async function sampleFabScale(

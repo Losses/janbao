@@ -17,9 +17,6 @@ import { describe, test, expect } from 'bun:test';
 import {
 	atRestOnFor,
 	initialOrchestratorState,
-	isAtRest,
-	isCommitting,
-	isInFlight,
 	reduce,
 	type OrchestratorEvent
 } from './nav-state-machine-logic';
@@ -60,7 +57,7 @@ function resolvedEvent(): OrchestratorEvent {
 describe('reducer: at-rest -> intent -> resolved', () => {
 	test('initial state is at-rest', () => {
 		const s = initialOrchestratorState('tab');
-		expect(isAtRest(s)).toBe(true);
+		expect(s.macro.kind).toBe('at-rest');
 		expect(s.macro.on).toBe('tab');
 	});
 
@@ -71,7 +68,6 @@ describe('reducer: at-rest -> intent -> resolved', () => {
 		expect(s1.fromPathname).toBe('/from');
 		expect(s1.fromTag).toBe('detail');
 		expect(s1.startedAt).toBe(NOW);
-		expect(s1.lastIntent?.micro).toBe('drag-right');
 	});
 
 	test('resolved locks the plan and from/to', () => {
@@ -81,7 +77,6 @@ describe('reducer: at-rest -> intent -> resolved', () => {
 		expect(s2.macro.kind).toBe('transitioning');
 		expect(s2.macro.sub).toBe('dragging');
 		expect(s2.macro.plan).toBe(noopPlan);
-		expect(s2.activePlan).toBe(noopPlan);
 		expect(s2.fromPathname).toBe('/from');
 		expect(s2.toPathname).toBe('/to');
 		expect(s2.direction).toBe('backward');
@@ -110,7 +105,6 @@ describe('reducer: dragging -> committing -> cancelling', () => {
 		const s3 = reduce(s2, { type: 'commit' }, NOW + 20);
 		expect(s3.macro.kind).toBe('transitioning');
 		expect(s3.macro.sub).toBe('committing');
-		expect(isCommitting(s3)).toBe(true);
 	});
 
 	test('cancel from dragging enters cancelling', () => {
@@ -136,13 +130,15 @@ describe('reducer: dragging -> committing -> cancelling', () => {
 		expect(s1).toBe(s0);
 	});
 
-	test('drag-move updates the live intent only while dragging', () => {
+	test('drag-move while dragging leaves the macro phase unchanged', () => {
 		const s0 = initialOrchestratorState('deep');
 		const s1 = reduce(s0, intentEvent(), NOW);
 		const s2 = reduce(s1, resolvedEvent(), NOW + 10);
 		const newIntent = { ...initialIntentState(), micro: 'drag-right' as const, offset: 50 };
 		const s3 = reduce(s2, { type: 'drag-move', intent: newIntent }, NOW + 15);
-		expect(s3.lastIntent?.offset).toBe(50);
+		expect(s3.macro.kind).toBe('transitioning');
+		expect(s3.macro.sub).toBe('dragging');
+		expect(s3).toBe(s2);
 	});
 
 	test('drag-move during committing is a no-op (no live updates mid-commit)', () => {
@@ -174,8 +170,7 @@ describe('reducer: interruption', () => {
 			NOW + 30
 		);
 		expect(s4.macro.kind).toBe('intent');
-		expect(s4.activePlan).toBeNull();
-		expect(s4.lastIntent?.direction).toBe('left');
+		expect(s4.macro.plan).toBeNull();
 	});
 
 	test('interrupt from at-rest is a no-op', () => {
@@ -226,7 +221,7 @@ describe('reducer: landing and reset', () => {
 		const s4 = reduce(s3, { type: 'land', on: 'tab' }, NOW + 30);
 		expect(s4.macro.kind).toBe('landing');
 		expect(s4.macro.on).toBe('tab');
-		expect(s4.activePlan).toBeNull();
+		expect(s4.macro.plan).toBeNull();
 	});
 
 	test('reset returns to at-rest and clears from/to', () => {
@@ -234,10 +229,10 @@ describe('reducer: landing and reset', () => {
 		const s1 = reduce(s0, intentEvent(), NOW);
 		const s2 = reduce(s1, resolvedEvent(), NOW + 10);
 		const s3 = reduce(s2, { type: 'reset', on: 'tab' }, NOW + 20);
-		expect(isAtRest(s3)).toBe(true);
+		expect(s3.macro.kind).toBe('at-rest');
 		expect(s3.fromPathname).toBeNull();
 		expect(s3.toPathname).toBeNull();
-		expect(s3.activePlan).toBeNull();
+		expect(s3.macro.plan).toBeNull();
 	});
 
 	test('reset from intent is a no-op (protects the landing-microtask race)', () => {
@@ -267,7 +262,7 @@ describe('reducer: landing and reset', () => {
 		const s1 = reduce(s0, { type: 'land', on: 'tab' }, NOW);
 		expect(s1.macro.kind).toBe('landing');
 		expect(s1.macro.on).toBe('tab');
-		expect(s1.activePlan).toBeNull();
+		expect(s1.macro.plan).toBeNull();
 	});
 
 	test('land then reset reaches at-rest (the wrapper microtask flow)', () => {
@@ -278,9 +273,9 @@ describe('reducer: landing and reset', () => {
 		const s4 = reduce(s3, { type: 'land', on: 'tab' }, NOW + 30);
 		expect(s4.macro.kind).toBe('landing');
 		const s5 = reduce(s4, { type: 'reset', on: 'tab' }, NOW + 40);
-		expect(isAtRest(s5)).toBe(true);
+		expect(s5.macro.kind).toBe('at-rest');
 		expect(s5.macro.on).toBe('tab');
-		expect(s5.activePlan).toBeNull();
+		expect(s5.macro.plan).toBeNull();
 	});
 
 	test('resolved from transitioning/committing preserves committing sub', () => {
@@ -312,21 +307,21 @@ describe('reducer: totality (out-of-sequence events are no-ops)', () => {
 		expect(s4).toBe(s3);
 	});
 
-	test('isInFlight is true for every transitioning sub', () => {
+	test('every transitioning sub keeps the macro kind as transitioning', () => {
 		// The transitioning subs are dragging, committing, and cancelling.
 		const s0 = initialOrchestratorState('deep');
 		const s1 = reduce(s0, intentEvent(), NOW);
 		const s2 = reduce(s1, resolvedEvent(), NOW + 10);
 		expect(s2.macro.sub).toBe('dragging');
-		expect(isInFlight(s2)).toBe(true);
+		expect(s2.macro.kind).toBe('transitioning');
 		const s3 = reduce(s2, { type: 'commit' }, NOW + 20);
 		expect(s3.macro.sub).toBe('committing');
-		expect(isInFlight(s3)).toBe(true);
+		expect(s3.macro.kind).toBe('transitioning');
 		// cancelling is reached by cancel-from-dragging (cancel from
 		// committing is a no-op, so branch from s2, not s3).
 		const s4 = reduce(s2, { type: 'cancel' }, NOW + 30);
 		expect(s4.macro.sub).toBe('cancelling');
-		expect(isInFlight(s4)).toBe(true);
+		expect(s4.macro.kind).toBe('transitioning');
 	});
 });
 

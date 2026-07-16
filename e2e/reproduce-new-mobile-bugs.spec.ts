@@ -235,11 +235,13 @@ test.describe('Compose-as-module-child fix (FAB, Messages, chip)', () => {
 			await page.locator('[data-testid="fab"]').click();
 			await page.waitForURL('/post/discussion');
 		});
-		// DV20 5b2 Phase 1: the discrete list -> compose family swap is eased by
-		// the orchestrator's per-frame publication of `pager.familySwapScale`
-		// (the inline scale advances each frame via the FAB layer's reactive
-		// `style:transform` binding). The FAB atom carries no CSS transition
-		// directive. The behavioural guard is `animated` (scale delta > 0.1).
+		// The discrete list -> compose route transition is eased by the
+		// orchestrator's per-frame publication of `publication.progress`
+		// (the FAB layer maps it through `fabScale(progress, fromHasFab,
+		// toHasFab)`, and the inline scale advances each frame via the
+		// reactive `style:transform` binding). The FAB atom carries no CSS
+		// transition directive. The behavioural guard is `animated` (scale
+		// delta > 0.1).
 		expect(cap.animated, 'FAB atom scale eased across the swap').toBe(true);
 	});
 

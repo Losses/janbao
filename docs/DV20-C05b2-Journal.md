@@ -2948,3 +2948,170 @@ Note: R47 onward uses a stripped audit prompt (no mechanism explanations) per th
 user's feedback that detailed mechanism paragraphs lead the auditor.
 
 R47 audits the post-R46-fix state.
+
+## Session 49: R47 audit (A/B PWC: dead state + leak + stale comments) + fixes
+
+R47 ran two independent auditors (the first round with the stripped,
+mechanism-free audit prompt). A returned PASS-WITH-CONCERNS (4 concern); B
+returned PASS-WITH-CONCERNS (2 concern). Counter stays 0/5.
+
+### Findings + fixes
+
+- A1 (dead state): `pager.coverProgress` was published + stored but never read.
+  Removed entirely (field + 7 publish sites + ~10 comments).
+- A2/A3 (comments): coverProgress references in nav-executor-logic + mobile-pager
+  docstrings. Fixed (part of the removal).
+- A4 (state leak): `releaseInputs` did not clear `#isEnterAnimation`. Fixed.
+- B1 (comment): `playEnterAnimation` claimed the morph is driven by `backMorph`
+  during the enter; actually the settle ease owns it. Fixed.
+- B2 (comment): `#pendingGesture` "back-swipe" docstring; the field carries both
+  directions. Fixed to "swipe".
+- Additional: a grep sweep found the broader stale-FAB-mechanism class in e2e
+  comments (familySwapScale, trackFractionalIndex, foregroundFraction,
+  TRACK_TRANSITION_MS, etc.). All rewritten to the current `fabScale` mechanism.
+
+### Gate outputs (post-fix, independently re-run 2026-07-16)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (exit 0)
+```
+
+Delegated to fresh-context sub-agents; independently re-verified (greps for all
+deleted-mechanism names return 0 in src/lib + e2e/; gate re-run on the clean
+tree).
+
+R48 audits the post-R47-fix state.
+
+## Session 50: R48 audit (A/B PWC: dead code + comments + clock contract + redundancy) + fixes
+
+R48 ran two independent auditors (stripped prompt). A returned PASS-WITH-CONCERNS
+(7 concern); B returned PASS-WITH-CONCERNS (6 concern + 1 nitpick). Counter stays
+0/5. R48 found accumulated dead code, stale comments, a clock-contract
+inconsistency, and minor redundancy.
+
+### Findings + fixes
+
+- Dead code removed: NavStateMachine wrapper getters (macro/activePlan/
+  fromPathname/toPathname/direction) + reset(); orchestrator.inFlight/activePlan
+  getters; OrchestratorState.activePlan (redundant mirror of macro.plan).
+- Comments corrected: "single mutation point" (forceReset bypasses dispatch);
+  reset() "external callers" (dead); #landAtRest redundant onLand; #gestureToTabIndex
+  clear sites; #endSettleEase causal claim.
+- Clock contract: settle + tap-scrub rAF ticks now use the injected `this.#clock()`
+  (was `performance.now()`).
+- lastIntent consistency: reducer reset now clears it (matching forceReset).
+- Redundancy: removed redundant tapMorph null check + the first of two setSettleState
+  calls in unmount.
+
+### Gate outputs (post-fix, independently re-run 2026-07-16)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (exit 0)
+```
+
+Delegated to a fresh-context sub-agent; independently re-verified by the
+orchestrator.
+
+R49 audits the post-R48-fix state.
+
+## Session 51: R49 audit (A clean PASS; B PWC: 4 minor comments + 1 redundant write) + fixes
+
+R49 ran two independent auditors (stripped prompt). A returned PASS (0 concerns);
+B returned PASS-WITH-CONCERNS (4 concern + 1 nitpick). Counter stays 0/5 (B's
+concerns reset the accumulator). R49 was the closest to a clean round.
+
+### Findings + fixes
+
+- A: PASS, no defect (3 minor observations below the concern bar).
+- B1 (comment): `publication` getter docstring; the orchestrator writes the pager
+  itself, hosts read via `$derived`. Fixed.
+- B2 (comment): `chipProgress` reference (deleted field); fixed to `tapMorph`.
+- B3 (comment): `NavExecutorTickFn` docstring; FAB reads publication, not pager.
+  Fixed.
+- B4 (redundant write): `#armTapScrubEase` reduced-motion `setTapMorph(toValue)`
+  overwritten by the finish in the same flush. Removed.
+- nitpick (spec §5): `coverProgress` reference; fixed to `backMorph`.
+- Process: Audit-48.md em-dashes tripped the `local/no-emdash` eslint rule;
+  fixed.
+
+### Gate outputs (post-fix, independently re-run 2026-07-16)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (exit 0)
+```
+
+Delegated to a fresh-context sub-agent; independently re-verified.
+
+R50 audits the post-R49-fix state.
+
+## Session 52: R50 audit (A/B PWC: dead code + redundant conditional + stale comments) + fixes
+
+R50 ran two independent auditors (stripped prompt). A returned PASS-WITH-CONCERNS
+(1 concern + 1 nitpick); B returned PASS-WITH-CONCERNS (3 concern). Counter stays
+0/5. Four minor issues + one spec nitpick, all fixed.
+
+### Findings + fixes
+
+- A1 (comment): `#beginGesture` docstring referenced the unimplemented coordinator.
+  Fixed.
+- A-nitpick (spec §5): morph-drag/commit bullet attributed drag morph to executor
+  rAF (should be synchronous publish). Split into two bullets. Fixed.
+- B1 (dead code): `target === undefined || target === null` check in
+  `#onExecutorSettle` (unreachable). Removed.
+- B2 (redundant + comment): tautological first conjunct in mid-settle re-arm.
+  Removed; comment updated.
+- B3 (comment): BurgerArrowIcon "the orchestrator's iconProgress" (it is the
+  Header's derivation). Fixed.
+
+### Gate outputs (post-fix, independently re-run 2026-07-16)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (exit 0)
+```
+
+Delegated to a fresh-context sub-agent; independently re-verified.
+
+R51 audits the post-R50-fix state.
+
+## Session 53: R51 audit (A/B PWC: 2 logic bugs + comments + dead code) + fixes
+
+R51 ran two independent auditors (stripped prompt). A returned PASS-WITH-CONCERNS
+(1 concern); B returned PASS-WITH-CONCERNS (5 concern). Counter stays 0/5.
+
+### Findings + fixes
+
+- A1 (comment): mid-settle re-arm comment claimed morph continuity; the morph can
+  jump when endpoints change. Fixed.
+- B1 (comment): `#lastDispatchWasDeepToDeep` lifecycle docstring wrong clear-site
+  list for `#lastLandWasPipelineCommit`. Fixed.
+- B2 (logic): `#lastDispatchWasDeepToDeep` leaks past a cancelled goto (stale
+  flag suppresses a later forward-enter slide). Fixed: supersede branch clears it.
+- B3 (logic): `#lastLandWasPipelineCommit` leaks past a cancelled goto (stale flag
+  skips a tap-scrub arm). Fixed: same supersede branch clears it.
+- B4 (dead code): `isAtRest` / `isInFlight` / `isCommitting` removed (zero callers).
+- B5 (dead state): `lastIntent` removed (zero production readers).
+
+### Gate outputs (post-fix, independently re-run 2026-07-16)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (exit 0)
+```
+
+Delegated to a fresh-context sub-agent; independently re-verified.
+
+R52 audits the post-R51-fix state.

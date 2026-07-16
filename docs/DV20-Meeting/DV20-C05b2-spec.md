@@ -223,13 +223,19 @@ motion, decided solely by the orchestrator's phase. CSS transitions and
   CSS-transition-free; no
   separate family-swap rAF, no `familySwapScale`, no `#lastRenderedScale`, no
   DOM read-back.
-- **Header morph / title crossfade during a gesture drag / commit:** owned
-  by the executor's rAF via `pager.backMorph` / `pager.tapMorph`. The morph
-  runs DURING the slide (the gesture's coverProgress drives the back-arrow
-  reveal frame-by-frame as the panels move). CSS-transition-free.
+- **Header morph / title crossfade during a gesture drag:** owned by the
+  orchestrator's synchronous `#publish`, which writes `pager.backMorph`
+  directly on each pointermove. The executor's rAF is stopped during a drag;
+  the orchestrator publishes per pointer-event instead, so the back-arrow
+  reveal tracks the finger frame-by-frame as the panels move.
+  CSS-transition-free.
+- **Header morph / title crossfade during a gesture commit:** owned by the
+  executor's rAF via `pager.backMorph`. The morph runs DURING the commit
+  slide (the published backMorph drives the back-arrow reveal frame-by-frame
+  as the panels move). CSS-transition-free.
 - **Header morph / title crossfade on a tab-click commit:** owned by the
   orchestrator's settle rAF via the `settleProgress` getter. The morph runs
-  POST-LANDING (the slide is a discrete nav with no live coverProgress to
+  POST-LANDING (the slide is a discrete nav with no live backMorph to
   drive the morph, so the settle ease owns the crossfade after the route
   lands). CSS-transition-free.
 - **Header title crossfade during a settle:** owned by the orchestrator's
@@ -355,7 +361,7 @@ passes release velocity 0 to the solver, which returns
    to `right` lets the destination skeleton (rendered by
    `NavPipelineHost`'s `forwardDeepTarget` branch) be revealed. The title
    crossfade direction is derived independently from `navStore.direction`
-   in `#resolveNavDirection`, so the title still enters from the right
+   in `#resolveNavDirection`, so the title still enters from below
    (matching the forward semantic). The slide direction and the title
    direction therefore disagree visually for this transition only.
    **Resolution:** the clean fix is a 3-panel track (a right-panel

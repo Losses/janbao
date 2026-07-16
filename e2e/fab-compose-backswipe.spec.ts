@@ -6,11 +6,12 @@ import { prepareContext, waitForHydration, swipeBack, openSidebarAndGoto } from 
  *
  * These specs guard two invariants of the FAB scale signal:
  *
- *  1. The compose family reads `pager.coverProgress` (like the overlay family),
+ *  1. The compose family reads the orchestrator's `publication.progress`
+ *     (like the overlay family) via `fabScale(progress, fromHasFab, toHasFab)`,
  *     so the FAB follows the finger during a drag back-swipe from a compose route
  *     toward its source list, scaling in over the last 50% of the gesture.
  *  2. A cross-tab tap from a compose route is intercepted by the pipeline
- *     orchestrator, which publishes `coverProgress` across the slide so the FAB
+ *     orchestrator, which publishes `publication.progress` across the slide so the FAB
  *     stays hidden for a destination without a resting FAB.
  *
  * Discriminator: a per-frame `{scale, pathname}` probe across the gesture. The
@@ -21,7 +22,7 @@ import { prepareContext, waitForHydration, swipeBack, openSidebarAndGoto } from 
  * resolved `getComputedStyle(fab).transform` (tautology-resistant) and key the
  * window to live DOM state (the pathname / the overlay element), not to internal
  * flags. A CALIBRATION spec on the overlay route `/bookmarks` proves the probe
- * and the CDP gesture surface work for a family that already reads `coverProgress`.
+ * and the CDP gesture surface work for a family that already reads `publication.progress`.
  */
 
 test.beforeEach(async ({ context }) => {
@@ -139,10 +140,10 @@ function dump(c: BackSwipeCapture): string {
 	return `maxPreSwap=${Number.isNaN(c.maxPreSwapScale) ? 'NaN' : c.maxPreSwapScale.toFixed(2)} preInt=${c.preSwapIntermediateCount} max=${Number.isNaN(c.maxScale) ? 'NaN' : c.maxScale.toFixed(2)}\n   pre(swap)=${pre}\n   post(swap)=${post}`;
 }
 
-// CALIBRATION: the deep overlay route /bookmarks reads pager.coverProgress, so a
-// drag back-swipe to / scales the FAB in DURING the gesture (before the URL
-// swaps). Proves the {scale,path} probe + CDP gesture work; isolates a compose
-// regression to the compose branch, not the harness.
+// CALIBRATION: the deep overlay route /bookmarks reads the orchestrator's
+// publication.progress, so a drag back-swipe to / scales the FAB in DURING the
+// gesture (before the URL swaps). Proves the {scale,path} probe + CDP gesture
+// work; isolates a compose regression to the compose branch, not the harness.
 test('CALIBRATION (overlay): `/bookmarks` -> `/` drag back-swipe scales the FAB in before the swap', async ({
 	page
 }) => {
@@ -170,8 +171,9 @@ test('CALIBRATION (overlay): `/bookmarks` -> `/` drag back-swipe scales the FAB 
 	).toBeGreaterThan(0);
 });
 
-// Compose (discussions): the compose family reads pager.coverProgress, so a drag
-// back-swipe /post/discussion -> / scales the FAB in BEFORE the route swaps.
+// Compose (discussions): the compose family reads the orchestrator's
+// publication.progress, so a drag back-swipe /post/discussion -> / scales the
+// FAB in BEFORE the route swaps.
 test('compose `/post/discussion` -> `/` drag back-swipe scales the FAB in before the swap', async ({
 	page
 }) => {
@@ -199,7 +201,7 @@ test('compose `/post/discussion` -> `/` drag back-swipe scales the FAB in before
 
 // Compose (messages): /messages/new reaches the same compose family via
 // MessageCompose.svelte's <NavPipelineHost centerTab={2} leftHref="/messages/inbox">.
-// Guards against a fix that lands the coverProgress read on the discussions
+// Guards against a fix that lands the publication.progress read on the discussions
 // compose route only.
 test('compose (messages) `/messages/new` -> `/messages/inbox` drag back-swipe scales the FAB in before the swap', async ({
 	page

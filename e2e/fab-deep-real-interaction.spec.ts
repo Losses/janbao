@@ -247,8 +247,9 @@ test('B realistic swipe: FAB must follow the finger during the drag', async ({ p
 	// The FAB must scale up BEFORE the URL swaps to / (i.e. while pathname is
 	// still /bookmarks), proving it follows the gesture/commit slide rather than
 	// jumping after the route change. Uses pathname (not a t-window) so it is
-	// robust to the half/half scale curve (the FAB is 0 for the first 50% of
-	// foregroundFraction) and to rAF sampling gaps under CDP touch dispatch.
+	// robust to the half/half scale curve (`fabScale` returns 0 for the first
+	// half of `publication.progress`) and to rAF sampling gaps under CDP touch
+	// dispatch.
 	const preCommit = frames.filter((f) => f.path === '/bookmarks' && f.scale !== null);
 	const maxPreCommit = preCommit.length ? Math.max(...preCommit.map((f) => f.scale as number)) : 0;
 	expect(
@@ -361,7 +362,7 @@ test('G tab tap: `/` -> `/messages/inbox` shrinks then grows the FAB', async ({ 
 // CASE H: back-swipe from a thread, release mid-gesture (commit). The FAB must
 // scale in CONTINUOUSLY (0 -> 1) following the gesture and the commit slide,
 // with no disappear-then-replay. The defect: GPL onSwipeEnd clears dragOffset
-// BEFORE setting pendingNav, so for one frame coverProgress falls to its rest
+// BEFORE setting pendingNav, so for one frame publication.progress falls to its rest
 // value (0) and the FAB snaps to 0, then re-animates 0 -> 1 once pendingNav
 // lands - a discontinuity on the timeline.
 test('H thread back-swipe release: FAB scales in continuously, no disappear-replay', async ({ page }) => {

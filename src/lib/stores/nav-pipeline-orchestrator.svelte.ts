@@ -119,7 +119,7 @@ export interface PipelineElementRefs {
  *  up automatically. */
 export type PipelineElementResolver = () => PipelineElementRefs;
 
-/** A pending gesture transition (a back-swipe). `to` is the
+/** A pending gesture transition (a swipe). `to` is the
  *  commit-settle dispatch target; `startProgress` is the track's
  *  progress at gesture start, read by the live-drag loop to continue
  *  from the current visual position (no snap back to 0). */
@@ -316,9 +316,10 @@ export class NavPipelineOrchestrator {
 	// publishing the prior route's transition state to the persistent
 	// FAB / Header consumers.
 	#mounted = $state(false);
-	/** A pending back-swipe gesture. `to` is the commit-settle dispatch
-	 *  target; `startProgress` is the track's progress at gesture start,
-	 *  read by the live-drag loop. Null at rest and after settle. */
+	/** A pending swipe gesture (backward or forward). `to` is the
+	 *  commit-settle dispatch target; `startProgress` is the track's
+	 *  progress at gesture start, read by the live-drag loop. Null at
+	 *  rest and after settle. */
 	#pendingGesture: PendingGestureTransition | null = null;
 	/** A pending discrete nav (tab-click exit or deep-to-deep) the
 	 *  orchestrator cancelled; `target` is the dispatch target fired on
@@ -409,7 +410,8 @@ export class NavPipelineOrchestrator {
 	/** The raw drag-fraction published at the moment a commit / cancel
 	 *  began. The commit-phase publication lerps from this value to the
 	 *  target (1 commit / 0 cancel) along the executor's eased fraction,
-	 *  so `coverProgress` stays continuous across the
+	 *  so `backMorph` (deep-page / backward-to-deep-page Header morph)
+	 *  and the FAB's `publication.progress` stay continuous across the
 	 *  drag-to-commit boundary for every transition that starts a
 	 *  commit/cancel (gesture from rest, mid-transition interrupt,
 	 *  tab-click / enter with no live drag). A sub-threshold cancel
@@ -424,7 +426,7 @@ export class NavPipelineOrchestrator {
 	 *  `#beginGesture` / `onSvelteKitBeforeNavigate` and read by
 	 *  `#republishToPager` so the pill interpolation follows the actual
 	 *  destination, not the at-rest `mountInputs.toTabIndex`. Cleared on
-	 *  land / unmount. */
+	 *  land, releaseInputs, and unmount. */
 	#gestureToTabIndex: number | null = null;
 
 	// ---------------------------------------------------------------------
@@ -559,11 +561,12 @@ export class NavPipelineOrchestrator {
 	 *     slide on the source host. Survives the source host's
 	 *     `releaseInputs` (onDestroy) and the destination host's
 	 *     `configure` (onMount) - intentionally NOT cleared in either,
-	 *     unlike `#pendingDiscreteNav` / `#navDispatchInFlight` /
-	 *     `#lastLandWasPipelineCommit` which are cleared by
-	 *     `releaseInputs`, `goto.finally`, or `notifyHeaderState`'s
-	 *     `$effect.pre` and so do not reliably reach the destination's
-	 *     `shouldEnter`.
+	 *     unlike `#pendingDiscreteNav` / `#navDispatchInFlight` (cleared
+	 *     by `releaseInputs`, so they do not survive the source host's
+	 *     teardown) and `#lastLandWasPipelineCommit` (cleared by
+	 *     `#landAtRest`, `notifyHeaderState`'s main body, and the
+	 *     supersede branch in `onSvelteKitBeforeNavigate`; it is read by
+	 *     `notifyHeaderState`, not by `shouldEnter`).
 	 *   - READ by the destination host's `shouldEnter` at onMount (via
 	 *     the publication's `lastDispatchWasDeepToDeep` field) to
 	 *     suppress the enter animation.
@@ -587,21 +590,17 @@ export class NavPipelineOrchestrator {
 
 	/** Reactive publication for downstream consumers. The FAB layer reads
 	 *  this directly (`progress` + FROM/TO FAB presence drive its
-	 *  half-mapping scale); the host reads this in a `$effect` and writes
-	 *  the pager store so the Header layer (reader of `backMorph` /
-	 *  `coverProgress`) reacts to the orchestrator's state. */
+	 *  half-mapping scale); the host components read `publication` via
+	 *  `$derived` to drive their reactive templates. The orchestrator is
+	 *  the sole writer of the in-flight pager state: `#publish` ->
+	 *  `#republishToPager` writes the pager fields on every drag-move /
+	 *  commit-tick so the Header layer (reader of `backMorph`) reacts to
+	 *  the orchestrator's state. Hosts call only `resetPagerStore()` for
+	 *  the at-rest reset on teardown. The Header's settle ease (post-release
+	 *  / post-title-change morph + crossfade) is read directly off the
+	 *  orchestrator singleton, NOT via these pager fields. */
 	get publication(): OrchestratorPublication {
 		return this.#publication;
-	}
-
-	/** Reactive read of the in-flight flag. */
-	get inFlight(): boolean {
-		return this.#publication.inFlight;
-	}
-
-	/** Reactive read of the active plan. */
-	get activePlan(): TransitionPlan | null {
-		return this.#publication.plan;
 	}
 
 	/** Reactive read of the in-flight settle flag. The Header reads this
@@ -715,6 +714,11 @@ export class NavPipelineOrchestrator {
 		// destination host's title changes are unrelated and must not
 		// be suppressed).
 		this.#enterAnimationArmedSettle = false;
+		// Clear the in-flight enter flag for the same reason: a
+		// non-intercepted nav that abandons an in-flight enter must not
+		// leave a stale enter flag suppressing the destination host's
+		// guards (afterNavigate / resize).
+		this.#isEnterAnimation = false;
 		// Do NOT cancel the settle / tap-scrub eases here: the Header
 		// persists across the route swap, and a settle in flight at the
 		// host's destroy (a commit settle awaiting its navigation landing)
@@ -732,7 +736,6 @@ export class NavPipelineOrchestrator {
 			active: false,
 			backMorph: null,
 			targetIndex: null,
-			coverProgress: 0,
 			transitionTarget: null
 		});
 		getMobilePagerStore().setReplaceStateIntent(false);
@@ -798,15 +801,15 @@ export class NavPipelineOrchestrator {
 				distance: w,
 				restingTranslate: 0
 			},
-			// During the enter, coverProgress ramps 0 to 1 (the executor's
-			// commit rAF publishes it). The FAB layer reads the
-			// orchestrator's publication directly (progress + FROM/TO FAB
-			// presence) to drive its scale via the half-mapping. The Header
-			// morph is driven by `backMorph`: the centerTab (thread-host)
-			// branch publishes `backMorph: null` so the Header stays in root
-			// mode end to end; a deep-page enter (no centerTab) publishes
-			// `backMorph: rawDragFraction` via `#republishToPager` so the
-			// morph tracks the slide.
+			// During the enter, the FAB layer reads the orchestrator's
+			// publication directly (progress + FROM/TO FAB presence) to drive
+			// its scale via the half-mapping. The Header morph during the
+			// enter is NOT driven by `backMorph` (which is read only during a
+			// live drag); it is driven by the settle ease armed at the bottom
+			// of this method - the latched endpoints (outgoingHasTabs /
+			// incomingHasTabs eased by settleProgress) carry the morph from
+			// the source route's tab-ness to the host route's tab-ness as the
+			// slide runs.
 			progressDirection: 0,
 			commitPhysics: this.#driver?.prefersReducedMotion() ? 'snap' : 'momentum'
 		};
@@ -946,7 +949,6 @@ export class NavPipelineOrchestrator {
 		// watchers.
 		this.#cancelSettleEaseRaf();
 		this.#cancelTapScrubRaf();
-		this.#stateMachine.setSettleState({ active: false });
 		this.#settleAwaitTitle = false;
 		this.#settleStartProgress = 0;
 		this.#settleStartTs = 0;
@@ -977,7 +979,6 @@ export class NavPipelineOrchestrator {
 			active: false,
 			backMorph: null,
 			targetIndex: null,
-			coverProgress: 0,
 			transitionTarget: null
 		});
 		// Clear the settle / tap-scrub publications so the next mount
@@ -1247,7 +1248,7 @@ export class NavPipelineOrchestrator {
 		return progressAtTranslateX(newPlan, tx);
 	}
 
-	/** Lock FROM/TO and run the resolver + coordinator once. Handles both
+	/** Lock FROM/TO and run the resolver once. Handles both
 	 *  rightward (backward, toward the back-target) and, when the host is
 	 *  bidirectional, leftward (forward, toward the next tab) gestures. */
 	#beginGesture(inputs: PipelineMountInputs, intent: IntentState): void {
@@ -1274,7 +1275,8 @@ export class NavPipelineOrchestrator {
 			this.#stateMachine.onInterrupt(intent);
 		}
 		// A gesture now owns the publication. Clear the enter flag; a
-		// re-grab continues coverProgress from the publication's live raw.
+		// re-grab continues `backMorph` / `publication.progress` from the
+		// publication's live raw.
 		this.#isEnterAnimation = false;
 		this.#liveDragging = true;
 		const from = inputs.fromPathname;
@@ -1299,7 +1301,8 @@ export class NavPipelineOrchestrator {
 		// tab-click's. The two pending slots are mutually exclusive.
 		this.#pendingDiscreteNav = null;
 		// Capture the in-flight raw BEFORE resetting the progress so a
-		// re-grab mid-commit continues coverProgress from the live value.
+		// re-grab mid-commit continues `backMorph` / `publication.progress`
+		// from the live value.
 		const rawStart = this.#progress;
 		if (target === null) {
 			// Boundary void-swipe on a bidirectional host (first/last tab):
@@ -1430,8 +1433,9 @@ export class NavPipelineOrchestrator {
 		// At the leftmost tab (fromTabIndex === 0) a backward-to-deep-page
 		// gesture has no panel to the left to reveal (the 3-panel track's
 		// panel 0 is leftmost), so a slide would reveal empty space. Suppress
-		// the track slide (distance = 0); coverProgress still drives the
-		// FAB/Header morph, and history.back() lands on the deep page on
+		// the track slide (distance = 0); `backMorph` still drives the
+		// Header morph and `publication.progress` the FAB scale, and
+		// history.back() lands on the deep page on
 		// commit. This is the resolution for the activeIndex === 0 case:
 		// the deep-snapshot overlay covers activeIndex >= 1, but panel 0
 		// has no left neighbour to reveal, so the slide is suppressed here
@@ -1465,8 +1469,9 @@ export class NavPipelineOrchestrator {
 	 *  live-drag publication: it lerps from `#commitStartRaw` (the raw
 	 *  captured at commit start) to the target raw (1 for a commit, 0
 	 *  for a cancel) along the executor's eased fraction of the
-	 *  progressStart -> progressTarget span. This keeps `coverProgress`
-	 *  / `chipProgress` / `fractionalIndex` continuous across the
+	 *  progressStart -> progressTarget span. This keeps `backMorph`
+	 *  / `tapMorph` / `fractionalIndex` (and the FAB's
+	 *  `publication.progress`) continuous across the
 	 *  drag-to-commit boundary for every transition that runs a
 	 *  commit/cancel rAF - a from-rest gesture, a mid-transition
 	 *  interrupt (startProgress > 0), and a tab-click / enter
@@ -1510,12 +1515,12 @@ export class NavPipelineOrchestrator {
 		// `history.back` / `history.forward` for a hop). The dispatch
 		// sets `navDispatchInFlight` so the orchestrator's
 		// `onSvelteKitBeforeNavigate` passes it through without
-		// re-cancelling.
-		const target = pendingDiscreteNav?.target ?? pendingGesture?.to;
-		if (target === undefined || target === null) {
-			this.#landAtRest();
-			return;
-		}
+		// re-cancelling. At least one pending slot is non-null (the
+		// both-null case returns above); both `.target` and `.to` are
+		// typed `string`, so this `??` chain always yields a string at
+		// runtime. The non-null assertion discharges the both-null case
+		// the early return already handled.
+		const target = (pendingDiscreteNav?.target ?? pendingGesture?.to)!;
 		// A commit landing on a non-pipeline route never triggers the
 		// orchestrator's afterNavigate hook (the singleton is not active
 		// there), so clear the transient post-commit state the hook would
@@ -1644,13 +1649,18 @@ export class NavPipelineOrchestrator {
 			// A navigation arriving while our own dispatch is in flight is
 			// either our dispatch's re-entry (it matches #dispatchTarget below)
 			// or an external nav superseding it. The supersede cancels our goto,
-			// so #landAtRest will not run to consume a queued finish-then-new
-			// nav; clear it here to prevent a phantom redirect on a later
-			// landing.
+			// so #landAtRest (the normal clear site) never runs: clear the
+			// state it would have cleared. #queuedDiscreteNav prevents a
+			// phantom redirect on a later landing; #lastDispatchWasDeepToDeep
+			// prevents a stale true suppressing a later forward-enter slide in
+			// shouldEnter; #lastLandWasPipelineCommit prevents a stale true
+			// skipping a tap-scrub arm in notifyHeaderState.
 			if (
 				!(this.#dispatchTarget !== null && to !== null && to + toSearch === this.#dispatchTarget)
 			) {
 				this.#queuedDiscreteNav = null;
+				this.#lastDispatchWasDeepToDeep = false;
+				this.#lastLandWasPipelineCommit = false;
 			}
 			return false;
 		}
@@ -1763,7 +1773,7 @@ export class NavPipelineOrchestrator {
 		// to 'right' so the slide reveals it. The title crossfade
 		// direction is derived independently from navStore.direction
 		// (forward for a push) in #resolveNavDirection, so the title still
-		// enters from the right. A coordinator-driven preload (Layer 4)
+		// enters from below. A coordinator-driven preload (Layer 4)
 		// that places the destination in a right panel would let the
 		// resolver's native 'left' axis work; that is beyond this fix.
 		const plan =
@@ -1788,8 +1798,8 @@ export class NavPipelineOrchestrator {
 		this.#dispatchTarget = null;
 		navigation.cancel();
 		// Capture the in-flight raw BEFORE resetting the progress so a
-		// tab-click interrupting a gesture commit continues coverProgress
-		// from the live value.
+		// tab-click interrupting a gesture commit continues `backMorph` /
+		// `publication.progress` from the live value.
 		this.#commitStartRaw = this.#progress;
 		this.#isEnterAnimation = false;
 		// Dispatch through the state machine so its macro state is the
@@ -1947,7 +1957,7 @@ export class NavPipelineOrchestrator {
 		}
 		this.#settleStartTs = 0;
 		const tick = (): void => {
-			const now = performance.now();
+			const now = this.#clock();
 			if (this.#settleStartTs === 0) this.#settleStartTs = now;
 			const u = Math.min((now - this.#settleStartTs) / safeDuration, 1);
 			const eased = 2 * u - u * u;
@@ -1980,9 +1990,13 @@ export class NavPipelineOrchestrator {
 	}
 
 	/** End the active settle: drop `settleActive` and clear the latched
-	 *  record. The publication's `settleProgress` stays at its last value
-	 *  (1 for commit, 0 for cancel) so the morph derivation's rest branch
-	 *  produces the same value the settle branch ended at (no snap). */
+	 *  record. The publication's `settleProgress` is NOT reset here; it
+	 *  stays at its last value (1 for commit, 0 for cancel). The no-snap
+	 *  is structural: after landing, `currentHasTabs` and the live title
+	 *  already match the latched incoming values, so the morph / titleView
+	 *  rest branches (which return `currentHasTabs ? 1 : 0` and ignore
+	 *  `settleProgress`) produce the same value the settle branch ended
+	 *  at. */
 	#endSettleEase(): void {
 		if (!this.#stateMachine.settleActive) return;
 		this.#cancelSettleEaseRaf();
@@ -2084,14 +2098,15 @@ export class NavPipelineOrchestrator {
 		this.#stateMachine.setSearchScrubbing(true);
 		pager.setTapMorph(fromValue);
 		pager.setScrubIconEndpoint(nonSearchIconValue);
-		// Reduced-motion: snap to target with no rAF.
+		// Reduced-motion: snap to target with no rAF. The subsequent
+		// `#finishTapScrubEase()` clears tapMorph to null in the same
+		// flush, so no intermediate `toValue` write is needed here.
 		if (this.#driver?.prefersReducedMotion() ?? false) {
-			pager.setTapMorph(toValue);
 			this.#finishTapScrubEase();
 			return;
 		}
 		const tick = (): void => {
-			const now = performance.now();
+			const now = this.#clock();
 			if (this.#scrubStartTs === 0) this.#scrubStartTs = now;
 			const u = Math.min((now - this.#scrubStartTs) / TITLE_CROSSFADE_MS, 1);
 			const eased = 2 * u - u * u;
@@ -2242,7 +2257,7 @@ export class NavPipelineOrchestrator {
 		if (pager.tapMorph !== null) {
 			const atTerminal = Math.abs(pager.tapMorph - this.#scrubTerminal) < 0.001;
 			if (
-				(pager.dragging && pager.tapMorph !== null) ||
+				pager.dragging ||
 				(atTerminal && currentHasTabs === this.#scrubTargetTabs) ||
 				newPath !== this.#scrubSource
 			) {
@@ -2289,15 +2304,19 @@ export class NavPipelineOrchestrator {
 			}
 			// A different title arrived mid-settle: re-arm toward the new
 			// title so a rapid back-to-back nav cannot strand the header
-			// on a stale title. Re-arm from the CURRENT settle progress so
-			// the morph (tab-bar transition) and the title crossfade
-			// continue from the in-flight position: the outgoing title
-			// span keeps its mid-settle offset and the new incoming title
-			// enters from below.
-			if (
-				newTitle !== this.#resolveSettleIncomingTitle() &&
-				newTitle !== this.#resolveSettleOutgoingTitle()
-			) {
+			// on a stale title. The re-arm is SKIPPED when the new title
+			// equals the OUTGOING title (the equal-to-INCOMING case
+			// returned above), so only a genuinely third title re-arms.
+			// The settle rAF's startProgress is the CURRENT settleProgress,
+			// so the title crossfade continues from the in-flight position:
+			// the outgoing title span keeps its mid-settle offset and the
+			// new incoming title enters from below. The morph derivation
+			// re-evaluates against the new latched endpoints
+			// (`outgoingHasTabs` is the prior incoming, `incomingHasTabs`
+			// is the current value), so the morph value can jump at the
+			// re-arm when the new endpoints differ from the prior latched
+			// pair; it does not continue from the in-flight position.
+			if (newTitle !== this.#resolveSettleOutgoingTitle()) {
 				const prevLatched = this.#readSettleLatched();
 				if (prevLatched !== null) {
 					const latched: HeaderSettleTransition = {
@@ -2445,7 +2464,6 @@ export class NavPipelineOrchestrator {
 				active: true,
 				backMorph: null,
 				targetIndex: null,
-				coverProgress: 0,
 				transitionTarget: null
 			});
 		} else if (inputs?.bidirectional === true) {
@@ -2461,7 +2479,6 @@ export class NavPipelineOrchestrator {
 				active: true,
 				backMorph: null,
 				targetIndex: null,
-				coverProgress: 0,
 				transitionTarget: null
 			});
 		} else {
@@ -2469,7 +2486,7 @@ export class NavPipelineOrchestrator {
 			// Deep page at rest (no centerTab, not bidirectional): no pill
 			// highlight (fromTabIndex is -1 for routes with no tab
 			// association), active: false so the pager reports no live
-			// drag, backMorph: 0 so the Header is in normal (hamburger)
+			// drag, backMorph: 0 so the Header is in deep (back-arrow)
 			// mode.
 			pager.set({
 				fractionalIndex: fromIdx,
@@ -2477,7 +2494,6 @@ export class NavPipelineOrchestrator {
 				active: false,
 				backMorph: 0,
 				targetIndex: null,
-				coverProgress: 0,
 				transitionTarget: null
 			});
 		}
@@ -2535,8 +2551,9 @@ export class NavPipelineOrchestrator {
 	 *  (`#interpretIntent`) passes `offsetX / W` directly; (2) the
 	 *  commit path (`#onExecutorTick`) lerps from `#commitStartRaw`
 	 *  toward the target raw along the executor's eased fraction. Both
-	 *  values drive `coverProgress` / `backMorph` / `fractionalIndex`
-	 *  via `#republishToPager`. The macro fields (plan, FROM/TO,
+	 *  values drive `backMorph` / `fractionalIndex` via
+	 *  `#republishToPager` (and the FAB reads the raw via
+	 *  `publication.progress` directly). The macro fields (plan, FROM/TO,
 	 *  direction, in-flight) stay owned by the state machine; only the
 	 *  per-frame `#progress` mutates here. The host's `$effect` only
 	 *  handles the at-rest reset (when `publication.plan` becomes null);
@@ -2558,10 +2575,12 @@ export class NavPipelineOrchestrator {
 	 *  highlight tracks the slide instead of jumping at landing; for a
 	 *  same-tab back-swipe the target equals `centerTab` so the pill
 	 *  holds. `targetIndex` stays null (the pill uses the fractionalIndex
-	 *  path, not the deep-swipe path). `coverProgress` is the raw slide
-	 *  fraction; the Header reads it for the morph derivation. The FAB
-	 *  layer reads the orchestrator's publication directly (progress +
-	 *  FROM/TO FAB presence) for its scale, NOT these pager fields.
+	 *  path, not the deep-swipe path). `backMorph` is null here
+	 *  (centerTab routes stay in root mode end to end), so the Header
+	 *  morph does not track the slide on a thread-host gesture. The FAB
+	 *  layer reads the orchestrator's publication directly (the raw
+	 *  slide fraction via `progress` + FROM/TO FAB presence) for its
+	 *  scale, NOT these pager fields.
 	 *
 	 *  Tab-host mode (no centerTab, bidirectional): interpolates
 	 *  `fractionalIndex` between `fromTabIndex` and `toTabIndex`
@@ -2614,7 +2633,6 @@ export class NavPipelineOrchestrator {
 				active: true,
 				backMorph: null,
 				targetIndex: null,
-				coverProgress: rawDragFraction,
 				transitionTarget: publication.toPathname
 			});
 			return;
@@ -2658,7 +2676,6 @@ export class NavPipelineOrchestrator {
 			active: true,
 			backMorph: backMorphValue,
 			targetIndex: targetIndexValue,
-			coverProgress: rawDragFraction,
 			transitionTarget: publication.toPathname
 		});
 	}

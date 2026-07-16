@@ -553,15 +553,15 @@ export async function captureExitPreview(
 
 // --- FAB route-transition capture -------------------------------------------
 // Samples `[data-testid="fab"]`'s computed scale each frame for ~700ms across
-// `trigger`. The FAB atom binds `transform: scale(s) translateY(y)`; since
-// DV20 5b2 the scale is driven by the global nav-pipeline orchestrator's
-// per-frame publication (`pager.familySwapScale` / `pager.trackFractionalIndex`),
-// which the FAB layer reads reactively (`scale = $derived(pager.familySwapScale
-// ?? restingScale)`). A discrete swap that eases the scale therefore shows
-// many distinct descending frames (the orchestrator publishes a new value each
-// frame); a snap shows a one-frame jump. `animated` (scale delta > 0.1) is the
-// behavioural signal. The FAB atom carries no CSS transition directive and no
-// transitionend the test can await.
+// `trigger`. The FAB atom binds `transform: scale(s) translateY(y)`; the scale
+// is driven by the global nav-pipeline orchestrator's per-frame publication of
+// `publication.progress`, which the FAB layer reads directly and maps through
+// `fabScale(publication.progress, fromHasFab, toHasFab)` (a half-mapping that
+// covers same- and cross-family transitions uniformly). A discrete swap that
+// eases the scale therefore shows many distinct descending frames (a new
+// `publication.progress` each frame); a snap shows a one-frame jump.
+// `animated` (scale delta > 0.1) is the behavioural signal. The FAB atom
+// carries no CSS transition directive and no transitionend the test can await.
 
 interface FabFrame {
 	t: number;

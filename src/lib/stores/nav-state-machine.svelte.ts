@@ -10,9 +10,12 @@
  * mobile gesture route mounts a pipeline host whose orchestrator feeds
  * this store; there is no parallel gesture state machine.
  *
- * The wrapper is a thin `$state` shell: every transition delegates to
- * the pure reducer so the reducer is the single source of truth for
- * the phase maths. The orchestrator reads the state through
+ * The wrapper is a thin `$state` shell with TWO mutation points:
+ * `dispatch()` delegates every transition event to the pure reducer
+ * (the authority for the phase maths), and `forceReset()` performs a
+ * direct overwrite with `initialOrchestratorState(on)`, used by
+ * `configure()` on a fresh host mount to clear state a prior route may
+ * have left in any phase. The orchestrator reads the state through
  * `$derived` and register as dependents on the underlying `$state`.
  *
  * Module-singleton pattern, matching the other stores in this
@@ -101,33 +104,6 @@ export class NavStateMachine {
 		return this.#state;
 	}
 
-	/** Reactive read of the current macro phase. Convenience for
-	 *  consumers that only care about the phase. */
-	get macro() {
-		return this.#state.macro;
-	}
-
-	/** Reactive read of the active plan. Null unless a transition is
-	 *  in flight. */
-	get activePlan(): TransitionPlan | null {
-		return this.#state.activePlan;
-	}
-
-	/** Reactive read of the FROM pathname. */
-	get fromPathname(): string | null {
-		return this.#state.fromPathname;
-	}
-
-	/** Reactive read of the TO pathname. */
-	get toPathname(): string | null {
-		return this.#state.toPathname;
-	}
-
-	/** Reactive read of the transition direction. */
-	get direction(): TransitionDirection | null {
-		return this.#state.direction;
-	}
-
 	// ------------------------------------------------------------------
 	// Settle + tap-scrub reactive reads. The orchestrator's publication
 	// merges these into the consumer-facing record; the Header reads
@@ -170,8 +146,9 @@ export class NavStateMachine {
 
 	/** Write the settle state. Each field is optional; unspecified fields
 	 *  preserve their prior value. Called by the orchestrator's settle
-	 *  rAF tick (progress only), settle-arm (all fields), and
-	 *  settle-end (clear active + latched). */
+	 *  rAF tick (progress only), settle-arm (all fields), settle-end
+	 *  (clear active + latched + awaitTitle), and awaitTitle-only clears
+	 *  from `onSvelteKitAfterNavigate` and `notifyHeaderState`. */
 	setSettleState(update: SettleStateUpdate): void {
 		if (update.active !== undefined) this.#settleActive = update.active;
 		if (update.progress !== undefined) this.#settleProgress = update.progress;
@@ -186,13 +163,15 @@ export class NavStateMachine {
 		this.#searchScrubbing = value;
 	}
 
-	/** Dispatch an event through the reducer. Single mutation point:
-	 *  every transition routes through here so the reducer stays the
-	 *  authority. The wrapper does not branch on event types itself;
-	 *  it builds the event payload and delegates. */
+	/** Dispatch an event through the reducer. One of the wrapper's two
+	 *  mutation points (the other is `forceReset`, which assigns
+	 *  `#state` directly). Every transition event routes through here
+	 *  so the reducer stays the authority for the phase maths. The
+	 *  wrapper does not branch on event types itself; it builds the
+	 *  event payload and delegates. */
 	dispatch(event: OrchestratorEvent): void {
-		// Replace the whole record so dependents on `state`/`macro`/
-		// `activePlan` etc re-run. The reducer returns a fresh
+		// Replace the whole record so dependents on `state` / `macro`
+		// / `fromPathname` etc re-run. The reducer returns a fresh
 		// `OrchestratorState`; assigning it through `$state` notifies
 		// every reactive reader.
 		this.#state = reduce(this.#state, event, this.#now());
@@ -258,19 +237,6 @@ export class NavStateMachine {
 		} else {
 			this.dispatch({ type: 'reset', on });
 		}
-	}
-
-	/** Reset to at-rest on a tag. A public boundary with no internal
-	 *  caller: the first-load landing and the SSR initial render both
-	 *  use the constructor's `initialOn` directly, and `onLand`
-	 *  dispatches the reset event itself rather than calling this
-	 *  method. Exposed for external callers that need to force-clear
-	 *  the state machine outside a land cycle. The `reset` event
-	 *  guards against clobbering an `intent` phase (a new gesture
-	 *  that arrived during the landing microtask); use `forceReset`
-	 *  when the caller needs an unconditional clear. */
-	reset(on: AtRestOn): void {
-		this.dispatch({ type: 'reset', on });
 	}
 
 	/** Unconditionally reset to at-rest on a tag, bypassing the

@@ -67,19 +67,17 @@ export interface MacroPhase {
 export type TransitionDirection = 'forward' | 'backward';
 
 /** The full orchestrator state. One record; the consumers read this
- *  shape directly. The single `macro` phase plus the resolved
- *  from/to/direction fields are the complete authority for the
- *  transition state. */
+ *  shape directly. The single `macro` phase (whose `macro.plan` carries
+ *  the active transition plan) plus the resolved from/to/direction
+ *  fields are the complete authority for the transition state. */
 export interface OrchestratorState {
 	readonly macro: MacroPhase;
-	readonly activePlan: TransitionPlan | null;
 	readonly fromPathname: string | null;
 	readonly toPathname: string | null;
 	readonly fromTag: RouteTag | null;
 	readonly toTag: RouteTag | null;
 	readonly direction: TransitionDirection | null;
 	readonly startedAt: number | null;
-	readonly lastIntent: IntentState | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -162,14 +160,12 @@ export function atRestPhase(on: AtRestOn): MacroPhase {
 export function initialOrchestratorState(on: AtRestOn = 'tab'): OrchestratorState {
 	return {
 		macro: atRestPhase(on),
-		activePlan: null,
 		fromPathname: null,
 		toPathname: null,
 		fromTag: null,
 		toTag: null,
 		direction: null,
-		startedAt: null,
-		lastIntent: null
+		startedAt: null
 	};
 }
 
@@ -207,8 +203,7 @@ export function reduce(
 					toPathname: null,
 					toTag: null,
 					direction: null,
-					startedAt: now,
-					lastIntent: event.intent
+					startedAt: now
 				};
 			}
 			if (state.macro.kind === 'landing') {
@@ -221,8 +216,7 @@ export function reduce(
 					toPathname: null,
 					toTag: null,
 					direction: null,
-					startedAt: now,
-					lastIntent: event.intent
+					startedAt: now
 				};
 			}
 			return state;
@@ -242,20 +236,19 @@ export function reduce(
 			return {
 				...state,
 				macro: { kind: 'transitioning', on: null, sub, plan: event.plan },
-				activePlan: event.plan,
 				fromPathname: event.from,
 				fromTag: event.fromTag,
 				toPathname: event.to,
 				toTag: event.toTag,
-				direction: event.direction,
-				lastIntent: state.lastIntent
+				direction: event.direction
 			};
 		}
 		case 'drag-move': {
-			// Update only the live intent. Phase unchanged.
-			if (state.macro.kind !== 'transitioning') return state;
-			if (state.macro.sub !== 'dragging') return state;
-			return { ...state, lastIntent: event.intent };
+			// Live drag moved. No reducer state changes: the live drag
+			// fraction is owned by the orchestrator's executor, not
+			// persisted in the reducer. The event remains in the protocol
+			// so the reducer stays total over the wrapper's dispatch set.
+			return state;
 		}
 		case 'commit': {
 			// Released past threshold: enter committing.
@@ -290,8 +283,7 @@ export function reduce(
 					on: null,
 					sub: 'cancelling',
 					plan: state.macro.plan === null ? null : { ...state.macro.plan, progressDirection: 1 }
-				},
-				activePlan: state.activePlan === null ? null : { ...state.activePlan, progressDirection: 1 }
+				}
 			};
 		}
 		case 'interrupt': {
@@ -306,21 +298,18 @@ export function reduce(
 			return {
 				...state,
 				macro: { kind: 'intent', on: null, sub: null, plan: null },
-				activePlan: null,
 				fromPathname: state.fromPathname,
 				fromTag: state.fromTag,
 				toPathname: null,
 				toTag: null,
 				direction: null,
-				lastIntent: event.intent,
 				startedAt: now
 			};
 		}
 		case 'land': {
 			return {
 				...state,
-				macro: { kind: 'landing', on: event.on, sub: null, plan: null },
-				activePlan: null
+				macro: { kind: 'landing', on: event.on, sub: null, plan: null }
 			};
 		}
 		case 'reset': {
@@ -334,33 +323,9 @@ export function reduce(
 			if (state.macro.kind === 'intent') {
 				return state;
 			}
-			return {
-				...initialOrchestratorState(event.on),
-				// Preserve lastIntent for diagnostics; the next intent
-				// overwrites it.
-				lastIntent: state.lastIntent
-			};
+			return initialOrchestratorState(event.on);
 		}
 		default:
 			return state;
 	}
-}
-
-/** Convenience: is the state machine idle (at-rest)? */
-export function isAtRest(state: OrchestratorState): boolean {
-	return state.macro.kind === 'at-rest';
-}
-
-/** Convenience: is a transition in flight (dragging / committing /
- *  cancelling)? */
-export function isInFlight(state: OrchestratorState): boolean {
-	return state.macro.kind === 'transitioning';
-}
-
-/** Convenience: is the active transition a commit (released past the
- *  threshold)? Not consulted by the wrapper's `onLand`, which
- *  schedules the reset microtask unconditionally. Exposed for callers
- *  that need to gate behaviour on the committing sub-phase. */
-export function isCommitting(state: OrchestratorState): boolean {
-	return state.macro.kind === 'transitioning' && state.macro.sub === 'committing';
 }

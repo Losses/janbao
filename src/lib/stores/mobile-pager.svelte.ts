@@ -20,8 +20,8 @@
  * waiting for hydration.
  *
  * The store carries the per-frame gesture signals the MobileTabBar and the
- * SearchTabBar read, plus the Header morph signals (`coverProgress`,
- * `tapMorph`, `backMorph`, `transitionTarget`, `scrubIconEndpoint`,
+ * SearchTabBar read, plus the Header morph signals (`tapMorph`,
+ * `backMorph`, `transitionTarget`, `scrubIconEndpoint`,
  * `replaceStateIntent`, `fractionalIndex`, `dragging`, `active`,
  * `targetIndex`). The FAB layer reads the orchestrator's publication
  * directly (not these fields). The Header's settle ease state (the
@@ -47,11 +47,6 @@ interface PagerUpdate {
 	active: boolean;
 	backMorph: number | null;
 	targetIndex?: number | null;
-	/** The slide-progress signal the Header reads for its morph
-	 * derivation, published by the pipeline orchestrator as the raw slide
-	 * fraction. null = not published. Optional so non-publishing writers
-	 * (SearchScopePager) compile without touching it. */
-	coverProgress?: number | null;
 	/** tap-morph progress 0..1 (DV17): continuous morph signal consumed by the
 	 * search track/Tab group and the search-page Page-slide headroom on a tap.
 	 * null = no tap scrub in flight (rest, drag). Optional so non-publishing
@@ -82,7 +77,6 @@ type SetScrubIconEndpointFn = (value: number | null) => void;
 
 interface PagerStore extends PagerUpdate {
 	targetIndex: number | null;
-	coverProgress: number | null;
 	tapMorph: number | null;
 	transitionTarget: string | null;
 	scrubIconEndpoint: number | null;
@@ -99,7 +93,6 @@ export function createPagerStore(): PagerStore {
 	let active = $state(false);
 	let backMorph = $state<number | null>(null);
 	let targetIndex = $state<number | null>(null);
-	let coverProgress = $state<number | null>(null);
 	let tapMorph = $state<number | null>(null);
 	let transitionTarget = $state<string | null>(null);
 	let scrubIconEndpoint = $state<number | null>(null);
@@ -111,7 +104,6 @@ export function createPagerStore(): PagerStore {
 		active = update.active;
 		backMorph = update.backMorph;
 		targetIndex = update.targetIndex !== undefined ? update.targetIndex : null;
-		coverProgress = update.coverProgress ?? null;
 		transitionTarget = update.transitionTarget ?? null;
 		// tapMorph is omitted by the drag $effect's pager.set calls; preserve
 		// it so an in-flight tap scrub is not clobbered. The tap publisher
@@ -155,9 +147,6 @@ export function createPagerStore(): PagerStore {
 		},
 		get targetIndex() {
 			return targetIndex;
-		},
-		get coverProgress() {
-			return coverProgress;
 		},
 		get tapMorph() {
 			return tapMorph;
