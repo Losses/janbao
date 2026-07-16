@@ -177,10 +177,13 @@ export class NavStateMachine {
 	 *  authority for the phase maths. The wrapper does not branch on
 	 *  event types itself; it builds the event payload and delegates. */
 	dispatch(event: OrchestratorEvent): void {
-		// Replace the whole record so dependents on `state` / `macro`
-		// / `fromPathname` etc re-run. The reducer returns a fresh
-		// `OrchestratorState`; assigning it through `$state` notifies
-		// every reactive reader.
+		// Assign through `$state` so dependents on `state` / `macro`
+		// / `fromPathname` re-run. The reducer may return the same
+		// reference for no-op events (e.g. `drag-move`, whose live
+		// fraction is owned by the orchestrator's executor, not the
+		// reducer); that is fine because the orchestrator's
+		// `#publication` re-runs via `#progress` for drag updates, and
+		// every state-changing event returns a fresh record.
 		this.#state = reduce(this.#state, event, this.#now());
 	}
 

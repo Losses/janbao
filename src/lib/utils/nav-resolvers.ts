@@ -58,10 +58,10 @@ export type PageTrackAxis = 'left' | 'right';
  *
  *  `restingTranslate` is the track's translateX (px) at progress=0. Most
  *  plans leave it at 0 (a single-panel track where progress=0 means
- *  translateX=0). The multi-panel tab host sets it to
- *  `-viewportWidth` so the centre panel (the right half of the 2*W
- *  track) fills the viewport at rest and the left panel sits
- *  off-screen. */
+ *  translateX=0). Both pipeline hosts use a 3-panel track (3*W):
+ *  NavPipelineHost sets it to `-viewportWidth` (its center panel is
+ *  the middle third of the 3-panel track); NavPipelineTabHost sets it
+ *  to `-activeIndex * viewportWidth`. */
 export interface PageTrackPlan {
 	readonly axis: PageTrackAxis;
 	readonly distance: number;

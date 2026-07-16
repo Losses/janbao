@@ -5,7 +5,9 @@
  *
  *   1. SvelteKit nav -> orchestrator: `onSvelteKitBeforeNavigate` /
  *      `onSvelteKitAfterNavigate` (called from `src/routes/+layout.svelte`'s
- *      hooks, gated by `isPilotTransition`).
+ *      hooks; `beforeNavigate` gated by
+ *      `isPilotTransition && orchestrator !== null`, `afterNavigate`
+ *      gated by `orchestrator !== null`).
  *   2. Pointer -> intent: `onPointerDown` / `onPointerMove` /
  *      `onPointerUp` (called from the `navPipelinePointer` Svelte
  *      action that wraps `detectSwipe`; a `pointercancel` is routed by
@@ -527,10 +529,14 @@ export class NavPipelineOrchestrator {
 	 *  just-landed pipeline commit (the executor's slide already drove
 	 *  the search-layout visual to its post-land position; arming a
 	 *  fresh scrub would re-animate it from the opposite endpoint and
-	 *  jump). Cleared in `#landAtRest` (the navigation has landed) and
-	 *  in `notifyHeaderState` (defensive clear after the read so a
-	 *  second header-state notification within the same navigation does
-	 *  not re-consume the flag). */
+	 *  jump). Cleared in three places: `#landAtRest` (the navigation
+	 *  has landed), `notifyHeaderState`'s main body (defensive clear
+	 *  after the read so a second header-state notification within the
+	 *  same navigation does not re-consume the flag), and the supersede
+	 *  branch in `onSvelteKitBeforeNavigate` (an external nav cancels
+	 *  our in-flight goto so `#landAtRest` never runs; without this
+	 *  clear the stale true would skip a tap-scrub arm on the next
+	 *  pipeline commit). */
 	#lastLandWasPipelineCommit = false;
 	/** True while a forward enter's settle ease owns the morph and the
 	 *  live `headerTitle` has not yet taken over. Set in
@@ -1297,9 +1303,12 @@ export class NavPipelineOrchestrator {
 		// bidirectional host that is `previousEntryPathname()` (the entry
 		// behind the current tab, whether it is the spatially-previous tab,
 		// a deep page the user came from, or a higher-indexed tab when that
-		// tab is the temporal-previous (Known #6: the track reveals it
-		// leftward while the finger moves rightward)); on a non-bidirectional
-		// host it is the mount-supplied back-target. Forward targets the next
+		// tab is the temporal-previous (the backward-to-higher-tab case:
+		// the resolver returns axis 'right' so the track follows the
+		// finger rightward, and the deepSnapshotTarget overlay reveals
+		// the destination tab's content from the left)); on a
+		// non-bidirectional host it is the mount-supplied back-target.
+		// Forward targets the next
 		// tab. Macro §6: a backward gesture always goes where the user
 		// came from; the hop-vs-push decision is the generic `hopForHref`
 		// check at dispatch time.
@@ -1375,9 +1384,11 @@ export class NavPipelineOrchestrator {
 	 *  (the temporal-previous): the entry behind the current tab, whether
 	 *  that is the spatially-previous tab root (the common tab-to-tab
 	 *  case, where spatial = temporal), a higher-indexed tab whose entry
-	 *  is the temporal-previous (Known #6: a tab-to-tab case where
-	 *  spatial != temporal, because the track reveals it leftward while
-	 *  the finger moves rightward), or a deep page the user forward-
+	 *  is the temporal-previous (a tab-to-tab case where
+	 *  spatial != temporal: the resolver returns axis 'right' so the
+	 *  track follows the finger rightward, and the deepSnapshotTarget
+	 *  overlay reveals the destination tab's content from the left),
+	 *  or a deep page the user forward-
 	 *  navigated from (the uncommon case, where spatial != temporal). On
 	 *  commit, `#dispatchNav`'s `hopForHref` check decides history.back()
 	 *  vs goto; for a deep page that sits behind the current tab it
@@ -1689,13 +1700,23 @@ export class NavPipelineOrchestrator {
 			// phantom redirect on a later landing; #lastDispatchWasDeepToDeep
 			// prevents a stale true suppressing a later forward-enter slide in
 			// shouldEnter; #lastLandWasPipelineCommit prevents a stale true
-			// skipping a tap-scrub arm in notifyHeaderState.
+			// skipping a tap-scrub arm in notifyHeaderState. The settle ease
+			// was armed for the in-flight goto's landing (a commit-tick holding
+			// at u=1 with awaitTitle, or a held mid-settle state); the supersede
+			// cancels the goto so the awaitTitle never clears via
+			// onSvelteKitAfterNavigate (skipped on a non-pipeline route), and
+			// the settle rAF would tick to u=1 and hold indefinitely. End it
+			// here so a stale settleActive does not leak into the next pipeline
+			// route (where configure's forceReset only resets macro state, so
+			// notifyHeaderState would take the mid-settle branch and snap the
+			// morph instead of crossfading).
 			if (
 				!(this.#dispatchTarget !== null && to !== null && to + toSearch === this.#dispatchTarget)
 			) {
 				this.#queuedDiscreteNav = null;
 				this.#lastDispatchWasDeepToDeep = false;
 				this.#lastLandWasPipelineCommit = false;
+				this.#endSettleEase();
 			}
 			return false;
 		}

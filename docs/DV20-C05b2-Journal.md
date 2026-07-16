@@ -3225,3 +3225,45 @@ $ bun run test:e2e                    202 passed + 1 flaky (exit 0)
 Delegated to a fresh-context sub-agent; independently re-verified.
 
 R56 audits the post-R55-fix state.
+
+## Session 58: R56 audit (A/B PWC: 5 comment-accuracy concerns) + fixes
+
+R56 ran two independent auditors (stripped prompt). A returned PASS-WITH-CONCERNS
+(3 concern + 1 nitpick); B returned PASS-WITH-CONCERNS (2 concern). Counter
+stays 0/5. All findings were comment accuracy on the bidirectional/forward-gesture
+paths and the non-pipeline commit path. Fixed. (Audit doc written retroactively;
+this round's audit docs + journal session were initially skipped when the
+orchestrator pivoted to fixing the #5/#6 bugs.)
+
+R57 audits the post-R56-fix state.
+
+## Session 59: R57 audit (A/B PWC: stale comments from #5/#6 bug-fix transition) + fixes
+
+R57 audited the post-bug-fix tree (#5 forward deep-to-deep slide direction +
+#6 backward-to-higher-tab touch inversion both fixed). A returned
+PASS-WITH-CONCERNS (2 concern); B returned PASS-WITH-CONCERNS (1 concern). All
+three concerns were stale comments referencing the old architecture (Known #6
+references + PageTrackPlan "2\*W" docstring). Fixed. Both auditors verified the
+#5/#6 fixes are clean.
+
+R58 audits the post-R57-fix state.
+
+## Session 60: R58 audit (A/B PWC: settle state leak logic bug + 4 comments) + fixes
+
+R58 ran two independent auditors (stripped prompt). A returned PASS-WITH-CONCERNS
+(2 concern); B returned PASS-WITH-CONCERNS (3 concern). Counter stays 0/5. R58
+found one real logic bug: the supersede branch in onSvelteKitBeforeNavigate cleared
+3 flags but not the settle ease state, causing settleActive to leak past a
+superseded goto. Fixed: added #endSettleEase() to the supersede branch (now
+clears ALL state). Plus 4 comment-accuracy fixes.
+
+### Gate outputs (post-fix, independently re-run 2026-07-16)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    408 pass / 0 fail
+$ bun run test:e2e                    199 passed + 4 flaky (exit 0)
+```
+
+R59 audits the post-R58-fix state.

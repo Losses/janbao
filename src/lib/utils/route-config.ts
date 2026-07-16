@@ -128,10 +128,14 @@ export interface FabRouteAttributes {
  * the most-recent FAB mounted across no-FAB routes.
  */
 const FAB_ROUTE_ATTRIBUTES: readonly FabRouteAttributes[] = [
-	// Family A: list routes with a visible FAB at rest.
+	// Family A: list routes whose atom is mounted (Family A/C at scale 0
+	// or 1). Only / and /messages/inbox show a visible FAB at rest
+	// (fab: true); the FAB layer scales the atom per route below.
 	{ pattern: /^\/$/, family: 'list', kind: 'discussions' },
 	{ pattern: /^\/messages\/inbox$/, family: 'list', kind: 'messages' },
-	// Family A, dynamic kind: Activity's FAB resolves from the gesture source tab.
+	// Family A, dynamic kind: Activity's FAB atom stays mounted at
+	// scale 0 (fab: false); the dynamic kind is used only as a retained
+	// icon for transitions across the list boundary.
 	{ pattern: /^\/activity$/, family: 'list', kind: 'dynamic' },
 
 	// Family B: thread / conversation (overlay on top of the source list).
