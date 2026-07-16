@@ -2853,3 +2853,41 @@ Delegated to a fresh-context sub-agent; independently re-verified by the
 orchestrator. The flaky tests are the known CDP-touch class.
 
 R44 audits the post-R43-fix state.
+
+## Session 46: R44 audit (A/B PWC: 1 real defect + 4 already-corrected) + fix
+
+R44 ran two independent auditors. A returned PASS-WITH-CONCERNS (2 concern); B
+returned PASS-WITH-CONCERNS (3 concern). Counter stays 0/5.
+
+### Findings + dispositions
+
+- A1 (logic, REAL DEFECT): the FAB dipped to exactly 0 mid-rubber-band during a
+  boundary void-swipe because `fabScale`'s icon-handoff half-mapping ran on the
+  raw progress (`fromPathname === toPathname`, no real transition) while the
+  track only rubber-banded ~20%. An earlier "document it as intended" was wrong;
+  this is a real over-reaction (a regression from the FAB unification's switch
+  to raw progress). Fixed: for `fromPathname === toPathname` the FAB reacts
+  proportionally (`1 - progress * BOUNDARY_RUBBER_BAND_FACTOR`, to 0.6 at full
+  drag); real transitions unchanged.
+- A2 (docstring, `/messages/1`->`/messages/2` no-op example): found already
+  corrected to `/messages/123/p1`->`/messages/123/p2`.
+- B1 (`#onExecutorSettle` "stray settle" comment): found already corrected to the
+  enter-completion description.
+- B2 (`FAB_KIND_CONFIGS` English fallbacks): found already removed (i18n keys
+  present).
+- B3 (redundant `FabKind`): found already unified to `FabListKind`.
+
+### Gate outputs (post-fix, independently re-run 2026-07-15)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (exit 0)
+```
+
+The A1 fix was delegated to a fresh-context sub-agent and independently
+re-verified (FAB-layer diff checked; gate re-run by the orchestrator; the
+`fab-boundary-swipe-sync` boundary spec passes for both tabs).
+
+R45 audits the post-R44-fix state.

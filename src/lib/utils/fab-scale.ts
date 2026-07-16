@@ -9,7 +9,12 @@
  *     toHasFab)`. The FAB exits in the first half of the transition
  *     (0 -> 0.5) if the FROM route shows a FAB, and enters in the second
  *     half (0.5 -> 1) if the TO route shows a FAB. `progress` is the
- *     same signal that drives the page-track slide.
+ *     orchestrator's raw drag fraction (`publication.progress`); on a
+ *     non-bidirectional host (every NavPipelineHost route: threads,
+ *     compose, deep pages) the page-track threshold-absorbs this same
+ *     drag (`trackProgress` absorbs the first 20% as a deadzone), so
+ *     the FAB reacts from the first pixel while the track absorbs the
+ *     deadzone (spec §5).
  *   - Scroll driver: `p = hideProgress(translateY, headerHeight)`,
  *     `y = p * (fabHeight + bottomClearance)`. Mirrors the Header's hide-on-scroll.
  *

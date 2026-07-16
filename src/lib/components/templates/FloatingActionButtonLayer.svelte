@@ -8,8 +8,13 @@
 	 * orchestrator's publication:
 	 *
 	 *   - In flight (publication.inFlight): `fabScale(progress, fromHasFab,
-	 *     toHasFab)` where `progress` is the same 0..1 slide fraction that
-	 *     drives the page-track slide, and fromHasFab / toHasFab come from
+	 *     toHasFab)` where `progress` is the orchestrator's raw drag
+	 *     fraction (`publication.progress`); on a non-bidirectional host
+	 *     (every NavPipelineHost route: threads, compose, deep pages) the
+	 *     page-track threshold-absorbs this same drag (`trackProgress`
+	 *     absorbs the first 20% as a deadzone), so the FAB reacts from
+	 *     the first pixel while the track absorbs the deadzone (spec §5),
+	 *     and fromHasFab / toHasFab come from
 	 *     `RouteData.fab` on the from/to pathnames. The FAB exits in the
 	 *     first half (0 -> 0.5) if FROM shows a FAB and enters in the
 	 *     second half (0.5 -> 1) if TO shows a FAB; a tab-to-tab swap
@@ -36,6 +41,7 @@
 	} from '$lib/utils/route-config';
 	import { getRouteData } from '$lib/utils/route-data';
 	import { fabScale, translateYFromHideProgress, hideProgress } from '$lib/utils/fab-scale';
+	import { BOUNDARY_RUBBER_BAND_FACTOR } from '$lib/utils/gesture-constants';
 	import type { FabListKind } from '$lib/utils/route-config';
 	import type { TranslationDict } from '$lib/types/translation';
 
@@ -142,19 +148,32 @@
 	 *
 	 *  Boundary void-swipe (first/last tab rubber-band, where the
 	 *  orchestrator publishes `fromPathname === toPathname` and no route
-	 *  change occurs): the FAB still reads the raw published progress and
-	 *  dips along the rubber-band BY DESIGN. The FAB "reacts from the
-	 *  first pixel" rule applies uniformly to every in-flight
-	 *  publication, so a tab-to-tab swap and a boundary void-swipe both
-	 *  vary the scale from the first drag frame. The e2e
-	 *  `fab-boundary-swipe-sync` spec asserts the dip (scale delta > 0.1
-	 *  during a first/last-tab void-swipe); the FAB MUST vary along the
-	 *  boundary dip to satisfy that assertion. */
+	 *  change occurs): the FAB reacts PROPORTIONALLY to the rubber-band,
+	 *  NOT via `fabScale`'s icon-handoff half-mapping. The half-mapping
+	 *  (`progress < 0.5 ? 1 - progress*2 : (progress-0.5)*2`) dips to
+	 *  exactly 0 at progress=0.5, fully hiding the FAB mid-rubber-band
+	 *  even though the track only rubber-bands ~20% (the track uses
+	 *  `BOUNDARY_RUBBER_BAND_FACTOR = 0.4`). Returning
+	 *  `1 - progress * BOUNDARY_RUBBER_BAND_FACTOR` (which reaches 0.6 at
+	 *  full drag, matching the track's reduced amplitude) keeps the FAB
+	 *  visible and still varies from the first drag frame. When the route
+	 *  has no FAB the scale stays 0. The e2e `fab-boundary-swipe-sync`
+	 *  spec asserts the dip (scale delta > 0.1 during a first/last-tab
+	 *  void-swipe); the proportional reaction reaches delta ~0.4 at full
+	 *  drag, well above the threshold. */
 	const scale = $derived.by(() => {
 		const pub = publication;
 		if (pub.inFlight && pub.fromPathname && pub.toPathname) {
 			const fromHasFab = getRouteData(pub.fromPathname).fab;
 			const toHasFab = getRouteData(pub.toPathname).fab;
+			// Boundary void-swipe: orchestrator publishes fromPathname ===
+			// toPathname (same route, no real transition). React proportionally
+			// to the rubber-band instead of running fabScale's icon-handoff
+			// half-mapping (which would dip to 0 at the midpoint, an
+			// over-reaction to a ~20% track displacement).
+			if (pub.fromPathname === pub.toPathname) {
+				return fromHasFab ? 1 - pub.progress * BOUNDARY_RUBBER_BAND_FACTOR : 0;
+			}
 			return fabScale(pub.progress, fromHasFab, toHasFab);
 		}
 		return getRouteData(page.url.pathname).fab ? 1 : 0;
