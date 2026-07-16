@@ -212,8 +212,27 @@ function commitPhysicsFor(reducedMotion: boolean): CommitPhysics {
 // FAB layer reads the orchestrator's publication directly and the
 // Header reacts through its own layer reading the pager store (the
 // plan carries no `fab` / `header` fns).
+//
+// EXCEPTION: backward-to-higher-indexed tab. A backward gesture whose
+// target sits at a HIGHER spatial index than the source (e.g. the user
+// is on tab 0 but history's previous entry is tab 2, so a back-swipe
+// pops to tab 2). The finger moves rightward (every backward pop does),
+// but the spatial axis would resolve to 'left' (higher index), making
+// the track slide against the finger. Follow the gesture direction
+// instead: return axis 'right' so the content follows the finger. The
+// slide covers exactly one panel (the deep-snapshot overlay at
+// activeIndex-1 in the host), NOT the multi-panel span the spatial
+// axis would imply; the orchestrator's multiPanel override skips this
+// case so the distance stays at one viewport width.
 
 export const tabTabResolver: Resolver = (input: ResolverInput): TransitionPlan => {
+	if (input.direction === 'backward' && input.toTabIndex > input.fromTabIndex) {
+		return {
+			pageTrack: { axis: 'right', distance: input.viewportWidth },
+			progressDirection: progressDirectionFor(input.intent),
+			commitPhysics: commitPhysicsFor(input.reducedMotion)
+		};
+	}
 	const axis: PageTrackAxis = input.toTabIndex > input.fromTabIndex ? 'left' : 'right';
 	return {
 		pageTrack: { axis, distance: input.viewportWidth },

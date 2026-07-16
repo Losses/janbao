@@ -70,7 +70,7 @@
 	// Forward enter animation: if this mount is a forward SPA navigation
 	// from `leftHref` (e.g. user tapped a conversation in /messages/inbox),
 	// slide the track from the left-panel position (translateX(0)) to the
-	// centre rest (translateX(-50%)) over ~300ms (COMMIT_T_DEFAULT_MS).
+	// centre rest (translateX(-33.333%)) over ~300ms (COMMIT_T_DEFAULT_MS).
 	// Computed at script init (before render) via `navStore.activeStack`
 	// so there is no first-paint flash.
 	const navStore = getNavigationStore();
@@ -112,6 +112,7 @@
 	let trackEl: HTMLElement | null = $state(null);
 	let leftEl: HTMLElement | null = $state(null);
 	let centerEl: HTMLElement | null = $state(null);
+	let rightEl: HTMLElement | null = $state(null);
 
 	// The in-flight publication. toPathname identifies the transition's
 	// target, so the left panel can render that tab's real panel (when its
@@ -177,18 +178,19 @@
 	const leftPanelPathname = $derived(crossTabPanelPath ?? resolvedLeftHref);
 	// Forward deep-to-deep: the in-flight transition is a detail -> detail
 	// push intercepted by the orchestrator (the source is a deep page). The
-	// left panel renders a skeleton for the destination; the real content
+	// RIGHT panel renders a skeleton for the destination; the real content
 	// mounts on landing. Null when no transition is in flight, the target is
 	// a tab root, or the source is a tab root (a tab -> deep forward-enter:
-	// the left panel shows the source's panel via leftPanelPathname below,
-	// not a destination skeleton).
+	// the LEFT panel shows the source's panel via leftPanelPathname below,
+	// and the RIGHT panel stays empty).
 	const forwardDeepTarget = $derived.by<string | null>(() => {
 		const target = transitionTarget;
 		if (target === null) return null;
-		// Only a forward deep-to-deep push renders the destination skeleton in
-		// the left panel. A backward deep-to-deep back-swipe reveals the
-		// back-target, whose cached preview panel renders via leftPanelPathname
-		// below, so it must not be classified as a forward deep-to-deep.
+		// Only a forward deep-to-deep push renders the destination skeleton
+		// in the RIGHT panel. A backward deep-to-deep back-swipe reveals
+		// the back-target via the LEFT panel (its cached preview panel
+		// renders via leftPanelPathname below), so it must not be
+		// classified as a forward deep-to-deep.
 		if (publication.direction !== 'forward') return null;
 		if (isTabRootPath(target)) return null;
 		// Only a deep-to-deep interception (`lastDispatchWasDeepToDeep` true)
@@ -219,12 +221,15 @@
 		page.url.pathname ? (pageCache.get(page.url.pathname)?.scrollTop ?? 0) : 0
 	);
 
-	// The track is always 2 panels: the left (the back-target's panel, or
-	// another tab's real panel / skeleton) + the centre (conversation). The
-	// slide uses the same 2-panel geometry whether the target is the
-	// back-target or another tab, so a cross-type interrupt handoff never
-	// jumps.
-	const panelCount = 2;
+	// The track is always 3 panels: LEFT (the back-target's panel, or
+	// another tab's real panel / skeleton), CENTER (the conversation), and
+	// RIGHT (a forward deep-to-deep destination's skeleton). A forward
+	// deep-to-deep push (axis='left') slides the track left so the RIGHT
+	// panel enters from the right edge; a backward swipe (axis='right')
+	// slides it right so the LEFT panel enters from the left edge. The
+	// slide geometry is the same for a back-target reveal and a cross-tab
+	// interrupt, so a handoff never jumps.
+	const panelCount = 3;
 
 	// Page-url builder for a DiscussionsPanel rendered as a tab preview
 	// (matches the home route's pagination scheme).
@@ -272,8 +277,8 @@
 	// orchestrator's responsibility).
 	// Tracks whether the orchestrator has run at least one transition on
 	// this mount. The at-rest $effect uses it to distinguish a real
-	// settle (re-apply the resting -50% to correct a stale px) from the
-	// initial mount (leave the forward-enter seed at translateX(0px)).
+	// settle (re-apply the resting -33.333% to correct a stale px) from
+	// the initial mount (leave the forward-enter seed at translateX(0px)).
 	let sawTransition = false;
 	$effect(() => {
 		if (publicationPlan !== null) {
@@ -290,11 +295,11 @@
 		// transition has settled (not at initial mount, where the
 		// forward-enter seed at translateX(0px) must survive). This
 		// corrects a resize that arrived during the transition: the
-		// ResizeObserver skipped its -50% re-apply while plan !== null, so
-		// the driver's last px write would otherwise strand the track
+		// ResizeObserver skipped its -33.333% re-apply while plan !== null,
+		// so the driver's last px write would otherwise strand the track
 		// off-centre on the new width.
 		if (sawTransition && trackEl) {
-			trackEl.style.transform = 'translateX(-50%)';
+			trackEl.style.transform = 'translateX(-33.333%)';
 		}
 	});
 	// Keep the orchestrator's from-pathname in sync with same-route param
@@ -427,7 +432,7 @@
 			// transition keeps its locked plan and
 			// picks up the new width on the next transition.
 			if (isMobile && publication.plan === null && trackEl) {
-				trackEl.style.transform = 'translateX(-50%)';
+				trackEl.style.transform = 'translateX(-33.333%)';
 			}
 		});
 		if (viewportEl) ro.observe(viewportEl);
@@ -517,6 +522,11 @@
 			? 'width: 100%; display: block;'
 			: `width: ${sectionWidth}; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; touch-action: pan-y pinch-zoom;`
 	);
+	// The RIGHT panel mirrors CENTER's mobile sizing (a scroll-pane that
+	// fills its third of the track) and is hidden on desktop alongside
+	// LEFT. Content is rendered only for a forward deep-to-deep push
+	// (forwardDeepTarget); at rest the panel is empty.
+	const rightStyle = $derived(centerStyle);
 
 	// The pointer action's disabled gate: only on mobile, only when the
 	// host has bound elements. Non-mobile (desktop) keeps the bridge
@@ -529,11 +539,12 @@
 	// filling the viewport. The FAB layer's at-rest scale reads
 	// `getRouteData(page.url.pathname).fab ? 1 : 0` (1 on a FAB route,
 	// 0 on a non-FAB route), not the pager store.
-	// The track's resting transform: CSS `translateX(-50%)` so the
-	// centre panel fills the viewport at SSR, before the browser
-	// measures viewportWidth. The driver writes px-based transforms via
-	// `style.setProperty` after hydration, overriding this CSS value.
-	const initialTrackTransform = $derived(!isMobile ? '' : 'transform: translateX(-50%);');
+	// The track's resting transform: CSS `translateX(-33.333%)` so the
+	// centre panel (the middle third of a 3*W track) fills the viewport
+	// at SSR, before the browser measures viewportWidth. The driver
+	// writes px-based transforms via `style.setProperty` after
+	// hydration, overriding this CSS value.
+	const initialTrackTransform = $derived(!isMobile ? '' : 'transform: translateX(-33.333%);');
 </script>
 
 <div
@@ -578,15 +589,12 @@
 					     against the array shadow: on `/messages/[id]` the
 					     route's message-row array replaces
 					     page.data.messages, so the panel cannot render and
-					     MessagesSkeleton stands in until the back-swipe lands. -->
-					{#if forwardDeepTarget !== null}
-						<!-- Forward deep-to-deep: the slide reveals the
-						     destination's skeleton in the left panel; the
-						     real content mounts on landing. Preloading the
-						     destination's data is a coordinator / Layer 4
-						     concern. -->
-						<DeepPreviewSkeleton />
-					{:else if leftPanelPathname === '/activity'}
+					     MessagesSkeleton stands in until the back-swipe lands.
+					     A forward deep-to-deep push does NOT render here: the
+					     LEFT panel keeps the back-target content and the
+					     destination skeleton renders in the RIGHT panel
+					     (forwardDeepTarget branch below). -->
+					{#if leftPanelPathname === '/activity'}
 						<ActivityPanel
 							activities={page.data.activity.activities}
 							currentPage={page.data.activity.page}
@@ -650,5 +658,25 @@
 				{@render children()}
 			</div>
 		</section>
+		{#if isMobile}
+			<section bind:this={rightEl} class="shrink-0 scroll-pane md:hidden" style={rightStyle}>
+				<div class="gpl-card">
+					{#if forwardDeepTarget !== null}
+						<!-- Forward deep-to-deep push: the slide reveals the
+						     destination's skeleton in the RIGHT panel; the
+						     track slides left (resolver axis='left') so the
+						     RIGHT panel enters from the right edge. The real
+						     content mounts on landing. Preloading the
+						     destination's data is a coordinator / Layer 4
+						     concern. -->
+						<DeepPreviewSkeleton />
+					{:else}
+						<!-- No forward deep-to-deep in flight: the RIGHT panel
+						     is empty placeholder; the track rests with CENTER
+						     filling the viewport. -->
+					{/if}
+				</div>
+			</section>
+		{/if}
 	</div>
 </div>

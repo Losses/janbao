@@ -295,7 +295,8 @@ three macro-plan divergences (old Known #3) are also resolved:
 history-previous entry, with a spatial-previous fallback only when no
 history exists); forward deep-to-deep nav is intercepted by
 `onSvelteKitBeforeNavigate` and played as a `{detail, detail}` pipeline
-slide (left panel renders the destination skeleton); and
+slide on the 3-panel `NavPipelineHost` track (right panel renders the
+destination, resolver native `left` axis preserved); and
 `TAB_CLICK_COMMIT_MS` is removed (the tab-click / forward-enter commit
 passes release velocity 0 to the solver, which returns
 `COMMIT_T_DEFAULT_MS`; the Header settle reads the resulting
@@ -352,49 +353,6 @@ passes release velocity 0 to the solver, which returns
    dissolution plan). **Resolution:** the drift dissolves in 5b3 when the
    classifier and `DualColumnLayout`'s `detectSwipe` are removed and the
    field is deleted.
-
-5. **Forward deep-to-deep slide axis override (macro-plan deviation).** A
-   forward `{detail, detail}` navigation (e.g. `/profile` ->
-   `/profile/settings`, or a sidebar link `/messages/<id>` ->
-   `/discussion/<id>`) on the 2-panel `NavPipelineHost` slides visually
-   **backward** (axis `right`, destination skeleton revealed from the left
-   panel) for what is semantically a forward push. **Why retained:** the
-   `{detail, detail}` resolver returns axis `left` for a forward push, but
-   `NavPipelineHost`'s track is 2 panels wide (centre + left; no right
-   panel), so a leftward slide would reveal empty space. The axis override
-   to `right` lets the destination skeleton (rendered by
-   `NavPipelineHost`'s `forwardDeepTarget` branch) be revealed. The title
-   crossfade direction is derived independently from `navStore.direction`
-   in `#resolveNavDirection`, so the title still enters from below
-   (matching the forward semantic). The slide direction and the title
-   direction therefore disagree visually for this transition only.
-   **Resolution:** the clean fix is a 3-panel track (a right-panel
-   destination slot, mirroring `NavPipelineTabHost`'s 3-panel geometry)
-   OR a coordinator-driven preload (Layer 4) that places the destination
-   in a right panel so the resolver's native `left` axis works. Either
-   lands in a future cycle.
-
-6. **Backward gesture on a bidirectional tab host to a higher-indexed tab
-   (macro-plan deviation).** A backward gesture on a bidirectional tab host
-   (`NavPipelineTabHost`) can target a HIGHER-indexed tab when that
-   higher-indexed tab is the temporal-previous entry (the user previously
-   navigated forward from it). Per macro §6 the backward gesture must target
-   the temporal-previous entry (where the user came from), not the
-   spatial-previous tab. The higher-indexed tab sits at `[2W, 3W]` in the
-   3-panel track layout and can only be revealed by a leftward track
-   translate (axis `left`), so the track translates leftward while the
-   finger moves rightward for this one case: the content moves against the
-   finger. **Why retained:** this is a geometry consequence of the 3-panel
-   track layout (panel index strictly determines translate direction; a
-   higher index is always leftward-revealed). The macro-plan mandate
-   (target the temporal-previous) takes priority over the
-   spatial-direction coincidence. The pill still interpolates toward the
-   target tab and the FAB scale follows `fabScale`, so only the
-   finger-vs-content direction is inverted. **Resolution:** none planned;
-   the deviation is intrinsic to revealing a higher-indexed panel from a
-   lower one within a single 3-panel track. A nested-sub-pager
-   architecture (macro §9) would dissolve the case by giving each tab its
-   own track; out of scope for 5b3.
 
 ## Out of scope (5b3)
 

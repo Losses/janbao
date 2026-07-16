@@ -145,10 +145,10 @@ interface PendingGestureTransition {
 
 /** A pending discrete navigation the orchestrator cancelled in
  *  `onSvelteKitBeforeNavigate`: either a tab-click exit (a host-route
- *  -> tab-root nav) or a deep-to-deep nav on a 2-panel host. Carries
- *  the deferred dispatch target (the FULL url: pathname + search) so
- *  commit-settle can fire the SvelteKit `goto` on the exact URL the
- *  discrete nav targeted. */
+ *  -> tab-root nav) or a deep-to-deep nav intercepted on the source
+ *  host. Carries the deferred dispatch target (the FULL url: pathname
+ *  + search) so commit-settle can fire the SvelteKit `goto` on the
+ *  exact URL the discrete nav targeted. */
 interface PendingDiscreteNav {
 	readonly target: string;
 }
@@ -190,13 +190,14 @@ export interface PipelineMountInputs {
 	/** The current viewport width (px). */
 	readonly viewportWidth: number;
 	/** The multi-panel track's resting translate (px) at progress=0.
-	 *  For a 2-panel host (`NavPipelineHost`) this is `-viewportWidth`
-	 *  so the centre panel (the right half of the 2*W track) fills the
-	 *  viewport and the left panel sits off-screen. For a 3-panel
-	 *  bidirectional host (`NavPipelineTabHost`) this is
-	 *  `-activeIndex * viewportWidth`. The plan's
-	 *  `pageTrack.restingTranslate` field carries this into the
-	 *  executor's `buildVisual`. */
+	 *  For the 3-panel `NavPipelineHost` track (LEFT=back-target,
+	 *  CENTER=current, RIGHT=forward deep-to-deep destination) this is
+	 *  `-viewportWidth` so the centre panel (the middle third of the
+	 *  3*W track) fills the viewport, with LEFT off-screen left and
+	 *  RIGHT off-screen right. For the 3-panel bidirectional host
+	 *  (`NavPipelineTabHost`) this is `-activeIndex * viewportWidth`.
+	 *  The plan's `pageTrack.restingTranslate` field carries this into
+	 *  the executor's `buildVisual`. */
 	readonly restingTranslate: number;
 	/** The host route's back-target (the `leftHref` prop on
 	 *  `NavPipelineHost`, resolved host-side to the actual URL). */
@@ -1425,12 +1426,13 @@ export class NavPipelineOrchestrator {
 		const plan = resolver(resolverInput);
 		// Apply the multi-panel resting translate and slide distance.
 		//
-		// Non-bidirectional hosts (the 2-panel route host): panelCount is
-		// always 2 (the track is 2*W wide; the centre is the right half).
-		// restingTranslate = -W (FROM's centred position), distance = W;
-		// progress 0 -> 1 maps the track from -W (centre fills the
-		// viewport, left section off-screen) to 0 (left section fills,
-		// centre off-screen).
+		// Non-bidirectional hosts (the 3-panel route host): the track is
+		// 3*W wide (LEFT=back-target, CENTER=current, RIGHT=forward
+		// deep-to-deep destination). restingTranslate = -W (CENTER's
+		// position), distance = W; progress 0 -> 1 maps the track
+		// from -W (CENTER fills the viewport) to -2W (RIGHT fills) for
+		// a forward axis='left' plan, or from -W to 0 (LEFT fills) for
+		// a backward axis='right' plan.
 		//
 		// Bidirectional hosts (the 3-panel tab host): a tab click can span
 		// more than one panel (e.g. tab 0 -> tab 2 = 2W). The slide
@@ -1440,11 +1442,26 @@ export class NavPipelineOrchestrator {
 		// centred position = `-activeIndex * W`): progress=0 leaves FROM
 		// centred, progress=1 brings TO centred at
 		// `restingTranslate + sign * distance`.
+		// Backward-to-higher-indexed tab: the resolver returns axis 'right'
+		// (following the finger) and a single-panel distance. The host's
+		// deep-snapshot overlay at activeIndex-1 covers the panel the slide
+		// reveals, so the motion is exactly one panel regardless of the
+		// spatial gap. Skip the multiPanel override here so its distance
+		// multiplication does not stretch the slide to the full spatial
+		// span. Backward-to-LOWER multi-panel (e.g. tab 2 -> tab 0 via a
+		// tab-click jump then back-swipe) still takes the multiPanel path:
+		// its axis is 'right' from the spatial branch, but the destination
+		// is a lower index so the gap is a real multi-panel slide with no
+		// overlay. The condition keys on the higher-index target so the
+		// lower-index backward case is unaffected.
+		const backwardToHigher =
+			direction === 'backward' && inputs.fromTabIndex >= 0 && toTabIndex > inputs.fromTabIndex;
 		const multiPanel =
 			inputs.bidirectional === true &&
 			inputs.fromTabIndex >= 0 &&
 			toTabIndex >= 0 &&
-			Math.abs(toTabIndex - inputs.fromTabIndex) > 1;
+			Math.abs(toTabIndex - inputs.fromTabIndex) > 1 &&
+			!backwardToHigher;
 		// At the leftmost tab (fromTabIndex === 0) a backward-to-deep-page
 		// gesture has no panel to the left to reveal (the 3-panel track's
 		// panel 0 is leftmost), so a slide would reveal empty space. Suppress
@@ -1719,11 +1736,12 @@ export class NavPipelineOrchestrator {
 		// detail -> detail nav (a push like /profile -> /profile/settings,
 		// or a sidebar link like /messages/<id> -> /discussion/<id>). All
 		// detail -> detail navs are intercepted; none pass through. The
-		// slide uses the 2-panel track geometry in every case: the
-		// destination renders its skeleton in the left panel and the
-		// resolver-derived axis selects the slide direction; the
-		// axis-override block below handles the 2-panel forward case
-		// (no right panel) so the destination skeleton is revealed.
+		// slide uses the 3-panel track geometry (LEFT=back-target,
+		// CENTER=current, RIGHT=forward deep-to-deep destination): the
+		// destination renders its skeleton in the RIGHT panel
+		// (NavPipelineHost's forwardDeepTarget branch) and the
+		// resolver-derived axis ('left' for a forward push) slides the
+		// track so the RIGHT panel enters from the right edge.
 		const toRouteData = getRouteData(to);
 		const isDeepToDeep =
 			!isTabRootPath(to) &&
@@ -1783,24 +1801,15 @@ export class NavPipelineOrchestrator {
 			startedAt: this.#clock()
 		};
 		const resolvedPlan = this.#resolvePlan(inputs, intent, direction, toPathname, toTabIndex);
-		// Deep-to-deep on a 2-panel host: the {detail,detail} resolver
-		// returns axis='left' for a forward push, but a 2-panel track has
-		// no panel to the right of centre, so a leftward slide reveals
-		// empty space. The destination skeleton renders in the left panel
-		// (NavPipelineHost's forwardDeepTarget branch); override the axis
-		// to 'right' so the slide reveals it. The title crossfade
-		// direction is derived independently from navStore.direction
-		// (forward for a push) in #resolveNavDirection, so the title still
-		// enters from below. A coordinator-driven preload (Layer 4)
-		// that places the destination in a right panel would let the
-		// resolver's native 'left' axis work; that is beyond this fix.
-		const plan =
-			isDeepToDeep && resolvedPlan.pageTrack.axis === 'left'
-				? {
-						...resolvedPlan,
-						pageTrack: { ...resolvedPlan.pageTrack, axis: 'right' as const }
-					}
-				: resolvedPlan;
+		// The host's track is 3 panels (LEFT=back-target, CENTER=current,
+		// RIGHT=forward deep-to-deep destination). The {detail,detail}
+		// resolver returns axis='left' for a forward push (the new page
+		// enters from the right edge); NavPipelineHost renders the
+		// destination skeleton in the RIGHT panel (its forwardDeepTarget
+		// branch), so the resolver's native axis is correct with no
+		// override. A backward deep-to-deep returns axis='right' and
+		// reveals the LEFT panel (the back-target).
+		const plan = resolvedPlan;
 		this.#pendingGesture = null;
 		this.#liveDragging = false;
 		this.#gestureToTabIndex = toTabIndex;
@@ -1834,10 +1843,12 @@ export class NavPipelineOrchestrator {
 		);
 		this.#progress = 0;
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
-		// The slide uses the same 2-panel geometry whether the target is
-		// the back-target or another tab root; the host renders the
-		// target's real panel (cached) or its skeleton in the left slot,
-		// so the slide reveals the correct content. Dispatch on settle.
+		// The slide uses the host's 3-panel geometry (LEFT=back-target,
+		// CENTER=current, RIGHT=forward deep-to-deep destination); the
+		// host renders the back-target's real panel (cached) or its
+		// skeleton in the LEFT slot and the destination's skeleton in the
+		// RIGHT slot for a forward deep-to-deep, so the slide reveals the
+		// correct content. Dispatch on settle.
 		this.#executor?.onDragStart(plan, startProgress, 0);
 		// No finger-release velocity on a tab-click: pass 0 and let the
 		// velocity-matched solver pick the default duration

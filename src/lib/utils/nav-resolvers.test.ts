@@ -118,6 +118,30 @@ describe('tabTabResolver: spatial axis', () => {
 		expect(plan.pageTrack.axis).toBe('right');
 	});
 
+	test('backward to higher-indexed tab -> axis right (follows the finger)', () => {
+		// User on tab 0 whose previous history entry is tab 2 swipes back.
+		// The finger moves rightward (a backward pop); the track must
+		// follow it instead of sliding left against it. Distance is one
+		// panel (the overlay at activeIndex-1), not the multi-panel span.
+		const plan = tabTabResolver(
+			baseInput({ direction: 'backward', fromTabIndex: 0, toTabIndex: 2 })
+		);
+		expect(plan.pageTrack.axis).toBe('right');
+		expect(plan.pageTrack.distance).toBe(375);
+	});
+
+	test('backward to lower-indexed tab keeps the spatial right axis', () => {
+		// Multi-panel backward-to-lower (e.g. tab 2 -> tab 0): spatial axis
+		// is 'right' from the lower index; the orchestrator's multiPanel
+		// override still widens the distance. The resolver itself returns
+		// the single-panel native distance; axis stays right.
+		const plan = tabTabResolver(
+			baseInput({ direction: 'backward', fromTabIndex: 2, toTabIndex: 0 })
+		);
+		expect(plan.pageTrack.axis).toBe('right');
+		expect(plan.pageTrack.distance).toBe(375);
+	});
+
 	test('commitPhysics is momentum when motion is allowed', () => {
 		const plan = tabTabResolver(baseInput({ reducedMotion: false }));
 		expect(plan.commitPhysics).toBe('momentum');

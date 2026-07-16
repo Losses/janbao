@@ -84,9 +84,30 @@
 	const deepSnapshotTarget = $derived.by<string | null>(() => {
 		const target = publication.inFlight ? publication.toPathname : null;
 		if (target === null) return null;
-		if (isTabRootPath(target)) return null;
+		if (isTabRootPath(target)) {
+			// Backward-to-higher-indexed tab (e.g. the user is on tab 0 but
+			// history's previous entry is tab 2, so a back-swipe pops to
+			// tab 2): the resolver returns axis 'right' and a one-panel
+			// slide, revealing the panel at activeIndex-1. Without this
+			// overlay that panel shows the previous tab's content (a visual
+			// proxy for the destination). Fire the overlay so the slide
+			// shows the destination tab's content instead. Forward and
+			// backward-to-lower tab-root cases keep returning null: their
+			// slide either does not happen (tap) or reveals the real
+			// destination panel content directly (multi-panel backward).
+			if (publication.direction === 'backward') {
+				const targetIdx = getCurrentTabIndex(target);
+				if (targetIdx > activeIndex) return target;
+			}
+			return null;
+		}
 		return target;
 	});
+	const deepSnapshotTabTargetIdx = $derived(
+		deepSnapshotTarget !== null && isTabRootPath(deepSnapshotTarget)
+			? getCurrentTabIndex(deepSnapshotTarget)
+			: -1
+	);
 	const deepSnapshotPanelIndex = $derived(activeIndex - 1);
 	const deepSnapshotOverlayLeft = $derived(`${deepSnapshotPanelIndex * (100 / panelCount)}%`);
 	const deepSnapshotOverlayWidth = $derived(`${100 / panelCount}%`);
@@ -376,7 +397,8 @@
 			{@const DeepPreview = deepSnapshotPreviewPanel}
 			<!-- Deep-snapshot overlay: covers the revealed panel (at
 			     deepSnapshotPanelIndex) with the deep target's preview
-			     panel or a skeleton, so the slide shows the destination's
+			     panel, a tab panel for a backward-to-higher tab target,
+			     or a skeleton, so the slide shows the destination's
 			     content instead of the previous tab's panel. -->
 			<div
 				class="deep-snapshot-overlay"
@@ -384,7 +406,35 @@
 				style={`position: absolute; top: 0; left: ${deepSnapshotOverlayLeft}; width: ${deepSnapshotOverlayWidth}; height: 100%;`}
 			>
 				<div class="gpl-card" style={sectionStyle}>
-					{#if DeepPreview}
+					{#if deepSnapshotTabTargetIdx === 0}
+						<DiscussionsPanel
+							discussions={data.home.discussions}
+							currentPage={data.home.page}
+							totalPages={data.home.totalPages}
+							{t}
+							buildPageUrl={discussionsBuildPageUrl}
+							paginate={true}
+						/>
+					{:else if deepSnapshotTabTargetIdx === 1}
+						<ActivityPanel
+							activities={data.activity.activities}
+							currentPage={data.activity.page}
+							totalPages={data.activity.totalPages}
+							activityDraft={data.activity.activityDraft}
+							mentionedUsers={data.activity.mentionedUsers}
+							{t}
+							{user}
+							paginate={true}
+						/>
+					{:else if deepSnapshotTabTargetIdx === 2}
+						<MessagesPanel
+							conversations={data.messages.conversations}
+							currentPage={data.messages.page}
+							totalPages={data.messages.totalPages}
+							{t}
+							paginate={true}
+						/>
+					{:else if DeepPreview}
 						<DeepPreview />
 					{:else}
 						<DeepPreviewSkeleton />
