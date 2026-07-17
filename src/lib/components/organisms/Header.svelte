@@ -384,6 +384,10 @@
 	function scheduleCommit(): void {
 		if (composing) return;
 		if (debounceId) clearTimeout(debounceId);
+		// Search-input debounce (coalesce rapid keystrokes), not an
+		// animation-alignment timer; the §5 "no setTimeout in the
+		// animation layer" bar targets the Header's morph / title
+		// animation (rAF-driven), not input handling.
 		debounceId = setTimeout(() => commitQuery(inputValue), 400);
 	}
 	function onInput(): void {

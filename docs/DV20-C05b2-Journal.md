@@ -3409,3 +3409,152 @@ $ bun run test:e2e                    202 passed + 1 flaky (exit 0)
 ```
 
 R61 audits the post-R60-fix state.
+
+## Session 64: R61 audit (A/B PWC: 2 settle-branch bugs + comment accuracy + dead exports) + fixes + /discussions/pN migration
+
+R61 ran two independent auditors (stripped, non-leading prompt). A returned
+PASS-WITH-CONCERNS (4 concern + 1 borderline); B returned PASS-WITH-CONCERNS
+(1 concern + 1 minor). Counter stays 0/5. Both verified the core pipeline
+clean. The two real bugs are both in the settle branch of `notifyHeaderState`
+/ the commit lifecycle, same family as the R58 supersede settle leak.
+
+### Findings + fixes
+
+- A1 (logic, FIXED): a mid-commit non-pipeline detour stranded the settle.
+  An external nav to a non-pipeline route during the ~300 ms commit rAF
+  window (settle armed `awaitTitle`, `#dispatchNav` not yet fired) returned
+  `false` from `onSvelteKitBeforeNavigate` without cancelling; `releaseInputs`
+  cleared `#pendingGesture` but not the settle; the commit rAF then reached
+  u=1 and `#onExecutorSettle`'s both-null branch only called `#landAtRest` (a
+  no-op with `#mountInputs === null`). `awaitTitle` never cleared
+  (`onSvelteKitAfterNavigate` is gated on the orchestrator being active, which
+  `releaseInputs` ends), so `settleActive` stuck `true` and the Header showed
+  the stale latched endpoint. Fixed: `onSvelteKitBeforeNavigate` calls
+  `#cancelAllAnimationEases()` on the non-pipeline-destination path (leaving
+  the pipeline ends the in-flight settle + tap-scrub; no-op when idle).
+- B1 (logic, FIXED): the mid-settle re-arm skip stranded the Header on a
+  stale title. When the route reverted to the settle's OUTGOING title within
+  the settle window (an IDLE title-change settle), the re-arm guard
+  `newTitle !== resolveSettleOutgoingTitle()` was false, so the settle rAF
+  kept running toward the stale INCOMING endpoint until settle end (then
+  snapped). Fixed: the equal-to-outgoing case ends the settle, GATED on
+  `!#settleAwaitTitle`, only an idle title-change settle ends here. A commit
+  settle (`awaitTitle` true) keeps running: its live title is the outgoing
+  because the nav has not landed yet, not because it reverted. (The first
+  version ended unconditionally and broke `header-tabs-replay` +
+  `header-title-replay`; the gate restores them.)
+- A2 / A3 / A4 (comment accuracy, FIXED): the `#cancelSettleEaseRaf` and
+  `#cancelTapScrubRaf` docstrings falsely listed "host destroy" /
+  "cleared by releaseInputs"; the `notifyHeaderState` gap-frame comment's
+  "in the detour case no settle is in flight" was the false assumption behind
+  A1. All rewritten to current behavior.
+- A5 (borderline, CLARIFIED): `Header.svelte`'s search-input `setTimeout`
+  debounce. Both auditors concur it is input handling, not animation
+  alignment; a comment states this inline so it is not re-flagged.
+- B2 (cleanup, FIXED): `PipelineElementRefs`, `PipelineElementResolver`,
+  `NavPipelineCancelFn` were exported with zero external imports; `export`
+  removed (declarations kept). `NavPipelineBeforeNavigateEvent` was already
+  not exported.
+
+### /discussions/pN unified onto the pipeline pager (user-requested)
+
+`/discussions/pN` (the one route that lost swipe-to-tab when the
+`DualColumnLayout` tab-swipe was deleted) is unified onto the pipeline pager:
+`src/routes/discussions/[[page=page]]/` moved under `src/routes/(tabs)/`, so
+mobile renders it through the persistent `NavPipelineTabHost` (the pager
+already read `page.data.discussions` and built `/discussions/pN` pagination
+URLs). Desktop unchanged. Localized to one route folder; verified by SSR curl
+(`/discussions/p2` 200, `/discussions/p1` 308 -> `/`) and a mobile browser
+pass (pager viewport + tab-bar links render on `/discussions/p2`).
+
+### Gate outputs (post-fix + migration, independently re-run 2026-07-16)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    377 pass / 0 fail
+$ bun run test:e2e                    201 passed + 1 flaky (exit 0)
+```
+
+R62 audits this state.
+
+## Session 65: R62 audit (A/B PWC: 2 logic + 2 comment/dead-code) + fixes
+
+R62 ran two independent auditors (stripped, non-leading prompt). A returned
+PASS-WITH-CONCERNS (2 concern); B returned PASS-WITH-CONCERNS (2 concern).
+Counter stays 0/5. Both verified the core pipeline clean and the R60/R61 fixes
+hold. The four findings are narrow.
+
+### Findings + fixes
+
+- B1 (logic, FIXED): `#armSettleEaseFromGesture` read the outgoing title from
+  `resolveDeepHeaderTitle`, which returns null for the dynamic-title routes
+  (`/profile/<id>/<slug>`, `/category/<slug>`, `/profile/discussions/<id>/<slug>`;
+  their title lives in `page.data.headerTitle`). The Header's drag branch read
+  the LIVE title, so the outgoing span snapped to '' at the drag-to-settle
+  boundary (flicker on cancel, disappear on commit). Fixed: outgoing title is
+  `#prevHeaderTitle` (the live title the idle settle-arm branch already uses).
+- B2 (logic, FIXED): `#dispatchNav` set `#lastLandWasPipelineCommit`
+  unconditionally; for a non-pipeline target the three clear-sites all skip, so
+  the flag survived the detour and skipped the first tap-scrub on return.
+  Fixed: the flag is set only for a pipeline target (`isNavPipelineRoute(target)`).
+- A1 (comment + logic, FIXED): the R61 ease-end on the
+  `!isTabRootPath(to) && !isDeepToDeep` branch was too broad (the branch also
+  fires for a non-intercepted pipeline destination like `/search`, where the
+  orchestrator stays active and afterNavigate clears the settle). Fixed: the
+  ease-end is gated on `!isNavPipelineRoute(to)` (restoring the pre-R61
+  behavior for `/search`); the comment now describes both cases.
+- A2 (cleanup, FIXED): `setNavPipelineOrchestrator`'s displacing-unmount branch
+  (`active !== orch`) was unreachable (singleton) and its docstring referenced a
+  non-existent test path. Branch removed, docstring updated. `unmount` stays
+  (called by the mobile -> desktop flip in both hosts).
+- Lint also caught six U+2014 em dashes that had slipped into the R61 report,
+  the journal, and one new code comment; replaced with commas (the repo's
+  `local/no-emdash` rule).
+
+### Gate outputs (post-fix, independently re-run 2026-07-16)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    377 pass / 0 fail
+$ bun run test:e2e                    201 passed + flaky (exit 0)
+```
+
+R63 audits this state.
+
+## Session 66: R63 audit (A/B PWC: 1 logic each) + fixes
+
+R63 ran two independent auditors (stripped, non-leading prompt). A returned
+PASS-WITH-CONCERNS (1 concern); B returned PASS-WITH-CONCERNS (1 concern).
+Counter stays 0/5. Both verified the core pipeline clean and the prior fixes
+hold. Two narrow logic findings, both fixed.
+
+### Findings + fixes
+
+- B1 (logic, FIXED): `#queuedDiscreteNav` leaked across a gesture interrupt.
+  `#beginGesture` cleared `#pendingDiscreteNav` but not `#queuedDiscreteNav`.
+  A tab-click that queued via finish-then-new, then a new gesture before the
+  accelerated commit settled, left the queue to fire on the gesture's landing
+  (overriding the user's latest action). Fixed: `#beginGesture` clears
+  `#queuedDiscreteNav` too. (A's clear-site sweep listed `#beginGesture` as a
+  clear-site for `#queuedDiscreteNav` but it only cleared `#pendingDiscreteNav`;
+  B caught the gap.)
+- A1 (logic, FIXED): `isNavPipelineRoute(target)` mis-classified a pipeline
+  route with a search suffix. `#onExecutorSettle` and `#dispatchNav` pass the
+  full `#pendingDiscreteNav.target` (pathname + search), but the gate matched
+  the bare pathname, so `/messages/inbox?page=2` / `/?q=foo` flipped to
+  non-pipeline (premature settle end + a mis-armed tap-scrub on the next
+  isSearch flip). Fixed: `isNavPipelineRoute` strips a `?search` suffix before
+  classifying. Regression test added.
+
+### Gate outputs (post-fix, independently re-run 2026-07-17)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (exit 0)
+```
+
+R64 audits this state.

@@ -86,6 +86,21 @@ describe('isNavPipelineRoute', () => {
 		// `/messages/123/a/b` has two segments after the id; only one is allowed.
 		expect(isNavPipelineRoute('/messages/123/a/b')).toBe(false);
 	});
+
+	test('strips a ?search suffix (a discrete-nav target carries the full URL)', () => {
+		// `#pendingDiscreteNav.target` is stored as pathname + search; the
+		// orchestrator's `#onExecutorSettle` / `#dispatchNav` classify it via
+		// `isNavPipelineRoute`, so a search suffix must not flip a pipeline
+		// route to non-pipeline (which would prematurely end the settle and
+		// mis-arm a tap-scrub).
+		expect(isNavPipelineRoute('/messages/inbox?page=2')).toBe(true);
+		expect(isNavPipelineRoute('/messages/inbox?filter=unread')).toBe(true);
+		expect(isNavPipelineRoute('/?q=foo')).toBe(true);
+		expect(isNavPipelineRoute('/profile/123/alice?tab=discussions')).toBe(true);
+		expect(isNavPipelineRoute('/messages/123/p2?x=1')).toBe(true);
+		// A non-pipeline route with a search stays non-pipeline.
+		expect(isNavPipelineRoute('/drafts?x=1')).toBe(false);
+	});
 });
 
 describe('isPipelineTransition', () => {

@@ -35,6 +35,12 @@
  *  A pathname not listed here does not mount a pipeline host (it is
  *  outside the mobile gesture layer). */
 export function isNavPipelineRoute(pathname: string): boolean {
+	// Strip any `?search` suffix so a discrete-nav target stored as the
+	// full URL (pathname + search, e.g. `/messages/inbox?page=2`,
+	// `/?q=foo`) is still classified by its pathname. The orchestrator's
+	// `#onExecutorSettle` and `#dispatchNav` pass the full
+	// `#pendingDiscreteNav.target` here.
+	pathname = pathname.split('?')[0];
 	// Strip any trailing `/pN` page segment so paged conversations
 	// (`/messages/123/p2`, `/discussion/123/slug/p2`) are still gated
 	// as pipeline routes.

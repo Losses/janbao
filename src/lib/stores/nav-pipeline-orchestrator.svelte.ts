@@ -112,7 +112,7 @@ import type { TransitionPlan } from '$lib/utils/nav-resolvers';
  *  `LiveDriverElements` but widened to the production `HTMLElement`
  *  (the driver's own interface accepts a structural `DriverElement`
  *  subset). */
-export interface PipelineElementRefs {
+interface PipelineElementRefs {
 	readonly pageTrack: HTMLElement | null;
 	readonly fab: HTMLElement | null;
 	readonly header: HTMLElement | null;
@@ -121,7 +121,7 @@ export interface PipelineElementRefs {
 /** Returns the host's track / FAB / Header element refs each
  *  `write`. Called once per frame so a re-bound `bind:this` is picked
  *  up automatically. */
-export type PipelineElementResolver = () => PipelineElementRefs;
+type PipelineElementResolver = () => PipelineElementRefs;
 
 /** A pending gesture transition (a swipe). `to` is the
  *  commit-settle dispatch target; `startProgress` is the track's
@@ -171,7 +171,7 @@ interface NavPipelineEndpoint {
 }
 
 /** SvelteKit's navigation-cancel hook. */
-export type NavPipelineCancelFn = () => void;
+type NavPipelineCancelFn = () => void;
 
 /** The subset of the SvelteKit `BeforeNavigate` event the orchestrator
  *  reads. Defined here so the orchestrator does not depend on the
@@ -523,10 +523,14 @@ export class NavPipelineOrchestrator {
 	#headerT: TranslationDict | null = null;
 	/** True when the current in-flight navigation was dispatched by the
 	 *  orchestrator (a gesture commit or a tab-click commit). Set at
-	 *  dispatch time in `#dispatchNav` (BEFORE the navigation lands) so
-	 *  the Header's `notifyHeaderState` `$effect.pre` - which fires
-	 *  BEFORE `afterNavigate` - reads the CURRENT navigation's flag (a
-	 *  flag set at land time would be stale at header-notification time).
+	 *  dispatch time in `#dispatchNav` (BEFORE the navigation lands), and
+	 *  only for a pipeline target (a non-pipeline target has no pipeline
+	 *  destination to read the flag, and the clear-sites below all skip
+	 *  on a non-pipeline landing, so setting it unconditionally would
+	 *  leak), so the Header's `notifyHeaderState` `$effect.pre` - which
+	 *  fires BEFORE `afterNavigate` - reads the CURRENT navigation's flag
+	 *  (a flag set at land time would be stale at header-notification
+	 *  time).
 	 *  Read in `notifyHeaderState` so the tap-scrub arming can skip the
 	 *  just-landed pipeline commit (the executor's slide already drove
 	 *  the search-layout visual to its post-land position; arming a
@@ -1341,10 +1345,16 @@ export class NavPipelineOrchestrator {
 					? this.#backwardTabTarget(inputs)
 					: inputs.backTarget
 				: this.#nextTabTarget(inputs);
-		// A gesture claims the transition: drop any in-flight tab-click so
-		// #onExecutorSettle dispatches THIS gesture's target, not the
-		// tab-click's. The two pending slots are mutually exclusive.
+		// A gesture claims the transition: drop any in-flight tab-click
+		// (`#pendingDiscreteNav`) AND any tab-click queued by the
+		// finish-then-new policy (`#queuedDiscreteNav`) so the gesture's
+		// own commit dispatches THIS gesture's target. Without clearing the
+		// queue, a re-grab mid-accelerated-commit (which stops the commit
+		// rAF so `#onExecutorSettle` / `#landAtRest` never consume it)
+		// would leave the queued tab-click to fire on the gesture's landing,
+		// overriding the user's latest direct action.
 		this.#pendingDiscreteNav = null;
+		this.#queuedDiscreteNav = null;
 		// Capture the in-flight raw BEFORE resetting the progress so a
 		// re-grab mid-commit continues `backMorph` / `publication.progress`
 		// from the live value.
@@ -1618,7 +1628,16 @@ export class NavPipelineOrchestrator {
 	 *  `afterNavigate`) reads the current navigation's flag. */
 	#dispatchNav(target: string): void {
 		this.#navDispatchInFlight = true;
-		this.#lastLandWasPipelineCommit = true;
+		// The flag is read only by a pipeline destination's
+		// `notifyHeaderState` (to skip the tap-scrub arm: the commit slide
+		// already drove the search-layout visual to its post-land spot).
+		// Set it only for a pipeline target. A non-pipeline target has no
+		// pipeline destination to read it, and the flag's clear-sites
+		// (`#landAtRest` via afterNavigate, `notifyHeaderState`'s main
+		// body, the supersede branch) all skip on a non-pipeline landing,
+		// so an unconditional set would survive the detour and skip a
+		// later tap-scrub.
+		this.#lastLandWasPipelineCommit = isNavPipelineRoute(target);
 		this.#dispatchTarget = target;
 		const hop = hopForHref(target);
 		// The in-flight flag + dispatch target persist until the
@@ -1793,6 +1812,22 @@ export class NavPipelineOrchestrator {
 			inputs.fromTag === 'detail' &&
 			toRouteData.tag === 'detail';
 		if (!isTabRootPath(to) && !isDeepToDeep) {
+			// This branch also fires for a non-intercepted PIPELINE
+			// destination (e.g. `/search` from a tab/detail source: not a
+			// tab root, not deep-to-deep). There the orchestrator stays
+			// active and `onSvelteKitAfterNavigate` clears any in-flight
+			// settle, so the manual end below is gated to a NON-pipeline
+			// destination. There the nav leaves the pipeline, `releaseInputs`
+			// (about to fire on the source host's destroy) ends the
+			// orchestrator's active window, and the afterNavigate hook that
+			// clears `awaitTitle` is gated on that window, so an in-flight
+			// commit settle would strand the Header on its stale latched
+			// endpoint. End the animation eases for that case (a tap-scrub
+			// in flight is abandoned for the same reason); no-op when
+			// nothing is in flight.
+			if (!isNavPipelineRoute(to)) {
+				this.#cancelAllAnimationEases();
+			}
 			return false;
 		}
 		// Finish-then-new interruption policy: a discrete tab-click
@@ -2057,9 +2092,14 @@ export class NavPipelineOrchestrator {
 		this.#settleRafId = requestAnimationFrame(tick);
 	}
 
-	/** Cancel the settle rAF (no endSettle). Used by interrupt paths
-	 *  (re-arm, drag-cancel, host destroy) where the settle state is
-	 *  either overwritten by a fresh arm or cleared by releaseInputs. */
+	/** Cancel the settle rAF (no endSettle). Used by `#armSettleEase`
+	 *  (a fresh arm overwrites the settle state), `#endSettleEase`
+	 *  (which clears it), and `unmount` (the mobile -> desktop flip
+	 *  teardown). The route-swap teardown `releaseInputs` intentionally
+	 *  does NOT cancel a commit settle awaiting its navigation landing;
+	 *  `onSvelteKitBeforeNavigate` ends the settle when the nav leaves
+	 *  the pipeline for a non-pipeline route (no landing will clear its
+	 *  awaitTitle). */
 	#cancelSettleEaseRaf(): void {
 		if (this.#settleRafId !== undefined) {
 			cancelAnimationFrame(this.#settleRafId);
@@ -2110,7 +2150,14 @@ export class NavPipelineOrchestrator {
 		if (inputs === null || pending === null || executor === null) return;
 		const back = pending.to;
 		const t = this.#headerT;
-		const outgoingTitle = t ? (resolveDeepHeaderTitle(inputs.fromPathname, t) ?? '') : '';
+		// outgoingTitle is the LIVE source title (`#prevHeaderTitle`, kept
+		// current by `notifyHeaderState`), not `resolveDeepHeaderTitle`: the
+		// dynamic-title routes (`/profile/<id>/<slug>`, `/category/<slug>`,
+		// `/profile/discussions/<id>/<slug>`) carry their title in
+		// `page.data.headerTitle`, which `resolveDeepHeaderTitle` does not
+		// know (returns null). Using the resolver here would snap the
+		// outgoing span to '' at the drag-to-settle boundary on those routes.
+		const outgoingTitle = this.#prevHeaderTitle;
 		const incomingTitle = t ? (resolveDeepHeaderTitle(back, t) ?? '') : '';
 		const outgoingHasTabs = inputs.fromTabIndex >= 0;
 		const incomingHasTabs = getCurrentTabIndex(back) >= 0;
@@ -2200,8 +2247,13 @@ export class NavPipelineOrchestrator {
 		this.#tapScrubRafId = requestAnimationFrame(tick);
 	}
 
-	/** Cancel the tap-scrub rAF (no clear). Used by interrupt paths
-	 *  (drag-cancel, host destroy). */
+	/** Cancel the tap-scrub rAF (no clear). Used by `#armTapScrubEase`
+	 *  (a fresh arm overwrites the scrub state), `#finishTapScrubEase`
+	 *  (which clears it), and `unmount` (the mobile -> desktop flip
+	 *  teardown). The route-swap teardown `releaseInputs` intentionally
+	 *  does NOT cancel a scrub awaiting its navigation landing, mirroring
+	 *  the settle; `onSvelteKitBeforeNavigate` ends it when the nav
+	 *  leaves the pipeline. */
 	#cancelTapScrubRaf(): void {
 		if (this.#tapScrubRafId !== undefined) {
 			cancelAnimationFrame(this.#tapScrubRafId);
@@ -2328,10 +2380,12 @@ export class NavPipelineOrchestrator {
 		// route's title). In the gap-frame case a commit / discrete settle
 		// is in flight awaiting the destination's landing, and the prev
 		// values MUST stay frozen so the destination's first notify call
-		// crossfades from the genuine outgoing title. In the detour case no
-		// settle is in flight, so refresh the prev values to what the
-		// Header is actually displaying; otherwise a later return to a
-		// pipeline route would crossfade from the stale pre-detour title.
+		// crossfades from the genuine outgoing title. In the detour case
+		// the settle is no longer in flight: `onSvelteKitBeforeNavigate`
+		// ends the animation eases when the nav leaves the pipeline, so
+		// the prev values refresh to what the Header is actually
+		// displaying; otherwise a later return to a pipeline route would
+		// crossfade from the stale pre-detour title.
 		if (!this.#mounted) {
 			if (!this.#stateMachine.settleActive) {
 				this.#prevHeaderTitle = newTitle;
@@ -2401,9 +2455,10 @@ export class NavPipelineOrchestrator {
 			}
 			// A different title arrived mid-settle: re-arm toward the new
 			// title so a rapid back-to-back nav cannot strand the header
-			// on a stale title. The re-arm is SKIPPED when the new title
-			// equals the OUTGOING title (the equal-to-INCOMING case
-			// returned above), so only a genuinely third title re-arms.
+			// on a stale title. When the new title equals the OUTGOING
+			// title the route reverted to the source, so the settle ends
+			// (the else branch below) instead of re-arming; only a
+			// genuinely third title re-arms.
 			// The settle rAF's startProgress is the CURRENT settleProgress,
 			// so the title crossfade continues from the in-flight position:
 			// the outgoing title span keeps its mid-settle offset and the
@@ -2434,6 +2489,19 @@ export class NavPipelineOrchestrator {
 						this.#resolveNavDirection()
 					);
 				}
+			} else if (!this.#settleAwaitTitle) {
+				// The settle was an idle title change (not awaiting a nav
+				// landing) and the route reverted to the outgoing title:
+				// the transition is undone. End the settle so the at-rest
+				// branch takes over with the live route's title / tab-ness
+				// instead of running the rAF toward the stale incoming
+				// endpoint. Spend the enter-arm flag: the live title has
+				// taken over, no idle re-arm to suppress. A commit settle
+				// (`awaitTitle` true) does NOT end here: its live title is
+				// the outgoing because the nav has not landed yet, not
+				// because it reverted, so the settle must keep running.
+				this.#endSettleEase();
+				this.#enterAnimationArmedSettle = false;
 			}
 			this.#prevHeaderTitle = newTitle;
 			this.#prevHeaderHasTabs = currentHasTabs;
@@ -2813,14 +2881,9 @@ export function getNavPipelineOrchestrator(): NavPipelineOrchestrator | null {
 }
 
 /** Set the active orchestrator (a host has called `configure`). With the
- *  shared singleton the displacing-unmount branch never fires
- *  (`active === orch` always holds when both come from
- *  `getGlobalNavPipelineOrchestrator`); the branch is retained for the
- *  in-process test path that constructs orchestrators directly. */
+ *  shared singleton there is only ever one orchestrator instance, so this
+ *  is a plain assignment of the active-slot pointer. */
 export function setNavPipelineOrchestrator(orch: NavPipelineOrchestrator | null): void {
-	if (orch !== null && active !== null && active !== orch) {
-		active.unmount();
-	}
 	active = orch;
 }
 
