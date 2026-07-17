@@ -1,6 +1,8 @@
 /**
  * Swipe actions - low-level horizontal pointer-drag primitives shared by the
- * mobile drawer (edge-open + overlay-close) and the tab pager.
+ * mobile drawer (captureSwipe for edge-open + overlay-close) and the pipeline
+ * hosts (NavPipelineHost and NavPipelineTabHost via navPipelinePointer, plus
+ * SearchScopePager).
  *
  * `captureSwipe` claims the entire gesture: touch-action:none on the node so
  * the browser yields its built-in pan / zoom / edge-back to us, pointer capture
@@ -11,17 +13,20 @@
  * it leaves native vertical scroll untouched and only takes over once a
  * clearly-horizontal drag is recognised (intent detection), ignoring drags that
  * start on editing controls or inside a horizontally-scrollable container. Used
- * for left/right tab switching. Both actions swallow the synthetic click that
- * follows a real drag so a swipe never double-fires as a tap.
+ * for every pipeline transition (back-swipe, tab-to-tab, deep-to-deep forward,
+ * search scope switch). Both actions swallow the synthetic click that follows a
+ * real drag so a swipe never double-fires as a tap.
  */
 import type { Action } from 'svelte/action';
 import { EDGE_DEAD_ZONE } from '$lib/utils/gesture-constants';
 
 // `onMove` fires per pointermove with the live displacement only; `onEnd` adds
-// `velocity` (release px/ms) and `reversed` (did the finger rebound from the
-// drag's peak before lift-off - a change of intent). Consumers gate commit on
-// `reversed` so a swipe that crossed the commit threshold but was pulled back
-// snaps to the origin instead of advancing.
+// `velocity` (release px/ms) and `reversed` (the cancel signal: true when the
+// finger rebounded from the drag's peak before lift-off OR when a
+// `pointercancel` ended the gesture). `shouldCancelOnRelease` computes this;
+// consumers gate commit on `reversed` so a swipe that crossed the commit
+// threshold but was pulled back (or was system-interrupted) snaps to the origin
+// instead of advancing.
 export type MoveHandler = (deltaX: number) => void;
 export type EndHandler = (deltaX: number, velocity: number, reversed: boolean) => void;
 export type DisabledGetter = () => boolean;

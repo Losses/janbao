@@ -3,7 +3,7 @@
 	 * DiscussionListPage Template - Thin shell for the paginated
 	 * `/discussions/pN` route: DualColumnLayout + DiscussionsSidebar +
 	 * DiscussionsPanel. (The home route `/` renders DiscussionsPanel directly via
-	 * its own page; the mobile tab pager renders all three panels itself.)
+	 * its own page; the pipeline tab host renders all three panels itself.)
 	 */
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';

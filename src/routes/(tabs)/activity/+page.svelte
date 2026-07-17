@@ -15,7 +15,7 @@
 
 	// Offline fallback: if we have a cached first page, swap to the client-only
 	// /offline/activity reader so the feed is readable without a server
-	// round-trip. (Mobile note: the tab pager suppresses this page, so this only
+	// round-trip. (Mobile note: the pipeline tab host suppresses this page, so this only
 	// runs on desktop; the offline reader remains reachable directly on mobile.)
 	onMount(() => {
 		if (navigator.onLine) return;

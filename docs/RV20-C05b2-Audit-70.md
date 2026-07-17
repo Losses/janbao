@@ -29,7 +29,7 @@ uses the live title). No runtime logic bug. All fixed.
    fix extended `suppressSlide` to set `distance = 0` for within-tab pagination
    gestures, so the track does not move. But the orchestrator still published
    `progress`, and the FAB layer computed `fabScale(progress, fromHasFab,
-   toHasFab)`, fading the FAB in during the second half of the gesture while the
+toHasFab)`, fading the FAB in during the second half of the gesture while the
    page was static. Fixed: the FAB layer checks
    `publication.plan?.pageTrack.distance === 0` and short-circuits to the FROM
    route's fab scale (the FAB stays put during the gesture, updates on landing).

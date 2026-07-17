@@ -101,10 +101,12 @@ const ROUTE_ENTRIES: readonly RouteEntry[] = [
 	{
 		// Tab-internal pagination of the discussions list. Per §4 this
 		// is handled by `{tab, tab}` and is tag 'tab', NOT a tab root.
+		// fab: true so the FAB is visible on every page of the list
+		// (the user can create a discussion from any page), matching `/`.
 		pattern: /^\/discussions\/p\d+$/,
 		tag: 'tab',
 		snapshotCapture: false,
-		fab: false
+		fab: true
 	},
 	{
 		// /offline mirrors / (the offline discussions list).

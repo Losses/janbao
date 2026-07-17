@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * MessagesPanel - Content-only inbox (conversation cards + paginator). No
-	 * chrome; shared by the messages route (desktop) and the mobile tab pager.
+	 * chrome; shared by the messages route (desktop) and the pipeline tab host.
 	 */
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import Paginator from '$lib/components/atoms/Paginator.svelte';

@@ -32,6 +32,7 @@
 	 * store (its own rAF-throttled scroll listener publishes each frame).
 	 */
 	import { untrack } from 'svelte';
+	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
@@ -72,6 +73,21 @@
 	const tNav = $derived(t.nav);
 	const currentPath = $derived(page.url.pathname);
 	const translateY = $derived(scrollChrome.translateY);
+
+	// Reset the orchestrator's cached header-state fields on mount. The
+	// Header persists across pipeline route swaps (SvelteKit keeps the same
+	// instance, only its `page.data` inputs change), so onMount fires only
+	// on a FRESH Header instance: initial app load and the AppShell remount
+	// after a `/entry/*` detour (login / logout). Without this reset the
+	// orchestrator's `#headerStateInitialized` stays `true` across the
+	// unmount, and the first `notifyHeaderState` on the remounted Header
+	// arms a settle against the prev values captured before the detour
+	// (visible as a brief stale-title + back-arrow glitch on the home tab
+	// root after login). onMount is client-only, so no `browser` guard is
+	// needed.
+	onMount(() => {
+		orchestrator.resetHeaderState();
+	});
 
 	const currentHasTabs = $derived(getCurrentTabIndex(currentPath) >= 0);
 	const targetHasTabs = $derived(

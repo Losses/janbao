@@ -14,10 +14,11 @@
  * `backMorph` drives the Header's layer morph during a swipe-back on a deep /
  * search page. It is the swipe-back progress 0..1 (0 at rest on the current
  * page, 1 once committed toward the source), written frame-synced with
- * `fractionalIndex` by the pipeline orchestrator. null everywhere a swipe-back
- * is not in progress (root tab routes, before mount): the Header then falls
- * back to a URL-derived default so a deep link SSRs in the right mode without
- * waiting for hydration.
+ * `fractionalIndex` by the pipeline orchestrator. null on tab roots, threads
+ * (centerTab routes), and before mount; 0 on deep pages at rest so the
+ * Header's morph derivation takes the explicit deep-mode branch. The Header
+ * falls back to a URL-derived default for the null case so a deep link
+ * SSRs in the right mode without waiting for hydration.
  *
  * The store carries the per-frame gesture signals the MobileTabBar and the
  * SearchTabBar read, plus the Header morph signals (`tapMorph`,
@@ -33,7 +34,7 @@
  * `.settleProgress` / `.settleLatched` / `.settleDirection` /
  * `.settleAwaitTitle` / `.searchScrubbing`).
  *
- * Factory: two pagers exist - the PRIMARY tab pager (NavPipelineTabHost /
+ * Factory: two pagers exist - the PRIMARY pager (NavPipelineTabHost /
  * NavPipelineHost write; Header / MobileTabBar read) and the SEARCH scope
  * pager (SearchScopePager writes; SearchTabBar reads). Each `createPagerStore()`
  * call holds its OWN closure-scoped `$state` so the two never cross-wire. The

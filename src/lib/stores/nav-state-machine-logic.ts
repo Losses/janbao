@@ -6,10 +6,12 @@
  * navigation transition and the page lifecycle. Macro phases:
  * `at-rest`, `intent`, `resolving`, `transitioning` (carrying the
  * active resolver + sub-phase), `landing`. The reducer models the
- * interruption (a new intent arriving mid-transition; §5). The
- * orchestrator's SvelteKit interop wiring (§9) surfaces
- * popstate-as-interruption and failed-preload-as-interruption events
- * into the reducer.
+ * interruption (a new intent arriving mid-transition; §5). The sole
+ * producer of the `interrupt` event is a gesture re-grab
+ * mid-transition (`#beginGesture` in the orchestrator); popstate and
+ * failed-preload are handled by the SvelteKit nav hooks
+ * (`onSvelteKitBeforeNavigate` / `onSvelteKitAfterNavigate`), not
+ * routed through the reducer's `interrupt` path.
  *
  * This module is the reducer; `nav-state-machine.svelte.ts` is the
  * thin `$state` wrapper that delegates every transition here. The
@@ -306,12 +308,16 @@ export function reduce(state: OrchestratorState, event: OrchestratorEvent): Orch
 		case 'reset': {
 			// Reset to at-rest. Fires from landing (the wrapper's
 			// microtask lands here) or at-rest (idempotent), and as a
-			// force-clear from any other phase. The one phase we DO NOT
-			// clobber is `intent`: if a new gesture arrived during the
-			// landing microtask window, the state moved landing -> intent,
-			// and the stale microtask's reset must not abort that new
-			// gesture.
-			if (state.macro.kind === 'intent') {
+			// force-clear from any other phase. The phases we DO NOT
+			// clobber:
+			//  - `intent`: a new gesture arrived during the landing
+			//    microtask window (the state moved landing -> intent,
+			//    and the stale microtask must not abort that new gesture).
+			//  - `transitioning`: the finish-then-new queued-nav replay
+			//    dispatches synchronously from `landing` through `intent`
+			//    to `transitioning` before this microtask drains. The
+			//    reset must not overwrite that in-flight transition.
+			if (state.macro.kind === 'intent' || state.macro.kind === 'transitioning') {
 				return state;
 			}
 			return initialOrchestratorState(event.on);

@@ -2,7 +2,7 @@
 	/**
 	 * DiscussionsPanel - Content-only discussion stream (paginator + rows). The
 	 * presentational body shared by the home route, the `/discussions/pN`
-	 * paginated route (via DiscussionListPage), and the mobile tab pager. Owns no
+	 * paginated route (via DiscussionListPage), and the pipeline tab host. Owns no
 	 * chrome (no sidebar / DualColumnLayout) so it can be mounted three-wide in
 	 * the pager track.
 	 *

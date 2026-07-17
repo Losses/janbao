@@ -220,11 +220,25 @@ describe('reducer: landing and reset', () => {
 		const s0 = initialOrchestratorState('deep');
 		const s1 = reduce(s0, intentEvent());
 		const s2 = reduce(s1, resolvedEvent());
-		const s3 = reduce(s2, { type: 'reset', on: 'tab' });
+		// 'transitioning' is NOT force-cleared by reset (the finish-then-new
+		// queued-nav replay may have dispatched synchronously into
+		// 'transitioning' before the landing microtask's reset drains). Reset
+		// from 'landing' (the normal reset path) does clear.
+		const sLanding = reduce(s2, { type: 'land', on: 'tab' });
+		expect(sLanding.macro.kind).toBe('landing');
+		const s3 = reduce(sLanding, { type: 'reset', on: 'tab' });
 		expect(s3.macro.kind).toBe('at-rest');
 		expect(s3.fromPathname).toBeNull();
 		expect(s3.toPathname).toBeNull();
 		expect(s3.macro.plan).toBeNull();
+	});
+
+	test('reset from transitioning is a no-op (protects the queued-nav replay)', () => {
+		const s0 = reduce(initialOrchestratorState('deep'), intentEvent());
+		const s1 = reduce(s0, resolvedEvent());
+		expect(s1.macro.kind).toBe('transitioning');
+		const s2 = reduce(s1, { type: 'reset', on: 'tab' });
+		expect(s2).toBe(s1);
 	});
 
 	test('reset from intent is a no-op (protects the landing-microtask race)', () => {

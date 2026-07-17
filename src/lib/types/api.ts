@@ -153,7 +153,7 @@ export interface JoinedMember {
 /**
  * A feed item as produced by the activity loaders. The union of what
  * ActivityRow and JoinedActivityRow consume. Shared between the server DAO
- * (`loadActivityPage`), the activity panel, and the mobile tab pager.
+ * (`loadActivityPage`), the activity panel, and the pipeline tab host.
  */
 export interface ActivityListItem extends AuthorPreviewFields {
 	id: number;

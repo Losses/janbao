@@ -102,9 +102,11 @@ export interface FabRouteAttributes {
  */
 const FAB_ROUTE_ATTRIBUTES: readonly FabRouteAttributes[] = [
 	// Family A: list routes whose atom is mounted (Family A/C at scale 0
-	// or 1). Only / and /messages/inbox show a visible FAB at rest
-	// (fab: true); the FAB layer scales the atom per route below.
+	// or 1). /, /discussions/pN (every page of the list), and
+	// /messages/inbox show a visible FAB at rest (fab: true); the FAB
+	// layer scales the atom per route below.
 	{ pattern: /^\/$/, kind: 'discussions' },
+	{ pattern: /^\/discussions\/p\d+$/, kind: 'discussions' },
 	{ pattern: /^\/messages\/inbox$/, kind: 'messages' },
 	// Family A, dynamic kind: Activity's FAB atom stays mounted at
 	// scale 0 (fab: false); the dynamic kind is used only as a retained

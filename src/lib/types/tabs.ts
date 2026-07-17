@@ -1,5 +1,5 @@
 /**
- * Shapes for the eager-loaded mobile tab pager. The `(tabs)` layout load returns
+ * Shapes for the eager-loaded pipeline tab host. The `(tabs)` layout load returns
  * `TabsLayoutData` (all three tabs at page 1) so the pager can mount every panel
  * up front; the active tab's `?page` pagination is still served by the per-route
  * page loads. Shared with `NavPipelineTabHost` and the panel components so they

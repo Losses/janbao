@@ -3777,3 +3777,204 @@ $ bun run test:e2e                    202 passed + 2 flaky (exit 0)
 ```
 
 R70 audits this state.
+
+## Session 73: R70 audit (A 1 nitpick + 1 concern; B 1 concern) + fixes
+
+R70 ran two independent auditors. A returned PASS-WITH-CONCERNS (1 nitpick + 1
+concern); B returned PASS-WITH-CONCERNS (1 concern). Counter stays 0/5. No
+runtime logic bug. All fixed.
+
+### Findings + fixes
+
+- A1 (nitpick, FIXED): the `playEnterAnimation` docstring's "static back-target
+  title" was imprecise for tab-root back-targets (resolver returns null, outgoing
+  is also empty). Reworded (part of the A2 edit).
+- A2 (concern, FIXED): `playEnterAnimation`'s outgoing title used
+  `resolveDeepHeaderTitle(inputs.backTarget, t)` while `#armSettleEaseFromGesture`
+  (R64 B1) uses `#prevHeaderTitle` (the live title). The divergence was masked
+  (current back-targets are tab roots with empty live titles) but was a latent
+  hazard for dynamic-title back-targets. Fixed: outgoing is now
+  `#prevHeaderTitle`, consistent with the gesture-release path.
+- B1 (concern, FIXED): the FAB reacted during a suppressed-slide gesture
+  (within-tab pagination `distance = 0`, track static, but `publication.progress`
+  advanced and `fabScale` faded the FAB in). Fixed: the FAB layer checks
+  `publication.plan?.pageTrack.distance === 0` and short-circuits to the FROM
+  route's fab scale.
+
+### Gate outputs (post-fix, independently re-run 2026-07-17)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
+$ bun run test:e2e                    203 passed + 1 flaky (exit 0, B1 run)
+                                      + header-enter e2e 16 pass (A2 verification)
+```
+
+R71 audits this state.
+
+## Session 74: R71 audit (A/B PWC: 9 comment accuracies, ZERO logic bugs) + fixes
+
+R71 ran two independent auditors. A returned PASS-WITH-CONCERNS (1 comment
+accuracy); B returned PASS-WITH-CONCERNS (4 concern + 5 nitpick, all comment
+accuracy). Counter stays 0/5. **R71 has zero logic bugs in either auditor.**
+All 9 findings are stale comment/docstring references to deleted mechanisms
+(primarily "tab pager" / "mobile tab pager" referring to the deleted
+`MobileTabPager`) plus one incorrect claim in `#isOwnDispatchReentry`.
+
+### Findings + fixes
+
+- A1: `backMorph` docstring internal contradiction ("null everywhere" vs "0 at
+  rest" for deep pages). Reworded.
+- B1: `swipe.ts` file header referenced "the tab pager" + "left/right tab
+  switching." Reworded to name NavPipelineHost/NavPipelineTabHost/SearchScopePager.
+- B2: `#isOwnDispatchReentry` docstring claimed "a gesture dispatch carries no
+  #queuedDiscreteNav", wrong (finish-then-new can set it mid-commit). Reworded.
+- B3-B4 + 5 nitpicks: stale "mobile tab pager" / "tab pager" references in
+  DiscussionListPage, updateFromPathname docstring, MessagesPanel,
+  DiscussionsPanel, api.ts, tabs.ts, activity/+page.svelte. Batch-replaced via sed.
+
+### Gate outputs (post-fix, 2026-07-17)
+
+Comment-only fixes; the e2e gate is unchanged from the R70 post-fix run.
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
+$ bun run test:e2e                    203 passed + 1 flaky (exit 0, R70 post-fix run)
+```
+
+R72 audits this state.
+
+## Session 75: R72 audit (A 1 logic; B 1 dead code + 1 logic) + fixes
+
+R72 ran two independent auditors. A returned PASS-WITH-CONCERNS (1 concern,
+logic); B returned PASS-WITH-CONCERNS (2 concern, 1 dead code + 1 logic).
+Counter stays 0/5. All fixed.
+
+### Findings + fixes
+
+- A1 (logic, FIXED): forward-direction within-tab pagination gesture (`/` ->
+  `/discussions/pN` via back-swipe) not suppressed. `suppressSlide` compared
+  `fromTabIndex === toTabIndex` where `toTabIndex = #tabIndexFor(toPathname)`
+  returns -1 for `/discussions/pN`. Fixed: replaced with
+  `getCurrentTabIndex(toPathname)` (pill-target-based, returns 0). Both
+  directions now suppressed.
+- B1 (dead code, FIXED): `#enterAnimationArmedSettle` was dead state. R68 B1's
+  `#endSettleEase` clear made the idle-branch read unreachable (the flag was
+  always false when the idle branch ran). Removed the flag entirely (field,
+  set, all clears, idle-branch read). Done by a fresh-context sub-agent.
+- B2 (logic, FIXED): stale header-state across AppShell unmount/remount
+  (login/logout). AppShell unmounts, Header unmounts, `notifyHeaderState` doesn't
+  fire, `#headerStateInitialized` stays true. On remount, the first
+  `notifyHeaderState` arms a settle with stale prev values. Fixed: added
+  `resetHeaderState()` to the orchestrator; the Header's `onMount` calls it.
+  Done by the sub-agent.
+
+### Gate outputs (post-fix, independently re-run 2026-07-17)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
+$ bun run test:e2e                    202 passed + 2 flaky (exit 0)
+```
+
+R73 audits this state.
+
+## Session 76: R73 audit (A 1 moderate + 2 low; B 1 low) + fixes
+
+R73 ran two independent auditors. A returned PASS-WITH-CONCERNS (1 moderate + 2
+low); B returned PASS-WITH-CONCERNS (1 low, comment accuracy). Counter stays
+0/5.
+
+### Findings + fixes
+
+- A1 (moderate, FIXED): the R70 B1 FAB `distance === 0` freeze was too broad; it
+  fired for backward-to-deep-from-tab-0 (where the FAB should exit via
+  `fabScale`, not freeze). Fixed: added `getRouteData(toPathname).tag === 'tab'`
+  so only within-tab pagination freezes.
+- A2 (low, ACCEPTED): Header morph snaps on the rare within-tab pagination
+  forward direction. Acceptable tradeoff of the suppressed-slide design.
+- A3 (low, ACCEPTED): FAB landing snap on within-tab pagination. Acceptable (the
+  slide is genuinely suppressed; the FAB updates on landing).
+- B1 (low, FIXED): finish-then-new comment said "tab-click" but the code handles
+  any discrete navigation (tab-click, popstate, link, goto). Reworded.
+
+### Gate outputs (post-fix, independently re-run 2026-07-17)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky; fab-release-snap
+                                     timing flake (1 failed in full-suite
+                                     run, 3/3 pass on isolated re-run;
+                                     not a regression from R73 fixes)
+```
+
+R74 audits this state.
+
+## Session 77: R74 audit (A 3 concern; B PASS) + fixes
+
+R74 ran two independent auditors. A returned PASS-WITH-CONCERNS (3 concern); **B
+returned PASS, no defect** (B's third full PASS: R64, R67, R74). Counter stays
+0/5.
+
+### Findings + fixes
+
+- A1+A3 (concern, FIXED): the within-tab pagination FAB landing snap. Root cause:
+  `/` has `fab: true` but `/discussions/pN` has `fab: false` (the same discussions
+  list). The FAB froze at FROM during the gesture, snapped to TO on landing. Fixed:
+  set `fab: true` for `/discussions/pN` in `route-data.ts` + added the route to
+  `FAB_ROUTE_ATTRIBUTES` in `route-config.ts`. Now `fromHasFab === toHasFab === true`
+  for within-tab pagination (no snap), and the FAB is visible on every page of the
+  discussions list (design improvement).
+- A2 (concern, FIXED): `EndHandler.reversed` docstring inaccurate, the parameter
+  carries the broader cancel signal (rebound OR pointercancel), not just rebound.
+  Reworded.
+
+### Gate outputs (post-fix, independently re-run 2026-07-17)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
+$ bun run test:e2e                    203 passed + 1 flaky (exit 0)
+```
+
+R75 audits this state.
+
+## Session 78: R75 audit (A 1 medium logic + 1 info; B 1 comment) + fixes
+
+R75 ran two independent auditors. A returned PASS-WITH-CONCERNS (1 medium + 1
+informational); B returned PASS-WITH-CONCERNS (1 concern, comment accuracy).
+Counter stays 0/5.
+
+### Findings + fixes
+
+- A1 (medium logic, FIXED): the SM `reset` microtask clobbered the finish-then-new
+  queued-nav replay. The queued-nav dispatch synchronously moved the SM from
+  `'landing'` through `'intent'` to `'transitioning'` before the landing
+  microtask's `reset` drained; the `reset` then force-cleared the
+  `'transitioning'` state to at-rest, freezing the FAB/Header/pager for ~200ms
+  mid-slide. Fixed: the `reset` guard now also blocks `'transitioning'`. Test
+  updated (reset from `'landing'` → at-rest; new test: reset from `'transitioning'`
+  → no-op).
+- A2 (informational): onInterrupt call-site guard vs reducer guard inconsistency.
+  No reachable failure trajectory. Noted.
+- B1 (comment, FIXED): the `nav-state-machine-logic.ts` module docstring claimed
+  popstate/failed-preload are routed into the reducer as interruptions. The sole
+  `interrupt` producer is a gesture re-grab. Reworded.
+
+### Gate outputs (post-fix, independently re-run 2026-07-17)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
+$ bun run test:e2e                    203 passed + 1 flaky (exit 0)
+```
+
+R76 audits this state.
