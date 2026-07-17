@@ -33,7 +33,8 @@
  * FAB layer reads the orchestrator's publication directly, and the
  * Header reacts through its own layer reading the pager store). The
  * plan is resolved ONCE per gesture (FROM and TO locked at gesture
- * start); the live offset streams separately to the executor.
+ * start); the per-frame drag progress streams to the executor via
+ * `onDragMove`.
  *
  * Pure (runes-free). The orchestrator imports the `TransitionPlan` and
  * `TransitionDirection` types from this module (the wrapper imports
@@ -122,9 +123,10 @@ export interface TransitionPlan {
 
 // ---------------------------------------------------------------------------
 // Route stack. Carried on `ResolverInput`. The back-target derivation
-// lives in the caller: it precomputes `direction` from the stack and
-// passes it (§6: "the back-target is always the route stack's previous
-// entry"). The resolvers consume `direction` and do not read `stack`.
+// lives in the caller: it precomputes `direction` from the gesture
+// classification and passes it (§6: "the back-target is always the
+// route stack's previous entry"). The resolvers consume `direction`
+// and do not read `stack`.
 
 /** A single entry in the route stack. `tag` is carried alongside the
  *  pathname so the caller does not need to re-classify. */
@@ -135,10 +137,11 @@ export interface RouteStackEntry {
 }
 
 /** The flat route stack. The last entry is the current route; the
- *  entry at `length - 2` is the back-target. The orchestrator builds
- *  the live stack from the navigation history; the resolvers do not
- *  read it directly (they read `direction`, which the caller
- *  precomputes from the stack). */
+ *  entry at `length - 2` is the back-target. The orchestrator
+ *  currently passes an empty stack (`{ entries: [] }`); the resolvers
+ *  do not read it (they read `direction`, which the caller
+ *  precomputes from the gesture classification and the resolved
+ *  target, not from the stack). */
 export interface RouteStack {
 	readonly entries: readonly RouteStackEntry[];
 }
@@ -148,18 +151,17 @@ export interface RouteStack {
 
 /** The direction of the transition. 'forward' = a push (a new entry
  *  lands on top of the stack); 'backward' = a pop (the current entry
- *  leaves, the previous entry is revealed). The caller precomputes this
- *  from the route stack; the resolvers read it instead of the stack. */
+ *  leaves, the previous entry is revealed). The caller precomputes
+ *  this from the gesture classification and the resolved target; the
+ *  resolvers read it instead of the stack. */
 export type TransitionDirection = 'forward' | 'backward';
 
 /** Input every resolver reads. The from/to route data, the from/to
  *  pathnames and tab indices, the gesture-start intent, the
  *  caller-precomputed direction, the viewport width, and the
- *  reduced-motion flag. The `stack` field is carried on the input (see
- *  above); the resolvers currently consume `direction` instead. All
- *  fields are locked at gesture start; the live offset streams to the
- *  executor directly (a plan that supplies optional `fab` / `header`
- *  fns receives it as their second argument). */
+ *  reduced-motion flag. The `stack` field is carried but always empty
+ *  (see `RouteStack` above); the resolvers consume `direction`
+ *  instead. All fields are locked at gesture start. */
 export interface ResolverInput {
 	readonly intent: IntentState;
 	readonly stack: RouteStack;

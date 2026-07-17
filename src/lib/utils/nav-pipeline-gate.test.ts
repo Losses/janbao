@@ -67,6 +67,8 @@ describe('isNavPipelineRoute', () => {
 		expect(isNavPipelineRoute('/')).toBe(true);
 		expect(isNavPipelineRoute('/activity')).toBe(true);
 		expect(isNavPipelineRoute('/messages/inbox')).toBe(true);
+		expect(isNavPipelineRoute('/discussions/p2')).toBe(true);
+		expect(isNavPipelineRoute('/discussions/p10')).toBe(true);
 	});
 
 	test('rejects non-migrated routes', () => {

@@ -60,6 +60,7 @@ export function isNavPipelineRoute(pathname: string): boolean {
 	if (pathname === '/') return true;
 	if (pathname === '/activity') return true;
 	if (pathname === '/messages/inbox') return true;
+	if (/^\/discussions\/p\d+$/.test(pathname)) return true;
 	return false;
 }
 

@@ -227,10 +227,9 @@ test('Bug4: global page (search) back-swipe shows the Discussions preview panel 
  * leftmost tab, activeIndex=0, with `/bookmarks` as the previous history
  * entry), then commit a rightward back-swipe. The CONTRACT being asserted is
  * the landing: history.back() must return to the deep page (`/bookmarks`), not
- * pop a tab. The in-slide visual proxy is intentionally imperfect here -
- * Known #9: at the leftmost tab there is no panel to the left, so the slide
- * reveals empty space; the 5b3 deep-snapshot overlay is the planned fix. This
- * test asserts only the landing URL, not the proxy visual.
+ * pop a tab. The slide is SUPPRESSED for this case (the leftmost tab has no
+ * panel to its left, so `suppressSlide` sets `distance = 0`); this test
+ * asserts only the landing URL.
  */
 test('activeIndex=0 backward-to-deep-page: back-swipe on / commits to prior deep history entry (/bookmarks)', async ({ page, context }) => {
 	await prepareContext(context);

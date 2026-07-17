@@ -3632,7 +3632,148 @@ found real defects. All fixed.
 $ bun run check                       0 errors / 0 warnings (1458 files)
 $ bun run lint                        EXIT=0
 $ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
-$ bun run test:e2e                    (re-run after the R65 fixes + new spec; see below)
+$ bun run test:e2e                    202 passed + 2 flaky (exit 0)
 ```
 
 R66 audits this state.
+
+## Session 69: R66 audit (A/B PWC: 3 comment-accuracy concerns, no logic bug) + fixes
+
+R66 ran two independent auditors. A returned PASS-WITH-CONCERNS (2 concern, both
+comment accuracy); B returned PASS-WITH-CONCERNS (1 concern, comment accuracy).
+Counter stays 0/5. **R66 is the cleanest round logically: no logic bug, no state
+leak, no architecture violation in either auditor.** Three docstring precisions,
+all fixed (comment-only; no runtime change).
+
+### Findings + fixes
+
+- A1 (comment, FIXED): the `OrchestratorPublication` docstring's FAB half
+  claimed the FAB reacts via the pager store; the FAB reads the orchestrator's
+  publication directly. Reworded (FAB direct; Header via the pager store).
+- A2 (comment, FIXED): the `releaseInputs` docstring's "reads at-rest"
+  overstated; only the macro fields go at-rest, the settle/scrub micro-state
+  stays live across the swap. Reworded to qualify.
+- B1 (comment, FIXED): a stale test comment in `nav-dom-driver-live.test.ts`
+  referenced the removed `plan.fab` behavior (a residual from R65 B2's
+  `liveOffset` removal). Reworded to describe the test's actual behavior.
+
+### Gate outputs (post-fix, 2026-07-17)
+
+Comment-only fixes; the e2e gate is unchanged from the R65 post-fix run.
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
+$ bun run test:e2e                    202 passed + 2 flaky (exit 0, R65 post-fix run)
+```
+
+R67 audits this state.
+
+## Session 70: R67 audit (A PWC: 3 comment accuracies; B PASS) + fixes
+
+R67 ran two independent auditors. A returned PASS-WITH-CONCERNS (3 concern, all
+comment accuracy); **B returned PASS, no defect** (B's second full PASS, after
+R64). Counter stays 0/5. No logic bug, no state leak in either auditor. All
+fixed (comment-only).
+
+### Findings + fixes
+
+- A1 (comment, FIXED): the tap-scrub docstring said its rAF is "frame-synced with
+  the NavPipelineHost Page panel the executor drives." The tap-scrub arms only
+  when `pager.transitionTarget === null` (no pipeline transition in flight), runs
+  on its OWN rAF, and uses a different duration than the enter slide. Reworded.
+- A2 (comment, FIXED): the deep-to-deep interception comment said "All detail ->
+  detail navs are intercepted; none pass through." Over-generalised: a detail ->
+  non-pipeline-detail nav (e.g. `/profile` -> `/offline/bookmarks`) fails the
+  `isNavPipelineRoute(to)` check and falls through. Reworded to "detail -> detail
+  nav between two PIPELINE routes."
+- A3 (comment, FIXED): the `#lastDispatchWasDeepToDeep` docstring's cross-
+  reference to `#lastLandWasPipelineCommit` listed three clear sites, omitting
+  `unmount`. Fixed (four sites).
+- B: PASS, no defect.
+
+### Gate outputs (post-fix, 2026-07-17)
+
+Comment-only fixes; the e2e gate is unchanged from the R65 post-fix run.
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
+$ bun run test:e2e                    202 passed + 2 flaky (exit 0, R65 post-fix run)
+```
+
+R68 audits this state.
+
+## Session 71: R68 audit (A 1 comment; B 1 logic + 1 comment) + fixes
+
+R68 ran two independent auditors. A returned PASS-WITH-CONCERNS (1 comment
+accuracy); B returned PASS-WITH-CONCERNS (1 logic + 1 comment). Counter stays
+0/5. All fixed.
+
+### Findings + fixes
+
+- A1 (comment, FIXED): the `RouteStack` docstring claimed "the orchestrator
+  builds the live stack from the navigation history"; the orchestrator passes an
+  empty `{ entries: [] }`. `direction` is precomputed from the gesture
+  classification. The same inaccuracy propagated to `TransitionDirection` and
+  `ResolverInput`; the latter also retained a "live offset streams to the
+  executor" reference (a residual from R65 B2's liveOffset removal). All four
+  docstrings rewritten. Orchestrator-initiated sweep found + fixed 3 more
+  residuals (nav-resolvers.ts:36, :125, nav-intent.ts:7).
+- B1 (logic, FIXED): `#enterAnimationArmedSettle` survived `#endSettleEase`. For
+  dynamic-title routes with a slow data load (headerTitle resolves after the
+  settle rAF reaches u=1), the flag stayed true, suppressing the idle arm and
+  snapping the Header title from empty to the live title (no crossfade). Fixed:
+  `#endSettleEase` clears the flag (the settle ended = the enter is done).
+- B2 (comment, FIXED): the `e2e/backtarget.spec.ts` test docstring described the
+  `activeIndex=0` backward-to-deep trajectory as having an "intentionally
+  imperfect" proxy with "Known #9" still open; the current code `suppressSlide`
+  sets distance=0 (no slide). Reworded.
+
+### Gate outputs (post-fix, independently re-run 2026-07-17)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
+$ bun run test:e2e                    202 passed + 2 flaky (exit 0)
+```
+
+R69 audits this state.
+
+## Session 72: R69 audit (A 2 logic migration gaps; B 1 comment) + fixes
+
+R69 ran two independent auditors. A returned PASS-WITH-CONCERNS (2 concern,
+both logic); B returned PASS-WITH-CONCERNS (1 concern, comment accuracy).
+Counter stays 0/5. Both of A's findings are consequences of the `/discussions/pN`
+migration not fully covering the gesture path and the route classifier.
+
+### Findings + fixes
+
+- A1 (logic, FIXED): within-tab pagination GESTURE back-swipe (`/discussions/pN`
+  -> `/`) played an empty-space slide. The R65 B1 fix covered only the CLICK path
+  (`onSvelteKitBeforeNavigate`); the gesture path (`#resolvePlan`'s
+  `suppressSlide`) had no within-tab check. Fixed: `suppressSlide` OR-extended
+  with a within-tab pagination condition (same spatial tab index, both `tag:
+'tab'`, different pathname).
+- A2 (logic, FIXED): `isNavPipelineRoute('/discussions/pN')` returned false (the
+  `/pN` strip left `/discussions`, not in the pattern list). `/discussions/pN`
+  IS a pipeline route (mounts `NavPipelineTabHost`). The misclassification
+  caused `#onExecutorSettle` to fire the non-pipeline branch (premature settle
+  end + flicker) and `#lastLandWasPipelineCommit = false`. Fixed: added
+  `/^\/discussions\/p\d+$/` to the patterns + test.
+- B1 (comment, FIXED): the `#enterAnimationArmedSettle` docstring's clear-site
+  list (a-d) missed the `#endSettleEase` clear added in R68 B1. Added (e).
+
+### Gate outputs (post-fix, independently re-run 2026-07-17)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
+$ bun run test:e2e                    202 passed + 2 flaky (exit 0)
+```
+
+R70 audits this state.

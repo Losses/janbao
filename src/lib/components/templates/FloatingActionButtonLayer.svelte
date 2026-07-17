@@ -174,6 +174,14 @@
 			if (pub.fromPathname === pub.toPathname) {
 				return fromHasFab ? 1 - pub.progress * BOUNDARY_RUBBER_BAND_FACTOR : 0;
 			}
+			// Suppressed slide (distance === 0): a within-tab pagination
+			// gesture (e.g. `/discussions/pN` -> `/`). The track does not
+			// move, so the FAB stays at the FROM route's scale during the
+			// gesture (the page content updates on landing, not during
+			// the drag).
+			if (pub.plan?.pageTrack.distance === 0) {
+				return fromHasFab ? 1 : 0;
+			}
 			return fabScale(pub.progress, fromHasFab, toHasFab);
 		}
 		return getRouteData(page.url.pathname).fab ? 1 : 0;

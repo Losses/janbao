@@ -15,8 +15,7 @@ docstring accuracies. All fixed; B1 is locked in by a new e2e.
    introduced by the `/discussions/pN` migration).** The orchestrator's
    tab-click-exit classifier treated the within-tab pagination nav as a tab
    switch: `#isPipelineFrom` strips `/pN`, so `/discussions/pN` (host) and `/`
-   (tab root) are different hosts, and the slide ran with no panel left of tab
-   0. Fixed: a same-tab guard (`getCurrentTabIndex(from) === getCurrentTabIndex(to)`,
+   (tab root) are different hosts, and the slide ran with no panel left of tab 0. Fixed: a same-tab guard (`getCurrentTabIndex(from) === getCurrentTabIndex(to)`,
    gated on `getRouteData(from).tag === 'tab'`) suppresses the slide for tab-
    internal pagination; a deep route that shares the tab's index
    (`/discussion/<id>` -> `/`) still slides. The first version (same-tab check
@@ -38,7 +37,7 @@ docstring accuracies. All fixed; B1 is locked in by a new e2e.
    entry (LOGIC, FIXED).** `#dispatchTarget` is the gesture target's pathname
    (`pendingGesture.to`) or the discrete nav's full URL (`pendingDiscreteNav.target`
    = pathname + search), but the supersede re-entry match used `to + toSearch ===
-   #dispatchTarget`, so a gesture commit dispatched via `history.back()` that
+#dispatchTarget`, so a gesture commit dispatched via `history.back()` that
    landed on a verbatim search-suffixed entry (e.g. `/?page=2`,
    `/messages/inbox?filter=unread`) did not match, falsely superseded, cleared
    `#lastLandWasPipelineCommit`, and armed a tap-scrub that should have been
@@ -64,7 +63,7 @@ true/false). Both reworded.
 $ bun run check                       0 errors / 0 warnings (1458 files)
 $ bun run lint                        EXIT=0
 $ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
-$ bun run test:e2e                    (re-run after the R65 fixes + new spec; see journal)
+$ bun run test:e2e                    202 passed + 2 flaky (exit 0)
 ```
 
 R66 audits this state.

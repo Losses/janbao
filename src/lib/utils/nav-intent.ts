@@ -4,7 +4,7 @@
  *
  * Per `docs/DV20-Plan.md` §2 Layer 2: maps raw input (pointer events,
  * taps, popstate, hashchange, programmatic goto) to an intent plus
- * continuous parameters (direction, live offset, live velocity).
+ * continuous parameters (direction, drag offset, velocity).
  *
  * Pure (runes-free). No side effects, no DOM reads, no DOM writes. The
  * classifier is a pure reducer; the orchestrator calls `classify` and

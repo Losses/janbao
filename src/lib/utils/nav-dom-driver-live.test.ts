@@ -181,8 +181,9 @@ describe('LiveNavDomDriver.write: FAB', () => {
 	});
 
 	test('FAB scale=0 + visible=false together', () => {
-		// Mirrors `plan.fab` returning `{ scale: 0, translateY: 0,
-		// visible: false }` for an inactive FAB plan in nav-resolvers.ts.
+		// Drives the driver with a synthetic FAB visual at scale 0 and
+		// hidden, verifying the write branch co-handles the scale and
+		// visibility on the FAB element.
 		const el = new CapturingElement();
 		const driver = new LiveNavDomDriver({
 			resolveElements: () => makeElements({ fab: el })

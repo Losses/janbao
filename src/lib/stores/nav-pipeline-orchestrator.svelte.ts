@@ -238,12 +238,12 @@ export interface PipelineMountInputs {
 }
 
 /** The orchestrator's published reactive state for downstream
- *  consumers (the host's `$effect` reads this and publishes to the
- *  pager store so the existing FAB / Header layers react). Per DV20
- *  §13.5 the NavStateMachine is the sole authority for the macro
- *  fields (plan, FROM/TO, direction, in-flight) and the settle +
- *  tap-scrub micro animation state; `progress` is the executor's
- *  per-frame contribution. `lastDispatchWasDeepToDeep` is the
+ *  consumers. The FAB layer reads this publication directly; the host's
+ *  `$effect` publishes the macro + settle/scrub fields to the pager
+ *  store for the Header. Per DV20 §13.5 the NavStateMachine is the sole
+ *  authority for the macro fields (plan, FROM/TO, direction, in-flight)
+ *  and the settle + tap-scrub micro animation state; `progress` is the
+ *  executor's per-frame contribution. `lastDispatchWasDeepToDeep` is the
  *  cross-host deep-to-deep handshake flag carried in the publication
  *  so the destination host's `shouldEnter` reads it on the other side
  *  of `releaseInputs` / `configure` (it survives the host swap to
@@ -480,8 +480,10 @@ export class NavPipelineOrchestrator {
 	// horizontal-track scrub on a tap navigation. The rAF below eases
 	// `pager.tapMorph` from `#scrubFromValue` to `#scrubToValue` over
 	// TITLE_CROSSFADE_MS with the constant-deceleration curve the settle
-	// ease uses, frame-synced with the NavPipelineHost Page panel the
-	// executor drives. Reduced-motion snaps.
+	// ease uses. The scrub runs on its OWN rAF, independent of the
+	// executor's slide (it arms only when `pager.transitionTarget ===
+	// null`, i.e. no pipeline transition is in flight). Reduced-motion
+	// snaps.
 	#tapScrubRafId: number | undefined;
 	/** The scrub's start value (1 for an exit-from-root, 0 for an
 	 *  enter-from-search). */
@@ -573,7 +575,10 @@ export class NavPipelineOrchestrator {
 	 *  it matches the settle's incoming title, or (an idle settle,
 	 *  `!#settleAwaitTitle`) the route reverted to the outgoing title
 	 *  and the settle ends; (d) `releaseInputs` / `unmount` (host
-	 *  teardown). The mid-settle re-arm is not gated by this flag: it
+	 *  teardown); (e) `#endSettleEase` (the settle's rAF reached u=1
+	 *  without the live title arriving mid-settle; the flag is spent,
+	 *  and a later idle title change should crossfade, not snap). The
+	 *  mid-settle re-arm is not gated by this flag: it
 	 *  re-latches from the current settleProgress, which is continuous
 	 *  (no snap), so it fires freely on a forward enter and clears the
 	 *  flag via (b). */
@@ -598,9 +603,9 @@ export class NavPipelineOrchestrator {
 	 *     unlike `#pendingDiscreteNav` / `#navDispatchInFlight` (cleared
 	 *     by `releaseInputs`, so they do not survive the source host's
 	 *     teardown) and `#lastLandWasPipelineCommit` (cleared by
-	 *     `#landAtRest`, `notifyHeaderState`'s main body, and the
-	 *     supersede branch in `onSvelteKitBeforeNavigate`; it is read by
-	 *     `notifyHeaderState`, not by `shouldEnter`).
+	 *     `#landAtRest`, `notifyHeaderState`'s main body, the supersede
+	 *     branch in `onSvelteKitBeforeNavigate`, and `unmount`; it is
+	 *     read by `notifyHeaderState`, not by `shouldEnter`).
 	 *   - READ by the destination host's `shouldEnter` at onMount (via
 	 *     the publication's `lastDispatchWasDeepToDeep` field) to
 	 *     suppress the enter animation.
@@ -740,9 +745,11 @@ export class NavPipelineOrchestrator {
 	/** Release the host's inputs and run the lifecycle `deactivate`. The
 	 *  singleton's executor + driver + rAF + lifecycle `mount` persist
 	 *  for the next host's `configure`; this is the route-swap teardown
-	 *  path. The gap-frame publication reads at-rest because
-	 *  `#mountInputs` becomes null and `#mounted` becomes false (the
-	 *  guard in `#publication`). */
+	 *  path. The gap-frame publication's MACRO fields read at-rest (the
+	 *  `!#mounted` guard in `#publication` returns at-rest for plan /
+	 *  progress / inFlight / FROM-TO / direction); the settle + tap-scrub
+	 *  micro-state stays live across the swap so the persistent Header
+	 *  keeps driving an in-flight settle / scrub. */
 	releaseInputs(): void {
 		this.#mountInputs = null;
 		this.#mounted = false;
@@ -921,11 +928,13 @@ export class NavPipelineOrchestrator {
 		// `inputs.fromPathname` (the host route) so the morph runs from the
 		// source's tab-ness to the host route's tab-ness (e.g. tab mode at
 		// the source tab root easing into deep mode on a thread / deep
-		// page). Titles use `resolveDeepHeaderTitle`; dynamic-title routes
-		// (threads, /profile/[userId], /category/[slug]) resolve to null
-		// and contribute an empty title, so the crossfade shows the static
-		// back-target title easing toward an empty incoming span until the
-		// settle ends and the live `page.data.headerTitle` takes over.
+		// page). The outgoing title is the LIVE `#prevHeaderTitle` (the
+		// back-target route's live `page.data.headerTitle`); the resolver
+		// (`resolveDeepHeaderTitle`) returns null for dynamic-title routes
+		// and would snap the outgoing span to empty. The incoming uses the
+		// resolver (the host route's static title); for a dynamic-title
+		// host the live title takes over when `page.data.headerTitle`
+		// resolves after the settle.
 		// `#enterAnimationArmedSettle` is set so the FIRST idle re-arm
 		// in `notifyHeaderState` after the enter settle ends (fired when
 		// the live title lands) is suppressed and does not re-arm the
@@ -934,7 +943,7 @@ export class NavPipelineOrchestrator {
 		// full clear-site list.
 		const t = this.#headerT;
 		if (t !== null) {
-			const outgoingTitle = resolveDeepHeaderTitle(inputs.backTarget, t) ?? '';
+			const outgoingTitle = this.#prevHeaderTitle;
 			const incomingTitle = resolveDeepHeaderTitle(inputs.fromPathname, t) ?? '';
 			const outgoingHasTabs = getCurrentTabIndex(inputs.backTarget) >= 0;
 			const incomingHasTabs = getCurrentTabIndex(inputs.fromPathname) >= 0;
@@ -1519,21 +1528,29 @@ export class NavPipelineOrchestrator {
 			toTabIndex >= 0 &&
 			Math.abs(toTabIndex - inputs.fromTabIndex) > 1 &&
 			!backwardToHigher;
-		// At the leftmost tab (fromTabIndex === 0) a backward-to-deep-page
-		// gesture has no panel to the left to reveal (the 3-panel track's
-		// panel 0 is leftmost), so a slide would reveal empty space. Suppress
-		// the track slide (distance = 0); `backMorph` still drives the
-		// Header morph and `publication.progress` the FAB scale, and
-		// history.back() lands on the deep page on
-		// commit. This is the resolution for the activeIndex === 0 case:
-		// the deep-snapshot overlay covers activeIndex >= 1, but panel 0
-		// has no left neighbour to reveal, so the slide is suppressed here
-		// rather than proxied.
+		// Suppress the track slide (distance = 0) in two cases where there
+		// is no panel to reveal:
+		// 1. Backward to a deep page from the leftmost tab (panel 0 has
+		//    no left neighbour; the deep-snapshot overlay covers
+		//    activeIndex >= 1). `backMorph` still drives the Header morph
+		//    and `publication.progress` the FAB scale; history.back()
+		//    lands on the deep page on commit.
+		// 2. Within-tab pagination (e.g. `/discussions/pN` -> `/`): both
+		//    routes share the same spatial tab index and the same panel,
+		//    so the panel does not change (only the page content does).
+		//    The gesture path needs this because the click-path guard in
+		//    `onSvelteKitBeforeNavigate` is not reached for gestures.
 		const suppressSlide =
-			inputs.bidirectional === true &&
-			inputs.fromTabIndex === 0 &&
-			direction === 'backward' &&
-			toData.tag !== 'tab';
+			(inputs.bidirectional === true &&
+				inputs.fromTabIndex === 0 &&
+				direction === 'backward' &&
+				toData.tag !== 'tab') ||
+			(inputs.bidirectional === true &&
+				inputs.fromTabIndex >= 0 &&
+				inputs.fromTabIndex === toTabIndex &&
+				fromData.tag === 'tab' &&
+				toData.tag === 'tab' &&
+				inputs.fromPathname !== toPathname);
 		const distance = suppressSlide
 			? 0
 			: multiPanel
@@ -1806,10 +1823,13 @@ export class NavPipelineOrchestrator {
 		if (this.#isPipelineFrom(inputs, to)) {
 			return false;
 		}
-		// Own transitions to a tab root (a tab-click exit) AND every
-		// detail -> detail nav (a push like /profile -> /profile/settings,
-		// or a sidebar link like /messages/<id> -> /discussion/<id>). All
-		// detail -> detail navs are intercepted; none pass through. The
+		// Own transitions to a tab root (a tab-click exit) AND a
+		// detail -> detail nav between two PIPELINE routes (a push like
+		// /profile -> /profile/settings, or a sidebar link like
+		// /messages/<id> -> /discussion/<id>). A detail -> detail nav to
+		// a NON-pipeline route (e.g. /profile -> /offline/bookmarks)
+		// fails `isNavPipelineRoute(to)` in the isDeepToDeep check below
+		// and falls through to the non-intercepted path. The
 		// slide uses the 3-panel track geometry (LEFT=back-target,
 		// CENTER=current, RIGHT=forward deep-to-deep destination): the
 		// destination renders its skeleton in the RIGHT panel
@@ -2162,6 +2182,13 @@ export class NavPipelineOrchestrator {
 		if (!this.#stateMachine.settleActive) return;
 		this.#cancelSettleEaseRaf();
 		this.#settleAwaitTitle = false;
+		// Clear the enter-arm flag: the settle ended without the live
+		// title arriving mid-settle (site c did not fire). The morph is
+		// at the host route's tab-ness; a subsequent idle title change
+		// (e.g. a slow `page.data.headerTitle` resolving after the
+		// settle) should crossfade, not snap. (`#armSettleEase` re-arms
+		// do not reach here; they cancel via `#cancelSettleEaseRaf`.)
+		this.#enterAnimationArmedSettle = false;
 		this.#stateMachine.setSettleState({
 			active: false,
 			latched: null,
