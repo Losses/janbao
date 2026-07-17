@@ -7,7 +7,7 @@
  *
  * Per `docs/DV20-Plan.md` §5 + §13.5: the executor publishes
  * authoritative state. There is NO driver method to read the DOM back.
- * The executor tracks its own `(progress, liveOffset)` and the driver
+ * The executor tracks its own `progress` and the driver
  * is write-only (plus a `prefersReducedMotion()` query for the
  * reduced-motion snap, which is a media-query read, not a read of the
  * gesture surface's own state).
@@ -59,7 +59,7 @@ export interface NavVisualWrite {
  *    the live track / FAB / Header elements.
  *
  *  The driver does NOT expose a read-back method. The executor holds
- *  the authoritative `(progress, liveOffset)` in its own state record;
+ *  the authoritative `progress` in its own state record;
  *  interruption handoff (§5) reads from that record, not from the
  *  DOM.
  */

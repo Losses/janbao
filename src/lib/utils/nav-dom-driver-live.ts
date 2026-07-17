@@ -8,7 +8,7 @@
  *
  * The driver is the only component that touches the DOM. It does not
  * read the gesture surface's own state back; the executor publishes
- * authoritative `(progress, liveOffset)` and the driver is write-only
+ * authoritative `progress` and the driver is write-only
  * (plus the media-query read for the reduced-motion snap, which is not
  * a read of the gesture surface's own state).
  *

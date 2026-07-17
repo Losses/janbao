@@ -77,7 +77,7 @@ export type NavExecutorSettleFn = (progressDirection: 0 | 1) => void;
  *  publication would freeze during the commit slide (the live-drag path
  *  publishes via the orchestrator's `#interpretIntent`, but the commit
  *  rAF is internal to the executor). */
-export type NavExecutorTickFn = (progress: number, liveOffset: number) => void;
+export type NavExecutorTickFn = (progress: number) => void;
 
 /** Constructor options for `NavExecutor`. */
 export interface NavExecutorOptions {
@@ -158,22 +158,22 @@ export class NavExecutor {
 
 	/** A gesture starts. Locks the plan and publishes the first live
 	 *  frame. The orchestrator's drag-start event calls this with the
-	 *  resolved plan and the initial (progress, liveOffset) computed
-	 *  from the live intent. */
-	onDragStart(plan: TransitionPlan, progress: number, liveOffset: number): void {
+	 *  resolved plan and the initial `progress` computed from the live
+	 *  intent. */
+	onDragStart(plan: TransitionPlan, progress: number): void {
 		this.#plan = plan;
-		this.#state = applyDrag(this.#state, { progress, liveOffset });
+		this.#state = applyDrag(this.#state, { progress });
 		this.#publish();
 		// During the live phase the rAF is not needed: each pointermove
 		// publishes directly via onDragMove.
 		this.#stopRaf();
 	}
 
-	/** A live drag moved. Updates the progress / liveOffset and
-	 *  publishes one frame synchronously. */
-	onDragMove(progress: number, liveOffset: number): void {
+	/** A live drag moved. Updates the progress and publishes one frame
+	 *  synchronously. */
+	onDragMove(progress: number): void {
 		if (this.#plan === null) return;
-		this.#state = applyDrag(this.#state, { progress, liveOffset });
+		this.#state = applyDrag(this.#state, { progress });
 		this.#publish();
 	}
 
@@ -213,7 +213,7 @@ export class NavExecutor {
 		// Fire onTick so the orchestrator's publication (pager store,
 		// FAB / Header consumers) transitions seamlessly from the live
 		// drag phase to the commit phase at the same progress.
-		this.#onTick?.(next.progress, next.liveOffset);
+		this.#onTick?.(next.progress);
 		if (next.phase === 'committing') {
 			this.#ensureRaf();
 		} else {
@@ -289,7 +289,7 @@ export class NavExecutor {
 		const sample = sampleFrame(this.#state, plan, this.#now());
 		this.#state = sample.state;
 		this.#publish();
-		this.#onTick?.(sample.state.progress, sample.state.liveOffset);
+		this.#onTick?.(sample.state.progress);
 		if (sample.done) {
 			this.#fireSettle(plan.progressDirection);
 		} else {

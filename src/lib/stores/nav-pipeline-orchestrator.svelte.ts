@@ -243,10 +243,11 @@ export interface PipelineMountInputs {
  *  §13.5 the NavStateMachine is the sole authority for the macro
  *  fields (plan, FROM/TO, direction, in-flight) and the settle +
  *  tap-scrub micro animation state; `progress` is the executor's
- *  per-frame contribution. `lastDispatchWasDeepToDeep` is the one
- *  orchestrator-private field carried here, so the destination host's
- *  `shouldEnter` can read the deep-to-deep handshake without a back
- *  channel. */
+ *  per-frame contribution. `lastDispatchWasDeepToDeep` is the
+ *  cross-host deep-to-deep handshake flag carried in the publication
+ *  so the destination host's `shouldEnter` reads it on the other side
+ *  of `releaseInputs` / `configure` (it survives the host swap to
+ *  carry the source host's dispatch fact to the destination host). */
 export interface OrchestratorPublication {
 	/** Null when at-rest; the resolved plan when transitioning. */
 	readonly plan: TransitionPlan | null;
@@ -358,11 +359,13 @@ export class NavPipelineOrchestrator {
 	 *  re-entering beforeNavigate. Lets the orchestrator's
 	 *  beforeNavigate handler pass it through. */
 	#navDispatchInFlight = $state(false);
-	/** The most recent dispatch's target URL (pathname + search). The robust
-	 *  pass-through check in `onSvelteKitBeforeNavigate`: matching
-	 *  the nav's `to` against the dispatched target catches the
-	 *  orchestrator's own `goto` / `history.back()` re-entry
-	 *  regardless of timer or popstate ordering. */
+	/** The most recent dispatch's target: the gesture target's pathname
+	 *  (`pendingGesture.to`) or the discrete nav's full URL
+	 *  (`pendingDiscreteNav.target`, pathname + search). The pass-through
+	 *  check in `onSvelteKitBeforeNavigate` (`#isOwnDispatchReentry`)
+	 *  matches the nav's `to` against this, accepting either form, to catch
+	 *  the orchestrator's own `goto` / `history.back()` re-entry regardless
+	 *  of timer or popstate ordering. */
 	#dispatchTarget: string | null = null;
 	/** The raw drag fraction in [0, 1]. The state machine owns the macro
 	 *  authority (phase, plan, FROM/TO, direction); this field owns the
@@ -523,26 +526,32 @@ export class NavPipelineOrchestrator {
 	#headerT: TranslationDict | null = null;
 	/** True when the current in-flight navigation was dispatched by the
 	 *  orchestrator (a gesture commit or a tab-click commit). Set at
-	 *  dispatch time in `#dispatchNav` (BEFORE the navigation lands), and
-	 *  only for a pipeline target (a non-pipeline target has no pipeline
-	 *  destination to read the flag, and the clear-sites below all skip
-	 *  on a non-pipeline landing, so setting it unconditionally would
-	 *  leak), so the Header's `notifyHeaderState` `$effect.pre` - which
-	 *  fires BEFORE `afterNavigate` - reads the CURRENT navigation's flag
-	 *  (a flag set at land time would be stale at header-notification
-	 *  time).
+	 *  dispatch time in `#dispatchNav` BEFORE the navigation lands; the
+	 *  assigned value is `isNavPipelineRoute(target)` (true for a
+	 *  pipeline target, false otherwise). The explicit `false` write
+	 *  for a non-pipeline target is the mitigation against a stale
+	 *  `true` leaking past a non-pipeline detour: the clear-sites below
+	 *  all skip on a non-pipeline landing, so a non-pipeline dispatch
+	 *  must clear the flag itself. Setting the value BEFORE land is
+	 *  load-bearing: the Header's `notifyHeaderState` `$effect.pre`
+	 *  fires BEFORE `afterNavigate`, so it reads the CURRENT
+	 *  navigation's flag (a flag set at land time would be stale at
+	 *  header-notification time).
 	 *  Read in `notifyHeaderState` so the tap-scrub arming can skip the
 	 *  just-landed pipeline commit (the executor's slide already drove
 	 *  the search-layout visual to its post-land position; arming a
 	 *  fresh scrub would re-animate it from the opposite endpoint and
-	 *  jump). Cleared in three places: `#landAtRest` (the navigation
+	 *  jump). Cleared in four places: `#landAtRest` (the navigation
 	 *  has landed), `notifyHeaderState`'s main body (defensive clear
 	 *  after the read so a second header-state notification within the
-	 *  same navigation does not re-consume the flag), and the supersede
+	 *  same navigation does not re-consume the flag), the supersede
 	 *  branch in `onSvelteKitBeforeNavigate` (an external nav cancels
 	 *  our in-flight goto so `#landAtRest` never runs; without this
 	 *  clear the stale true would skip a tap-scrub arm on the next
-	 *  pipeline commit). */
+	 *  pipeline commit), and `unmount` (the mobile -> desktop flip
+	 *  tears down the host inputs; without this clear the stale true
+	 *  would survive the desktop detour and skip a tap-scrub arm when
+	 *  the user returns to mobile). */
 	#lastLandWasPipelineCommit = false;
 	/** True while a forward enter's settle ease owns the morph and the
 	 *  live `headerTitle` has not yet taken over. Set in
@@ -560,12 +569,14 @@ export class NavPipelineOrchestrator {
 	 *  any settle arm (a mid-settle re-arm, a gesture-release settle,
 	 *  a discrete-nav settle, or an unsuppressed idle re-arm all
 	 *  supersede the enter's settle); (c) the mid-settle branch in
-	 *  `notifyHeaderState` when the live title already matches the
-	 *  settle's incoming title (the live title has taken over); (d)
-	 *  `releaseInputs` / `unmount` (host teardown). The mid-settle
-	 *  re-arm is not gated by this flag: it re-latches from the
-	 *  current settleProgress, which is continuous (no snap), so it
-	 *  fires freely on a forward enter and clears the flag via (b). */
+	 *  `notifyHeaderState` when the live title has taken over: either
+	 *  it matches the settle's incoming title, or (an idle settle,
+	 *  `!#settleAwaitTitle`) the route reverted to the outgoing title
+	 *  and the settle ends; (d) `releaseInputs` / `unmount` (host
+	 *  teardown). The mid-settle re-arm is not gated by this flag: it
+	 *  re-latches from the current settleProgress, which is continuous
+	 *  (no snap), so it fires freely on a forward enter and clears the
+	 *  flag via (b). */
 	#enterAnimationArmedSettle = false;
 	/** Handshake flag: true when the most recent dispatch was a
 	 *  deep-to-deep interception (the orchestrator cancelled a
@@ -750,6 +761,7 @@ export class NavPipelineOrchestrator {
 		// leave a stale enter flag suppressing the destination host's
 		// guards (afterNavigate / resize).
 		this.#isEnterAnimation = false;
+		this.#commitStartRaw = 0;
 		// Clear the live-drag flags. A host destroyed mid-drag (an
 		// external nav to a non-pipeline route while the finger is still
 		// down) never receives the pointerup, so the release path that
@@ -891,7 +903,7 @@ export class NavPipelineOrchestrator {
 		// above returns if a gesture or tab-click arrived in the same
 		// tick, so there is no in-flight position to continue from.
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
-		executor.onDragStart(plan, startProgress, 0);
+		executor.onDragStart(plan, startProgress);
 		// No finger-release velocity on a forward-enter: pass 0 and let the
 		// velocity-matched solver pick the default duration
 		// (`COMMIT_T_DEFAULT_MS`). The Header settle reads the resulting
@@ -997,6 +1009,7 @@ export class NavPipelineOrchestrator {
 		this.#settleStartProgress = 0;
 		this.#settleStartTs = 0;
 		this.#scrubSource = '';
+		this.#scrubTargetTabs = false;
 		this.#scrubFromValue = 0;
 		this.#scrubToValue = 0;
 		this.#scrubStartTs = 0;
@@ -1170,7 +1183,7 @@ export class NavPipelineOrchestrator {
 						? Math.min(1, startProgress + rawDrag * (1 - startProgress))
 						: startProgress + this.#thresholdAbsorbedProgress(rawDrag) * (1 - startProgress);
 			const raw = Math.max(0, Math.min(1, rawStart + rawDrag));
-			executor.onDragMove(trackProgress, intent.offset);
+			executor.onDragMove(trackProgress);
 			this.#stateMachine.onDragMove(intent);
 			this.#publish(raw);
 		}
@@ -1380,7 +1393,7 @@ export class NavPipelineOrchestrator {
 			this.#progress = 0;
 			const startProgress = this.#startProgressFromCurrentVisual(boundaryPlan);
 			this.#pendingGesture = { to: from, startProgress, rawStart, direction, boundary: true };
-			this.#executor?.onDragStart(boundaryPlan, startProgress, intent.offset);
+			this.#executor?.onDragStart(boundaryPlan, startProgress);
 			return;
 		}
 		const to: string = target;
@@ -1401,7 +1414,7 @@ export class NavPipelineOrchestrator {
 		// in-flight forward-enter or commit hands off with no jump.
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
 		this.#pendingGesture = { to, startProgress, rawStart, direction, boundary: false };
-		this.#executor?.onDragStart(plan, startProgress, intent.offset);
+		this.#executor?.onDragStart(plan, startProgress);
 	}
 
 	/** Resolve the next-tab target for a leftward (forward) gesture. Returns
@@ -1752,9 +1765,7 @@ export class NavPipelineOrchestrator {
 			// route (where configure's forceReset only resets macro state, so
 			// notifyHeaderState would take the mid-settle branch and snap the
 			// morph instead of crossfading).
-			if (
-				!(this.#dispatchTarget !== null && to !== null && to + toSearch === this.#dispatchTarget)
-			) {
+			if (!this.#isOwnDispatchReentry(to, toSearch)) {
 				this.#queuedDiscreteNav = null;
 				this.#lastDispatchWasDeepToDeep = false;
 				this.#lastLandWasPipelineCommit = false;
@@ -1762,7 +1773,7 @@ export class NavPipelineOrchestrator {
 			}
 			return false;
 		}
-		if (this.#dispatchTarget !== null && to !== null && to + toSearch === this.#dispatchTarget) {
+		if (this.#isOwnDispatchReentry(to, toSearch)) {
 			return false;
 		}
 		// Orphan-prevention: clear a queued discrete nav (the
@@ -1828,6 +1839,22 @@ export class NavPipelineOrchestrator {
 			if (!isNavPipelineRoute(to)) {
 				this.#cancelAllAnimationEases();
 			}
+			return false;
+		}
+		// A within-tab PAGINATION nav (e.g. `/discussions/pN` -> `/`,
+		// both the discussions tab and both `tag: 'tab'`) is not a
+		// tab-click exit: the panel does not change, only the page content
+		// does, so there is no panel to slide in. Gate on
+		// `getRouteData(from).tag === 'tab'` so a DEEP route that shares
+		// the tab's index (e.g. `/discussion/<id>` -> `/`, a thread back
+		// to the list) still plays its slide. `#tabIndexFor`
+		// (isTabRootPath-based) returns -1 for a non-tab-root pagination
+		// route, so compare via `getCurrentTabIndex` (pill-target-based).
+		if (
+			getCurrentTabIndex(from) >= 0 &&
+			getCurrentTabIndex(from) === getCurrentTabIndex(to) &&
+			getRouteData(from).tag === 'tab'
+		) {
 			return false;
 		}
 		// Finish-then-new interruption policy: a discrete tab-click
@@ -1928,7 +1955,7 @@ export class NavPipelineOrchestrator {
 		// skeleton in the LEFT slot and the destination's skeleton in the
 		// RIGHT slot for a forward deep-to-deep, so the slide reveals the
 		// correct content. Dispatch on settle.
-		this.#executor?.onDragStart(plan, startProgress, 0);
+		this.#executor?.onDragStart(plan, startProgress);
 		// No finger-release velocity on a tab-click: pass 0 and let the
 		// velocity-matched solver pick the default duration
 		// (`COMMIT_T_DEFAULT_MS`). The Header settle reads the resulting
@@ -2003,6 +2030,22 @@ export class NavPipelineOrchestrator {
 		const hostPath = inputs.fromPathname.replace(/\/p\d+$/, '');
 		const fromStripped = from.replace(/\/p\d+$/, '');
 		return hostPath === fromStripped;
+	}
+
+	/** True if a `beforeNavigate` (`to` pathname + `toSearch`) is the
+	 *  orchestrator's own in-flight dispatch re-entering. `#dispatchTarget`
+	 *  is the gesture target's PATHNAME (`pendingGesture.to`, which derives
+	 *  from `previousEntryPathname` / `backTarget`, both search-stripped) or
+	 *  the discrete nav's FULL URL (`pendingDiscreteNav.target = to +
+	 *  toSearch`). Accept either: a gesture commit dispatched via
+	 *  `history.back()` re-enters with the verbatim history entry's search,
+	 *  which the pathname-only gesture target cannot match by full URL, so a
+	 *  pathname match is also accepted. (A same-pathname external nav during
+	 *  a gesture dispatch could match the pathname clause, but a gesture
+	 *  dispatch carries no `#queuedDiscreteNav`, so the leak is bounded.) */
+	#isOwnDispatchReentry(to: string | null, toSearch: string): boolean {
+		if (this.#dispatchTarget === null || to === null) return false;
+		return to === this.#dispatchTarget || to + toSearch === this.#dispatchTarget;
 	}
 
 	#tabIndexFor(pathname: string): number {
@@ -2268,6 +2311,7 @@ export class NavPipelineOrchestrator {
 	#finishTapScrubEase(): void {
 		this.#cancelTapScrubRaf();
 		this.#scrubSource = '';
+		this.#scrubTargetTabs = false;
 		this.#stateMachine.setSearchScrubbing(false);
 		const pager = getMobilePagerStore();
 		pager.setTapMorph(null);

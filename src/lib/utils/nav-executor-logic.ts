@@ -107,9 +107,6 @@ export interface ExecutorState {
 	/** Current gesture progress in [0, 1]. 0 = FROM visible; 1 = TO
 	 *  visible. Authoritative: no consumer reads this from the DOM. */
 	readonly progress: number;
-	/** Live drag offset (px, signed). Streams in via `applyDrag`; the
-	 *  plan's consumer functions read it each frame. */
-	readonly liveOffset: number;
 	/** Populated when `phase === 'committing'`; null otherwise. */
 	readonly commitStart: CommitStartInfo | null;
 }
@@ -117,7 +114,7 @@ export interface ExecutorState {
 /** Initial state. The SSR render and the first-load landing both start
  *  here; no animation runs until a drag-start event arrives. */
 export function initialExecutorState(): ExecutorState {
-	return { phase: 'idle', progress: 0, liveOffset: 0, commitStart: null };
+	return { phase: 'idle', progress: 0, commitStart: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -127,18 +124,15 @@ export function initialExecutorState(): ExecutorState {
  *  live intent offset and the gesture distance. */
 export interface DragUpdate {
 	readonly progress: number;
-	readonly liveOffset: number;
 }
 
-/** Apply a drag move. Sets `phase: 'live'`, updates the progress and
- *  live offset, and clears any in-flight commit metadata. Returns a
- *  fresh state record (the reactive shell's `$state` assignment
- *  notifies dependents). */
+/** Apply a drag move. Sets `phase: 'live'`, updates the progress, and
+ *  clears any in-flight commit metadata. Returns a fresh state record
+ *  (the reactive shell's `$state` assignment notifies dependents). */
 export function applyDrag(state: ExecutorState, update: DragUpdate): ExecutorState {
 	return {
 		phase: 'live',
 		progress: update.progress,
-		liveOffset: update.liveOffset,
 		commitStart: null
 	};
 }
@@ -286,7 +280,6 @@ export function startCommit(state: ExecutorState, input: CommitInput): ExecutorS
 		return {
 			phase: 'idle',
 			progress: target,
-			liveOffset: state.liveOffset,
 			commitStart: null
 		};
 	}
@@ -295,7 +288,6 @@ export function startCommit(state: ExecutorState, input: CommitInput): ExecutorS
 		return {
 			phase: 'idle',
 			progress: target,
-			liveOffset: state.liveOffset,
 			commitStart: null
 		};
 	}
@@ -310,7 +302,6 @@ export function startCommit(state: ExecutorState, input: CommitInput): ExecutorS
 	return {
 		phase: 'committing',
 		progress: state.progress,
-		liveOffset: state.liveOffset,
 		commitStart
 	};
 }
@@ -355,7 +346,6 @@ export function sampleFrame(state: ExecutorState, plan: TransitionPlan, now: num
 	const nextState: ExecutorState = {
 		phase: 'committing',
 		progress: newProgress,
-		liveOffset: state.liveOffset,
 		commitStart: cs
 	};
 	return { state: nextState, done: u >= 1 };
@@ -419,13 +409,9 @@ export function progressAtTranslateX(plan: TransitionPlan, tx: number): number {
  *  the driver. The `fab` / `header` fields are computed only when the
  *  plan supplies the corresponding fn; otherwise the field is
  *  `undefined` and the driver skips that write branch. */
-export function buildVisual(
-	plan: TransitionPlan,
-	progress: number,
-	liveOffset: number
-): NavVisualWrite {
-	const fab = plan.fab?.(progress, liveOffset);
-	const header = plan.header?.(progress, liveOffset);
+export function buildVisual(plan: TransitionPlan, progress: number): NavVisualWrite {
+	const fab = plan.fab?.(progress);
+	const header = plan.header?.(progress);
 	const translateX = trackTranslateX(plan, progress);
 	return {
 		pageTrack: { translateX },
@@ -450,7 +436,7 @@ export function publishFrame(
 	plan: TransitionPlan,
 	driver: NavDomDriver
 ): void {
-	const visual = buildVisual(plan, state.progress, state.liveOffset);
+	const visual = buildVisual(plan, state.progress);
 	driver.write(visual);
 }
 

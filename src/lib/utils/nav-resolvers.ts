@@ -88,12 +88,12 @@ export interface HeaderVisual {
 }
 
 /** Per-frame FAB plan function. Takes the gesture progress (0..1,
- *  where 0 = FROM visible, 1 = TO visible) and the live finger offset
- *  (px, signed). Returns the FAB's visual for that frame. */
-export type FabPlanFn = (progress: number, liveOffset: number) => FabVisual;
+ *  where 0 = FROM visible, 1 = TO visible). Returns the FAB's visual
+ *  for that frame. */
+export type FabPlanFn = (progress: number) => FabVisual;
 
 /** Per-frame Header plan function. Same inputs as the FAB plan. */
-export type HeaderPlanFn = (progress: number, liveOffset: number) => HeaderVisual;
+export type HeaderPlanFn = (progress: number) => HeaderVisual;
 
 /** Commit-physics selector. 'momentum' uses the release velocity
  *  integral; 'snap' is the reduced-motion instant translate. */

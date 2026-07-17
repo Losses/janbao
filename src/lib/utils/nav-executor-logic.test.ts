@@ -8,7 +8,7 @@
  * Coverage focus (per the C04 spec deliverables):
  *   - The build-visual function: pageTrack.axis sign convention,
  *     FAB/Header pass-through.
- *   - applyDrag updates progress and liveOffset.
+ *   - applyDrag updates progress.
  *   - Velocity-to-duration mapping (slow release > fast release; near-
  *     zero fallback; high-velocity clamp; wrong-direction fallback).
  *   - Reduced-motion snap (no integration; progress jumps to target).
@@ -46,8 +46,8 @@ import type { TransitionPlan } from './nav-resolvers';
 
 // ---------------------------------------------------------------------------
 // Plan fixtures. The plan's consumer functions are pure; the suite
-// builds minimal stubs that record the (progress, liveOffset) the
-// executor passed in so the per-frame call sequence is assertable.
+// builds minimal stubs that record the progress the executor passed
+// in so the per-frame call sequence is assertable.
 
 interface PlanStubOptions {
 	axis: 'left' | 'right';
@@ -55,17 +55,15 @@ interface PlanStubOptions {
 	progressDirection: 0 | 1;
 }
 
-/** Recorded (progress, liveOffset) the plan's consumer functions were
- *  called with. Used by the suite to assert the per-frame call
- *  sequence. */
+/** Recorded progress the plan's consumer functions were called with.
+ *  Used by the suite to assert the per-frame call sequence. */
 interface PlanCallRecord {
 	progress: number;
-	liveOffset: number;
 }
 
 /** A plan stub plus the call-record arrays its consumer functions
  *  append to. The suite reads `fabCalls` / `headerCalls` to verify the
- *  executor passed the expected (progress, liveOffset) each frame. */
+ *  executor passed the expected progress each frame. */
 interface RecordedPlan extends TransitionPlan {
 	readonly fabCalls: PlanCallRecord[];
 	readonly headerCalls: PlanCallRecord[];
@@ -76,12 +74,12 @@ function planStub(opts: PlanStubOptions): RecordedPlan {
 	const headerCalls: PlanCallRecord[] = [];
 	return {
 		pageTrack: { axis: opts.axis, distance: opts.distance },
-		fab: (progress, liveOffset) => {
-			fabCalls.push({ progress, liveOffset });
+		fab: (progress) => {
+			fabCalls.push({ progress });
 			return { scale: 1 - progress, translateY: 0, visible: progress < 0.5 };
 		},
-		header: (progress, liveOffset) => {
-			headerCalls.push({ progress, liveOffset });
+		header: (progress) => {
+			headerCalls.push({ progress });
 			return { morph: progress, titleCrossfade: progress, translateY: 0 };
 		},
 		progressDirection: opts.progressDirection,
@@ -109,7 +107,7 @@ function baseCommitInput(overrides: Partial<CommitInput> = {}): CommitInput {
 describe('buildVisual', () => {
 	test('axis left: progress 0 leaves FROM centred (translateX = 0)', () => {
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
-		const visual = buildVisual(plan, 0, 0);
+		const visual = buildVisual(plan, 0);
 		// toBeCloseTo accepts both +0 and -0 (sign * distance * 0 produces -0
 		// for axis 'left'); CSS renders them identically.
 		expect(visual.pageTrack.translateX).toBeCloseTo(0, 7);
@@ -117,31 +115,31 @@ describe('buildVisual', () => {
 
 	test('axis left: progress 0.5 translates the track leftward by half distance', () => {
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
-		const visual = buildVisual(plan, 0.5, 0);
+		const visual = buildVisual(plan, 0.5);
 		expect(visual.pageTrack.translateX).toBe(-187.5);
 	});
 
 	test('axis left: progress 1 translates the track leftward by full distance', () => {
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
-		const visual = buildVisual(plan, 1, 0);
+		const visual = buildVisual(plan, 1);
 		expect(visual.pageTrack.translateX).toBe(-375);
 	});
 
 	test('axis right: progress 0.5 translates the track rightward by half distance', () => {
 		const plan = planStub({ axis: 'right', distance: 375, progressDirection: 0 });
-		const visual = buildVisual(plan, 0.5, 0);
+		const visual = buildVisual(plan, 0.5);
 		expect(visual.pageTrack.translateX).toBe(187.5);
 	});
 
 	test('axis right: progress 1 translates the track rightward by full distance', () => {
 		const plan = planStub({ axis: 'right', distance: 375, progressDirection: 0 });
-		const visual = buildVisual(plan, 1, 0);
+		const visual = buildVisual(plan, 1);
 		expect(visual.pageTrack.translateX).toBe(375);
 	});
 
 	test('FAB and Header visuals are passed through unchanged from the plan functions', () => {
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
-		const visual = buildVisual(plan, 0.3, 12);
+		const visual = buildVisual(plan, 0.3);
 		const fab = visual.fab;
 		const header = visual.header;
 		expect(fab, 'planStub supplies a fab fn so visual.fab must be set').toBeDefined();
@@ -151,9 +149,9 @@ describe('buildVisual', () => {
 		expect(fab.visible).toBe(true);
 		expect(header.morph).toBe(0.3);
 		expect(header.titleCrossfade).toBe(0.3);
-		// The plan recorded the (progress, liveOffset) it was called with.
-		expect(plan.fabCalls[0]).toEqual({ progress: 0.3, liveOffset: 12 });
-		expect(plan.headerCalls[0]).toEqual({ progress: 0.3, liveOffset: 12 });
+		// The plan recorded the progress it was called with.
+		expect(plan.fabCalls[0]).toEqual({ progress: 0.3 });
+		expect(plan.headerCalls[0]).toEqual({ progress: 0.3 });
 	});
 });
 
@@ -165,15 +163,13 @@ describe('initialExecutorState + applyDrag', () => {
 		const state = initialExecutorState();
 		expect(state.phase).toBe('idle');
 		expect(state.progress).toBe(0);
-		expect(state.liveOffset).toBe(0);
 		expect(state.commitStart).toBeNull();
 	});
 
-	test('applyDrag sets phase live, updates progress and liveOffset, clears commitStart', () => {
+	test('applyDrag sets phase live, updates progress, clears commitStart', () => {
 		const committing: ExecutorState = {
 			phase: 'committing',
 			progress: 0.4,
-			liveOffset: 50,
 			commitStart: {
 				progressStart: 0,
 				progressTarget: 1,
@@ -183,10 +179,9 @@ describe('initialExecutorState + applyDrag', () => {
 				reducedMotion: false
 			}
 		};
-		const next = applyDrag(committing, { progress: 0.6, liveOffset: 120 });
+		const next = applyDrag(committing, { progress: 0.6 });
 		expect(next.phase).toBe('live');
 		expect(next.progress).toBe(0.6);
-		expect(next.liveOffset).toBe(120);
 		expect(next.commitStart).toBeNull();
 	});
 });
@@ -322,7 +317,7 @@ describe('startCommit', () => {
 	test('reduced motion snaps: phase idle, progress jumps to target, no commit metadata', () => {
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
 		const input = baseCommitInput({ reducedMotion: true, plan });
-		const state: ExecutorState = { phase: 'live', progress: 0.3, liveOffset: 5, commitStart: null };
+		const state: ExecutorState = { phase: 'live', progress: 0.3, commitStart: null };
 		const next = startCommit(state, input);
 		expect(next.phase).toBe('idle');
 		expect(next.progress).toBe(1); // target for progressDirection 0
@@ -332,7 +327,7 @@ describe('startCommit', () => {
 	test('cancel plan + reduced motion snaps progress to 0', () => {
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 1 });
 		const input = baseCommitInput({ reducedMotion: true, plan });
-		const state: ExecutorState = { phase: 'live', progress: 0.7, liveOffset: 5, commitStart: null };
+		const state: ExecutorState = { phase: 'live', progress: 0.7, commitStart: null };
 		const next = startCommit(state, input);
 		expect(next.phase).toBe('idle');
 		expect(next.progress).toBe(0); // target for progressDirection 1
@@ -345,13 +340,11 @@ describe('startCommit', () => {
 		const state: ExecutorState = {
 			phase: 'live',
 			progress: 0.4,
-			liveOffset: 30,
 			commitStart: null
 		};
 		const next = startCommit(state, input);
 		expect(next.phase).toBe('committing');
 		expect(next.progress).toBe(0.4); // preserved at release point
-		expect(next.liveOffset).toBe(30); // preserved
 		expect(next.commitStart).not.toBeNull();
 		expect(next.commitStart?.progressStart).toBe(0.4);
 		expect(next.commitStart?.progressTarget).toBe(1);
@@ -362,7 +355,7 @@ describe('startCommit', () => {
 	test('commit metadata duration matches solveCommitDuration', () => {
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
 		const input = baseCommitInput({ releaseVelocityPxPerMs: 1.5, plan });
-		const state: ExecutorState = { phase: 'live', progress: 0.2, liveOffset: 0, commitStart: null };
+		const state: ExecutorState = { phase: 'live', progress: 0.2, commitStart: null };
 		const next = startCommit(state, input);
 		const solved = solveCommitDuration(input, 0.2);
 		expect(next.commitStart?.durationMs).toBe(solved.durationMs);
@@ -384,7 +377,7 @@ describe('sampleFrame', () => {
 	test('sample at t = t0 yields the start progress', () => {
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
 		const state = startCommit(
-			{ phase: 'live', progress: 0.3, liveOffset: 0, commitStart: null },
+			{ phase: 'live', progress: 0.3, commitStart: null },
 			baseCommitInput({ releaseVelocityPxPerMs: 2, plan, now: 1000 })
 		);
 		const sample = sampleFrame(state, plan, 1000); // elapsed = 0
@@ -395,7 +388,7 @@ describe('sampleFrame', () => {
 	test('sample at t = t0 + duration yields target progress and done', () => {
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
 		const state = startCommit(
-			{ phase: 'live', progress: 0.3, liveOffset: 0, commitStart: null },
+			{ phase: 'live', progress: 0.3, commitStart: null },
 			baseCommitInput({ releaseVelocityPxPerMs: 2, plan, now: 1000 })
 		);
 		const duration = state.commitStart?.durationMs ?? 0;
@@ -407,7 +400,7 @@ describe('sampleFrame', () => {
 	test('sample at t > duration clamps progress to target and is done', () => {
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
 		const state = startCommit(
-			{ phase: 'live', progress: 0.3, liveOffset: 0, commitStart: null },
+			{ phase: 'live', progress: 0.3, commitStart: null },
 			baseCommitInput({ releaseVelocityPxPerMs: 2, plan, now: 1000 })
 		);
 		const duration = state.commitStart?.durationMs ?? 0;
@@ -419,7 +412,7 @@ describe('sampleFrame', () => {
 	test('progress is monotonic across the commit (forward, target = 1)', () => {
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
 		const state = startCommit(
-			{ phase: 'live', progress: 0.1, liveOffset: 0, commitStart: null },
+			{ phase: 'live', progress: 0.1, commitStart: null },
 			baseCommitInput({ releaseVelocityPxPerMs: 1, plan, now: 0 })
 		);
 		const duration = state.commitStart?.durationMs ?? 0;
@@ -439,7 +432,7 @@ describe('sampleFrame', () => {
 	test('progress is monotonic across a cancel commit (target = 0)', () => {
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 1 });
 		const state = startCommit(
-			{ phase: 'live', progress: 0.9, liveOffset: 0, commitStart: null },
+			{ phase: 'live', progress: 0.9, commitStart: null },
 			baseCommitInput({ releaseVelocityPxPerMs: -1, plan, now: 0 })
 		);
 		const duration = state.commitStart?.durationMs ?? 0;
@@ -458,7 +451,7 @@ describe('sampleFrame', () => {
 	test('the ease curve matches s(u) = 2u - u² at the midpoint', () => {
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
 		const state = startCommit(
-			{ phase: 'live', progress: 0, liveOffset: 0, commitStart: null },
+			{ phase: 'live', progress: 0, commitStart: null },
 			baseCommitInput({ releaseVelocityPxPerMs: 1, plan, now: 0 })
 		);
 		const duration = state.commitStart?.durationMs ?? 0;
@@ -478,7 +471,6 @@ describe('publishFrame + tickFrame', () => {
 		const state: ExecutorState = {
 			phase: 'live',
 			progress: 0.5,
-			liveOffset: 10,
 			commitStart: null
 		};
 		publishFrame(state, plan, driver);
@@ -495,7 +487,7 @@ describe('publishFrame + tickFrame', () => {
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
 		const driver = new MockNavDomDriver();
 		const start = startCommit(
-			{ phase: 'live', progress: 0, liveOffset: 0, commitStart: null },
+			{ phase: 'live', progress: 0, commitStart: null },
 			baseCommitInput({ releaseVelocityPxPerMs: 1, plan, now: 0 })
 		);
 		const duration = start.commitStart?.durationMs ?? 0;
@@ -520,7 +512,6 @@ describe('reduced-motion end-to-end', () => {
 		const fromLive: ExecutorState = {
 			phase: 'live',
 			progress: 0.3,
-			liveOffset: 0,
 			commitStart: null
 		};
 		const next = startCommit(
@@ -582,7 +573,7 @@ describe('track geometry helpers (interrupt handoff)', () => {
 		for (const plan of plans) {
 			for (const progress of [0, 0.25, 0.5, 0.75, 1]) {
 				expect(trackTranslateX(plan, progress)).toBeCloseTo(
-					buildVisual(plan, progress, 0).pageTrack.translateX,
+					buildVisual(plan, progress).pageTrack.translateX,
 					7
 				);
 			}

@@ -3558,3 +3558,81 @@ $ bun run test:e2e                    202 passed + 1 flaky (exit 0)
 ```
 
 R64 audits this state.
+
+## Session 67: R64 audit (A PWC: 1 docstring + 2 nitpicks; B PASS) + fixes
+
+R64 ran two independent auditors. A returned PASS-WITH-CONCERNS (1 concern +
+2 nitpicks); **B returned PASS, no defect** (the first full PASS in the loop).
+Counter stays 0/5 (A's docstring concern). All findings fixed.
+
+### Findings + fixes
+
+- A1 (comment, FIXED): the `#enterAnimationArmedSettle` docstring's clear-site
+  list omitted the clear at the `else if (!#settleAwaitTitle)` mid-settle branch
+  (added in R61 B1). Rewritten to cover both mid-settle sub-branches.
+- A2 (nitpick, FIXED): `#scrubTargetTabs` not cleared in `#finishTapScrubEase`
+  / `unmount` (the other scrub fields were). Cleared in both (benign: read only
+  inside the `tapMorph !== null` guard, which the teardown clears).
+- A3 (nitpick, FIXED): `#commitStartRaw` not cleared in `releaseInputs`. Cleared
+  (benign: overwritten on the next commit; the `!#mounted` publication guard
+  short-circuits before any cross-swap read).
+- B: PASS, no defect. B verified every trajectory, the §5 invariants, and a
+  complete clear-site inventory (all matching the code, including R60-R63).
+
+### Gate outputs (post-fix, independently re-run 2026-07-17)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (exit 0)
+```
+
+The findings have diminished each round (R60 six, R61 seven, R62 four, R63 two,
+R64 one concern + two nitpicks on A, zero on B). R65 audits this state.
+
+## Session 68: R65 audit (A/B PWC: migration-introduced bug + supersede + dead state + docstrings) + fixes
+
+R65 ran two independent auditors. A returned PASS-WITH-CONCERNS (3 concern); B
+returned PASS-WITH-CONCERNS (2 concern + 2 nitpicks). Counter stays 0/5. Both
+found real defects. All fixed.
+
+### Findings + fixes
+
+- B1 (logic, FIXED; introduced by the `/discussions/pN` migration): the
+  orchestrator mis-classified `/discussions/pN` -> `/` (within-tab pagination)
+  as a tab-click exit and slid panel 0 into empty space. Fixed: a same-tab guard
+  `getCurrentTabIndex(from) === getCurrentTabIndex(to)` gated on
+  `getRouteData(from).tag === 'tab'` suppresses the slide for tab-internal
+  pagination; a deep route sharing the tab's index (`/discussion/<id>` -> `/`)
+  still slides. The first version (no tag gate) over-suppressed and broke 7
+  `tab-exit-preview` e2e; the gate restores them. New e2e
+  `discussions-pagination-no-slide.spec.ts` locks the no-slide behavior in.
+- B2 (dead state, FIXED): `liveOffset` in the executor was computed every drag
+  frame but never read (plans carry no `fab`/`header` consumer fns; the FAB and
+  Header are reactive readers). Removed end-to-end (executor state/logic/
+  wrapper, the orchestrator's `onDragMove`/`onDragStart` args, the
+  `FabPlanFn`/`HeaderPlanFn` signatures, the executor test, three driver
+  docstrings). Done by a fresh-context sub-agent.
+- A1 (logic, FIXED): the supersede re-entry match (`to + toSearch === #dispatchTarget`)
+  mis-fired on a gesture `history.back()` to a search-suffixed entry, falsely
+  superseding, clearing `#lastLandWasPipelineCommit`, and arming a tap-scrub.
+  Fixed: `#isOwnDispatchReentry(to, toSearch)` accepts a pathname match (gesture)
+  OR a full-URL match (discrete).
+- A2 / A3 + B-nitpick-1 / B-nitpick-2 (docstrings, FIXED): the
+  `#lastLandWasPipelineCommit` clear-site count (three -> four, `unmount`); the
+  `#dispatchTarget` form (pathname for gesture, full for discrete); the
+  `OrchestratorPublication` "orchestrator-private" wording for
+  `lastDispatchWasDeepToDeep`; the `#lastLandWasPipelineCommit` "only for a
+  pipeline target" wording. Done by the sub-agent.
+
+### Gate outputs (post-fix, independently re-run 2026-07-17)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
+$ bun run test:e2e                    (re-run after the R65 fixes + new spec; see below)
+```
+
+R66 audits this state.
