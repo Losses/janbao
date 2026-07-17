@@ -2,16 +2,8 @@
 	import type { Snippet } from 'svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
 	import { getDrawerStore } from '$lib/stores/drawer.svelte';
-	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
-	import { captureSwipe, detectSwipe } from '$lib/actions/swipe';
-	import {
-		MOBILE_TABS,
-		getCurrentTabIndex,
-		isPagerRoute,
-		isPipelineSwipeDisabledRoute
-	} from '$lib/utils/route-config';
+	import { captureSwipe } from '$lib/actions/swipe';
 	import type { UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
@@ -102,66 +94,6 @@
 		drawerOffset = null;
 	}
 
-	// ---- Swipe to switch tab on inner (non-pager) pages ----
-	// On the tab routes NavPipelineTabHost owns the swipe (1:1 drag + live
-	// reveal); everywhere else a horizontal drag slides the page content with the
-	// finger (clamped + rubber-banded at the tab boundaries) and a committed
-	// release jumps to the next/prev tab, relative to the tab the current page
-	// belongs to. touch-action: pan-y lets vertical scroll stay native while
-	// yielding horizontal to us (without it the browser claims the gesture and
-	// fires pointercancel).
-	const TAB_SWIPE_COMMIT = 60;
-	const TAB_SWIPE_MAX = 100; // px of finger-follow feedback on inner pages
-	const swipeBaseline = $derived(getCurrentTabIndex(page.url.pathname));
-	// Disabled wherever another gesture layer owns the horizontal drag:
-	// the pipeline tab host on pager routes, or NavPipelineHost on every
-	// route that mounts it (thread, conversation, deep page, and the
-	// compose forms). `isPipelineSwipeDisabledRoute` drives the deep-route
-	// set (routes whose structural parent is declared in the registry),
-	// but the five latent-bug routes (`/search`, `/bookmarks`,
-	// `/notifications`, `/profile`, `/messages/add/[userId]`) return FALSE
-	// there and are additionally gated by the `swipeBaseline < 0` clause
-	// below: their `pillTarget` resolves to `'active'` or `'none'`, so
-	// `getCurrentTabIndex` returns -1. A new pipeline route with a
-	// non-`'active'`/`'none'` pillTarget and no declared `backParent` would
-	// need checking here. Also disabled off-tab (`swipeBaseline < 0`) and
-	// on desktop. If this were enabled on a pipeline route too, both
-	// detectSwipe nodes would race to setPointerCapture on the same
-	// bubbled touch, and main (higher in the DOM) would win and override
-	// the pipeline's 1:1 + reveal.
-	const swipeDisabled = $derived(
-		isPagerRoute(page.url.pathname) ||
-			isPipelineSwipeDisabledRoute(page.url.pathname) ||
-			swipeBaseline < 0 ||
-			!isMobile
-	);
-	let swipeOffset = $state(0);
-	/** 1:1 toward a neighbour (clamped); 0.4x rubber-band past the first/last tab. */
-	function swipeFollow(deltaX: number): number {
-		const last = MOBILE_TABS.length - 1;
-		let d = deltaX;
-		if (swipeBaseline <= 0 && d > 0) d *= 0.4;
-		if (swipeBaseline >= last && d < 0) d *= 0.4;
-		return Math.max(-TAB_SWIPE_MAX, Math.min(TAB_SWIPE_MAX, d));
-	}
-	const contentSwipeStyle = $derived(
-		swipeOffset === 0 ? '' : `transform: translateX(${swipeOffset}px); transition: none`
-	);
-	function tabSwipeMove(deltaX: number): void {
-		swipeOffset = swipeFollow(deltaX);
-		getScrollChromeStore().show();
-	}
-	function tabSwipeEnd(deltaX: number, velocity: number, reversed: boolean): void {
-		const last = MOBILE_TABS.length - 1;
-		// `reversed` = change of intent: stay on the current tab.
-		if (deltaX <= -TAB_SWIPE_COMMIT && swipeBaseline < last && !reversed) {
-			void goto(MOBILE_TABS[swipeBaseline + 1].href);
-		} else if (deltaX >= TAB_SWIPE_COMMIT && swipeBaseline > 0 && !reversed) {
-			void goto(MOBILE_TABS[swipeBaseline - 1].href);
-		}
-		swipeOffset = 0;
-	}
-
 	let sidebarEl: HTMLElement | null = $state(null);
 	let middleContentEl: HTMLElement | null = $state(null);
 	let sloganEl: HTMLElement | null = $state(null);
@@ -233,23 +165,12 @@
 		<div
 			class="dual-column-layout-columns flex flex-1 flex-col gap-3 border-b border-base-300 bg-base-100 p-0 md:p-3 md:flex-initial md:border-x md:flex-row desktop-min-height"
 		>
-			<!-- Left Column (Main Page Content). On non-pager pages a horizontal
-			     drag slides the content with the finger and a committed swipe
-			     switches to the next/prev tab (disabled on the tab routes, where
-			     NavPipelineTabHost owns the gesture). -->
+			<!-- Left Column (Main Page Content). -->
 			<main
 				class="dual-column-layout-main flex w-full min-w-0 flex-1 flex-col"
 				style="touch-action: pan-y pinch-zoom"
-				use:detectSwipe={{
-					onMove: tabSwipeMove,
-					onEnd: tabSwipeEnd,
-					disabled: () => swipeDisabled
-				}}
 			>
-				<div
-					class="dual-column-layout-content flex min-h-0 flex-1 flex-col transition-transform duration-200 ease-out"
-					style={contentSwipeStyle}
-				>
+				<div class="dual-column-layout-content flex min-h-0 flex-1 flex-col">
 					{@render children()}
 				</div>
 			</main>

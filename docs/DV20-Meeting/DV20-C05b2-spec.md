@@ -21,11 +21,11 @@ Roll the new pipeline out to every remaining route that mounts `GesturePageLayou
 2. **FAB atom CSS transition → rAF.** The `.fab-transition { transition: transform 200ms ease-out }` CSS class + `discreteNavInFlight` 280ms `setTimeout` latch are replaced with an rAF-driven scale on the orchestrator. The FAB layer computes `fabScale(progress, fromHasFab, toHasFab)` reactively from the published transition progress and the FROM / TO `RouteData.fab` booleans.
 3. **Skeleton branches audited.** The eager-load model is permanent (the root layout's `Promise.allSettled` always returns truthy `EMPTY_*` objects on rejection, never null). The dead `ActivitySkeleton` and `DiscussionsSkeleton` `{:else}` branches and their component files are removed; only `MessagesSkeleton` remains, reachable via the `/messages/[id]` route shadowing the layout's `messages` field with its message-row array (the preview cannot render an array, so the skeleton stands in until the back-swipe lands).
 4. **`isGesturePageLayoutRoute` rename.** The function covers NavPipelineHost routes too; renamed to `isPipelineRoute` (or similar).
-5. **`backParent` consumer audit.** As routes migrate off GPL, `backParent`'s GPL consumer dissolves per route. At end of 5b2, both consumers are gone; 5b3 removes the field.
+5. **`backParent` removed.** The field and its sole consumer `isPipelineSwipeDisabledRoute` are deleted (see Known #1); `RouteData` holds three fields.
 
 ## End state
 
-1. Every route that was on `GesturePageLayout` or `MobileTabPager` now mounts `NavPipelineHost` (or a pipeline tab host for the three tab roots). The new pipeline is the SOLE transition mechanism for every mobile route that was on those two hosts. Routes still rendered only by `DualColumnLayout` (e.g. the paginated discussions list `/discussions/pN`, whose tab-switch gesture DualColumnLayout's `detectSwipe` + CSS transition drives) are out of scope until `DualColumnLayout` is deleted in 5b3; see Known condition #2. Every migrated transition (back-swipe, tab-click, cross-tab, deep-link landing, forward enter, tab swipe) is driven by one progress through the executor's rAF.
+1. Every route that was on `GesturePageLayout` or `MobileTabPager` now mounts `NavPipelineHost` (or a pipeline tab host for the three tab roots). The new pipeline is the SOLE transition mechanism for every mobile route that was on those two hosts. `DualColumnLayout`'s own tab-swipe, the second horizontal-gesture mechanism that served `/discussions/pN`, is deleted (see Known #2), so the pipeline owns every horizontal-tab gesture. Every migrated transition (back-swipe, tab-click, cross-tab, deep-link landing, forward enter, tab swipe) is driven by one progress through the executor's rAF.
 2. The FAB atom carries NO CSS transition. The FAB scale is `fabScale(progress, fromHasFab, toHasFab)` driven by the same single transition progress that drives the page-track slide and the FROM / TO `RouteData.fab` booleans; the FAB exits in the first half of the transition if FROM has a FAB and enters in the second half if TO has a FAB. No `familySwapScale`, no `#lastRenderedScale`, no separate family-swap rAF, no `setTimeout`, no `discreteNavInFlight`, no `.fab-transition` CSS class.
 3. The `NavStateMachine` is the sole authority (§13.5). Consumers read its phase + plan. The orchestrator does not hold a private `#publication`.
 4. `MobileTabPager` is no longer mounted. The three tab roots share a persistent pipeline host in the `(tabs)` layout. The `LoadingChip` cross-tab overlay is removed everywhere.
@@ -51,7 +51,7 @@ Roll the new pipeline out to every remaining route that mounts `GesturePageLayou
 4. **Compose routes migration** (3 routes: `/post/discussion`, `/messages/new`, `/messages/add/[userId]`).
 5. **MobileTabPager → pipeline tab swipe.** Replace the tab pager with a persistent pipeline host in the `(tabs)` layout.
 6. **Discussion thread verify.** The 5b1 pilot after shared-component changes.
-7. **`isGesturePageLayoutRoute` rename + `backParent` audit.** Prepare for 5b3.
+7. **`isGesturePageLayoutRoute` rename.** Prepare for 5b3.
 
 ## Global animation manager (the 5b2 structural refactor)
 
@@ -264,16 +264,14 @@ inline-style transitions; R18 removed the last sub-component transitions -
 
 ## Known 5b2 conditions (intentional deviations, not defects)
 
-These are §5 / §13.5 deviations retained with a technical justification and a
-defined resolution path. They are documented here so auditors assess them as
-known + planned, not as undiscovered divergences from the bar. Each entry is
-labelled by status so the reader can tell at a glance whether it is a
-**5b3-deletion item** (the clean fix is in 5b3 and the item dissolves with
-the named 5b3 deletion), a **macro-plan deviation** (the behaviour
-intentionally diverges from the macro plan with a stated rationale), or
-**spec-code drift** (the spec text in another section overstates what the
-code does; the drift is documented rather than the spec text being softened,
-because the spec text is forward-looking).
+All deviations retained during the cycle are resolved; the section records
+what was resolved so auditors can confirm nothing is deferred. The four
+carried into R59 (the `isPipelineSwipeDisabledRoute` mis-classification, the
+`DualColumnLayout` tab-swipe on a CSS transition, `pointercancel` as a
+regular release, and the `backParent` consumer drift) formed a mutual
+deferral to 5b3, each item blocking on another or on the eventual
+`DualColumnLayout` deletion. That web is dissolved below; nothing remains
+open.
 
 The deviations resolved during C05b2 are no longer listed: the six the global
 animation manager resolved (FAB DOM read-back, FAB family-swap separate rAF,
@@ -303,62 +301,41 @@ passes release velocity 0 to the solver, which returns
 `COMMIT_T_DEFAULT_MS`; the Header settle reads the resulting
 `commitStart.durationMs` so no desync).
 
-1. **`isPipelineSwipeDisabledRoute` latent mis-classification (5b3-deletion).**
-   The function returns `false` for `/search`, `/bookmarks`, `/notifications`,
-   `/profile`, `/messages/add/[userId]` despite those routes mounting
-   `NavPipelineHost` (they fail both the overlay-family branch and the
-   `backParent !== undefined` branch). **Why retained:** the mis-classification
-   does not manifest because `DualColumnLayout`'s parallel `detectSwipe` is
-   gated off by its own `swipeBaseline < 0` check (those routes resolve
-   `getCurrentTabIndex` to -1), so the pipeline wins pointer capture
-   consistently. Fixing the classifier in isolation would leave it reading a
-   `backParent` field whose own dissolution is also tracked (see #4) and
-   would not change any user-visible behaviour. **Resolution:** the classifier
-   and `DualColumnLayout.swipeDisabled` dissolve together in 5b3 when
-   `DualColumnLayout`'s `detectSwipe` is removed.
+1. **`isPipelineSwipeDisabledRoute` and `backParent` are deleted.** The
+   classifier served only to gate `DualColumnLayout`'s tab-swipe, and
+   `backParent` served only to feed that classifier (`backParent !==
+undefined`). With both gone, `RouteData` holds three fields (`tag`,
+   `snapshotCapture`, `fab`). The `FabFamily` enum (the `family` field on
+   `FabRouteAttributes`) is removed with the classifier that read it; the
+   FAB layer reads `kind` alone.
 
-2. **DualColumnLayout mobile routes (5b3-deletion).** The paginated discussions
-   list `/discussions/pN` and any other route rendered only by
-   `DualColumnLayout` is mobile-reachable but its tab-switch gesture runs on
-   `DualColumnLayout`'s `detectSwipe` + `transition-transform duration-200` CSS
-   transition, not the pipeline. **Why retained:** these routes were never on
-   `GesturePageLayout` or `MobileTabPager`, so they are outside end-state #1's
-   migration set; migrating them in 5b2 would require deleting
-   `DualColumnLayout` (5b3 scope) because they have no other host.
-   **Resolution:** migrate when `DualColumnLayout` is deleted in 5b3.
+2. **`DualColumnLayout`'s tab-swipe mechanism is deleted.** The
+   `detectSwipe` tab-switch on `<main>`, the `swipeOffset` state, and the
+   `transition-transform duration-200` CSS snap are removed. The pipeline is
+   the sole horizontal-tab gesture on every route that mounts a pipeline
+   host. `/discussions/pN`, the one route that relied on the
+   `DualColumnLayout` tab-swipe (it renders via `DiscussionListPage` and
+   mounts no pipeline host), switches tabs via the tab bar; it stays
+   mobile-reachable through the pager's pagination links. `DualColumnLayout`
+   itself stays as the desktop shell and the mobile drawer host; only its
+   tab-swipe (the animation layer's last CSS transition) is gone. The
+   drawer's own open/close snap is a separate `captureSwipe`-driven UI
+   gesture, not part of the page-transition animation layer; it is retained
+   here, and `swipe.ts` / `DualColumnLayout` deletion is tracked under Out
+   of scope below.
 
-3. **`pointercancel` treated as a regular release (5b3-deletion).**
-   `detectSwipe` routes `pointercancel` through its terminal path to `onEnd`,
-   so the pointer bridge forwards it as a `pointerup` and the release gate
-   commits vs cancels by offset. A `pointercancel` past the commit threshold
-   therefore commits (navigates) instead of snapping back. Pre-existing
-   (inherited from `detectSwipe`, which `DualColumnLayout` still uses); rare
-   in practice (`touch-action: pan-y` handles most scroll conflicts). The
-   intent classifier's `pointercancel -> cancelled` path is dead because the
-   bridge cannot distinguish the cancel from a release inside `detectSwipe`'s
-   `onEnd`. **Why retained:** `detectSwipe` is shared with `DualColumnLayout`,
-   so changing its terminal routing before 5b3 would bifurcate the gesture
-   model between the pipeline and `DualColumnLayout`. **Resolution:** the
-   clean fix lands with the 5b3 `detectSwipe` rework (when
-   `DualColumnLayout`'s `detectSwipe` is removed and the pipeline owns the
-   gesture layer end-to-end).
-
-4. **`backParent` consumer dissolution timeline (spec-code drift on
-   5b1-skipped item #5).** The spec's 5b1-skipped item #5 ("at end of 5b2,
-   both consumers are gone; 5b3 removes the field") overstates the current
-   code: `isPipelineSwipeDisabledRoute` still reads `backParent !== undefined`
-   (see #1), so one consumer remains at end of 5b2. The field cannot be
-   removed until both the classifier and `DualColumnLayout`'s `detectSwipe`
-   are addressed in 5b3. **Why documented rather than softened:** the
-   5b1-skipped item #5 text is forward-looking (it tracks the field's
-   dissolution plan). **Resolution:** the drift dissolves in 5b3 when the
-   classifier and `DualColumnLayout`'s `detectSwipe` are removed and the
-   field is deleted.
+3. **`pointercancel` cancels and never commits.** `swipe.ts`'s
+   `shouldCancelOnRelease` forces the cancel signal on a `pointercancel`
+   for every `captureSwipe` and `detectSwipe` consumer (the pipeline via
+   `navPipelinePointer` and `SearchScopePager` on `detectSwipe`;
+   `DualColumnLayout`'s drawer on `captureSwipe`), so a system-interrupted
+   gesture snaps back regardless of the displacement at the instant of
+   cancellation. The intent classifier's `pointercancel` case is removed:
+   the release arrives as a `pointerup` already marked for cancel.
 
 ## Out of scope (5b3)
 
-- Deleting `swipe.ts` / `DualColumnLayout`. (`GesturePageLayout` and `MobileTabPager` were deleted in 5b2 once every route had migrated to the pipeline host; both were dead, zero imports.)
-- Removing `backParent` from `RouteData`.
+- Deleting `swipe.ts` / `DualColumnLayout`. (`GesturePageLayout` and `MobileTabPager` were deleted in 5b2 once every route had migrated to the pipeline host; both were dead, zero imports. `DualColumnLayout`'s tab-swipe mechanism was deleted in 5b2; the shell itself stays as the desktop layout + mobile drawer host.)
 - Offline unification (Cycle 6).
 
 ## Deliverables

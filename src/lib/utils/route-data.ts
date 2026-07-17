@@ -3,12 +3,9 @@
  * RouteData - the per-route navigation/gesture attribute record.
  *
  * The authoritative source of truth for a route's navigation attributes
- * per `docs/DV20-Plan.md` §3. The record holds exactly four fields:
+ * per `docs/DV20-Plan.md` §3. The record holds exactly three fields:
  *
  *   - `tag`              selects the resolver pair (§4)
- *   - `backParent`       structural parent (transitional; read by
- *                        `isPipelineSwipeDisabledRoute`); NOT the
- *                        back-target (§3, §6)
  *   - `snapshotCapture`  whether the page captures data + snippet on
  *                        leave; read by the coordinator (§7, Layer 4)
  *   - `fab`              whether the FAB is visible on this page
@@ -29,37 +26,15 @@
 /** The transition family a route participates in (§3, §14.1). */
 export type RouteTag = 'tab' | 'detail' | 'search';
 
-/** Resolves a route's structural parent from its pathname (used by routes
- *  whose parent depends on URL params, e.g. `/profile/comments/<uid>/<slug>`).
- * Internal to this module: the public `RouteData` shape always exposes
- * backParent as a string, never a function. */
-type BackParentResolver = (pathname: string) => string;
-
 /**
  * The per-route navigation record. The shape is exactly `docs/DV20-Plan.md`
- * §3: four fields, none of them a tag-duplicate or a renamed
+ * §3: three fields, none of them a tag-duplicate or a renamed
  * `gestureOwner`/`headerMode`/`fabFamily` style discriminator. §3 lists
  * those as derived or moved to consumer configs.
  */
 export interface RouteData {
 	/** Selects the resolver pair (§4). */
 	readonly tag: RouteTag;
-	/**
-	 * TRANSITIONAL (migration-era). Must be removed when its consumers
-	 * dissolve; do NOT leave it standing as a permanent field. The route's
-	 * structural parent in the site hierarchy. It exists ONLY to feed one
-	 * transitional consumer during the migration; it has no clean target-
-	 * architecture use (the mobile app has no breadcrumb, and the preview
-	 * panel is `PREVIEW_PANEL_CONFIG`, not this field). Its sole consumer
-	 * is transitional:
-	 *   - `isPipelineSwipeDisabledRoute` reads `backParent !== undefined`
-	 *     to mark the deep-route set; that classifier dissolves in 5b3
-	 *     when DualColumnLayout's detectSwipe is removed.
-	 * When that consumer is gone (end of Cycle 5), remove this field
-	 * from the record and the registry. NOT the back-target (the
-	 * back-target is the route-stack entry behind the current one, §6).
-	 */
-	readonly backParent?: string;
 	/**
 	 * Whether the page captures its data + render snippet into the cache
 	 * on leave. Read by the coordinator (Layer 4). `/discussion/*` is
@@ -76,18 +51,9 @@ export interface RouteData {
 	readonly fab: boolean;
 }
 
-/**
- * Internal registry entry. Most routes carry a static `backParent`; the
- * few whose parent depends on URL params (`/profile/comments/<uid>/<slug>`,
- * `/profile/discussions/<uid>/<slug>`) supply a resolver. The resolver
- * runs inside `getRouteData` so the public `RouteData` shape is exactly
- * §3 (a string `backParent`, not a function).
- */
 interface RouteEntry {
 	readonly pattern: RegExp;
 	readonly tag: RouteTag;
-	readonly backParent?: string;
-	readonly resolveBackParent?: BackParentResolver;
 	readonly snapshotCapture: boolean;
 	readonly fab: boolean;
 }
@@ -103,13 +69,6 @@ interface RouteEntry {
  *   - 'search': `/search`
  *   - 'detail': every other route, including the offline detail mirrors
  *     `/offline/bookmarks` and `/offline/[discussionId]`
- *
- * `backParent` coverage is limited: the field is transitional, retained
- * only for the one remaining consumer `isPipelineSwipeDisabledRoute`,
- * and slated for removal in Cycle 5b3 (see the field-level docstring
- * above and Plan-Journal entry 2026-07-04 #1). It is NOT being
- * broadened to `/discussion/*`, `/messages/<id>`, `/bookmarks`, etc.;
- * those routes never gain a `backParent` entry.
  *
  * `snapshotCapture` is `true` on `/discussion/*` only; every other
  * route is `false`. Cycle 2's unified `PageCacheStore` broadens this.
@@ -187,7 +146,6 @@ const ROUTE_ENTRIES: readonly RouteEntry[] = [
 	{
 		pattern: /^\/messages\/new$/,
 		tag: 'detail',
-		backParent: '/messages/inbox',
 		snapshotCapture: false,
 		fab: false
 	},
@@ -200,7 +158,6 @@ const ROUTE_ENTRIES: readonly RouteEntry[] = [
 	{
 		pattern: /^\/post\/discussion$/,
 		tag: 'detail',
-		backParent: '/',
 		snapshotCapture: false,
 		fab: false
 	},
@@ -254,7 +211,6 @@ const ROUTE_ENTRIES: readonly RouteEntry[] = [
 	{
 		pattern: /^\/profile\/settings$/,
 		tag: 'detail',
-		backParent: '/profile',
 		snapshotCapture: false,
 		fab: false
 	},
@@ -262,29 +218,20 @@ const ROUTE_ENTRIES: readonly RouteEntry[] = [
 		// /profile/<userId>/<userSlug>
 		pattern: /^\/profile\/\d+\/[^/]+$/,
 		tag: 'detail',
-		backParent: '/profile',
 		snapshotCapture: false,
 		fab: false
 	},
 	{
-		// /profile/comments/<userId>/<userSlug> -> /profile/<userId>/<userSlug>
+		// /profile/comments/<userId>/<userSlug>
 		pattern: /^\/profile\/comments\/\d+\/[^/]+$/,
 		tag: 'detail',
-		resolveBackParent: (path) => {
-			const m = path.match(/^\/profile\/comments\/(\d+)\/([^/]+)/);
-			return m ? `/profile/${m[1]}/${m[2]}` : '/profile';
-		},
 		snapshotCapture: false,
 		fab: false
 	},
 	{
-		// /profile/discussions/<userId>/<userSlug> -> /profile/<userId>/<userSlug>
+		// /profile/discussions/<userId>/<userSlug>
 		pattern: /^\/profile\/discussions\/\d+\/[^/]+$/,
 		tag: 'detail',
-		resolveBackParent: (path) => {
-			const m = path.match(/^\/profile\/discussions\/(\d+)\/([^/]+)/);
-			return m ? `/profile/${m[1]}/${m[2]}` : '/profile';
-		},
 		snapshotCapture: false,
 		fab: false
 	},
@@ -293,14 +240,12 @@ const ROUTE_ENTRIES: readonly RouteEntry[] = [
 		pattern:
 			/^\/profile\/(?:appearance|edit|editor|offlineReading|onlineNow|password|picture|preferences)$/,
 		tag: 'detail',
-		backParent: '/profile/settings',
 		snapshotCapture: false,
 		fab: false
 	},
 	{
 		pattern: /^\/profile\/invitations$/,
 		tag: 'detail',
-		backParent: '/profile',
 		snapshotCapture: false,
 		fab: false
 	},
@@ -309,14 +254,12 @@ const ROUTE_ENTRIES: readonly RouteEntry[] = [
 	{
 		pattern: /^\/admin$/,
 		tag: 'detail',
-		backParent: '/',
 		snapshotCapture: false,
 		fab: false
 	},
 	{
 		pattern: /^\/admin\/(?:backups|categories|maintenance|permissions|stats|user-groups)$/,
 		tag: 'detail',
-		backParent: '/admin',
 		snapshotCapture: false,
 		fab: false
 	},
@@ -342,31 +285,24 @@ const ROUTE_ENTRIES: readonly RouteEntry[] = [
  * The default for unmatched pathnames. Routes like `/entry/*`,
  * `/avatar/*`, `/attachment/*`, `/api/*`, `/upload`,
  * `/manifest.webmanifest` fall through to this: none participates in
- * the gesture layer, none shows a FAB, none captures a snapshot, none
- * has a structural parent declared in this registry.
+ * the gesture layer, none shows a FAB, none captures a snapshot.
  */
 const DEFAULT_ROUTE_DATA: RouteData = {
 	tag: 'detail',
-	backParent: undefined,
 	snapshotCapture: false,
 	fab: false
 };
 
 /**
- * Lookup the `RouteData` for `pathname`. Returns the matching entry,
- * applying any dynamic `backParent` resolver; falls back to
- * `DEFAULT_ROUTE_DATA` when no pattern matches. First-match-wins.
+ * Lookup the `RouteData` for `pathname`. Returns the matching entry;
+ * falls back to `DEFAULT_ROUTE_DATA` when no pattern matches.
+ * First-match-wins.
  */
 export function getRouteData(pathname: string): RouteData {
 	const entry = ROUTE_ENTRIES.find((e) => e.pattern.test(pathname));
 	if (!entry) return DEFAULT_ROUTE_DATA;
-	let backParent: string | undefined = entry.backParent;
-	if (entry.resolveBackParent) {
-		backParent = entry.resolveBackParent(pathname);
-	}
 	return {
 		tag: entry.tag,
-		backParent,
 		snapshotCapture: entry.snapshotCapture,
 		fab: entry.fab
 	};

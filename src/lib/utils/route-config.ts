@@ -4,43 +4,28 @@
  * core `RouteData` record (in `route-data.ts`).
  *
  * Per `docs/DV20-Plan.md` §3 the core record holds only `tag`,
- * `backParent`, `snapshotCapture`, and `fab`. Everything that the
- * renderer (Layer 5), the FAB atom, the tab bar, or the deep-page
- * preview reads lives here as a separate consumer config keyed by route
- * pattern.
+ * `snapshotCapture`, and `fab`. Everything that the renderer (Layer 5),
+ * the FAB atom, the tab bar, or the deep-page preview reads lives here
+ * as a separate consumer config keyed by route pattern.
  *
  * The configs in this file:
  *
  *   - `FAB_KIND_CONFIGS`          the FAB icon / href per
  *                                  concrete list kind (the rendering
  *                                  details for `fab: true` routes).
- *   - `FAB_ROUTE_ATTRIBUTES`      family + kind per route where the FAB
+ *   - `FAB_ROUTE_ATTRIBUTES`      the FAB `kind` per route where the
  *                                  atom mounts (including Family B/C
  *                                  routes that keep the atom at scale
- *                                  0). The `family` enum is read by
- *                                  `isPipelineSwipeDisabledRoute`
- *                                  (`family === 'overlay'`) and is
- *                                  marked for dissolution in §3; it is
- *                                  not consumed by the FAB layer's scale
- *                                  computation (which reads
- *                                  `RouteData.fab` booleans + `fabScale`).
+ *                                  0).
  *   - `TAB_BAR_CONFIG`            the pill target per route (§3's
  *                                  tab-bar consumer config).
  *   - `PREVIEW_PANEL_CONFIG`      the back-preview snippet component
  *                                  per route that captures one.
  *
- * `isPipelineSwipeDisabledRoute` reads the core `RouteData` registry
- * directly via `getRouteData(p).backParent !== undefined` for its
- * deep-route set, plus `FAB_ROUTE_ATTRIBUTES` for the
- * thread/conversation check. Both the function and DualColumnLayout's
- * detectSwipe dissolve in 5b3.
- *
- * The classifier functions below are either positional queries over
+ * The classifier functions below are positional queries over
  * `MOBILE_TAB_DEFS` (`isPagerRoute`), one-line reads of the consumer
- * configs (`getCurrentTabIndex`), or non-route classifiers
- * (`backTargetListKind` classifies a back-target string). The
- * `isPipelineSwipeDisabledRoute` classifier reads the consumer
- * registries above.
+ * configs (`getCurrentTabIndex`), or the non-route classifier
+ * `backTargetListKind` (which classifies a back-target string).
  */
 import type { Component } from 'svelte';
 import ProfileMenuPanel from '$lib/components/panels/ProfileMenuPanel.svelte';
@@ -52,7 +37,6 @@ import TabMessagesPanel from '$lib/components/panels/TabMessagesPanel.svelte';
 import { mdiPlus, mdiEmailPlus } from '@mdi/js';
 import type { TranslationDict } from '$lib/types/translation';
 import { MOBILE_TAB_DEFS, type TabDef, type MobileTabLabelKey } from './tab-config';
-import { getRouteData } from './route-data';
 import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
 import type { TabsLayoutData } from '$lib/types/tabs';
 
@@ -89,23 +73,13 @@ export const FAB_KIND_CONFIGS: Record<FabListKind, FabKindConfig> = {
 };
 
 // ---------------------------------------------------------------------------
-// FAB route attributes (§3 consumer config #2; the `family` enum is
-// marked for dissolution in §3).
+// FAB route attributes (§3 consumer config #2).
 //
-// `family` is read by `isPipelineSwipeDisabledRoute`
-// (`family === 'overlay'`); it is not consumed by the FAB layer's scale
-// computation (which uses `RouteData.fab` booleans + `fabScale`).
 // `kind` selects the icon/href (or `'dynamic'` for the Activity route's
 // spatially-resolved FAB, or `'deep'` for the non-FAB deep routes whose
-// atom stays mounted at scale 0 across the list<->deep boundary).
-// Together they preserve the per-route rendering that the FAB layer
-// needs; nothing here is a concept the core `RouteData` record holds.
-
-// `FabFamily` is the canonical FAB family enum, owned by
-// `fab-scale.ts` (the FAB layer's pure scale maths). Imported here so
-// the consumer registry and the FAB layer share one type; adding a
-// family in either module requires updating the other.
-import type { FabFamily } from './fab-scale';
+// atom stays mounted at scale 0 across the list<->deep boundary). It
+// preserves the per-route rendering the FAB layer needs; nothing here
+// is a concept the core `RouteData` record holds.
 
 /**
  * The dynamic FAB kind. `'dynamic'` is the Activity route's
@@ -117,7 +91,6 @@ export type FabRouteKind = FabListKind | 'dynamic' | 'deep';
 
 export interface FabRouteAttributes {
 	readonly pattern: RegExp;
-	readonly family: FabFamily;
 	readonly kind: FabRouteKind;
 }
 
@@ -131,49 +104,47 @@ const FAB_ROUTE_ATTRIBUTES: readonly FabRouteAttributes[] = [
 	// Family A: list routes whose atom is mounted (Family A/C at scale 0
 	// or 1). Only / and /messages/inbox show a visible FAB at rest
 	// (fab: true); the FAB layer scales the atom per route below.
-	{ pattern: /^\/$/, family: 'list', kind: 'discussions' },
-	{ pattern: /^\/messages\/inbox$/, family: 'list', kind: 'messages' },
+	{ pattern: /^\/$/, kind: 'discussions' },
+	{ pattern: /^\/messages\/inbox$/, kind: 'messages' },
 	// Family A, dynamic kind: Activity's FAB atom stays mounted at
 	// scale 0 (fab: false); the dynamic kind is used only as a retained
 	// icon for transitions across the list boundary.
-	{ pattern: /^\/activity$/, family: 'list', kind: 'dynamic' },
+	{ pattern: /^\/activity$/, kind: 'dynamic' },
 
 	// Family B: thread / conversation (overlay on top of the source list).
-	{ pattern: /^\/discussion\//, family: 'overlay', kind: 'discussions' },
-	{ pattern: /^\/messages\/\d/, family: 'overlay', kind: 'messages' },
+	{ pattern: /^\/discussion\//, kind: 'discussions' },
+	{ pattern: /^\/messages\/\d/, kind: 'messages' },
 
 	// Family C: compose forms (the FAB scale is fabScale(publication.progress,
 	// fromHasFab, toHasFab), driven by the orchestrator's publication.progress
 	// and FROM/TO RouteData.fab).
-	{ pattern: /^\/post\/discussion$/, family: 'compose', kind: 'discussions' },
-	{ pattern: /^\/messages\/new$/, family: 'compose', kind: 'messages' },
+	{ pattern: /^\/post\/discussion$/, kind: 'discussions' },
+	{ pattern: /^\/messages\/new$/, kind: 'messages' },
 	// /messages/add/[userId] shares MessageCompose with /messages/new; the
 	// FAB atom stays mounted at scale 0 (compose family, no visible FAB).
-	{ pattern: /^\/messages\/add\//, family: 'compose', kind: 'messages' },
+	{ pattern: /^\/messages\/add\//, kind: 'messages' },
 
 	// Family B 'deep': non-FAB deep routes whose atom stays mounted at scale 0
 	// so fabScale(publication.progress, fromHasFab, toHasFab) drives the scale
 	// across the list<->deep boundary (orchestrator's publication.progress
 	// and FROM/TO RouteData.fab).
-	{ pattern: /^\/bookmarks$/, family: 'overlay', kind: 'deep' },
-	{ pattern: /^\/search$/, family: 'overlay', kind: 'deep' },
-	{ pattern: /^\/notifications$/, family: 'overlay', kind: 'deep' },
-	{ pattern: /^\/profile$/, family: 'overlay', kind: 'deep' },
-	{ pattern: /^\/profile\/settings$/, family: 'overlay', kind: 'deep' },
-	{ pattern: /^\/profile\/\d+\/[^/]+$/, family: 'overlay', kind: 'deep' },
-	{ pattern: /^\/profile\/comments\/\d+\/[^/]+$/, family: 'overlay', kind: 'deep' },
-	{ pattern: /^\/profile\/discussions\/\d+\/[^/]+$/, family: 'overlay', kind: 'deep' },
+	{ pattern: /^\/bookmarks$/, kind: 'deep' },
+	{ pattern: /^\/search$/, kind: 'deep' },
+	{ pattern: /^\/notifications$/, kind: 'deep' },
+	{ pattern: /^\/profile$/, kind: 'deep' },
+	{ pattern: /^\/profile\/settings$/, kind: 'deep' },
+	{ pattern: /^\/profile\/\d+\/[^/]+$/, kind: 'deep' },
+	{ pattern: /^\/profile\/comments\/\d+\/[^/]+$/, kind: 'deep' },
+	{ pattern: /^\/profile\/discussions\/\d+\/[^/]+$/, kind: 'deep' },
 	{
 		pattern:
 			/^\/profile\/(?:appearance|edit|editor|offlineReading|onlineNow|password|picture|preferences)$/,
-		family: 'overlay',
 		kind: 'deep'
 	},
-	{ pattern: /^\/profile\/invitations$/, family: 'overlay', kind: 'deep' },
-	{ pattern: /^\/admin$/, family: 'overlay', kind: 'deep' },
+	{ pattern: /^\/profile\/invitations$/, kind: 'deep' },
+	{ pattern: /^\/admin$/, kind: 'deep' },
 	{
 		pattern: /^\/admin\/(?:backups|categories|maintenance|permissions|stats|user-groups)$/,
-		family: 'overlay',
 		kind: 'deep'
 	}
 ];
@@ -289,21 +260,13 @@ export function getPreviewPanel(pathname: string): SvelteComponentType | null {
 }
 
 // ---------------------------------------------------------------------------
-// `isPipelineSwipeDisabledRoute` reads the deep-route-parent set directly
-// from the core `RouteData` registry (`backParent !== undefined`) rather
-// than maintaining a separate pattern list. This keeps the function's
-// answer set byte-stable without a duplication hazard: the set of routes
-// that declare a structural parent lives in one place (`route-data.ts`).
-
-// ---------------------------------------------------------------------------
 // Classifiers.
 //
 // Most of the classifier surface lives in the core `RouteData` record
 // or the consumer configs above. The remaining functions below are
 // positional queries (`isPagerRoute`), consumer-config reads
-// (`getCurrentTabIndex`), non-route classifiers (`backTargetListKind`),
-// and `isPipelineSwipeDisabledRoute` whose body reads the consumer
-// registries above.
+// (`getCurrentTabIndex`), and the non-route classifier
+// `backTargetListKind`.
 
 /**
  * Resolve the source-list kind for a `deep` route from its back target. The back
@@ -317,33 +280,6 @@ export function backTargetListKind(backTargetHref: string | null): FabListKind {
 	const queryIdx = backTargetHref.indexOf('?');
 	const pathname = queryIdx >= 0 ? backTargetHref.slice(0, queryIdx) : backTargetHref;
 	return pathname === '/messages/inbox' ? 'messages' : 'discussions';
-}
-
-/**
- * A route whose +page.svelte mounts a pipeline-owning layout
- * (`NavPipelineHost`), so `DualColumnLayout`'s own detectSwipe tab-
- * swipe must yield to it (the pipeline owns the horizontal drag on
- * these routes). TRUE for routes in Family-B `overlay` whose kind is
- * not `'deep'` (threads and conversations) OR routes whose structural
- * parent is declared in the core record.
- *
- * Masked latent bug: `/search`, `/bookmarks`, `/notifications`,
- * `/profile`, and `/messages/add/[userId]` mount a NavPipelineHost but
- * this function returns FALSE for them (the first four carry
- * `kind: 'deep'`, failing the overlay branch; `/messages/add/[userId]`
- * carries a compose-family attribute, also failing the overlay branch;
- * all five have no declared `backParent`, failing the deep-route
- * branch). Sub-pages of `/profile` and the entire `/admin/*` tree
- * declare `backParent`, so they return TRUE; the latent-bug set is
- * these five leaf routes. The race does not manifest because
- * NavPipelineHost wins the pointer capture consistently; the function
- * and the bug dissolve in 5b3 when `DualColumnLayout`'s detectSwipe is
- * removed.
- */
-export function isPipelineSwipeDisabledRoute(pathname: string): boolean {
-	const attrs = getFabRouteAttributes(pathname);
-	if (attrs && attrs.family === 'overlay' && attrs.kind !== 'deep') return true;
-	return getRouteData(pathname).backParent !== undefined;
 }
 
 /** True for the exact pager routes (the three tab roots, where

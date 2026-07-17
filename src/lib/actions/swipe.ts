@@ -181,6 +181,23 @@ export function reversedAtRelease(deltaX: number, velocity: number, rebound: num
 	return !flingingForward;
 }
 
+/** Whether the terminal event should cancel (snap back) instead of committing.
+ *  A `pointercancel` is the browser or OS revoking the pointer (a native pan
+ *  or OS gesture took over); the user is no longer driving the swipe, so it
+ *  must NEVER commit on whatever displacement existed at the instant of
+ *  cancellation. Forcing the cancel signal here unifies every consumer (the
+ *  pipeline via `navPipelinePointer`, `DualColumnLayout`, and
+ *  `SearchScopePager`) on snap-back, so a system-interrupted gesture never
+ *  navigates. A genuine `pointerup` cancels only on a rebound. */
+export function shouldCancelOnRelease(
+	event: PointerEvent,
+	deltaX: number,
+	velocity: number,
+	rebound: number
+): boolean {
+	return event.type === 'pointercancel' || reversedAtRelease(deltaX, velocity, rebound);
+}
+
 export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => {
 	let params = initial;
 	// Capture is best-effort: we request it so the browser yields native pan /
@@ -219,7 +236,7 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 		// the origin (≥ 0). Tracked live (maxX/minX) so it is unaffected by the
 		// 32-sample cap on `samples`, which prunes the early part of long drags.
 		const rebound = deltaX >= 0 ? maxX - event.clientX : event.clientX - minX;
-		params.onEnd(deltaX, velocity, reversedAtRelease(deltaX, velocity, rebound));
+		params.onEnd(deltaX, velocity, shouldCancelOnRelease(event, deltaX, velocity, rebound));
 		if (moved) suppressNextClick(node);
 	}
 
@@ -342,7 +359,7 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 		// See captureSwipe.finish: live-tracked extreme → rebound, independent of
 		// the 32-sample cap (which prunes the early part of long drags).
 		const rebound = deltaX >= 0 ? maxX - event.clientX : event.clientX - minX;
-		params.onEnd(deltaX, velocity, reversedAtRelease(deltaX, velocity, rebound));
+		params.onEnd(deltaX, velocity, shouldCancelOnRelease(event, deltaX, velocity, rebound));
 		suppressNextClick(node);
 	}
 

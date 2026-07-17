@@ -4,24 +4,18 @@ import {
 	getTabBarPillTarget,
 	getCurrentTabIndex,
 	isPagerRoute,
-	isPipelineSwipeDisabledRoute,
 	backTargetListKind,
 	getPreviewPanel
 } from './route-config';
 
 describe('getFabRouteAttributes - the FAB atom-mount registry', () => {
 	test('Family A list routes mount the FAB atom', () => {
-		expect(getFabRouteAttributes('/')?.family).toBe('list');
 		expect(getFabRouteAttributes('/')?.kind).toBe('discussions');
-		expect(getFabRouteAttributes('/messages/inbox')?.family).toBe('list');
 		expect(getFabRouteAttributes('/messages/inbox')?.kind).toBe('messages');
-		expect(getFabRouteAttributes('/activity')?.family).toBe('list');
 		expect(getFabRouteAttributes('/activity')?.kind).toBe('dynamic');
 	});
 	test('Family B overlay routes mount the FAB atom (threads + conversations)', () => {
-		expect(getFabRouteAttributes('/discussion/123')?.family).toBe('overlay');
 		expect(getFabRouteAttributes('/discussion/123')?.kind).toBe('discussions');
-		expect(getFabRouteAttributes('/messages/123')?.family).toBe('overlay');
 		expect(getFabRouteAttributes('/messages/123')?.kind).toBe('messages');
 	});
 	test('Family B deep routes (non-FAB deep routes) mount the atom at scale 0', () => {
@@ -38,16 +32,12 @@ describe('getFabRouteAttributes - the FAB atom-mount registry', () => {
 		for (const p of deep) {
 			const attrs = getFabRouteAttributes(p);
 			expect(attrs, `${p} must have FAB attrs`).not.toBeNull();
-			expect(attrs?.family, `${p} family must be overlay`).toBe('overlay');
 			expect(attrs?.kind, `${p} kind must be deep`).toBe('deep');
 		}
 	});
 	test('Family C compose routes mount the FAB atom', () => {
-		expect(getFabRouteAttributes('/post/discussion')?.family).toBe('compose');
 		expect(getFabRouteAttributes('/post/discussion')?.kind).toBe('discussions');
-		expect(getFabRouteAttributes('/messages/new')?.family).toBe('compose');
 		expect(getFabRouteAttributes('/messages/new')?.kind).toBe('messages');
-		expect(getFabRouteAttributes('/messages/add/55')?.family).toBe('compose');
 		expect(getFabRouteAttributes('/messages/add/55')?.kind).toBe('messages');
 	});
 	test('routes that do not mount the FAB atom return null', () => {
@@ -189,55 +179,6 @@ describe('isPagerRoute - positional query over MOBILE_TAB_DEFS', () => {
 		for (const p of notRoots) {
 			expect(isPagerRoute(p), `${p} is not a pager route`).toBe(false);
 		}
-	});
-});
-
-describe('isPipelineSwipeDisabledRoute - DualColumnLayout yield gate', () => {
-	// Masked latent bug: `/search`, `/bookmarks`, `/notifications`,
-	// `/profile`, and `/messages/add/[userId]` mount a NavPipelineHost but
-	// the function returns FALSE because the first four carry
-	// `kind: 'deep'` (failing the overlay branch) and `/messages/add/[userId]`
-	// carries a compose-family attribute (also failing the overlay branch);
-	// all five have no declared `backParent` (failing the deep-route branch).
-	// Sub-pages of `/profile` and the `/admin/*` tree declare `backParent`,
-	// so they return TRUE; the latent-bug set is these five leaf routes.
-	// The race does not manifest (NavPipelineHost wins pointer capture);
-	// the function and the bug dissolve in 5b3 when the DualColumnLayout
-	// detectSwipe is removed.
-	test('true for thread / conversation routes (Family B overlay, non-deep kind)', () => {
-		expect(isPipelineSwipeDisabledRoute('/discussion/123')).toBe(true);
-		expect(isPipelineSwipeDisabledRoute('/discussion/123/slug/p1')).toBe(true);
-		expect(isPipelineSwipeDisabledRoute('/messages/123')).toBe(true);
-		expect(isPipelineSwipeDisabledRoute('/messages/123/p2')).toBe(true);
-	});
-	test('true for routes whose structural parent is declared in the registry', () => {
-		expect(isPipelineSwipeDisabledRoute('/profile/settings')).toBe(true);
-		expect(isPipelineSwipeDisabledRoute('/profile/55/sunny')).toBe(true);
-		expect(isPipelineSwipeDisabledRoute('/profile/comments/55/sunny')).toBe(true);
-		expect(isPipelineSwipeDisabledRoute('/profile/discussions/55/sunny')).toBe(true);
-		expect(isPipelineSwipeDisabledRoute('/profile/appearance')).toBe(true);
-		expect(isPipelineSwipeDisabledRoute('/profile/invitations')).toBe(true);
-		expect(isPipelineSwipeDisabledRoute('/admin')).toBe(true);
-		expect(isPipelineSwipeDisabledRoute('/admin/backups')).toBe(true);
-		expect(isPipelineSwipeDisabledRoute('/post/discussion')).toBe(true);
-		expect(isPipelineSwipeDisabledRoute('/messages/new')).toBe(true);
-	});
-	test('latent-bug leaf routes return FALSE; backParent-declaring sub-pages return TRUE', () => {
-		expect(isPipelineSwipeDisabledRoute('/search')).toBe(false);
-		expect(isPipelineSwipeDisabledRoute('/bookmarks')).toBe(false);
-		expect(isPipelineSwipeDisabledRoute('/notifications')).toBe(false);
-		expect(isPipelineSwipeDisabledRoute('/profile')).toBe(false);
-		expect(isPipelineSwipeDisabledRoute('/messages/add/55')).toBe(false);
-		expect(isPipelineSwipeDisabledRoute('/admin/user-groups')).toBe(true);
-	});
-	test('false for tab roots, tab-internal pagination, offline routes, unmatched', () => {
-		expect(isPipelineSwipeDisabledRoute('/')).toBe(false);
-		expect(isPipelineSwipeDisabledRoute('/activity')).toBe(false);
-		expect(isPipelineSwipeDisabledRoute('/messages/inbox')).toBe(false);
-		expect(isPipelineSwipeDisabledRoute('/discussions/p2')).toBe(false);
-		expect(isPipelineSwipeDisabledRoute('/offline')).toBe(false);
-		expect(isPipelineSwipeDisabledRoute('/offline/123')).toBe(false);
-		expect(isPipelineSwipeDisabledRoute('/entry/signin')).toBe(false);
 	});
 });
 

@@ -67,7 +67,6 @@ export type IntentEventKind =
 	| 'pointerdown'
 	| 'pointermove'
 	| 'pointerup'
-	| 'pointercancel'
 	| 'tap'
 	| 'popstate'
 	| 'hashchange'
@@ -223,9 +222,10 @@ export function resolveDirection(deltaX: number, decideThresholdPx: number): Int
  *      (the offset never reached the threshold) it returns to `idle`.
  *      From a drag state it transitions to `committed`, or to
  *      `cancelled` when the drag was reversed past the start. Freezes
- *      the release velocity.
- *   - `pointercancel`: a no-op from `idle`; otherwise transitions to
- *      `cancelled`.
+ *      the release velocity. (A `pointercancel` never reaches the
+ *      classifier: the `detectSwipe` primitive forces the cancel signal
+ *      at the gesture layer via `shouldCancelOnRelease`, so the release
+ *      arrives here as a `pointerup` already marked for cancel.)
  *   - `tap` / `goto` / `popstate` / `hashchange`: a no-op when the
  *      event carries no target; otherwise produces a target intent
  *      with `micro: 'committed'` and `target: pathname`, which the
@@ -301,10 +301,6 @@ export function classify(
 			const reversed = state.reversed;
 			const micro: IntentMicro = reversed ? 'cancelled' : 'committed';
 			return { ...state, micro, releaseVelocity, velocity: releaseVelocity, reversed };
-		}
-		case 'pointercancel': {
-			if (state.micro === 'idle') return state;
-			return { ...state, micro: 'cancelled' };
 		}
 		case 'tap':
 		case 'popstate':

@@ -3295,3 +3295,117 @@ $ bun run test:e2e                    201 passed + 2 flaky (exit 0)
 ```
 
 R60 audits the post-R59-fix state.
+
+## Session 62: pre-R60 fixes (dissolve the 5b3 deferral web + A2)
+
+The user flagged the spec's "Known 5b2 conditions" as lazily deferred to 5b3
+and asked for them to be fixed, not deferred. The four conditions formed a
+circular deferral web (each item blocked on another or on the eventual
+`DualColumnLayout` deletion). The web is dissolved; none survives.
+
+### Fixes
+
+- **#3 `pointercancel` cancels, never commits.** `swipe.ts`'s new
+  `shouldCancelOnRelease(event, ...)` forces the cancel signal when
+  `event.type === 'pointercancel'`, so every `detectSwipe` consumer (the
+  pipeline via `navPipelinePointer`, `DualColumnLayout`'s drawer,
+  `SearchScopePager`) snaps back on a system-interrupted gesture. The dead
+  `pointercancel` case in the intent classifier (`nav-intent.ts`) and its
+  tests are removed; the release arrives as a `pointerup` already marked for
+  cancel. The "shared detectSwipe would bifurcate" excuse was wrong: fixing
+  the primitive unifies all consumers.
+- **#1 / #2 / #4 `isPipelineSwipeDisabledRoute` + `backParent` +
+  `DualColumnLayout` tab-swipe deleted.** The classifier existed only to gate
+  `DualColumnLayout`'s tab-swipe; `backParent` existed only to feed the
+  classifier. Both are deleted, so `RouteData` holds three fields (`tag`,
+  `snapshotCapture`, `fab`). `DualColumnLayout`'s entire tab-swipe mechanism
+  (the `detectSwipe` on `<main>`, the `swipeOffset` state, the
+  `transition-transform duration-200` CSS snap) is removed; it was the last
+  CSS transition in the animation layer and the second horizontal-gesture
+  mechanism, so removing it satisfies both §5 (no CSS transitions) and
+  UNIFY-not-bridge. The pipeline now owns every horizontal-tab gesture.
+  `/discussions/pN` (the one route that relied on the `DualColumnLayout`
+  tab-swipe, since it renders via `DiscussionListPage` and mounts no pipeline
+  host) now switches tabs via the tab bar; it stays mobile-reachable through
+  the pager's pagination links. The `FabFamily` enum (`family` field on
+  `FabRouteAttributes`) is removed with the classifier that was its sole
+  production reader; the FAB layer reads `kind` alone.
+- **A2 `#prevHeaderTitle` stale across a non-pipeline detour (R59 carryover,
+  FIXED).** The `!#mounted` early-return in `notifyHeaderState` now refreshes
+  the prev values only when no settle is in flight. A call with no host
+  mounted is either the gap frame of a direct pipeline -> pipeline handoff (a
+  commit / discrete settle is in flight awaiting the destination's landing,
+  so the prev values MUST stay frozen for the destination's first notify to
+  crossfade from the genuine outgoing title) or a non-pipeline detour (no
+  settle in flight, so the prev values refresh to what the persistent Header
+  is actually displaying). The `settleActive` signal distinguishes the two:
+  R59's "always update prev in the early-return" broke the gap-frame freeze
+  (5 e2e), and "reset `#headerStateInitialized` in `releaseInputs`" would
+  have skipped the direct crossfade; gating on `!settleActive` avoids both.
+- **Spec rewrite.** The "Known 5b2 conditions" section is rewritten to record
+  the four resolutions (no open deviations); the end-state #1, the backParent
+  audit item, and the Out-of-scope list drop the stale 5b3 deferral language.
+
+### Gate outputs (post-fix, independently re-run 2026-07-16)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    377 pass / 0 fail
+$ bun run test:e2e                    200 passed + 3 flaky (exit 0)
+```
+
+The 3 flaky tests are the FAB-scale-sampler timing specs (the pre-existing
+CDP flake set documented in R58 / R59); they pass on retry. The header
+title-crossfade + title-replay specs (the ones R59's A2 attempts broke)
+pass.
+
+R60 audits this post-fix state.
+
+## Session 63: R60 audit (A/B PWC: 2 state-leak variants + dead state + spec-wording) + fixes
+
+R60 ran two independent auditors (stripped, non-leading prompt). A returned
+PASS-WITH-CONCERNS (3 concern); B returned PASS-WITH-CONCERNS (3 concern + 1
+note). Counter stays 0/5. Both verified the core pipeline (the dissolved 5b3
+web, the pointercancel cancel, the non-pipeline-detour title freeze,
+finish-then-new, single-progress FAB) clean. The findings are narrow.
+
+### Findings + fixes
+
+- A1 / A2 (spec wording): Known #3 mis-listed the drawer as a `detectSwipe`
+  consumer (it is `captureSwipe`); Known #2's "the §5 bar now covers it"
+  over-stated (the drawer's `transition-transform` snap stays). Fixed: Known #3
+  separates `captureSwipe` / `detectSwipe` consumers; Known #2 states the
+  drawer snap is a separate `captureSwipe`-driven UI gesture, not part of the
+  page-transition animation layer, retained (5b3 `DualColumnLayout` deletion).
+  The drawer transition is not a 5b2 defect (B independently concurred).
+- A3 (docstring): `releaseInputs` did not note that `#queuedDiscreteNav`
+  intentionally survives (consumed by `#landAtRest` on the destination host).
+  Fixed: added the note.
+- B1 (logic, FIXED): `#liveDragging` leaked across host destruction.
+  `releaseInputs` cleared the other transient flags but not `#liveDragging`;
+  a host destroyed mid-drag (external nav to a non-pipeline route while the
+  finger is down) never receives the pointerup, so the next pipeline host's
+  forward enter read a stale `#liveDragging === true` and
+  `#republishToPager` published `pager.dragging = true`, corrupting the Header
+  morph / titleView. Fixed: `releaseInputs` clears `#liveDragging`.
+- B2 (dead state, FIXED): `OrchestratorState.startedAt` was set by the reducer
+  on every `intent` / `interrupt` and by `initialOrchestratorState`, but had
+  no production reader; the reducer's `now` parameter existed only to feed it.
+  Removed: `startedAt` from `OrchestratorState`, the reducer's `now`
+  parameter, the wrapper's `NavClockFn` / `#now` clock threading, and the
+  test's `NOW` fixtures + `startedAt` assertion.
+- B3 (minor, FIXED): `#prevWasDrag` had the same releaseInputs gap as B1
+  (self-correcting on the first pointerdown but delayed the next gesture's
+  start by one event). Fixed: `releaseInputs` clears `#prevWasDrag`.
+
+### Gate outputs (post-fix, independently re-run 2026-07-16)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    377 pass / 0 fail
+$ bun run test:e2e                    202 passed + 1 flaky (exit 0)
+```
+
+R61 audits the post-R60-fix state.

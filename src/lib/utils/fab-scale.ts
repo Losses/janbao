@@ -38,14 +38,6 @@ function clamp(value: number, range: ClampRange): number {
 }
 
 /**
- * The FAB family a route belongs to. Read by `route-config.ts`'s
- * `isPipelineSwipeDisabledRoute` (`family === 'overlay'`); not consumed
- * by the FAB layer's scale computation (which uses the FROM/TO
- * `RouteData.fab` booleans + `fabScale`).
- */
-export type FabFamily = 'list' | 'overlay' | 'compose';
-
-/**
  * The single-progress FAB scale, gated on FROM / TO FAB presence. The FAB
  * exits in the first half of the transition if FROM has a FAB, and enters
  * in the second half if TO has a FAB. At rest (no transition in flight)

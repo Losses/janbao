@@ -49,22 +49,13 @@ import type { RouteTag } from '$lib/utils/route-data';
 import type { TransitionDirection, TransitionPlan } from '$lib/utils/nav-resolvers';
 import type { HeaderSettleTransition } from '$lib/utils/header-probe';
 
-/** A clock function returning epoch milliseconds. Injectable so unit
- *  tests are deterministic. */
-export type NavClockFn = () => number;
-
-/** Constructor options. The clock is injectable for deterministic
- *  tests; the default is `Date.now`. The wrapper is SSR-safe (no
- *  events arrive during SSR so the reducer is never called). */
+/** Constructor options. The wrapper is SSR-safe (no events arrive
+ *  during SSR so the reducer is never called). */
 export interface NavStateMachineOptions {
-	readonly now?: NavClockFn;
 	/** Initial at-rest surface. Defaults to 'tab' (the discussions
 	 *  list is the canonical entry). */
 	readonly initialOn?: AtRestOn;
 }
-
-/** Internal alias kept for the private field type. */
-type ClockFn = NavClockFn;
 
 /** Partial settle state update. Each field is optional; unspecified fields
  *  preserve their prior value. Passed to `NavStateMachine.setSettleState` by
@@ -79,7 +70,6 @@ interface SettleStateUpdate {
 
 export class NavStateMachine {
 	#state = $state<OrchestratorState>(initialOrchestratorState('tab'));
-	readonly #now: ClockFn;
 
 	// ------------------------------------------------------------------
 	// Settle + tap-scrub micro animation state. Per §13.5 the state
@@ -98,7 +88,6 @@ export class NavStateMachine {
 	#searchScrubbing = $state(false);
 
 	constructor(opts: NavStateMachineOptions = {}) {
-		this.#now = opts.now ?? (() => Date.now());
 		if (opts.initialOn) {
 			this.#state = initialOrchestratorState(opts.initialOn);
 		}
@@ -184,7 +173,7 @@ export class NavStateMachine {
 		// reducer); that is fine because the orchestrator's
 		// `#publication` re-runs via `#progress` for drag updates, and
 		// every state-changing event returns a fresh record.
-		this.#state = reduce(this.#state, event, this.#now());
+		this.#state = reduce(this.#state, event);
 	}
 
 	// -----------------------------------------------------------------------

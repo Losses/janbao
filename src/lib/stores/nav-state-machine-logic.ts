@@ -77,7 +77,6 @@ export interface OrchestratorState {
 	readonly fromTag: RouteTag | null;
 	readonly toTag: RouteTag | null;
 	readonly direction: TransitionDirection | null;
-	readonly startedAt: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -164,8 +163,7 @@ export function initialOrchestratorState(on: AtRestOn = 'tab'): OrchestratorStat
 		toPathname: null,
 		fromTag: null,
 		toTag: null,
-		direction: null,
-		startedAt: null
+		direction: null
 	};
 }
 
@@ -183,11 +181,7 @@ export function atRestOnFor(tag: RouteTag): AtRestOn {
 // does not throw on out-of-sequence events (e.g. a `commit` arriving
 // while at rest); it returns the unchanged state for those.
 
-export function reduce(
-	state: OrchestratorState,
-	event: OrchestratorEvent,
-	now: number
-): OrchestratorState {
+export function reduce(state: OrchestratorState, event: OrchestratorEvent): OrchestratorState {
 	switch (event.type) {
 		case 'intent': {
 			// A gesture-start intent arrives. From at-rest we enter
@@ -202,8 +196,7 @@ export function reduce(
 					fromTag: event.fromTag,
 					toPathname: null,
 					toTag: null,
-					direction: null,
-					startedAt: now
+					direction: null
 				};
 			}
 			if (state.macro.kind === 'landing') {
@@ -215,8 +208,7 @@ export function reduce(
 					fromTag: event.fromTag,
 					toPathname: null,
 					toTag: null,
-					direction: null,
-					startedAt: now
+					direction: null
 				};
 			}
 			return state;
@@ -302,8 +294,7 @@ export function reduce(
 				fromTag: state.fromTag,
 				toPathname: null,
 				toTag: null,
-				direction: null,
-				startedAt: now
+				direction: null
 			};
 		}
 		case 'land': {

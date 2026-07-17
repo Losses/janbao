@@ -11,8 +11,10 @@
  *   2. Pointer -> intent: `onPointerDown` / `onPointerMove` /
  *      `onPointerUp` (called from the `navPipelinePointer` Svelte
  *      action that wraps `detectSwipe`; a `pointercancel` is routed by
- *      `detectSwipe` through its onUp listener, reaching the
- *      orchestrator as `onPointerUp`).
+ *      `detectSwipe` through its onUp listener and reaches the
+ *      orchestrator as `onPointerUp` with the cancel signal forced by
+ *      `shouldCancelOnRelease`, so a system-interrupted gesture never
+ *      commits).
  *   3. Executor + driver -> elements: `configure({ resolveElements, ... })`
  *      constructs (once) a `LiveNavDomDriver` whose `resolveElements` returns
  *      `{ pageTrack: trackEl, fab: null, header: null }` - the FAB and Header
@@ -744,6 +746,16 @@ export class NavPipelineOrchestrator {
 		// leave a stale enter flag suppressing the destination host's
 		// guards (afterNavigate / resize).
 		this.#isEnterAnimation = false;
+		// Clear the live-drag flags. A host destroyed mid-drag (an
+		// external nav to a non-pipeline route while the finger is still
+		// down) never receives the pointerup, so the release path that
+		// normally clears these does not run. Without this clear the next
+		// pipeline host's forward enter would read a stale `#liveDragging`
+		// and publish `pager.dragging = true` (corrupting the Header morph
+		// / titleView), and a stale `#prevWasDrag` would delay the next
+		// gesture's start by one event.
+		this.#liveDragging = false;
+		this.#prevWasDrag = false;
 		// Do NOT cancel the settle / tap-scrub eases here: the Header
 		// persists across the route swap, and a settle in flight at the
 		// host's destroy (a commit settle awaiting its navigation landing)
@@ -751,7 +763,10 @@ export class NavPipelineOrchestrator {
 		// `!this.#mounted` guard skips re-arming during the gap frame
 		// (releaseInputs -> the next configure) AND on a mobile -> desktop
 		// flip (unmount); the afterNavigate hook clears the awaitTitle
-		// once the navigation lands.
+		// once the navigation lands. `#queuedDiscreteNav` is likewise
+		// retained here: the finish-then-new replay fires from `#landAtRest`
+		// on the destination host's afterNavigate, so the queue must
+		// survive the source host's destroy.
 		// Clear the in-flight pager state so a stale fractionalIndex /
 		// transitionTarget does not drive the Header on the destination
 		// route before that route's configure publishes its own state.
@@ -2305,7 +2320,26 @@ export class NavPipelineOrchestrator {
 		// navigations, but with no host mounted the orchestrator must not
 		// re-arm eases (the settle / tap-scrub rAFs would tick against
 		// torn-down state). No-op until the next `configure`.
-		if (!this.#mounted) return;
+		//
+		// A call with no host mounted is either the gap frame of a direct
+		// pipeline -> pipeline handoff (releaseInputs -> configure) or a
+		// non-pipeline detour (the user left the pipeline for a route with
+		// no pipeline host, and the persistent Header is now showing that
+		// route's title). In the gap-frame case a commit / discrete settle
+		// is in flight awaiting the destination's landing, and the prev
+		// values MUST stay frozen so the destination's first notify call
+		// crossfades from the genuine outgoing title. In the detour case no
+		// settle is in flight, so refresh the prev values to what the
+		// Header is actually displaying; otherwise a later return to a
+		// pipeline route would crossfade from the stale pre-detour title.
+		if (!this.#mounted) {
+			if (!this.#stateMachine.settleActive) {
+				this.#prevHeaderTitle = newTitle;
+				this.#prevHeaderHasTabs = currentHasTabs;
+				this.#prevHeaderIsSearch = currentIsSearch;
+			}
+			return;
+		}
 		if (!this.#headerStateInitialized) {
 			this.#prevHeaderTitle = newTitle;
 			this.#prevHeaderHasTabs = currentHasTabs;

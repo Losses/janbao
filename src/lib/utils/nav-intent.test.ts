@@ -32,9 +32,6 @@ function move(x: number, t: number): IntentEvent {
 function up(x: number, t: number): IntentEvent {
 	return { kind: 'pointerup', x, y: 0, t, target: null };
 }
-function cancel(): IntentEvent {
-	return { kind: 'pointercancel', x: 0, y: 0, t: 0, target: null };
-}
 function tap(target: string, t = 0): IntentEvent {
 	return { kind: 'tap', x: 0, y: 0, t, target };
 }
@@ -151,26 +148,6 @@ describe('intent classifier: pointerup commits or cancels', () => {
 		s = classify(s, move(105, 10), OPTS, VW); // sub-threshold
 		s = classify(s, up(105, 20), OPTS, VW);
 		expect(s.micro).toBe('idle');
-	});
-
-	test('pointercancel transitions an active drag to cancelled', () => {
-		let s = classify(initialIntentState(), down(100, 0), OPTS, VW);
-		s = classify(s, move(150, 100), OPTS, VW);
-		s = classify(s, cancel(), OPTS, VW);
-		expect(s.micro).toBe('cancelled');
-	});
-
-	test('pointercancel on an idle state is a no-op', () => {
-		const idle = initialIntentState();
-		const next = classify(idle, cancel(), OPTS, VW);
-		expect(next).toBe(idle);
-	});
-
-	test('pointercancel while deciding transitions to cancelled', () => {
-		let s = classify(initialIntentState(), down(100, 0), OPTS, VW);
-		expect(s.micro).toBe('deciding');
-		s = classify(s, cancel(), OPTS, VW);
-		expect(s.micro).toBe('cancelled');
 	});
 });
 

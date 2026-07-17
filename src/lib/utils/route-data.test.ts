@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { getRouteData } from './route-data';
-import type { RouteData, RouteTag } from './route-data';
+import type { RouteTag } from './route-data';
 
 describe('getRouteData - tag assignments per §3 + §14.1 + Cycle 1 spec', () => {
 	interface TagCase {
@@ -108,62 +108,12 @@ describe('getRouteData - snapshotCapture', () => {
 	});
 });
 
-describe('getRouteData - backParent (structural parent)', () => {
-	interface ParentCase {
-		readonly path: string;
-		readonly expected: string | undefined;
-	}
-	const cases: readonly ParentCase[] = [
-		// Routes with a declared structural parent.
-		{ path: '/profile/settings', expected: '/profile' },
-		{ path: '/profile/55/sunny', expected: '/profile' },
-		{ path: '/profile/comments/55/sunny', expected: '/profile/55/sunny' },
-		{ path: '/profile/discussions/55/sunny', expected: '/profile/55/sunny' },
-		{ path: '/profile/appearance', expected: '/profile/settings' },
-		{ path: '/profile/password', expected: '/profile/settings' },
-		{ path: '/profile/invitations', expected: '/profile' },
-		{ path: '/admin', expected: '/' },
-		{ path: '/admin/backups', expected: '/admin' },
-		{ path: '/post/discussion', expected: '/' },
-		{ path: '/messages/new', expected: '/messages/inbox' },
-		// Routes whose structural parent is not in the registry.
-		{ path: '/', expected: undefined },
-		{ path: '/activity', expected: undefined },
-		{ path: '/messages/inbox', expected: undefined },
-		{ path: '/discussion/123', expected: undefined },
-		{ path: '/messages/123', expected: undefined },
-		{ path: '/bookmarks', expected: undefined },
-		{ path: '/search', expected: undefined },
-		{ path: '/notifications', expected: undefined },
-		{ path: '/profile', expected: undefined },
-		{ path: '/categories', expected: undefined },
-		{ path: '/offline/123', expected: undefined },
-		// Known #1 asymmetry: /messages/add/[userId] mounts NavPipelineHost via
-		// MessageCompose (same host as /messages/new) but does NOT declare a
-		// backParent, while /messages/new declares '/messages/inbox'. Pinned
-		// here so the asymmetry surfaces if either entry changes.
-		{ path: '/messages/add/55', expected: undefined }
-	];
-	for (const { path, expected } of cases) {
-		test(`${path} → backParent ${String(expected)}`, () => {
-			expect(getRouteData(path).backParent).toBe(expected);
-		});
-	}
-
-	test('the public RouteData shape never leaks a backParent resolver', () => {
-		// Sanity: a dynamic-parent route still exposes a string, not a function.
-		const rd: RouteData = getRouteData('/profile/comments/55/sunny');
-		expect(typeof rd.backParent).toBe('string');
-		expect(rd.backParent).toBe('/profile/55/sunny');
-	});
-});
-
 describe('getRouteData - clarity principle (§3)', () => {
-	test('the record exposes exactly four fields (matched and unmatched routes)', () => {
+	test('the record exposes exactly three fields (matched and unmatched routes)', () => {
 		const cases = ['/discussion/123', '/api/users', '/entry/signin', '/upload'];
 		for (const p of cases) {
 			const keys = Object.keys(getRouteData(p)).sort();
-			expect(keys, p).toEqual(['backParent', 'fab', 'snapshotCapture', 'tag']);
+			expect(keys, p).toEqual(['fab', 'snapshotCapture', 'tag']);
 		}
 	});
 	test('no migration-era fields leak into the record', () => {
