@@ -155,13 +155,19 @@ interface PendingGestureTransition {
  *  exact URL the discrete nav targeted. */
 interface PendingDiscreteNav {
 	readonly target: string;
-	/** The `replaceState` intent from the queued navigation's original `goto`
-	 *  call (captured from the pager store at queue time). Carried through
-	 *  the finish-then-new replay so a `Header.onBack` replace-intent nav
-	 *  does not silently degrade to a push. Optional: `#pendingDiscreteNav`
-	 *  does not set it (the dispatch reads the store directly); only
-	 *  `#queuedDiscreteNav` sets it (the replay fires after `#landAtRest`
-	 *  clears the store). */
+	/** The `replaceState` intent captured from the pager store at queue
+	 *  time, carried through the finish-then-new replay so a
+	 *  `Header.onBack` replace-intent nav queued during an in-flight
+	 *  commit does not silently degrade to a push. The capture-clear-rearm
+	 *  flow: the finish-then-new branch reads the store into this field
+	 *  AND clears the store so the in-flight commit's subsequent
+	 *  `#dispatchNav(commitTarget)` (whose target is the COMMIT's, not the
+	 *  queued nav's) does not mis-apply the intent to the wrong target;
+	 *  `#landAtRest` then re-arms the store from this field before firing
+	 *  the replay goto so the replay's `#dispatchNav` (which reads the
+	 *  store, not the queue) picks up the correct intent. Optional:
+	 *  `#pendingDiscreteNav` does not set it (its dispatch reads the store
+	 *  directly); only `#queuedDiscreteNav` sets it. */
 	readonly replaceState?: boolean;
 }
 
@@ -589,7 +595,7 @@ export class NavPipelineOrchestrator {
 	 *   - READ by the destination host's `shouldEnter` at onMount (via
 	 *     the publication's `lastDispatchWasDeepToDeep` field) to
 	 *     suppress the enter animation.
-	 *   - CLEARED to false in three places. (a) `#landAtRest`, which
+	 *   - CLEARED to false in four places. (a) `#landAtRest`, which
 	 *     runs in `onSvelteKitAfterNavigate` AFTER the destination
 	 *     host's onMount (so the flag is still true when `shouldEnter`
 	 *     reads it); a deep-to-deep target is always a pipeline route
@@ -600,9 +606,21 @@ export class NavPipelineOrchestrator {
 	 *     target-mismatch case): an external nav cancels the in-flight
 	 *     goto so `#landAtRest` never runs; without this clear a stale
 	 *     true would suppress a later forward-enter slide in
-	 *     `shouldEnter`. (c) `unmount`, which resets every transient
-	 *     transition field so the next mount (a desktop -> mobile flip
-	 *     that re-enters mobile) starts clean.
+	 *     `shouldEnter`. (c) The non-tab-root non-deep-to-deep
+	 *     early-return branch in `onSvelteKitBeforeNavigate`: a nav
+	 *     arriving in the pre-dispatch window (after the deep-to-deep
+	 *     intercept set the flag and armed the slide on the source
+	 *     host, but before the commit rAF reached `#dispatchNav` and
+	 *     set `#navDispatchInFlight`, so the supersede branch in (b)
+	 *     does not fire) is not itself a deep-to-deep intercept, so
+	 *     the handshake does not apply to it; without this clear the
+	 *     stale true would suppress the destination's
+	 *     `playEnterAnimation` and land the route with a hard cut.
+	 *     Covers a pipeline destination (`/profile` -> `/search`) and
+	 *     a non-pipeline destination (`/profile` -> `/offline/bookmarks`).
+	 *     (d) `unmount`, which resets every transient transition field
+	 *     so the next mount (a desktop -> mobile flip that re-enters
+	 *     mobile) starts clean.
 	 *
 	 *  Backed by `$state` because the `#publication` `$derived.by`
 	 *  reads it to publish `lastDispatchWasDeepToDeep` for the
@@ -1694,11 +1712,12 @@ export class NavPipelineOrchestrator {
 		this.#gestureToTabIndex = null;
 		this.#executor?.onLand();
 		// Clear the replaceState side-channel: the intent Header.onBack set
-		// must not leak to a later dispatch. #landAtRest runs on a cancel, a
-		// normal landing, and immediately before a queued finish-then-new
-		// goto, so this is defense-in-depth alongside the
-		// onSvelteKitAfterNavigate clear (the primary site when a navigation
-		// lands).
+		// must not leak to a later dispatch. #landAtRest runs on a cancel,
+		// a normal landing, and immediately before a queued finish-then-new
+		// replay goto, so this clear is defense-in-depth alongside the
+		// onSvelteKitAfterNavigate clear. When a queued nav follows, the
+		// re-arm below overwrites this clear with the queued intent so the
+		// replay's #dispatchNav reads the queued value, not the cleared one.
 		getMobilePagerStore().setReplaceStateIntent(false);
 		if (inputs !== null) {
 			this.#stateMachine.onLand(inputs.fromTag);
@@ -1707,14 +1726,24 @@ export class NavPipelineOrchestrator {
 		// Fire a queued discrete navigation (the finish-then-new policy).
 		// The in-flight commit completed and the nav landed; replay the
 		// queued nav so `onSvelteKitBeforeNavigate` intercepts it on the
-		// active host and plays the transition from progress 0. The
-		// `replaceState` intent from the original `goto` is carried through
-		// the queue so a replace-intent nav (e.g. `Header.onBack`) does not
-		// degrade to a push. The queue is consumed exactly once (cleared
-		// before the goto fires).
+		// active host and plays the transition from progress 0. The queue
+		// is consumed exactly once (cleared before the goto fires).
+		//
+		// Re-arm the replaceState side-channel from the queued nav before
+		// the goto fires. The replay goto is intercepted by
+		// `onSvelteKitBeforeNavigate`, which cancels it (discarding the
+		// goto's own replaceState option) and starts a fresh slide plan;
+		// that slide's eventual `#dispatchNav` reads the STORE, not the
+		// queued nav. Without this re-arm the replay's dispatch would read
+		// the cleared store and degrade the user's `replaceState: true`
+		// intent (set by `Header.onBack`) to a push. The store is cleared
+		// again when the replay slide's `#dispatchNav` `.finally` runs,
+		// and again by the replay's `onSvelteKitAfterNavigate` ->
+		// `#landAtRest` (no queued nav the second time, so no re-arm).
 		const queuedNav = this.#queuedDiscreteNav;
 		this.#queuedDiscreteNav = null;
 		if (queuedNav !== null) {
+			getMobilePagerStore().setReplaceStateIntent(queuedNav.replaceState === true);
 			void goto(queuedNav.target, { replaceState: queuedNav.replaceState });
 		}
 	}
@@ -1841,6 +1870,24 @@ export class NavPipelineOrchestrator {
 			if (!isNavPipelineRoute(to)) {
 				this.#cancelAllAnimationEases();
 			}
+			// Clear the deep-to-deep handshake flag. The four clear sites
+			// (`#landAtRest`, the supersede branch, this branch, `unmount`)
+			// cover every interruption path; this branch covers a
+			// non-deep-to-deep nav arriving in the pre-dispatch window
+			// (after `navigation.cancel()` armed the slide on the source
+			// host but before the commit rAF reached `#dispatchNav`, so
+			// `#navDispatchInFlight` is still false and the supersede branch
+			// above does not fire). Without this clear the flag stays true,
+			// the destination host's `shouldEnter` reads it and suppresses
+			// `playEnterAnimation`, and the route lands with a hard cut
+			// instead of the forward-enter slide. This branch fires for
+			// every non-tab-root non-deep-to-deep target, so it covers the
+			// pipeline-destination case (`/profile` -> `/search`: the
+			// orchestrator stays active and `releaseInputs` does not clear
+			// the flag) and the non-pipeline-destination case
+			// (`/profile` -> `/offline/bookmarks`: the flag would otherwise
+			// survive the detour until the next mobile re-mount).
+			this.#lastDispatchWasDeepToDeep = false;
 			return false;
 		}
 		// A within-tab PAGINATION nav (e.g. `/discussions/pN` -> `/`,
@@ -1873,11 +1920,27 @@ export class NavPipelineOrchestrator {
 		// visual). The live-drag phase (executor phase 'live') is not
 		// accelerated: a finger is still controlling the track, so the
 		// discrete nav falls through to the from-visual handoff below.
+		//
+		// Capture-clear: read the replaceState intent from the pager
+		// store into the queue (so it survives the in-flight commit's
+		// landing) AND clear the store immediately. The clear is
+		// required because the in-flight commit's settle will call
+		// `#dispatchNav(commitTarget)` next, which reads the store for
+		// its own goto options; if the intent remained, the COMMIT's
+		// target would dispatch with `replaceState: true` applied to
+		// the wrong URL. `#landAtRest` re-arms the store from the
+		// queue before the replay goto so the replay's `#dispatchNav`
+		// reads the correct intent. The goto's own `replaceState`
+		// argument is discarded by `navigation.cancel()` below, so the
+		// store (not the goto options) is the only path that preserves
+		// the intent through the replay.
 		if (this.#executor?.state.phase === 'committing') {
 			this.#accelerateInFlight();
+			const queuedReplaceState = getMobilePagerStore().replaceStateIntent;
+			getMobilePagerStore().setReplaceStateIntent(false);
 			this.#queuedDiscreteNav = {
 				target: to + toSearch,
-				replaceState: getMobilePagerStore().replaceStateIntent
+				replaceState: queuedReplaceState
 			};
 			navigation.cancel();
 			return true;
@@ -2631,15 +2694,29 @@ export class NavPipelineOrchestrator {
 			const nonSearchIconValue = nonSearchHasTabs ? 0 : 1;
 			this.#armTapScrubEase(fromValue, toValue, newPath, currentHasTabs, nonSearchIconValue);
 		}
-		// Idle: arm the crossfade on any title change (including an empty
-		// incoming title for a tab-root landing and an empty outgoing
-		// title for a forward-from-tab click). The arm is continuous
-		// (startProgress=0) and never snaps, even when the live title
-		// lands after a forward-enter settle already ended: a same-route
-		// title resolution keeps `outgoingHasTabs === incomingHasTabs`
-		// (the route's tab-ness does not flip when only the dynamic
-		// `page.data.headerTitle` resolves), so the morph endpoints match
-		// and the crossfade is invisible on the icon layer.
+		// Idle: arm the crossfade ONLY on a title change. A tab-ness
+		// flip WITHOUT a title change (a `/search` -> tab-root
+		// browser-back, or any `/search` -> tab-root discrete nav)
+		// deliberately does NOT arm the settle: at both endpoints the
+		// root layer rests at translateY(0) (MobileTabBar shown in place
+		// at /search via `transform: none` and at the tab root via
+		// `translateY(-(1-morph)*100%)` with morph=1), so the morph
+		// value snapping from 0 to 1 in one flush produces no visible
+		// layer-group motion. The icon's freeze across the transition
+		// is owned by the `isSearch || (searchScrubbing &&
+		// currentHasTabs)` clause in the Header's `iconProgress`: at
+		// /search it stays hamburger via `isSearch`, on a tab root it
+		// stays hamburger via `1 - morph` with morph=1. Arming a settle
+		// here would drive morph 0 -> 1 over TITLE_CROSSFADE_MS, and
+		// during that window `iconProgress = 1 - morph` would briefly
+		// read 1 (full back-arrow) before reaching 0 - a hamburger
+		// flash caught by `search-back-hamburger-flash.spec.ts`. It
+		// would also drive `rootLayerStyle.translateY` from -100% to
+		// 0% - a MobileTabBar descent caught by `search-enter-exit-
+		// asymmetry.spec.ts` DV17 NB27. The tap-scrub arm above handles
+		// the search <-> non-search horizontal-track scrub on its own
+		// rAF; the idle settle arm here is restricted to the title
+		// crossfade case it correctly owns.
 		if (newTitle !== this.#prevHeaderTitle) {
 			const latched: HeaderSettleTransition = {
 				outgoingTitle: this.#prevHeaderTitle,

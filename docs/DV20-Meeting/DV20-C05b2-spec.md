@@ -254,13 +254,12 @@ The Header's search-track, search-button, and tab-bar transforms are pure
 reactive style bindings with no CSS transition (R17 removed the last residual
 inline-style transitions; R18 removed the last sub-component transitions -
 `BurgerArrowIcon`'s line-element transform transition, `MobileTabBar`'s label
-
-- pill transitions, `SearchTabBar`'s underline + cell transitions, and the
-  Header outer `transition-transform duration-200`; every frame is driven by the
-  orchestrator's rAF publication). The programmatic URL changes that arrive
-  without a gesture or a tap (direct URL entry, an external link) update the
-  reactive derivations on the next flush; the macro plan folds them into the
-  executor when those paths become orchestrator-driven.
+and pill transitions, `SearchTabBar`'s underline + cell transitions, and the
+Header outer `transition-transform duration-200`; every frame is driven by the
+orchestrator's rAF publication). The programmatic URL changes that arrive
+without a gesture or a tap (direct URL entry, an external link) update the
+reactive derivations on the next flush; the macro plan folds them into the
+executor when those paths become orchestrator-driven.
 
 ## Known 5b2 conditions (intentional deviations, not defects)
 
@@ -313,16 +312,18 @@ undefined`). With both gone, `RouteData` holds three fields (`tag`,
    `detectSwipe` tab-switch on `<main>`, the `swipeOffset` state, and the
    `transition-transform duration-200` CSS snap are removed. The pipeline is
    the sole horizontal-tab gesture on every route that mounts a pipeline
-   host. `/discussions/pN`, the one route that relied on the
-   `DualColumnLayout` tab-swipe (it renders via `DiscussionListPage` and
-   mounts no pipeline host), switches tabs via the tab bar; it stays
-   mobile-reachable through the pager's pagination links. `DualColumnLayout`
-   itself stays as the desktop shell and the mobile drawer host; only its
-   tab-swipe (the animation layer's last CSS transition) is gone. The
-   drawer's own open/close snap is a separate `captureSwipe`-driven UI
-   gesture, not part of the page-transition animation layer; it is retained
-   here, and `swipe.ts` / `DualColumnLayout` deletion is tracked under Out
-   of scope below.
+   host. `/discussions/pN` renders via `DiscussionListPage` and is a
+   discussions-tab pagination route under the `(tabs)` layout's
+   `NavPipelineTabHost` (`tag: 'tab'`, `fab: true`); it is the same
+   discussions list as `/`, so the FAB is visible on every page and
+   within-tab pagination (`/discussions/pN` to `/`) is a `{tab, tab}`
+   transition with `fromHasFab === toHasFab === true` (no FAB landing
+   snap). `DualColumnLayout` itself stays as the desktop shell and the
+   mobile drawer host; only its tab-swipe (the animation layer's last CSS
+   transition) is gone. The drawer's own open/close snap is a separate
+   `captureSwipe`-driven UI gesture, not part of the page-transition
+   animation layer; it is retained here, and `swipe.ts` /
+   `DualColumnLayout` deletion is tracked under Out of scope below.
 
 3. **`pointercancel` cancels and never commits.** `swipe.ts`'s
    `shouldCancelOnRelease` forces the cancel signal on a `pointercancel`

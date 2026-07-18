@@ -11,6 +11,7 @@ import {
 describe('getFabRouteAttributes - the FAB atom-mount registry', () => {
 	test('Family A list routes mount the FAB atom', () => {
 		expect(getFabRouteAttributes('/')?.kind).toBe('discussions');
+		expect(getFabRouteAttributes('/discussions/p2')?.kind).toBe('discussions');
 		expect(getFabRouteAttributes('/messages/inbox')?.kind).toBe('messages');
 		expect(getFabRouteAttributes('/activity')?.kind).toBe('dynamic');
 	});
@@ -53,7 +54,6 @@ describe('getFabRouteAttributes - the FAB atom-mount registry', () => {
 			'/offline/activity',
 			'/offline/123',
 			'/offline/bookmarks',
-			'/discussions/p2',
 			'/entry/signin',
 			'/avatar/55',
 			'/api/users',

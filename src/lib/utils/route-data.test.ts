@@ -58,8 +58,9 @@ describe('getRouteData - tag assignments per §3 + §14.1 + Cycle 1 spec', () =>
 });
 
 describe('getRouteData - fab visibility (record boolean)', () => {
-	test('FAB is visible at rest on / and /messages/inbox only', () => {
+	test('FAB is visible at rest on the discussions list (/, /discussions/pN) and /messages/inbox', () => {
 		expect(getRouteData('/').fab).toBe(true);
+		expect(getRouteData('/discussions/p2').fab).toBe(true);
 		expect(getRouteData('/messages/inbox').fab).toBe(true);
 	});
 	test('FAB is not visible on every other route', () => {
@@ -74,7 +75,6 @@ describe('getRouteData - fab visibility (record boolean)', () => {
 			'/profile',
 			'/admin',
 			'/notifications',
-			'/discussions/p2',
 			'/offline'
 		];
 		for (const p of notVisible) {

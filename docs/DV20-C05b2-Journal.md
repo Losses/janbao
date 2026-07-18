@@ -4164,3 +4164,125 @@ $ bun run test:e2e                    202 passed + 2 flaky (exit 0)
 ```
 
 R82 audits this state.
+
+## Session 85: R82 audit (A PASS; B 2 concerns, both FIXED) + orchestrator-found unit regression
+
+R82 ran two independent auditors. **A returned PASS, no defect** (full read of
+the 2970-line orchestrator, 18 trajectories, horizontal sweeps over every field
+lifecycle and rAF owner). B returned PASS-WITH-CONCERNS (2 concerns). Counter
+stays 0/5.
+
+### Orchestrator-found: the unit gate was red since A75
+
+Before launching R82 the orchestrator re-ran the gate independently (never
+trusting the journal's numbers). The unit run returned **377 pass / 2 fail**, not
+the "378 pass / 0 fail" reported by R76 through R81. A75 (commit `e098fcc`,
+2026-07-17 18:40) deliberately set `/discussions/pN` to `fab: true` and added it
+to `FAB_ROUTE_ATTRIBUTES` (fixing a within-tab-pagination FAB landing snap), but
+two A60 test assertions still expected `/discussions/pN` not to mount the FAB
+atom. The code is correct (`/discussions/pN` is the discussions-tab pagination
+route under `(tabs)` / `NavPipelineTabHost`, same `DiscussionListPage` as `/`,
+`tag: 'tab'`, `isNavPipelineRoute` true); the tests and spec Known #2
+("mounts no pipeline host") were stale. Fixed both tests to the positive
+assertion and rewrote spec Known #2. Unit is now 400 pass / 0 fail. Process
+finding recorded in Audit-82: R76 to R81 copied the gate numbers forward without
+re-running; the orchestrator now re-runs all four gate commands every round.
+
+### B's findings + fixes
+
+- B1 (concern, FIXED): a `Header.onBack` replace-intent nav queued during a
+  commit lost its `replaceState` intent through the replay, and the commit's own
+  `#dispatchNav` mis-applied the intent to the wrong target. Root cause: the
+  pager-store side-channel `#dispatchNav` reads cannot distinguish the queued
+  nav's intent from the commit's across the replay boundary. Fix: the
+  finish-then-new branch captures the intent into `#queuedDiscreteNav` AND clears
+  the store (the commit's dispatch then reads `false`); `#landAtRest` re-arms the
+  store from `queuedNav.replaceState` before the replay goto (the replay's
+  dispatch reads the queued intent). This is a sibling of the R81 replaceState
+  fix (R81 covered the replay goto itself; this round's horizontal check found
+  the re-interception of that replay still dropped the intent). Horizontal check
+  enumerated every `replaceStateIntent` site; docstrings rewritten.
+- B2 (concern, FIXED): `shouldCancelOnRelease`'s pointercancel term (Known #3)
+  had no preventive test. Added 7 unit tests in `swipe.test.ts`.
+
+### Preventive tests added
+
+- `e2e/messages-back-swipe.spec.ts`: "replaceState intent survives a queue-replay".
+  Drives the scenario via the dev-only `__e2eGoto` hook (extended to forward
+  `replaceState`) plus a direct pager-store mutation during a commit, and asserts
+  via the Navigation API (`navigation.entries()`) that the entry behind the
+  post-replay `/activity` is `/` (replace) not `/messages/inbox` (push). The
+  initial `history.back()` + URL-read form flaked once (the orchestrator
+  intercepts the popstate, causing a transient URL traversal that raced the
+  read); rewritten to the Navigation-API read, which triggers no navigation.
+  Verified deterministic (3 targeted runs + `--repeat-each=5` 5/5 + full spec,
+  no flaky marker) and verified it fails on pre-fix code.
+- `src/lib/actions/swipe.test.ts`: 7 `shouldCancelOnRelease` tests.
+
+### Gate outputs (post-fix, 2026-07-18, orchestrator-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores src/lib/actions    400 pass / 0 fail
+$ bun run test:e2e                    204 passed + 1 flaky (exit 0)
+```
+
+The single flaky is the pre-existing `fab.spec.ts:436` CDP-touch flake; the new
+preventive test is deterministic.
+
+R83 audits this state.
+
+## Session 86: R83 audit (A real concern FIXED; B false positive REVERTED) + gate-recovery
+
+R83 ran two independent auditors. A returned PASS-WITH-CONCERNS (1 concern);
+B returned PASS-WITH-CONCERNS (1 concern). Counter stays 0/5.
+
+### A's finding (REAL, FIXED)
+
+`#lastDispatchWasDeepToDeep` survived an interrupted deep-to-deep commit's
+pre-dispatch window: the flag is set true at the intercept, and a second nav to
+a non-deep-to-deep pipeline route (e.g. `/profile` -> `/search`) arriving before
+the commit rAF reaches `#dispatchNav` took the `(!isTabRootPath(to) &&
+!isDeepToDeep)` early-return, which did not clear it. `releaseInputs`/`configure`
+do not clear it by design, so `/search`'s `shouldEnter` read the stale true and
+suppressed `playEnterAnimation` (a hard cut). Fixed: clear the flag in that
+early-return block (`:1890`); docstring rewritten to four clear sites. New
+preventive e2e `deep-to-deep-pre-dispatch-interrupt.spec.ts`; its timing-sensitive
+`phaseCount >= 2` assertion was replaced with a durable `lastPhase.maxDelta > 50`
+check.
+
+### B's finding (FALSE POSITIVE, REVERTED)
+
+B reported a Header morph snap on `/search` -> tab-root. The initial fix (arm the
+settle also on a `currentHasTabs` flip) passed its targeted spec but the
+orchestrator's independent FULL e2e caught that it broke five existing tests
+(`search-back-hamburger-flash` x4, `search-enter-exit-asymmetry` DV17 NB27).
+Re-analysis adjudicated the finding a false positive: the morph rests at 0 on
+`/search` and 1 on a tab root but the resulting `rootLayerStyle` is identical at
+both endpoints (both `translateY(0)`), so the "snap" is invisible; and `/search`
+shows the hamburger (not the back-arrow) because `iconProgress = isSearch || ...
+? 0 : 1 - morph` freezes the icon at 0 on `/search`. Arming a settle on the flip
+drove a MobileTabBar descent and a back-arrow flash, the exact behaviors the
+existing tests prohibit. Reverted to the title-only arm (`:2720`); docstring
+rewritten to document why the tab-ness-flip arm is rejected; the false-positive
+preventive e2e `header-search-to-tab-crossfade.spec.ts` was deleted.
+
+### Process note
+
+The initial fixer ran only the targeted spec and reported green; the full-suite
+regression was caught by the orchestrator's independent e2e. A fix is gate-green
+only when the full e2e passes. Recorded in Audit-83.
+
+### Gate outputs (post-recovery, 2026-07-18, orchestrator-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores src/lib actions    400 pass / 0 fail
+$ bun run test:e2e                    205 passed + 1 flaky (exit 0)
+```
+
+The flaky is the pre-existing `fab.spec.ts:436` CDP-touch flake.
+
+R84 audits this state.

@@ -32,7 +32,12 @@
 	}
 
 	/** Client-side navigation exposed to E2E (dev-only). See __e2eGoto below. */
-	type E2EGotoHandler = (href: string) => Promise<void>;
+	interface E2EGotoOptions {
+		replaceState?: boolean;
+		noScroll?: boolean;
+		keepFocus?: boolean;
+	}
+	type E2EGotoHandler = (href: string, options?: E2EGotoOptions) => Promise<void>;
 	// E2E instrumentation for the page-cache staleness investigation (dev-only).
 	// The page cache is the swipe-back preview's data source. It is written
 	// from the root-layout effect for every tab root, and the staleness e2e
@@ -148,7 +153,7 @@
 	// SPA path the drawer link ultimately takes, without the timing surface.
 	if (import.meta.env.DEV && typeof window !== 'undefined') {
 		const w = window as E2EWindow;
-		w.__e2eGoto = (href) => goto(href);
+		w.__e2eGoto = (href, options) => goto(href, options);
 		// Wrap the page-cache capture once (HMR-safe via the hooked flag) so
 		// every cache write, from any caller of getPageCacheStore(), appends
 		// to a log the staleness e2e reads. The wrapper is installed as an

@@ -774,6 +774,132 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		await page.waitForURL('/', { timeout: 5000 });
 	});
 
+	// Preventive cover for the finish-then-new queue-replay replaceState
+	// invariant. The orchestrator's `#dispatchNav` reads `replaceState`
+	// from the pager store side-channel, so a replace-intent nav queued
+	// during an in-flight commit (the `Header.onBack` scenario) must
+	// preserve the intent across two dispatch sites:
+	//   1. The COMMIT's dispatch must NOT read the queued nav's intent
+	//      (the commit's target is the wrong URL for the replace).
+	//   2. The REPLAY's dispatch MUST read the queued nav's intent (the
+	//      intent's correct target is the queued nav's).
+	// The capture-clear-rearm flow enforces both: the finish-then-new
+	// branch captures the store into `#queuedDiscreteNav.replaceState`
+	// and clears the store; `#landAtRest` re-arms the store from the
+	// queue before firing the replay goto.
+	//
+	// This test drives the scenario via the dev-only `__e2eGoto` hook:
+	// during a back-swipe's commit slide we set the pager store to
+	// `replaceStateIntent = true` and fire `goto('/activity', {
+	// replaceState: true })`. The orchestrator's finish-then-new policy
+	// queues the goto, accelerates the commit to /messages/inbox
+	// (history.back), then replays the queued /activity nav. The replay
+	// honours the captured intent (replaceState: true), so the
+	// /messages/inbox entry (the one the commit's history.back moved the
+	// pointer to) is REPLACED by /activity: the entry immediately behind
+	// the new /activity current is '/'. A push instead of a replace
+	// appends /activity after /messages/inbox (pruning the prior forward
+	// /messages/<id> entry), so the entry behind /activity stays
+	// /messages/inbox. The discriminator is `navigation.entries()` read
+	// directly: the entry at `currentEntry.index - 1` is '/' when the
+	// replace is preserved, or '/messages/inbox' when the replay
+	// degrades to a push.
+	test('replaceState intent survives a queue-replay (replace-intent nav queued during a commit)', async ({
+		page,
+		context
+	}) => {
+		await prepareContext(context);
+		// Land on /messages/inbox first so the conversation push creates a
+		// well-shaped stack: ['/', '/messages/inbox', '/messages/<id>'].
+		await page.goto('/');
+		await waitForHydration(page);
+		await page.click('a[data-tab-nav][href="/messages/inbox"]');
+		await page.waitForURL('/messages/inbox');
+		await page.waitForTimeout(200);
+		await page.click('a[href^="/messages/"]:not([href="/messages/new"]):not([href="/messages/inbox"])');
+		await page.waitForURL(/\/messages\/\d+/);
+		await page.waitForTimeout(500);
+
+		// Drive a back-swipe; the commit slide is in flight for ~200ms after
+		// the touch release, which is the window in which a `Header.onBack`
+		// (or any programmatic replace-intent goto) lands and gets queued.
+		await swipeBack(page);
+		// Immediately fire the replace-intent nav: set the side-channel the
+		// same way `Header.onBack` does, then goto via the dev hook (the
+		// production caller uses `$app/navigation`'s `goto`). The orchestrator
+		// intercepts this in `onSvelteKitBeforeNavigate`, sees the executor is
+		// still in `phase === 'committing'`, captures the intent into
+		// `#queuedDiscreteNav`, and cancels the goto. `navigation.cancel()`
+		// discards the goto's own `replaceState` option, so the store is the
+		// ONLY path the intent can survive through.
+		await page.evaluate(async () => {
+			const w = window as unknown as {
+				__primaryPager?: { setReplaceStateIntent: (v: boolean) => void };
+				__e2eGoto?: (href: string, opts?: { replaceState?: boolean }) => Promise<void>;
+			};
+			w.__primaryPager!.setReplaceStateIntent(true);
+			await w.__e2eGoto!('/activity', { replaceState: true });
+		});
+
+		// The commit lands on /messages/inbox, then the queued replay fires
+		// and the orchestrator drives a fresh slide plan for /activity. Wait
+		// for the replay to land.
+		await page.waitForURL('**/activity', { timeout: 5000 });
+		// Hold for the post-landing settle: afterNavigate fires #landAtRest,
+		// the orchestrator clears the queue + replaceState side-channel, and
+		// SvelteKit's history write commits. The stack is what we assert, so
+		// we wait for it to stabilise before reading navigation.entries().
+		await page.waitForTimeout(200);
+
+		// Assert the ENTRY BEHIND the current /activity via the Navigation
+		// API. When the replace intent is preserved, /activity REPLACES
+		// /messages/inbox (the entry the commit's history.back moved the
+		// pointer to), so the previous entry is '/'. When the replay
+		// degrades to a push, /activity is appended after /messages/inbox
+		// (and the prior forward /messages/<id> entry is pruned by the
+		// push), so the previous entry is '/messages/inbox'.
+		//
+		// This is the same discrimination the user-visible
+		// `history.back()` landing gives ('/' for a replace vs
+		// '/messages/inbox' for a push), read directly from the session
+		// history without driving another navigation. Reading
+		// `navigation.entries()` is deterministic because both '/' and
+		// '/activity' are pipeline routes: an actual `history.back()`
+		// would re-enter the orchestrator's `onSvelteKitBeforeNavigate`,
+		// which calls `navigation.cancel()` (discrete-nav branch) and
+		// runs a fresh slide plan. During that intercept cycle the URL
+		// transiently flips `/activity` -> '/' (popstate) -> '/activity'
+		// (cancel revert) -> '/' (the slide's eventual #dispatchNav
+		// history.back, ~200ms later). A `waitForFunction` poll can
+		// resolve on the FIRST transient '/' while Playwright's tracked
+		// `page.url()` still reads the reverted '/activity', desyncing
+		// the assertion. `navigation.entries()` reads the session history
+		// synchronously with no navigation triggered, so the
+		// orchestrator's intercept cycle never runs and there is no URL
+		// transient to race.
+		const historyAround = await page.evaluate(() => {
+			if (typeof navigation === 'undefined' || !navigation.currentEntry) {
+				throw new Error('Navigation API unavailable in this browser');
+			}
+			const entries = navigation.entries();
+			const currentIdx = navigation.currentEntry.index;
+			const prev = currentIdx > 0 ? entries[currentIdx - 1] : null;
+			return {
+				current: new URL(navigation.currentEntry.url).pathname,
+				prev: prev ? new URL(prev.url).pathname : null
+			};
+		});
+		expect(
+			historyAround.current,
+			`post-replay current entry must be '/activity'`
+		).toBe('/activity');
+		expect(
+			historyAround.prev,
+			`entry behind '/activity' must be '/' (replace preserved the intent); ` +
+				`'/messages/inbox' means the replay degraded the replace to a push`
+		).toBe('/');
+	});
+
 	// The gesture-during-tab-click-commit interrupt is not separately
 	// e2e'd here: the gesture must catch the tab-click's ~200ms slide
 	// slide, a race too tight to be reliable under varying dev-server
