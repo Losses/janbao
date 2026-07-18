@@ -4134,3 +4134,33 @@ $ bun run test:e2e                    203 passed + 1 flaky (exit 0, R78 post-fix
 ```
 
 R81 audits this state.
+
+## Session 84: R81 audit (A 1 low + 1 very low; B failed 429) + fixes
+
+R81 ran two independent auditors. A returned PASS-WITH-CONCERNS (1 low + 1 very
+low). B failed due to API rate limit (429). Counter stays 0/5.
+
+### Findings + fixes
+
+- A1 (low, FIXED): `e2e/forward-deep-to-deep-slide.spec.ts` docstring said
+  "2-panel / left panel" but the host is 3-panel and the forward deep-to-deep
+  slide reveals the RIGHT panel. Reworded.
+- A2 (very low, FIXED): `PendingDiscreteNav` carried only `{ target }`; the
+  finish-then-new queued replay used bare `goto(target)` (push), losing the
+  `replaceState` intent from `Header.onBack`. Fixed: `PendingDiscreteNav` now
+  carries `replaceState` (captured from the pager store at queue time); the
+  replay passes `{ replaceState }` to `goto`. (The orchestrator's initial
+  classification of A2 as "design tradeoff, accepted" was corrected after the
+  user challenged it: the policy covers more than tab-clicks, so the push
+  default is wrong for replace-intent navs. The fix is not optional.)
+
+### Gate outputs (post-fix, 2026-07-17)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
+$ bun run test:e2e                    202 passed + 2 flaky (exit 0)
+```
+
+R82 audits this state.

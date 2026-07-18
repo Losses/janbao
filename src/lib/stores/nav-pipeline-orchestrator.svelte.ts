@@ -155,6 +155,14 @@ interface PendingGestureTransition {
  *  exact URL the discrete nav targeted. */
 interface PendingDiscreteNav {
 	readonly target: string;
+	/** The `replaceState` intent from the queued navigation's original `goto`
+	 *  call (captured from the pager store at queue time). Carried through
+	 *  the finish-then-new replay so a `Header.onBack` replace-intent nav
+	 *  does not silently degrade to a push. Optional: `#pendingDiscreteNav`
+	 *  does not set it (the dispatch reads the store directly); only
+	 *  `#queuedDiscreteNav` sets it (the replay fires after `#landAtRest`
+	 *  clears the store). */
+	readonly replaceState?: boolean;
 }
 
 /** A URL record subset the layout hook extracts from SvelteKit's
@@ -1698,13 +1706,16 @@ export class NavPipelineOrchestrator {
 		this.#progress = 0;
 		// Fire a queued discrete navigation (the finish-then-new policy).
 		// The in-flight commit completed and the nav landed; replay the
-		// queued tab-click so `onSvelteKitBeforeNavigate` intercepts it on
-		// the active host and plays the transition from progress 0. The
-		// queue is consumed exactly once (cleared before the goto fires).
+		// queued nav so `onSvelteKitBeforeNavigate` intercepts it on the
+		// active host and plays the transition from progress 0. The
+		// `replaceState` intent from the original `goto` is carried through
+		// the queue so a replace-intent nav (e.g. `Header.onBack`) does not
+		// degrade to a push. The queue is consumed exactly once (cleared
+		// before the goto fires).
 		const queuedNav = this.#queuedDiscreteNav;
 		this.#queuedDiscreteNav = null;
 		if (queuedNav !== null) {
-			void goto(queuedNav.target);
+			void goto(queuedNav.target, { replaceState: queuedNav.replaceState });
 		}
 	}
 
@@ -1864,7 +1875,10 @@ export class NavPipelineOrchestrator {
 		// discrete nav falls through to the from-visual handoff below.
 		if (this.#executor?.state.phase === 'committing') {
 			this.#accelerateInFlight();
-			this.#queuedDiscreteNav = { target: to + toSearch };
+			this.#queuedDiscreteNav = {
+				target: to + toSearch,
+				replaceState: getMobilePagerStore().replaceStateIntent
+			};
 			navigation.cancel();
 			return true;
 		}
