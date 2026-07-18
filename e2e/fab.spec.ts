@@ -433,6 +433,13 @@ test('Family B forward: list -> thread scales the FAB out as a monotonic traject
 // from near 0 (thread covers at drag start) up toward 1 (list foreground at
 // drag end), with intermediate values present (the assertion that catches a
 // pinned scale at 1 from frame 1).
+//
+// Pre-swipe timing: the 800ms wait covers the click-driven enter animation's
+// full commit ease (clamped to COMMIT_T_MIN_MS=100 .. COMMIT_T_MAX_MS=600)
+// plus post-settle Svelte flush slack, so the orchestrator is reliably idle
+// when the swipe begins. The mid-enter case (swipe begun during the enter's
+// commit ease) is covered by the dedicated `Family B back (mid-enter)`
+// spec below; this spec validates the post-settle path.
 test('Family B back: thread -> list scales the FAB in as a monotonic trajectory', async ({
 	page
 }) => {
@@ -440,7 +447,9 @@ test('Family B back: thread -> list scales the FAB in as a monotonic trajectory'
 	await waitForHydration(page);
 	await clickDiscussion(page, 0);
 	await page.waitForURL(/\/discussion\//);
-	await page.waitForTimeout(300);
+	// Wait for the click-driven enter animation to fully settle before the
+	// swipe. See the test-level comment above for the rationale.
+	await page.waitForTimeout(800);
 	const capture = await sampleFabScale(page, async () => {
 		await swipeBack(page);
 		await page.waitForURL('/', { timeout: 5000 });
@@ -449,12 +458,13 @@ test('Family B back: thread -> list scales the FAB in as a monotonic trajectory'
 		capture.samples.length,
 		'sampler must have captured enough frames to span the swipe'
 	).toBeGreaterThanOrEqual(6);
-	// CDP dispatches all touchMoves synchronously before the first rAF, so the
-	// first sampled frame can land mid-drag (~0.5) rather than at rest. The
-	// resting state is scale 0 (verify via a near-zero sample somewhere in the
-	// first 3 frames), and the trajectory-shape guards below (monotonicity, the
-	// 0.5 mid-window crossing, the intermediate in (0.3,0.7), the last > 0.9)
-	// carry the real assertion weight.
+	// The toHasFab-only half-mapping keeps scale 0 for progress < 0.5, so the
+	// FAB stays at scale 0 for the first half of the transition (thread
+	// covers the list). Verify a near-zero sample exists in the first 3
+	// frames (the source-list FAB is covered at rest), then the
+	// trajectory-shape guards below (monotonicity, the 0.5 mid-window
+	// crossing, the intermediate in (0.3,0.7), the last > 0.9) carry the
+	// real assertion weight.
 	const firstThree = capture.samples.slice(0, 3);
 	expect(
 		Math.min(...(firstThree.length > 0 ? firstThree : [1])),
@@ -481,6 +491,96 @@ test('Family B back: thread -> list scales the FAB in as a monotonic trajectory'
 	expect(
 		capture.samples.some((s) => s > 0.3 && s < 0.7),
 		'an intermediate scale sample between 0.3 and 0.7 must exist mid-swipe'
+	).toBe(true);
+});
+
+// Family B back (mid-enter): the back-swipe begins DURING the click-driven
+// forward-enter's commit ease, not after it settles. The orchestrator must
+// recognise the gesture and drive `publication.progress` continuously so the
+// FAB ramps through (0.3, 0.7) rather than jumping from 0 to ~0.7+ in a
+// single frame. `#beginGesture` seeds the new gesture's `rawStart` from
+// `startProgress` (the new plan's progress at the current visual), keeping
+// the publication in lockstep with the track translate across the FROM/TO
+// swap.
+//
+// Timing: a `__e2ePublication` dev hook exposes the orchestrator's
+// publication. The test pre-arms the FAB sampler, then waits for the
+// enter's commit ease to cross 70% progress (deep enough that seeding
+// `rawStart` from the in-flight raw would land the FAB past the
+// (0.3, 0.7) mid-range on the first post-claim frame) and fires the swipe
+// inside the same trigger. Pre-arming the sampler eliminates the
+// ~80ms install delay between the wait resolving and the first sampled
+// frame; the swipe's CDP setup (~50ms) advances the enter by another
+// ~15% but still lands it inside the in-flight window.
+test('Family B back (mid-enter): back-swipe during the forward-enter commit ease ramps the FAB through the mid-range', async ({
+	page
+}) => {
+	await page.goto('/');
+	await waitForHydration(page);
+	await clickDiscussion(page, 0);
+	await page.waitForURL(/\/discussion\//);
+	type PublicationProbe = {
+		inFlight: boolean;
+		progress: number;
+		fromPathname: string | null;
+		toPathname: string | null;
+	};
+	type PublicationWindow = Window & {
+		__e2ePublication?: () => PublicationProbe | null;
+	};
+	const capture = await sampleFabScale(page, async () => {
+		// Wait until the enter's commit ease is deep enough that seeding
+		// `rawStart` from the in-flight raw (instead of the
+		// visual-derived `startProgress`) would land the FAB past
+		// (0.3, 0.7) on the first post-claim frame. The > 0.7 threshold
+		// plus the CDP-setup delay lands the swipe at progress ~0.85+,
+		// where FAB = (rawStart - 0.5) * 2 > 0.7.
+		await page.waitForFunction(
+			() => {
+				const pub = (window as unknown as PublicationWindow).__e2ePublication?.();
+				return pub?.inFlight === true && pub.progress > 0.7;
+			},
+			{ timeout: 5000 }
+		);
+		await swipeBack(page);
+		await page.waitForURL('/', { timeout: 5000 });
+	});
+	// Trim leading and trailing artifacts so the intermediate-sample
+	// assertion sees only the back-swipe's own trajectory. The forward
+	// enter's ramp-down (1 -> 0) precedes the back-swipe's ramp-up (0 -> 1)
+	// in the captured window; without trimming, a sample from the enter's
+	// tail could satisfy the (0.3, 0.7) check and mask the bug. The
+	// trimLeadingArtifact + trimTrailingNoise pair isolates the
+	// back-swipe's sustained-0 start plateau through its sustained-1 end.
+	const trailingTrimmed = trimTrailingNoise(capture.samples, 1, 0.05);
+	const trajectorySamples = trimLeadingArtifact(trailingTrimmed, 0, 0.05);
+	expect(
+		capture.samples.length,
+		'sampler must have captured enough frames to span the swipe'
+	).toBeGreaterThanOrEqual(6);
+	expect(
+		capture.samples[capture.samples.length - 1] ?? 0,
+		'FAB must rest near scale 1 once the list is foreground'
+	).toBeGreaterThan(0.9);
+	expect(
+		capture.maxScale ?? 0,
+		'FAB must scale above 0.5 during the swipe'
+	).toBeGreaterThan(0.5);
+	assertNonDecreasingWithinTolerance(capture.samples, 0.25);
+	expect(
+		scaleTrajectoryCrosses(trajectorySamples, 0.5),
+		'scale trajectory must cross 0.5 inside the swipe window (after trimming enter and post-settle artifacts)'
+	).toBe(true);
+	// The load-bearing assertion: if the publication seeds past the
+	// midpoint at gesture claim, it saturates before the finger crosses
+	// half the viewport and skips the (0.3, 0.7) mid-range entirely.
+	// The continuous ramp through that range proves `rawStart` was seeded
+	// from the visual-derived `startProgress`. Run against the trimmed
+	// trajectory so the forward enter's ramp-down cannot satisfy the
+	// check by accident.
+	expect(
+		trajectorySamples.some((s) => s > 0.3 && s < 0.7),
+		'an intermediate scale sample between 0.3 and 0.7 must exist mid-swipe (the FAB must ramp, not jump, when the swipe begins mid-enter)'
 	).toBe(true);
 });
 

@@ -50,12 +50,20 @@
 		t: number;
 	}
 	type E2EInvalidateBadgesHandler = () => Promise<void>;
+	interface E2EPublicationProbe {
+		inFlight: boolean;
+		progress: number;
+		fromPathname: string | null;
+		toPathname: string | null;
+	}
+	type E2EPublicationHandler = () => E2EPublicationProbe | null;
 	interface E2EWindow extends Window {
 		__e2eGoto?: E2EGotoHandler;
 		__e2ePageCache?: PageCacheStore;
 		__e2eCacheWrites?: E2ECacheWrite[];
 		__e2eInvalidateBadges?: E2EInvalidateBadgesHandler;
 		__e2ePageCacheHooked?: boolean;
+		__e2ePublication?: E2EPublicationHandler;
 	}
 
 	let { data, children }: LayoutProps = $props();
@@ -174,6 +182,17 @@
 				origCapture(pathname, subKey, input);
 			};
 			w.__e2eInvalidateBadges = () => invalidate('app:badges');
+			w.__e2ePublication = () => {
+				const orch = getNavPipelineOrchestrator();
+				if (orch === null) return null;
+				const pub = orch.publication;
+				return {
+					inFlight: pub.inFlight,
+					progress: pub.progress,
+					fromPathname: pub.fromPathname,
+					toPathname: pub.toPathname
+				};
+			};
 			w.__e2ePageCacheHooked = true;
 		}
 	}

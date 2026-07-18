@@ -52,11 +52,11 @@ false positive:
 1. The morph's at-rest branch returns `currentHasTabs ? 1 : 0` (0 at `/search`,
    1 at a tab root), but the resulting `rootLayerStyle` is identical at both
    endpoints: `transform: none` at `/search` and `translateY(-(1-1)*100%) =
-   translateY(0%)` at the tab root. The "snap from 0 to 1" produces no visible
+translateY(0%)` at the tab root. The "snap from 0 to 1" produces no visible
    layer-group motion.
 2. The icon is held at the hamburger on `/search` by the `isSearch || ...`
    freeze in `Header.iconProgress` (`return isSearch || (searchScrubbing &&
-   currentHasTabs) ? 0 : 1 - morph`), so `/search` shows the hamburger, not the
+currentHasTabs) ? 0 : 1 - morph`), so `/search` shows the hamburger, not the
    back-arrow. B's premise that `/search` rests at morph=0 and therefore shows
    the back-arrow missed this freeze.
 3. Arming a settle on the tab-ness flip would drive `rootLayerStyle.translateY`

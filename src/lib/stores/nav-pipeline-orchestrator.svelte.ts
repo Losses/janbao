@@ -557,14 +557,19 @@ export class NavPipelineOrchestrator {
 	 *  just-landed pipeline commit (the executor's slide already drove
 	 *  the search-layout visual to its post-land position; arming a
 	 *  fresh scrub would re-animate it from the opposite endpoint and
-	 *  jump). Cleared in four places: `#landAtRest` (the navigation
+	 *  jump). Cleared in five places: `#landAtRest` (the navigation
 	 *  has landed), `notifyHeaderState`'s main body (defensive clear
 	 *  after the read so a second header-state notification within the
 	 *  same navigation does not re-consume the flag), the supersede
 	 *  branch in `onSvelteKitBeforeNavigate` (an external nav cancels
 	 *  our in-flight goto so `#landAtRest` never runs; without this
 	 *  clear the stale true would skip a tap-scrub arm on the next
-	 *  pipeline commit), and `unmount` (the mobile -> desktop flip
+	 *  pipeline commit), `#beginGesture` (a new gesture invalidates
+	 *  the in-flight dispatch's markers: clearing `#navDispatchInFlight`
+	 *  here makes the pending afterNavigate short-circuit before
+	 *  `#landAtRest`, so the landing-state flags must be cleared here
+	 *  too or they leak into the gesture's `notifyHeaderState` /
+	 *  `shouldEnter` reads), and `unmount` (the mobile -> desktop flip
 	 *  tears down the host inputs; without this clear the stale true
 	 *  would survive the desktop detour and skip a tap-scrub arm when
 	 *  the user returns to mobile). */
@@ -590,12 +595,13 @@ export class NavPipelineOrchestrator {
 	 *     by `releaseInputs`, so they do not survive the source host's
 	 *     teardown) and `#lastLandWasPipelineCommit` (cleared by
 	 *     `#landAtRest`, `notifyHeaderState`'s main body, the supersede
-	 *     branch in `onSvelteKitBeforeNavigate`, and `unmount`; it is
-	 *     read by `notifyHeaderState`, not by `shouldEnter`).
+	 *     branch in `onSvelteKitBeforeNavigate`, `#beginGesture`, and
+	 *     `unmount`; it is read by `notifyHeaderState`, not by
+	 *     `shouldEnter`).
 	 *   - READ by the destination host's `shouldEnter` at onMount (via
 	 *     the publication's `lastDispatchWasDeepToDeep` field) to
 	 *     suppress the enter animation.
-	 *   - CLEARED to false in four places. (a) `#landAtRest`, which
+	 *   - CLEARED to false in five places. (a) `#landAtRest`, which
 	 *     runs in `onSvelteKitAfterNavigate` AFTER the destination
 	 *     host's onMount (so the flag is still true when `shouldEnter`
 	 *     reads it); a deep-to-deep target is always a pipeline route
@@ -618,9 +624,13 @@ export class NavPipelineOrchestrator {
 	 *     `playEnterAnimation` and land the route with a hard cut.
 	 *     Covers a pipeline destination (`/profile` -> `/search`) and
 	 *     a non-pipeline destination (`/profile` -> `/offline/bookmarks`).
-	 *     (d) `unmount`, which resets every transient transition field
-	 *     so the next mount (a desktop -> mobile flip that re-enters
-	 *     mobile) starts clean.
+	 *     (d) `#beginGesture`, which clears `#navDispatchInFlight`
+	 *     alongside this flag (a new gesture invalidates the in-flight
+	 *     dispatch's markers); the same ordering rationale as for
+	 *     `#lastLandWasPipelineCommit` applies. (e) `unmount`, which
+	 *     resets every transient transition field so the next mount
+	 *     (a desktop -> mobile flip that re-enters mobile) starts
+	 *     clean.
 	 *
 	 *  Backed by `$state` because the `#publication` `$derived.by`
 	 *  reads it to publish `lastDispatchWasDeepToDeep` for the
@@ -871,11 +881,6 @@ export class NavPipelineOrchestrator {
 		};
 		this.#pendingGesture = null;
 		this.#pendingDiscreteNav = null;
-		// Capture the in-flight raw BEFORE resetting the progress
-		// (consistent with #beginGesture / onSvelteKitBeforeNavigate).
-		// playEnterAnimation runs synchronously after configure in the
-		// host's onMount, so the prior progress is 0 (configure reset it).
-		this.#commitStartRaw = this.#progress;
 		this.#isEnterAnimation = true;
 		// The enter is a forward transition: FROM is the back-target, TO
 		// is the host route. Dispatch through the state machine so its
@@ -903,6 +908,12 @@ export class NavPipelineOrchestrator {
 		// above returns if a gesture or tab-click arrived in the same
 		// tick, so there is no in-flight position to continue from.
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
+		// Seed `#commitStartRaw` from the visual-derived `startProgress`
+		// (consistent with #beginGesture / onSvelteKitBeforeNavigate).
+		// For the enter case there is no in-flight plan (configure reset
+		// the executor), so `startProgress` is 0; the publication's
+		// commit-phase lerp thus starts at the at-rest endpoint.
+		this.#commitStartRaw = startProgress;
 		executor.onDragStart(plan, startProgress);
 		// No finger-release velocity on a forward-enter: pass 0 and let the
 		// velocity-matched solver pick the default duration
@@ -932,8 +943,14 @@ export class NavPipelineOrchestrator {
 		// deep page's static title). For a dynamic-title back-target the
 		// resolver returns null -> '' (the live title was replaced by the
 		// `$effect.pre` update). The incoming uses the resolver (the host
-		// route's static title); for a dynamic-title host the live title takes
-		// over when `page.data.headerTitle` resolves after the settle.
+		// route's static title) for endpoint symmetry with the outgoing so
+		// the crossfade latched pair is stable across destination load-timing.
+		// The live destination title is already in `#prevHeaderTitle` when
+		// this runs (the Header's `$effect.pre` fires BEFORE this host's
+		// `onMount`, so the live `page.data.headerTitle` is available before
+		// the settle starts, not after). It is displayed when the settle
+		// completes and the title view's at-rest branch (which reads the live
+		// `page.data.headerTitle`) takes over as `settleActive` becomes false.
 		const t = this.#headerT;
 		if (t !== null) {
 			const outgoingTitle = resolveDeepHeaderTitle(inputs.backTarget, t) ?? '';
@@ -1000,10 +1017,26 @@ export class NavPipelineOrchestrator {
 		this.#liveDragging = false;
 		this.#prevWasDrag = false;
 		this.#gestureToTabIndex = null;
-		// Tear down the settle + tap-scrub eases and the header-state
-		// watchers so the next mount (a desktop -> mobile flip) starts
-		// clean. The first configure after the re-mount re-installs the
-		// watchers.
+		// Tear down the settle + tap-scrub eases so the next mount (a
+		// desktop -> mobile flip that re-enters mobile) starts clean.
+		// The header-state fields (`#headerStateInitialized`,
+		// `#prevHeaderTitle`, `#prevHeaderHasTabs`, `#prevHeaderIsSearch`,
+		// `#headerT`) are intentionally NOT cleared here: the Header
+		// persists across the flip (AppShell stays mounted; only the
+		// host swaps), so its last-reported state remains valid, and
+		// the Header's `$effect.pre` keeps firing `notifyHeaderState`
+		// during desktop-mode navigation - that call's `!#mounted`
+		// branch writes `#headerT` unconditionally and refreshes the
+		// three prev fields when no settle is active. Clearing them
+		// here would leave a window (flip-without-navigation ->
+		// back-swipe before any nav) where `#armSettleEaseFromGesture`
+		// and `playEnterAnimation`'s `if (t !== null)` guard read
+		// empty / null latched endpoints and run a 200ms title
+		// crossfade against empty titles. `configure()` does not
+		// touch these fields either; a real Header re-mount (an
+		// AppShell unmount / remount across a `/entry/*` detour)
+		// resets them via `resetHeaderState`, which the Header
+		// component calls from its `onMount`.
 		this.#cancelSettleEaseRaf();
 		this.#cancelTapScrubRaf();
 		this.#settleAwaitTitle = false;
@@ -1015,11 +1048,6 @@ export class NavPipelineOrchestrator {
 		this.#scrubToValue = 0;
 		this.#scrubStartTs = 0;
 		this.#scrubTerminal = 0;
-		this.#headerStateInitialized = false;
-		this.#prevHeaderTitle = '';
-		this.#prevHeaderHasTabs = false;
-		this.#prevHeaderIsSearch = false;
-		this.#headerT = null;
 		this.#lastLandWasPipelineCommit = false;
 		this.#lastDispatchWasDeepToDeep = false;
 		this.#mountInputs = null;
@@ -1335,6 +1363,35 @@ export class NavPipelineOrchestrator {
 		// re-grab continues `backMorph` / `publication.progress` from the
 		// publication's live raw.
 		this.#isEnterAnimation = false;
+		// Invalidate an in-flight dispatch's markers (analogous to the
+		// enter-flag clear above). If a tab-click / discrete-nav commit
+		// fired `#dispatchNav` and its `goto` is mid-flight (the 1-3-frame
+		// window between `goto` and the destination's `afterNavigate`),
+		// `#navDispatchInFlight` is still true and `#dispatchTarget` still
+		// holds the dispatch's URL. Without this clear the pending
+		// `afterNavigate` would see `#navDispatchInFlight === true` and
+		// fall through to `#landAtRest`, which clears `#pendingGesture` and
+		// wipes the gesture just begun (the drag goes unresponsive until
+		// pointerup + re-press). Clearing here makes `afterNavigate`'s
+		// `#pendingGesture !== null` guard short-circuit before
+		// `#landAtRest`. The dispatch's `.finally` clears the same fields
+		// again after `goto` resolves (no-op here, but defense-in-depth).
+		// Also clear the two landing-state fields `#landAtRest` would have
+		// cleared for this dispatch's landing (`#lastLandWasPipelineCommit`,
+		// `#lastDispatchWasDeepToDeep`): with `#navDispatchInFlight`
+		// cleared, `afterNavigate`'s guard returns early and `#landAtRest`
+		// never runs, so the flags would otherwise survive the landing and
+		// leak into the next nav's `notifyHeaderState` / `shouldEnter`
+		// reads. The other landing-state (`#settleAwaitTitle`,
+		// `replaceStateIntent`) is cleared by `onSvelteKitAfterNavigate`'s
+		// unconditional preamble, so no clear is needed here for those.
+		// The fields that `#landAtRest` clears but the gesture now owns
+		// (`#pendingGesture`, `#liveDragging`, `#gestureToTabIndex`,
+		// `#progress`) are intentionally NOT cleared here.
+		this.#navDispatchInFlight = false;
+		this.#dispatchTarget = null;
+		this.#lastLandWasPipelineCommit = false;
+		this.#lastDispatchWasDeepToDeep = false;
 		this.#liveDragging = true;
 		const from = inputs.fromPathname;
 		const fromTag = inputs.fromTag;
@@ -1368,10 +1425,6 @@ export class NavPipelineOrchestrator {
 		// overriding the user's latest direct action.
 		this.#pendingDiscreteNav = null;
 		this.#queuedDiscreteNav = null;
-		// Capture the in-flight raw BEFORE resetting the progress so a
-		// re-grab mid-commit continues `backMorph` / `publication.progress`
-		// from the live value.
-		const rawStart = this.#progress;
 		if (target === null) {
 			// Boundary void-swipe on a bidirectional host (first/last tab):
 			// start a rubber-band gesture that tracks the finger at a reduced
@@ -1393,8 +1446,30 @@ export class NavPipelineOrchestrator {
 			this.#stateMachine.onIntent(intent, from, fromTag);
 			this.#stateMachine.onResolved(boundaryPlan, from, from, fromTag, fromTag, direction);
 			this.#progress = 0;
+			// `rawStart` is the new plan's progress at the current visual
+			// position. It equals the value `#startProgressFromCurrentVisual`
+			// returns for `boundaryPlan`, NOT `this.#progress`. The two can
+			// diverge when this gesture interrupts an in-flight transition
+			// whose FROM/TO differ from the new gesture's: the same visual
+			// position maps to distinct raw values once FROM/TO swap, so
+			// seeding the publication from the in-flight raw would publish
+			// a scale already past the midpoint (the FAB jumps to ~0.6 from
+			// frame 1 and saturates before the finger crosses half the
+			// viewport, skipping the (0.3, 0.7) mid-range). Using the
+			// visual-derived `startProgress` keeps the publication in
+			// lockstep with the track translate (which
+			// `executor.onDragStart` seeds from the same value) for every
+			// re-grab shape: from-rest (both 0), same-direction mid-commit
+			// (the new plan's geometry matches, so `startProgress` equals
+			// the in-flight raw), and opposite-direction mid-enter.
 			const startProgress = this.#startProgressFromCurrentVisual(boundaryPlan);
-			this.#pendingGesture = { to: from, startProgress, rawStart, direction, boundary: true };
+			this.#pendingGesture = {
+				to: from,
+				startProgress,
+				rawStart: startProgress,
+				direction,
+				boundary: true
+			};
 			this.#executor?.onDragStart(boundaryPlan, startProgress);
 			return;
 		}
@@ -1415,7 +1490,17 @@ export class NavPipelineOrchestrator {
 		// Start the gesture at the track's current visual position so an
 		// in-flight forward-enter or commit hands off with no jump.
 		const startProgress = this.#startProgressFromCurrentVisual(plan);
-		this.#pendingGesture = { to, startProgress, rawStart, direction, boundary: false };
+		// See the boundary branch above: `rawStart` mirrors `startProgress`
+		// so the publication's raw stays in lockstep with the track
+		// translate across the FROM/TO swap on an opposite-direction
+		// re-grab.
+		this.#pendingGesture = {
+			to,
+			startProgress,
+			rawStart: startProgress,
+			direction,
+			boundary: false
+		};
 		this.#executor?.onDragStart(plan, startProgress);
 	}
 
@@ -1870,21 +1955,21 @@ export class NavPipelineOrchestrator {
 			if (!isNavPipelineRoute(to)) {
 				this.#cancelAllAnimationEases();
 			}
-			// Clear the deep-to-deep handshake flag. The four clear sites
-			// (`#landAtRest`, the supersede branch, this branch, `unmount`)
-			// cover every interruption path; this branch covers a
-			// non-deep-to-deep nav arriving in the pre-dispatch window
-			// (after `navigation.cancel()` armed the slide on the source
-			// host but before the commit rAF reached `#dispatchNav`, so
-			// `#navDispatchInFlight` is still false and the supersede branch
-			// above does not fire). Without this clear the flag stays true,
-			// the destination host's `shouldEnter` reads it and suppresses
-			// `playEnterAnimation`, and the route lands with a hard cut
-			// instead of the forward-enter slide. This branch fires for
-			// every non-tab-root non-deep-to-deep target, so it covers the
-			// pipeline-destination case (`/profile` -> `/search`: the
-			// orchestrator stays active and `releaseInputs` does not clear
-			// the flag) and the non-pipeline-destination case
+			// Clear the deep-to-deep handshake flag. The five clear sites
+			// (`#landAtRest`, the supersede branch, this branch,
+			// `#beginGesture`, `unmount`) cover every interruption path;
+			// this branch covers a non-deep-to-deep nav arriving in the
+			// pre-dispatch window (after `navigation.cancel()` armed the
+			// slide on the source host but before the commit rAF reached
+			// `#dispatchNav`, so `#navDispatchInFlight` is still false and
+			// the supersede branch above does not fire). Without this clear
+			// the flag stays true, the destination host's `shouldEnter`
+			// reads it and suppresses `playEnterAnimation`, and the route
+			// lands with a hard cut instead of the forward-enter slide.
+			// This branch fires for every non-tab-root non-deep-to-deep
+			// target, so it covers the pipeline-destination case (`/profile`
+			// -> `/search`: the orchestrator stays active and `releaseInputs`
+			// does not clear the flag) and the non-pipeline-destination case
 			// (`/profile` -> `/offline/bookmarks`: the flag would otherwise
 			// survive the detour until the next mobile re-mount).
 			this.#lastDispatchWasDeepToDeep = false;
@@ -2000,10 +2085,29 @@ export class NavPipelineOrchestrator {
 		this.#navDispatchInFlight = false;
 		this.#dispatchTarget = null;
 		navigation.cancel();
-		// Capture the in-flight raw BEFORE resetting the progress so a
-		// tab-click interrupting a gesture commit continues `backMorph` /
-		// `publication.progress` from the live value.
-		this.#commitStartRaw = this.#progress;
+		// Compute the new plan's progress at the current visual position
+		// BEFORE we touch the executor or `#progress`. The discrete nav
+		// can interrupt a live drag whose FROM/TO differ from this nav's
+		// (an opposite-direction tab-click arriving mid-finger-drag, or a
+		// deep-to-deep forward nav interrupting a backward drag on a deep
+		// host): the same visual then maps to a raw value in the new
+		// direction's frame that differs from `this.#progress`, and the
+		// two can be related by `raw_new = 1 - raw_old` (or an
+		// extrapolated value outside [0, 1] when the visual falls outside
+		// the new plan's span). Seed `#commitStartRaw` from this
+		// visual-derived `startProgress` so the commit-phase publication
+		// (which lerps from `#commitStartRaw` toward `cs.progressTarget`
+		// in `#onExecutorTick`) stays in lockstep with the track translate
+		// (which `executor.onDragStart` seeds from the same
+		// `startProgress`). Seeding from `this.#progress` instead would
+		// publish a raw already past the midpoint at frame 1 of the
+		// commit (the FAB jumps and the morph saturates before the
+		// slide's first eased step). `#publish` clamps the raw it writes
+		// so an extrapolated `startProgress` (a reverse-direction
+		// interrupt on the bidirectional host) cannot push
+		// `publication.progress` / `pager.backMorph` outside [0, 1].
+		const startProgress = this.#startProgressFromCurrentVisual(plan);
+		this.#commitStartRaw = startProgress;
 		this.#isEnterAnimation = false;
 		// Dispatch through the state machine so its macro state is the
 		// authority the derived publication reads.
@@ -2018,7 +2122,6 @@ export class NavPipelineOrchestrator {
 			direction
 		);
 		this.#progress = 0;
-		const startProgress = this.#startProgressFromCurrentVisual(plan);
 		// The slide uses the host's 3-panel geometry (LEFT=back-target,
 		// CENTER=current, RIGHT=forward deep-to-deep destination); the
 		// host renders the back-target's real panel (cached) or its
@@ -2870,11 +2973,25 @@ export class NavPipelineOrchestrator {
 	 *  per-frame `#progress` mutates here. The host's `$effect` only
 	 *  handles the at-rest reset (when `publication.plan` becomes null);
 	 *  the in-flight pager publication is the orchestrator's
-	 *  responsibility. */
+	 *  responsibility.
+	 *
+	 *  The raw is clamped to [0, 1] at this site so an extrapolated
+	 *  seed (a reverse-direction interrupt whose visual-derived
+	 *  `startProgress` falls outside the new plan's travelled span - see
+	 *  `progressAtTranslateX`'s extrapolation comment) cannot push
+	 *  `publication.progress` / `pager.backMorph` outside the bounded
+	 *  slide range. The track translate is unaffected: `trackTranslateX`
+	 *  is linear and well-defined for any progress, so it carries the
+	 *  out-of-range value transiently while the publication stays
+	 *  bounded. Downstream consumers (FAB scale via `fabScale`, Header
+	 *  morph via `BurgerArrowIcon`) self-clamp their outputs too, so the
+	 *  clamp here is the central contract that lets those consumers
+	 *  assume a bounded input. */
 	#publish(rawDragFraction: number): void {
 		if (this.#publication.plan === null) return;
-		this.#progress = rawDragFraction;
-		this.#republishToPager(rawDragFraction);
+		const raw = rawDragFraction < 0 ? 0 : rawDragFraction > 1 ? 1 : rawDragFraction;
+		this.#progress = raw;
+		this.#republishToPager(raw);
 	}
 
 	/** Republish the current publication to the pager store. Three modes:

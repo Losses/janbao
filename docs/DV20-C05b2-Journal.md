@@ -4286,3 +4286,157 @@ $ bun run test:e2e                    205 passed + 1 flaky (exit 0)
 The flaky is the pre-existing `fab.spec.ts:436` CDP-touch flake.
 
 R84 audits this state.
+
+## Session 87: R84 audit (A PASS + surfaced real race FIXED; B clean PASS) + candidate-1 comment fix
+
+R84 ran two independent auditors. Both returned PASS (no flagged defect). A
+surfaced two "closest calls" for the orchestrator's adjudication; the
+orchestrator independently confirmed one real and fixed both. Counter stays 0/5.
+
+### Orchestrator-adjudicated (A's surfaced closest calls)
+
+- Candidate 2 (REAL, FIXED): a tab-click / discrete-nav commit's `#dispatchNav`
+  sets `#navDispatchInFlight` and fires `goto`; in the 1-3-frame window before
+  `afterNavigate`, a new gesture on a persisted `NavPipelineTabHost` sets
+  `#pendingGesture` without clearing `#navDispatchInFlight`, so
+  `onSvelteKitAfterNavigate`'s guard fell through to `#landAtRest`, which wiped
+  `#pendingGesture` (drag unresponsive until re-press). Fixed: `#beginGesture`
+  clears the in-flight dispatch markers (`#navDispatchInFlight`,
+  `#dispatchTarget`, `#lastLandWasPipelineCommit`, `#lastDispatchWasDeepToDeep`)
+  alongside the existing `#isEnterAnimation = false` clear (same precedent).
+  Landing-handling traced field-by-field: no leak (replaceState + settle
+  awaitTitle cleared by `onSvelteKitAfterNavigate`'s preamble + the goto
+  `.finally`; the rest cleared by `#beginGesture` or owned by the new gesture).
+  No deterministic preventive e2e (1-3-frame window, too tight; the
+  `#beginGesture` path is covered by existing re-grab/leftward-drag tests).
+- Candidate 1 (comment accuracy, FIXED): `playEnterAnimation`'s settle-arm
+  docstring claimed the live title "resolves after the settle"; verified A's
+  correction (the Header's `$effect.pre` fires before the destination `onMount`,
+  so the live title is available before the settle). Rewrote the docstring.
+
+### Gate outputs (post-fix, 2026-07-18, orchestrator-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores src/lib/actions    400 pass / 0 fail
+$ bun run test:e2e                    205 passed + 1 flaky (exit 0)
+```
+
+R85 audits this state.
+
+## Session 88: R85 audit (A 1 very-low + 1 comment; B 2 comment); all 4 fixed
+
+R85 ran two independent auditors. A returned PASS-WITH-CONCERNS (1 very-low
+behavior + 1 comment); B returned PASS-WITH-CONCERNS (2 comment-accuracy).
+Counter stays 0/5. All four fixed.
+
+### Findings + fixes
+
+- A1 (very-low, FIXED): `unmount()` cleared the five cached header-state fields
+  (`#headerStateInitialized`/`#prevHeaderTitle`/`#prevHeaderHasTabs`/
+  `#prevHeaderIsSearch`/`#headerT`), which only `notifyHeaderState` (Header
+  `$effect.pre`) repopulates. On a mobile -> desktop -> mobile flip-without-nav,
+  the Header persists and `$effect.pre` does not re-fire, so a back-swipe before
+  any nav read empty latched endpoints (a ~200ms title crossfade against empty
+  titles, self-healing). Fix: `unmount()` no longer clears these five. Verified:
+  `notifyHeaderState` writes `#headerT` before its `!#mounted` guard and its
+  `!#mounted` branch refreshes the prev fields, so they stay current in desktop
+  mode; a real Header re-mount resets them via `resetHeaderState` on `onMount`.
+- A2 (comment, FIXED): `unmount()` comment claimed `configure()` "re-installs
+  the watchers"; it does not. Rewritten.
+- B1/B2 (comment, FIXED): the `#lastLandWasPipelineCommit` and
+  `#lastDispatchWasDeepToDeep` field docstrings said "four places" but R84's
+  `#beginGesture` clear made them five. Both docstrings + the cross-reference +
+  the inline comment updated to "five". Verified five clear sites each.
+
+### Gate outputs (post-fix, 2026-07-18, orchestrator-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores src/lib/actions    400 pass / 0 fail
+$ bun run test:e2e                    205 passed + 1 flaky (exit 0)
+```
+
+R86 audits this state.
+
+## Session 89: the "pre-existing flaky" was a production defect; root cause fixed (not masked)
+
+The user challenged the orchestrator's acceptance of `e2e/fab.spec.ts:436`
+("Family B back: thread -> list scales the FAB in as a monotonic trajectory")
+as a permanent "pre-existing CDP-touch flake." Investigation proved it was NOT a
+driver artifact: with `--retries=0` the test failed 5/5 in isolation, and a
+MutationObserver probe showed the FAB's transform changed exactly once (0 -> 1)
+on failing runs; production was not ramping the FAB at all.
+
+Root cause: `#beginGesture` captured `rawStart = this.#progress` BEFORE resetting
+`#progress` to 0. On an opposite-direction re-grab (a back-swipe interrupting a
+forward enter), the FROM/TO swap means the same visual position maps to a
+different raw in the new frame (the enter's 0.827 is the back-swipe's 0.173).
+The FAB (driven by `publication.progress`, seeded from the old `#progress`) and
+the track (driven by `executor.state.progress`, seeded from the visual-derived
+`startProgress`) desynced, so the FAB jumped instead of ramping. This is a
+sibling class of the R84 candidate-2 in-flight-handoff bug.
+
+Fixes:
+
+- Primary: `rawStart: startProgress` in both `#beginGesture` branches
+  (unify: one handoff value for both channels). Verified 5/5 fail pre-fix,
+  5/5 pass post-fix.
+- Sibling (the primary fix's horizontal check): the same old-frame capture in
+  `onSvelteKitBeforeNavigate`'s discrete-nav path (`#commitStartRaw =
+this.#progress`) desynced on an opposite-direction discrete-nav interrupting a
+  live-drag gesture. Fixed `#commitStartRaw = startProgress`; unified
+  `playEnterAnimation` to the same seeding; added a central clamp in `#publish`
+  (rawDragFraction bounded to [0,1]) so an extrapolated `startProgress` (e.g.
+  -0.5 on a bidirectional host) cannot push `publication.progress` /
+  `pager.backMorph` out of range. The executor-logic docstring that already
+  claimed a publish-site clamp contract becomes true for both paths.
+- Preventive e2e `fab.spec.ts` "Family B back (mid-enter)": drives a back-swipe
+  during the forward-enter commit ease (via a dev-only `__e2ePublication` probe
+  that waits for `publication.progress > 0.7`) and asserts the FAB ramps through
+  (0.3, 0.7). Fails pre-fix, passes post-fix. The original `fab.spec.ts:436`
+  test is now deterministic (its pre-swipe wait stays at 800ms as reasonable
+  settle discipline; production now handles the mid-enter case regardless).
+
+Memory recorded: `flaky-test-not-accepted-exception` (a flaky test is a defect
+to fix, never an inherited permanent exception).
+
+### Gate outputs (post-fix, 2026-07-18, orchestrator-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores src/lib/actions    400 pass / 0 fail
+$ bun run test:e2e                    207 passed / 0 flaky (exit 0)
+```
+
+Zero flakies. R86 audits this state.
+
+## Session 90: R86 audit (A 1 dead-code FIXED; B clean PASS)
+
+R86 ran two independent auditors. A returned PASS-WITH-CONCERNS (1 dead-code
+module); B returned PASS (no defect). Counter stays 0/5.
+
+### Finding + fix
+
+- A (LOW, FIXED): `src/lib/stores/active-gesture-track.svelte.ts` was an orphan
+  module, zero importers under `src/` or `e2e/`, no `__activeGestureTrack` dev
+  hook, no test (grep-confirmed; the prior session's recollection of such a hook
+  was wrong). Left behind when its AppShell / root-layout wiring was removed;
+  C05b2 A06 even rewrote its docstring without noticing it was dead. Deleted per
+  the cycle's zero-import deletion principle (End-state #5). grep + tsc confirm
+  zero remaining references; the deletion is runtime-neutral (no importer = no
+  load-time side effect), so the prior full-e2e 207 passed / 0 flaky still holds.
+
+### Gate outputs (post-fix, 2026-07-18, orchestrator-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1457 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores src/lib/actions    400 pass / 0 fail
+$ bun run test:e2e                    207 passed / 0 flaky (exit 0)
+```
+
+File count 1458 -> 1457 (deleted module). R87 audits this state.
