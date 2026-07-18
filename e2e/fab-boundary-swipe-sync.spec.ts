@@ -15,8 +15,8 @@ import {
  * global nav-pipeline orchestrator publishes `fromPathname === toPathname`
  * with the raw drag progress on its per-frame publication. The FAB layer is a
  * reactive reader of that same publication. On a real transition it computes
- * `fabScale(publication.progress, fromHasFab, toHasFab)` — the icon-handoff
- * half-mapping that dips to 0 at progress=0.5 — but on a boundary void-swipe
+ * `fabScale(publication.progress, fromHasFab, toHasFab)`, the icon-handoff
+ * half-mapping that dips to 0 at progress=0.5, but on a boundary void-swipe
  * (the very condition this spec exercises) the FAB does NOT use `fabScale`;
  * it reacts proportionally to the rubber-band via
  * `1 - progress * BOUNDARY_RUBBER_BAND_FACTOR` (reaching 0.6 at full drag),

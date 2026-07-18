@@ -895,16 +895,20 @@ export class NavPipelineOrchestrator {
 		// `inputs.fromPathname` (the host route) so the morph runs from the
 		// source's tab-ness to the host route's tab-ness (e.g. tab mode at
 		// the source tab root easing into deep mode on a thread / deep
-		// page). The outgoing title is the LIVE `#prevHeaderTitle` (the
-		// back-target route's live `page.data.headerTitle`); the resolver
-		// (`resolveDeepHeaderTitle`) returns null for dynamic-title routes
-		// and would snap the outgoing span to empty. The incoming uses the
-		// resolver (the host route's static title); for a dynamic-title
-		// host the live title takes over when `page.data.headerTitle`
-		// resolves after the settle.
+		// page). The outgoing title uses `resolveDeepHeaderTitle(inputs.backTarget)`
+		// (the source/back-target route's STATIC title), NOT `#prevHeaderTitle`:
+		// the Header's `$effect.pre` fires BEFORE `onMount` (where
+		// `playEnterAnimation` runs), so `#prevHeaderTitle` has already been
+		// updated to the destination's title by the time this code runs. The
+		// back-target for a forward enter is always a tab root or tab route
+		// (deep-to-deep is intercepted), so the resolver returns null -> '' for
+		// it (tab roots have no static title). The incoming uses the resolver
+		// (the host route's static title); for a dynamic-title host the live
+		// title takes over when `page.data.headerTitle` resolves after the
+		// settle.
 		const t = this.#headerT;
 		if (t !== null) {
-			const outgoingTitle = this.#prevHeaderTitle;
+			const outgoingTitle = resolveDeepHeaderTitle(inputs.backTarget, t) ?? '';
 			const incomingTitle = resolveDeepHeaderTitle(inputs.fromPathname, t) ?? '';
 			const outgoingHasTabs = getCurrentTabIndex(inputs.backTarget) >= 0;
 			const incomingHasTabs = getCurrentTabIndex(inputs.fromPathname) >= 0;
@@ -2549,15 +2553,20 @@ export class NavPipelineOrchestrator {
 			this.#prevHeaderIsSearch = currentIsSearch;
 			return;
 		}
-		// tap-scrub arm: ANY navigation that flipped `isSearch` (one side
-		// is /search) AND did not land via the orchestrator's own commit
-		// dispatch. Covers root<->search (the search-button tap), deep<->
-		// search (/profile <-> /search, /messages/<id> <-> /search,
-		// /search <-> /bookmarks, etc.), and any other isSearch flip the
-		// orchestrator does not intercept pre-nav. The orchestrator owns
-		// this motion on its rAF (§5: no CSS transitions in this layer);
-		// the Header's horizontal-track / search-button / scope-tab-bar
-		// readers follow `pager.tapMorph` while the scrub runs.
+		// tap-scrub arm: a navigation that flipped `isSearch` (one side
+		// is /search), did not land via the orchestrator's own commit
+		// dispatch, and has no pipeline slide in flight
+		// (`pager.transitionTarget === null`). Covers root<->search (the
+		// search-button tap), deep<->search (/profile <-> /search,
+		// /messages/<id> <-> /search, /search <-> /bookmarks, etc.). A
+		// forward nav whose destination runs `playEnterAnimation` (which
+		// sets `transitionTarget` synchronously in `onMount`) skips the
+		// scrub; the enter slide's `backMorph` drives the morph instead
+		// (spec Step 5 sanctions the `transitionTarget` arbitration). The
+		// orchestrator owns this motion on its rAF (§5: no CSS
+		// transitions in this layer); the Header's horizontal-track /
+		// search-button / scope-tab-bar readers follow `pager.tapMorph`
+		// while the scrub runs.
 		//
 		// The scrub values are `isSearch`-based (1 = not search, 0 =
 		// search). This represents the search-layout position the Header
@@ -2858,7 +2867,7 @@ export class NavPipelineOrchestrator {
 		// host always target a tab root (`#nextTabTarget`), so a deep-page
 		// target implies a backward gesture.
 		const targetPath = publication.toPathname;
-		const targetIsDeepPage = targetPath !== null && !isTabRootPath(targetPath);
+		const targetIsDeepPage = targetPath !== null && getRouteData(targetPath).tag !== 'tab';
 		const holdPillAtFromIdx = bidirectional && targetIsDeepPage;
 		const pillToIdx = holdPillAtFromIdx ? fromIdx : toIdx;
 		const pillProgress =

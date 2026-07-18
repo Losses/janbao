@@ -3978,3 +3978,95 @@ $ bun run test:e2e                    203 passed + 1 flaky (exit 0)
 ```
 
 R76 audits this state.
+
+## Session 79: R76 audit (A PASS; B PWC: 1 comment) + fix
+
+R76 ran two independent auditors. **A returned PASS, no defect** (A's first full
+PASS in the loop). B returned PASS-WITH-CONCERNS (1 concern, comment accuracy).
+Counter stays 0/5.
+
+### Findings + fix
+
+- A: PASS, no defect. Verified every trajectory, invariant, clear-site, and
+  comment. Specifically confirmed the R75 reset guard fix.
+- B1 (comment, FIXED): the tap-scrub arm docstring said "ANY navigation that
+  flipped isSearch" but the condition also requires `pager.transitionTarget === null`,
+  which excludes forward navigations where `playEnterAnimation` sets
+  `transitionTarget`. Reworded to note the condition and the `playEnterAnimation`
+  exclusion (spec Step 5 sanctions the arbitration).
+
+### Gate outputs (post-fix, 2026-07-17)
+
+Comment-only fix; the e2e gate is unchanged from the R75 post-fix run.
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
+$ bun run test:e2e                    203 passed + 1 flaky (exit 0, R75 post-fix run)
+```
+
+R77 audits this state.
+
+## Session 80: R77 audit (A 1 medium + 1 low; B PASS) + fix
+
+R77 ran two independent auditors. A returned PASS-WITH-CONCERNS (1 medium + 1
+low); **B returned PASS, no defect** (B's fourth full PASS: R64, R67, R74, R77).
+Counter stays 0/5.
+
+### Findings + fix
+
+- A1 (medium, FIXED): within-tab pagination backward-gesture morph leak.
+  `#republishToPager`'s `targetIsDeepPage` used `!isTabRootPath(targetPath)`,
+  misclassifying `/discussions/pN` (a tab route) as a deep page. This published
+  `backMorph` during within-tab pagination gestures, animating the Header morph
+  and snapping back at release. Fixed: `targetIsDeepPage` now uses
+  `getRouteData(targetPath).tag !== 'tab'` (matching the FAB layer's R73 A1 tag
+  check).
+- A2 (low, RESOLVED by A1): the FAB docstring's "nothing else animates" was
+  inaccurate (the morph did animate). After A1's fix, the morph no longer
+  animates for within-tab pagination, so the claim is accurate.
+- B: PASS, no defect.
+
+### Gate outputs (post-fix, independently re-run 2026-07-17)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
+$ bun run test:e2e                    202 passed + 2 flaky (exit 0)
+```
+
+R78 audits this state.
+
+## Session 81: R78 audit (A 1 low; B 1 medium regression) + fixes
+
+R78 ran two independent auditors. A returned PASS-WITH-CONCERNS (1 low); B
+returned PASS-WITH-CONCERNS (1 medium). Counter stays 0/5.
+
+### Findings + fixes
+
+- A1 (low, FIXED): 2 U+2014 em dashes in `e2e/fab-boundary-swipe-sync.spec.ts`
+  comment. Replaced with commas.
+- B1 (medium, FIXED): the R70 A2 fix (changing `playEnterAnimation`'s outgoing
+  title to `#prevHeaderTitle`) was a regression. The gesture-release path
+  (`#armSettleEaseFromGesture`) correctly uses `#prevHeaderTitle` (the user is on
+  the source page at gesture start). But `playEnterAnimation` runs in `onMount`
+  AFTER the Header's `$effect.pre` has already updated `#prevHeaderTitle` to the
+  destination's title. The settle had `outgoing = destination, incoming =
+  destination` (invisible crossfade; the title showed the destination's title
+  during the slide while the source content was still visible). Fixed: reverted
+  to `resolveDeepHeaderTitle(inputs.backTarget, t) ?? ''` (the back-target's
+  static title, always a tab root/route, so null -> ''). Updated the comment to
+  explain the timing difference.
+
+### Gate outputs (post-fix, independently re-run 2026-07-17)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
+$ bun run test:e2e                    203 passed + 1 flaky (exit 0)
+```
+
+R79 audits this state.
