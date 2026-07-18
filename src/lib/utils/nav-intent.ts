@@ -224,8 +224,11 @@ export function resolveDirection(deltaX: number, decideThresholdPx: number): Int
  *      `cancelled` when the drag was reversed past the start. Freezes
  *      the release velocity. (A `pointercancel` never reaches the
  *      classifier: the `detectSwipe` primitive forces the cancel signal
- *      at the gesture layer via `shouldCancelOnRelease`, so the release
- *      arrives here as a `pointerup` already marked for cancel.)
+ *      at the gesture layer via `shouldCancelOnRelease`. The cancel is
+ *      applied AFTER `classify` returns, by the orchestrator's
+ *      `onPointerUp` overriding `intent.reversed`; the classifier
+ *      itself has no cancel-mark parameter and computes `micro` purely
+ *      from its own drag state.)
  *   - `tap` / `goto` / `popstate` / `hashchange`: a no-op when the
  *      event carries no target; otherwise produces a target intent
  *      with `micro: 'committed'` and `target: pathname`, which the

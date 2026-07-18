@@ -900,12 +900,14 @@ export class NavPipelineOrchestrator {
 		// the Header's `$effect.pre` fires BEFORE `onMount` (where
 		// `playEnterAnimation` runs), so `#prevHeaderTitle` has already been
 		// updated to the destination's title by the time this code runs. The
-		// back-target for a forward enter is always a tab root or tab route
-		// (deep-to-deep is intercepted), so the resolver returns null -> '' for
-		// it (tab roots have no static title). The incoming uses the resolver
-		// (the host route's static title); for a dynamic-title host the live
-		// title takes over when `page.data.headerTitle` resolves after the
-		// settle.
+		// back-target is the route behind the host: a tab root for tab-to-deep
+		// enters (resolver returns null -> ''), or a deep page for detail-to-
+		// search enters (not deep-to-deep, not intercepted; resolver returns the
+		// deep page's static title). For a dynamic-title back-target the
+		// resolver returns null -> '' (the live title was replaced by the
+		// `$effect.pre` update). The incoming uses the resolver (the host
+		// route's static title); for a dynamic-title host the live title takes
+		// over when `page.data.headerTitle` resolves after the settle.
 		const t = this.#headerT;
 		if (t !== null) {
 			const outgoingTitle = resolveDeepHeaderTitle(inputs.backTarget, t) ?? '';
@@ -1348,8 +1350,10 @@ export class NavPipelineOrchestrator {
 			// Boundary void-swipe on a bidirectional host (first/last tab):
 			// start a rubber-band gesture that tracks the finger at a reduced
 			// factor and always snaps back on release. No navigation is
-			// dispatched.
-			if (inputs.bidirectional !== true) return;
+			// dispatched. (`target === null` implies `inputs.bidirectional`:
+			// the backward ternary returns `inputs.backTarget` (non-null) for
+			// non-bidirectional hosts; `#nextTabTarget`/`#backwardTabTarget`
+			// return null only on bidirectional hosts at the boundary.)
 			const boundaryPlan: TransitionPlan = {
 				pageTrack: {
 					axis: direction === 'backward' ? 'right' : 'left',
@@ -1947,8 +1951,11 @@ export class NavPipelineOrchestrator {
 		this.#executor?.onDragStart(plan, startProgress);
 		// No finger-release velocity on a tab-click: pass 0 and let the
 		// velocity-matched solver pick the default duration
-		// (`COMMIT_T_DEFAULT_MS`). The Header settle reads the resulting
-		// `commitStart.durationMs` and matches it (R17), so no desync.
+		// (`COMMIT_T_DEFAULT_MS`). The settle is NOT armed here (armed at
+		// landing via `notifyHeaderState`'s idle title-change arm with
+		// `TITLE_CROSSFADE_MS`). The slide and settle are sequential
+		// (slide finishes -> lands -> settle arms), not concurrent, so
+		// there is no duration-matching requirement and no desync.
 		this.#executor?.onCommit(0);
 		this.#stateMachine.onCommit();
 		// The title / morph settle for this discrete nav is armed at landing

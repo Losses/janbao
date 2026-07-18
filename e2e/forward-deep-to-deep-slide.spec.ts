@@ -10,9 +10,10 @@ import { prepareContext, waitForHydration, captureExitPreview } from './helpers'
  * pipeline slide via the `{detail, detail}` resolver, instead of passing
  * through as plain SvelteKit nav with no source-side slide.
  *
- * The 2-panel NavPipelineHost has no panel to the right of centre, so the
- * slide reveals the left panel (overridden to render the destination
- * skeleton via `forwardDeepTarget`). On settle the orchestrator dispatches
+ * The 3-panel NavPipelineHost renders the destination skeleton in the
+ * RIGHT panel (via `forwardDeepTarget`); the forward deep-to-deep slide
+ * (axis='left') shifts the track left, revealing the RIGHT panel. On
+ * settle the orchestrator dispatches
  * the navigation; the destination mounts at rest with its real content.
  *
  * This spec asserts the behavioural signal that the pipeline drove the

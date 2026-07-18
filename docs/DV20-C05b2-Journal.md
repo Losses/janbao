@@ -4054,7 +4054,7 @@ returned PASS-WITH-CONCERNS (1 medium). Counter stays 0/5.
   the source page at gesture start). But `playEnterAnimation` runs in `onMount`
   AFTER the Header's `$effect.pre` has already updated `#prevHeaderTitle` to the
   destination's title. The settle had `outgoing = destination, incoming =
-  destination` (invisible crossfade; the title showed the destination's title
+destination` (invisible crossfade; the title showed the destination's title
   during the slide while the source content was still visible). Fixed: reverted
   to `resolveDeepHeaderTitle(inputs.backTarget, t) ?? ''` (the back-target's
   static title, always a tab root/route, so null -> ''). Updated the comment to
@@ -4070,3 +4070,67 @@ $ bun run test:e2e                    203 passed + 1 flaky (exit 0)
 ```
 
 R79 audits this state.
+
+## Session 82: R79 audit (A 1 low + 1 accepted; B 2 comment) + fixes
+
+R79 ran two independent auditors. A returned PASS-WITH-CONCERNS (1 low + 1
+low-medium accepted); B returned PASS-WITH-CONCERNS (2 concern, comment accuracy).
+Counter stays 0/5. No logic bugs.
+
+### Findings + fixes
+
+- A1 (low, FIXED): nav-intent.ts pointerup docstring said the release "arrives
+  here as a pointerup already marked for cancel." The cancel is applied
+  post-classify by the orchestrator's onPointerUp (overriding intent.reversed),
+  not pre-marked. Reworded.
+- A2 (low-medium, ACCEPTED): within-host pagination click during a commit rAF is
+  overridden by the gesture's goto. By design (the finish-then-new policy
+  excludes within-host navs from queueing; the committed gesture takes priority).
+  Narrow window, unusual sequence, no state leak.
+- B1 (comment, FIXED): playEnterAnimation docstring claimed "back-target is
+  always a tab root or tab route." Detail-to-search forward navs (not
+  deep-to-deep) have a deep-page back-target. Reworded.
+- B2 (comment, FIXED): discrete-nav branch comment said "settle reads
+  commitStart.durationMs" but the next block said "armed at landing." The slide
+  and settle are sequential (not concurrent). Reworded.
+
+### Gate outputs (post-fix, 2026-07-17)
+
+Comment-only fixes; the e2e gate is unchanged from the R78 post-fix run.
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
+$ bun run test:e2e                    203 passed + 1 flaky (exit 0, R78 post-fix run)
+```
+
+R80 audits this state.
+
+## Session 83: R80 audit (A PASS; B PWC: 1 dead code) + fix
+
+R80 ran two independent auditors. **A returned PASS, no defect** (A's second
+full PASS: R76, R80). B returned PASS-WITH-CONCERNS (1 concern, dead code).
+Counter stays 0/5.
+
+### Findings + fix
+
+- A: PASS, no defect. Verified every trajectory, invariant, and comment.
+- B1 (dead code, FIXED): `#beginGesture`'s `if (inputs.bidirectional !== true)
+return;` inside the `target === null` branch was unreachable (`target === null`
+  implies `inputs.bidirectional`). Removed the dead check + added a comment
+  documenting the implication.
+
+### Gate outputs (post-fix, 2026-07-17)
+
+Dead-code removal; no behavioral impact; the e2e gate is unchanged from the R78
+post-fix run.
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores    378 pass / 0 fail
+$ bun run test:e2e                    203 passed + 1 flaky (exit 0, R78 post-fix run)
+```
+
+R81 audits this state.

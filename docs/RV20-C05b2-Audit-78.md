@@ -26,7 +26,7 @@ the destination's title, making the crossfade invisible. Both fixed.
    new URL and updated `#prevHeaderTitle` to the destination's title. The settle
    had `outgoing = destination, incoming = destination` (invisible crossfade).
    Fixed: reverted to `resolveDeepHeaderTitle(inputs.backTarget, t) ?? ''` (the
-   back-target's static title — always a tab root or tab route, so the resolver
+   back-target's static title, always a tab root or tab route, so the resolver
    returns null for it, giving `''`). Updated the comment to explain the timing
    difference from the gesture-release path.
 
