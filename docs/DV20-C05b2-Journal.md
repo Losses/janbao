@@ -4589,3 +4589,50 @@ $ bun run test:e2e                    210 passed / 0 flaky (exit 0)
 ```
 
 R91 audits this state with an open-scoped prompt.
+
+## Session 95: R91 audit (open-scoped prompt; A 1 concern + B 1 concern + 4 low); all 6 fixed
+
+R91 was the first round with the open-scoped audit prompt (no
+file/trajectory/defect-type/invariant list). It found SIX defects in one round,
+ALL outside the orchestrator/animation layer the prior scoped prompt excluded.
+Counter stays 0/5. All six fixed.
+
+### Findings + fixes
+
+- A1 (concern, FIXED): `<title>` missing on mobile for the four primary tab
+  routes (the (tabs) layout mobile branch renders NavPipelineTabHost, not
+  children, so the child `<svelte:head><title>` is suppressed; NavPipelineTabHost
+  had none). Same class as R90's passthrough. Fix: NavPipelineTabHost publishes
+  activeTitle (derived from activeIndex) via `<svelte:head>`. curl-verified.
+- B1 (low, FIXED): dead `target` field + unreachable template in
+  notifications/+page.svelte; removed.
+- B2 (concern, FIXED): dead `inbox` field + wasted getConversations query on every
+  message-thread load (for the deleted ThreadPager); removed.
+- B3 (very low, FIXED): dead totalRepliesCount return in the discussion page
+  server; removed (kept the internal computation for totalPages).
+- B4 (low, FIXED): five stale ThreadPager comment references; rewritten to
+  NavPipelineHost / .detail-scroll-pane. grep confirms 0 ThreadPager refs in src.
+- B5 (low, FIXED): /messages/add/ omitted from TAB_BAR_CONFIG, causing a
+  pill-highlight flash on SSR/first-paint; added to TAB_BAR_CONFIG
+  (pillTarget messages); route-config.test.ts updated (it had locked the defect).
+
+### Horizontal check
+
+Every (tabs) child side-effect enumerated: each restored on mobile (runPassthrough
+R90, title A1) or acknowledged desktop-only (activity offline-fallback). No
+silently-dropped side-effect remains.
+
+The open-scoped prompt's productivity (6 defects in one round, all outside the
+prior scope) validated the user's feedback that the scoped prompt excluded real
+bug spaces and manufactured false confidence.
+
+### Gate outputs (post-fix, 2026-07-19, orchestrator-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1457 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores src/lib/actions    400 pass / 0 fail
+$ bun run test:e2e                    210 passed / 0 flaky (exit 0)
+```
+
+R92 audits this state (open-scoped prompt).

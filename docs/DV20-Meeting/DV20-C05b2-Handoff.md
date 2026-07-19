@@ -1,17 +1,17 @@
 # DV20 Cycle 5b2 - Handoff Document
 
 **Date:** 2026-07-19. **For:** the next agent continuing the DV20 5b2 audit loop.
-**Status:** R82-R87 complete this stretch (6 rounds) plus the fab.spec flaky
-root-cause fix and the R87 dead-code cleanup. All fixes applied; the full gate is
-green with ZERO flakies. Counter: **0/5** (no clean round yet; every round still
-finds at least one real concern, though the findings are increasingly fine:
-dead code, docstring accuracy, and empirically-disproven 1-frame claims). R88
-auditors were launched; if they hit the 5-hour API rate limit (HTTP 429), re-run
-them.
+**Status:** R82-R91 complete this stretch (10 rounds) plus the fab.spec flaky
+root-cause fix. All fixes applied; the full gate is green with ZERO flakies (210
+e2e passed). Counter: **0/5**. IMPORTANT: as of R91 the audit prompt is
+**OPEN-SCOPED** (the prior scoped prompt excluded bug spaces outside the
+orchestrator/animation layer; R91's open prompt found 6 such defects in one
+round). R92 auditors were launched with the open prompt; if they hit the 5-hour
+API rate limit (HTTP 429), re-run them.
 
 This handoff supersedes the 2026-07-15 (R37) version. The architecture and the
 user's demands in sections 1 to 3 are still accurate; sections 4 to 8 reflect
-the current (post-R87) state.
+the current (post-R91) state.
 
 ## 1. The user's design vision (READ THIS FIRST)
 
@@ -90,7 +90,7 @@ layer reads `publication.progress` + `getRouteData(from).fab` /
 `1 - progress * BOUNDARY_RUBBER_BAND_FACTOR` reaction (a sanctioned divergence
 from the half-mapping).
 
-## 4. What was fixed this stretch (R82 to R87 + flaky root cause)
+## 4. What was fixed this stretch (R82 to R91 + flaky root cause)
 
 - **R82:** `replaceState` intent was lost through the finish-then-new queue replay
   (and mis-applied to the commit's own dispatch). Fixed with a capture-clear-rearm
@@ -139,12 +139,38 @@ from the half-mapping).
   (`__resetNavPipelineOrchestrator`, `__setNavStateMachine`). (R87 A1, a claimed
   FAB 1-frame jump at a re-grab instant, was empirically disproven and is a
   non-issue: `#beginGesture` and `#publish` run in the same synchronous tick.)
+- **R88:** the MobileTabBar was non-interactive at rest on a tab root whenever
+  `navStore.backTarget` was a deep page. `Header.svelte` derived `tabsIn` fell
+  back to `targetHasTabs` at rest (asymmetric with `tabsOut`'s `currentHasTabs`),
+  so `rootLayerStyle`'s pointer-events was `none`. Fixed: `tabsIn` at-rest
+  fallback is `currentHasTabs`. Preventive e2e `tab-bar-interactive-with-deep-backtarget.spec.ts`.
+- **R89:** the first clean round (A+B PASS), counter reached 2/5.
+- **R90:** DV20's (tabs) layout change (NavPipelineTabHost on mobile instead of
+  children) dropped the child routes' `runPassthrough` (DV07 offline passthrough
+  IDB write) on mobile. Fixed: `NavPipelineTabHost` calls `runPassthrough`
+  (onMount + afterNavigate, gated activeIndex===0, reading home.discussions),
+  wrapped in `requestIdleCallback`. Preventive e2e `mobile-passthrough.spec.ts`.
+  The passthrough concern reset the counter 2/5 -> 0/5. Also stabilized a
+  ~17%-flaky `fab-deep-real-interaction` CASE A (rAF-sampling fragility, not a
+  production defect; time-based rampMs + wide-band assertions).
+- **R91 (first OPEN-SCOPED round):** the prior scoped prompt had excluded bug
+  spaces outside the orchestrator; R91's open prompt found SIX in one round. A1:
+  `<title>` missing on mobile for the four tab routes (same layout-skip class as
+  the passthrough); fixed by `NavPipelineTabHost` publishing `activeTitle` via
+  `<svelte:head>`. B: dead `target` in notifications; dead `inbox` field + wasted
+  `getConversations` query on every message-thread load; dead `totalRepliesCount`
+  return; five stale `ThreadPager` comments; `/messages/add/` missing from
+  `TAB_BAR_CONFIG` (pill flash). All fixed. (A horizontal sweep confirmed every
+  (tabs) child side-effect is now restored or acknowledged desktop-only.)
 
 Lessons (also recorded in auto-memory): the horizontal check is BINDING (when you
 fix one defect, grep sibling paths and fix them in the same change); the
 audit/fix prompt must require empirical verification of any "visible behavior"
-claim (two false positives, R83-B and R87-A1, were plausible-sounding but wrong);
-a sub-agent's targeted-spec pass does not prove the full suite is green.
+claim (false positives R83-B and R87-A1 were plausible-sounding but wrong); a
+sub-agent's targeted-spec pass does not prove the full suite is green; the audit
+prompt must ORIENT not SCOPE (a file/trajectory/defect-type/invariant list
+excludes other bug spaces, as R91's open prompt proved by finding 6 defects the
+scoped prompt had missed).
 
 ## 5. Current state of the code
 
@@ -154,10 +180,10 @@ a sub-agent's targeted-spec pass does not prove the full suite is green.
 $ bun run check                       0 errors / 0 warnings (1457 files)
 $ bun run lint                        EXIT=0
 $ bun test src/lib/utils src/lib/stores src/lib/actions    400 pass / 0 fail
-$ bun run test:e2e                    207 passed / 0 flaky (exit 0)
+$ bun run test:e2e                    210 passed / 0 flaky (exit 0)
 ```
 
-### What exists (post-R87)
+### What exists (post-R91)
 
 - Global singleton orchestrator, eagerly constructed. `configure`/`releaseInputs`
   lifecycle; `unmount` for mobile to desktop.
@@ -198,19 +224,24 @@ $ bun run test:e2e                    207 passed / 0 flaky (exit 0)
 
 ### Audit trail
 
-- Audit files: `docs/RV20-C05b2-Audit-{24..87}.md`.
-- Journal: `docs/DV20-C05b2-Journal.md` (sessions through 91).
+- Audit files: `docs/RV20-C05b2-Audit-{24..91}.md`.
+- Journal: `docs/DV20-C05b2-Journal.md` (sessions through 95).
 - Spec: `docs/DV20-Meeting/DV20-C05b2-spec.md`.
 - Reusable audit prompt: `docs/DV20-Meeting/DV20-C05b2-Audit-Prompt.md`
-  (open-ended, non-leading, with the binding horizontal-check requirement).
+  (OPEN-SCOPED since R91: orients with architecture + spec location, then "find
+  ANY defect ANYWHERE, explore freely"; no file/trajectory/defect-type/invariant
+  list. Binding horizontal-check requirement.)
 
 ## 6. The convergence model and the process (binding)
 
 - **Two auditors per round** (DV20 two-vote model), role-less and hint-less, given
-  ONLY the audit-prompt file (architecture + invariants + file locations + "find
-  ANY defect empirically"). Pass votes accumulate ACROSS rounds; the Cycle closes
-  at 5 consecutive PASS votes. Any concern resets the counter to 0.
-  PASS-with-concerns is not PASS.
+  ONLY the open-scoped audit-prompt file (architecture + spec location for
+  ORIENTATION, then "find ANY defect ANYWHERE, explore the whole codebase freely";
+  NO file/trajectory/defect-type/invariant list, which would exclude other bug
+  spaces). Pass votes accumulate ACROSS rounds; the Cycle closes at 5 consecutive
+  PASS votes. Any concern resets the counter to 0. PASS-with-concerns is not PASS.
+  (R89 was the first clean round at 2/5; R90's passthrough concern reset to 0/5;
+  the open-scoped R91 then found 6 defects the prior scoped prompt had missed.)
 - **The orchestrator runs the audit** (spawns both auditors itself), independently
   re-traces every finding, adjudicates real vs false positive (empirically verify
   any visible-behavior claim; two false positives this stretch were caught this
@@ -222,11 +253,12 @@ $ bun run test:e2e                    207 passed / 0 flaky (exit 0)
 
 ## 7. What the next agent must do
 
-### Immediate: R82-R87 are done; continue from R88
+### Immediate: R82-R91 are done; continue from R92
 
-R88 auditors were launched. If they returned, triage their findings (re-trace
-each, adjudicate real vs false positive). If they failed with a 429, re-launch
-two independent auditors with the `DV20-C05b2-Audit-Prompt.md` brief.
+R92 auditors were launched (open-scoped prompt). If they returned, triage their
+findings (re-trace each, adjudicate real vs false positive). If they failed with
+a 429, re-launch two independent auditors with the `DV20-C05b2-Audit-Prompt.md`
+brief (which is now open-scoped).
 
 ### For each round
 
