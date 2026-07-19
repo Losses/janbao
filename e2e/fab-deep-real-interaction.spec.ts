@@ -186,8 +186,19 @@ async function openDrawerAndClickBookmarks(page: import('@playwright/test').Page
 }
 
 // CASE A: drawer tap / -> /bookmarks. Correct behaviour: a smooth multi-frame
-// scale-out (>= 5 intermediate samples in (0.1, 0.9)). The defect produces ~2
-// intermediate samples after a long hold at scale 1 - a late fast drop.
+// scale-out taking ~80-150ms (roughly half the COMMIT_T_DEFAULT_MS=300ms
+// forward-enter slide). The defect produces a scale that holds at 1 then snaps
+// to 0 in 1-2 frames - a late fast drop - which the assertion catches via two
+// independent signals:
+//   - TIME: the ramp from >0.95 down to <=0.05 must take >=50ms (the defect
+//     takes 16-32ms). Time is the primary signal because it is independent of
+//     the rAF cadence, which varies under main-thread load.
+//   - WIDE-BAND COUNT: >=5 samples strictly inside (0.05, 0.95). The wide
+//     band tolerates rAF jitter that lands the first non-1 frame at ~0.91
+//     (just above 0.9) or the last non-0 frame at ~0.10 (at the 0.1 bound);
+//     a strict (0.1, 0.9) band would drop those boundary samples and
+//     undercount a healthy ramp. A late fast drop produces 0-3 wide-band
+//     samples.
 test('A forward drawer: `/` -> `/bookmarks` must scale the FAB out smoothly', async ({ page }) => {
 	await page.goto('/');
 	await waitForHydration(page);
@@ -196,11 +207,32 @@ test('A forward drawer: `/` -> `/bookmarks` must scale the FAB out smoothly', as
 		await openDrawerAndClickBookmarks(page);
 		await page.waitForURL('/bookmarks', { timeout: 5000 });
 	});
+	const present = frames.filter(
+		(f): f is Frame & { present: true; scale: number } => f.present && f.scale !== null
+	);
+	const leaveIdx = present.findIndex((f) => f.scale < 0.95);
+	const reachIdx = present.findIndex((f) => f.scale <= 0.05);
+	expect(
+		leaveIdx,
+		`FAB must leave scale 0.95 during the forward enter. ${dump('A', frames)}`
+	).toBeGreaterThanOrEqual(0);
+	expect(
+		reachIdx,
+		`FAB must reach scale 0.05 during the forward enter. ${dump('A', frames)}`
+	).toBeGreaterThanOrEqual(0);
+	const rampMs = reachIdx > leaveIdx ? Math.round(present[reachIdx].t - present[leaveIdx].t) : -1;
+	expect(
+		rampMs,
+		`forward scale-out must take >=50ms to ramp from 0.95 to 0.05 (a late fast drop takes 16-32ms); got ${rampMs}ms. ${dump('A', frames)}`
+	).toBeGreaterThanOrEqual(50);
 	const s = scales(frames);
-	const intermediate = s.filter((v) => v > 0.1 && v < 0.9);
+	const intermediate = s.filter((v) => v > 0.05 && v < 0.95);
 	expect(
 		intermediate.length,
-		`forward scale-out must be a smooth multi-frame ramp, not a late fast drop. ${dump('A', frames)}`
+		`forward scale-out must be a smooth multi-frame ramp (>=5 samples in (0.05, 0.95), not a late fast drop). ${dump(
+			'A',
+			frames
+		)}`
 	).toBeGreaterThanOrEqual(5);
 });
 

@@ -11,6 +11,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
 	import { page } from '$app/state';
+	import { afterNavigate } from '$app/navigation';
 	import { getRouteData } from '$lib/utils/route-data';
 	import { MOBILE_TABS, getCurrentTabIndex, getPreviewPanel } from '$lib/utils/route-config';
 	import { isTabRootPath } from '$lib/utils/history-nav';
@@ -23,10 +24,13 @@
 		releaseNavPipelineOrchestrator
 	} from '$lib/stores/nav-pipeline-orchestrator.svelte';
 	import { navPipelinePointer } from '$lib/actions/nav-pipeline-pointer';
+	import { writeList, passthroughEnabledFor } from '$lib/offline/passthrough';
 	import DiscussionsPanel from '$lib/components/panels/DiscussionsPanel.svelte';
 	import ActivityPanel from '$lib/components/panels/ActivityPanel.svelte';
 	import MessagesPanel from '$lib/components/panels/MessagesPanel.svelte';
 	import DeepPreviewSkeleton from '$lib/components/panels/DeepPreviewSkeleton.svelte';
+	import { formatTitle } from '$lib/utils/title';
+	import type { DiscussionListItem } from '$lib/server/db/dao/discussions';
 	import type { PageUrlBuilder, TabsLayoutData } from '$lib/types/tabs';
 	import type { TranslationDict } from '$lib/types/translation';
 	import type { UserInfoSummary } from '$lib/types/api';
@@ -48,6 +52,20 @@
 	}
 
 	let activeIndex = $state(initialIndex());
+
+	// Active-tab document title. The (tabs) layout's mobile branch renders this
+	// host instead of `{@render children()}`, so the child route's
+	// `<svelte:head><title>` (set by each (tabs)/+page.svelte) never applies on
+	// mobile. Publish the equivalent title here so mobile SSR + swipes between
+	// tabs keep the document title in sync. `/discussions/pN` resolves to tab 0
+	// (the home title), matching `(tabs)/discussions/+page.svelte`.
+	const activeTitle = $derived(
+		activeIndex === 0
+			? formatTitle(t.nav.home)
+			: activeIndex === 1
+				? formatTitle(t.nav.activity)
+				: formatTitle(t.message.inbox)
+	);
 
 	// The shared singleton orchestrator. Every mobile host reaches the same
 	// instance via `getGlobalNavPipelineOrchestrator`; the host calls
@@ -295,6 +313,48 @@
 		};
 	});
 
+	// DV07 C04 read passthrough on mobile. This host renders only in the
+	// (tabs) layout's `{#if isMobile}` branch, which does not call
+	// `{@render children()}` - so the route's own `+page.svelte` (where the
+	// desktop `runPassthrough` call sites live) never mounts on mobile. Fire
+	// the write here so mobile browsing of the discussions list populates the
+	// offline cache. Gated on `activeIndex === 0` so we write only the list
+	// the user is viewing (the discussions tab), matching the desktop
+	// behaviour where `/activity` and `/messages/inbox` do not trigger a
+	// write. `home.discussions` resolves to the active route's PageData
+	// (`page.data.discussions ?? data.home.discussions`) when the discussions
+	// tab is settled, so paginated routes (`/discussions/pN`) write the
+	// page-N list. Mirrors the existing `onMount` + `afterNavigate` pattern;
+	// best-effort (IDB failures are swallowed), no `$effect` loop (per
+	// [[svelte-effect-fetch-loop]]).
+	//
+	// The writeList call is deferred to `requestIdleCallback` (with a
+	// `setTimeout(0)` fallback for runtimes without it) so the IDB write's
+	// synchronous prep (data mapping, transaction open) does not contend with
+	// the orchestrator's gesture-animation rAF on this same host. The write
+	// is best-effort and survives host destroy (the data is the same regardless
+	// of host lifecycle), so a long idle wait is acceptable.
+	function runPassthrough(items: DiscussionListItem[]): void {
+		if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+		if (!passthroughEnabledFor(user)) return;
+		const run = (): void => {
+			void writeList(items).catch((err) => {
+				console.error('[offline passthrough] writeList failed', err);
+			});
+		};
+		if (typeof requestIdleCallback === 'function') {
+			requestIdleCallback(() => run());
+		} else {
+			setTimeout(run, 0);
+		}
+	}
+	onMount(() => {
+		if (activeIndex === 0) runPassthrough(home.discussions);
+	});
+	afterNavigate(() => {
+		if (activeIndex === 0) runPassthrough(home.discussions);
+	});
+
 	let held = false;
 	const releaseOrchestrator = (): void => {
 		if (!orchestratorMounted) return;
@@ -316,6 +376,10 @@
 
 	const pointerDisabled = (): boolean => trackEl === null;
 </script>
+
+<svelte:head>
+	<title>{activeTitle}</title>
+</svelte:head>
 
 <div
 	bind:this={viewportEl}

@@ -345,7 +345,6 @@ export const load: PageServerLoad = async (event) => {
 		replies: repliesView,
 		page,
 		totalPages,
-		totalRepliesCount,
 		// Reply page size used by the offline pass-through writer (DV07 C04) to
 		// derive the replyCacheManifest ranges. Equals getPaginationLimit() so
 		// the offline reader's gap math lines up with the online pagination.

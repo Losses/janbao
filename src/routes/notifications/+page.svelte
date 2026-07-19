@@ -36,7 +36,6 @@
 		isRead: boolean;
 		href: string | null;
 		label: string;
-		target: string | null;
 	}
 
 	function buildView(item: NotificationItem): NotificationView {
@@ -44,7 +43,6 @@
 		const isRead = item.isRead || markedReadIds.has(item.id);
 		let label: string;
 		let href: string | null = null;
-		let target: string | null = null;
 
 		if (
 			(item.type === 'mention' ||
@@ -87,7 +85,7 @@
 			label = sourceName;
 		}
 
-		return { item, isRead, href, label, target };
+		return { item, isRead, href, label };
 	}
 
 	const views = $derived(notifications.map(buildView));
@@ -188,17 +186,6 @@
 										<span class="text-base-content/75">
 											{view.label}
 										</span>
-										{#if view.target}
-											{#if view.href}
-												<a href={view.href} class="text-primary font-medium hover:underline">
-													{view.target}
-												</a>
-											{:else}
-												<span class="font-medium text-base-content/85">
-													{view.target}
-												</span>
-											{/if}
-										{/if}
 									</div>
 									{#if !view.isRead}
 										<Badge variant="primary" class="badge-xs"></Badge>

@@ -79,6 +79,7 @@ describe('getTabBarPillTarget - the §3 tab-bar consumer config', () => {
 		expect(getTabBarPillTarget('/messages/123')).toBe('messages');
 		expect(getTabBarPillTarget('/post/discussion')).toBe('discussions');
 		expect(getTabBarPillTarget('/messages/new')).toBe('messages');
+		expect(getTabBarPillTarget('/messages/add/55')).toBe('messages');
 	});
 	test('offline tab mirrors resolve to their pill', () => {
 		expect(getTabBarPillTarget('/offline')).toBe('discussions');
@@ -102,7 +103,6 @@ describe('getTabBarPillTarget - the §3 tab-bar consumer config', () => {
 		expect(getTabBarPillTarget('/notifications')).toBe('active');
 	});
 	test('unmatched routes resolve to none (no pill, no tab highlight)', () => {
-		expect(getTabBarPillTarget('/messages/add/55')).toBe('none');
 		expect(getTabBarPillTarget('/categories')).toBe('none');
 		expect(getTabBarPillTarget('/drafts')).toBe('none');
 		expect(getTabBarPillTarget('/entry/signin')).toBe('none');
@@ -120,6 +120,7 @@ describe('getCurrentTabIndex - one-line read of the tab-bar config', () => {
 		expect(getCurrentTabIndex('/messages/123')).toBe(2);
 		expect(getCurrentTabIndex('/post/discussion')).toBe(0);
 		expect(getCurrentTabIndex('/messages/new')).toBe(2);
+		expect(getCurrentTabIndex('/messages/add/55')).toBe(2);
 	});
 	test('tab-internal pagination and offline tab mirrors', () => {
 		expect(getCurrentTabIndex('/discussions/p2')).toBe(0);
@@ -148,7 +149,6 @@ describe('getCurrentTabIndex - one-line read of the tab-bar config', () => {
 		}
 	});
 	test('unmatched routes return -1', () => {
-		expect(getCurrentTabIndex('/messages/add/55')).toBe(-1);
 		expect(getCurrentTabIndex('/categories')).toBe(-1);
 		expect(getCurrentTabIndex('/entry/signin')).toBe(-1);
 	});

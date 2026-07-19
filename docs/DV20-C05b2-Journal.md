@@ -4548,3 +4548,44 @@ $ bun run test:e2e                    209 passed / 0 flaky (exit 0)
 ```
 
 R90 audits this state.
+
+## Session 94: R90 audit (scoped PASS; passthrough regression found + flaky; both fixed; counter 2/5 -> 0/5)
+
+R90 ran two independent auditors with the reusable (scoped) audit prompt. Both
+PASSed within the scope (orchestrator/animation logic). Counter resets 2/5 -> 0/5.
+
+### The dismissed regression (found, fixed)
+
+Auditor A observed but dismissed as out-of-scope a real cross-feature regression:
+DV20's (tabs) layout change (NavPipelineTabHost on mobile instead of children)
+means the route's (tabs)/+page.svelte runPassthrough (DV07 offline passthrough
+IDB write) does not fire on mobile. The orchestrator verified it is real and
+DV20-introduced. Validated the user's feedback that the scoped prompt excludes
+other bug spaces; R91 onward uses an open-scoped prompt. Fix: NavPipelineTabHost
+now calls runPassthrough (onMount + afterNavigate, gated activeIndex===0, reading
+home.discussions); writeList wrapped in requestIdleCallback so it does not contend
+with the animation rAF. Preventive e2e mobile-passthrough.spec.ts.
+
+### CASE A flaky (found, fixed)
+
+Verification surfaced a flaky fab-deep-real-interaction.spec.ts:191 (~17% rate).
+A probe proved the FAB ramps smoothly (rampMs 92-104ms); not a production defect
+but rAF-sampling fragility (boundary samples at ~0.91/~0.10 outside the strict
+(0.1,0.9) band). Fix: time-based rampMs>=50ms + wide-band (0.05,0.95) count>=5
+(both catch a late-fast-drop). CASE A now 20/20.
+
+### Counter
+
+R89 reached 2/5 (first clean round). R90's passthrough regression is a real
+concern, so the 2 votes reset to 0/5.
+
+### Gate outputs (post-fix, 2026-07-19, orchestrator-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1457 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores src/lib actions    400 pass / 0 fail
+$ bun run test:e2e                    210 passed / 0 flaky (exit 0)
+```
+
+R91 audits this state with an open-scoped prompt.

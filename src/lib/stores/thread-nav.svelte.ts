@@ -3,13 +3,15 @@ import { hopForHref } from '$lib/utils/history-nav';
 /**
  * Thread-Nav Context - cross-component signals for navigations involving a
  * discussion thread (`/discussion/*`). Written by the root layout's
- * beforeNavigate and read by ThreadPager; module-level (NOT reactive) because it
- * is written once per navigation and read on a gesture/commit.
+ * beforeNavigate; module-level (NOT reactive) because it is written once per
+ * navigation and read on a gesture/commit.
  *
  *  - enterFromList (one-shot): set when a navigation goes `/` → `/discussion/*`.
- *    ThreadPager consumes it on mount to play a forward push slide-in (the list
- *    neighbour slides out as the thread slides in), mirroring the back-swipe.
- *    Reset on read; false on SSR / reload / non-list entry.
+ *    The list→thread forward slide-in runs through NavPipelineHost's onMount
+ *    `orchestrator.configure({ fromPathname, backTarget, ... })` call, which
+ *    derives the slide from the route pair directly; the flag records the
+ *    navigation's provenance for any consumer that needs it. Reset on read;
+ *    false on SSR / reload / non-list entry.
  */
 let enterFromList = false;
 

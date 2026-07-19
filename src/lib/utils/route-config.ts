@@ -199,6 +199,10 @@ const TAB_BAR_CONFIG: readonly TabBarEntry[] = [
 	{ pattern: /^\/messages\/\d/, pillTarget: 'messages' },
 	{ pattern: /^\/post\/discussion$/, pillTarget: 'discussions' },
 	{ pattern: /^\/messages\/new$/, pillTarget: 'messages' },
+	// /messages/add/[userId] shares MessageCompose with /messages/new and mounts
+	// NavPipelineHost centerTab={2}, so the Messages pill highlights at rest on
+	// SSR/first-paint (before configure flips pager.active). Mirrors /messages/new.
+	{ pattern: /^\/messages\/add\//, pillTarget: 'messages' },
 
 	// Global routes follow the active tab (the §3 'active' pill target).
 	{ pattern: /^\/admin/, pillTarget: 'active' },

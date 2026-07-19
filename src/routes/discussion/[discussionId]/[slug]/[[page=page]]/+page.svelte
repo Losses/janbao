@@ -243,12 +243,13 @@
 
 	/**
 	 * Bring an element to the top of the viewport by scrolling the WINDOW only -
-	 * never via Element.scrollIntoView. The thread lives inside the ThreadPager
-	 * viewport, which is `overflow: hidden`, and an overflow:hidden box is still a
-	 * CSS scroll container: scrollIntoView on a descendant scrolls that viewport
-	 * internally, where the user cannot scroll it back, locking the page on the
-	 * target with everything above clipped. Offset by the sticky header height so
-	 * the target lands just below the app bar.
+	 * never via Element.scrollIntoView. On mobile the thread lives inside
+	 * NavPipelineHost's `.detail-scroll-pane`, and under `html.fixed-viewport`
+	 * the WINDOW itself is `overflow: hidden` - an overflow:hidden box is still a
+	 * CSS scroll container, so scrollIntoView on a descendant scrolls that
+	 * viewport internally where the user cannot scroll it back, locking the page
+	 * on the target with everything above clipped. Offset by the sticky header
+	 * height so the target lands just below the app bar.
 	 */
 	function scrollToElement(el: HTMLElement, behavior: ScrollBehavior = 'smooth'): void {
 		if (typeof window === 'undefined') return;
@@ -457,11 +458,12 @@
 	});
 
 	// 2. Navigation Anchor Scroll (DESKTOP only). Uses scrollToElement
-	// (window-only), never scrollIntoView: the ThreadPager viewport is
-	// overflow:hidden, so scrollIntoView would scroll it internally and lock the
-	// page on the anchor. Deferred until the layout is stable (waitForStableLayout)
-	// so it does not chase a moving target mid-enter and twitch the header. Mobile
-	// lands in afterNavigate (below) so the anchor is on the first paint - no flash.
+	// (window-only), never scrollIntoView: under `html.fixed-viewport`
+	// (NavPipelineHost) the WINDOW is overflow:hidden, so scrollIntoView would
+	// scroll it internally and lock the page on the anchor. Deferred until the
+	// layout is stable (waitForStableLayout) so it does not chase a moving target
+	// mid-enter and twitch the header. Mobile lands in afterNavigate (below) so
+	// the anchor is on the first paint - no flash.
 	let lastScrolledHash: string | null = null;
 	$effect(() => {
 		const hash = page.url.hash;
