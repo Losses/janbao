@@ -28,7 +28,8 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		return jsonError(t, 'draft.invalidBody', 400);
 	}
 
-	const { contextType, contextId, contentJson } = body;
+	const { contextType, contentJson } = body;
+	const contextId = body.contextId;
 
 	if (!contextType || !contentJson) {
 		return jsonError(t, 'draft.fieldsRequired', 400);
@@ -44,7 +45,15 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 
 	const db = locals.db;
 	const authorId = locals.user.id;
-	const normalizedContextId = contextId ?? 0;
+	// Defense-in-depth: the drafts.context_id column has INTEGER affinity, so a
+	// non-numeric value (e.g. a client sending contextId: 'new') is stored as
+	// TEXT and silently bypasses every integer-keyed lookup on the load and
+	// clear paths (which query contextId = 0 for the "new" composer draft),
+	// leaking one orphan row per call. Coerce to a finite integer at the
+	// boundary so the unique index (authorId, contextType, contextId) converges
+	// manual and auto saves onto a single row regardless of caller.
+	const normalizedContextId =
+		typeof contextId === 'number' && Number.isFinite(contextId) ? contextId : 0;
 	const now = new Date();
 
 	// Atomic upsert - on conflict over (authorId, contextType, contextId), update content

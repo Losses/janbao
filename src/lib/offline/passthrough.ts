@@ -27,6 +27,7 @@ import { readOfflinePrefs } from './prefs';
 import { REASON_ORDER } from './types';
 import type { CachedDiscussion, CachedRange, CachedReply, CachedUser, Reason } from './types';
 import type { SyncDiscussionDTO, SyncReplyDTO } from '$lib/types/api';
+import { isRealUserId } from '$lib/utils/user';
 import type { DiscussionListItem } from '$lib/server/db/dao/discussions';
 
 // Pre-computed singleton so we never allocate a new array per row when the row
@@ -195,7 +196,7 @@ function replyAuthorFromThread(r: ThreadReplyInput): AuthorInput {
 // what we can resolve from the join. The thread page has no editor avatar URL,
 // so editor rows cache `avatarUrl: null` (letter-avatar fallback).
 function editorFromThread(r: ThreadReplyInput): AuthorInput | null {
-	if (r.editedBy == null || !Number.isFinite(r.editedBy) || r.editedBy <= 0) return null;
+	if (!isRealUserId(r.editedBy)) return null;
 	const displayName = r.editedByDisplayName ?? r.editedByUsername;
 	const username = r.editedByUsername ?? r.editedByDisplayName;
 	if (!displayName && !username) return null;
@@ -274,7 +275,7 @@ async function upsertUsers(authors: AuthorInput[], now: number): Promise<void> {
 	const seen = new Set<number>();
 	const rows: CachedUser[] = [];
 	for (const a of authors) {
-		if (!Number.isFinite(a.id) || a.id <= 0) continue;
+		if (!isRealUserId(a.id)) continue;
 		if (seen.has(a.id)) continue;
 		seen.add(a.id);
 		rows.push(mapCachedUser(a, now));

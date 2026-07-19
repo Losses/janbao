@@ -17,6 +17,7 @@ import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 import { buildAvatarUrl } from '$lib/utils/image';
 import { enforcePostThrottle } from '$lib/server/throttle';
 import { deliverPushForMessage } from '$lib/server/push/deliver';
+import { isRealUserId } from '$lib/utils/user';
 
 const MESSAGE_PAGE_FALLBACK = 50;
 const MAX_ADD_PARTICIPANTS = 20;
@@ -229,7 +230,7 @@ export const actions: Actions = {
 		const userIds = data
 			.getAll('userId')
 			.map((val) => Number((val as string).trim()))
-			.filter((id) => !isNaN(id) && id > 0);
+			.filter((id) => isRealUserId(id));
 
 		if (userIds.length === 0) {
 			return { success: false, error: t.message.userIdRequired };

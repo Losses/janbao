@@ -7,37 +7,10 @@ import {
 	switchTabNav,
 	handleBeforeNavigateNav,
 	handleAfterNavigateNav,
-	getTabFromPath as getTabFromPathLogic,
 	backTargetFor,
 	type NavState,
 	type NavDirection
 } from './navigation-logic';
-
-// Back Handler Callback contract
-export type BackCallback = () => boolean; // returns true if the back event is consumed
-
-class BackHandlerDispatcher {
-	#handlers = $state<BackCallback[]>([]);
-
-	register(callback: BackCallback) {
-		this.#handlers.push(callback);
-		return () => {
-			this.#handlers = this.#handlers.filter((h) => h !== callback);
-		};
-	}
-
-	dispatch(): boolean {
-		if (this.#handlers.length > 0) {
-			// LIFO order: execute the last registered handler
-			const handler = this.#handlers[this.#handlers.length - 1];
-			const consumed = handler();
-			if (consumed) return true;
-		}
-		return false;
-	}
-}
-
-export const backHandler = new BackHandlerDispatcher();
 
 export type { RouteEntry } from './navigation-logic';
 
@@ -46,20 +19,8 @@ class NavigationStore {
 	// unit-tested); this class only holds the $state and delegates transitions.
 	#state = $state<NavState>(initialNavState());
 
-	get activeTab() {
-		return this.#state.activeTab;
-	}
-
-	getTabFromPath(path: string): number {
-		return getTabFromPathLogic(path, this.#state.activeTab);
-	}
-
 	get activeStack() {
 		return this.#state.stacks[this.#state.activeTab];
-	}
-
-	getStack(tabIdx: number) {
-		return this.#state.stacks[tabIdx];
 	}
 
 	get backTarget() {
@@ -93,22 +54,6 @@ class NavigationStore {
 
 	handleAfterNavigate() {
 		this.#state = handleAfterNavigateNav(this.#state);
-	}
-
-	/**
-	 * Performs a backward step safely. Per macro §6 a backward step always
-	 * targets the previous history entry; the hop-vs-push decision is the
-	 * generic `hopForHref` check on the fallback href (back / forward / push).
-	 */
-	navigateBackward(fallbackHref: string) {
-		const hop = hopForHref(fallbackHref);
-		if (hop === 'back') {
-			history.back();
-		} else if (hop === 'forward') {
-			history.forward();
-		} else {
-			void goto(fallbackHref, { replaceState: true });
-		}
 	}
 
 	/**

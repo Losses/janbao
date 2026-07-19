@@ -17,7 +17,6 @@
 	import { SITE_DEFAULT_THEME } from '$lib/ui/prefs';
 	import { getPageThemeStore } from '$lib/stores/page-theme.svelte';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
-	import { markEnterFromList, setReachedFromList } from '$lib/stores/thread-nav.svelte';
 	import { initNavigationStore } from '$lib/stores/navigation.svelte';
 	import { initMobilePagerStore, initSearchPagerStore } from '$lib/stores/mobile-pager.svelte';
 	import { getPageCacheStore, type PageCacheStore } from '$lib/stores/page-cache.svelte';
@@ -127,16 +126,6 @@
 
 		const threadEnter = to?.url.hash && to.url.pathname.startsWith('/discussion');
 		const swipeBack = from?.url.pathname.startsWith('/discussion') && to?.url.pathname === '/';
-		// Record whether the thread was reached from the discussions list, so the
-		// swipe-back gesture can pop the history entry (history.back) instead of
-		// pushing a duplicate (goto). Set on every thread arrival so it reflects
-		// the current entry's origin; stays false on full load (no beforeNavigate)
-		// so a deep-linked thread never backs out of the site.
-		if (to?.url.pathname.startsWith('/discussion')) {
-			const fromList = from?.url.pathname === '/';
-			if (fromList) markEnterFromList();
-			setReachedFromList(fromList);
-		}
 		if (threadEnter || swipeBack) {
 			const store = getScrollChromeStore();
 			store.holdThroughNavigation(!!threadEnter);

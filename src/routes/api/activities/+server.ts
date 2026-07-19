@@ -17,6 +17,7 @@ import type { ActivityCommentItem, ActivityCreateBody, ActivityDeleteBody } from
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 import { enforcePostThrottle, tooManyRequests } from '$lib/server/throttle';
 import { getAllowGuestActivity } from '$lib/server/constants';
+import { isRealUserId } from '$lib/utils/user';
 
 export const GET: RequestHandler = async ({ url, locals, platform }) => {
 	const user = locals.user;
@@ -85,7 +86,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		return jsonError(t, 'common.contentTooLarge', 400);
 	}
 
-	if (recipientId) {
+	if (isRealUserId(recipientId)) {
 		const recipient = await locals.db
 			.select({ id: users.id })
 			.from(users)
@@ -114,7 +115,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			.insert(activities)
 			.values({
 				authorId: user.id,
-				recipientId: recipientId || null,
+				recipientId: isRealUserId(recipientId) ? recipientId : null,
 				parentActivityId: null,
 				contentJson,
 				createdAt: new Date()
@@ -130,7 +131,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	// profile-page draft uses contextId = targetUser.id (user.id for owner,
 	// recipientId for a guest viewing the recipient's profile).
 	const draftContextIds: number[] = [0, user.id];
-	if (recipientId && recipientId !== user.id) {
+	if (isRealUserId(recipientId) && recipientId !== user.id) {
 		draftContextIds.push(recipientId);
 	}
 	await locals.db
@@ -143,7 +144,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			)
 		);
 
-	if (recipientId && recipientId !== user.id) {
+	if (isRealUserId(recipientId) && recipientId !== user.id) {
 		const prefs = await locals.db
 			.select({ profileComment: notificationPreferences.profileComment })
 			.from(notificationPreferences)
@@ -200,7 +201,7 @@ export const DELETE: RequestHandler = async ({ request, locals }) => {
 
 	let isAuthorized = activity.authorId === user.id || isAdmin;
 
-	if (!isAuthorized && activity.recipientId) {
+	if (!isAuthorized && isRealUserId(activity.recipientId)) {
 		isAuthorized = activity.recipientId === user.id;
 	}
 

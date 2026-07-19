@@ -4,6 +4,7 @@
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import DiscussionRow from '$lib/components/organisms/DiscussionRow.svelte';
 	import { generateSlug } from '$lib/utils/slug';
+	import { getSiteName } from '$lib/utils/title';
 	import { loadOfflineDiscussions, mapOfflineDiscussionRow } from '$lib/offline/queries';
 	import type { OfflineDiscussionView } from '$lib/offline/types';
 	import type { PageProps } from './$types';
@@ -26,7 +27,7 @@
 </script>
 
 <svelte:head>
-	<title>Janbao</title>
+	<title>{getSiteName()}</title>
 </svelte:head>
 
 {#snippet sidebar()}

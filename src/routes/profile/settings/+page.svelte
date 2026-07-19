@@ -94,7 +94,7 @@
 </script>
 
 <svelte:head>
-	<title>{formatTitle(profileT['accountSettings'] || 'Settings')}</title>
+	<title>{formatTitle(profileT['accountSettings'])}</title>
 </svelte:head>
 
 {#snippet sidebar()}
@@ -106,7 +106,7 @@
 <DualColumnLayout {sidebar} {user} {t}>
 	<NavPipelineHost leftHref="/">
 		<div class="space-y-4">
-			<PageTitle title={profileT['accountSettings'] || 'Settings'} />
+			<PageTitle title={profileT['accountSettings']} />
 			<DirectoryGrid {groups} />
 		</div>
 	</NavPipelineHost>

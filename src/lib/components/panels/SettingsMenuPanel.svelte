@@ -86,6 +86,6 @@
 </script>
 
 <div class="space-y-4">
-	<PageTitle title={profileT['accountSettings'] || 'Settings'} />
+	<PageTitle title={profileT['accountSettings']} />
 	<DirectoryGrid {groups} />
 </div>

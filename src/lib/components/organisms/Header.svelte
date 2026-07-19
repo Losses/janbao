@@ -49,7 +49,7 @@
 	import { getCurrentTabIndex } from '$lib/utils/route-config';
 	import { getScrollChromeStore } from '$lib/stores/scroll-chrome.svelte';
 	import { getMobilePagerStore } from '$lib/stores/mobile-pager.svelte';
-	import { getNavigationStore, backHandler } from '$lib/stores/navigation.svelte';
+	import { getNavigationStore } from '$lib/stores/navigation.svelte';
 	import { getGlobalNavPipelineOrchestrator } from '$lib/stores/nav-pipeline-orchestrator.svelte';
 	import { hopForHref } from '$lib/utils/history-nav';
 	import { HEADER_MORPH_THRESHOLD } from '$lib/utils/gesture-constants';
@@ -458,7 +458,6 @@
 	});
 
 	function onBack(): void {
-		if (backHandler.dispatch()) return;
 		const target = navStore.backTarget;
 		if (navStore.activeStack.length > 1) {
 			if (hopForHref(target) === 'back') {

@@ -5,6 +5,7 @@
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import BookmarkButton from '$lib/components/atoms/BookmarkButton.svelte';
 	import { generateSlug } from '$lib/utils/slug';
+	import { formatTitle } from '$lib/utils/title';
 	import { recordOfflineRead } from '$lib/offline/read-state';
 	import { computeGapPlacements, type GapPlacement } from '$lib/offline/gap-placement';
 	import type { PageProps } from './$types';
@@ -90,7 +91,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.discussion?.title ?? 'Janbao'} · Janbao</title>
+	<title>{formatTitle(data.discussion?.title)}</title>
 </svelte:head>
 
 {#snippet sidebar()}

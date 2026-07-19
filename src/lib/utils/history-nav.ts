@@ -11,7 +11,7 @@ import { MOBILE_TAB_DEFS } from '$lib/utils/tab-config';
  * 'push' when that API is unavailable, so old browsers keep the
  * push-on-every-switch behaviour (progressive enhancement). The same function
  * also backs the thread back-swipe's "does the previous entry match" check
- * (NavPipelineHost / thread-nav).
+ * (NavPipelineHost).
  *
  * Direction-agnostic: it only asks "which adjacent entry equals the target",
  * never "which way the finger moved" - so a left or right swipe that targets a

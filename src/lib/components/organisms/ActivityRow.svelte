@@ -51,7 +51,7 @@
 		isTopLevel = true
 	}: ActivityRowProps = $props();
 
-	import { formatDisplayName } from '$lib/utils/user';
+	import { formatDisplayName, isRealUserId } from '$lib/utils/user';
 
 	const formattedAuthorDisplayName = $derived(formatDisplayName(authorDisplayName, authorId, t));
 	const formattedRecipientDisplayName = $derived(
@@ -113,7 +113,7 @@
 				>
 					{formattedAuthorDisplayName}
 				</a>
-				{#if recipientId && formattedRecipientDisplayName}
+				{#if isRealUserId(recipientId) && formattedRecipientDisplayName}
 					<span class="flex items-center gap-1 text-base-content/60">
 						<Icon path={mdiArrowRight} size={16} />
 						<a

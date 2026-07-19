@@ -348,7 +348,7 @@
 </script>
 
 <svelte:head>
-	<title>{formatTitle(adminT['stats'] || 'Stats')}</title>
+	<title>{formatTitle(adminT['stats'])}</title>
 </svelte:head>
 
 {#snippet sidebar()}
@@ -362,7 +362,7 @@
 		<div class="space-y-6">
 			<!-- Header and Dropdown Selection -->
 			<div class="flex items-center justify-between border-b border-base-300 pb-4">
-				<h1 class="page-title">{adminT['stats'] || 'Statistics'}</h1>
+				<h1 class="page-title">{adminT['stats']}</h1>
 
 				<div class="flex items-center gap-2">
 					<select
@@ -372,12 +372,12 @@
 						onchange={(e) =>
 							goto(`/admin/stats?interval=${interval}&range=${e.currentTarget.value}`)}
 					>
-						<option value="2y">{adminT['range2y'] || 'Past 2 Years'}</option>
-						<option value="1y">{adminT['range1y'] || 'Past 1 Year'}</option>
-						<option value="6m">{adminT['range6m'] || 'Past 6 Months'}</option>
-						<option value="3m">{adminT['range3m'] || 'Past 3 Months'}</option>
-						<option value="current_month">{adminT['rangeCurrentMonth'] || 'This Month'}</option>
-						<option value="all">{adminT['rangeAll'] || 'All Time'}</option>
+						<option value="2y">{adminT['range2y']}</option>
+						<option value="1y">{adminT['range1y']}</option>
+						<option value="6m">{adminT['range6m']}</option>
+						<option value="3m">{adminT['range3m']}</option>
+						<option value="current_month">{adminT['rangeCurrentMonth']}</option>
+						<option value="all">{adminT['rangeAll']}</option>
 					</select>
 
 					<select
@@ -431,7 +431,7 @@
 				<!-- Draggable Brush Range Selector Slider -->
 				<div class="space-y-1">
 					<div class="text-xs text-base-content/50 font-medium px-1">
-						{adminT['dateRange'] || 'Drag handles or selection area to select time window'}
+						{adminT['dateRange']}
 					</div>
 					<div
 						class="relative h-14 w-full bg-base-200 border border-base-300 rounded-box select-none touch-none"
@@ -510,11 +510,11 @@
 				>
 					<div class="flex items-center gap-1.5">
 						<div class="w-3 h-3 bg-primary/75 rounded-sm"></div>
-						<span>{adminT['discussions'] || 'Discussions'}</span>
+						<span>{adminT['discussions']}</span>
 					</div>
 					<div class="flex items-center gap-1.5">
 						<div class="w-3 h-3 bg-secondary/75 rounded-sm"></div>
-						<span>{adminT['replies'] || 'Replies'}</span>
+						<span>{adminT['replies']}</span>
 					</div>
 				</div>
 			</div>

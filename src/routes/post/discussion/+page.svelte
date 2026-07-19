@@ -84,7 +84,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					contextType: 'discussion',
-					contextId: 'new',
+					contextId: 0,
 					contentJson
 				})
 			});

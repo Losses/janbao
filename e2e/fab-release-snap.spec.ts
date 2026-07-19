@@ -120,10 +120,21 @@ async function captureFabScale(
 }
 
 /**
- * Assert the release scaled SMOOTHLY: the snap must ease through the intermediate
- * band (several frames strictly between `lo` and `hi`), and no single frame may
- * leap across the release gap (from above `gapHi` to below `gapLo` in one rAF).
- * A single-frame jump fails both: it skips the band and is itself the leap.
+ * Assert the release scaled SMOOTHLY using two sample-independent guards:
+ *   1. TIME-based descent: the wall-clock span from the LAST sample above `hi`
+ *      to the FIRST subsequent sample at or below `lo` must exceed
+ *      DESCENT_MS_FLOOR. rAF timestamps advance through main-thread blocks, so
+ *      this measures real elapsed time regardless of how many rAF ticks the
+ *      sampler happened to capture. A correct ease crosses in 30+ ms; a
+ *      one-frame pop crosses in ~16ms (a single rAF tick).
+ *   2. LEAP check: no single captured frame may leap from above `gapHi` to
+ *      below `gapLo` with magnitude >= 0.2. A pop (e.g. 0.39 -> 0.00)
+ *      registers a ~0.39 drop, well over the threshold; a correct ease produces
+ *      successive samples close enough that no step approaches it.
+ * Both guards are rAF-tick-count-independent: the route-navigation main-thread
+ * block can leave the sampler with very few ticks in the (lo, hi) band on a
+ * correct ease, so the assertion must not depend on how many ticks landed
+ * inside that band.
  */
 function assertSmoothRelease(
 	capture: TrajectoryCapture,
@@ -132,18 +143,40 @@ function assertSmoothRelease(
 	gapHi: number,
 	gapLo: number
 ): void {
-	// An eased release must pass through the intermediate scale region, not
-	// vanish in one frame. The route navigation blocks the main thread for a few
-	// frames mid-slide, so the per-frame sampler may capture as few as two
-	// samples in the (lo, hi) band on a correct eased release. A true
-	// single-frame jump captures zero. Two is the dividing line.
-	const inBand = capture.finiteScales.filter((s) => s > lo && s < hi);
+	// Guard 1: time-based descent. The release must spend real wall-clock time
+	// descending from above `hi` to at-or-below `lo`. rAF timestamps advance
+	// through main-thread blocks, so this is sample-count-independent: a
+	// one-frame pop crosses in ~16ms (a single tick); a correct ease takes
+	// 30+ ms. The floor sits between those regimes.
+	const DESCENT_MS_FLOOR = 18;
+	let lastHighIdx = -1;
+	for (let i = 0; i < capture.samples.length; i++) {
+		if (capture.samples[i].scale > hi) lastHighIdx = i;
+	}
+	let firstLowIdx = -1;
+	if (lastHighIdx >= 0) {
+		for (let i = lastHighIdx + 1; i < capture.samples.length; i++) {
+			if (capture.samples[i].scale <= lo) {
+				firstLowIdx = i;
+				break;
+			}
+		}
+	}
+	const descentMs =
+		lastHighIdx >= 0 && firstLowIdx > lastHighIdx
+			? capture.samples[firstLowIdx].t - capture.samples[lastHighIdx].t
+			: Number.NaN;
 	expect(
-		inBand.length,
-		`release must pass through the (${lo}, ${hi}) band with at least two frames; a single-frame jump skips it. scales=[${capture.finiteScales
+		descentMs,
+		`release must take at least ${DESCENT_MS_FLOOR}ms to descend from >${hi} to <=${lo} (a one-frame pop crosses in ~16ms). descentMs=${descentMs.toFixed(1)} scales=[${capture.finiteScales
 			.map((s) => s.toFixed(2))
 			.join(',')}]`
-	).toBeGreaterThanOrEqual(2);
+	).toBeGreaterThanOrEqual(DESCENT_MS_FLOOR);
+
+	// Guard 2: leap check. No single captured frame may leap from above `gapHi`
+	// to below `gapLo`. A one-frame pop (0.39 -> 0.00) registers a ~0.39
+	// single-frame drop, which exceeds the 0.2 threshold; a correct ease
+	// produces successive samples close enough that no step approaches it.
 	let leap = 0;
 	for (let i = 1; i < capture.finiteScales.length; i++) {
 		const prev = capture.finiteScales[i - 1];
@@ -179,7 +212,7 @@ test('Family A forward: FAB eases out across the release snap (discussions -> ac
 
 	// Precondition: the FAB really did scale out during the drag and reached
 	// near-0 by the end of the window (the swipe committed). Without these the
-	// easing-band assertion could pass vacuously.
+	// release assertion could pass vacuously (no descent to measure, no leap).
 	expect(capture.maxScale, 'FAB must start at scale 1 on the discussions list').toBeGreaterThan(0.9);
 	expect(capture.minScale, 'FAB must reach near-0 once the swipe commits').toBeLessThan(0.1);
 
@@ -209,13 +242,13 @@ test('Family A backward: FAB eases out across the release snap (messages -> acti
 
 /**
  * Assert a scale-IN release (a cancelled swipe snapping back to its source tab)
- * eased smoothly. The FAB scaled down during the drag (minScale < 0.9) and returned
- * to rest (maxScale > 0.95), and no single frame leapt up from <0.90 to >0.95. A
- * smooth ease crosses 0.95 starting from ~0.93 (prev > 0.90); the bug jumps from
- * the drag value (<0.90) straight to 1.0 in one frame. The band-count check used
- * for scale-OUT does not apply here: the drag already traversed (0.75, 0.95) on
- * the way down, so only the single-frame upward leap distinguishes a pop from an
- * ease.
+ * eased smoothly. The FAB scaled down during the drag (minScale < 0.9) and
+ * returned to rest (maxScale > 0.95), and no single frame leapt up from <0.90
+ * to >0.95. A smooth ease crosses 0.95 starting from ~0.93 (prev > 0.90); the
+ * bug jumps from the drag value (<0.90) straight to 1.0 in one frame. The
+ * scale-IN case needs only this single-frame upward leap check: the drag
+ * already traversed (0.75, 0.95) on the way down, so the upward leap alone
+ * distinguishes a pop from an ease.
  */
 function assertSmoothScaleIn(capture: TrajectoryCapture): void {
 	expect(capture.minScale, 'drag must scale the FAB below 0.9').toBeLessThan(0.9);

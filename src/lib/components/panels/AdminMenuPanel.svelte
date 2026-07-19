@@ -74,6 +74,6 @@
 </script>
 
 <div class="space-y-4">
-	<PageTitle title={adminT['title'] || 'Admin'} />
+	<PageTitle title={adminT['title']} />
 	<DirectoryGrid {groups} />
 </div>

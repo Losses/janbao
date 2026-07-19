@@ -3,6 +3,7 @@ import { eq, and } from 'drizzle-orm';
 import type { D1Db } from '$lib/server/db';
 import type { UserSearchResult } from '$lib/types/api';
 import { buildAvatarUrl } from '$lib/utils/image';
+import { isRealUserId } from '$lib/utils/user';
 
 export interface MessageComposePrefill {
 	messageDraft: string | null;
@@ -36,7 +37,7 @@ export async function resolveMessageComposePrefill(
 	}
 
 	let prefillRecipient: UserSearchResult | null = null;
-	if (recipientId && recipientId !== userId) {
+	if (isRealUserId(recipientId) && recipientId !== userId) {
 		// Select the raw avatar columns so buildAvatarUrl can derive the URL;
 		// they are dropped from the returned UserSearchResult.
 		const recipientRows = await db

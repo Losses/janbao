@@ -24,6 +24,7 @@
  * browser-side code that does not touch the backend.
  */
 import { build, files, version } from '$service-worker';
+import { PUBLIC_SITE_NAME } from '$env/static/public';
 
 // The project tsconfig loads the DOM lib, where the global `self` is `Window`.
 // In a service worker the runtime global is ServiceWorkerGlobalScope; pin it here
@@ -115,7 +116,7 @@ self.addEventListener('push', (event: PushEvent) => {
 	} catch (err) {
 		console.error('[sw] malformed push payload:', err);
 	}
-	const title = payload.title || 'Janbao';
+	const title = payload.title || PUBLIC_SITE_NAME || 'Janbao';
 	const options: NotificationOptions = {
 		body: payload.body || '',
 		icon: '/icons/icon-192.png',

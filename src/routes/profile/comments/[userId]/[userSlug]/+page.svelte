@@ -9,6 +9,7 @@
 	import Paginator from '$lib/components/atoms/Paginator.svelte';
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
+	import { isRealUserId } from '$lib/utils/user';
 	import { goto } from '$app/navigation';
 	import type { UserCommentItem } from '$lib/server/db/dao/comments';
 	import type { PageData } from './$types';
@@ -81,7 +82,7 @@
 				{invitedBy}
 				email={headerEmail}
 				{showLastActive}
-				canMessage={!isOwner && !!user && targetUser.id !== 0}
+				canMessage={!isOwner && !!user && isRealUserId(targetUser.id)}
 				{t}
 			/>
 

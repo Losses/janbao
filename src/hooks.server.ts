@@ -7,6 +7,7 @@ import { getUiPreferences } from '$lib/server/db/dao/ui-preferences';
 import { SITE_DEFAULT_THEME } from '$lib/ui/prefs';
 import { resolveLang, getTranslation } from '$lib/server/i18n';
 import { buildAvatarUrl } from '$lib/utils/image';
+import { getSiteName } from '$lib/utils/title';
 import { getJwtSecret, getCookieSecure } from '$lib/server/constants';
 import { resolvePcloudConfig, pcloudIsConfigured } from '$lib/server/pcloud';
 import { maybeRunDailyBackup } from '$lib/server/backup';
@@ -50,6 +51,19 @@ function injectResolvedTheme(
 		`data-theme="${SITE_DEFAULT_THEME}"`,
 		`data-theme="${target}" data-theme-ssr`
 	);
+}
+
+// Substitute the apple-mobile-web-app-title meta with the configured site
+// name. app.html cannot read $env/dynamic/public at build time, so this runs
+// on every SSR render alongside the theme injection. String search + function
+// replacer (no regex) so a site name containing regex metacharacters or `$`
+// (which `$N` patterns in a string replacer would otherwise interpret) is
+// inserted verbatim.
+function injectSiteName(html: string): string {
+	return html.replace('apple-mobile-web-app-title" content="Janbao"', () => {
+		const name = getSiteName();
+		return `apple-mobile-web-app-title" content="${name}"`;
+	});
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
@@ -192,12 +206,16 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	// Inject the resolved theme (per-page theme if a load published one, else
 	// the interface theme, else the site default) so the first paint is correct.
+	// Also substitute the OS web-app title with the configured site name, which
+	// app.html cannot read from $env at build time.
 	const response = await resolve(event, {
 		transformPageChunk: ({ html }) =>
-			injectResolvedTheme(
-				html,
-				event.locals.pageTheme,
-				event.locals.user?.uiPreferences?.interfaceTheme
+			injectSiteName(
+				injectResolvedTheme(
+					html,
+					event.locals.pageTheme,
+					event.locals.user?.uiPreferences?.interfaceTheme
+				)
 			)
 	});
 	// The service worker script must always be revalidated: otherwise Firefox

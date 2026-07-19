@@ -92,7 +92,7 @@
 </script>
 
 <svelte:head>
-	<title>{formatTitle(profileT.accountSettings || 'Profile')}</title>
+	<title>{formatTitle(profileT.accountSettings)}</title>
 </svelte:head>
 
 {#snippet sidebar()}

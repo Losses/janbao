@@ -23,7 +23,7 @@
 	const t = $derived(data.t);
 	const profileT = $derived(t.profile);
 	const user = $derived(data.user);
-	import { formatDisplayName } from '$lib/utils/user';
+	import { formatDisplayName, isRealUserId } from '$lib/utils/user';
 
 	const targetUser = $derived(data.targetUser);
 	const displayTargetUser = $derived(formatDisplayName(targetUser.displayName, targetUser.id, t));
@@ -82,7 +82,7 @@
 				{invitedBy}
 				email={headerEmail}
 				{showLastActive}
-				canMessage={!isOwner && !!user && targetUser.id !== 0}
+				canMessage={!isOwner && !!user && isRealUserId(targetUser.id)}
 				{t}
 			/>
 

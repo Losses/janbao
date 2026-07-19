@@ -4636,3 +4636,125 @@ $ bun run test:e2e                    210 passed / 0 flaky (exit 0)
 ```
 
 R92 audits this state (open-scoped prompt).
+
+## Session 96: R92 audit (open-scoped; A 1 concern + 5 low/very-low, B 1 concern); all 7 fixed
+
+R92 was the second open-scoped round. Both auditors independently converged on
+one concern: src/lib/stores/thread-nav.svelte.ts is entirely dead. A additionally
+found five dead-code and site-name consistency defects. Counter stays 0/5. All
+seven fixed.
+
+### Findings + fixes
+
+- A1=B1 (concern, FIXED): thread-nav.svelte.ts is entirely dead code. The two
+  readers (consumeEnterFromList, backLandsOnList) have zero callers; the two
+  writers (markEnterFromList, setReachedFromList) are called only from
+  +layout.svelte and feed write-only state nothing reads. The orchestrator owns
+  swipe-back via hopForHref. R91 rewrote the docstrings (dropping ThreadPager
+  refs) but missed that the whole module was orphaned by R90's ThreadPager
+  deletion; the rewritten docstring defended dead state. Fix: deleted the module
+  and the +layout.svelte dead write block (kept the threadEnter / swipeBack locals
+  and the scroll-chrome block); corrected the stale history-nav.ts comment.
+- A2 (low, FIXED): dead NavigationStore members (activeTab getter, getTabFromPath,
+  getStack, navigateBackward); zero external callers. navigateForward stays alive
+  (MobileTabBar). Removed the now-unused getTabFromPathLogic import.
+  navigation-logic.test.ts asserts s.activeTab on a plain NavState, not the store
+  getter, so it stays green.
+- A3 (very low, FIXED): dead BackHandlerDispatcher (register zero callers;
+  dispatch called in Header.onBack but #handlers always empty so it always
+  returned false). Deleted the class + singleton + BackCallback type; Header.onBack
+  trimmed. Behavior-preserving (dispatch was a no-op).
+- A4 (low, FIXED): hardcoded site name in the two offline page titles. .env sets
+  PUBLIC_SITE_NAME="火星" but offline/+page.svelte and
+  offline/[discussionId]/+page.svelte hardcoded "Janbao". Switched to
+  getSiteName() / formatTitle() (matching the online discussion page).
+- A5 (very low, FIXED): app.html apple-mobile-web-app-title hardcoded "Janbao".
+  app.html cannot read $env at build time; hooks.server.ts gained injectSiteName
+  (exact-string match + function replacer for $ / metacharacter safety), composed
+  in transformPageChunk alongside injectResolvedTheme.
+- A6 (low, FIXED via horizontal sweep): service-worker.ts push fallback hardcoded
+  "Janbao"; now payload.title || PUBLIC_SITE_NAME || "Janbao" via
+  $env/static/public (SvelteKit forbids $env/dynamic/public in SW; only
+  $env/static/public is permitted). tsconfig.sw.json now includes
+  .svelte-kit/ambient.d.ts for the SW typecheck.
+
+### Horizontal check
+
+Site-name sweep: every "Janbao" literal in title/meta/push surfaces enumerated.
+manifest +server.ts literal is a correct ultimate fallback (matches mailer.ts);
+offline pages, app.html, SW push fixed. static/offline-fallback.html is a truly
+static last-resort shell (no runtime env), left as-is. i18n copy embeds "Janbao"
+as a brand proper noun in localized sentences (the loader is property-path access
+with no interpolation machinery); a distinct content/branding concern, not the
+OS/browser-label defect class, left as-is and documented.
+
+Both auditors converged on the thread-nav concern (independent corroboration of
+the headline defect). No false positives: every finding was grep-verifiable dead
+code or env-consistency drift, with no runtime-visible-behavior claim to falsify.
+
+### Counter
+
+0/5 (R92 had concerns; not a PASS round).
+
+### Gate outputs (post-fix, 2026-07-19, orchestrator-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1456 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores src/lib/actions    400 pass / 0 fail
+$ bun run test:e2e                    210 passed / 0 flaky (exit 0, 9.3m)
+```
+
+R93 audits this state (open-scoped prompt).
+
+## Session 97: R93 audit (open-scoped; A 1 concern, B 5 id-0 findings); + i18n fallbacks + flaky fix; all fixed
+
+R93 was the third open-scoped round. A found a silent draft-loss data bug; B
+found a whole defect class (id-0 bootstrap-admin filtered inconsistently). The
+horizontal i18n sweep (A had flagged unscored) was verified real and fixed, and
+a flaky e2e exposed by the gate was root-caused and made deterministic. Counter
+stays 0/5.
+
+### Findings + fixes
+
+- A1 (concern, FIXED): post/discussion manual Save Draft posted contextId 'new'
+  (string) to an INTEGER-affinity column; the row was never loaded (load queries
+  contextId = 0) and never cleared on publish, leaking one orphan per click.
+  Call site -> contextId: 0; /api/drafts/save now coerces contextId to a finite
+  integer at the boundary (defense-in-depth). The drafts unique index makes
+  manual + auto saves converge.
+- B1-B5 (concern/low, FIXED): the id-0 class. 13 call sites used >0 / <=0 /
+  truthy / !==0 instead of isRealUserId, dropping the bootstrap admin from
+  participant lists, the profile Message button, the compose prefill, the wall-
+  post recipient (stored null -> undirected activity + lost notification + lost
+  DELETE auth), and the offline author cache. All switched to isRealUserId,
+  including a 13th sibling (ActivityRow recipient chip) the horizontal sweep
+  added. Correct id===0 / isRealUserId sites left untouched.
+- Convention (FIXED): 18 i18n English-fallback sites (|| 'English') removed; all
+  keys verified in both en.json and zh-CN.json. Zero i18n English fallbacks
+  remain in svelte.
+- Dismissed FP: A's unscored restore: (value) => in the discussion snapshot is
+  contextually typed (check 0, lint green), not implicit-any.
+- Flaky (FIXED): fab-release-snap.spec.ts band-count check was fragile to rAF
+  under-sampling (route-nav main-thread block -> as few as 1 sample in the band
+  on a correct ease). Removed band-count; kept the leap check (robust pop
+  catcher); added a time-based descent guard (DESCENT_MS_FLOOR = 18ms; observed
+  descents 31.4ms+, one-frame pop ~16ms; rAF-timestamp span is sample-count-
+  independent). One-frame pop fails both guards; correct ease passes both.
+  Determinism: 60/60.
+
+### Counter
+
+0/5 (R93 had concerns; not a PASS round).
+
+### Gate outputs (post-fix, 2026-07-19, orchestrator-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1456 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores src/lib/actions    400 pass / 0 fail
+$ bun run test:e2e                    210 passed / 0 flaky (exit 0, 9.1m)
+$ fab-release-snap --repeat-each=20    60 passed / 0 flaky (determinism)
+```
+
+R94 audits this state (open-scoped prompt).
