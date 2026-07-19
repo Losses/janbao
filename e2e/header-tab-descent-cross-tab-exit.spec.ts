@@ -32,8 +32,6 @@ interface SettleFrame {
 	rootTargetTy: number | null; // % from inline style.transform
 	rootComputedPx: number | null; // m42 (px) from getComputedStyle
 	rootTransition: string;
-	navInFlight: boolean;
-	pending: string | null;
 }
 
 interface SamplerWindow extends Window {
@@ -47,7 +45,6 @@ interface HeaderSnap {
 	morph: number;
 	settling: boolean;
 	currentHasTabs: boolean;
-	pendingNav: string | null;
 }
 
 interface HeaderLogWindow extends Window {
@@ -65,9 +62,6 @@ async function installSampler(page: Page): Promise<void> {
 		const parseTy = (s: string): number | null => {
 			const m = s.match(/translateY\((-?\d+(?:\.\d+)?)%\)/);
 			return m ? parseFloat(m[1]) : null;
-		};
-		const g = window as unknown as {
-			__navStore?: { navInFlight: boolean; pendingNav: { href: string } | null };
 		};
 		const tick = (): void => {
 			const nodes = Array.from(
@@ -87,9 +81,7 @@ async function installSampler(page: Page): Promise<void> {
 				path: location.pathname,
 				rootTargetTy: root ? parseTy(root.style.transform) : null,
 				rootComputedPx,
-				rootTransition: root ? root.style.transition : '',
-				navInFlight: g.__navStore ? g.__navStore.navInFlight : false,
-				pending: g.__navStore && g.__navStore.pendingNav ? g.__navStore.pendingNav.href : null
+				rootTransition: root ? root.style.transition : ''
 			});
 			if (log.length > cap) log.splice(0, log.length - cap);
 			if (!w.__settleStop) requestAnimationFrame(tick);

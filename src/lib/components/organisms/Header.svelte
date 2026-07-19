@@ -287,7 +287,6 @@
 			latchedSettle: settleLatched,
 			effectiveTabsOut: tabsOut,
 			effectiveTabsIn: tabsIn,
-			pendingNav: navStore.pendingNav ? navStore.pendingNav.href : null,
 			dragging,
 			backMorph: pager.backMorph
 		};

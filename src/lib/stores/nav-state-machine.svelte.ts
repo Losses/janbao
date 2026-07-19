@@ -259,10 +259,3 @@ export function getNavStateMachine(): NavStateMachine {
 	}
 	return instance;
 }
-
-/** Test-only: replace the singleton. The unit suite for the pure
- *  reducer does not need this (it tests the reducer directly); it is
- *  exposed for future integration tests that want a fresh machine. */
-export function __setNavStateMachine(next: NavStateMachine | undefined): void {
-	instance = next;
-}

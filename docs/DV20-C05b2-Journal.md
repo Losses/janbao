@@ -4440,3 +4440,42 @@ $ bun run test:e2e                    207 passed / 0 flaky (exit 0)
 ```
 
 File count 1458 -> 1457 (deleted module). R87 audits this state.
+
+## Session 91: R87 audit (A: 1 false positive + A2 dead code + A3 comment; B: B1 dead code); all resolved
+
+R87 ran two independent auditors (re-launched after a 429 rate-limit failure of
+the first attempt). A returned PASS-WITH-CONCERNS (3 findings); B returned
+PASS-WITH-CONCERNS (1 finding). Counter stays 0/5.
+
+### Findings + resolution
+
+- A1 (FALSE POSITIVE): A hypothesized a 1-frame FAB jump at a mid-commit re-grab
+  instant (`#progress = 0` between pointerdown and first pointermove). Empirically
+  disproven with a MutationObserver probe: `#beginGesture` runs from
+  `#interpretIntent` (on the first pointermove past threshold) in the SAME
+  synchronous tick as `#publish(rawStart + rawDrag)`, so Svelte's flush sees only
+  the final value; the DOM never renders the intermediate 0. No production change.
+  (The "verify visible-behavior claims empirically" prompt discipline caught it.)
+- A2 (FIXED): removed dead `pendingNav` / `navInFlight` state from
+  `NavigationStore` (fields, getter/setter, three methods; zero production
+  callers). Downstream cascade also removed: `determineDirection` /
+  `getNavigationParams`, their interfaces, the now-write-only `#lastHistoryIndex`
+  field + writes. Two stale `pendingNav` mechanism docstrings in e2e and two
+  "pendingNav rAF-poll" comment clauses in src rewritten to current mechanism.
+  Grep confirms zero residual references in src/e2e.
+- A3 (FIXED): boundary re-grab docstring rewrote to acknowledge publication is
+  clamped while the track carries an extrapolated out-of-range value on an
+  opposite-direction re-grab (no longer claims full lockstep).
+- B1 (FIXED): deleted two zero-caller test-only exports
+  (`__resetNavPipelineOrchestrator`, `__setNavStateMachine`).
+
+### Gate outputs (post-fix, 2026-07-19, orchestrator-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1457 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores src/lib/actions    400 pass / 0 fail
+$ bun run test:e2e                    207 passed / 0 flaky (exit 0)
+```
+
+R87 changes are runtime-neutral (dead-code removal + comment edits). R88 audits this state.

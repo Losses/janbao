@@ -64,7 +64,6 @@ interface HeaderSnap {
 	latchedSettle: HeaderSettleTransition | null;
 	effectiveTabsOut: boolean;
 	effectiveTabsIn: boolean;
-	pendingNav: string | null;
 	dragging: boolean;
 	backMorph: number | null;
 }
@@ -108,7 +107,7 @@ function summarise(snaps: HeaderSnap[], sinceT: number): SpikeSummary {
 		if (s.morph > DEEP_MORPH_EPSILON) spikeFrames.push(s);
 		// Post-navigation frames on a deep destination where settling was in flight
 		// (the window the spike occupies).
-		if (!s.currentHasTabs && (s.settling || s.pendingNav !== null)) {
+		if (!s.currentHasTabs && s.settling) {
 			landingFrames.push(s);
 		}
 	}
@@ -116,7 +115,7 @@ function summarise(snaps: HeaderSnap[], sinceT: number): SpikeSummary {
 }
 
 function fmt(s: HeaderSnap): string {
-	return `t=${Math.round(s.t)} path=${s.path} morph=${s.morph.toFixed(3)} settling=${s.settling} settleProgress=${s.settleProgress.toFixed(2)} awaitTitle=${s.settleAwaitTitle} currentHasTabs=${s.currentHasTabs} targetHasTabs=${s.targetHasTabs} pending=${s.pendingNav}`;
+	return `t=${Math.round(s.t)} path=${s.path} morph=${s.morph.toFixed(3)} settling=${s.settling} settleProgress=${s.settleProgress.toFixed(2)} awaitTitle=${s.settleAwaitTitle} currentHasTabs=${s.currentHasTabs} targetHasTabs=${s.targetHasTabs}`;
 }
 
 // Drive the user's exact entry: / → /profile/settings → /profile/edit. Both

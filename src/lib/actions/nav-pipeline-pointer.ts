@@ -10,8 +10,8 @@
  * converts pointer events into `(deltaX, velocity, reversed)` callbacks
  * and forwards them to the orchestrator. The orchestrator runs the
  * resolver + executor + driver; the executor drives the rAF that
- * writes the track transform. There is no CSS transition, no
- * `transitionend`, no `pendingNav` rAF-poll on this action's surface.
+ * writes the track transform. There is no CSS transition and no
+ * `transitionend` handler on this action's surface.
  *
  * Mounted on the viewport element of both pipeline hosts
  * (`NavPipelineHost` and `NavPipelineTabHost`).

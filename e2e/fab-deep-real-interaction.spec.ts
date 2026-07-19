@@ -361,10 +361,15 @@ test('G tab tap: `/` -> `/messages/inbox` shrinks then grows the FAB', async ({ 
 
 // CASE H: back-swipe from a thread, release mid-gesture (commit). The FAB must
 // scale in CONTINUOUSLY (0 -> 1) following the gesture and the commit slide,
-// with no disappear-then-replay. The defect: GPL onSwipeEnd clears dragOffset
-// BEFORE setting pendingNav, so for one frame publication.progress falls to its rest
-// value (0) and the FAB snaps to 0, then re-animates 0 -> 1 once pendingNav
-// lands - a discontinuity on the timeline.
+// with no disappear-then-replay. The invariant: the orchestrator's
+// `#publication.progress` (NavStateMachine macro state merged with the
+// executor's per-frame rAF-driven `#progress`) stays continuous across the
+// live-drag to commit-slide to route-swap handoff. The route swap rebinds the
+// host's element refs in place without tearing down the executor, so the FAB
+// layer (a reactive reader of the publication) never sees a rest gap. The
+// test guards against a regression where progress drops to its rest value (0)
+// between the commit and the route swap and then re-animates 0 -> 1, which
+// would surface as a disappear-replay discontinuity on the timeline.
 test('H thread back-swipe release: FAB scales in continuously, no disappear-replay', async ({ page }) => {
 	await page.goto('/');
 	await waitForHydration(page);

@@ -1456,12 +1456,21 @@ export class NavPipelineOrchestrator {
 			// a scale already past the midpoint (the FAB jumps to ~0.6 from
 			// frame 1 and saturates before the finger crosses half the
 			// viewport, skipping the (0.3, 0.7) mid-range). Using the
-			// visual-derived `startProgress` keeps the publication in
-			// lockstep with the track translate (which
-			// `executor.onDragStart` seeds from the same value) for every
-			// re-grab shape: from-rest (both 0), same-direction mid-commit
-			// (the new plan's geometry matches, so `startProgress` equals
-			// the in-flight raw), and opposite-direction mid-enter.
+			// visual-derived `startProgress` keeps the drag-driven
+			// publication continuous with the track translate (which
+			// `executor.onDragStart` seeds from the same value) once the
+			// raw enters [0,1]: from-rest (both 0), same-direction
+			// mid-commit (the new plan's geometry matches, so
+			// `startProgress` equals the in-flight raw). On an
+			// opposite-direction re-grab whose extrapolated
+			// `startProgress` falls outside [0,1] (e.g. -0.6), `#publish`
+			// clamps the raw it writes here, so `publication.progress`
+			// stays at 0 while the track translate carries the unclamped
+			// `-0.6 * W` (spec §5 divergence note: the track translate is
+			// linear and well-defined for any progress, so it carries the
+			// out-of-range value transiently while the publication stays
+			// bounded). The publication and the track therefore diverge
+			// until the raw catches up to the in-range region.
 			const startProgress = this.#startProgressFromCurrentVisual(boundaryPlan);
 			this.#pendingGesture = {
 				to: from,
@@ -3155,9 +3164,4 @@ export function releaseNavPipelineOrchestrator(orch: NavPipelineOrchestrator): v
 	if (active === orch) {
 		active = null;
 	}
-}
-
-/** Test-only: clear the active slot. */
-export function __resetNavPipelineOrchestrator(): void {
-	active = null;
 }

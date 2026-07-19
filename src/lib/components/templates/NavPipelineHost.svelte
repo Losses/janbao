@@ -14,8 +14,7 @@
 	// the orchestrator's reactive publication. The component does not
 	// use `detectSwipe` directly (it uses `navPipelinePointer` which
 	// forwards to the orchestrator); there is no CSS transition on the
-	// track; there is no `transitionend` handler; there is no
-	// `pendingNav` rAF-poll.
+	// track; there is no `transitionend` handler.
 
 	import type { Snippet } from 'svelte';
 	import type { VoidHandler } from '$lib/types/handlers';

@@ -12,14 +12,15 @@ import { prepareContext, swipeBack, openSidebarAndGoto, waitForHydration } from 
  * homepage pager. Pre-fix it collapsed and lost its highlight, then re-expanded
  * - a visible flicker.
  *
- * Root cause: NavPipelineHost's pager-driving $effect has a "true rest" branch
- * that resets the pager to `fractionalIndex = fromIdx` (-1 on a deep page) +
- * `active:false`. That branch fires in the window `onTrackTransitionEnd` opens:
- * it clears `pendingNav` and dispatches history.back()/goto(), but the route
- * hasn't swapped yet, so the effect briefly sees an "idle" state and resets,
- * collapsing the pill (closeness→0, round(-1)≠0 → inactive). Once the route
- * swaps, the tab host / orchestrator publishes `active:true` for the homepage
- * tab and the pill re-expands.
+ * Current invariant: the orchestrator's publication (NavStateMachine macro
+ * state merged with the executor's per-frame rAF-driven `#progress`, exposed
+ * to the pager store via the orchestrator's `$derived`) holds the destination
+ * tab's `active:true` continuously from the commit slide through the route
+ * swap. The route swap rebinds the host's element refs in place without
+ * tearing down the executor, so the pager-driving effect never observes a
+ * rest/idle gap that could collapse the pill. The test guards against any
+ * regression that re-introduces an idle-reset window between commit and
+ * landing, which would surface as a collapse/re-expand V-dip on the timeline.
  *
  * Faithfulness: the back-swipe is a real CDP touch gesture (detectSwipe rejects
  * mouse), and /bookmarks is reached via the dev __e2eGoto hook - the same
