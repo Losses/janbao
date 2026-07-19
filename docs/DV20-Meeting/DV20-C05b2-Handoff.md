@@ -1,10 +1,17 @@
 # DV20 Cycle 5b2 - Handoff Document
 
-**Date:** 2026-07-15. **For:** the next agent continuing the DV20 5b2 audit loop.
-**Status:** R24-R37 complete (14 rounds) + FAB scale unification refactor. All
-fixes applied. Counter: **0/5** (no clean round yet). R38 auditors were launched
-but hit the 5-hour API rate limit (HTTP 429); re-launch them after 2026-07-15
-18:28:54.
+**Date:** 2026-07-19. **For:** the next agent continuing the DV20 5b2 audit loop.
+**Status:** R82-R87 complete this stretch (6 rounds) plus the fab.spec flaky
+root-cause fix and the R87 dead-code cleanup. All fixes applied; the full gate is
+green with ZERO flakies. Counter: **0/5** (no clean round yet; every round still
+finds at least one real concern, though the findings are increasingly fine:
+dead code, docstring accuracy, and empirically-disproven 1-frame claims). R88
+auditors were launched; if they hit the 5-hour API rate limit (HTTP 429), re-run
+them.
+
+This handoff supersedes the 2026-07-15 (R37) version. The architecture and the
+user's demands in sections 1 to 3 are still accurate; sections 4 to 8 reflect
+the current (post-R87) state.
 
 ## 1. The user's design vision (READ THIS FIRST)
 
@@ -13,25 +20,24 @@ but hit the 5-hour API rate limit (HTTP 429); re-launch them after 2026-07-15
 > Interruption: rollback = reverse-play; new target = finish the current then
 > play the new (or accelerate the remainder).
 
-This is the architecture. It is NOW implemented with a significant addition
-(see section 3 - the FAB scale unification):
+This IS the implemented architecture:
 
-- The orchestrator (a global persistent singleton) owns a single set of rAF
-  channels (executor gesture slide, settle, tap-scrub). Each owns one motion
-  channel.
-- It publishes progress signals (via the pager store + the state machine's
-  reactive getters) to the FAB layer, the Header, the MobileTabBar, the
-- SearchTabBar, the BurgerArrowIcon - all reactive readers that compute their own
-  visual from the signals.
-- Interruption: gesture re-grab tracks 1:1 from the current visual (no jump);
-  discrete nav (tab-click) interrupting an in-flight animation accelerates the
-  current to completion, then plays the new (the "finish-then-new" policy via
-  #accelerateInFlight + #queuedDiscreteNav).
-- The FAB scale is NOW driven by the SAME single transition progress as the
-  page-track slide, gated on FROM/TO "has FAB" booleans (RouteData.fab). The FAB
-  exits in the first half (0-50%) if FROM has a FAB and enters in the second half
-  (50%-100%) if TO has a FAB. No family-swap rAF, no familySwapScale, no
-  #lastRenderedScale. This is the fabScale half-mapping.
+- The orchestrator (a global persistent singleton, `getGlobalNavPipelineOrchestrator`,
+  eagerly constructed) owns one rAF per motion channel: the executor gesture slide,
+  the settle ease, the tap-scrub ease.
+- It publishes progress signals (via the pager store + the state machine's reactive
+  getters + the orchestrator's `$derived` `#publication`) to the FAB layer, the
+  Header, the MobileTabBar, the SearchTabBar, the BurgerArrowIcon. All are reactive
+  readers that compute their own visual from the signals.
+- Interruption: a gesture re-grab tracks from the current visual (no jump); a
+  discrete nav interrupting an in-flight animation accelerates the current to
+  completion, then replays the new (the finish-then-new policy via
+  `#accelerateInFlight` + `#queuedDiscreteNav`).
+- The FAB scale is driven by the SAME single transition progress as the page-track
+  slide, gated on FROM/TO "has FAB" booleans (`RouteData.fab`). The FAB exits in
+  the first half (0 to 50%) if FROM has a FAB and enters in the second half (50%
+  to 100%) if TO has a FAB. No family-swap rAF, no `familySwapScale`, no
+  `#lastRenderedScale`.
 
 The user explicitly REJECTED the "driver-writes" model (the manager writing DOM
 directly, components as pure renderers). Their design has components computing
@@ -43,259 +49,218 @@ from progress. Do NOT pursue driver-writes.
   violating it must be corrected.
 - **No CSS transitions. No setTimeout in the animation layer.** Anywhere.
 - **No "partially resolved" or "honest-unresolved" as an excuse to skip work.**
+  This explicitly includes a "pre-existing flaky" test: a flaky test is a defect
+  to fix (investigate root cause, make it deterministic), NEVER an inherited
+  permanent exception. The `fab.spec.ts:436` flaky was investigated this stretch
+  and turned out to be a real production defect (now fixed), not a CDP artifact.
 - **No bridges.** If two mechanisms exist for the same concern, UNIFY them (delete
   one), do NOT bridge with a third.
 - **No stopping before 5/5.** The user authorized autonomous rolling: fix -> gate
   -> audit without interruption.
-- **Long context is NOT an excuse to stop.** Delegate to sub-agents (fresh
-  context). The orchestrator independently verifies.
-- **Communication: written technical Chinese (规范书面汉语), not spoken.** No
-  calques (根因, 墙钟), no em-dashes (U+2014).
-- **Every round must write an Audit-XX report.** Do NOT skip the audit log (this
-  was a process gap in R36/R37; corrected retroactively).
+- **Long context is NOT an excuse to stop.** Delegate the FIX work to fresh-context
+  sub-agents; the orchestrator independently re-verifies the gate (re-run check /
+  lint / unit / FULL e2e; never trust a sub-agent's gate number) and writes the
+  Audit-XX + journal session.
+- **Communication: written technical Chinese, not spoken.** No calques
+  (`根因`/`墙钟`/`钳位`/`死端`), no em dashes (U+2014, forbidden by the repo's
+  `local/no-emdash` lint rule in code, comments, AND docs).
+- **Every round must write an Audit-XX report.** Do not skip the audit log.
+- **A fix is gate-green ONLY when the FULL e2e passes**, not when a targeted spec
+  does. A fixer that breaks existing tests has the wrong fix; do not weaken
+  existing tests to make the gate green.
+- **After EVERY doc (`.md`) or code-comment edit, immediately** `grep -nP
+'\x{2014}' <file>` and `bunx prettier --check <file>` on that file. Do not wait
+  for the next gate run (em dashes and prettier-wrap in audit reports / journal
+  sessions were a recurring slip this stretch).
 
-## 3. The FAB scale unification (the major architectural change this session)
+## 3. The architecture (current, post-R87)
 
-### What was wrong
+Global singleton orchestrator (`getGlobalNavPipelineOrchestrator`), eagerly
+constructed. `configure`/`releaseInputs` lifecycle (hosts call `configure` in
+`onMount`, `releaseInputs` in `onDestroy`); `unmount` is the full teardown for the
+mobile to desktop flip. Three orchestrator-owned rAF channels (executor gesture
+slide, settle ease, tap-scrub ease). The `NavStateMachine` is the sole macro
+authority (§13.5); the orchestrator's `#publication` is a `$derived.by` reading
+the state machine + the per-frame `#progress`, with a central clamp in `#publish`
+bounding `publication.progress` / `pager.backMorph` to [0,1].
 
-The FAB scale used THREE FAB-specific signals (trackFractionalIndex,
-familySwapScale, coverProgress-branched foregroundFraction) with a family-branched
-formula. This caused F5 (a continuity gap when a tab-to-tab gesture interrupted a
-family-swap ease) and violated UNIFY NOT BRIDGE.
+FAB scale: `fabScale(progress, fromHasFab, toHasFab)` in `fab-scale.ts`. The FAB
+layer reads `publication.progress` + `getRouteData(from).fab` /
+`getRouteData(to).fab`. Boundary void-swipe uses the proportional
+`1 - progress * BOUNDARY_RUBBER_BAND_FACTOR` reaction (a sanctioned divergence
+from the half-mapping).
 
-The user identified the root cause: the "two families" (list vs overlay/compose)
-was NOT a necessary design constraint. It was a design error that created two
-parallel animation formulas. The correct design: ONE progress signal + FROM/TO
-"has FAB" booleans from the Resolver (RouteData.fab) + a half-mapping formula.
+## 4. What was fixed this stretch (R82 to R87 + flaky root cause)
 
-### What was done
+- **R82:** `replaceState` intent was lost through the finish-then-new queue replay
+  (and mis-applied to the commit's own dispatch). Fixed with a capture-clear-rearm
+  flow: the finish-then-new branch captures the intent into `#queuedDiscreteNav`
+  and clears the store; `#landAtRest` re-arms the store from the queue before the
+  replay goto. Plus `shouldCancelOnRelease` pointercancel preventive unit tests.
+  Also: the orchestrator's independent pre-R82 gate re-run caught a unit
+  regression (`/discussions/pN` fab) that had been red since A75 and reported green
+  by R76-R81 (gate numbers had been copied forward without re-running).
+- **R83:** `#lastDispatchWasDeepToDeep` had a fourth lifecycle gap (a non-deep-to-deep
+  pipeline nav interrupting a deep-to-deep commit in the pre-dispatch window).
+  Fixed by clearing it in the `(!isTabRootPath(to) && !isDeepToDeep)` early-return.
+  (R83 B's "/search -> tab-root morph snap" was adjudicated a FALSE POSITIVE and
+  reverted: the morph endpoints rest at the same `translateY(0)` and the icon is
+  frozen by `isSearch`.)
+- **R84:** a gesture begun in the gap between `#dispatchNav`'s goto and the
+  destination's `afterNavigate` had its `#pendingGesture` wiped by `#landAtRest`.
+  Fixed: `#beginGesture` clears the in-flight dispatch markers
+  (`#navDispatchInFlight`, `#dispatchTarget`, `#lastLandWasPipelineCommit`,
+  `#lastDispatchWasDeepToDeep`), mirroring the existing `#isEnterAnimation` clear.
+- **R85:** `unmount()` had been clearing the cached header-state fields, which are
+  only re-populated by `notifyHeaderState` (Header `$effect.pre`); on a mobile to
+  desktop to mobile flip-without-navigation the Header persists and `$effect.pre`
+  does not re-fire, so a back-swipe read empty latched titles. Fixed: `unmount()`
+  no longer clears those fields (they stay current via `notifyHeaderState`'s
+  `!#mounted` branch; a real Header re-mount resets them via `resetHeaderState`).
+- **Flaky root cause (the "pre-existing" `fab.spec.ts:436`):** NOT a CDP artifact.
+  `#beginGesture` captured `rawStart = this.#progress` (the OLD direction's frame)
+  before the reset; on an opposite-direction re-grab the FROM/TO swap desyncs the
+  FAB (publication, seeded from old `#progress`) from the track (executor, seeded
+  from the visual-derived `startProgress`). Fixed: `rawStart: startProgress` in
+  both `#beginGesture` branches (unify: one handoff value for both channels). The
+  horizontal check found a sibling in `onSvelteKitBeforeNavigate`'s
+  `#commitStartRaw = this.#progress` (same desync on an opposite-direction
+  discrete-nav interrupt of a live drag); fixed the same way. Added the central
+  `[0,1]` clamp in `#publish` so an extrapolated `startProgress` cannot push the
+  publication out of range. Added a mid-enter-re-grab preventive e2e. The
+  `fab.spec.ts:436` test is now deterministic.
+- **R86:** deleted the dead orphan module `src/lib/stores/active-gesture-track.svelte.ts`
+  (zero importers).
+- **R87:** removed the dead `pendingNav` / `navInFlight` state from
+  `NavigationStore` plus its downstream cascade (`determineDirection`,
+  `getNavigationParams`, their interfaces, the now-write-only `#lastHistoryIndex`
+  field + writes) and rewrote stale `pendingNav` mechanism docstrings in two e2e
+  specs to the current mechanism. Deleted two zero-caller test-only exports
+  (`__resetNavPipelineOrchestrator`, `__setNavStateMachine`). (R87 A1, a claimed
+  FAB 1-frame jump at a re-grab instant, was empirically disproven and is a
+  non-issue: `#beginGesture` and `#publish` run in the same synchronous tick.)
 
-- **fab-scale.ts**: replaced `scaleFromFraction` + `tabFraction` with a single
-  `fabScale(progress, fromHasFab, toHasFab)` function (exit first half if FROM has
-  FAB, enter second half if TO has FAB, dip to 0 at midpoint if both, 0 if
-  neither).
-- **FloatingActionButtonLayer.svelte**: replaced the entire foregroundFraction /
-  restingScale / `familySwapScale ?? restingScale` machinery with a single `scale`
-  derivation reading `publication.progress` + `getRouteData(from).fab` /
-  `getRouteData(to).fab`.
-- **Orchestrator**: deleted 250+ lines of FAB-specific signals and mechanisms:
-  `trackFractionalIndex`, `familySwapScale`, the family-swap ease rAF
-  (#startFamilySwapEase / #stopFamilySwapEase / #publishFamilySwapScale),
-  #lastRenderedScale, #fabDragSeedFraction, #detectFamilyChange, #previousFamily,
-  #computeFabRestingScale, #listFabTabIndex, #familyOf, #pilotTransitionListKind.
-- **mobile-pager.svelte.ts**: removed `trackFractionalIndex` and `familySwapScale`
-  fields + `setFamilySwapScale` method.
-- **gesture-constants.ts**: removed dead `TRACK_TRANSITION_MS`.
-- F5 is eliminated (one progress signal, no bridging needed).
-
-### Known behavior change
-
-/activity's "dynamic" FAB (previously appeared during a drag toward /activity via
-trackFractionalIndex, then disappeared at rest) no longer appears during
-transitions. RouteData.fab is false for /activity, so the half-mapping treats it
-as "no FAB." This is a simplification the user approved.
-
-## 4. Errors encountered and lessons learned THIS session
-
-### 4.1. The F5 design error (the most important lesson)
-
-The orchestrator (me) initially classified F5 as "irreconcilable" - a genuine
-tradeoff between 1:1 finger-tracking and FAB continuity. The user corrected this:
-the two-family design was an ARCHITECTURAL ERROR, not a necessity. I had been
-"正当化一个架构设计错误" (justifying a design error). The real fix was to unify
-the FAB scale to one progress signal + FROM/TO booleans, which eliminates F5
-entirely.
-
-**Lesson**: before claiming a defect is "irreconcilable," PROVE the mutual
-exclusivity by exhausting alternatives (including redesigning the mechanism, not
-just patching within the flawed framework). The burden of proof is on the one
-claiming irreconcilability. Most "irreconcilable" tradeoffs dissolve with deeper
-architectural work.
-
-### 4.2. The F4 fix introduced the double-slide regression (R34)
-
-The R33 F4 fix (configure calls executor.onLand() to prevent a playEnterAnimation
-no-op on stale executor state) UNMASKED a double-slide bug on intra-tree
-deep-to-deep navs (/profile/settings -> /profile/password). Before F4, the stale
-executor state inadvertently prevented the second slide; after F4, both the
-orchestrator's interception slide AND the destination host's playEnterAnimation
-fired. Fixed with a #lastDispatchWasDeepToDeep handshake (the flag survives from
-the interception through the destination's onMount, then is cleared in
-#landAtRest).
-
-**Lesson**: when fixing one bug, trace the full consequence - the "fix" may
-unmask a latent bug that was being masked by the original.
-
-### 4.3. The FAB refactor caused 3 e2e failures (forward-enter FAB scale jump)
-
-The FAB scale unification initially caused 3 e2e failures
-(fab-deep-page-boundary.spec.ts): the FAB scale jumped 1.0 -> 0.0 in one frame
-(no smooth transition). Root cause: `shouldEnter` compared the nav stack against
-the static `leftHref` PROP instead of `resolvedLeftHref` (the actual previous
-entry). For forward enters from a different source (e.g. / -> /profile/edit),
-shouldEnter was false, playEnterAnimation never ran, and the FAB had no progress
-to animate. Fixed: `leftHref` -> `resolvedLeftHref` (one-line fix).
-
-**Lesson**: when a refactor changes a mechanism, verify ALL the entry points that
-feed it. The old family-swap ease ran unconditionally on configure; the new
-half-mapping depends on playEnterAnimation publishing progress, which depends on
-shouldEnter - a dependency chain that broke when shouldEnter was too narrow.
-
-### 4.4. The snippet field deferral (R24) - initially wrong, later corrected
-
-The cache entry's `snippet` field was deferred in R24 ("removing it needs verifying
-section 7"). This was initially a compromise (scope-discipline framing for what
-was really a deferral). Later verified: section 7's description was stale (it
-described the deleted MobileTabPager mechanism). The field was deleted and section
-7 updated in the FAB refactor round.
-
-**Lesson**: do not defer dead-code removal by claiming "needs spec verification"
-when the spec is in the repo and can be checked immediately.
-
-### 4.5. The #queuedDiscreteNav orphan - two variants found across rounds
-
-R26 B1 found the first variant: non-pipeline commit targets leave
-#queuedDiscreteNav orphaned (no #landAtRest). Fixed by clearing on non-pipeline
-targets in #onExecutorSettle.
-
-R37 B found the second variant: pipeline commit targets whose goto is CANCELLED by
-a competing external navigation (session-timeout, user URL) before landing. The
-R26 fix doesn't cover this (the target IS pipeline). Fixed by clearing
-#queuedDiscreteNav in onSvelteKitBeforeNavigate after the dispatch-reentry checks
-(any external nav invalidates the prior queue).
-
-**Lesson**: when fixing a state-leak bug, consider ALL the paths where the state
-can become stale, not just the one flagged by the auditor.
-
-### 4.6. Missing audit logs (R36/R37)
-
-R36 and R37 audit reports were not written (skipped due to context pressure). The
-user caught this. Written retroactively.
-
-**Lesson**: every round must write its Audit-XX report. Do not skip the audit log
-even under context pressure. Delegate to a sub-agent if needed.
+Lessons (also recorded in auto-memory): the horizontal check is BINDING (when you
+fix one defect, grep sibling paths and fix them in the same change); the
+audit/fix prompt must require empirical verification of any "visible behavior"
+claim (two false positives, R83-B and R87-A1, were plausible-sounding but wrong);
+a sub-agent's targeted-spec pass does not prove the full suite is green.
 
 ## 5. Current state of the code
 
-### Gate (green, last verified 2026-07-15)
+### Gate (green, last verified 2026-07-19, zero flakies)
 
 ```
-$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run check                       0 errors / 0 warnings (1457 files)
 $ bun run lint                        EXIT=0
-$ bun test src/lib/utils src/lib/stores    406 pass / 0 fail
-$ bun run test:e2e                    202 passed + 1 flaky (fab.spec.ts:432,
-                                     "Family B back: thread -> list", the
-                                     pre-existing CDP touch flake; passes on
-                                     retry)
+$ bun test src/lib/utils src/lib/stores src/lib/actions    400 pass / 0 fail
+$ bun run test:e2e                    207 passed / 0 flaky (exit 0)
 ```
 
-### What exists (updated for the FAB unification)
+### What exists (post-R87)
 
-- **Global singleton orchestrator** (`getGlobalNavPipelineOrchestrator`), eagerly
-  constructed. `configure`/`releaseInputs` lifecycle. `unmount` for mobile->desktop.
-  configure calls `executor.onLand()` to reset stale executor state (F4 fix).
-- **Three orchestrator-owned rAF channels:** executor gesture slide (velocity-
-  matched commit/cancel), settle ease, tap-scrub ease. The family-swap rAF was
-  DELETED (FAB scale is now driven by the single transition progress).
-- **FAB scale:** `fabScale(progress, fromHasFab, toHasFab)` in `fab-scale.ts`. The
-  FAB layer reads `publication.progress` + `getRouteData(from/to).fab`. No
-  familySwapScale, no trackFractionalIndex, no family-swap rAF.
-- **shouldEnter:** `$derived.by`, gated on `resolvedLeftHref` (not the static
-  `leftHref` prop) + `publication.lastDispatchWasDeepToDeep` (suppresses enter on
-  deep-to-deep interception landings).
-- **#queuedDiscreteNav:** cleared on non-pipeline commit targets (R26 fix), on
-  external navs arriving after the dispatch-reentry check (R37 fix), and consumed
-  by #landAtRest on pipeline landings.
-- **isMobile:** seeds from `page.data.isMobile` (SSR + first client render agree,
-  no hydration mismatch); onMount flips to matchMedia (the repo pattern).
+- Global singleton orchestrator, eagerly constructed. `configure`/`releaseInputs`
+  lifecycle; `unmount` for mobile to desktop.
+- Three orchestrator-owned rAF channels (executor slide, settle, tap-scrub).
+- FAB scale: `fabScale(progress, fromHasFab, toHasFab)`, reactive reader.
+- `shouldEnter`: `$derived.by`, gated on `resolvedLeftHref` +
+  `publication.lastDispatchWasDeepToDeep`.
+- `#queuedDiscreteNav`: carries `replaceState`; cleared on non-pipeline commit
+  targets, on external navs after the dispatch-reentry check, and consumed by
+  `#landAtRest` on pipeline landings (capture-clear-rearm).
+- `#beginGesture` (both branches): clears `#isEnterAnimation`,
+  `#navDispatchInFlight`, `#dispatchTarget`, `#lastLandWasPipelineCommit`,
+  `#lastDispatchWasDeepToDeep`; seeds `rawStart = startProgress`.
+- `#commitStartRaw = startProgress` at all seed sites (`#beginGesture`,
+  `playEnterAnimation`, the discrete-nav path, `#accelerateInFlight` uses the
+  same-commit `#progress`).
+- Central `[0,1]` clamp in `#publish`.
+- `#lastDispatchWasDeepToDeep` and `#lastLandWasPipelineCommit`: five clear sites
+  each (documented in their field docstrings).
+- `isMobile`: seeds from `page.data.isMobile`; onMount flips to matchMedia.
 
-### What was deleted (cumulative, R24-R37)
+### What was deleted (cumulative, this stretch)
 
-- `MobileTabPager.svelte`, `GesturePageLayout.svelte` (R23).
-- `nav-coordinator.ts`, `backSwipeShouldPopHistory`, `TAB_CLICK_COMMIT_MS`,
-  `readRenderedFabScale`, `discreteNavInFlight`, `.fab-transition` CSS class,
-  `ActivitySkeleton`, `DiscussionsSkeleton`.
-- `trackFractionalIndex`, `familySwapScale`, `#startFamilySwapEase`,
-  `#stopFamilySwapEase`, `#publishFamilySwapScale`, `#lastRenderedScale`,
-  `#fabDragSeedFraction`, `#detectFamilyChange`, `#previousFamily`,
-  `#computeFabRestingScale`, `#listFabTabIndex`, `#familyOf`,
-  `#pilotTransitionListKind`, `TRACK_TRANSITION_MS` (all FAB-specific, R37/FAB
-  unification).
-- `mount()` method on the orchestrator + page-lifecycle (dead code, R28).
-- `GESTURE_MORPH_EPSILON` (dead code, R33).
-- `snippet` field from PageCacheEntry + PageCacheCaptureInput (dead code, §7
-  updated).
-- `LoadingChip` dead gesture props (dragging, scale, maxWidth, textMaxWidth,
-  dead transitions).
-- `.scroll-chrome-scrolling` CSS rule (orphan after R18).
-- `PendingTabExit` renamed to `PendingDiscreteNav` (more accurate).
-
-### Known conditions (current, all in spec)
-
-1. `isPipelineSwipeDisabledRoute` mis-classification (5b3-deletion).
-2. DualColumnLayout mobile routes `/discussions/pN` (5b3-deletion).
-3. `pointercancel` treated as regular release (5b3-deletion).
-4. Forward deep-to-deep slide axis override (2-panel geometry).
-5. `backParent` consumer dissolution timeline (dissolves in 5b3).
-
-### Known behavior change (FAB unification)
-
-/activity's dynamic FAB no longer appears during transitions (RouteData.fab is
-false for /activity). This is a simplification the user approved.
+- `active-gesture-track.svelte.ts` (R86).
+- `NavigationStore` pending-nav state: `#navInFlight`, `#pendingNav`, the
+  getter/setter, `setPendingNav`/`clearPendingNav`/`executePendingNav`,
+  `determineDirection`, `getNavigationParams`, `DirectionResult`,
+  `NavigationParamsResult`, `#lastHistoryIndex` (R87).
+- `__resetNavPipelineOrchestrator`, `__setNavStateMachine` test exports (R87).
+- (Earlier in the cycle: `MobileTabPager`, `GesturePageLayout`, `nav-coordinator`,
+  `backSwipeShouldPopHistory`, `TAB_CLICK_COMMIT_MS`, `discreteNavInFlight`,
+  `.fab-transition`, `ActivitySkeleton`, `DiscussionsSkeleton`, `backParent`,
+  `isPipelineSwipeDisabledRoute`, `FabFamily`, `familySwapScale`,
+  `#lastRenderedScale`, the family-swap rAF, `isGesturePageLayoutRoute`,
+  `GESTURE_MORPH_EPSILON`, the `snippet` cache field, `LoadingChip` dead props,
+  `.scroll-chrome-scrolling`, `runSettleDriver`/`startTapScrub`/settle setTimeout
+  in the Header, the R18 sub-component CSS transitions.)
 
 ### Audit trail
 
-- Audit files: `docs/RV20-C05b2-Audit-{24..37}.md` (all written, including R36/R37
-  written retroactively).
-- Journal: `docs/DV20-C05b2-Journal.md` (Sessions 1-37, but R36/R37 sessions may
-  be missing - check and append if needed).
-- Spec: `docs/DV20-Meeting/DV20-C05b2-spec.md` (updated for the FAB unification:
-  fabScale mechanism described, old familySwapScale references removed).
-- Plan: `docs/DV20-Plan.md` (section 7 updated: snippet field removed from cache
-  entry shape).
-- FAB redesign plan: `/home/losses/.claude/plans/modular-splashing-pebble.md`.
+- Audit files: `docs/RV20-C05b2-Audit-{24..87}.md`.
+- Journal: `docs/DV20-C05b2-Journal.md` (sessions through 91).
+- Spec: `docs/DV20-Meeting/DV20-C05b2-spec.md`.
+- Reusable audit prompt: `docs/DV20-Meeting/DV20-C05b2-Audit-Prompt.md`
+  (open-ended, non-leading, with the binding horizontal-check requirement).
 
-## 6. What the next agent must do
+## 6. The convergence model and the process (binding)
 
-### Immediate: re-launch R38
+- **Two auditors per round** (DV20 two-vote model), role-less and hint-less, given
+  ONLY the audit-prompt file (architecture + invariants + file locations + "find
+  ANY defect empirically"). Pass votes accumulate ACROSS rounds; the Cycle closes
+  at 5 consecutive PASS votes. Any concern resets the counter to 0.
+  PASS-with-concerns is not PASS.
+- **The orchestrator runs the audit** (spawns both auditors itself), independently
+  re-traces every finding, adjudicates real vs false positive (empirically verify
+  any visible-behavior claim; two false positives this stretch were caught this
+  way), fixes with a fresh-context sub-agent, independently re-runs the FULL gate,
+  writes Audit-XX + the journal session, counts votes, launches the next round.
+- **Autonomous rolling**: do not stop for session length or context pressure.
+  Delegate fix work to fresh-context sub-agents; keep launching the next round.
+  Only surface the user for a genuine architect-level decision.
 
-R38 auditors hit the rate limit (429). Re-launch 2 independent auditors with the
-MINIMAL prompt (same as R24-R37). The convergence bar is 5 consecutive PASS votes
-(2 per round).
+## 7. What the next agent must do
 
-### The convergence path
+### Immediate: R82-R87 are done; continue from R88
 
-R24-R37 all non-clean (0/5). The findings are getting finer (mostly comment
-accuracy + occasional logic). R37 found 4 stale comments + 1 logic defect
-(queuedNav orphan variant), all fixed. R38 may finally be clean (or find 1-2 more
-stragglers from the FAB refactor cleanup).
+R88 auditors were launched. If they returned, triage their findings (re-trace
+each, adjudicate real vs false positive). If they failed with a 429, re-launch
+two independent auditors with the `DV20-C05b2-Audit-Prompt.md` brief.
 
-### If R38 returns PWC: fix ALL findings, re-gate, launch R39
+### For each round
 
-Do NOT carry findings across rounds. Fix everything. Re-run the full e2e gate.
-Launch the next round.
+1. Spawn 2 independent auditors (the prompt file).
+2. Triage: independently re-trace each finding; classify concern vs false
+   positive (empirically verify visible-behavior claims; verify dead-code claims
+   by grep).
+3. Fix every real concern with a fresh-context sub-agent: structural cause +
+   horizontal check (all siblings) + preventive test; require the sub-agent to
+   run the FULL e2e (real exit code, not piped through `tail`).
+4. Independently re-run check / lint / unit / FULL e2e. Zero flakies.
+5. Write `docs/RV20-C05b2-Audit-XX.md` + append a journal session. Immediately
+   `grep -P '\x{2014}'` + `prettier --check` each doc you wrote.
+6. Count votes; launch the next round. Repeat to 5 consecutive PASS.
 
-### If a finding needs the user's decision: report directly
+### If a finding needs the user's decision
 
-Only for genuine architect-level decisions (a macro-plan deviation needing
-sign-off).
+Only for a genuine architect-level decision (a macro-plan deviation needing
+sign-off). Everything else is handled autonomously.
 
-## 7. Key files (updated)
+## 8. Key files
 
-- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts` (~2800 lines, down from
-  ~3000 after the FAB-specific deletions) - the universal orchestrator.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts` (~3100 lines) - the
+  universal orchestrator.
 - `src/lib/stores/nav-state-machine.svelte.ts` + `nav-state-machine-logic.ts`.
 - `src/lib/stores/nav-executor.svelte.ts` + `nav-executor-logic.ts`.
-- `src/lib/stores/mobile-pager.svelte.ts` - the pager store (no familySwapScale,
-  no trackFractionalIndex).
+- `src/lib/stores/mobile-pager.svelte.ts` - the pager store.
+- `src/lib/stores/navigation.svelte.ts` - the tab/stack nav store (post-R87
+  cleanup).
 - `src/lib/utils/fab-scale.ts` - `fabScale(progress, fromHasFab, toHasFab)`.
-- `src/lib/components/templates/FloatingActionButtonLayer.svelte` - the FAB layer
-  (reads publication.progress + RouteData.fab).
-- `src/lib/components/templates/NavPipelineHost.svelte` - shouldEnter uses
-  resolvedLeftHref + lastDispatchWasDeepToDeep.
+- `src/lib/components/templates/FloatingActionButtonLayer.svelte` - the FAB layer.
+- `src/lib/components/templates/NavPipelineHost.svelte` - `shouldEnter` uses
+  `resolvedLeftHref` + `lastDispatchWasDeepToDeep`.
 - `src/lib/components/templates/NavPipelineTabHost.svelte`.
-- `src/lib/utils/route-data.ts` - RouteData.fab boolean (FROM/TO FAB presence).
-- `src/lib/utils/route-config.ts` - FAB_ROUTE_ATTRIBUTES (family for icon/kind +
-  isPipelineSwipeDisabledRoute; NOT for FAB scale).
-- `src/lib/utils/gesture-constants.ts` - constants (no TRACK_TRANSITION_MS, no
-  GESTURE_MORPH_EPSILON).
+- `src/lib/utils/route-data.ts` - `RouteData.fab` boolean.
+- `src/lib/utils/route-config.ts` - `FAB_ROUTE_ATTRIBUTES`.
+- `src/lib/utils/gesture-constants.ts` - constants.

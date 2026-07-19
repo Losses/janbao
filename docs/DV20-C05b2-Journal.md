@@ -4479,3 +4479,72 @@ $ bun run test:e2e                    207 passed / 0 flaky (exit 0)
 ```
 
 R87 changes are runtime-neutral (dead-code removal + comment edits). R88 audits this state.
+
+## Session 92: R88 audit (A PASS; B serious tab-bar defect FIXED)
+
+R88 ran two independent auditors. A returned PASS (no defect); B returned FAIL
+(1 concern). Counter stays 0/5.
+
+### Finding + fix
+
+- B (SERIOUS, FIXED): the MobileTabBar was non-interactive at rest on a tab root
+  whenever `navStore.backTarget` was a deep page. `Header.svelte` derived `tabsIn`
+  fell back to `targetHasTabs` at rest (asymmetric with `tabsOut`'s
+  `currentHasTabs`), so `rootLayerStyle`'s `pointer-events: morph > 0.5 && tabsIn ?
+'auto' : 'none'` evaluated to `none` on `/` with a deep back-target. Repro:
+  `/` -> `/bookmarks` -> `/profile` -> tap Discussions (a push, not a popstate,
+  leaving `backTarget === '/profile'`). Fix: `tabsIn` at-rest fallback is now
+  `currentHasTabs` (matching `tabsOut`); the tab bar follows the route the user is
+  on, not the back-target. Preventive e2e
+  `e2e/tab-bar-interactive-with-deep-backtarget.spec.ts` (behavioral + structural)
+  verified to fail with `targetHasTabs` and pass with `currentHasTabs`. Horizontal
+  check: `tabsIn`/`tabsOut` feed only `rootLayerStyle`, `layerDownStyle`, the dev
+  probe; `targetHasTabs` remains correctly used by `isDeepToDeep` (mid-drag) and
+  the probe.
+
+B found this via the history-stack mechanics; A did not reproduce the two-deep-page
+chain that triggers the push (not popstate) path. The two-auditor model caught it.
+
+### Gate outputs (post-fix, 2026-07-19, orchestrator-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1457 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores src/lib/actions    400 pass / 0 fail
+$ bun run test:e2e                    209 passed / 0 flaky (exit 0)
+```
+
+R89 audits this state.
+
+## Session 93: R89 audit (A PASS + B PASS); first clean round, counter 0/5 -> 2/5
+
+R89 ran two independent auditors. Both returned PASS (no defect, no closest-calls).
+This is the first clean round of the R82-R89 stretch. Counter advances 0/5 -> 2/5.
+
+### Verdicts
+
+- A: PASS. Full read of every key file; horizontal sweeps (all spec-deleted
+  identifiers gone; the only animation-layer rAFs are the three orchestrator-owned
+  channels plus the §9 SearchScopePager nested rAF; only retained CSS transition
+  is the DualColumnLayout drawer per Known #2; only adjacent setTimeout is the
+  Header search-input debounce); every trajectory traced; every clear-site count
+  and lifecycle docstring matches the code.
+- B: PASS. 17 trajectories traced end-to-end; every invariant verified; no state
+  leaks across any transient field's clear sites; comment/spec accuracy confirmed
+  (spec §5 invariant status, Known #1/#2/#3, end-state list all consistent). The
+  R88 `tabsIn = currentHasTabs` fix and the publication/track divergence on
+  opposite-direction re-grabs both verified correct.
+
+R89 made no code changes; it audited the R88-fixed state. Three more consecutive
+pass votes are needed to close the Cycle.
+
+### Gate outputs (2026-07-19, orchestrator-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1457 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores src/lib/actions    400 pass / 0 fail
+$ bun run test:e2e                    209 passed / 0 flaky (exit 0)
+```
+
+R90 audits this state.

@@ -235,8 +235,14 @@
 	// latched record during a settle (frozen), live at rest. Consuming the SAME
 	// derived here means a revert to live in either layer style is observable
 	// via effectiveTabsOut/In in the probe (the §7 source-attribution guard).
+	// At rest (no settle) both endpoints fall back to the CURRENT route's
+	// tab-ness (currentHasTabs): the tab bar's visibility and interactivity
+	// follow the route the user is on, not the back-target. The back-target's
+	// tab-ness is irrelevant at rest (only its title drives the back-arrow
+	// label); reading it here would disable the bar on a tab root whenever the
+	// back-target is a deep page.
 	const tabsOut = $derived(settleLatched ? settleLatched.outgoingHasTabs : currentHasTabs);
-	const tabsIn = $derived(settleLatched ? settleLatched.incomingHasTabs : targetHasTabs);
+	const tabsIn = $derived(settleLatched ? settleLatched.incomingHasTabs : currentHasTabs);
 	// Root↔deep vertical morph: FROZEN in search mode so the tabs exit
 	// horizontally with the track, never float up. The transform follows
 	// `morph` directly (no `transition:` inline): during a settle `morph`
