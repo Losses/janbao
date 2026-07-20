@@ -228,9 +228,15 @@ export const actions: Actions = {
 		}
 
 		const data = await request.formData();
+		// Drop empty entries before Number(): Number('') === 0, and id 0 is the
+		// real bootstrap super admin, so an empty form field is promoted to a
+		// real recipient by isRealUserId without this filter. Non-numeric
+		// strings become NaN and are dropped by the isRealUserId filter.
 		const userIds = data
 			.getAll('userId')
-			.map((val) => Number((val as string).trim()))
+			.map((val) => (val as string).trim())
+			.filter((val) => val !== '')
+			.map(Number)
 			.filter((id) => isRealUserId(id));
 
 		if (userIds.length === 0) {

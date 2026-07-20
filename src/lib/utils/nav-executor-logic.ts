@@ -321,10 +321,96 @@ export interface FrameSample {
 	readonly done: boolean;
 }
 
+/** The constant-deceleration easing curve used by the executor's commit
+ *  loop (`sampleFrame` below), the orchestrator's settle ease rAF, and
+ *  the orchestrator's tap-scrub ease rAF. s(0) = 0, s(1) = 1, s'(0) = 2
+ *  (initial slope matched to release velocity via the duration solver),
+ *  s'(1) = 0 (settles at zero velocity). Exposed as a named function so
+ *  all three rAF channels share one curve definition and the unit suite
+ *  can verify the shape directly: `sampleFrame` applies the per-tick
+ *  clamp on top of this curve, so a single call with a large `elapsed`
+ *  returns the clamped value (startProgress + cap), not the eased
+ *  value. A curve-shape test queries `commitEase(u)` itself. */
+export function commitEase(u: number): number {
+	return 2 * u - u * u;
+}
+
+/** The nominal frame period (ms) used to size the per-tick progress
+ *  clamp for the settle ease. 16.7ms = one frame at 60fps, the
+ *  project's nominal refresh rate. The clamp never engages on a tick
+ *  whose elapsed-time delta is at or below this period (i.e. a normal
+ *  60fps frame); under main-thread load a single rAF tick can be
+ *  delayed by many frame periods, and the per-tick clamp caps the
+ *  progress advance so the animation does not pop on its first
+ *  post-block frame. */
+export const SETTLE_NOMINAL_FRAME_MS = 16.7;
+
+/** Multiplier on the steepest possible normal-frame advance. The
+ *  constant-deceleration curve `commitEase(u) = 2u - u²` has s'(0) = 2,
+ *  so the steepest first-frame advance is `2 * (frameMs / durationMs) *
+ *  span`. A multiplier of 1.25 gives 25% headroom over this steepest
+ *  case, so the clamp never engages on a true 60fps frame even for the
+ *  shortest commit duration (`COMMIT_T_MIN_MS = 100ms`, span 1.0 → cap
+ *  ≈ 0.418 vs normal first-frame delta ≈ 0.334). Under load the cap
+ *  limits each tick to this multiple of the steepest normal frame, so a
+ *  delayed first tick degrades gracefully (slower wall-clock finish)
+ *  without popping.
+ *
+ *  For the FAB release-snap regression (commitDist 30.5% of the
+ *  viewport, ~300ms commit duration, span ~0.7): the cap is ~0.097 per
+ *  tick. The FAB scale mapping `1 - 2*progress` (Family A, from-only)
+ *  drops at most `2 * cap ≈ 0.193` per tick, under the e2e leap-guard's
+ *  strict `< 0.2` threshold; the descent from scale > 0.3 to <= 0.05
+ *  takes 2+ ticks (≥ 33ms), over the 18ms descent floor. The 1.25
+ *  factor is the tightest safe value: 1.30 gives cap ≈ 0.100 → scale
+ *  drop 0.200, hitting the leap threshold exactly (the test uses
+ *  strict `< 0.2`, so equality fails). 1.20 would start clamping
+ *  slightly-slow 60fps frames (whose delta can reach 0.080). 1.25
+ *  preserves both the leap margin and the 60fps tolerance. */
+export const SETTLE_PER_TICK_CLAMP_FACTOR = 1.25;
+
+/** The maximum per-tick progress advance for an ease of the given
+ *  duration and span. The cap is the constant-deceleration curve's
+ *  steepest normal-frame advance (`2 * (16.7ms / durationMs) * span`,
+ *  i.e. `s'(0)` times the frame-period fraction of the duration times
+ *  the progress span) multiplied by `SETTLE_PER_TICK_CLAMP_FACTOR`.
+ *  Pure; exported so the orchestrator's settle ease rAF and tap-scrub
+ *  rAF reuse the same cap as the executor's commit rAF: one source of
+ *  truth for the per-tick clamp policy across every animation channel
+ *  that uses `commitEase`. */
+export function settlePerTickCap(durationMs: number, span: number): number {
+	if (durationMs <= 0) return Math.abs(span);
+	return SETTLE_PER_TICK_CLAMP_FACTOR * 2 * (SETTLE_NOMINAL_FRAME_MS / durationMs) * Math.abs(span);
+}
+
 /** Sample one commit frame at the given time. Pure: returns the next
  *  state and a `done` flag; does NOT touch the driver. The reactive
  *  shell calls `publishFrame` (below) to write the visual through the
  *  driver.
+ *
+ *  Per-tick progress clamp: the desired progress for this tick is
+ *  computed from the elapsed-time ease `commitEase(elapsed /
+ *  durationMs)`; the per-tick advance (`desired - state.progress`) is
+ *  then clamped to `settlePerTickCap(durationMs, |target - start|)`.
+ *  The cap is sized so a normal 60fps frame's advance is well within
+ *  it: the clamp never engages on a 60fps frame, so normal-condition
+ *  timing and the easing-curve shape come from `commitEase` alone. The
+ *  clamp exists for the loaded-main-thread case where the first
+ *  post-commit rAF tick is delayed by many frame periods: the
+ *  elapsed-time delta for that tick corresponds to many frames of
+ *  advance, and clamping caps the single-tick progress delta so the
+ *  FAB scale (which reads `publication.progress`) and the page-track
+ *  (driven by the same progress via `publishFrame`) ease smoothly
+ *  instead of popping. The rAF reschedules a few extra ticks to close
+ *  the remaining gap, so a delayed first tick extends the wall-clock
+ *  duration but never pops.
+ *
+ *  `done` is `u >= 1 && progress === target`: the rAF keeps
+ *  rescheduling until BOTH the elapsed-time ease has reached u=1 AND
+ *  the clamped progress has caught up to the target. Without the
+ *  second condition the rAF would terminate at u=1 even if the clamped
+ *  progress had not caught up; with it the rAF reschedules a few extra
+ *  ticks to close the remaining gap.
  *
  *  Outside the committing phase this is a no-op: it returns the
  *  unchanged state with `done: true` so the shell stops the rAF. */
@@ -335,20 +421,36 @@ export function sampleFrame(state: ExecutorState, plan: TransitionPlan, now: num
 	const cs = state.commitStart;
 	const elapsed = now - cs.t0;
 	const u = clamp(elapsed / cs.durationMs, 0, 1);
-	// Constant-deceleration ease: s(u) = 2u - u². s(0)=0, s(1)=1,
-	// s'(0)=2 (initial slope matched to release velocity via the
-	// duration solver), s'(1)=0 (settles at zero velocity). Symmetric
-	// in shape for commit (target=1) and cancel (target=0): the
-	// progress is interpolated from start to target by the eased
-	// fraction.
-	const eased = 2 * u - u * u;
-	const newProgress = cs.progressStart + (cs.progressTarget - cs.progressStart) * eased;
+	const eased = commitEase(u);
+	const desiredProgress = cs.progressStart + (cs.progressTarget - cs.progressStart) * eased;
+	// Clamp the per-tick advance so a delayed first rAF tick (main
+	// thread blocked under load) cannot advance progress by more than
+	// a smooth amount in a single tick. `settlePerTickCap` sizes the
+	// cap from the commit's duration and span so it never engages on a
+	// normal 60fps frame. The clamp is symmetric (the cancel direction
+	// advances progress downward); the absolute cap value is the same
+	// for both directions because the constant-deceleration curve is
+	// symmetric in shape for commit (target=1) and cancel (target=0).
+	const span = Math.abs(cs.progressTarget - cs.progressStart);
+	const cap = settlePerTickCap(cs.durationMs, span);
+	const delta = desiredProgress - state.progress;
+	const clampedDelta = clamp(delta, -cap, cap);
+	const newProgress = state.progress + clampedDelta;
+	// `done` requires BOTH the elapsed-time ease to have reached u=1
+	// AND the clamped progress to have caught up to the target. The
+	// clamp can lag the elapsed-time curve (it bounds the per-tick
+	// delta, not the elapsed-time computation), so without the second
+	// condition the rAF would terminate at u=1 even if the clamped
+	// progress had not caught up; with it the rAF reschedules a few
+	// extra ticks to close the remaining gap.
+	const atTarget = Math.abs(cs.progressTarget - newProgress) < 1e-6;
+	const done = u >= 1 && atTarget;
 	const nextState: ExecutorState = {
 		phase: 'committing',
 		progress: newProgress,
 		commitStart: cs
 	};
-	return { state: nextState, done: u >= 1 };
+	return { state: nextState, done };
 }
 
 // ---------------------------------------------------------------------------

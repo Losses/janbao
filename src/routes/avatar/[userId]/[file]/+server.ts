@@ -45,7 +45,7 @@ export const GET: RequestHandler = async (event) => {
 	}
 
 	try {
-		const { body, headers: upstream } = await pcloudStream(cfg, `/avatars/${userIdParam}`);
+		const { body, headers: upstream } = await pcloudStream(cfg, `/avatars/${userId}`);
 		const headers = new Headers();
 		headers.set('Content-Type', rec[0].contentType || 'image/webp');
 		headers.set('X-Content-Type-Options', 'nosniff');

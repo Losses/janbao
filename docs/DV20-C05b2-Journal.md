@@ -4887,3 +4887,38 @@ Gate (orchestrator-run): check 0 errors (1466 files); lint exit 0; unit 521 pass
 
 Counter 0/5 (R96 had concerns; not a PASS round). R97 runs with the PASS criterion
 added to the audit prompt.
+
+## Session 101: R97 complete; id-0 truthy-guard class + messages regression + avatar; gate-found flaky root-caused and fixed; gate green
+
+Both R97 auditors voted FAIL. Auditor A found 4 sites of the id-0 truthy-guard
+class (notifications DAO sourceUserId, notifications page x2, sync-orchestrator
+editedBy). Auditor B found the R93 isRealUserId-migration regression at
+messages.ts:40 (Number(null)=0 prefilled the super admin in /messages/new), its
+sibling in the messages participant-add form filter, and an avatar-route
+raw-param-vs-parsed-number very-low.
+
+Fixes: the 4 truthy-guard sites changed to `!= null` / `!== null` (mirroring
+correct siblings); messages/new passes `null` when the recipient param is absent;
+the form filter excludes empty before isRealUserId; the avatar route interpolates
+the parsed number. A new preventive test `src/lib/utils/user-id-truthy-guard.test.ts`
+scans src/ for truthy guards on user-id fields (empty allowlist) so the class
+cannot recur regardless of syntactic surface. The id-0 class leaked again because
+R93-R96 swept only the comparison surfaces; the truthy-guard surface
+(`x ?`, `{#if x}`, `if (x)`) was uncovered until now.
+
+Gate-found defect: the full e2e flaked on fab-release-snap (1 flaky). Root cause:
+the executor's `sampleFrame` (nav-executor-logic.ts) advanced `publication.progress`
+from elapsed wall-clock time, so under main-thread load the first post-commit rAF
+tick jumped progress and the FAB (tracking the shared progress) popped 0.39 to 0.05
+in one frame. The same defect was in the orchestrator's settle-ease and tap-scrub
+rAFs. Fixed with a shared per-tick progress clamp (`commitEase` + `settlePerTickCap`,
+factor 1.25) applied to all three rAF channels; `sampleFrame` clamps the per-tick
+delta and requires `u >= 1` and `progress === target` for done. Normal 60fps
+behavior unchanged; under load the animation degrades gracefully (no pop). Treated
+as a real defect and fixed at the cause, not retried.
+
+Gate (orchestrator-run): check 0 errors (1467 files); lint exit 0; unit 531 pass /
+0 fail; scripts tsc exit 0; e2e 210 passed / 0 flaky (9.1m). Full report in
+`docs/RV20-C05b2-Audit-97.md`.
+
+Counter 0/5 (R97 had concerns; not a PASS round). R98 next.

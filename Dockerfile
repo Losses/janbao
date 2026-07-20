@@ -11,6 +11,13 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV ADAPTER=node
+# SvelteKit's $env/static/public (used by the service worker) inlines public env
+# vars at BUILD time and reads them from .env, not .env.example. .dockerignore
+# excludes the real .env (it carries secrets), so seed a build-only .env from the
+# committed template so the inlining resolves. This .env stays in the build stage
+# only; the runtime image never receives it, and no $env/static/private is used,
+# so no secret is baked into the bundle.
+RUN cp .env.example .env
 RUN bun run build
 
 FROM oven/bun:1.3 AS runtime

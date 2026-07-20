@@ -27,19 +27,23 @@ import {
 	COMMIT_T_MIN_MS,
 	COMMIT_VELOCITY_CLAMP_PX_PER_MS,
 	COMMIT_VELOCITY_EPSILON_PX_PER_MS,
+	SETTLE_NOMINAL_FRAME_MS,
 	applyDrag,
 	buildVisual,
+	commitEase,
 	initialExecutorState,
 	progressAtTranslateX,
 	publishFrame,
 	sampleFrame,
+	settlePerTickCap,
 	shouldScheduleRaf,
 	solveCommitDuration,
 	startCommit,
 	tickFrame,
 	trackTranslateX,
 	type CommitInput,
-	type ExecutorState
+	type ExecutorState,
+	type FrameSample
 } from './nav-executor-logic';
 import { MockNavDomDriver } from './nav-dom-driver';
 import type { TransitionPlan } from './nav-resolvers';
@@ -387,40 +391,80 @@ describe('sampleFrame', () => {
 
 	test('sample at t = t0 + duration yields target progress and done', () => {
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
-		const state = startCommit(
+		const initial = startCommit(
 			{ phase: 'live', progress: 0.3, commitStart: null },
 			baseCommitInput({ releaseVelocityPxPerMs: 2, plan, now: 1000 })
 		);
-		const duration = state.commitStart?.durationMs ?? 0;
-		const sample = sampleFrame(state, plan, 1000 + duration);
+		const duration = initial.commitStart?.durationMs ?? 0;
+		// Drive the rAF at the nominal 60fps frame period: at this tick
+		// rate the per-tick clamp never engages, so the elapsed-time ease
+		// alone shapes the sequence and at t = t0 + duration the rAF
+		// settles at the target.
+		let state: ExecutorState = initial;
+		let sample: FrameSample = { state, done: false };
+		for (
+			let t = SETTLE_NOMINAL_FRAME_MS;
+			t <= duration + SETTLE_NOMINAL_FRAME_MS;
+			t += SETTLE_NOMINAL_FRAME_MS
+		) {
+			sample = sampleFrame(state, plan, 1000 + t);
+			state = sample.state;
+			if (sample.done) break;
+		}
 		expect(sample.done).toBe(true);
 		expect(sample.state.progress).toBeCloseTo(1, 5);
 	});
 
-	test('sample at t > duration clamps progress to target and is done', () => {
+	test('sample at t > duration settles at the target via the elapsed-time u=1 clamp', () => {
+		// The u-clamp (`Math.min(elapsed / durationMs, 1)`) bounds the
+		// elapsed-time ease at u=1; the per-tick clamp bounds the
+		// per-tick delta. Driven at the nominal 60fps frame period the
+		// per-tick clamp does not engage, and once u reaches 1 the
+		// progress has caught up to the target so `done` fires.
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
-		const state = startCommit(
+		const initial = startCommit(
 			{ phase: 'live', progress: 0.3, commitStart: null },
 			baseCommitInput({ releaseVelocityPxPerMs: 2, plan, now: 1000 })
 		);
-		const duration = state.commitStart?.durationMs ?? 0;
-		const sample = sampleFrame(state, plan, 1000 + duration * 3);
+		const duration = initial.commitStart?.durationMs ?? 0;
+		let state: ExecutorState = initial;
+		let sample: FrameSample = { state, done: false };
+		// Tick well past the duration; the elapsed-time u-clamp holds and
+		// the rAF terminates once the clamped progress catches up.
+		for (
+			let t = SETTLE_NOMINAL_FRAME_MS;
+			t <= duration * 3 + SETTLE_NOMINAL_FRAME_MS;
+			t += SETTLE_NOMINAL_FRAME_MS
+		) {
+			sample = sampleFrame(state, plan, 1000 + t);
+			state = sample.state;
+			if (sample.done) break;
+		}
 		expect(sample.done).toBe(true);
 		expect(sample.state.progress).toBeCloseTo(1, 5);
 	});
 
 	test('progress is monotonic across the commit (forward, target = 1)', () => {
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
-		const state = startCommit(
+		const initial = startCommit(
 			{ phase: 'live', progress: 0.1, commitStart: null },
 			baseCommitInput({ releaseVelocityPxPerMs: 1, plan, now: 0 })
 		);
-		const duration = state.commitStart?.durationMs ?? 0;
-		const progressSamples: number[] = [];
-		for (let i = 0; i <= 20; i += 1) {
-			const t = (duration * i) / 20;
+		const duration = initial.commitStart?.durationMs ?? 0;
+		// Chain states (sample.state feeds the next call) and tick at the
+		// nominal 60fps frame period: this is the production rAF pattern,
+		// and at this tick rate the per-tick clamp never engages.
+		let state: ExecutorState = initial;
+		const progressSamples: number[] = [state.progress];
+		for (
+			let t = SETTLE_NOMINAL_FRAME_MS;
+			t <= duration + SETTLE_NOMINAL_FRAME_MS;
+			t += SETTLE_NOMINAL_FRAME_MS
+		) {
 			const sample = sampleFrame(state, plan, t);
-			progressSamples.push(sample.state.progress);
+			state = sample.state;
+			progressSamples.push(state.progress);
+			if (sample.done) break;
 		}
 		for (let i = 1; i < progressSamples.length; i += 1) {
 			expect(progressSamples[i]).toBeGreaterThanOrEqual(progressSamples[i - 1] - 1e-9);
@@ -431,16 +475,22 @@ describe('sampleFrame', () => {
 
 	test('progress is monotonic across a cancel commit (target = 0)', () => {
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 1 });
-		const state = startCommit(
+		const initial = startCommit(
 			{ phase: 'live', progress: 0.9, commitStart: null },
 			baseCommitInput({ releaseVelocityPxPerMs: -1, plan, now: 0 })
 		);
-		const duration = state.commitStart?.durationMs ?? 0;
-		const progressSamples: number[] = [];
-		for (let i = 0; i <= 20; i += 1) {
-			const t = (duration * i) / 20;
+		const duration = initial.commitStart?.durationMs ?? 0;
+		let state: ExecutorState = initial;
+		const progressSamples: number[] = [state.progress];
+		for (
+			let t = SETTLE_NOMINAL_FRAME_MS;
+			t <= duration + SETTLE_NOMINAL_FRAME_MS;
+			t += SETTLE_NOMINAL_FRAME_MS
+		) {
 			const sample = sampleFrame(state, plan, t);
-			progressSamples.push(sample.state.progress);
+			state = sample.state;
+			progressSamples.push(state.progress);
+			if (sample.done) break;
 		}
 		for (let i = 1; i < progressSamples.length; i += 1) {
 			expect(progressSamples[i]).toBeLessThanOrEqual(progressSamples[i - 1] + 1e-9);
@@ -448,16 +498,197 @@ describe('sampleFrame', () => {
 		expect(progressSamples[progressSamples.length - 1]).toBeCloseTo(0, 5);
 	});
 
-	test('the ease curve matches s(u) = 2u - u² at the midpoint', () => {
-		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
-		const state = startCommit(
-			{ phase: 'live', progress: 0, commitStart: null },
-			baseCommitInput({ releaseVelocityPxPerMs: 1, plan, now: 0 })
+	test('the ease curve matches commitEase(u) = 2u - u² at the midpoint', () => {
+		// sampleFrame applies the per-tick clamp on top of the curve, so
+		// a single call with a large `elapsed` returns the clamped value
+		// (startProgress + cap), not the eased value. The curve shape is
+		// verified directly via the `commitEase` helper that sampleFrame
+		// and the orchestrator's settle / tap-scrub rAFs all use.
+		expect(commitEase(0)).toBeCloseTo(0, 7);
+		expect(commitEase(0.5)).toBeCloseTo(0.75, 7); // 2*0.5 - 0.25
+		expect(commitEase(1)).toBeCloseTo(1, 7);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Per-tick progress clamp. The settle ease (the executor's commit rAF
+// here, plus the orchestrator's settle + tap-scrub rAFs that share the
+// `commitEase` curve + `settlePerTickCap` cap) advances progress from
+// elapsed wall-clock time. When the first post-commit rAF tick is
+// delayed by main-thread load the elapsed-time delta for that tick
+// corresponds to many frames of advance; without the clamp the
+// resulting single-tick progress jump pops the FAB scale (driven by
+// `publication.progress`) together with the page-track (driven by the
+// same progress via `publishFrame`). The clamp caps the per-tick delta
+// so a delayed tick degrades gracefully (slower wall-clock finish)
+// without popping.
+
+describe('settlePerTickCap: per-tick clamp sizing', () => {
+	test("cap scales with the steepest normal-frame advance (s'(0) = 2)", () => {
+		// For span = 1 the steepest first-frame advance at 60fps is
+		// 2 * (16.7 / duration) * 1; the cap is the SETTLE_PER_TICK_CLAMP_FACTOR
+		// multiple of that.
+		const span = 1;
+		for (const duration of [COMMIT_T_MIN_MS, 200, COMMIT_T_DEFAULT_MS, COMMIT_T_MAX_MS]) {
+			const cap = settlePerTickCap(duration, span);
+			const steepest = 2 * (SETTLE_NOMINAL_FRAME_MS / duration) * span;
+			expect(cap).toBeCloseTo(steepest * 1.25, 7);
+		}
+	});
+
+	test('cap scales with the progress span (cancel and commit are symmetric)', () => {
+		// A commit from progress 0.3 to 1 has span 0.7; a cancel from
+		// 0.7 to 0 has span 0.7. Both eases use the same curve shape and
+		// the same cap (the clamp is symmetric).
+		const duration = 300;
+		expect(settlePerTickCap(duration, 0.7)).toBeCloseTo(settlePerTickCap(duration, -0.7), 7);
+		expect(settlePerTickCap(duration, 0.7)).toBeCloseTo(
+			settlePerTickCap(duration, 0.3) * (0.7 / 0.3),
+			5
 		);
-		const duration = state.commitStart?.durationMs ?? 0;
-		const sample = sampleFrame(state, plan, duration / 2);
-		// s(0.5) = 2*0.5 - 0.25 = 0.75.
-		expect(sample.state.progress).toBeCloseTo(0.75, 5);
+	});
+
+	test('a zero or negative duration returns the full span (no clamp)', () => {
+		// Defensive: a degenerate duration disables the clamp by
+		// returning a delta larger than any possible span.
+		expect(settlePerTickCap(0, 1)).toBeCloseTo(1, 7);
+		expect(settlePerTickCap(-1, 0.5)).toBeCloseTo(0.5, 7);
+	});
+});
+
+describe('sampleFrame per-tick clamp', () => {
+	test('clamp engages on a delayed first tick (single-tick large delta)', () => {
+		// Reproduces the FAB release-snap defect scenario: a slow swipe
+		// (commitDist 30.5% of the viewport) commits at progress 0.305
+		// with a ~300ms duration; under 4-worker load the first
+		// post-commit rAF tick is delayed by several frame periods.
+		// Without the clamp the single tick jumps progress to the
+		// elapsed-time value (a 0.3+ delta that pops the FAB scale);
+		// with the clamp the per-tick advance is capped.
+		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
+		const start = startCommit(
+			{ phase: 'live', progress: 0.305, commitStart: null },
+			baseCommitInput({
+				releaseVelocityPxPerMs: 0.86,
+				plan,
+				now: 0
+			})
+		);
+		const duration = start.commitStart?.durationMs ?? 1;
+		const span = 1 - 0.305;
+		const cap = settlePerTickCap(duration, span);
+		// Tick fires at 5x the nominal frame period (delayed).
+		const delayedTickMs = 5 * SETTLE_NOMINAL_FRAME_MS;
+		const sample = sampleFrame(start, plan, delayedTickMs);
+		// The clamped progress is bounded to startProgress + cap; the
+		// unclamped desired would be much larger (the eased value at
+		// u = 5*16.7/duration).
+		expect(sample.state.progress).toBeLessThanOrEqual(0.305 + cap + 1e-9);
+		expect(sample.state.progress).toBeGreaterThan(0.305);
+		// Not done: the clamp lags the elapsed-time curve, so the rAF
+		// must reschedule.
+		expect(sample.done).toBe(false);
+	});
+
+	test('clamp does not engage on a nominal 60fps tick', () => {
+		// At the nominal 60fps frame period the per-tick delta is well
+		// under the cap (cap is sized to SETTLE_PER_TICK_CLAMP_FACTOR = 1.25
+		// times the steepest possible 60fps first-frame delta). The
+		// clamped progress equals the eased value to floating-point
+		// precision.
+		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
+		const start = startCommit(
+			{ phase: 'live', progress: 0.305, commitStart: null },
+			baseCommitInput({ releaseVelocityPxPerMs: 0.86, plan, now: 0 })
+		);
+		const duration = start.commitStart?.durationMs ?? 1;
+		const sample = sampleFrame(start, plan, SETTLE_NOMINAL_FRAME_MS);
+		const u = SETTLE_NOMINAL_FRAME_MS / duration;
+		const expected = 0.305 + (1 - 0.305) * commitEase(u);
+		expect(sample.state.progress).toBeCloseTo(expected, 7);
+	});
+
+	test('clamp is symmetric for cancel (target = 0) and commit (target = 1)', () => {
+		// The cap value is the same for both directions; a delayed first
+		// tick on a cancel settles progress DOWNWARD by at most |cap|.
+		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 1 });
+		const start = startCommit(
+			{ phase: 'live', progress: 0.7, commitStart: null },
+			baseCommitInput({ releaseVelocityPxPerMs: -0.86, plan, now: 0 })
+		);
+		const duration = start.commitStart?.durationMs ?? 1;
+		const span = 0.7;
+		const cap = settlePerTickCap(duration, span);
+		const delayedTickMs = 5 * SETTLE_NOMINAL_FRAME_MS;
+		const sample = sampleFrame(start, plan, delayedTickMs);
+		expect(sample.state.progress).toBeGreaterThanOrEqual(0.7 - cap - 1e-9);
+		expect(sample.state.progress).toBeLessThan(0.7);
+		expect(sample.done).toBe(false);
+	});
+
+	test('a delayed first tick still settles at the target via subsequent ticks', () => {
+		// The clamp extends the wall-clock duration (more ticks to
+		// finish) but never prevents the animation from reaching the
+		// target. Simulate a delayed first tick, then nominal 60fps
+		// ticks until `done` fires.
+		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
+		const initial = startCommit(
+			{ phase: 'live', progress: 0.305, commitStart: null },
+			baseCommitInput({ releaseVelocityPxPerMs: 0.86, plan, now: 0 })
+		);
+		const duration = initial.commitStart?.durationMs ?? 1;
+		// Delayed first tick at 80ms (5 frames at 60fps).
+		let state: ExecutorState = sampleFrame(initial, plan, 80).state;
+		let sample: FrameSample = { state, done: false };
+		let ticks = 1;
+		const cappedTickCount = 200;
+		while (!sample.done && ticks < cappedTickCount) {
+			const t = 80 + ticks * SETTLE_NOMINAL_FRAME_MS;
+			sample = sampleFrame(state, plan, t);
+			state = sample.state;
+			ticks += 1;
+		}
+		expect(sample.done).toBe(true);
+		expect(state.progress).toBeCloseTo(1, 5);
+		// Sanity: the delayed first tick settles well within a bounded
+		// tick count (the clamp extends the duration by a small multiple
+		// of the original, not unboundedly).
+		const nominalTickFloor = duration / SETTLE_NOMINAL_FRAME_MS;
+		expect(ticks).toBeLessThan(nominalTickFloor * 3 + 50);
+	});
+
+	test('per-tick progress delta is bounded by the cap across the whole commit', () => {
+		// Stress shape: drive the rAF with randomly delayed ticks and
+		// assert no single tick's progress delta exceeds the cap. This
+		// is the property the FAB release-snap e2e relies on (no
+		// single-frame scale leap > 0.2 = no per-tick progress delta
+		// > 0.1 for the from-only FAB mapping).
+		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
+		const initial = startCommit(
+			{ phase: 'live', progress: 0.305, commitStart: null },
+			baseCommitInput({ releaseVelocityPxPerMs: 0.86, plan, now: 0 })
+		);
+		const duration = initial.commitStart?.durationMs ?? 1;
+		const span = 1 - 0.305;
+		const cap = settlePerTickCap(duration, span);
+		let state: ExecutorState = initial;
+		let prevProgress = state.progress;
+		// Pseudo-random delays of 1-10 frame periods per tick.
+		const delays = [3, 7, 2, 9, 5, 4, 8, 6, 1, 10, 3, 5, 7, 2, 4];
+		let t = 0;
+		for (const delayFrames of delays) {
+			t += delayFrames * SETTLE_NOMINAL_FRAME_MS;
+			const sample = sampleFrame(state, plan, t);
+			const delta = Math.abs(sample.state.progress - prevProgress);
+			// Allow a tiny floating-point epsilon on the boundary.
+			expect(
+				delta,
+				`tick at +${delayFrames} frames: delta ${delta} exceeds cap ${cap}`
+			).toBeLessThanOrEqual(cap + 1e-9);
+			prevProgress = sample.state.progress;
+			state = sample.state;
+			if (sample.done) break;
+		}
 	});
 });
 
@@ -484,6 +715,9 @@ describe('publishFrame + tickFrame', () => {
 	});
 
 	test('tickFrame samples one commit step and publishes it in one call', () => {
+		// Tick at the nominal 60fps frame period: at this rate the
+		// per-tick clamp does not engage, so the write's translateX is
+		// the eased value at u = SETTLE_NOMINAL_FRAME_MS / duration.
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
 		const driver = new MockNavDomDriver();
 		const start = startCommit(
@@ -491,10 +725,12 @@ describe('publishFrame + tickFrame', () => {
 			baseCommitInput({ releaseVelocityPxPerMs: 1, plan, now: 0 })
 		);
 		const duration = start.commitStart?.durationMs ?? 0;
-		const sample = tickFrame(start, plan, duration / 2, driver);
+		const sample = tickFrame(start, plan, SETTLE_NOMINAL_FRAME_MS, driver);
+		const u = SETTLE_NOMINAL_FRAME_MS / duration;
+		const expectedProgress = commitEase(u);
 		expect(sample.done).toBe(false);
 		expect(driver.writes.length).toBe(1);
-		expect(driver.lastWrite?.pageTrack.translateX).toBeCloseTo(-375 * 0.75, 3);
+		expect(driver.lastWrite?.pageTrack.translateX).toBeCloseTo(-375 * expectedProgress, 3);
 	});
 });
 

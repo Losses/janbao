@@ -539,7 +539,7 @@ async function backfillMissingUsers(): Promise<void> {
 	for (const d of allDisc) authorIds.add(d.authorId);
 	for (const r of allRep) {
 		authorIds.add(r.authorId);
-		if (r.editedBy) authorIds.add(r.editedBy);
+		if (r.editedBy != null) authorIds.add(r.editedBy);
 	}
 	const cachedUserIds = new Set((await db.users.toArray()).map((u) => u.id));
 	const missing = [...authorIds].filter((id) => !cachedUserIds.has(id) && isRealUserId(id));

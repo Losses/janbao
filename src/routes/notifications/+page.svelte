@@ -156,7 +156,7 @@
 								: ''}"
 						>
 							<div class="flex-shrink-0">
-								{#if item.sourceUserId}
+								{#if item.sourceUserId !== null}
 									{@const sourceSlug = generateSlug(item.sourceUsername || '')}
 									<a href="/profile/{item.sourceUserId}/{sourceSlug}">
 										<Avatar
@@ -172,7 +172,7 @@
 							<div class="flex-grow min-w-0">
 								<div class="flex items-start justify-between gap-3">
 									<div class="text-sm break-words flex-1 min-w-0">
-										{#if item.sourceUserId}
+										{#if item.sourceUserId !== null}
 											{@const sourceSlug = generateSlug(item.sourceUsername || '')}
 											<a
 												href="/profile/{item.sourceUserId}/{sourceSlug}"

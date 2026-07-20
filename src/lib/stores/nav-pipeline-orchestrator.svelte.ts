@@ -72,7 +72,12 @@ import { getNavStateMachine } from '$lib/stores/nav-state-machine.svelte';
 import { getNavigationStore } from '$lib/stores/navigation.svelte';
 import { atRestOnFor } from '$lib/stores/nav-state-machine-logic';
 import { NavExecutor } from '$lib/stores/nav-executor.svelte';
-import { progressAtTranslateX, trackTranslateX } from '$lib/utils/nav-executor-logic';
+import {
+	commitEase,
+	progressAtTranslateX,
+	settlePerTickCap,
+	trackTranslateX
+} from '$lib/utils/nav-executor-logic';
 import { LiveNavDomDriver } from '$lib/utils/nav-dom-driver-live';
 import { PageLifecycleController } from '$lib/stores/page-lifecycle.svelte';
 import {
@@ -2295,20 +2300,43 @@ export class NavPipelineOrchestrator {
 			return;
 		}
 		this.#settleStartTs = 0;
+		// Last progress published by the rAF. Seeded at the arm value so
+		// the first tick's clamp is measured from the start. Captured in
+		// the tick closure (not read back from the state machine) so the
+		// rAF owns its own per-tick delta computation without coupling to
+		// the publication's read path.
+		let lastProgress = startProgress;
 		const tick = (): void => {
 			const now = this.#clock();
 			if (this.#settleStartTs === 0) this.#settleStartTs = now;
 			const u = Math.min((now - this.#settleStartTs) / safeDuration, 1);
-			const eased = 2 * u - u * u;
-			const progress =
+			const eased = commitEase(u);
+			const desiredProgress =
 				this.#settleStartProgress +
 				(this.#settleTargetProgress - this.#settleStartProgress) * eased;
+			// Per-tick clamp (see `settlePerTickCap` in nav-executor-logic):
+			// caps the single-tick advance so a delayed first rAF tick
+			// under main-thread load cannot pop the Header morph / title
+			// crossfade. Same policy as the executor's commit rAF; one
+			// source of truth for the clamp across every animation channel
+			// that uses `commitEase`.
+			const span = Math.abs(this.#settleTargetProgress - this.#settleStartProgress);
+			const cap = settlePerTickCap(safeDuration, span);
+			const delta = desiredProgress - lastProgress;
+			const clampedDelta = Math.max(-cap, Math.min(cap, delta));
+			const progress = lastProgress + clampedDelta;
+			lastProgress = progress;
 			this.#stateMachine.setSettleState({ progress });
-			if (u >= 1) {
+			// `done` requires BOTH the elapsed-time ease to reach u=1 AND
+			// the clamped progress to reach the target. The clamp can lag
+			// the elapsed-time curve, so the rAF reschedules until both
+			// hold; the few extra ticks close the gap gracefully.
+			const atTarget = Math.abs(this.#settleTargetProgress - progress) < 1e-6;
+			if (u >= 1 && atTarget) {
 				this.#settleRafId = undefined;
 				// Commit settle: hold at target, wait for the nav-landed
 				// clear. Cancel / non-gesture settle: end now (no nav
-				// landing to wait for; the rAF reaching u=1 is the
+				// landing to wait for; the rAF reaching the target is the
 				// end-of-animation signal).
 				if (!this.#settleAwaitTitle) this.#endSettleEase();
 				return;
@@ -2456,15 +2484,29 @@ export class NavPipelineOrchestrator {
 			this.#finishTapScrubEase();
 			return;
 		}
+		// Last tapMorph value published by the rAF. Seeded at the arm
+		// value so the first tick's clamp is measured from the start.
+		let lastValue = fromValue;
 		const tick = (): void => {
 			const now = this.#clock();
 			if (this.#scrubStartTs === 0) this.#scrubStartTs = now;
 			const u = Math.min((now - this.#scrubStartTs) / TITLE_CROSSFADE_MS, 1);
-			const eased = 2 * u - u * u;
-			getMobilePagerStore().setTapMorph(
-				this.#scrubFromValue + (this.#scrubToValue - this.#scrubFromValue) * eased
-			);
-			if (u >= 1) {
+			const eased = commitEase(u);
+			const desired = this.#scrubFromValue + (this.#scrubToValue - this.#scrubFromValue) * eased;
+			// Per-tick clamp (see `settlePerTickCap` in nav-executor-logic):
+			// same policy as the executor's commit rAF and the settle ease
+			// rAF; caps the single-tick advance so a delayed first rAF
+			// tick under main-thread load cannot pop the search-layout
+			// scrub.
+			const span = Math.abs(this.#scrubToValue - this.#scrubFromValue);
+			const cap = settlePerTickCap(TITLE_CROSSFADE_MS, span);
+			const delta = desired - lastValue;
+			const clampedDelta = Math.max(-cap, Math.min(cap, delta));
+			const value = lastValue + clampedDelta;
+			lastValue = value;
+			getMobilePagerStore().setTapMorph(value);
+			const atTarget = Math.abs(this.#scrubToValue - value) < 1e-6;
+			if (u >= 1 && atTarget) {
 				this.#finishTapScrubEase();
 				return;
 			}

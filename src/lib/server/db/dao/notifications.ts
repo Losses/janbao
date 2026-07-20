@@ -93,7 +93,10 @@ export async function getNotifications(
 	}
 
 	return rows.map((r) => {
-		const source = r.sourceUserId ? (sourceMap.get(r.sourceUserId) ?? null) : null;
+		// Explicit null check (not truthy): id 0 is the bootstrap super admin
+		// and a legitimate notification source, so the truthy guard must not be
+		// used here. The upstream `id !== null` filter admits 0 into sourceMap.
+		const source = r.sourceUserId !== null ? (sourceMap.get(r.sourceUserId) ?? null) : null;
 		const discussion = r.discussionId ? (discussionMap.get(r.discussionId) ?? null) : null;
 		return {
 			id: r.id,
