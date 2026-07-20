@@ -31,6 +31,8 @@ function isAllowedPushEndpoint(endpoint: string): boolean {
 // unique per (browser, push service), so we upsert keyed on endpoint: existing
 // rows are overwritten with the current user + refreshed keys rather than
 // duplicated. This also handles the case where a single device switches accounts.
+// The single ON CONFLICT DO UPDATE statement is race-safe against double-subscribe
+// retries hitting the endpoint unique constraint.
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const user = locals.user;
 	const t = locals.t;
@@ -60,32 +62,25 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const userAgent = request.headers.get('user-agent');
 	const db = locals.db;
 
-	const existing = await db
-		.select({ id: pushSubscriptions.id })
-		.from(pushSubscriptions)
-		.where(eq(pushSubscriptions.endpoint, endpoint))
-		.limit(1);
-
-	if (existing.length > 0) {
-		await db
-			.update(pushSubscriptions)
-			.set({
-				userId: user.id,
-				p256dhKey: p256dh,
-				authKey: auth,
-				userAgent: userAgent ?? null,
-				lastErrorAt: null
-			})
-			.where(eq(pushSubscriptions.id, existing[0].id));
-	} else {
-		await db.insert(pushSubscriptions).values({
+	await db
+		.insert(pushSubscriptions)
+		.values({
 			userId: user.id,
 			endpoint,
 			p256dhKey: p256dh,
 			authKey: auth,
 			userAgent: userAgent ?? null
+		})
+		.onConflictDoUpdate({
+			target: pushSubscriptions.endpoint,
+			set: {
+				userId: user.id,
+				p256dhKey: p256dh,
+				authKey: auth,
+				userAgent: userAgent ?? null,
+				lastErrorAt: null
+			}
 		});
-	}
 
 	return json({ success: true });
 };

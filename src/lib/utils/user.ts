@@ -1,7 +1,20 @@
 import type { TranslationDict } from '$lib/types/translation';
 
-export const GHOST_USER_ID = -2;
+/**
+ * Sentinel for the "System User" that authors automated activity (e.g. the
+ * isJoined activity). Never a sign-in account. The single source of truth;
+ * `$lib/server/constants` re-exports this symbol so server code that already
+ * imports from there keeps a stable address.
+ */
 export const SYSTEM_USER_ID = -1;
+
+/**
+ * Sentinel for "original author no longer exists". Vanilla reserves UserID 0
+ * for this (rendered as "Unknown"); we remap it onto -2 so the positive id
+ * space - including id 0 (the seeded admin) - stays clear for real accounts.
+ * The single source of truth; `$lib/server/constants` re-exports this symbol.
+ */
+export const GHOST_USER_ID = -2;
 
 /**
  * True for an id that refers to a real user account. The bootstrap super admin

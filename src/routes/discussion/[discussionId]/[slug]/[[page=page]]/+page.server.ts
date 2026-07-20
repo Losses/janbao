@@ -763,27 +763,40 @@ export const actions: Actions = {
 			error(403, locals.t.common.forbidden);
 		}
 
-		// Soft delete discussion
-		await db
-			.update(discussions)
-			.set({
-				deletedAt: new Date(),
-				updatedAt: new Date()
-			})
-			.where(eq(discussions.id, discussionId));
+		// Atomicity: the soft-delete UPDATE, the title unindex, and the stats
+		// decrement must commit together. Running them as separate statements
+		// means a crash or isolate eviction between them leaves the admin stats
+		// bucket inflated forever (the discussion_count never drops) or the FTS
+		// title index holding a ghost row. Mirrors deleteReply's tx wrapper.
+		try {
+			await db.transaction(async (tx: DbTransaction) => {
+				await tx
+					.update(discussions)
+					.set({
+						deletedAt: new Date(),
+						updatedAt: new Date()
+					})
+					.where(eq(discussions.id, discussionId));
 
-		// Remove the title from the search index. Replies are left indexed; search
-		// queries JOIN discussions and filter deletedAt, so they are excluded anyway.
-		await unindexDiscussion(db, discussionId, title);
-		// Decrement the discussion's bucket row. The OP reply is intentionally not
-		// decremented (it stays live via deleted_at IS NULL on replies, matching
-		// how the stats query counts it), so only the discussion_count drops.
-		await decrementContributionStats(
-			db,
-			Number(authorId),
-			Math.floor(createdAt.getTime() / 1000),
-			'discussion'
-		);
+				// Remove the title from the search index. Replies are left indexed;
+				// search queries JOIN discussions and filter deletedAt, so they are
+				// excluded anyway.
+				await unindexDiscussion(tx, discussionId, title);
+				// Decrement the discussion's bucket row. The OP reply is intentionally
+				// not decremented (it stays live via deleted_at IS NULL on replies,
+				// matching how the stats query counts it), so only the discussion_count
+				// drops.
+				await decrementContributionStats(
+					tx,
+					Number(authorId),
+					Math.floor(createdAt.getTime() / 1000),
+					'discussion'
+				);
+			});
+		} catch (err) {
+			console.error('Failed to delete discussion:', err);
+			error(500, locals.t.common.internalError);
+		}
 
 		redirect(303, '/');
 	}

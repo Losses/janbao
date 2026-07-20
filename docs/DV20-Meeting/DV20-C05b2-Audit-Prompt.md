@@ -52,6 +52,22 @@ is coalesced by a same-tick flush, is not a defect. Verify any "dead code" claim
 by grepping for importers/usage (including dev-only hooks and tests) before
 reporting.
 
+## PASS criterion (your vote)
+
+Your output is a vote in a two-auditor convergence loop that closes at 5
+consecutive PASS votes; any concern resets the counter to zero, so a PASS vote is
+a strong claim. Vote PASS only after an exhaustive, open-ended examination of the
+whole codebase finds ZERO concerns. A concern is ANY code-level defect at any
+severity (concern, low, or very low), and that explicitly includes inaccurate,
+overclaiming, or stale code comments in `.ts` / `.svelte.ts` / `.test.ts` files;
+comment accuracy is never a nitpick. Pure prose inaccuracy inside `.md`
+documentation files (journal, audit reports, spec, plan) is a nitpick, not a
+concern; report it separately, it does not affect your vote. If you find even one
+concern, do NOT vote PASS; report it, and reporting a real defect is the correct
+outcome, never a failure of the audit. Do not vote PASS to be agreeable, and do
+not inflate a verified non-defect into a concern to avoid PASS; verify each
+candidate empirically, then vote honestly.
+
 ## Report format
 
 For each finding give `file:line`, a one-line summary, the concrete failure

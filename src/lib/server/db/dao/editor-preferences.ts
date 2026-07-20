@@ -1,8 +1,9 @@
 // DAO for the per-user editor-preferences table. Mirrors the
 // notificationPreferences access pattern: a missing row resolves to the code
-// defaults, and writes are an explicit select-then-insert/update (D1/libsql
-// does not need an atomic upsert here - the row is keyed by userId and only the
-// owning user writes it).
+// defaults, and writes are a single atomic ON CONFLICT DO UPDATE so two
+// concurrent requests from the same user (double-click, retry storm) cannot
+// race past the existence check and surface the userId PK violation as a
+// 500.
 
 import { editorPreferences } from '../schema';
 import { eq } from 'drizzle-orm';
@@ -50,23 +51,20 @@ export async function getEditorPreferences(db: D1Db, userId: number): Promise<Ed
 /**
  * Insert or update the user's editor preferences. `updates` carries only the
  * fields being changed; unspecified fields keep their existing value (or the
- * column default on first insert). Mirrors the profile/preferences handler's
- * select-then-insert/update so the write path matches the rest of the codebase.
+ * column default on first insert). The single statement races safely on the
+ * userId primary key: a concurrent first-write wins, and any follower folds
+ * its `updates` onto the surviving row instead of raising a PK violation.
  */
 export async function upsertEditorPreferences(
 	db: D1Db,
 	userId: number,
 	updates: Partial<EditorPreferences>
 ): Promise<void> {
-	const existing = await db
-		.select({ userId: editorPreferences.userId })
-		.from(editorPreferences)
-		.where(eq(editorPreferences.userId, userId))
-		.limit(1);
-
-	if (existing.length === 0) {
-		await db.insert(editorPreferences).values({ userId, ...updates });
-	} else {
-		await db.update(editorPreferences).set(updates).where(eq(editorPreferences.userId, userId));
-	}
+	await db
+		.insert(editorPreferences)
+		.values({ userId, ...updates })
+		.onConflictDoUpdate({
+			target: editorPreferences.userId,
+			set: updates
+		});
 }

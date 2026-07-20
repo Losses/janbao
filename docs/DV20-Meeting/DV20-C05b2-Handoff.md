@@ -1,17 +1,26 @@
 # DV20 Cycle 5b2 - Handoff Document
 
-**Date:** 2026-07-19. **For:** the next agent continuing the DV20 5b2 audit loop.
-**Status:** R82-R91 complete this stretch (10 rounds) plus the fab.spec flaky
-root-cause fix. All fixes applied; the full gate is green with ZERO flakies (210
-e2e passed). Counter: **0/5**. IMPORTANT: as of R91 the audit prompt is
-**OPEN-SCOPED** (the prior scoped prompt excluded bug spaces outside the
-orchestrator/animation layer; R91's open prompt found 6 such defects in one
-round). R92 auditors were launched with the open prompt; if they hit the 5-hour
-API rate limit (HTTP 429), re-run them.
+**Date:** 2026-07-19 (updated through R95). **For:** the next agent continuing the
+DV20 5b2 audit loop.
+
+**Status:** R82-R95 complete (prior stretch R82-R91, then a continuation stretch
+R92-R95; the per-round details are in section 4). All fixes applied; the full gate
+is green with ZERO flakies (210 e2e passed). Counter: **0/5** (every round R91-R95
+found at least one concern; no clean round yet). The audit prompt has been
+**OPEN-SCOPED** since R91.
+
+**BINDING (user directive 2026-07-19).** Every auditor AND every fixer MUST perform
+an EXHAUSTIVE horizontal check for the SAME bug class in sibling paths before
+reporting or claiming done, using BROAD grep patterns that cover the bug CLASS
+(not one variable name). One defect almost always has siblings. The id-0 class
+leaked a sibling in R93, R94, AND R95 because the early sweeps grepped only
+`id > 0` and missed `n > 0`, `lastReplyAuthorId > 0`, the recipient display-name
+projection, and the `/drafts/clear` endpoint sibling. A round is NOT done until
+the class is exhausted. Full protocol in section 6.
 
 This handoff supersedes the 2026-07-15 (R37) version. The architecture and the
-user's demands in sections 1 to 3 are still accurate; sections 4 to 8 reflect
-the current (post-R91) state.
+user's demands in sections 1 to 3 are still accurate; sections 4 to 8 reflect the
+current (post-R95) state.
 
 ## 1. The user's design vision (READ THIS FIRST)
 
@@ -90,7 +99,7 @@ layer reads `publication.progress` + `getRouteData(from).fab` /
 `1 - progress * BOUNDARY_RUBBER_BAND_FACTOR` reaction (a sanctioned divergence
 from the half-mapping).
 
-## 4. What was fixed this stretch (R82 to R91 + flaky root cause)
+## 4. What was fixed (R82 to R95)
 
 - **R82:** `replaceState` intent was lost through the finish-then-new queue replay
   (and mis-applied to the commit's own dispatch). Fixed with a capture-clear-rearm
@@ -172,16 +181,61 @@ prompt must ORIENT not SCOPE (a file/trajectory/defect-type/invariant list
 excludes other bug spaces, as R91's open prompt proved by finding 6 defects the
 scoped prompt had missed).
 
+### R92-R95 (the continuation stretch)
+
+- **R92:** deleted the dead `thread-nav.svelte.ts` module (write-only state, zero
+  reader callers) + its dead write block in `+layout.svelte`; deleted dead
+  `NavigationStore` members (`activeTab`, `getTabFromPath`, `getStack`,
+  `navigateBackward`); deleted the dead `BackHandlerDispatcher` (register had
+  zero callers; dispatch always returned false); replaced hardcoded "Janbao" with
+  `getSiteName` / `formatTitle` in the offline page titles, the `app.html`
+  apple-mobile-web-app-title (`hooks.server.ts injectSiteName`), and the
+  service-worker push fallback (`$env/static/public`).
+- **R93:** fixed the manual Save Draft silent data loss (`contextId: 'new'`
+  string into an INTEGER-affinity column; call site to `0` + a boundary coercion
+  in `/api/drafts/save`); migrated 13 id-0 filter sites to `isRealUserId`
+  (messages, the activities wall-post incl. storage + DELETE auth, 3 profile
+  Message buttons, addParticipant, the offline cache, ActivityRow); removed 18
+  i18n English fallbacks; root-caused the `fab-release-snap` flaky (the
+  band-count check was fragile to rAF under-sampling; replaced with a time-based
+  - leap guard; 60/60 deterministic).
+- **R94:** caught three id-0 / coercion SIBLINGS the R93 horizontal sweep missed
+  (`passthrough.ts` `lastReplyAuthorId > 0`, `api/sync/content` `n > 0`,
+  `/api/drafts/clear` missing the contextId coercion); extracted a shared
+  `normalizeDraftContextId` helper (+ 7 unit tests) used by `/save` and `/clear`.
+  Process fix: the fixer prompt now BINDS an independent broad-grep class-wide
+  enumeration; the orchestrator cross-checks it.
+- **R95:** fixed the id-0 recipient display-name projection (`a.recipientId ?` ->
+  `isRealUserId`) that R93's ActivityRow change had exposed (a wall-post to the
+  admin rendered "Unknown user"); fixed the offline manifest depth mismatch
+  (pass `requestDepth`, not `depth`); corrected an overstated `manifest-recompute`
+  docstring; normalized vanilla id 0 in the import script (`normalizeVanillaUserId`
+  - the inviter sibling); wrapped three FTS-write paths in transactions; fixed a
+    stale-activeIndex `runPassthrough` gate; misc very-low cleanup. The id-0
+    recipient class is now FULLY CLOSED after this round's exhaustive sweep.
+
+The id-0 class is the cautionary tale of this stretch: it produced sibling
+findings in R93, R94, AND R95 because each round's horizontal sweep was narrower
+than the class. The fixer prompt and the orchestrator's close-out now require an
+exhaustive broad-pattern sweep before a round closes (see section 6).
+
 ## 5. Current state of the code
 
 ### Gate (green, last verified 2026-07-19, zero flakies)
 
 ```
-$ bun run check                       0 errors / 0 warnings (1457 files)
+$ bun run check                       0 errors / 0 warnings (1458 files)
 $ bun run lint                        EXIT=0
-$ bun test src/lib/utils src/lib/stores src/lib/actions    400 pass / 0 fail
+$ bun test src/lib/utils src/lib/stores src/lib/actions src/lib/server/utils   407 pass / 0 fail
+$ bunx tsc -p scripts/tsconfig.json   EXIT=0
 $ bun run test:e2e                    210 passed / 0 flaky (exit 0)
+$ fab-release-snap --repeat-each=20    60 passed / 0 flaky (determinism, R93)
 ```
+
+Working tree: the R94 + R95 changes are applied and gated but NOT yet committed
+(continued in git history only through A94, which the user committed as a
+checkpoint of R92+R93). Commit cadence for the continuation rounds is pending the
+user's instruction.
 
 ### What exists (post-R91)
 
@@ -224,8 +278,10 @@ $ bun run test:e2e                    210 passed / 0 flaky (exit 0)
 
 ### Audit trail
 
-- Audit files: `docs/RV20-C05b2-Audit-{24..91}.md`.
-- Journal: `docs/DV20-C05b2-Journal.md` (sessions through 95).
+- Audit files: `docs/RV20-C05b2-Audit-{24..95}.md` (R92-R95 written this
+  continuation; the Audit Log IS these report files).
+- Journal: `docs/DV20-C05b2-Journal.md` (sessions through 98 = R94; R95 session
+  99 not yet appended).
 - Spec: `docs/DV20-Meeting/DV20-C05b2-spec.md`.
 - Reusable audit prompt: `docs/DV20-Meeting/DV20-C05b2-Audit-Prompt.md`
   (OPEN-SCOPED since R91: orients with architecture + spec location, then "find
@@ -242,6 +298,17 @@ $ bun run test:e2e                    210 passed / 0 flaky (exit 0)
   PASS votes. Any concern resets the counter to 0. PASS-with-concerns is not PASS.
   (R89 was the first clean round at 2/5; R90's passthrough concern reset to 0/5;
   the open-scoped R91 then found 6 defects the prior scoped prompt had missed.)
+- **BINDING horizontal check (user directive 2026-07-19).** Every auditor AND
+  every fixer must grep the WHOLE codebase for the same bug class in sibling
+  paths before reporting or claiming done, using BROAD patterns that cover the
+  bug CLASS (not one variable name), enumerate every hit classified as
+  defect-vs-legitimate, and fix ALL siblings in the same change. The id-0 class
+  leaked a sibling in R93, R94, AND R95 because the early sweeps grepped only
+  `id > 0` and missed `n > 0`, `lastReplyAuthorId > 0`, the recipient
+  display-name projection, and the `/drafts/clear` sibling. A narrow sweep that
+  fixes only the cited site is an INCOMPLETE fix; the round is not done until the
+  class is exhausted. The orchestrator independently re-runs the sweep and
+  cross-checks the agent's enumeration.
 - **The orchestrator runs the audit** (spawns both auditors itself), independently
   re-traces every finding, adjudicates real vs false positive (empirically verify
   any visible-behavior claim; two false positives this stretch were caught this
@@ -253,12 +320,13 @@ $ bun run test:e2e                    210 passed / 0 flaky (exit 0)
 
 ## 7. What the next agent must do
 
-### Immediate: R82-R91 are done; continue from R92
+### Immediate: R82-R95 are done; continue from R96
 
-R92 auditors were launched (open-scoped prompt). If they returned, triage their
-findings (re-trace each, adjudicate real vs false positive). If they failed with
-a 429, re-launch two independent auditors with the `DV20-C05b2-Audit-Prompt.md`
-brief (which is now open-scoped).
+Launch two independent open-scoped auditors with the `DV20-C05b2-Audit-Prompt.md`
+brief. If they hit the 5-hour API rate limit (HTTP 429), re-run them (R94's
+auditors hit a 429 on first launch and were re-run successfully). Triage each
+finding (re-trace, adjudicate real vs false positive). For every confirmed
+concern, the fixer MUST do the binding exhaustive horizontal sweep (section 6).
 
 ### For each round
 

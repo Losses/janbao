@@ -10,9 +10,11 @@
 	 * mounted) and whose drawer shows the ACTIVE tab's sidebar. Suppresses the
 	 * route's own page so there is exactly one Header/drawer.
 	 *
-	 * SSR renders the desktop branch (isMobile defaults false); the mobile client
-	 * flips isMobile in onMount - a normal reactive update, not a hydration
-	 * mismatch.
+	 * `isMobile` seeds from `data.isMobile`, the UA-derived value the root
+	 * `+layout.server.ts` sets for every request, so SSR and the first client
+	 * render agree on which branch to paint (no hydration mismatch);
+	 * `onMount`'s matchMedia sync then refines it to the live viewport.
+	 * Mirrors NavPipelineHost.svelte and the search page.
 	 */
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';

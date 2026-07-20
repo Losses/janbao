@@ -140,13 +140,27 @@ export async function userGroupExists(db: D1Db, slug: string): Promise<boolean> 
 	return rows.length > 0;
 }
 
+/**
+ * Insert a new user group. The slug PK is the single source of truth for
+ * uniqueness: a concurrent insert that lands the same slug first makes this
+ * caller's insert a no-op, and the function returns `false` so the handler
+ * can respond with a 409.
+ *
+ * Returns `true` when a row was inserted, `false` when the slug already
+ * existed (ON CONFLICT DO NOTHING matched).
+ */
 export async function createUserGroup(
 	db: D1Db,
 	slug: string,
 	title: string,
 	description: string
-): Promise<void> {
-	await db.insert(userGroups).values({ slug, title, description, permissionsJson: '{}' });
+): Promise<boolean> {
+	const inserted = await db
+		.insert(userGroups)
+		.values({ slug, title, description, permissionsJson: '{}' })
+		.onConflictDoNothing({ target: userGroups.slug })
+		.returning({ slug: userGroups.slug });
+	return inserted.length > 0;
 }
 
 export async function deleteUserGroup(db: D1Db, slug: string): Promise<void> {
@@ -183,16 +197,30 @@ export async function categoryExists(db: D1Db, slug: string): Promise<boolean> {
 	return rows.length > 0;
 }
 
-export async function createCategory(db: D1Db, category: AdminCategoryItem): Promise<void> {
-	await db.insert(categories).values({
-		slug: category.slug,
-		title: category.title,
-		description: category.description,
-		priority: category.priority,
-		displayOrder: category.displayOrder,
-		themeName: category.themeName,
-		disabledAt: category.disabledAt
-	});
+/**
+ * Insert a new category. The slug PK is the single source of truth for
+ * uniqueness: a concurrent insert that lands the same slug first makes this
+ * caller's insert a no-op, and the function returns `false` so the handler
+ * can respond with a 409.
+ *
+ * Returns `true` when a row was inserted, `false` when the slug already
+ * existed (ON CONFLICT DO NOTHING matched).
+ */
+export async function createCategory(db: D1Db, category: AdminCategoryItem): Promise<boolean> {
+	const inserted = await db
+		.insert(categories)
+		.values({
+			slug: category.slug,
+			title: category.title,
+			description: category.description,
+			priority: category.priority,
+			displayOrder: category.displayOrder,
+			themeName: category.themeName,
+			disabledAt: category.disabledAt
+		})
+		.onConflictDoNothing({ target: categories.slug })
+		.returning({ slug: categories.slug });
+	return inserted.length > 0;
 }
 
 export async function updateCategory(db: D1Db, category: AdminCategoryItem): Promise<void> {

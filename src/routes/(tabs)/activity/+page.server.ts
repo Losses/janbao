@@ -2,11 +2,12 @@ import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { loadActivityPage } from '$lib/server/db/dao/activities';
 import { getAllowGuestActivity } from '$lib/server/constants';
+import { buildSignInRedirectUrl } from '$lib/utils/redirect';
 
 export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user;
 	if (!user && !getAllowGuestActivity(event.platform?.env)) {
-		redirect(302, '/entry/signin');
+		redirect(302, buildSignInRedirectUrl(event.url.pathname));
 	}
 
 	const pageParam = event.url.searchParams.get('page');

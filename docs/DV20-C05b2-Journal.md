@@ -4802,3 +4802,88 @@ $ bun run test:e2e                    210 passed / 0 flaky (exit 0, 9.1m)
 ```
 
 R95 audits this state (open-scoped prompt).
+
+## Session 99: R95 completed (per handoff section 4); R96 launch blocked by account quota cap (HTTP 429); host-header lead pinned
+
+State R96 audits: R95 completed (id-0 recipient display-name projection fixed;
+offline manifest depth mismatch; manifest-recompute docstring; vanilla id 0 in the
+import script; three FTS-write paths wrapped in transactions; stale-activeIndex
+runPassthrough gate). Counter 0/5. Gate green (210 e2e, zero flakies) per handoff
+section 5. Working tree note: the handoff document itself is modified (M) and its
+section 5 "R94+R95 not yet committed" line is now stale, because A94 and A95 are
+both committed in git history. To be reconciled when Audit-96 is written.
+
+R96 launched 2026-07-20 01:54:51 EDT with two independent open-scoped auditors
+(same brief as R91 onward). Both failed immediately on launch with HTTP 429: the
+account's 5-hour usage cap was already saturated. The cap is account-wide, not
+per-session, so re-launching before the reset would 429 again and the round is
+paused until the window clears. Gateway reset time 2026-07-20 19:04:51 (UTC+8) =
+07:04:51 EDT.
+
+Recovery scheduled:
+
+- One-shot cron 2c5b3473 at 2026-07-20 07:12 EDT (cron `12 7 20 7 *`), about 7
+  minutes after the reset, to re-launch the two R96 auditors and resume the loop.
+  If the 429 persists it re-schedules a 30-minute retry.
+- Recurring cron 37ea0681 (every 5 hours at :23 local) remains as a backstop.
+
+Lead pinned from auditor A's partial run. Auditor A returned "Found a potential
+host-header injection. Let me verify and check the broader pattern" before the
+429 cut it off. Orchestrator triage located the site: `src/lib/server/constants.ts`
+lines 36 to 40, function `getSiteUrl`. When SITE_URL is unset it falls back to
+`${url.protocol}//${url.host}` (line 39), where `url.host` is client-controllable
+via the Host or X-Forwarded-Host header. The docstring (lines 32 to 34)
+acknowledges the risk and mitigates by preferring SITE_URL, but the fallback
+branch is still poisonable for RSS and link generation.
+
+Not yet verified as a defect. Post-reset, the orchestrator will empirically
+confirm: whether SITE_URL is set in production configuration (if always set, the
+fallback is dev-only and lower severity); the `getSiteUrl` callers and whether
+the output is cached or persisted (cache-poisoning reachability); and a
+horizontal sweep for any other direct `url.host` or Host-header reads in link
+construction (password reset, invite, verification, RSS, sitemap, open-graph
+metadata). The verdict and any fix happen post-reset. This lead is not seeded
+into the auditor prompt (auditors stay role-less and hint-less); the orchestrator
+verifies it independently during triage.
+
+No code changed this session. Quota blocks subagent fixers, and the lead is pinned
+but not fixed.
+
+## Session 100: R96 complete; 13 findings, 1 false positive, 10 fixes, gate green
+
+Quota recovered; both R96 auditors re-ran cleanly. Auditor A returned 7 findings,
+Auditor B returned 8 (B-L1 duplicates A4). The orchestrator triaged every finding.
+
+The host-header lead pinned in session 99 was adjudicated a FALSE POSITIVE.
+`getSiteUrl`'s SITE_URL-preference with request-origin fallback is the deliberate,
+audited resolution from cycle DV04-C03 (RV04-C03-Audit-02 / DV04-C03-Journal), with
+a single RSS caller that documents the preference. Neither full auditor flagged it.
+No change.
+
+Ten fixes applied, each with a binding class-wide horizontal sweep and a preventive
+test, dispatched as fresh-context sub-agents on non-overlapping files: C1 upload
+atomicity (DB-first / MOVE-second with compensation, new upload-commit helper); C2
+post-login destination (new redirect.ts open-redirect validator, signin consumes
+redirectTo, nine bare loaders plus sixteen already-correct loaders unified); C3
+reindexUser wrapped in its transaction; L1 /api/users sentinel filter broadened to
+both sentinels plus the searchUsers sibling; L2 mention dispatch isRealUserId guard
+plus chip-resolver sentinel skip (stealth verified as presence-only, not a mention
+opt-out); L3 preference and push-subscribe upserts made atomic; L4 offline reader
+records reads regardless of online state, lastReadPage derived from the cached-range
+manifest; L5 deleteDiscussion side-effects wrapped in a transaction; V1 consolidated
+the duplicate SYSTEM/GHOST_USER_ID source; V2 drafts DELETE uses the shared helper
+(with a Number() wrap that preserves parsing); V3 corrected the stale isMobile SSR
+comment plus a search-page sibling; V4 collapsed a redundant isNaN clause.
+
+Three horizontal-sweep extras fixed this round: X1 admin user-groups and categories
+CREATE races now return 409 via onConflictDoNothing; X2 joined-activity get-or-create
+race closed with a new joined_day column and UNIQUE(is_joined, joined_day) index
+(migration 0019, auto-applied by db/index.ts for local, prod, and e2e); X3 three
+guest sign-in anchor tags now preserve the destination.
+
+Gate (orchestrator-run): check 0 errors (1466 files); lint exit 0; unit 521 pass /
+0 fail; scripts tsc exit 0; e2e 210 passed / 0 flaky (9.3m). Full report in
+`docs/RV20-C05b2-Audit-96.md`.
+
+Counter 0/5 (R96 had concerns; not a PASS round). R97 runs with the PASS criterion
+added to the audit prompt.

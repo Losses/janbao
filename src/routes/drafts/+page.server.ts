@@ -2,6 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { drafts } from '$lib/server/db/schema';
 import { eq, and, inArray, desc } from 'drizzle-orm';
+import { buildSignInRedirectUrl } from '$lib/utils/redirect';
 
 // Per RQ00-Frontend §6.10, the drafts list only shows thread-creation drafts
 // and discussion-reply drafts (filtering out private-message and activity drafts).
@@ -11,7 +12,7 @@ const DRAFT_LIST_LIMIT = 100; // Defensive cap; drafts are bounded by active edi
 export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user;
 	if (!user) {
-		redirect(302, '/entry/signin');
+		redirect(302, buildSignInRedirectUrl(event.url.pathname));
 	}
 
 	const rows = await event.locals.db

@@ -8,6 +8,8 @@
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
+	import { buildSignInRedirectUrl } from '$lib/utils/redirect';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
 	import type { BookmarkListItem } from '$lib/types/api';
 	import type { PageData } from './$types';
@@ -32,7 +34,7 @@
 
 	onMount(() => {
 		if (!user) {
-			void goto('/entry/signin');
+			void goto(buildSignInRedirectUrl(page.url.pathname));
 		}
 	});
 </script>

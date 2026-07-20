@@ -1,8 +1,8 @@
 import { json } from '@sveltejs/kit';
 import { jsonError } from '$lib/server/errors';
 import { users } from '$lib/server/db/schema';
-import { like, not, eq, and, ne, or, desc } from 'drizzle-orm';
-import { SYSTEM_USER_ID } from '$lib/server/constants';
+import { like, eq, and, ne, or, desc } from 'drizzle-orm';
+import { SYSTEM_USER_ID, GHOST_USER_ID } from '$lib/server/constants';
 import { buildAvatarUrl } from '$lib/utils/image';
 import type { RequestHandler } from './$types';
 import type { UserSearchResult } from '$lib/types/api';
@@ -11,9 +11,9 @@ const MAX_RESULTS = 10;
 
 // GET /api/users/search?q=<term>&limit=<n> - Username/displayName autocomplete
 // for @mention typeahead chips, PM recipient selection, and the ParticipantAdder
-// widget. Excludes the caller and the System User. With a term, prefix-matches on
-// both username and displayName. With an empty term (bare @), returns the most
-// recently active users as a starting suggestion set.
+// widget. Excludes the caller and both sentinel accounts (System -1, Ghost -2).
+// With a term, prefix-matches on both username and displayName. With an empty
+// term (bare @), returns the most recently active users as a starting set.
 export const GET: RequestHandler = async ({ url, locals }) => {
 	const user = locals.user;
 	const t = locals.t;
@@ -28,10 +28,13 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
 	const db = locals.db;
 
-	// Excludes the caller, the System User, and stealth users (who opted out of
-	// presence surfacing) in both branches.
+	// Excludes the caller, both sentinel accounts (System -1, Ghost -2; these
+	// never participate in social affordances), and stealth users (presence
+	// opt-out). The sentinel-id guard is independent of the isStealth clause so
+	// that a future flag flip on a sentinel does not surface it in typeahead.
 	const baseConditions = and(
-		not(eq(users.id, SYSTEM_USER_ID)),
+		ne(users.id, SYSTEM_USER_ID),
+		ne(users.id, GHOST_USER_ID),
 		ne(users.id, user.id),
 		eq(users.isStealth, false)
 	);

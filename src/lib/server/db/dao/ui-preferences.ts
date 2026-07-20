@@ -1,8 +1,9 @@
 // DAO for the per-user interface-preferences table. Mirrors the
 // editorPreferences access pattern: a missing row resolves to the code
-// defaults, and writes are an explicit select-then-insert/update (D1/libsql
-// does not need an atomic upsert here - the row is keyed by userId and only
-// the owning user writes it).
+// defaults, and writes are a single atomic ON CONFLICT DO UPDATE so two
+// concurrent requests from the same user (double-click, retry storm) cannot
+// race past the existence check and surface the userId PK violation as a
+// 500.
 
 import { uiPreferences } from '../schema';
 import { eq } from 'drizzle-orm';
@@ -35,23 +36,20 @@ export async function getUiPreferences(db: D1Db, userId: number): Promise<UiPref
 /**
  * Insert or update the user's interface preferences. `updates` carries only
  * the fields being changed; unspecified fields keep their existing value (or
- * the column default on first insert). Mirrors the editorPreferences handler's
- * select-then-insert/update so the write path matches the rest of the codebase.
+ * the column default on first insert). The single statement races safely on
+ * the userId primary key: a concurrent first-write wins, and any follower
+ * folds its `updates` onto the surviving row instead of raising a PK violation.
  */
 export async function upsertUiPreferences(
 	db: D1Db,
 	userId: number,
 	updates: Partial<UiPreferences>
 ): Promise<void> {
-	const existing = await db
-		.select({ userId: uiPreferences.userId })
-		.from(uiPreferences)
-		.where(eq(uiPreferences.userId, userId))
-		.limit(1);
-
-	if (existing.length === 0) {
-		await db.insert(uiPreferences).values({ userId, ...updates });
-	} else {
-		await db.update(uiPreferences).set(updates).where(eq(uiPreferences.userId, userId));
-	}
+	await db
+		.insert(uiPreferences)
+		.values({ userId, ...updates })
+		.onConflictDoUpdate({
+			target: uiPreferences.userId,
+			set: updates
+		});
 }

@@ -8,19 +8,31 @@
 	import { formatTitle } from '$lib/utils/title';
 	import { recordOfflineRead } from '$lib/offline/read-state';
 	import { computeGapPlacements, type GapPlacement } from '$lib/offline/gap-placement';
+	import { highestCachedPage } from '$lib/offline/manifest';
 	import type { PageProps } from './$types';
 	import type { OfflineReplyView } from '$lib/offline/types';
 
 	let { data }: PageProps = $props();
 
-	// Record this offline read into the local outbox; it syncs back to the server
-	// (last-write-wins) on reconnect without touching the online read mechanism.
+	// Record this read into the local outbox on every visit. The route is
+	// reachable both offline (the standard entry: /offline list, redirect from
+	// /discussion/... on network drop) and online (direct URL, bookmark,
+	// browser history, or a row click on /offline while the network is back).
+	// The online read-mutation path runs only on /discussion/... so a visit
+	// here would otherwise leave no read-state trace at all. The outbox is
+	// drained by `flushPendingReadState` during sync; the server reconciles
+	// with last-write-wins by `lastReadAt`, and `lastReadPage` /
+	// `lastReadReplyId` advance via CASE-WHEN-max, so a delta recorded while
+	// online never regresses a prior online read. `lastReadPage` is derived
+	// from the cached-range manifest: the reader renders every cached page in
+	// one stream, so the highest cached page is the page the user actually
+	// reached.
 	onMount(() => {
-		if (navigator.onLine) return;
 		const disc = data.discussion;
 		if (!disc) return;
 		const last = data.replies.length > 0 ? data.replies[data.replies.length - 1] : null;
-		void recordOfflineRead(disc.id, last?.id ?? null, 1);
+		const lastReadPage = highestCachedPage(data.replyGaps?.cachedRanges ?? []);
+		void recordOfflineRead(disc.id, last?.id ?? null, lastReadPage);
 	});
 
 	// The lowest-id reply is the OP (existing convention). Split it out so it can

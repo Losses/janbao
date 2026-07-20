@@ -12,6 +12,7 @@ import { users } from '../db/schema';
 import { inArray } from 'drizzle-orm';
 import { extractMentions } from '$lib/utils/mentions';
 import { buildAvatarUrl } from '$lib/utils/image';
+import { isRealUserId } from '$lib/utils/user';
 import type { D1Db } from '../db/index';
 import type { MentionedUsersMap } from '$lib/types/mentions';
 
@@ -58,9 +59,15 @@ export async function resolveMentions(
 		.from(users)
 		.where(inArray(users.username, allUsernames));
 
-	// 3. Build the map keyed by username
+	// 3. Build the map keyed by username. Sentinel accounts (System -1, Ghost
+	//    -2) are skipped so @system / @<ghost-username> never render as a chip
+	//    linking to a non-social profile. The author's literal text is preserved
+	//    by the editor (it stays as plain "@system" in the rendered content);
+	//    only the chip affordance is suppressed. This matches the typeahead
+	//    contract (sentinels never appear in /api/users/search results).
 	const map: MentionedUsersMap = {};
 	for (const u of matchedUsers) {
+		if (!isRealUserId(u.id)) continue;
 		map[u.username] = {
 			id: u.id,
 			displayName: u.displayName,

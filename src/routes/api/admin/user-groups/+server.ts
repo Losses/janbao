@@ -53,10 +53,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return jsonError(locals.t, 'permissions.fieldsRequired', 400);
 	if (!isValidAdminSlug(slug)) return jsonError(locals.t, 'permissions.invalidSlug', 400);
 	if (isReservedUserGroupSlug(slug)) return jsonError(locals.t, 'permissions.reservedGroup', 400);
-	if (await userGroupExists(locals.db, slug))
-		return jsonError(locals.t, 'permissions.groupExists', 409);
 
-	await createUserGroup(locals.db, slug, title, description);
+	// Race-safe create: the slug PK is the authority. A concurrent duplicate
+	// folds onto the existing row and surfaces a clean 409 here.
+	const created = await createUserGroup(locals.db, slug, title, description);
+	if (!created) return jsonError(locals.t, 'permissions.groupExists', 409);
 	return json({ success: true }, { status: 201 });
 };
 

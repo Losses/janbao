@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import { jsonError } from '$lib/server/errors';
 import { drafts } from '$lib/server/db/schema';
 import { DRAFT_CONTEXT_TYPES } from '$lib/server/constants';
+import { normalizeDraftContextId } from '$lib/server/utils/drafts';
 import { eq, and } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
@@ -15,7 +16,14 @@ export const DELETE: RequestHandler = async ({ url, locals }) => {
 	}
 
 	const contextType = url.searchParams.get('contextType');
-	const contextId = Number(url.searchParams.get('contextId')) || 0;
+	// Parse the query string to a number first (searchParams.get yields
+	// `string | null`, which the shared helper would otherwise coerce to 0 for
+	// every input), then hand the result to normalizeDraftContextId so this
+	// DELETE path matches the save/clear boundary: a missing, non-numeric, or
+	// non-finite contextId collapses to 0 (the "new composer" draft key)
+	// instead of diverging from the integer-keyed save/clear queries. See
+	// $lib/server/utils/drafts.ts for the rationale.
+	const contextId = normalizeDraftContextId(Number(url.searchParams.get('contextId')));
 
 	if (!contextType) {
 		return jsonError(t, 'draft.contextFieldsRequired', 400);

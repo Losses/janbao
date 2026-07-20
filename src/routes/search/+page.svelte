@@ -17,9 +17,11 @@
 	const tSearch = $derived(t.search);
 
 	// Mobile renders the scope pager inside NavPipelineHost; desktop keeps the
-	// pre-DV08 form/select surface. SSR defaults to desktop (isMobile false);
-	// the client flips on mount (a normal reactive update, not a hydration
-	// mismatch), mirroring the (tabs) layout.
+	// form/select surface. `isMobile` seeds from `data.isMobile`, the UA-derived
+	// value the root `+layout.server.ts` sets for every request, so SSR and the
+	// first client render agree on which branch to paint (no hydration
+	// mismatch); `onMount`'s matchMedia sync then refines it to the live
+	// viewport. Mirrors the (tabs) layout and NavPipelineHost.svelte.
 	const MOBILE_BREAKPOINT = '(max-width: 767px)';
 	// svelte-ignore state_referenced_locally
 	let isMobile = $state(data.isMobile ?? false);

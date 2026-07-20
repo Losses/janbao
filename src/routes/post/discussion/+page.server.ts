@@ -14,11 +14,12 @@ import type { DbTransaction } from '$lib/server/db';
 import { indexDiscussionTitle, indexReply } from '$lib/server/search/fts';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 import { enforcePostThrottle } from '$lib/server/throttle';
+import { buildSignInRedirectUrl } from '$lib/utils/redirect';
 
 export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user;
 	if (!user) {
-		redirect(302, `/entry/signin?redirectTo=/post/discussion`);
+		redirect(302, buildSignInRedirectUrl('/post/discussion'));
 	}
 
 	const db = event.locals.db;

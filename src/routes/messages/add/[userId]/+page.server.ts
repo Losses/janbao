@@ -1,11 +1,12 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { resolveMessageComposePrefill } from '$lib/server/messages';
+import { buildSignInRedirectUrl } from '$lib/utils/redirect';
 
 export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user;
 	if (!user) {
-		redirect(302, '/entry/signin');
+		redirect(302, buildSignInRedirectUrl(event.url.pathname));
 	}
 
 	// Prefill the recipient from the route param. URL is preserved on this

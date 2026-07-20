@@ -39,7 +39,11 @@ export function getSiteUrl(platformEnv: App.Platform['env'] | undefined, url: UR
 	return `${url.protocol}//${url.host}`;
 }
 
-export const SYSTEM_USER_ID = -1;
+// User-id sentinels live in the client-safe `$lib/utils/user` module (so
+// `isRealUserId` / `formatDisplayName` and their callers share the same
+// symbols) and are re-exported here so server code keeps a stable import
+// address. The canonical value is the one in `$lib/utils/user`.
+export { SYSTEM_USER_ID, GHOST_USER_ID } from '$lib/utils/user';
 
 /**
  * Offline cache retention in days. Cached discussions scroll out of the offline
@@ -62,13 +66,6 @@ export function getOfflineRetentionDays(platformEnv: App.Platform['env'] | undef
  * the super-admin. See src/lib/server/db/seed.ts.
  */
 export const BOOTSTRAP_ADMIN_ID = 0;
-
-/**
- * Sentinel for "original author no longer exists". Vanilla reserves UserID 0 for
- * this (rendered as "Unknown"); we remap it onto -2 so the positive id space  -
- * including id 0 (the seeded admin)  - stays clear for real accounts.
- */
-export const GHOST_USER_ID = -2;
 
 /** Allowlist of valid draft context types, shared by the save/clear/delete endpoints. */
 export const DRAFT_CONTEXT_TYPES = ['discussion', 'reply', 'message', 'activity'] as const;

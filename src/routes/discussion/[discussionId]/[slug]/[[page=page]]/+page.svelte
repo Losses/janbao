@@ -14,6 +14,7 @@
 	import { formatTitle } from '$lib/utils/title';
 	import { generateSlug } from '$lib/utils/slug';
 	import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
+	import { buildSignInRedirectUrl } from '$lib/utils/redirect';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { enhance } from '$app/forms';
@@ -836,7 +837,9 @@
 						{t.discussion.signInToReply}
 					</p>
 					<div class="flex justify-center gap-2">
-						<a href="/entry/signin" class="btn btn-sm btn-primary">{t.nav.signin}</a>
+						<a href={buildSignInRedirectUrl(page.url.pathname)} class="btn btn-sm btn-primary"
+							>{t.nav.signin}</a
+						>
 						<a href="/entry/register" class="btn btn-sm btn-outline">{t.nav.register}</a>
 					</div>
 				</div>

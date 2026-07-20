@@ -9,10 +9,9 @@
  * activity_joins.
  */
 import { activities, activityJoins } from './schema';
-import { and, eq, gte, lte, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { D1Db, DbTransaction } from './index';
 import { SYSTEM_USER_ID, getForumTimezone } from '../constants';
-import { getTzBoundaries } from './welcome';
 
 // Either the db instance or an in-flight transaction - both expose the same
 // query-builder API (select/insert/update/where), so this helper runs
@@ -48,41 +47,37 @@ export async function appendJoinedMember(
 	platformEnv: App.Platform['env'] | undefined
 ): Promise<void> {
 	const tz = getForumTimezone(platformEnv);
-	// Bucket by the calendar day of `joinedAt` in the forum timezone.
+	// Bucket by the calendar day of `joinedAt` in the forum timezone. Same
+	// value is stored on joined_day so the UNIQUE(is_joined, joined_day)
+	// index can serialize concurrent first-of-the-day inserts.
 	const dayStr = formatDay(joinedAt, tz);
-	const { start, end } = getTzBoundaries(dayStr, tz);
 
-	// Find today's existing isJoined activity (one per day).
-	const existing = await dbOrTx
-		.select({ id: activities.id })
-		.from(activities)
-		.where(
-			and(
-				eq(activities.isJoined, true),
-				gte(activities.createdAt, start),
-				lte(activities.createdAt, end)
-			)
-		)
-		.limit(1);
-
-	let activityId: number;
-	if (existing.length > 0) {
-		activityId = existing[0].id;
-	} else {
-		const inserted = await dbOrTx
-			.insert(activities)
-			.values({
-				authorId: SYSTEM_USER_ID,
-				recipientId: null,
-				parentActivityId: null,
-				contentJson: PLACEHOLDER_CONTENT,
-				isJoined: true,
-				createdAt: joinedAt,
-				updatedAt: joinedAt
-			})
-			.returning({ id: activities.id });
-		activityId = inserted[0].id;
-	}
+	// Upsert today's isJoined activity. The ON CONFLICT branch targets the
+	// UNIQUE(is_joined, joined_day) index: two concurrent signups on the same
+	// day both compute the same joined_day, the index serializes them, and
+	// the second one folds onto the first writer's id - guaranteeing exactly
+	// one activity row per day bucket. The SET clause bumps updated_at to
+	// the new join time, matching the column's documented purpose ("activity
+	// feed can order by last-updated"); created_at and content_json are left
+	// untouched so the row remains anchored to the day's first signup.
+	const upserted = await dbOrTx
+		.insert(activities)
+		.values({
+			authorId: SYSTEM_USER_ID,
+			recipientId: null,
+			parentActivityId: null,
+			contentJson: PLACEHOLDER_CONTENT,
+			isJoined: true,
+			joinedDay: dayStr,
+			createdAt: joinedAt,
+			updatedAt: joinedAt
+		})
+		.onConflictDoUpdate({
+			target: [activities.isJoined, activities.joinedDay],
+			set: { updatedAt: joinedAt }
+		})
+		.returning({ id: activities.id });
+	const activityId = upserted[0].id;
 
 	// Append the member (idempotent on the (activityId, userId) PK).
 	await dbOrTx.insert(activityJoins).values({ activityId, userId, joinedAt }).onConflictDoNothing();

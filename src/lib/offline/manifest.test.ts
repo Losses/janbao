@@ -7,6 +7,7 @@ import { test, expect } from 'bun:test';
 import {
 	computeCachedRanges,
 	computeReplyGaps,
+	highestCachedPage,
 	isComplete,
 	type ReplyGapSummary
 } from './manifest';
@@ -205,4 +206,38 @@ test('computeReplyGaps: no manifest returns pageSize=0', () => {
 	expect(res.totalMissingPages).toBe(0);
 	expect(res.totalMissingReplies).toBe(0);
 	expect(res.pageSize).toBe(0);
+});
+
+test('highestCachedPage returns 1 for an empty range set', () => {
+	expect(highestCachedPage([])).toBe(1);
+});
+
+test('highestCachedPage returns the max end across cached ranges', () => {
+	// Single contiguous block: the end is the high-water mark.
+	expect(highestCachedPage([{ start: 1, end: 5 }])).toBe(5);
+	// firstLast shape [{1,1},{10,10}] - the user read page 10 too.
+	expect(
+		highestCachedPage([
+			{ start: 1, end: 1 },
+			{ start: 10, end: 10 }
+		])
+	).toBe(10);
+	// Over-cap 'all' shape [{1,5},{21,25}] - the trailing block wins.
+	expect(
+		highestCachedPage([
+			{ start: 1, end: 5 },
+			{ start: 21, end: 25 }
+		])
+	).toBe(25);
+});
+
+test('highestCachedPage ignores malformed endpoints and stays >= 1', () => {
+	expect(highestCachedPage([{ start: 1, end: Number.NaN }])).toBe(1);
+	expect(
+		highestCachedPage([
+			{ start: 1, end: 3 },
+			{ start: 4, end: Number.POSITIVE_INFINITY }
+		])
+	).toBe(3);
+	expect(highestCachedPage([{ start: 1, end: 0 }])).toBe(1);
 });

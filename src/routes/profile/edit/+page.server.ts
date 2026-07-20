@@ -1,11 +1,12 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getAllowSlugChange } from '$lib/server/constants';
+import { buildSignInRedirectUrl } from '$lib/utils/redirect';
 
 export const load: PageServerLoad = async ({ locals, platform }) => {
 	const user = locals.user;
 	if (!user) {
-		redirect(302, '/entry/signin?redirectTo=/profile/edit');
+		redirect(302, buildSignInRedirectUrl('/profile/edit'));
 	}
 
 	const allowSlugChange = getAllowSlugChange(platform?.env);

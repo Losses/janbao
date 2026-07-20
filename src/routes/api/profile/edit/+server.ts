@@ -145,25 +145,32 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		oldIdentity = existing[0] ?? null;
 	}
 
-	await locals.db.update(users).set(updates).where(eq(users.id, user.id));
+	// Atomicity: the UPDATE and FTS reindex must commit together. Running the
+	// reindex after the row UPDATE commits leaves a window where a crash or
+	// isolate eviction would leave users_fts holding stale identity text and
+	// the user would be unsearchable by their current username/displayName/bio.
+	// Wrapping both in one tx gives all-or-nothing on crash.
+	await locals.db.transaction(async (tx) => {
+		await tx.update(users).set(updates).where(eq(users.id, user.id));
 
-	if (oldIdentity) {
-		const newUsername = updates.username ?? oldIdentity.username;
-		const newDisplayName = updates.displayName ?? oldIdentity.displayName;
-		// updates.bio is the trimmed string when provided (even if ''), so the
-		// !== undefined check keeps an unchanged bio on the old value.
-		const newBio = updates.bio !== undefined ? updates.bio : oldIdentity.bio;
-		await reindexUser(
-			locals.db,
-			user.id,
-			oldIdentity.username,
-			oldIdentity.displayName,
-			oldIdentity.bio,
-			newUsername,
-			newDisplayName,
-			newBio
-		);
-	}
+		if (oldIdentity) {
+			const newUsername = updates.username ?? oldIdentity.username;
+			const newDisplayName = updates.displayName ?? oldIdentity.displayName;
+			// updates.bio is the trimmed string when provided (even if ''), so the
+			// !== undefined check leaves an unspecified bio on its prior value.
+			const newBio = updates.bio !== undefined ? updates.bio : oldIdentity.bio;
+			await reindexUser(
+				tx,
+				user.id,
+				oldIdentity.username,
+				oldIdentity.displayName,
+				oldIdentity.bio,
+				newUsername,
+				newDisplayName,
+				newBio
+			);
+		}
+	});
 
 	return json({ success: true });
 };

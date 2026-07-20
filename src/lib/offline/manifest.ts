@@ -112,6 +112,24 @@ export function computeCachedRanges(
 	];
 }
 
+/**
+ * The highest page number the user has cached content for. The offline reader
+ * at /offline/[discussionId] renders every cached reply in a single stream
+ * (OP + all cached pages with gap dividers between non-contiguous blocks), so
+ * a visit means the user has effectively read every cached page. Stamping
+ * this value as `lastReadPage` on the read-state outbox row keeps the server's
+ * `discussion_reads.lastReadPage` aligned with the page the user actually saw.
+ * Defaults to 1 when there are no cached ranges (no manifest yet) so a fresh
+ * row still records a valid page number.
+ */
+export function highestCachedPage(ranges: CachedRange[]): number {
+	let max = 0;
+	for (const r of ranges) {
+		if (Number.isFinite(r.end) && r.end > max) max = r.end;
+	}
+	return Math.max(1, max);
+}
+
 /** True iff every page [1,totalPages] is covered by the cached ranges. */
 export function isComplete(ranges: CachedRange[], totalPages: number): boolean {
 	if (totalPages <= 0) return true;

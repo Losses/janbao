@@ -17,11 +17,7 @@ export const POST: RequestHandler = async (event) => {
 		const body = (await event.request.json()) as AuthAdminGenerateResetBody;
 		const { targetUserId } = body;
 
-		if (
-			typeof targetUserId !== 'number' ||
-			!Number.isFinite(targetUserId) ||
-			Number.isNaN(targetUserId)
-		) {
+		if (typeof targetUserId !== 'number' || !Number.isFinite(targetUserId)) {
 			return jsonError(t, 'common.badRequest', 400);
 		}
 

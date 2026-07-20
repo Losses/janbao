@@ -26,6 +26,7 @@ import {
 import { eq, and, isNull, ne, inArray } from 'drizzle-orm';
 import type { D1Db } from './index';
 import { extractMentions } from '$lib/utils/mentions';
+import { isRealUserId } from '$lib/utils/user';
 
 export type ReplyNotifCategory = 'mention' | 'owner' | 'participant' | 'bookmarker';
 
@@ -70,7 +71,14 @@ export async function dispatchReplyNotifications(
 
 	const ownerId = discussionRecords[0].authorId;
 
-	// 2. Resolve mentioned user IDs from the reply content
+	// 2. Resolve mentioned user IDs from the reply content.
+	// Sentinel accounts (System -1, Ghost -2) are dropped via isRealUserId: they
+	// never receive notifications even when an author literally types @system,
+	// because they are not real participants and a notification row for them is
+	// semantically meaningless. Stealth users DO still receive @mention
+	// notifications: stealth is a presence-surfacing opt-out (Active Users Wall,
+	// last-active), not a social-interaction opt-out, and a literal @username is
+	// the author's explicit intent to direct attention to that account.
 	const mentionUsernames = extractMentions(ctx.contentJson);
 	const mentionIds: number[] = [];
 	if (mentionUsernames.length > 0) {
@@ -79,7 +87,7 @@ export async function dispatchReplyNotifications(
 			.from(users)
 			.where(inArray(users.username, mentionUsernames));
 		for (const m of mentionedUsers) {
-			if (m.id !== ctx.authorId) {
+			if (isRealUserId(m.id) && m.id !== ctx.authorId) {
 				mentionIds.push(m.id);
 			}
 		}

@@ -1,14 +1,18 @@
 import { json } from '@sveltejs/kit';
 import { jsonError } from '$lib/server/errors';
 import { users } from '$lib/server/db/schema';
-import { eq, and, gt, not } from 'drizzle-orm';
-import { SYSTEM_USER_ID } from '$lib/server/constants';
+import { eq, and, gt, ne } from 'drizzle-orm';
+import { SYSTEM_USER_ID, GHOST_USER_ID } from '$lib/server/constants';
 import { buildAvatarUrl } from '$lib/utils/image';
 import type { RequestHandler } from './$types';
 import type { OnlineUser } from '$lib/types/api';
 
 // Active Users Wall endpoint
-// Returns users active in the last 10 minutes, excluding stealth mode users and the system user.
+// Returns users active in the last 10 minutes. Excludes stealth-mode users
+// (presence opt-out) and both sentinel accounts (System -1, Ghost -2); the
+// isStealth clause alone is not a sufficient sentinel guard because the
+// sentinels themselves are seeded with isStealth=true, so a future flag flip
+// would surface them on the wall unless they are explicitly excluded by id.
 export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.user) {
 		return jsonError(locals.t, 'common.unauthorized', 401);
@@ -32,7 +36,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 			and(
 				eq(users.isStealth, false),
 				gt(users.lastActiveTime, tenMinutesAgo),
-				not(eq(users.id, SYSTEM_USER_ID))
+				ne(users.id, SYSTEM_USER_ID),
+				ne(users.id, GHOST_USER_ID)
 			)
 		)
 		.limit(50);

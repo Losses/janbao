@@ -350,7 +350,16 @@ export const activities = sqliteTable(
 		// the body. Exactly one isJoined row per calendar day (FORUM_TIMEZONE);
 		// new members append into it at write time, so feeds/pagination stay simple.
 		isJoined: integer('is_joined', { mode: 'boolean' }).notNull().default(false),
-		deletedAt: integer('deleted_at', { mode: 'timestamp' })
+		deletedAt: integer('deleted_at', { mode: 'timestamp' }),
+		// The calendar-day bucket (YYYY-MM-DD in FORUM_TIMEZONE) for isJoined
+		// rows; NULL otherwise. Backs the UNIQUE(is_joined, joined_day) index
+		// that lets the lazy "create today's rollup" insert use ON CONFLICT DO
+		// UPDATE: two concurrent signups on the same day both compute the same
+		// joined_day, the index serializes them, and the second one folds onto
+		// the first writer's row, guaranteeing exactly one activity row per
+		// day bucket. SQLite UNIQUE indexes permit multiple NULLs, so
+		// non-joined rows are unaffected.
+		joinedDay: text('joined_day')
 	},
 	(table) => ({
 		authorIdx: index('activities_author_idx').on(table.authorId),
@@ -358,6 +367,10 @@ export const activities = sqliteTable(
 		recipientIdx: index('activities_recipient_idx').on(table.recipientId),
 		createdIdx: index('activities_created_idx').on(table.createdAt),
 		joinedIdx: index('activities_joined_idx').on(table.isJoined, table.createdAt),
+		joinedDayUniqueIdx: uniqueIndex('activities_joined_day_unique').on(
+			table.isJoined,
+			table.joinedDay
+		),
 		parentCreatedIdx: index('activities_parent_created_idx').on(
 			table.parentActivityId,
 			table.createdAt

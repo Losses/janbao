@@ -16,6 +16,7 @@ import { detectImageFormat, mimeForFormat, type ImageFormat } from '$lib/server/
 import { buildAvatarUrl, extFromMime } from '$lib/utils/image';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
+import { commitUploadedFile } from '$lib/server/utils/upload-commit';
 
 const MAX_AVATAR = 1 * 1024 * 1024;
 const MAX_ATTACHMENT = 5 * 1024 * 1024;
@@ -27,10 +28,17 @@ let tmpEnsured = false;
  * Streaming image upload (raw request body, not multipart). The body is piped
  * through a TransformStream that counts bytes (aborts on size limit), sniffs the
  * real type from the first chunk (the client Content-Type is not trusted), and
- * hashes incrementally  - all while forwarding bytes straight to pCloud with no
+ * hashes incrementally - all while forwarding bytes straight to pCloud with no
  * full buffering. The file lands in /Janbao/tmp/<uuid> first, then MOVEs to its
  * final path once the sha/type are known (so a rejected upload never overwrites
  * an existing file). Avatars → /avatars/<userId>; attachments → /attachments/<sha>.
+ *
+ * The publish (DB write) and the MOVE are coordinated via commitUploadedFile
+ * (DB-first, MOVE-second, with compensating rollback of the row on MOVE
+ * failure). DB-first avoids the failure mode where a MOVE succeeds and the DB
+ * write then throws, leaving storage and the DB out of sync; the compensation
+ * always undoes our own DB write, never a content-addressed file that may be
+ * referenced by a pre-existing row for the same sha.
  */
 export const POST: RequestHandler = async (event) => {
 	const user = event.locals.user;
@@ -117,26 +125,71 @@ export const POST: RequestHandler = async (event) => {
 			// here and returned ready for the client to render (the client never
 			// constructs avatar URLs itself). The URL extension is derived from the
 			// freshly-detected MIME, so the type info is not coupled into the id.
-			await pcloudMove(cfg, `/tmp/${tmpName}`, `/avatars/${user.id}`);
-			await db
-				.update(users)
-				.set({ avatarFileId: sha, avatarContentType: mime })
-				.where(eq(users.id, user.id));
+			// Capture the prior avatar columns so the MOVE-failure rollback can
+			// restore them; the prior file at /avatars/<userId> is untouched by a
+			// failed MOVE, so restoring the columns also restores DB/file
+			// consistency.
+			const [prev] = await db
+				.select({
+					avatarFileId: users.avatarFileId,
+					avatarContentType: users.avatarContentType
+				})
+				.from(users)
+				.where(eq(users.id, user.id))
+				.limit(1);
+			await commitUploadedFile({
+				dbWrite: async () => {
+					await db
+						.update(users)
+						.set({ avatarFileId: sha, avatarContentType: mime })
+						.where(eq(users.id, user.id));
+				},
+				move: () => pcloudMove(cfg, `/tmp/${tmpName}`, `/avatars/${user.id}`),
+				rollbackDbWrite: async () => {
+					await db
+						.update(users)
+						.set({
+							avatarFileId: prev?.avatarFileId ?? null,
+							avatarContentType: prev?.avatarContentType ?? null
+						})
+						.where(eq(users.id, user.id));
+				}
+			});
 			const avatarUrl = buildAvatarUrl(user.id, sha, mime);
 			return json({ fileId: sha, url: `/avatar/${user.id}/${sha}`, avatarUrl });
 		}
 		// Attachment URLs carry a real extension (baked into post content here) so
 		// CDN edge caches treat them as static assets without a cache-everything
 		// rule. The attachment route strips this cosmetic suffix to recover the sha.
+		// Track whether THIS request actually inserted the row (vs an existing row
+		// for the same sha from a prior or concurrent upload of identical bytes);
+		// the rollback only deletes what we added, never a row another upload owns.
+		let insertedSha: string | null = null;
+		await commitUploadedFile({
+			dbWrite: async () => {
+				const inserted = await db
+					.insert(attachments)
+					.values({ fileId: sha, contentType: mime, uploaderId: user.id })
+					.onConflictDoNothing()
+					.returning({ fileId: attachments.fileId });
+				if (inserted.length > 0) insertedSha = sha;
+			},
+			move: () => pcloudMove(cfg, `/tmp/${tmpName}`, `/attachments/${sha}`),
+			rollbackDbWrite: async () => {
+				if (insertedSha !== null) {
+					await db.delete(attachments).where(eq(attachments.fileId, insertedSha));
+				}
+			}
+		});
 		const ext = extFromMime(mime) ?? 'webp';
-		await pcloudMove(cfg, `/tmp/${tmpName}`, `/attachments/${sha}`);
-		await db
-			.insert(attachments)
-			.values({ fileId: sha, contentType: mime, uploaderId: user.id })
-			.onConflictDoNothing();
 		return json({ fileId: sha, url: `/attachment/${sha}.${ext}` });
 	} catch (err) {
 		console.error('[Upload API Error - move/db]:', err);
+		// commitUploadedFile has already undone the DB write on a MOVE failure, so
+		// no destination cleanup is needed here. The only leftover is the tmp file
+		// (present whenever dbWrite threw before the MOVE consumed it); delete it
+		// defensively. After a successful MOVE it is already gone and this is a
+		// no-op.
 		await pcloudDelete(cfg, `/tmp/${tmpName}`).catch(() => {});
 		return jsonError(t, 'upload.uploadFailed', 502);
 	}

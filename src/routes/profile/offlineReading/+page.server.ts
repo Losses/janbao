@@ -1,5 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
+import { buildSignInRedirectUrl } from '$lib/utils/redirect';
 
 // DV07 C03 - Offline Reading settings. Decision #5: auth-only; guests cannot
 // enter. The prefs themselves live client-side (decision #1: per-device
@@ -10,7 +11,7 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ locals }) => {
 	const user = locals.user;
 	if (!user) {
-		redirect(302, '/entry/signin?redirectTo=/profile/offlineReading');
+		redirect(302, buildSignInRedirectUrl('/profile/offlineReading'));
 	}
 
 	return {};

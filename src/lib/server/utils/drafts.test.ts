@@ -48,3 +48,20 @@ test('normalizeDraftContextId: rejects other non-number types', () => {
 	expect(normalizeDraftContextId({})).toBe(0);
 	expect(normalizeDraftContextId([1])).toBe(0);
 });
+
+// Drift guard for DELETE /api/drafts, which receives contextId as a query
+// string and routes it through `Number(...)` before this helper. Pins the
+// full query-string-endpoint coercion pattern (numeric string -> the integer;
+// empty / non-numeric / null / non-finite -> 0) so a refactor cannot silently
+// diverge from the save/clear boundary.
+test('normalizeDraftContextId: handles the URLSearchParams-then-Number pattern used by DELETE /api/drafts', () => {
+	const parse = (raw: string | null): number => normalizeDraftContextId(Number(raw));
+	expect(parse('123')).toBe(123);
+	expect(parse('0')).toBe(0);
+	expect(parse('')).toBe(0);
+	expect(parse('new')).toBe(0);
+	expect(parse('foo')).toBe(0);
+	expect(parse(null)).toBe(0);
+	expect(parse('Infinity')).toBe(0);
+	expect(parse('-Infinity')).toBe(0);
+});

@@ -13,11 +13,12 @@ import { resolvePermissions, resolveGroupSlug } from '$lib/server/constants';
 import type { DbTransaction } from '$lib/server/db';
 import { isLexicalEmpty, MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 import { reindexDiscussionTitle, reindexReply } from '$lib/server/search/fts';
+import { buildSignInRedirectUrl } from '$lib/utils/redirect';
 
 export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user;
 	if (!user) {
-		redirect(302, `/entry/signin?redirectTo=/post/editDiscussion/${event.params.discussionId}`);
+		redirect(302, buildSignInRedirectUrl(`/post/editDiscussion/${event.params.discussionId}`));
 	}
 
 	const db = event.locals.db;

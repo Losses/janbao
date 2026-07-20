@@ -39,8 +39,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!slug || !title || !description)
 		return jsonError(locals.t, 'permissions.fieldsRequired', 400);
 	if (!isValidAdminSlug(slug)) return jsonError(locals.t, 'permissions.invalidSlug', 400);
-	if (await categoryExists(locals.db, slug))
-		return jsonError(locals.t, 'permissions.categoryExists', 409);
 
 	const category: AdminCategoryItem = {
 		slug,
@@ -52,7 +50,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		disabledAt: null
 	};
 
-	await createCategory(locals.db, category);
+	// Race-safe create: the slug PK is the authority. A concurrent duplicate
+	// folds onto the existing row and surfaces a clean 409 here.
+	const created = await createCategory(locals.db, category);
+	if (!created) return jsonError(locals.t, 'permissions.categoryExists', 409);
 	return json({ success: true }, { status: 201 });
 };
 

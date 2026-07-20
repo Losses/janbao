@@ -3,7 +3,9 @@
 	import AlertMessage from '$lib/components/AlertMessage.svelte';
 	import FormField from '$lib/components/atoms/FormField.svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { formatTitle } from '$lib/utils/title';
+	import { resolveInternalRedirect } from '$lib/utils/redirect';
 	import type { PageData } from './$types';
 	import type { ApiResponse } from '$lib/types/api';
 
@@ -39,7 +41,11 @@
 
 			const result = (await res.json()) as ApiResponse;
 			if (res.ok && result.success) {
-				await goto('/', { invalidateAll: true });
+				const destination = resolveInternalRedirect(
+					page.url.searchParams.get('redirectTo'),
+					page.url.origin
+				);
+				await goto(destination, { invalidateAll: true });
 			} else {
 				errorMessage = result.error || t.auth.invalidCredentials;
 			}

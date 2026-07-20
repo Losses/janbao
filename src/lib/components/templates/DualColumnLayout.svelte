@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { getDrawerStore } from '$lib/stores/drawer.svelte';
 	import { captureSwipe } from '$lib/actions/swipe';
+	import { buildSignInRedirectUrl } from '$lib/utils/redirect';
 	import type { UserInfoSummary } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 	import UserInfoBlock from '$lib/components/molecules/UserInfoBlock.svelte';
@@ -188,7 +189,10 @@
 						<div class="space-y-2">
 							<h3 class="text-sm font-semibold text-base-content/70">{t.home.welcomeTo}</h3>
 							<div class="flex gap-2">
-								<a href="/entry/signin" class="btn btn-sm btn-primary flex-1">{t.nav.signin}</a>
+								<a
+									href={buildSignInRedirectUrl(page.url.pathname)}
+									class="btn btn-sm btn-primary flex-1">{t.nav.signin}</a
+								>
 								<a href="/entry/register" class="btn btn-sm btn-outline flex-1">{t.nav.register}</a>
 							</div>
 						</div>
@@ -270,7 +274,10 @@
 				<div class="space-y-2">
 					<h3 class="text-sm font-semibold text-base-content/70">{t.home.welcomeTo}</h3>
 					<div class="flex gap-2">
-						<a href="/entry/signin" class="btn btn-sm btn-primary flex-1">{t.nav.signin}</a>
+						<a
+							href={buildSignInRedirectUrl(page.url.pathname)}
+							class="btn btn-sm btn-primary flex-1">{t.nav.signin}</a
+						>
 						<a href="/entry/register" class="btn btn-sm btn-outline flex-1">{t.nav.register}</a>
 					</div>
 				</div>

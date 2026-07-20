@@ -4,7 +4,19 @@ import type { Client } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import * as schema from '../db/schema';
 import type { D1Db } from '../db';
-import { indexReply, unindexReply, reindexReply } from './fts';
+import type { VoidHandler } from '$lib/types/handlers';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+	indexReply,
+	unindexReply,
+	reindexReply,
+	indexUser,
+	reindexUser,
+	indexDiscussionTitle,
+	unindexDiscussion
+} from './fts';
 
 // Drizzle's libsql driver is structurally compatible with the D1 driver for the
 // `.run(sql)` API this module uses; bridge the types the same way db/index.ts does.
@@ -84,4 +96,126 @@ test('distinct rowids are independent rows', async () => {
 	expect(await matchCount(client, '第一条')).toBe(1);
 	expect(await matchCount(client, '第二条')).toBe(1);
 	expect(await matchCount(client, '条回复')).toBe(2);
+});
+
+// ---------------------------------------------------------------------------
+// Transaction atomicity contract.
+//
+// The fix in src/routes/api/profile/edit/+server.ts and the deleteDiscussion
+// action relies on the FTS helpers participating in the caller's transaction:
+// if the tx rolls back, the FTS write must roll back too. A regression that
+// moves a reindex/unindex outside the tx would let the FTS change commit
+// independently of the source row UPDATE, leaving a stale or ghost index.
+// These tests pin the contract by mutating FTS inside a thrown tx and
+// asserting nothing persisted.
+// ---------------------------------------------------------------------------
+
+interface MultiTableSetup {
+	db: D1Db;
+	client: Client;
+	cleanup: VoidHandler;
+}
+
+// db.transaction() opens a pooled connection, which under libsql's `:memory:`
+// URL is a *separate* private in-memory database (so tables created on the
+// outer client are invisible inside the tx). A temp file gives every test a
+// real on-disk SQLite database that both the outer client and the tx see
+// consistently; the per-test dir is removed in cleanup.
+let multiTableSeq = 0;
+async function setupMultiTable(): Promise<MultiTableSetup> {
+	multiTableSeq += 1;
+	const dir = mkdtempSync(join(tmpdir(), `fts-tx-${process.pid}-${multiTableSeq}-`));
+	const cleanup = () => {
+		rmSync(dir, { recursive: true, force: true });
+	};
+	const client = createClient({ url: `file:${join(dir, 'test.db')}` });
+	await client.execute(
+		`CREATE VIRTUAL TABLE replies_fts USING fts5(body, content='', tokenize='trigram')`
+	);
+	await client.execute(
+		`CREATE VIRTUAL TABLE users_fts USING fts5(username, displayName, bio, content='', tokenize='trigram')`
+	);
+	await client.execute(
+		`CREATE VIRTUAL TABLE discussions_fts USING fts5(title, content='', tokenize='trigram')`
+	);
+	const db = castDb<D1Db>(drizzle(client, { schema }));
+	return { db, client, cleanup };
+}
+
+async function usersFtsMatchCount(client: Client, term: string): Promise<number> {
+	const res = await client.execute({
+		sql: 'SELECT count(*) AS c FROM users_fts WHERE users_fts MATCH ?',
+		args: [term]
+	});
+	const row = res.rows[0];
+	return row ? Number(row.c) : 0;
+}
+
+async function discussionsFtsMatchCount(client: Client, term: string): Promise<number> {
+	const res = await client.execute({
+		sql: 'SELECT count(*) AS c FROM discussions_fts WHERE discussions_fts MATCH ?',
+		args: [term]
+	});
+	const row = res.rows[0];
+	return row ? Number(row.c) : 0;
+}
+
+test('reindexUser inside a rolled-back transaction leaves the prior FTS row intact', async () => {
+	const { db, client, cleanup } = await setupMultiTable();
+	try {
+		await indexUser(db, 1, 'alice', 'Alice', '');
+		expect(await usersFtsMatchCount(client, 'alice')).toBe(1);
+
+		await expect(
+			db.transaction(async (tx) => {
+				await reindexUser(tx, 1, 'alice', 'Alice', '', 'bob', 'Bob', '');
+				throw new Error('simulate post-UPDATE failure');
+			})
+		).rejects.toThrow('simulate post-UPDATE failure');
+
+		// Atomicity: the rolled-back tx must leave the prior FTS row in place -
+		// 'alice' still searchable, 'bob' never committed.
+		expect(await usersFtsMatchCount(client, 'alice')).toBe(1);
+		expect(await usersFtsMatchCount(client, 'bob')).toBe(0);
+	} finally {
+		cleanup();
+	}
+});
+
+test('reindexUser inside a committed transaction swaps the indexed terms', async () => {
+	const { db, client, cleanup } = await setupMultiTable();
+	try {
+		await indexUser(db, 1, 'alice', 'Alice', '');
+
+		await db.transaction(async (tx) => {
+			await reindexUser(tx, 1, 'alice', 'Alice', '', 'bob', 'Bob', '');
+		});
+
+		expect(await usersFtsMatchCount(client, 'alice')).toBe(0);
+		expect(await usersFtsMatchCount(client, 'bob')).toBe(1);
+	} finally {
+		cleanup();
+	}
+});
+
+test('unindexDiscussion inside a rolled-back transaction leaves the title searchable', async () => {
+	const { db, client, cleanup } = await setupMultiTable();
+	try {
+		await indexDiscussionTitle(db, 7, 'hello world');
+		expect(await discussionsFtsMatchCount(client, 'hello')).toBe(1);
+
+		await expect(
+			db.transaction(async (tx) => {
+				await unindexDiscussion(tx, 7, 'hello world');
+				throw new Error('simulate post-UPDATE failure');
+			})
+		).rejects.toThrow('simulate post-UPDATE failure');
+
+		// Atomicity: the unindex rolled back, so the title is still searchable.
+		// This is the invariant deleteDiscussion relies on for "all-or-nothing"
+		// between the soft-delete UPDATE and the FTS cleanup.
+		expect(await discussionsFtsMatchCount(client, 'hello')).toBe(1);
+	} finally {
+		cleanup();
+	}
 });

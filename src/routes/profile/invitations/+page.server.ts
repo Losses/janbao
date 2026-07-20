@@ -3,11 +3,12 @@ import type { PageServerLoad } from './$types';
 import { getInvitations, getMonthlyRequestCount } from '$lib/server/db/dao/invitations';
 import { getMonthlyInvitationLimit, getForumTimezone } from '$lib/server/constants';
 import { getTzMonthBoundaries } from '$lib/server/db/welcome';
+import { buildSignInRedirectUrl } from '$lib/utils/redirect';
 
 export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user;
 	if (!user) {
-		redirect(302, '/entry/signin');
+		redirect(302, buildSignInRedirectUrl(event.url.pathname));
 	}
 
 	const isAdmin = user.groupSlug === 'admin';

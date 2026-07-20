@@ -1,4 +1,4 @@
-import { sql, eq, and, isNull, inArray } from 'drizzle-orm';
+import { sql, eq, and, isNull, inArray, ne } from 'drizzle-orm';
 import {
 	discussions,
 	replies,
@@ -11,6 +11,8 @@ import {
 } from '$lib/server/db/schema';
 import type { D1Db } from '$lib/server/db';
 import {
+	SYSTEM_USER_ID,
+	GHOST_USER_ID,
 	getReadableCategorySlugs,
 	getDiscussionsLimit,
 	getActivitiesLimit,
@@ -738,7 +740,14 @@ export async function searchUsers(
 			signupTime: users.signupTime
 		})
 		.from(users)
-		.where(and(inArray(users.id, [...idToRank.keys()]), eq(users.isStealth, false)));
+		.where(
+			and(
+				inArray(users.id, [...idToRank.keys()]),
+				eq(users.isStealth, false),
+				ne(users.id, SYSTEM_USER_ID),
+				ne(users.id, GHOST_USER_ID)
+			)
+		);
 
 	const ranked = (id: number) => idToRank.get(id) ?? 0;
 	const sorted = [...rows].sort((a, b) => {

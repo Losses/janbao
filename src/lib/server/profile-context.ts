@@ -10,6 +10,7 @@ import {
 	type ProfileAdminSidebarData
 } from '$lib/server/db/dao/admin-permissions';
 import { getProfileHeaderPayload } from '$lib/server/db/dao/profile';
+import { buildSignInRedirectUrl } from '$lib/utils/redirect';
 import type { ProfileHeaderUser, UserInfoSummary } from '$lib/types/api';
 
 interface ProfileSubPageRouteParams {
@@ -51,7 +52,7 @@ export async function loadProfileSubPageContext(
 	// Redirect to sign-in (preserving the destination) so a successful login
 	// lands them back on the profile they tried to view.
 	if (!input.user && !getAllowGuestProfileView(input.platformEnv)) {
-		redirect(302, `/entry/signin?redirectTo=${encodeURIComponent(input.url.pathname)}`);
+		redirect(302, buildSignInRedirectUrl(input.url.pathname));
 	}
 
 	const userId = Number(input.params.userId);

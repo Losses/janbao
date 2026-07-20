@@ -14,6 +14,7 @@ import { getProfileHeaderPayload } from '$lib/server/db/dao/profile';
 import { authorPreviewColumns } from '$lib/server/db/dao/user-preview';
 import { listManageableUserGroups } from '$lib/server/db/dao/admin-permissions';
 import { isRealUserId } from '$lib/utils/user';
+import { buildSignInRedirectUrl } from '$lib/utils/redirect';
 import type { JoinedMember, RecipientInfo } from '$lib/types/api';
 
 export const load: PageServerLoad = async (event) => {
@@ -28,7 +29,7 @@ export const load: PageServerLoad = async (event) => {
 	// Redirect to sign-in (preserving the destination) so a successful login
 	// lands them back on the profile they tried to view.
 	if (!currentUser && !getAllowGuestProfileView(event.platform?.env)) {
-		redirect(302, `/entry/signin?redirectTo=${encodeURIComponent(event.url.pathname)}`);
+		redirect(302, buildSignInRedirectUrl(event.url.pathname));
 	}
 
 	// 1. Fetch target user header data (shared across profile pages)

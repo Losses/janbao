@@ -2,11 +2,12 @@ import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getConversations } from '$lib/server/db/dao/messages';
 import { getDiscussionsLimit } from '$lib/server/constants';
+import { buildSignInRedirectUrl } from '$lib/utils/redirect';
 
 export const load: PageServerLoad = async (event) => {
 	const user = event.locals.user;
 	if (!user) {
-		redirect(302, '/entry/signin');
+		redirect(302, buildSignInRedirectUrl(event.url.pathname));
 	}
 
 	const limit = getDiscussionsLimit(event.platform?.env);
