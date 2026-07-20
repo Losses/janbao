@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import { jsonError } from '$lib/server/errors';
 import { drafts } from '$lib/server/db/schema';
 import { DRAFT_CONTEXT_TYPES } from '$lib/server/constants';
+import { normalizeDraftContextId } from '$lib/server/utils/drafts';
 import { eq, and } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import type { DraftClearBody } from '$lib/types/api';
@@ -25,7 +26,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	const contextType = body.contextType;
-	const contextId = body.contextId ?? 0;
+	// Coerce at the boundary via the shared helper so a non-numeric contextId
+	// (e.g. a client sending contextId: 'new') cannot diverge from the
+	// integer-keyed save path; matches /api/drafts/save exactly. See
+	// $lib/server/utils/drafts.ts for the rationale.
+	const contextId = normalizeDraftContextId(body.contextId);
 
 	if (!contextType) {
 		return jsonError(t, 'draft.contextFieldsRequired', 400);

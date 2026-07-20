@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import { jsonError } from '$lib/server/errors';
 import { drafts } from '$lib/server/db/schema';
 import { DRAFT_CONTEXT_TYPES } from '$lib/server/constants';
+import { normalizeDraftContextId } from '$lib/server/utils/drafts';
 import { MAX_CONTENT_SIZE } from '$lib/utils/lexical';
 import type { RequestHandler } from './$types';
 
@@ -45,15 +46,11 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 
 	const db = locals.db;
 	const authorId = locals.user.id;
-	// Defense-in-depth: the drafts.context_id column has INTEGER affinity, so a
-	// non-numeric value (e.g. a client sending contextId: 'new') is stored as
-	// TEXT and silently bypasses every integer-keyed lookup on the load and
-	// clear paths (which query contextId = 0 for the "new" composer draft),
-	// leaking one orphan row per call. Coerce to a finite integer at the
-	// boundary so the unique index (authorId, contextType, contextId) converges
-	// manual and auto saves onto a single row regardless of caller.
-	const normalizedContextId =
-		typeof contextId === 'number' && Number.isFinite(contextId) ? contextId : 0;
+	// Coerce at the boundary via the shared helper so a non-numeric contextId
+	// (e.g. a client sending contextId: 'new') cannot be stored as TEXT in the
+	// INTEGER-affinity drafts.context_id column and bypass the integer-keyed
+	// load/clear queries. See $lib/server/utils/drafts.ts for the rationale.
+	const normalizedContextId = normalizeDraftContextId(contextId);
 	const now = new Date();
 
 	// Atomic upsert - on conflict over (authorId, contextType, contextId), update content

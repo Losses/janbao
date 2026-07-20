@@ -203,9 +203,21 @@ export async function getConversations(
 			// Generous cap so the card's CSS line-clamp-3 is the real visual limiter
 			// (≈3 lines on desktop); short messages render in full.
 			lastMessagePreview: latest ? extractPlainText(latest.contentJson, 300) : null,
+			// NB: despite the `lastAuthor*` name, these fields describe the
+			// conversation PEER (the first-joined non-self participant, resolved
+			// as `displayUser` above) used to render the card's avatar/name, NOT
+			// the author of the most recent message. `lastMessageAt` and
+			// `lastMessagePreview` ARE last-message-derived, which makes this
+			// naming misleading; kept for now because the field names are part
+			// of the public `ConversationListItem` API type consumed by
+			// MessagesPanel. Read these as "the peer on the card".
 			lastAuthorId: displayUser?.userId ?? null,
 			lastAuthorUsername: displayUser?.username ?? null,
 			lastAuthorDisplayName: displayUser?.displayName ?? null,
+			// buildAvatarUrl requires a number; passing 0 when displayUser is
+			// undefined is a harmless sentinel because avatarFileId is also
+			// null in that case, so buildAvatarUrl short-circuits and returns
+			// null (the caller renders a letter-avatar fallback).
 			lastAuthorAvatarUrl: buildAvatarUrl(
 				displayUser?.userId ?? 0,
 				displayUser?.avatarFileId ?? null,

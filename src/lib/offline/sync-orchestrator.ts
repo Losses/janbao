@@ -264,12 +264,16 @@ async function doSync(): Promise<SyncResult> {
 	// C04), so no lost updates. The replies-store read inside the helper drops
 	// ranges whose backing replies were since evicted. Curated ids are only
 	// included when refreshNow is true (otherwise their manifest is left as the
-	// last refresh left it; front/bookmark always update).
+	// last refresh left it; front/bookmark always update). The depth passed is
+	// `requestDepth` (what the server actually backfilled this run), NOT `depth`
+	// (the user's preference): when refreshNow is false the server backfills
+	// only firstLast, so the manifest must claim firstLast too or the reader
+	// would render an incomplete thread with no gap indicator.
 	await mergeDepthRangesIntoManifests(
 		refreshNow ? latestCurated : {},
 		latestFront,
 		latestBookmarks,
-		depth,
+		requestDepth,
 		latestReplyPageSize
 	);
 

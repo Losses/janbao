@@ -754,7 +754,15 @@ function decodeProfileSlug(slug: string): string {
 function extractProfileUser(html: string): ProfileUserRef {
 	const m = html.match(/\/profile\/(\d+)\/([^"'/?#]+)/);
 	if (!m) return { userId: null, username: null };
-	return { userId: Number(m[1]), username: decodeProfileSlug(m[2]) || null };
+	// Vanilla reserves id 0 for the "Unknown"/deleted author; remap it (and any
+	// other non-positive id) onto GHOST_USER_ID so it never collides with the
+	// seeded bootstrap admin (id 0) or a real user. This covers every call site
+	// (discussion OP, reply author, activity author/recipient, join members,
+	// comment author) without each one having to remember to normalize.
+	return {
+		userId: normalizeVanillaUserId(Number(m[1])),
+		username: decodeProfileSlug(m[2]) || null
+	};
 }
 
 // Parse discussions-activities in user's profile.html. Captures both top-level
@@ -1512,15 +1520,21 @@ async function main() {
 					// <dd class="Invited"><a href="/profile/inviterId/…">…</a></dd>. The app
 					// resolves "invited by" via getInviter, which joins invitations on
 					// usedById → creatorId, so record one synthetic invitation per user.
-					if (profile.inviterId !== null && profile.inviterId !== userId) {
-						await ensureUser(profile.inviterId, '');
+					// parseProfileHtml (import-shared.ts) reads the inviter's raw vanilla
+					// id from the href; normalize here so a reserved id 0 (Unknown) or any
+					// non-positive inviter maps to GHOST_USER_ID instead of colliding with
+					// the seeded bootstrap admin (id 0).
+					const inviterId =
+						profile.inviterId !== null ? normalizeVanillaUserId(profile.inviterId) : null;
+					if (inviterId !== null && inviterId !== userId) {
+						await ensureUser(inviterId, '');
 						const invitedAt = profile.signupTime ?? new Date();
 						try {
 							await db
 								.insert(schema.invitations)
 								.values({
-									code: `legacy-${userId}-${profile.inviterId}`,
-									creatorId: profile.inviterId,
+									code: `legacy-${userId}-${inviterId}`,
+									creatorId: inviterId,
 									usedById: userId,
 									createdAt: invitedAt,
 									expiresAt: invitedAt
@@ -1530,7 +1544,7 @@ async function main() {
 							conflicts.push({
 								type: 'invitation_insert_error',
 								userId,
-								inviterId: profile.inviterId,
+								inviterId,
 								error: getErrorMessage(e)
 							});
 						}

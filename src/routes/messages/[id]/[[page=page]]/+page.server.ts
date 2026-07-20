@@ -8,6 +8,7 @@ import {
 	users,
 	drafts
 } from '$lib/server/db/schema';
+import type { DbTransaction } from '$lib/server/db';
 import { eq, and, isNull, count } from 'drizzle-orm';
 import { getPaginationLimit } from '$lib/server/constants';
 import { authorPreviewColumns } from '$lib/server/db/dao/user-preview';
@@ -316,18 +317,21 @@ export const actions: Actions = {
 		}
 
 		const now = new Date();
-		const inserted = await db
-			.insert(messages)
-			.values({
-				conversationId,
-				authorId: user.id,
-				contentJson,
-				createdAt: now,
-				updatedAt: now
-			})
-			.returning({ id: messages.id });
-		const messageId = inserted[0].id;
-		await indexMessage(db, messageId, contentJson);
+		const messageId = await db.transaction(async (tx: DbTransaction) => {
+			const inserted = await tx
+				.insert(messages)
+				.values({
+					conversationId,
+					authorId: user.id,
+					contentJson,
+					createdAt: now,
+					updatedAt: now
+				})
+				.returning({ id: messages.id });
+			const id = inserted[0].id;
+			await indexMessage(tx, id, contentJson);
+			return id;
+		});
 
 		// Clear the composer draft
 		await db
@@ -429,14 +433,17 @@ export const actions: Actions = {
 			return { success: false, error: t.common.forbidden };
 		}
 
-		await db
-			.update(messages)
-			.set({ contentJson, updatedAt: new Date() })
-			.where(eq(messages.id, messageId));
+		await db.transaction(async (tx: DbTransaction) => {
+			await tx
+				.update(messages)
+				.set({ contentJson, updatedAt: new Date() })
+				.where(eq(messages.id, messageId));
 
-		// messageRecords[0].contentJson is the pre-edit value; reindex swaps the old
-		// indexed text for the new (contentless FTS needs the old text to delete).
-		await reindexMessage(db, messageId, messageRecords[0].contentJson, contentJson);
+			// messageRecords[0].contentJson is the pre-edit value; reindex swaps
+			// that prior indexed text for the new (contentless FTS needs the
+			// prior value to locate the row to delete).
+			await reindexMessage(tx, messageId, messageRecords[0].contentJson, contentJson);
+		});
 
 		return { success: true };
 	}

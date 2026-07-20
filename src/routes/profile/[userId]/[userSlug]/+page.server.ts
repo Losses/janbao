@@ -6,7 +6,6 @@ import { generateSlug } from '$lib/utils/slug';
 import { buildAvatarUrl } from '$lib/utils/image';
 import {
 	BOOTSTRAP_ADMIN_ID,
-	SYSTEM_USER_ID,
 	getAllowGuestActivity,
 	getAllowGuestProfileView
 } from '$lib/server/constants';
@@ -14,6 +13,7 @@ import { resolveMentions } from '$lib/server/utils/mentions';
 import { getProfileHeaderPayload } from '$lib/server/db/dao/profile';
 import { authorPreviewColumns } from '$lib/server/db/dao/user-preview';
 import { listManageableUserGroups } from '$lib/server/db/dao/admin-permissions';
+import { isRealUserId } from '$lib/utils/user';
 import type { JoinedMember, RecipientInfo } from '$lib/types/api';
 
 export const load: PageServerLoad = async (event) => {
@@ -88,8 +88,8 @@ export const load: PageServerLoad = async (event) => {
 							or(
 								eq(activities.authorId, userId),
 								eq(activities.recipientId, userId),
-								// isJoined activities have author=SYSTEM_USER_ID; surface the ones
-								// where this profile's user is a member.
+								// isJoined activities have the System sentinel as their author;
+								// surface the ones where this profile's user is a member.
 								sql`(${activities.isJoined} = 1 AND EXISTS (SELECT 1 FROM activity_joins aj WHERE aj.activity_id = ${activities.id} AND aj.user_id = ${userId}))`
 							)
 						)
@@ -137,7 +137,7 @@ export const load: PageServerLoad = async (event) => {
 	// 5. Batch-fetch recipient display names for directed activities
 	const recipientIds = profileActivities
 		.map((a) => a.recipientId)
-		.filter((id): id is number => id !== null && id !== SYSTEM_USER_ID);
+		.filter((id): id is number => isRealUserId(id));
 
 	const recipientMap = new Map<number, RecipientInfo>();
 	if (recipientIds.length > 0) {
@@ -231,10 +231,12 @@ export const load: PageServerLoad = async (event) => {
 			authorUsername: a.authorUsername,
 			authorAvatarUrl: buildAvatarUrl(a.authorId, a.authorAvatarFileId, a.authorAvatarContentType),
 			recipientId: a.recipientId,
-			recipientDisplayName: a.recipientId
+			recipientDisplayName: isRealUserId(a.recipientId)
 				? recipientMap.get(a.recipientId)?.displayName || null
 				: null,
-			recipientUsername: a.recipientId ? recipientMap.get(a.recipientId)?.username || null : null,
+			recipientUsername: isRealUserId(a.recipientId)
+				? recipientMap.get(a.recipientId)?.username || null
+				: null,
 			contentJson: a.contentJson,
 			createdAt: a.createdAt,
 			isJoined: a.isJoined,

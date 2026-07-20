@@ -7,10 +7,11 @@
 import { activities, users, drafts, activityJoins } from '../schema';
 import { and, isNull, desc, asc, eq, sql, inArray } from 'drizzle-orm';
 import type { D1Db } from '../index';
-import { getActivitiesLimit, SYSTEM_USER_ID } from '$lib/server/constants';
+import { getActivitiesLimit } from '$lib/server/constants';
 import { resolveMentions } from '$lib/server/utils/mentions';
 import { authorPreviewColumns } from './user-preview';
 import { buildAvatarUrl } from '$lib/utils/image';
+import { isRealUserId } from '$lib/utils/user';
 import type {
 	ActivityListItem,
 	ActivityCommentItem,
@@ -95,7 +96,7 @@ export async function loadActivityPage(
 	// 3. Recipient display names for directed activities.
 	const recipientIds = activityList
 		.map((a) => a.recipientId)
-		.filter((id): id is number => id !== null && id !== SYSTEM_USER_ID);
+		.filter((id): id is number => isRealUserId(id));
 	const recipientMap = new Map<number, RecipientInfo>();
 	if (recipientIds.length > 0) {
 		const uniqueIds = [...new Set(recipientIds)];
@@ -183,10 +184,12 @@ export async function loadActivityPage(
 		authorUsername: a.authorUsername,
 		authorAvatarUrl: buildAvatarUrl(a.authorId, a.authorAvatarFileId, a.authorAvatarContentType),
 		recipientId: a.recipientId,
-		recipientDisplayName: a.recipientId
+		recipientDisplayName: isRealUserId(a.recipientId)
 			? (recipientMap.get(a.recipientId)?.displayName ?? null)
 			: null,
-		recipientUsername: a.recipientId ? (recipientMap.get(a.recipientId)?.username ?? null) : null,
+		recipientUsername: isRealUserId(a.recipientId)
+			? (recipientMap.get(a.recipientId)?.username ?? null)
+			: null,
 		contentJson: a.contentJson,
 		createdAt: a.createdAt,
 		commentCount: commentsMap.get(a.id)?.length ?? 0,

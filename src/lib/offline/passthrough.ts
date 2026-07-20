@@ -303,11 +303,7 @@ export async function writeList(items: DiscussionListItem[]): Promise<void> {
 			username: item.authorUsername,
 			avatarUrl: item.authorAvatarUrl
 		});
-		if (
-			item.lastReplyAuthorId != null &&
-			Number.isFinite(item.lastReplyAuthorId) &&
-			item.lastReplyAuthorId > 0
-		) {
+		if (isRealUserId(item.lastReplyAuthorId)) {
 			authors.push({
 				id: item.lastReplyAuthorId,
 				displayName: item.lastReplyAuthorDisplayName ?? item.lastReplyAuthorUsername ?? 'user',

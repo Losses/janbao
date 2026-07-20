@@ -229,8 +229,9 @@ header nav {
 
 /* Pipeline host content card. Wraps each panel's content so the scroll
    container (`.scroll-pane`) can be the page-bg surface with this white card
-   floating inside it on mobile (matching the homepage). Transparent + padding
-   on desktop (replaces the pane's former `p-3`); white card on mobile. */
+   floating inside it on mobile (matching the homepage). On desktop the pane
+   itself supplies no padding; the white-card surface and its padding both
+   live on `.gpl-card`. White card on mobile. */
 .gpl-card {
 	padding: 0.75rem;
 }

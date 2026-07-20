@@ -349,10 +349,15 @@
 		}
 	}
 	onMount(() => {
-		if (activeIndex === 0) runPassthrough(home.discussions);
+		if (getCurrentTabIndex(page.url.pathname) === 0) runPassthrough(home.discussions);
 	});
 	afterNavigate(() => {
-		if (activeIndex === 0) runPassthrough(home.discussions);
+		// Gate on the route directly, not the reactive `activeIndex`: the
+		// activeIndex `$effect` (synced from `page.url.pathname`) can flush
+		// AFTER afterNavigate fires, so the reactive gate would see a stale
+		// tab index and skip (or redundantly re-run) the passthrough write.
+		// `/` and `/discussions/pN` both resolve to tab 0.
+		if (getCurrentTabIndex(page.url.pathname) === 0) runPassthrough(home.discussions);
 	});
 
 	let held = false;

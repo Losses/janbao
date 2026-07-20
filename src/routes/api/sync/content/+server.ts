@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import { jsonError } from '$lib/server/errors';
 import { buildContentSync, parseCuratedCategories } from '$lib/server/sync/content';
 import { getCachedUsers } from '$lib/server/db/dao/sync';
+import { isRealUserId } from '$lib/utils/user';
 import type { CuratedCategorySet, ReplyDepth } from '$lib/server/sync/content';
 import type { RequestHandler } from './$types';
 
@@ -34,7 +35,7 @@ export const GET: RequestHandler = async ({ url, locals, platform }) => {
 		const userIds = backfillRaw
 			.split(',')
 			.map(Number)
-			.filter((n) => Number.isFinite(n) && n > 0)
+			.filter((n) => isRealUserId(n))
 			.slice(0, MAX_BACKFILL_IDS);
 		const users = await getCachedUsers(locals.db, userIds);
 		return json({ users });

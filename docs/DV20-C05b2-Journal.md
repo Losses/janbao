@@ -4758,3 +4758,47 @@ $ fab-release-snap --repeat-each=20    60 passed / 0 flaky (determinism)
 ```
 
 R94 audits this state (open-scoped prompt).
+
+## Session 98: R94 audit (open-scoped; A 1 concern, B 2 concerns); caught R93 sibling misses; process fix; all fixed
+
+R94 was the fourth open-scoped round. Both auditors swept the id-0 and
+draft-coercion classes BROADLY and found three sibling sites R93 had missed
+(R93's horizontal grep was too narrow). All fixed. Counter stays 0/5.
+
+### Findings + fixes
+
+- B1 (concern, FIXED): passthrough.ts:307-310 writeList lastReplyAuthorId > 0 ->
+  isRealUserId. R93 fixed editorFromThread (L199) and upsertUsers (L278) in the
+  same file but missed this one three lines away.
+- B2 (concern, FIXED): api/sync/content:37 backfillUserIds filter n > 0 ->
+  isRealUserId. R93's `id > 0` grep did not match the short param `n`.
+- A1 (concern, FIXED): api/drafts/clear:30 lacked the contextId coercion that
+  R93 added to /save. Extracted shared helper normalizeDraftContextId in
+  src/lib/server/utils/drafts.ts; /save and /clear both call it; 7-test preventive
+  unit test added. DELETE /api/drafts already coerced (Number() || 0).
+
+### Process fix
+
+R93 handed its fixer a narrow pre-computed site list; the fixer fixed exactly it.
+R94's auditors (prompt already required the horizontal sweep) caught the misses.
+Corrections: fixer prompt now BINDS independent broad-grep class-wide
+enumeration + complete classified report; orchestrator cross-checks the
+enumeration; audit-search-for-similar-bugs memory updated with the concrete
+failure mode. The orchestrator's own post-R94 broad sweep confirms zero
+remaining id-0 user-id filters (only non-user-id numerics like constants.ts:53).
+
+### Counter
+
+0/5 (R94 had concerns; not a PASS round).
+
+### Gate outputs (post-fix, 2026-07-19, orchestrator-run)
+
+```
+$ bun run check                       0 errors / 0 warnings (1458 files)
+$ bun run lint                        EXIT=0
+$ bun test src/lib/utils src/lib/stores src/lib/actions    400 pass / 0 fail
+$ bun test src/lib/server/utils       7 pass / 0 fail (new drafts helper test)
+$ bun run test:e2e                    210 passed / 0 flaky (exit 0, 9.1m)
+```
+
+R95 audits this state (open-scoped prompt).

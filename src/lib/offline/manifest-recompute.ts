@@ -14,14 +14,16 @@
 // So this module's model is: each writer reports the page(s) it cached
 // (sync knows its depth-policy ranges; passthrough knows the page the user
 // visited), and `mergePageRange` unions that range into the existing manifest.
-// The replies-store read is used only to drop ranges whose replies were
-// since evicted (defense-in-depth: if a range's replies are gone, the range
-// is stale and must not claim completeness).
+// The replies-store read drops the manifest only when every reply for the
+// discussion has been evicted (eviction is cascade-only: src/lib/offline/evict
+// deletes all of a discussion's replies atomically, so a per-range eviction
+// check is not needed; the whole-discussion survivor count is the right
+// discriminator).
 //
 // This still satisfies the C04 spec's "no lost updates" goal: a discussion
 // that is both curated (sync writes [1,5]) AND read-cached (passthrough
 // writes [3]) ends up with [1,5]; curated-only [1,1] + passthrough [5,5]
-// ends up with [1,1],[5,5]. The pre-C04 depth-only manifest is replaced by
+// ends up with [1,1],[5,5]. The depth-only manifest is replaced by
 // the merged union on every write.
 
 import { computeTotalPages } from './manifest';
@@ -146,9 +148,11 @@ export interface ManifestRecomputeDb {
  * Reconcile a discussion's manifest after a writer cached a page range:
  *
  *   1. Read the existing manifest row (if any) to get its prior ranges.
- *   2. Drop any prior range whose replies are no longer in the cache (the
- *      range was evicted between writes - don't claim pages we don't have).
- *   3. Union the newly-cached range into the surviving ranges.
+ *   2. Drop the manifest entirely when every reply for the discussion has
+ *      been evicted (the manifest is fully stale in that case - don't claim
+ *      pages we don't have). Eviction is cascade-only, so it is all-or-
+ *      nothing per discussion; a per-range check is not needed.
+ *   3. Otherwise union the newly-cached range into the prior ranges.
  *   4. Persist the result.
  *
  * Called from BOTH the C02 sync orchestrator (after it writes its
@@ -156,8 +160,9 @@ export interface ManifestRecomputeDb {
  * page the user visited). Idempotent: re-merging the same range is a no-op.
  *
  * The replies-store read in step 2 is the "derived from the replies store"
- * part of the C04 spec: ranges whose backing replies have been evicted are
- * dropped, so the manifest can never claim a page that isn't actually cached.
+ * part of the C04 spec: when no backing replies survive, the manifest is
+ * dropped so the reader's gap view never claims a page that isn't actually
+ * cached.
  */
 export async function recomputeManifestForDiscussion(
 	db: ManifestRecomputeDb,
