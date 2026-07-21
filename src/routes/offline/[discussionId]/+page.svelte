@@ -94,11 +94,14 @@
 	// Fallback display for replies whose author isn't cached yet (e.g. editedBy
 	// referencing a now-deleted account, or content synced before the users
 	// stream shipped). Keeps the reader from crashing on partial cache.
+	// `resolveUsername` returns the empty string for an unknown author so
+	// `DiscussionMetadata`'s `profilePath` call routes to the id-segment
+	// fallback rather than baking an English literal into the URL.
 	function resolveName(reply: OfflineReplyView): string {
 		return reply.author.displayName ?? data.t.offline.reader.unknownUser;
 	}
 	function resolveUsername(reply: OfflineReplyView): string {
-		return reply.author.username ?? 'user';
+		return reply.author.username ?? '';
 	}
 </script>
 

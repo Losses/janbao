@@ -3,7 +3,7 @@
 	import Badge from '$lib/components/atoms/Badge.svelte';
 	import BookmarkButton from '$lib/components/atoms/BookmarkButton.svelte';
 	import DateAtom from '$lib/components/atoms/Date.svelte';
-	import { generateSlug } from '$lib/utils/slug';
+	import { formatDisplayName, profilePath } from '$lib/utils/user';
 	import type { TranslationDict } from '$lib/types/translation';
 	import type { DiscussionRowItem, DiscussionReadHistory } from '$lib/types/discussion-row';
 
@@ -61,10 +61,14 @@
 		return base;
 	});
 
-	import { formatDisplayName } from '$lib/utils/user';
-
-	const authorSlug = $derived(generateSlug(discussion.authorUsername || 'user'));
-	const lastReplyAuthorSlug = $derived(generateSlug(lastReplyAuthorUsername || 'user'));
+	// Profile URLs route through `profilePath` so the slug segment is the
+	// username when it has content, otherwise the numeric id. This avoids
+	// baking an English `'user'` literal into the path for nameless accounts
+	// (deleted author, partial cache, empty-string username).
+	const authorProfileUrl = $derived(profilePath(discussion.authorId, discussion.authorUsername));
+	const lastReplyAuthorProfileUrl = $derived(
+		lastReplyAuthorId != null ? profilePath(lastReplyAuthorId, lastReplyAuthorUsername) : null
+	);
 
 	const authorDisplayName = $derived(
 		formatDisplayName(discussion.authorDisplayName, discussion.authorId, t)
@@ -88,7 +92,7 @@
 		: 'bg-base-200'}"
 >
 	<!-- Left: User Avatar -->
-	<a href="/profile/{discussion.authorId}/{authorSlug}" class="flex-shrink-0">
+	<a href={authorProfileUrl} class="flex-shrink-0">
 		<Avatar avatarUrl={discussion.authorAvatarUrl} displayName={authorDisplayName} size="md" />
 	</a>
 
@@ -123,10 +127,7 @@
 				</span>
 			{/if}
 
-			<a
-				href="/profile/{discussion.authorId}/{authorSlug}"
-				class="hover:underline font-medium text-base-content/60"
-			>
+			<a href={authorProfileUrl} class="hover:underline font-medium text-base-content/60">
 				{authorDisplayName}
 			</a>
 
@@ -135,10 +136,8 @@
 			{/if}
 			<span>{discussion.commentCount} {repliesText}</span>
 
-			{#if formattedLastReplyAuthorDisplayName}
-				<a
-					href="/profile/{lastReplyAuthorId}/{lastReplyAuthorSlug}"
-					class="hover:underline font-medium text-base-content/60"
+			{#if formattedLastReplyAuthorDisplayName && lastReplyAuthorProfileUrl}
+				<a href={lastReplyAuthorProfileUrl} class="hover:underline font-medium text-base-content/60"
 					>{formattedLastReplyAuthorDisplayName}</a
 				>
 			{/if}

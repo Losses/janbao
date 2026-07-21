@@ -14,7 +14,9 @@ import type {
  * omitted (not cached) so the views label is hidden; lastReplyAt falls back to
  * createdAt (the online DAO coalesces the same way) so reply-less threads still
  * show a timestamp instead of 1970. `unknownUser` substitutes for a missing
- * author display name.
+ * author display name. A null cached username maps to the empty string here so
+ * `DiscussionRow`'s `profilePath` call routes to the id-segment fallback rather
+ * than baking an English literal into the row.
  */
 export function mapOfflineDiscussionRow(
 	d: OfflineDiscussionView,
@@ -26,7 +28,7 @@ export function mapOfflineDiscussionRow(
 		slug: d.slug,
 		authorId: d.authorId,
 		authorDisplayName: d.author.displayName ?? unknownUser,
-		authorUsername: d.author.username ?? 'user',
+		authorUsername: d.author.username ?? '',
 		authorAvatarUrl: d.author.avatarUrl,
 		commentCount: d.commentCount,
 		isPinned: d.isPinned,

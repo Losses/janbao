@@ -223,15 +223,18 @@ export const DELETE: RequestHandler = async ({ request, locals }) => {
 		return jsonError(t, 'common.forbidden', 403);
 	}
 
-	await locals.db
-		.update(activities)
-		.set({ deletedAt: new Date() })
-		.where(eq(activities.id, activityId));
-
-	// contentJson is unchanged by the soft-delete; remove the indexed text so the
-	// activity stops matching searches. (Search queries also filter deletedAt, so a
-	// missed unindex here is harmless, but keeping the index tidy is cheaper.)
-	await unindexActivity(locals.db, activityId, activity.contentJson);
+	// Commit the soft-delete and the FTS unindex together so a crash or isolate
+	// eviction cannot leave activities_fts holding a ghost entry for a
+	// soft-deleted row. Search queries JOIN activities and filter deletedAt so a
+	// stale hit would be filtered out anyway, but keeping the index tidy is
+	// cheaper and the single tx gives all-or-nothing on crash. Mirrors
+	// deleteReply / deleteDiscussion's tx wrapper.
+	await locals.db.transaction(async (tx: DbTransaction) => {
+		await tx.update(activities).set({ deletedAt: new Date() }).where(eq(activities.id, activityId));
+		// contentJson is unchanged by the soft-delete; resupply the indexed text so
+		// the contentless FTS delete recomputes matching terms.
+		await unindexActivity(tx, activityId, activity.contentJson);
+	});
 
 	return json({ success: true });
 };

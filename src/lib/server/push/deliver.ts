@@ -29,7 +29,9 @@ import type { NewNotificationRow, ReplyNotifCategory } from '$lib/server/db/noti
 import { encryptJsonPayload } from './encryption';
 import { signVapidJwt } from './vapid';
 import { getVapidKeys, base64UrlToBytes, bytesToBase64Url } from './keys';
-import { getTranslation } from '../i18n';
+import { buildMessagePayload, buildNotificationPayload, type PushPayload } from './payload';
+
+export type { PushPayload } from './payload';
 
 /** Discrete outcome of a single push POST. */
 type PushDeliveryStatus = 'ok' | 'gone' | 'retryable' | 'failed';
@@ -40,13 +42,6 @@ export interface PushSubscriptionRecord {
 	p256dhKey: string;
 	/** base64url-encoded 16-byte auth secret. */
 	authKey: string;
-}
-
-export interface PushPayload {
-	title: string;
-	body: string;
-	url: string;
-	tag?: string;
 }
 
 /** A notification row plus its semantic push category, for fan-out. */
@@ -238,7 +233,7 @@ export async function deliverPushForMessage(
 	const recipientIds = participantRows.map((p) => p.userId).filter((id) => id !== authorId);
 	if (recipientIds.length === 0) return;
 
-	const [subsRows, prefRows, authorRows] = await Promise.all([
+	const [subsRows, prefRows, authorRows, recipientUserRows] = await Promise.all([
 		db.select().from(pushSubscriptions).where(inArray(pushSubscriptions.userId, recipientIds)),
 		db
 			.select()
@@ -248,7 +243,11 @@ export async function deliverPushForMessage(
 			.select({ username: users.username, displayName: users.displayName })
 			.from(users)
 			.where(eq(users.id, authorId))
-			.limit(1)
+			.limit(1),
+		db
+			.select({ id: users.id, languagePreference: users.languagePreference })
+			.from(users)
+			.where(inArray(users.id, recipientIds))
 	]);
 
 	const prefByUser = new Map(prefRows.map((p) => [p.userId, p]));
@@ -260,7 +259,7 @@ export async function deliverPushForMessage(
 	}
 	const author = authorRows[0];
 	const authorName = author?.displayName || author?.username || '';
-	const url = `/messages/${conversationId}`;
+	const recipientLang = new Map(recipientUserRows.map((u) => [u.id, u.languagePreference]));
 
 	for (const userId of recipientIds) {
 		const pref = prefByUser.get(userId);
@@ -270,12 +269,8 @@ export async function deliverPushForMessage(
 		const subscriptions = subsByUser.get(userId);
 		if (!subscriptions || subscriptions.length === 0) continue;
 
-		const payload: PushPayload = {
-			title: authorName ? `${authorName} sent you a message` : 'New message',
-			body: '',
-			url,
-			tag: `message-${conversationId}`
-		};
+		const lang = recipientLang.get(userId) || 'en';
+		const payload = buildMessagePayload(authorName, conversationId, lang);
 		await sendToSubscriptions(db, subscriptions, payload, platformEnv);
 	}
 }
@@ -315,89 +310,6 @@ async function sendToSubscriptions(
 		} catch (err) {
 			console.error('[push] failed to prune gone subscriptions:', err);
 		}
-	}
-}
-
-/** Compose a human-readable payload from a notification row. */
-function buildNotificationPayload(
-	type: string,
-	sourceName: string,
-	url: string,
-	lang: string,
-	discussionTitle: string | null
-): PushPayload {
-	const actor = sourceName || 'Someone';
-	const t = getTranslation(lang);
-	const notificationT = (t.notification as Record<string, string> | undefined) ?? {};
-
-	let titlePattern: string;
-	if (type === 'mention') {
-		titlePattern = discussionTitle
-			? (notificationT.mention ?? '')
-			: (notificationT.mentionFallback ?? '');
-	} else if (type === 'reply') {
-		titlePattern = discussionTitle
-			? (notificationT.reply ?? '')
-			: (notificationT.replyFallback ?? '');
-	} else if (type === 'participated_comment') {
-		titlePattern = discussionTitle
-			? (notificationT.participatedComment ?? '')
-			: (notificationT.participatedCommentFallback ?? '');
-	} else if (type === 'bookmarked_comment') {
-		titlePattern = discussionTitle
-			? (notificationT.bookmarkedComment ?? '')
-			: (notificationT.bookmarkedCommentFallback ?? '');
-	} else if (type === 'discussion_comment') {
-		titlePattern = discussionTitle
-			? (notificationT.discussionComment ?? '')
-			: (notificationT.discussionCommentFallback ?? '');
-	} else {
-		titlePattern = discussionTitle
-			? (notificationT.discussionComment ?? '')
-			: (notificationT.discussionCommentFallback ?? '');
-	}
-
-	const verb = titlePattern.replace('{title}', discussionTitle ?? '');
-	const title = `${actor} ${verb}`;
-
-	switch (type) {
-		case 'mention':
-			return {
-				title,
-				body: '',
-				url,
-				tag: `mention-${url}`
-			};
-		case 'reply':
-			return {
-				title,
-				body: '',
-				url,
-				tag: `reply-${url}`
-			};
-		case 'participated_comment':
-			return {
-				title,
-				body: '',
-				url,
-				tag: `participated-${url}`
-			};
-		case 'bookmarked_comment':
-			return {
-				title,
-				body: '',
-				url,
-				tag: `bookmarked-${url}`
-			};
-		case 'discussion_comment':
-			return {
-				title,
-				body: '',
-				url,
-				tag: `comment-${url}`
-			};
-		default:
-			return { title, body: '', url, tag: url };
 	}
 }
 

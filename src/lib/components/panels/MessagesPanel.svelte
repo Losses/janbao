@@ -10,7 +10,7 @@
 	import DateComponent from '$lib/components/atoms/Date.svelte';
 	import { goto } from '$app/navigation';
 	import { getOnlineStore } from '$lib/stores/online.svelte';
-	import { generateSlug } from '$lib/utils/slug';
+	import { profilePath } from '$lib/utils/user';
 	import type { ConversationListItem } from '$lib/types/api';
 	import type { TranslationDict } from '$lib/types/translation';
 
@@ -51,9 +51,10 @@
 		<div class="overflow-hidden bg-base-100">
 			<div class="divide-y divide-base-300">
 				{#each conversations as conv (conv.id)}
-					{@const authorSlug = generateSlug(conv.lastAuthorUsername || 'user')}
 					{@const authorHref =
-						conv.lastAuthorId !== null ? `/profile/${conv.lastAuthorId}/${authorSlug}` : null}
+						conv.lastAuthorId !== null
+							? profilePath(conv.lastAuthorId, conv.lastAuthorUsername)
+							: null}
 					<div class="flex items-start gap-4 py-4 transition-all hover:bg-base-200/20">
 						<!-- Left: last author avatar → profile -->
 						<div class="flex-shrink-0">

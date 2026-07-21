@@ -318,15 +318,32 @@
 	// `{@render children()}` - so the route's own `+page.svelte` (where the
 	// desktop `runPassthrough` call sites live) never mounts on mobile. Fire
 	// the write here so mobile browsing of the discussions list populates the
-	// offline cache. Gated on `activeIndex === 0` so we write only the list
-	// the user is viewing (the discussions tab), matching the desktop
-	// behaviour where `/activity` and `/messages/inbox` do not trigger a
-	// write. `home.discussions` resolves to the active route's PageData
-	// (`page.data.discussions ?? data.home.discussions`) when the discussions
-	// tab is settled, so paginated routes (`/discussions/pN`) write the
-	// page-N list. Mirrors the existing `onMount` + `afterNavigate` pattern;
-	// best-effort (IDB failures are swallowed), no `$effect` loop (per
-	// [[svelte-effect-fetch-loop]]).
+	// offline cache. Gated on `getCurrentTabIndex(page.url.pathname) === 0`
+	// so we write only the list the user is viewing (the discussions tab),
+	// matching the desktop behaviour where `/activity` and `/messages/inbox`
+	// do not trigger a write. Mirrors the desktop `onMount` + `afterNavigate`
+	// pattern; best-effort (IDB failures are swallowed), no `$effect` loop
+	// (per [[svelte-effect-fetch-loop]]).
+	//
+	// IMPORTANT: read `page.data.discussions ?? data.home.discussions` here,
+	// NOT the reactive `home.discussions`. The reactive `home` derivation
+	// resolves to `data.home` (the layout's eager page-1 snapshot) unless
+	// `settled` is true, and `settled = (activeIndex ===
+	// getCurrentTabIndex(page.url.pathname))`. The `activeIndex`-sync
+	// `$effect` (synced from `page.url.pathname`) flushes AFTER
+	// `afterNavigate` fires, so at the afterNavigate instant on a cross-tab
+	// paginated nav (e.g. `/activity` -> `/discussions/p2`) `activeIndex`
+	// still holds the source tab index (1), `settled = (1 === 0) = false`,
+	// and `home.discussions` captures page-1 data instead of page-N. The
+	// route's loaded PageData (`page.data.discussions`) is fresh at the
+	// afterNavigate instant, so read it directly and fall back to the layout
+	// snapshot when the active route does not provide discussions (e.g. `/`
+	// itself, where the route's load returns `{ discussions, page: 1, ... }`
+	// and `page.data.discussions` is also present, so the fallback is a
+	// safety net rather than the common path). `onMount` reads the same
+	// source for consistency; it is not defective (activeIndex is seeded
+	// from the URL at host init, so `settled` is true at mount), but using
+	// one source for both callbacks keeps the reasoning single.
 	//
 	// The writeList call is deferred to `requestIdleCallback` (with a
 	// `setTimeout(0)` fallback for runtimes without it) so the IDB write's
@@ -349,15 +366,26 @@
 		}
 	}
 	onMount(() => {
-		if (getCurrentTabIndex(page.url.pathname) === 0) runPassthrough(home.discussions);
+		// Read the route's loaded data directly, not the reactive
+		// `home.discussions` (see the long note above `runPassthrough`).
+		// `onMount` is not defective here, but using one source for both
+		// lifecycle callbacks keeps the reasoning single.
+		if (getCurrentTabIndex(page.url.pathname) === 0) {
+			runPassthrough(page.data.discussions ?? data.home.discussions);
+		}
 	});
 	afterNavigate(() => {
 		// Gate on the route directly, not the reactive `activeIndex`: the
-		// activeIndex `$effect` (synced from `page.url.pathname`) can flush
+		// activeIndex `$effect` (synced from `page.url.pathname`) flushes
 		// AFTER afterNavigate fires, so the reactive gate would see a stale
 		// tab index and skip (or redundantly re-run) the passthrough write.
-		// `/` and `/discussions/pN` both resolve to tab 0.
-		if (getCurrentTabIndex(page.url.pathname) === 0) runPassthrough(home.discussions);
+		// `/` and `/discussions/pN` both resolve to tab 0. Read the route's
+		// loaded data directly for the same reason - the reactive
+		// `home.discussions` is stale at this instant (see the long note
+		// above `runPassthrough`).
+		if (getCurrentTabIndex(page.url.pathname) === 0) {
+			runPassthrough(page.data.discussions ?? data.home.discussions);
+		}
 	});
 
 	let held = false;

@@ -15,7 +15,9 @@ import {
 	indexUser,
 	reindexUser,
 	indexDiscussionTitle,
-	unindexDiscussion
+	unindexDiscussion,
+	indexActivity,
+	unindexActivity
 } from './fts';
 
 // Drizzle's libsql driver is structurally compatible with the D1 driver for the
@@ -138,6 +140,9 @@ async function setupMultiTable(): Promise<MultiTableSetup> {
 	await client.execute(
 		`CREATE VIRTUAL TABLE discussions_fts USING fts5(title, content='', tokenize='trigram')`
 	);
+	await client.execute(
+		`CREATE VIRTUAL TABLE activities_fts USING fts5(body, content='', tokenize='trigram')`
+	);
 	const db = castDb<D1Db>(drizzle(client, { schema }));
 	return { db, client, cleanup };
 }
@@ -154,6 +159,15 @@ async function usersFtsMatchCount(client: Client, term: string): Promise<number>
 async function discussionsFtsMatchCount(client: Client, term: string): Promise<number> {
 	const res = await client.execute({
 		sql: 'SELECT count(*) AS c FROM discussions_fts WHERE discussions_fts MATCH ?',
+		args: [term]
+	});
+	const row = res.rows[0];
+	return row ? Number(row.c) : 0;
+}
+
+async function activitiesFtsMatchCount(client: Client, term: string): Promise<number> {
+	const res = await client.execute({
+		sql: 'SELECT count(*) AS c FROM activities_fts WHERE activities_fts MATCH ?',
 		args: [term]
 	});
 	const row = res.rows[0];
@@ -215,6 +229,29 @@ test('unindexDiscussion inside a rolled-back transaction leaves the title search
 		// This is the invariant deleteDiscussion relies on for "all-or-nothing"
 		// between the soft-delete UPDATE and the FTS cleanup.
 		expect(await discussionsFtsMatchCount(client, 'hello')).toBe(1);
+	} finally {
+		cleanup();
+	}
+});
+
+test('unindexActivity inside a rolled-back transaction leaves the body searchable', async () => {
+	const { db, client, cleanup } = await setupMultiTable();
+	try {
+		const content = lexical('activity soft-delete rollback');
+		await indexActivity(db, 42, content);
+		expect(await activitiesFtsMatchCount(client, 'rollback')).toBe(1);
+
+		await expect(
+			db.transaction(async (tx) => {
+				await unindexActivity(tx, 42, content);
+				throw new Error('simulate post-UPDATE failure');
+			})
+		).rejects.toThrow('simulate post-UPDATE failure');
+
+		// Atomicity: the unindex rolled back, so the body is still searchable.
+		// This is the invariant the activities DELETE handler relies on for
+		// "all-or-nothing" between the soft-delete UPDATE and the FTS cleanup.
+		expect(await activitiesFtsMatchCount(client, 'rollback')).toBe(1);
 	} finally {
 		cleanup();
 	}

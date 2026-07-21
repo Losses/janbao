@@ -48,7 +48,9 @@ const USER_ID_FIELDS = [
 	'creatorId',
 	'reviewerId',
 	'modifierId',
-	'approverId'
+	'approverId',
+	'usedById',
+	'uploaderId'
 ] as const;
 
 // Allowlist of `relative-path:line` entries permitted to use a truthy guard

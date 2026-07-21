@@ -15,8 +15,7 @@
 	import DateAtom from '$lib/components/atoms/Date.svelte';
 	import Icon from '$lib/components/atoms/Icon.svelte';
 	import { mdiCommentOutline } from '@mdi/js';
-	import { generateSlug } from '$lib/utils/slug';
-	import { formatDisplayName } from '$lib/utils/user';
+	import { formatDisplayName, profilePath } from '$lib/utils/user';
 	import type { SearchScope, SearchScopeItems } from '$lib/types/search';
 	import type {
 		DiscussionSearchItem,
@@ -94,15 +93,15 @@
 			{#if scope === 'discussions'}
 				{@const discussions = items as DiscussionSearchItem[]}
 				{#each discussions as item (item.id)}
-					{@const authorSlug = generateSlug(item.authorUsername || 'user')}
 					{@const dUrl =
 						item.matchKind === 'reply' && item.bestReplyId !== null && item.replyPage !== null
 							? `/discussion/${item.id}/${item.slug}/p${item.replyPage}#reply-${item.bestReplyId}`
 							: `/discussion/${item.id}/${item.slug}`}
 					{@const authorDisplayName = formatDisplayName(item.authorDisplayName, item.authorId, t)}
+					{@const authorProfileUrl = profilePath(item.authorId, item.authorUsername)}
 					<div class="flex items-start gap-4 py-4 pl-3 pr-2">
 						<div class="relative flex-shrink-0">
-							<a href="/profile/{item.authorId}/{authorSlug}">
+							<a href={authorProfileUrl}>
 								<Avatar
 									avatarUrl={item.authorAvatarUrl}
 									displayName={authorDisplayName}
@@ -140,15 +139,15 @@
 			{:else if scope === 'activities'}
 				{@const activities = items as ActivitySearchItem[]}
 				{#each activities as item (item.id)}
-					{@const authorSlug = generateSlug(item.authorUsername || 'user')}
 					{@const authorDisplayName = formatDisplayName(item.authorDisplayName, item.authorId, t)}
+					{@const authorProfileUrl = profilePath(item.authorId, item.authorUsername)}
 					<div class="flex items-start gap-4 py-4 pl-3 pr-2">
-						<a href="/profile/{item.authorId}/{authorSlug}" class="flex-shrink-0">
+						<a href={authorProfileUrl} class="flex-shrink-0">
 							<Avatar avatarUrl={item.authorAvatarUrl} displayName={authorDisplayName} size="md" />
 						</a>
 						<div class="min-w-0 flex-1">
 							<a
-								href="/profile/{item.authorId}/{authorSlug}"
+								href={authorProfileUrl}
 								class="block text-sm font-medium text-base-content/85 hover:underline"
 							>
 								{authorDisplayName}
@@ -189,9 +188,8 @@
 			{:else if scope === 'users'}
 				{@const users = items as UserSearchItem[]}
 				{#each users as item (item.id)}
-					{@const userSlug = generateSlug(item.username || 'user')}
 					{@const userDisplayName = formatDisplayName(item.displayName, item.id, t)}
-					{@const profileUrl = `/profile/${item.id}/${userSlug}`}
+					{@const profileUrl = profilePath(item.id, item.username)}
 					<div class="flex items-start gap-4 py-4 pl-3 pr-2">
 						<a href={profileUrl} class="flex-shrink-0">
 							<Avatar avatarUrl={item.avatarUrl} displayName={userDisplayName} size="md" />

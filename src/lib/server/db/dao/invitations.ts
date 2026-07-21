@@ -52,7 +52,7 @@ export async function getInvitations(db: D1Db, userId: number): Promise<Invitati
 			code: r.code,
 			creatorId: r.creatorId,
 			usedById: r.usedById,
-			usedByUsername: r.usedById ? (usedByMap.get(r.usedById) ?? null) : null,
+			usedByUsername: r.usedById !== null ? (usedByMap.get(r.usedById) ?? null) : null,
 			createdAt: r.createdAt,
 			expiresAt: r.expiresAt,
 			status

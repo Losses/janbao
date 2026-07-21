@@ -373,7 +373,5 @@ export function resolve(input: ResolverInput): TransitionPlan {
 
 export const __test = {
 	crossTagAxis,
-	progressDirectionFor,
-	commitPhysicsFor,
 	pairKey
 };

@@ -94,8 +94,13 @@ interface ThreadReplyInput {
 
 interface AuthorInput {
 	id: number;
-	displayName: string;
-	username: string;
+	// Display fields are nullable so a writer that cannot resolve a display
+	// value (e.g. a list page whose last-reply author has null display fields
+	// in DiscussionListItem) stores `null` instead of baking in an English
+	// fallback. CachedUser mirrors this nullability; the reader applies its
+	// localized `unknownUser` fallback at render time.
+	displayName: string | null;
+	username: string | null;
 	avatarUrl: string | null;
 }
 
@@ -194,7 +199,10 @@ function replyAuthorFromThread(r: ThreadReplyInput): AuthorInput {
 // display info (a deleted editor account yields null display fields). The
 // offline reader degrades gracefully for a missing CachedUser; we only cache
 // what we can resolve from the join. The thread page has no editor avatar URL,
-// so editor rows cache `avatarUrl: null` (letter-avatar fallback).
+// so editor rows cache `avatarUrl: null` (letter-avatar fallback). The guard
+// below ensures at least one source field is non-empty in the surviving
+// branch; the symmetric `??` chains then guarantee BOTH locals hold that
+// value, so no synthetic English fallback is needed.
 function editorFromThread(r: ThreadReplyInput): AuthorInput | null {
 	if (!isRealUserId(r.editedBy)) return null;
 	const displayName = r.editedByDisplayName ?? r.editedByUsername;
@@ -202,8 +210,8 @@ function editorFromThread(r: ThreadReplyInput): AuthorInput | null {
 	if (!displayName && !username) return null;
 	return {
 		id: r.editedBy,
-		displayName: displayName ?? 'user',
-		username: username ?? 'user',
+		displayName,
+		username,
 		avatarUrl: null
 	};
 }
@@ -306,11 +314,11 @@ export async function writeList(items: DiscussionListItem[]): Promise<void> {
 		if (isRealUserId(item.lastReplyAuthorId)) {
 			authors.push({
 				id: item.lastReplyAuthorId,
-				displayName: item.lastReplyAuthorDisplayName ?? item.lastReplyAuthorUsername ?? 'user',
-				username: item.lastReplyAuthorUsername ?? 'user',
+				displayName: item.lastReplyAuthorDisplayName ?? item.lastReplyAuthorUsername ?? null,
+				username: item.lastReplyAuthorUsername ?? null,
 				// DiscussionListItem does not ship lastReplyAuthorAvatarUrl; the
 				// cached row degrades to letter-avatar until the sync stream fills
-				// it in (same behavior as the previous avatarFileId: null path).
+				// it in.
 				avatarUrl: null
 			});
 		}

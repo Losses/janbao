@@ -73,9 +73,11 @@ interface RouteEntry {
  * `snapshotCapture` is `true` on `/discussion/*` only; every other
  * route is `false`. Cycle 2's unified `PageCacheStore` broadens this.
  *
- * `fab` is true only where the FAB is visible at rest (`/` and
- * `/messages/inbox`); every other route is `false`. The FAB-layer's
- * atom-on-Family-B/C behavior is a consumer-rendering concern.
+ * `fab` is true where the FAB is visible at rest: `/`, `/messages/inbox`,
+ * and `/discussions/p\d+` (the FAB is visible on every page of the
+ * discussions list, including within-tab pagination); every other route is
+ * `false`. The FAB-layer's atom-on-Family-B/C behavior is a
+ * consumer-rendering concern.
  */
 const ROUTE_ENTRIES: readonly RouteEntry[] = [
 	// --- Tab routes (the three pager roots + tab-internal pagination +

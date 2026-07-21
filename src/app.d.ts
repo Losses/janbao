@@ -50,6 +50,12 @@ interface UserData {
 	bio: string | null;
 	avatarUrl: string | null;
 	groupSlug: string;
+	// DB-stored display title from user_groups.title, joined in hooks.server.ts.
+	// Lets the session user back ProfileHeader's group label the same way the
+	// real /profile page does (getProfileHeaderPayload), for the preview path
+	// where ProfileMenuPanel falls back to page.data.user. Falls back to the
+	// slug only if the user_groups FK row is missing.
+	groupTitle: string;
 	signupTime: Date;
 	lastActiveTime: Date;
 	showEmail: boolean;

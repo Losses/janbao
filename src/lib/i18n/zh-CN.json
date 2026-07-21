@@ -542,6 +542,9 @@
 		"discussionComment": "在讨论 {title} 中回复了消息",
 		"discussionCommentFallback": "在你关注的讨论中回复了消息",
 		"profileComment": "在你的主页留言",
+		"message": "{name} 给你发了一条私信",
+		"messageFallback": "新私信",
+		"unknownSender": "有人",
 		"in": "于",
 		"allCaughtUp": "已全部阅读完毕"
 	},

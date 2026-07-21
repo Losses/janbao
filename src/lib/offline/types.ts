@@ -1,10 +1,4 @@
-import type {
-	SyncActivityDTO,
-	SyncCursors,
-	SyncDiscussionDTO,
-	SyncReplyDTO,
-	SyncUserDTO
-} from '$lib/types/api';
+import type { SyncActivityDTO, SyncCursors, SyncDiscussionDTO, SyncReplyDTO } from '$lib/types/api';
 
 // DV07 reason enum (Plan decision #4): every cached discussion carries the
 // union of reasons it is currently cached under. A row is deleted only when
@@ -50,8 +44,17 @@ export interface CachedReply extends SyncReplyDTO {
 }
 
 // Author display info cached so the offline reader can render avatars and
-// names without a server round-trip. Mirrors SyncUserDTO plus cachedAt.
-export interface CachedUser extends SyncUserDTO {
+// names without a server round-trip. Display fields are nullable: a row is
+// written whenever a real user id is seen (e.g. a reply's author or a list
+// page's last-reply author), and the display info for that id may not be
+// available yet (deleted account, server join returned null, partial sync).
+// Storing `null` lets the reader apply its localized `unknownUser` fallback;
+// the sync backfill fills the nulls in on the next /api/sync/content pass.
+export interface CachedUser {
+	id: number;
+	displayName: string | null;
+	username: string | null;
+	avatarUrl: string | null;
 	cachedAt: number;
 }
 
@@ -112,10 +115,14 @@ export interface OfflineAuthorInfo {
 
 // Minimal projection of a CachedUser used as the join map's value type. Kept
 // separate from OfflineAuthorInfo so the load functions can build a Map keyed
-// by user id without resorting to inline object-type literals.
+// by user id without resorting to inline object-type literals. Display fields
+// mirror CachedUser's nullability so a row that stored `null` (deleted account,
+// server join yielded null, partial sync) flows through unchanged - the reader
+// applies its localized `unknownUser` fallback rather than receiving an English
+// literal baked in at the IDB layer.
 export interface CachedAuthorProjection {
-	displayName: string;
-	username: string;
+	displayName: string | null;
+	username: string | null;
 	avatarUrl: string | null;
 }
 

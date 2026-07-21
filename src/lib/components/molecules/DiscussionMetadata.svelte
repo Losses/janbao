@@ -1,7 +1,6 @@
 <script lang="ts">
 	import Avatar from '$lib/components/atoms/Avatar.svelte';
 	import DateAtom from '$lib/components/atoms/Date.svelte';
-	import { generateSlug } from '$lib/utils/slug';
 	import { getContext } from 'svelte';
 
 	/**
@@ -29,7 +28,7 @@
 		class?: string;
 	}
 
-	import { formatDisplayName } from '$lib/utils/user';
+	import { formatDisplayName, profilePath } from '$lib/utils/user';
 
 	let {
 		userId,
@@ -52,7 +51,10 @@
 		editedByDisplayName ? formatDisplayName(editedByDisplayName, editedById, t) : null
 	);
 
-	const userSlug = $derived(generateSlug(username || displayUser || 'user'));
+	// Profile URL routes through `profilePath` so the slug segment is the
+	// username when non-empty, otherwise the numeric id. Avoids baking an
+	// English `'user'` literal into the path for nameless authors.
+	const profileUrl = $derived(profilePath(userId, username));
 
 	// "Last edited" label shown before the edit timestamp.
 	const lastEditedLabel = $derived(t.common.lastEdited);
@@ -81,15 +83,12 @@
 </script>
 
 <div class="flex items-center gap-3 {className}">
-	<a href="/profile/{userId}/{userSlug}" class="flex-shrink-0">
+	<a href={profileUrl} class="flex-shrink-0">
 		<Avatar {avatarUrl} displayName={displayUser} size="sm" />
 	</a>
 	<div class="flex flex-col min-w-0">
 		<div class="flex items-center gap-1.5 flex-wrap">
-			<a
-				href="/profile/{userId}/{userSlug}"
-				class="font-semibold text-sm hover:underline truncate text-base-content"
-			>
+			<a href={profileUrl} class="font-semibold text-sm hover:underline truncate text-base-content">
 				{displayUser}
 			</a>
 		</div>

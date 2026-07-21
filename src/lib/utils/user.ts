@@ -1,3 +1,4 @@
+import { generateSlug } from '$lib/utils/slug';
 import type { TranslationDict } from '$lib/types/translation';
 
 /**
@@ -41,4 +42,32 @@ export function formatDisplayName(
 		return t.offline.reader.unknownUser;
 	}
 	return displayName || t.offline.reader.unknownUser;
+}
+
+/**
+ * Build a profile URL `/profile/{userId}/{slug}`. The slug is derived from
+ * `username` when it has visible content; otherwise the slug segment is the
+ * numeric id rendered as a string. The id-segment fallback covers nameless
+ * accounts (deleted user, partial cache, server join that yielded null
+ * display fields) without introducing an English word into the path. The
+ * profile route resolves by `userId` alone, so any non-empty slug segment
+ * is functionally correct.
+ */
+export function profilePath(userId: number, username: string | null | undefined): string {
+	const trimmed = username?.trim();
+	if (!trimmed) return `/profile/${userId}/${userId}`;
+	return `/profile/${userId}/${generateSlug(trimmed)}`;
+}
+
+/**
+ * Build just the slug segment of a profile URL (the third path part). Same
+ * fallback rule as {@link profilePath}: `username` when non-empty, otherwise
+ * the id as a string. Use this when the surrounding URL is constructed
+ * elsewhere (e.g. when the path prefix or id segment comes from a different
+ * source) so the slug-segment rule stays centralized.
+ */
+export function profileSlug(userId: number, username: string | null | undefined): string {
+	const trimmed = username?.trim();
+	if (!trimmed) return String(userId);
+	return generateSlug(trimmed);
 }

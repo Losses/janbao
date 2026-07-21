@@ -1,7 +1,7 @@
 import { getDb, getLocalDb } from '$lib/server/db';
 import { seedCore } from '$lib/server/db/seed';
 import { verifyJwt } from '$lib/server/auth';
-import { users } from '$lib/server/db/schema';
+import { users, userGroups } from '$lib/server/db/schema';
 import { getEditorPreferences } from '$lib/server/db/dao/editor-preferences';
 import { getUiPreferences } from '$lib/server/db/dao/ui-preferences';
 import { SITE_DEFAULT_THEME } from '$lib/ui/prefs';
@@ -112,9 +112,23 @@ export const handle: Handle = async ({ event, resolve }) => {
 		// UUID token from before the id migration) is treated as an invalid token.
 		const userId = payload?.sub !== undefined ? Number(payload.sub) : NaN;
 		if (payload && payload.sub && !Number.isNaN(userId)) {
-			const usersList = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+			// LEFT JOIN user_groups so the session user carries the DB-stored group
+			// title, matching /profile's getProfileHeaderPayload. Consumers that
+			// only have the session user available (e.g. ProfileMenuPanel's preview
+			// before page.data.targetUser loads) then render the same canonical
+			// group label as the real profile page.
+			const usersList = await db
+				.select({
+					user: users,
+					groupTitle: userGroups.title
+				})
+				.from(users)
+				.leftJoin(userGroups, eq(users.groupSlug, userGroups.slug))
+				.where(eq(users.id, userId))
+				.limit(1);
 			if (usersList.length > 0) {
-				const userRecord = usersList[0];
+				const userRecord = usersList[0].user;
+				const groupTitle = usersList[0].groupTitle ?? userRecord.groupSlug;
 				// Editor feature prefs are needed app-wide (every LexicalEditor
 				// instance reads them via the client store), so they ride along on
 				// the session. A PK lookup on a 1:1 row; sub-ms.
@@ -136,6 +150,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 						userRecord.avatarContentType
 					),
 					groupSlug: userRecord.groupSlug,
+					groupTitle,
 					signupTime: userRecord.signupTime,
 					lastActiveTime: userRecord.lastActiveTime,
 					showEmail: userRecord.showEmail,

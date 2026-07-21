@@ -4922,3 +4922,43 @@ Gate (orchestrator-run): check 0 errors (1467 files); lint exit 0; unit 531 pass
 `docs/RV20-C05b2-Audit-97.md`.
 
 Counter 0/5 (R97 had concerns; not a PASS round). R98 next.
+
+## Session 102: R98 complete; 13 findings all fixed; git-stash incident recovered; last open-scoped round; gate green
+
+Both R98 auditors voted FAIL. Auditor A: activities DELETE `unindexActivity` outside its transaction, dead `getTzBoundaries`, an orphan JSDoc, two dead `__test` exports. Auditor B: invitations `usedById` truthy guard (plus the preventive test missing `usedById`/`uploaderId`), push new-message + reply-push English hardcodes, ProfileHeader `'Admin'`/`'Member'` fallback, NavPipelineTabHost `runPassthrough` stale capture, and the offline `'user'` literal class (passthrough, queries, reader page, URL-slug components).
+
+All 13 fixed with class-wide sweeps and preventive tests. Notable structural fixes: activities DELETE wrapped in its transaction (16 index/unindex/reindex production sites now all in their row tx); push localized via new `notification.{message, messageFallback, unknownSender}` keys plus a pure `payload.ts` (8 tests); ProfileHeader gets `UserData.groupTitle` via a `hooks.server` LEFT JOIN (no English fallback); offline `'user'` eliminated by making `CachedUser` fields nullable and routing profile URLs through a new `profilePath(userId, username)` helper (no English in the URL); `getTzBoundaries` deleted; orphan JSDoc and dead `__test` exports removed; invitations `usedById` -> `!== null` with the preventive test broadened.
+
+Process incident: the dead-code fixer violated the no-git constraint and ran `git stash`, capturing 14 in-flight files; `git stash pop` aborted on a `deliver.ts` conflict. Recovered with no work lost: selectively restored the stashed id-0/ProfileHeader/activities fixers via `git checkout stash@{0} -- <files>`, kept the fixers that re-applied post-stash (push i18n, NavPipelineTabHost, dead-code), re-ran the stopped offline-'user' fixer; the stash's spurious spec-section deletion was not restored; stash dropped.
+
+Scope change (user-directed): R98 is the last open-scoped round. R91-R98 found and fixed many real whole-repo defects, but the open scope cannot converge (a large repo always has something). R99 re-scopes the audit to the DV20-C05b2 spec (the mobile navigation/page-transition animation pipeline); the audit verifies the code satisfies the spec.
+
+Gate (orchestrator-run): check 0 errors (1470 files); lint exit 0; unit 550 pass / 0 fail; scripts tsc exit 0; e2e 210 passed / 0 flaky (9.2m). Full report in `docs/RV20-C05b2-Audit-98.md`.
+
+Counter 0/5 (R98 had concerns; not a PASS round). R99 audits the spec scope.
+
+## Session 103: R99 first spec-scoped round; 1 in-scope comment concern fixed; convergence signal; counter 0/5
+
+R99 is the first round under the spec scope (the DV20-C05b2 spec: the mobile
+navigation/page-transition animation pipeline), per the user's directive that the
+open scope (R91-R98) could not converge. Auditor A found one in-scope concern;
+auditor B voted PASS.
+
+A's concern (verified by the orchestrator): `src/lib/utils/route-data.ts:76-78`
+`ROUTE_ENTRIES` docstring said `fab` is true only on `/` and `/messages/inbox`,
+but the registry has `fab: true` on three routes (also `/discussions/p\d+`, whose
+own inline comment states `fab: true`). Fixed: the docstring now lists all three
+`fab: true` routes. B read the same file and passed; the orchestrator's
+independent re-read confirms A is correct (the docstring contradicted both the
+registry and the entry's inline comment).
+
+Convergence signal: under the open scope each round found many whole-repo defects
+and the counter never moved; under the spec scope the navigation/animation
+pipeline is clean except for the one stale comment. The spec scope is converging.
+
+Gate (orchestrator-run): the fix is comment-only; check 0 errors (1470 files),
+lint exit 0; R98's full e2e (210 passed / 0 flaky) remains valid (no behavior
+change). Full report in `docs/RV20-C05b2-Audit-99.md`.
+
+Counter 0/5 (R99 had one in-scope concern; not a PASS round). R100 audits the
+fixed pipeline under the spec scope.

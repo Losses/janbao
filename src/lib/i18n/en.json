@@ -542,6 +542,9 @@
 		"discussionComment": "commented on the discussion  {title}",
 		"discussionCommentFallback": "posted in a discussion you follow",
 		"profileComment": "posted on your profile",
+		"message": "{name} sent you a message",
+		"messageFallback": "New message",
+		"unknownSender": "Someone",
 		"in": "in",
 		"allCaughtUp": "You're all caught up"
 	},

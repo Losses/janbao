@@ -24,39 +24,14 @@ function getTzOffsetMinutes(referenceDate: Date, tz: string): number {
 }
 
 /**
- * Calculates start and end Date objects for a date string in a given timezone.
- */
-/**
  * A UTC Date boundary window { start, end }. The inclusivity of `end` is
- * producer-specific - see each function's JSDoc. Callers must pair a boundary
- * with the comparator matching its producer (inclusive → `lte`, half-open → `lt`).
+ * producer-specific - see the producing function's JSDoc. Callers must pair a
+ * boundary with the comparator matching its producer (inclusive → `lte`,
+ * half-open → `lt`).
  */
 export interface DateBoundary {
 	start: Date;
 	end: Date;
-}
-
-/**
- * Day boundaries for `dateStr` in `tz`. Returns a **closed** window
- * `[start, end]` where `end` is the last millisecond of the day - pair with
- * `lte(column, end)`.
- */
-export function getTzBoundaries(dateStr: string, tz: string): DateBoundary {
-	const datePart = dateStr.split('-');
-	const year = parseInt(datePart[0], 10);
-	const month = parseInt(datePart[1], 10) - 1;
-	const day = parseInt(datePart[2], 10);
-
-	const dateUtc = new Date(Date.UTC(year, month, day, 0, 0, 0));
-	const offsetMinutes = getTzOffsetMinutes(dateUtc, tz);
-
-	const startMs = Date.UTC(year, month, day, 0, 0, 0) - offsetMinutes * 60 * 1000;
-	const endMs = startMs + 24 * 60 * 60 * 1000 - 1;
-
-	return {
-		start: new Date(startMs),
-		end: new Date(endMs)
-	};
 }
 
 /**
