@@ -4962,3 +4962,106 @@ change). Full report in `docs/RV20-C05b2-Audit-99.md`.
 
 Counter 0/5 (R99 had one in-scope concern; not a PASS round). R100 audits the
 fixed pipeline under the spec scope.
+
+## Session 104: R100 spec-scoped; 2 comment-attribution concerns fixed; counter 0/5
+
+R100 (spec scope). Auditor A found two very-low in-scope concerns, both the same
+class: comments attributed the orchestrator's `#publication.progress` to the
+`NavExecutor`. Sites: `nav-pipeline-orchestrator.svelte.ts:2385`
+(`#armSettleEaseFromGesture` docstring said "the executor's live raw at release"
+but the code reads `this.#publication.progress`) and `Header.svelte:271` (the
+DEV-probe snapshot comment said "the executor's release-raw"). Auditor B voted
+PASS. The orchestrator verified A is correct (the code reads `#publication.progress`,
+not an executor field; the executor's `state.progress` is the threshold-absorbed
+value) and fixed both comments to name `#publication.progress` and distinguish it
+from the executor's threshold-absorbed `state.progress`.
+
+Convergence: under the spec scope the pipeline is clean except for comment
+accuracy. R99 fixed one stale comment; R100 fixed two mis-attributions. Each
+round polishes the remaining comment inaccuracies.
+
+Gate (orchestrator-run): comment-only fix; check 0 errors (1470 files), lint
+exit 0; R98's full e2e (210 passed / 0 flaky) remains valid. Full report in
+`docs/RV20-C05b2-Audit-100.md`.
+
+Counter 0/5 (R100 had two in-scope concerns; not a PASS round). R101 audits the
+fixed pipeline under the spec scope.
+
+## Session 105: R101 first clean round; both PASS; counter 2/5
+
+R101 (spec scope). Both auditors voted PASS: zero in-scope concerns. This is the
+first clean round since the spec re-scoping (R99). The navigation/animation
+pipeline satisfies the DV20-C05b2 spec on every point: End state, §5 invariant,
+Constraints, migration completeness, and comment accuracy (both auditors read
+every comment in the navigation/animation files; all match the code).
+
+The three comment issues R99/R100 found and fixed (the `fab` distribution
+docstring and the two executor-vs-orchestrator `#publication.progress`
+mis-attributions) are no longer flagged. R101 introduced no code changes
+(nothing to fix).
+
+Counter: 2/5 (both auditors PASS = two votes). R102 audits the pipeline under
+the spec scope; two more PASS votes reach 5/5.
+
+## Session 106: R102 second clean round; both PASS; counter 4/5
+
+R102 (spec scope). Both auditors voted PASS: zero in-scope concerns. This is the
+second consecutive clean round (R101 + R102). Both auditors read every docstring
+in the navigation/animation files and found them accurate; the End state, §5
+invariant, Constraints, and migration completeness all hold; zero CSS transitions
+and zero setTimeout in the animation layer.
+
+R102 ran with the prior prompt (before the PASS/BLOCK criteria were made
+explicit). Both passed anyway. R103 runs with the updated prompt (crisp PASS =
+zero in-scope concerns including every comment accurate; BLOCK = any concern
+including any comment inaccuracy; no PASS-with-concern middle ground).
+
+Counter: 4/5 (four consecutive PASS votes). R103's first PASS vote closes the
+cycle at 5/5.
+
+## Session 107: R103 A BLOCK (stale interface docstring, fixed); B PASS; counter resets to 0/5; comment-accuracy sweep next
+
+R103 (spec scope). Auditor A found one in-scope concern and voted BLOCK:
+`src/lib/stores/nav-pipeline-orchestrator.svelte.ts:259-269` `OrchestratorPublication`
+interface docstring claimed "the host's `$effect` publishes the macro + settle/scrub
+fields to the pager store for the Header," but hosts never publish to the pager
+store (they call only `resetPagerStore` for the at-rest reset); the orchestrator
+publishes in-flight pager fields via `#republishToPager`; the Header reads the
+macro + settle/scrub fields directly off the orchestrator singleton. The file's
+other four "host publish" docstrings were already accurate; this interface
+docstring was the lone stale outlier. Fixed: the docstring now describes the
+actual architecture.
+
+Auditor B read the file after the fix and voted PASS, cross-checking every
+"N places" enumeration. The concern (A's) resets the counter to 0/5.
+
+The orchestrator is large (3212 lines, many docstrings); each fresh audit surfaces
+a stale comment a prior round's readers missed (R99 the `fab` docstring, R100 the
+executor-attribution comments, R103 this interface docstring). A dedicated
+comment-accuracy sweep runs next to front-load the cleanup, then R104.
+
+Gate (orchestrator-run): comment-only fix; check 0 errors (1470 files), lint
+exit 0; R98's full e2e (210 passed / 0 flaky) remains valid. Full report in
+`docs/RV20-C05b2-Audit-103.md`.
+
+Counter 0/5 (R103 had one in-scope concern; the counter resets).
+
+## Session 108: comment-accuracy sweep fixed 4 stale comments; R104 both PASS; counter 2/5
+
+A dedicated comment-accuracy sweep read every comment in the navigation/animation
+files and found four inaccuracies (all fixed before R104): (1) mobile-pager.svelte.ts
+miscategorized `replaceStateIntent` as a Header morph signal (it is a navigation-
+intent side-channel); removed from the list. (2) nav-state-machine.svelte.ts
+`setSettleState` docstring missed the `unmount` call site (a fifth context);
+appended. (3) nav-state-machine-logic.ts `reset` handler said "force-clear from
+any other phase" then immediately listed phases it does NOT clobber (intent,
+transitioning); removed the self-contradictory hyperbole. (4) Header.svelte
+RENDER-ONLY docstring's consumed-fields list missed `pager.backMorph`,
+`pager.dragging`, `pager.scrubIconEndpoint`, `pager.transitionTarget`; extended.
+
+R104 (spec scope): both auditors voted PASS, zero in-scope concerns. The pipeline
+satisfies the DV20-C05b2 spec; every comment in the navigation/animation files is
+accurate. This is the first clean round after the R103 reset.
+
+Counter: 2/5 (both auditors PASS = two votes). R105 audits the pipeline under the
+spec scope.

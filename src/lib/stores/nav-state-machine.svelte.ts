@@ -142,8 +142,10 @@ export class NavStateMachine {
 	/** Write the settle state. Each field is optional; unspecified fields
 	 *  preserve their prior value. Called by the orchestrator's settle
 	 *  rAF tick (progress only), settle-arm (all fields), settle-end
-	 *  (clear active + latched + awaitTitle), and awaitTitle-only clears
-	 *  from `onSvelteKitAfterNavigate` and `notifyHeaderState`. */
+	 *  (clear active + latched + awaitTitle), awaitTitle-only clears
+	 *  from `onSvelteKitAfterNavigate` and `notifyHeaderState`, and
+	 *  `unmount` (clears active + latched + awaitTitle and resets
+	 *  progress to 1 so the next mount starts at rest). */
 	setSettleState(update: SettleStateUpdate): void {
 		if (update.active !== undefined) this.#settleActive = update.active;
 		if (update.progress !== undefined) this.#settleProgress = update.progress;

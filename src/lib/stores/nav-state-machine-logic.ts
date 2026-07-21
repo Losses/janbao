@@ -307,9 +307,8 @@ export function reduce(state: OrchestratorState, event: OrchestratorEvent): Orch
 		}
 		case 'reset': {
 			// Reset to at-rest. Fires from landing (the wrapper's
-			// microtask lands here) or at-rest (idempotent), and as a
-			// force-clear from any other phase. The phases we DO NOT
-			// clobber:
+			// microtask lands here) or at-rest (idempotent). Phases we
+			// DO NOT clobber:
 			//  - `intent`: a new gesture arrived during the landing
 			//    microtask window (the state moved landing -> intent,
 			//    and the stale microtask must not abort that new gesture).

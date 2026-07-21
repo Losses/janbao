@@ -65,22 +65,29 @@ is coalesced by a same-tick flush, is not a defect. Verify any "dead code" claim
 by grepping for importers/usage (including dev-only hooks and tests) before
 reporting.
 
-## PASS criterion (your vote)
+## Vote criteria (binding)
 
 Your output is a vote in a two-auditor convergence loop that closes at 5
-consecutive PASS votes; any concern resets the counter to zero, so a PASS vote
-is a strong claim. Vote PASS only after an exhaustive examination of the
-DV20-C05b2 spec's subject (the navigation/animation pipeline) finds ZERO
-concerns. A concern is ANY in-scope defect at any severity (concern, low, or very
-low), and that explicitly includes inaccurate, overclaiming, or stale code
-comments in the navigation/animation files (`.ts` / `.svelte.ts` / `.test.ts`);
-comment accuracy is never a nitpick. Pure prose inaccuracy inside `.md`
-documentation files (journal, audit reports, spec, plan) is a nitpick, not a
-concern; report it separately, it does not affect your vote. If you find even one
-in-scope concern, do NOT vote PASS; report it, and reporting a real defect is the
-correct outcome, never a failure of the audit. Do not vote PASS to be agreeable,
-and do not inflate a verified non-defect into a concern to avoid PASS; verify
-each candidate empirically, then vote honestly.
+consecutive PASS votes; ANY in-scope concern resets the counter to zero. Vote
+exactly one of:
+
+- **PASS**: zero in-scope concerns. You exhaustively examined the spec subject
+  (End state, §5 invariant, Constraints, migration completeness, comment
+  accuracy) and found no defect at any severity. Every code comment in the
+  navigation/animation files (`.ts` / `.svelte.ts` / `.test.ts`) accurately
+  describes the current code.
+- **BLOCK**: one or more in-scope concerns. This is ANY defect at any severity
+  (concern, low, or very low), and explicitly includes inaccurate, overclaiming,
+  or stale code comments in the navigation/animation files. A single comment
+  inaccuracy is enough to BLOCK. (Pure prose inaccuracy inside `.md`
+  documentation files (journal, audit reports, spec, plan) is a nitpick, not a
+  concern; report it separately, it does not BLOCK.)
+
+There is NO "PASS with concern." A concern BLOCKS the round: report it, the
+orchestrator fixes it, the round does not count toward convergence (the counter
+resets to zero). Do not vote PASS to be agreeable, and do not inflate a verified
+non-defect into a concern to avoid PASS; verify each candidate empirically, then
+vote honestly.
 
 ## Report format
 

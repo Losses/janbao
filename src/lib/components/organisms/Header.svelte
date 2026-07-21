@@ -24,8 +24,10 @@
 	 * crossfade), the root↔search tap-scrub ease, and the `searchScrubbing`
 	 * flag; this component reads `orchestrator.settleProgress`,
 	 * `orchestrator.settleLatched`, `orchestrator.settleActive`,
-	 * `orchestrator.settleDirection`, `pager.tapMorph`, and
-	 * `orchestrator.searchScrubbing` and derives every visual from them.
+	 * `orchestrator.settleDirection`, `orchestrator.searchScrubbing`,
+	 * `pager.tapMorph`, `pager.backMorph`, `pager.dragging`,
+	 * `pager.scrubIconEndpoint`, and `pager.transitionTarget`, and derives
+	 * every visual from them.
 	 * No Header-owned rAF, no Header-owned animation state, no CSS transitions
 	 * in this layer. §5: one rAF (the orchestrator's) owns every motion; the
 	 * hide-on-scroll `translateY` is a reactive read of the scroll-chrome
@@ -269,8 +271,10 @@
 	// snapshot shape (the e2e tests mirror the shape) and carry stable
 	// values: `settleActive` is the single settle-mode signal (aliased into
 	// `isSettleMode`); the orchestrator seeds `settleProgress` directly from
-	// the executor's release-raw, so there is no separate gesture-morph
-	// latch (`lastGestureMorph` reads 0); the Header does not track a
+	// its own `#publication.progress` at release (the published raw, not the
+	// executor's threshold-absorbed `state.progress`), so there is no
+	// separate gesture-morph latch (`lastGestureMorph` reads 0); the Header
+	// does not track a
 	// previous path (`prevHasTabs` mirrors `currentHasTabs`).
 	$effect(() => {
 		if (!import.meta.env.DEV || !browser) return;

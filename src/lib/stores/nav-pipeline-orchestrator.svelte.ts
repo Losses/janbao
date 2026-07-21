@@ -257,9 +257,11 @@ export interface PipelineMountInputs {
 }
 
 /** The orchestrator's published reactive state for downstream
- *  consumers. The FAB layer reads this publication directly; the host's
- *  `$effect` publishes the macro + settle/scrub fields to the pager
- *  store for the Header. Per DV20 §13.5 the NavStateMachine is the sole
+ *  consumers. The FAB layer reads this publication directly; the
+ *  orchestrator publishes the in-flight pager fields via
+ *  `#republishToPager` (a host calls only `resetPagerStore` for the
+ *  at-rest reset), and the Header reads the macro + settle/scrub fields
+ *  directly off this orchestrator singleton (not via the pager store). Per DV20 §13.5 the NavStateMachine is the sole
  *  authority for the macro fields (plan, FROM/TO, direction, in-flight)
  *  and the settle + tap-scrub micro animation state; `progress` is the
  *  executor's per-frame contribution. `lastDispatchWasDeepToDeep` is the
@@ -2382,8 +2384,10 @@ export class NavPipelineOrchestrator {
 
 	/** Arm the settle ease for a gesture release (commit or cancel).
 	 *  Outgoing = current page, incoming = the gesture's commit target.
-	 *  The start progress is the executor's live raw at release so the
-	 *  morph is continuous across the drag-to-settle boundary (no snap).
+	 *  The start progress is `this.#publication.progress` at release (the
+	 *  orchestrator's live published raw, not the executor's
+	 *  threshold-absorbed `state.progress`) so the morph is continuous
+	 *  across the drag-to-settle boundary (no snap).
 	 *  `committed` true → target 1 + awaitTitle; false → target 0, no
 	 *  await.
 	 *
