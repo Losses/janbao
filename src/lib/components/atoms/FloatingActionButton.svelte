@@ -9,11 +9,12 @@
 	 * Viewport gating (mobile-only) and stacking context live on the layer
 	 * (FloatingActionButtonLayer); the atom is viewport-agnostic.
 	 *
-	 * The atom carries NO CSS transition. Every motion that affects the
-	 * transform (route-transition scale, scroll-hide translateY) is driven by
-	 * the global nav-pipeline orchestrator's per-frame publication; the layer
-	 * is a reactive reader and the atom has no transition directive. The layer
-	 * binds the eased scale through the inline `style:transform` binding.
+	 * The atom carries NO CSS transition. The route-transition scale is
+	 * driven by the orchestrator's per-frame publication; the scroll-hide
+	 * translateY is driven by the scroll-chrome store (its own
+	 * rAF-throttled scroll listener). The layer is a reactive reader of
+	 * both sources and binds them through the inline `style:transform`
+	 * binding; the atom has no transition directive.
 	 *
 	 * Visibility gates (both feed `pointer-events` and `aria-hidden`):
 	 *   - scale hidden: `scale < 0.01` (route-transition scale-out)

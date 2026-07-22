@@ -103,7 +103,7 @@ export interface FabRouteAttributes {
  * the most-recent FAB mounted across no-FAB routes.
  */
 const FAB_ROUTE_ATTRIBUTES: readonly FabRouteAttributes[] = [
-	// Family A: list routes whose atom is mounted (Family A/C at scale 0
+	// Family A: list routes whose atom is mounted (Family A at scale 0
 	// or 1). /, /discussions/pN (every page of the list), and
 	// /messages/inbox show a visible FAB at rest (fab: true); the FAB
 	// layer scales the atom per route below.

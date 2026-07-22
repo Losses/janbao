@@ -10,8 +10,8 @@
 	 *
 	 * RENDER-ONLY (DV20 §5): the orchestrator publishes `fractionalIndex` (and
 	 * `targetIndex` / `backMorph` for a deep-page swipe) to the pager store
-	 * (synchronous per pointermove during a drag, via the rAF channels during a
-	 * commit/settle/scrub); this bar re-derives `closeness` + `labelStyle` from
+	 * (synchronous per pointermove during a drag, via the executor's commit
+	 * rAF during a commit slide); this bar re-derives `closeness` +
 	 * those signals. No CSS transition: the pager store drives both the label
 	 * max-width / margin and the pill background color.
 	 */

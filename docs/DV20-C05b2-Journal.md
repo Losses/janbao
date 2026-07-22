@@ -5129,3 +5129,26 @@ fixed. Counter 0/5.
 R111 (spec scope). Both auditors voted PASS: zero in-scope concerns. The R110
 fixes held. Both auditors read every docstring and verified all accurate. This is
 the second clean round (R109 was the first). Counter 2/5.
+
+## Session 116: R112 A PASS (post-fix) + B BLOCK (pre-fix); route-config inner comment fixed; counter 0/5
+
+R112 (spec scope). Auditor A voted PASS (read the file after the fix). Auditor B
+voted BLOCK: `route-config.ts:106` inner comment of `FAB_ROUTE_ATTRIBUTES`'s
+Family A section said "Family A/C at scale 0 or 1" (inaccurate: Family C is at
+scale 0 only; a sibling of the R110-fixed outer summary that was missed). Fixed:
+removed "/C". Counter 0/5.
+
+## Session 117: R113 both BLOCK; 2 comment concerns fixed; counter 0/5
+
+R113 (spec scope). Both auditors BLOCK. A found Header.svelte:371 rAF-ownership
+overclaim ("the orchestrator's rAF drives every frame": a sibling of the
+R106-R108 class missed because the grep targeted "executor's rAF" / "single rAF"
+but not the "gesture rAF" phrasing). B found FloatingActionButton.svelte:12
+overclaim ("every motion that affects the transform is driven by the orchestrator"
+: the scroll-hide translateY is driven by the scroll-chrome store, not the
+orchestrator). Both fixed. Counter 0/5.
+
+## Session 118: R114 both PASS; clean round; counter 2/5
+
+R114 (spec scope). Both auditors voted PASS: zero in-scope concerns. The R113
+fixes held. This is the third clean round (R109, R111, R114). Counter 2/5.

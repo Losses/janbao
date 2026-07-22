@@ -345,9 +345,9 @@
 	//      deep page isSearch is false and the gated fallback below would
 	//      clamp to 0; tapMorph drives the slide back to 0 over the scrub.
 	//   2. A gesture in flight (transitionTarget + backMorph): follows
-	//      trackMorph, gated by isSearch (the gesture rAF runs while the
-	//      source route is still mounted, so isSearch matches the
-	//      pre-flip endpoint).
+	//      trackMorph, gated by isSearch (the orchestrator's publication
+	//      runs while the source route is still mounted, so isSearch
+	//      matches the pre-flip endpoint).
 	//   3. At rest: isSearch ? 1 : 0.
 	const searchProgress = $derived.by(() => {
 		if (pager.tapMorph !== null) {
@@ -369,7 +369,8 @@
 	});
 
 	// Pure functions of searchProgress / tabProgress. No CSS transition: the
-	// orchestrator's rAF (gesture rAF or tap-scrub rAF) drives every frame;
+	// orchestrator's publication (synchronous per pointermove during a drag,
+	// via the rAF channels during a commit/settle/scrub) drives every frame;
 	// the styles re-render via Svelte's reactive `style=` binding. §5: no
 	// CSS transitions in this layer.
 	const trackStyle = $derived(`transform: translateX(${-(searchProgress * 50).toFixed(2)}%);`);
@@ -618,8 +619,10 @@
 
 			<!-- Single search button: slides from right (root) to left (search =
 			     hamburger position) via the reactive `searchButtonStyle` binding
-			     (no CSS transition; the orchestrator's rAF publication drives
-			     `searchProgress` each frame). Always rendered; ONE icon. -->
+			     (no CSS transition; the orchestrator's publication, synchronous
+			     per pointermove during a drag and via the rAF channels during a
+			     commit/settle/scrub, drives `searchProgress`). Always rendered;
+			     ONE icon. -->
 			<a
 				href="/search"
 				class="absolute top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center text-neutral-content/80 hover:bg-neutral-content/10 hover:text-neutral-content"

@@ -10,7 +10,8 @@
 	 * 1:1, and on release or a URL-driven switch a self-owned rAF eases it to
 	 * `activeIndex` with the constant-deceleration curve `2u - u²` (the same ease
 	 * the orchestrator's commit / tap-scrub rAFs use). `prefers-reduced-motion`
-	 * snaps. The rAF, not CSS, owns every frame of the motion.
+	 * snaps. The rAF, not CSS, owns the settle phase; during a drag `swipeMove`
+	 * writes `visualIndex` directly per `pointermove` (the rAF is cancelled).
 	 *
 	 * Boundary handoff: `detectSwipe` is given `shouldClaim` + `exclusive`. At the
 	 * leftmost scope a rightward drag (the back-swipe direction) YIELDS
@@ -74,9 +75,9 @@
 
 	let activeIndex = $state(untrack(() => scopeIndex(data.scope)));
 	/** Authoritative visual position of the panel track in scope units
-	 *  (0 = discussions visible, 1 = activities, ...). During a drag it
-	 *  follows the finger 1:1; on release or a URL-driven switch the settle
-	 *  rAF eases it to `activeIndex`. The rAF below owns every frame. */
+	 *  (0 = discussions visible, 1 = activities, ...). During a drag
+	 *  `swipeMove` writes this directly per `pointermove`; the rAF below
+	 *  eases it to `activeIndex` on release or a URL-driven switch. */
 	let visualIndex = $state(untrack(() => scopeIndex(data.scope)));
 	/** Finger-down flag: true during a drag (1:1 follow, underline stretches),
 	 *  false during a settle. Published as the pager store's `dragging`. */
@@ -278,8 +279,9 @@
 		void goto(`/search?${params.toString()}`, { replaceState: true, noScroll: true });
 	}
 
-	// The panel track reads `visualIndex` (the rAF-driven visual position)
-	// directly. No transition property: the settle rAF owns every frame.
+	// The panel track reads `visualIndex` (the visual position) directly. No
+	// transition property: during a drag `visualIndex` is `pointermove`-driven
+	// (`swipeMove` writes it directly); the settle rAF owns the settle phase.
 	const trackStyle = $derived(`transform: translateX(-${visualIndex * STEP_PERCENT}%)`);
 
 	const measureViewport: Action<HTMLElement> = (node) => {

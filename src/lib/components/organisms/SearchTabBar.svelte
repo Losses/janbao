@@ -14,13 +14,15 @@
 	 * contracting below one cell. Cells are equal-width so the math is closed-form
 	 * (percentages of the strip, no measurement).
 	 *
-	 * RENDER-ONLY (DV20 §5): the SearchScopePager's rAF publishes the
-	 * SEARCH pager store's `fractionalIndex` each frame (the §9-sanctioned
-	 * nested channel; the orchestrator does NOT publish to the search
-	 * pager, only to the primary pager via `#republishToPager`), and this
-	 * bar derives the underline position from it each frame; the cell
-	 * color is a pure function of the active index. No CSS transition:
-	 * the SearchScopePager rAF's per-frame publication owns every motion.
+	 * RENDER-ONLY (DV20 §5): the SearchScopePager publishes the
+	 * SEARCH pager store's `fractionalIndex` per `pointermove` during a
+	 * drag and via its settle rAF on release (the §9-sanctioned nested
+	 * channel; the orchestrator does NOT publish to the search pager,
+	 * only to the primary pager via `#republishToPager`), and this bar
+	 * derives the underline position from it each frame; the cell color
+	 * is a pure function of the active index. No CSS transition: the
+	 * SearchScopePager publishes to the search pager store per
+	 * `pointermove` during a drag and via its settle rAF on release.
 	 */
 	import { untrack } from 'svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
