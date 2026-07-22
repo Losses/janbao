@@ -7,7 +7,8 @@
  *
  *   - `tag`              selects the resolver pair (§4)
  *   - `snapshotCapture`  whether the page captures data + snippet on
- *                        leave; read by the coordinator (§7, Layer 4)
+ *                        leave (no production consumer; see the field
+ *                        docstring)
  *   - `fab`              whether the FAB is visible on this page
  *
  * Per §3's clarity principle, NO stored field duplicates the tag. The
@@ -37,16 +38,22 @@ export interface RouteData {
 	readonly tag: RouteTag;
 	/**
 	 * Whether the page captures its data + render snippet into the cache
-	 * on leave. Read by the coordinator (Layer 4). `/discussion/*` is
-	 * the single capturing route in this registry.
+	 * on leave. `/discussion/*` is the single capturing route in this
+	 * registry. Retained per spec Known #1 (RouteData holds three
+	 * fields); no production consumer reads it in the integrated
+	 * pipeline.
 	 */
 	readonly snapshotCapture: boolean;
 	/**
-	 * Whether the FAB is visible at rest on this page. The resolver
-	 * (Layer 3) reads the from/to fab booleans to drive the FAB scale
-	 * plan. The FAB atom also stays mounted at scale 0 on Family B/C
-	 * routes; that mount decision is a Layer 5 concern that reads the
-	 * consumer FAB-route-attributes config, not this boolean.
+	 * Whether the FAB is visible at rest on this page. The FAB layer
+	 * (`FloatingActionButtonLayer.svelte`) reads the from/to fab booleans
+	 * directly off each transition's `RouteData` to drive
+	 * `fabScale(progress, fromHasFab, toHasFab)`; the resolver does NOT
+	 * read this field (the plan it returns carries no FAB function, as
+	 * asserted by `nav-resolvers.test.ts`'s `plan.fab should be
+	 * undefined`). The FAB atom also stays mounted at scale 0 on Family
+	 * B/C routes; that mount decision is a Layer 5 concern that reads
+	 * the consumer FAB-route-attributes config, not this boolean.
 	 */
 	readonly fab: boolean;
 }
@@ -71,7 +78,9 @@ interface RouteEntry {
  *     `/offline/bookmarks` and `/offline/[discussionId]`
  *
  * `snapshotCapture` is `true` on `/discussion/*` only; every other
- * route is `false`. Cycle 2's unified `PageCacheStore` broadens this.
+ * route is `false`. `PageCacheStore` (the unified cache) is a separate
+ * capture mechanism that does NOT consult this field; see the field
+ * docstring for the current reader status.
  *
  * `fab` is true where the FAB is visible at rest: `/`, `/messages/inbox`,
  * and `/discussions/p\d+` (the FAB is visible on every page of the

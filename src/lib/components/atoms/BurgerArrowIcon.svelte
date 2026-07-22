@@ -26,8 +26,10 @@
 	 * with the pager store's `backMorph` / `tapMorph` / `scrubIconEndpoint`:
 	 * `pager.backMorph` during a drag, `settleProgress` during a settle, and
 	 * `pager.tapMorph * scrubIconEndpoint` during a root<->search tap-scrub. The
-	 * orchestrator's single rAF owns every motion of the morph, so this atom
-	 * carries no CSS transition. §5: zero CSS transitions in the animation layer.
+	 * orchestrator owns the morph's motion through its publication (synchronous
+	 * during a drag, via the rAF channels during a commit/settle/scrub), so this
+	 * atom carries no CSS transition. §5: zero CSS transitions in the animation
+	 * layer.
 	 */
 	interface BurgerArrowIconProps {
 		/** 0 = hamburger, 1 = back arrow. Clamped to [0, 1]. */

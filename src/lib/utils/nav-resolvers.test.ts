@@ -12,8 +12,11 @@
  *   - Cross-tag axes follow direction (forward -> left, backward -> right).
  *   - The {search, search} resolver is reserved (distance 0).
  *   - progressDirection follows intent.micro (committed / cancelled).
- *   - The resolvers omit `fab` / `header` (the pipeline orchestrator drives those
- *     layers through the pager store, not through the plan).
+ *   - The resolvers omit `fab` / `header` (the pipeline orchestrator drives
+ *     the FAB layer through its direct publication: the FAB reads
+ *     `orchestrator.publication.progress` + `RouteData.fab`, not the pager
+ *     store. The orchestrator drives the Header through both its direct
+ *     settle/scrub getters and the pager store, never through the plan).
  */
 
 import { describe, test, expect } from 'bun:test';

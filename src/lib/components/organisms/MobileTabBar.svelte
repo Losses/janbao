@@ -9,10 +9,11 @@
 	 * fade). The Messages pill shows a solid unread dot (never a count).
 	 *
 	 * RENDER-ONLY (DV20 §5): the orchestrator publishes `fractionalIndex` (and
-	 * `targetIndex` / `backMorph` for a deep-page swipe) each frame on its single
-	 * rAF; this bar re-derives `closeness` + `labelStyle` per frame from those
-	 * signals. No CSS transition: the rAF's per-frame publication drives both the
-	 * label max-width / margin and the pill background color.
+	 * `targetIndex` / `backMorph` for a deep-page swipe) to the pager store
+	 * (synchronous per pointermove during a drag, via the rAF channels during a
+	 * commit/settle/scrub); this bar re-derives `closeness` + `labelStyle` from
+	 * those signals. No CSS transition: the pager store drives both the label
+	 * max-width / margin and the pill background color.
 	 */
 	import { page } from '$app/state';
 	import { env } from '$env/dynamic/public';

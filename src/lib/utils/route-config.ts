@@ -45,9 +45,10 @@ export type { MobileTabLabelKey, PathMatcher } from './tab-config';
 // ---------------------------------------------------------------------------
 // FAB icon/href config (§3 consumer config #1).
 //
-// The FAB's icon, label, and href per concrete list kind. The resolver
-// (Layer 3) reads only the core `fab` boolean; the FAB layer reads this
-// for rendering.
+// The FAB's icon, label, and href per concrete list kind. The FAB layer
+// reads the core `fab` boolean (off `RouteData`) for its scale plan and
+// this config (`FAB_KIND_CONFIGS`) for rendering; the resolver does not
+// read either (its plan carries no FAB function).
 
 export type FabListKind = 'discussions' | 'messages';
 
@@ -96,7 +97,8 @@ export interface FabRouteAttributes {
 
 /**
  * Per-route FAB attributes. The atom mounts on every route in this
- * table (Family B/C at scale 0). Routes absent from this table never
+ * table (Family A at scale 0 or 1; Family B/C at scale 0). Routes
+ * absent from this table never
  * mount the FAB atom directly; the FAB layer's `retainedConfig` keeps
  * the most-recent FAB mounted across no-FAB routes.
  */

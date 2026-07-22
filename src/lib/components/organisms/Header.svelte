@@ -197,7 +197,8 @@
 	// target in from above). The title spans read `progress` directly: during
 	// a settle it is the orchestrator-published `settleProgress`, animated
 	// frame-by-frame by the orchestrator's settle rAF; during a drag it is
-	// `pager.backMorph` (the orchestrator's executor rAF publication); at
+	// `pager.backMorph` (the orchestrator's synchronous per-pointermove
+	// publication; the executor's rAF is stopped during a drag); at
 	// rest it is 1. No CSS transition is involved on the title spans.
 	interface TitleView {
 		outgoing: string;
@@ -265,8 +266,12 @@
 
 	// DEV-ONLY probe. Reads every morph-state dep so Svelte re-runs it on each
 	// flush they change, pushing a snapshot to window.__headerMorphProbe
-	// regardless of whether a paint fires between flushes. The settle /
-	// tap-scrub fields come from the orchestrator's pager-store publication.
+	// regardless of whether a paint fires between flushes. The settle fields
+	// (settleActive / settleProgress / settleLatched / settleDirection /
+	// settleAwaitTitle) come from the orchestrator singleton's reactive
+	// getters (NavStateMachine pass-throughs exposed via `#publication`);
+	// the tap-scrub fields (tapMorph / scrubIconEndpoint) come from the
+	// primary pager store.
 	// `lastGestureMorph`, `isSettleMode`, and `prevHasTabs` are kept in the
 	// snapshot shape (the e2e tests mirror the shape) and carry stable
 	// values: `settleActive` is the single settle-mode signal (aliased into
@@ -305,9 +310,11 @@
 	});
 
 	// Root↔search horizontal track.
-	// During an orchestrator-in-flight transition the track reads the
-	// executor's own eased publication (pager.backMorph) so it stays
-	// frame-synced with the NavPipelineHost Page panel the executor drives.
+	// During an orchestrator-in-flight transition the track reads
+	// `pager.backMorph` (the orchestrator's publication: synchronous and
+	// raw per pointermove during a drag, eased via the executor's rAF
+	// during a commit/cancel slide) so it stays frame-synced with the
+	// NavPipelineHost Page panel that same publication drives.
 	// The ENTER and EXIT branches invert because backMorph is the slide
 	// progress 0→1 in both directions, while the morph signal (tab-ness) runs
 	// 1→0 on a forward-enter (transitionTarget === currentPath, arriving at

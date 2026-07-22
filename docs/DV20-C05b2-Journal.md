@@ -5065,3 +5065,67 @@ accurate. This is the first clean round after the R103 reset.
 
 Counter: 2/5 (both auditors PASS = two votes). R105 audits the pipeline under the
 spec scope.
+
+## Sessions 109-112: R105-R108 comment-cleanup stretch; all BLOCK; counter stays 0/5
+
+R105 through R108 were four consecutive spec-scoped rounds where both auditors
+found in-scope comment-accuracy defects (no code-behavior or architecture issues;
+the pipeline satisfies the End state, the §5 invariant, the Constraints, and the
+migration completeness throughout). Each round's defects were fixed immediately;
+the counter stayed at 0/5 throughout.
+
+R105 (session 109): 7 comment concerns across 5 files. Stale-consumer references
+(route-data `resolver reads fab`, route-data + route-config `coordinator (Layer
+4)` reads snapshotCapture, PageCacheStore "broadens this") and misattributed
+publication sources (SearchTabBar "orchestrator's SEARCH-pager publication",
+Header "settle/tap-scrub from pager-store"). A comprehensive comment-cleanup
+fixer fixed 10 (7 confirmed + 3 sweep siblings in NavPipelineHost + page-cache).
+
+R106 (session 110): 9 comment concerns in 2 classes. Executor-rAF-during-drag
+attribution (7 sites: orchestrator x4, Header x2, NavPipelineHost x1) and
+FAB-via-pager-store (2 sites: nav-resolvers.test.ts, NavPipelineHost). Plus
+2 siblings (NavPipelineHost:509, orchestrator:38). 11 total fixes. The
+executor-rAF class is the recurring one: comments that attribute live-drag
+publication to "the executor's rAF" when the rAF is stopped during a drag and
+the orchestrator publishes synchronously per pointermove.
+
+R107 (session 111): 1 comment concern (orchestrator cancelAllAnimationEases
+docstring overclaimed `notifyHeaderState` "does not end the settle" when it
+calls `#endSettleEase` at 2 sites). Auditor B 429'd. Fixed.
+
+R108 (session 112): 2 comment concerns (MobileTabBar + BurgerArrowIcon
+rAF-ownership overclaim: "single rAF owns every motion"). The last 2 siblings
+of the executor-rAF class. Auditor B PASS on the fixed state. Fixed. The
+rAF-ownership-overclaim class is now closed (11 sites across R106-R108).
+
+Total comment fixes R105-R108: ~24. All known stale-comment classes are now
+closed. R109 audits the cleaned pipeline.
+
+## Session 113: R109 first clean round after the cleanup stretch; both PASS; counter 2/5
+
+R109 (spec scope). Both auditors voted PASS: zero in-scope concerns. The
+navigation/animation pipeline satisfies the DV20-C05b2 spec on every point
+(End state, §5 invariant, Constraints, migration completeness, comment accuracy).
+The rAF-ownership-overclaim class is confirmed closed (17 "executor's rAF"
+mentions all correctly qualified; zero stale Layer 4 / coordinator references).
+The R105-R108 comment cleanup held.
+
+This is the first clean round since R104. The counter restarts at 2/5.
+
+Counter: 2/5 (both auditors PASS = two votes). R110 audits the pipeline under
+the spec scope.
+
+## Session 114: R110 both BLOCK; 4 comment concerns fixed; counter 0/5
+
+R110 (spec scope). Both auditors BLOCK. A found 3 (isNavPipelineRoute docstring
+omitted `/discussions/p\d+`; FAB_ROUTE_ATTRIBUTES summary incomplete; MobileTabBar
+"via its publication" conflated OrchestratorPublication with pager store). B found
+1 (#cancelAllAnimationEases docstring entries 1 + 7 misattributed settle-end to
+#cancelSettleEaseRaf which only cancels the rAF, not sets active:false). All 4
+fixed. Counter 0/5.
+
+## Session 115: R111 both PASS; clean round; counter 2/5
+
+R111 (spec scope). Both auditors voted PASS: zero in-scope concerns. The R110
+fixes held. Both auditors read every docstring and verified all accurate. This is
+the second clean round (R109 was the first). Counter 2/5.

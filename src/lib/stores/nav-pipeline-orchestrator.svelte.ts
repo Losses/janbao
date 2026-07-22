@@ -35,7 +35,7 @@
  * `transitionend` path. Every mobile route mounts `NavPipelineHost` (the
  * thread and deep-page routes) or `NavPipelineTabHost` (the three tab
  * roots); the shared singleton orchestrator drives every transition
- * through the executor's rAF.
+ * through the executor.
  *
  * The orchestrator coordinates; it does NOT bypass SvelteKit (§9).
  * Settle on a commit dispatches the SvelteKit navigation via `goto`
@@ -59,9 +59,10 @@
  * macro transition state (phase, plan, FROM/TO, direction). The
  * orchestrator dispatches `intent` / `resolved` / `land` events into
  * the state machine and reads its publication as a `$derived` that
- * merges the state machine's macro fields with the executor's
- * per-frame `#progress`. The orchestrator does not hold an independent
- * publication `$state`.
+ * merges the state machine's macro fields with the orchestrator's
+ * per-frame `#progress` (synchronous per pointermove during a drag,
+ * via the executor's rAF during a commit/cancel slide). The
+ * orchestrator does not hold an independent publication `$state`.
  */
 
 import { browser } from '$app/environment';
@@ -264,7 +265,9 @@ export interface PipelineMountInputs {
  *  directly off this orchestrator singleton (not via the pager store). Per DV20 §13.5 the NavStateMachine is the sole
  *  authority for the macro fields (plan, FROM/TO, direction, in-flight)
  *  and the settle + tap-scrub micro animation state; `progress` is the
- *  executor's per-frame contribution. `lastDispatchWasDeepToDeep` is the
+ *  orchestrator's per-frame contribution (synchronous per pointermove
+ *  during a drag, via the executor's rAF during a commit/cancel slide).
+ *  `lastDispatchWasDeepToDeep` is the
  *  cross-host deep-to-deep handshake flag carried in the publication
  *  so the destination host's `shouldEnter` reads it on the other side
  *  of `releaseInputs` / `configure` (it survives the host swap to
@@ -403,9 +406,10 @@ export class NavPipelineOrchestrator {
 	#progress = $state(0);
 	/** Reactive publication: a read-through to the state machine's macro
 	 *  state (plan, FROM/TO, direction, in-flight phase) and settle +
-	 *  tap-scrub micro state, merged with the executor-driven `#progress`.
-	 *  Per DV20 §13.5 the state machine is the sole authority; this
-	 *  derived has no independent state. */
+	 *  tap-scrub micro state, merged with the orchestrator's `#progress`
+	 *  (synchronous per pointermove during a drag, via the executor's rAF
+	 *  during a commit/cancel slide). Per DV20 §13.5 the state machine is
+	 *  the sole authority; this derived has no independent state. */
 	readonly #publication = $derived.by<OrchestratorPublication>(() => {
 		// Guard: between releaseInputs (old host destroy) and configure
 		// (new host mount), #mountInputs is null and #mounted is false.
@@ -2593,15 +2597,20 @@ export class NavPipelineOrchestrator {
 	 *  discrete-nav path (a tab-click or deep-to-deep nav arriving outside
 	 *  the `phase === 'committing'` finish-then-new branch). This is ONE
 	 *  of several settle-cancellation sites, not the sole point: the
-	 *  settle ease is also ended by `#armSettleEase`'s own
-	 *  `#cancelSettleEaseRaf` (a rapid back-to-back re-arm),
-	 *  `#onExecutorSettle`'s `#endSettleEase` for a non-pipeline commit
-	 *  target, `onSvelteKitAfterNavigate`'s `#endSettleEase` on a
-	 *  nav-landed awaitTitle clear, the settle rAF tick's `#endSettleEase`
-	 *  when u reaches 1 on a non-await settle, and `unmount`'s
-	 *  `#cancelSettleEaseRaf`. (`notifyHeaderState` finishes an in-flight
-	 *  tap-scrub when it sees `pager.dragging`, but it does not end the
-	 *  settle, so it is not a safety net for the settle.) */
+	 *  settle ease is also ended by `#onExecutorSettle`'s
+	 *  `#endSettleEase` for a non-pipeline commit target, the
+	 *  `onSvelteKitBeforeNavigate` supersede branch's `#endSettleEase`
+	 *  when an external nav supersedes the in-flight goto,
+	 *  `onSvelteKitAfterNavigate`'s `#endSettleEase` on a nav-landed
+	 *  awaitTitle clear, the settle rAF tick's `#endSettleEase` when u
+	 *  reaches 1 on a non-await settle, `notifyHeaderState`'s
+	 *  `#endSettleEase` on an awaitTitle clear or a mid-settle revert,
+	 *  and `unmount`'s `setSettleState({ active: false })` teardown.
+	 *  (`#armSettleEase` cancels the previous settle's rAF via
+	 *  `#cancelSettleEaseRaf` on a rapid back-to-back re-arm, but the
+	 *  settle is re-armed, not ended; the reduced-motion non-await path
+	 *  does call `#endSettleEase`. `notifyHeaderState` also finishes an
+	 *  in-flight tap-scrub when it sees `pager.dragging`.) */
 	#cancelAllAnimationEases(): void {
 		this.#endSettleEase();
 		this.#finishTapScrubEase();
@@ -3015,8 +3024,10 @@ export class NavPipelineOrchestrator {
 		};
 	}
 
-	/** Internal: refresh the executor-driven progress and re-publish to
-	 *  the pager store. Called from two paths, both passing a RAW drag
+	/** Internal: refresh the orchestrator's progress (synchronous per
+	 *  pointermove during a drag; via the executor's rAF during a
+	 *  commit/cancel slide) and re-publish to the pager store. Called
+	 *  from two paths, both passing a RAW drag
 	 *  fraction on the same scale: (1) the live-drag path
 	 *  (`#interpretIntent`) passes `offsetX / W` directly; (2) the
 	 *  commit path (`#onExecutorTick`) lerps from `#commitStartRaw`

@@ -29,8 +29,9 @@
  *  - The admin tree `/admin` and all sub-routes.
  *  - The compose routes `/post/discussion`, `/messages/new`, and
  *    `/messages/add/[userId]`.
- *  - The three tab roots `/`, `/activity`, `/messages/inbox` (these
- *    mount `NavPipelineTabHost`).
+ *  - The three tab roots `/`, `/activity`, `/messages/inbox` and the
+ *    within-tab pagination `/discussions/p\d+` (these mount
+ *    `NavPipelineTabHost` via the `(tabs)` layout).
  *
  *  A pathname not listed here does not mount a pipeline host (it is
  *  outside the mobile gesture layer). */

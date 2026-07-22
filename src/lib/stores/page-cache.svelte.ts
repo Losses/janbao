@@ -28,11 +28,9 @@
  *
  * The READ INTERFACE is data-source-agnostic: a pluggable
  * `PageCacheDataSource` can be registered, and `ensure(pathname,
- * subKey)` does a cache-then-source lookup. For Cycle 2 no caller uses
- * `ensure`; Cycle 3's coordinator (Layer 4) consumes it for the
- * preload-vs-direct-slide decision, and Cycle 6 registers an
- * IDB-backed source for the `/offline/*` routes. The default source
- * set is empty, so `ensure` is equivalent to `get` until a source is
+ * subKey)` does a cache-then-source lookup. No current caller uses
+ * `ensure` in the integrated pipeline; the default source set is
+ * empty, so `ensure` is equivalent to `get` until a source is
  * registered.
  *
  * SvelteKit's `snapshot` exports on the thread page are retained for
@@ -131,8 +129,7 @@ export class PageCacheStore {
 	 * `source.route` is the requested `pathname`) and returned. A miss
 	 * returns `null`.
 	 *
-	 * For Cycle 2 no caller uses `ensure`; Cycle 3's coordinator
-	 * (Layer 4) consumes it, and Cycle 6 registers an IDB source.
+	 * No current caller uses `ensure` in the integrated pipeline.
 	 */
 	async ensure(pathname: string, subKey: string | undefined): Promise<PageCacheEntry | null> {
 		const cached = this.get(pathname, subKey);

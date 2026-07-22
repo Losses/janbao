@@ -273,11 +273,14 @@
 	});
 
 	// When the orchestrator lands (publication.plan goes null), reset the
-	// pager store to the at-rest values so the FAB and Header layers
-	// drop their in-flight state. The orchestrator publishes to the
-	// pager store on every drag-move / commit rAF tick itself; the host
-	// only owns the at-rest reset (the in-flight publication is the
-	// orchestrator's responsibility).
+	// pager store to the at-rest values so the Header layer drops its
+	// in-flight state. The FAB's in-flight state is dropped separately
+	// by its own reactive derivation re-evaluating when
+	// `publication.plan` becomes null (the FAB reads
+	// `orchestrator.publication` directly, not the pager store). The
+	// orchestrator publishes to the pager store on every drag-move /
+	// commit rAF tick itself; the host only owns the at-rest reset (the
+	// in-flight publication is the orchestrator's responsibility).
 	// Tracks whether the orchestrator has run at least one transition on
 	// this mount. The at-rest $effect uses it to distinguish a real
 	// settle (re-apply the resting -33.333% to correct a stale px) from
@@ -500,9 +503,13 @@
 
 	// The structural style: the track is `panelCount * 100%` wide and
 	// a flex row of equal-width panels. The CSS carries no transition
-	// (the slide is driven by the executor's rAF, not a CSS transition).
-	// The transform is written by the executor's rAF during a transition
-	// and by the SSR seed (`initialTrackTransform`), the at-rest
+	// (the slide is driven by the orchestrator's per-pointermove
+	// publication during a drag and the executor's rAF during a
+	// commit/cancel slide, not a CSS transition).
+	// The transform is written by the orchestrator's publication
+	// (synchronous per pointermove during a drag, via the executor's rAF
+	// during a commit/cancel slide), and by the SSR seed
+	// (`initialTrackTransform`), the at-rest
 	// `$effect`, and the forward-enter seed when at rest.
 	const viewportStyle = $derived(
 		!isMobile
@@ -669,9 +676,9 @@
 						     destination's skeleton in the RIGHT panel; the
 						     track slides left (resolver axis='left') so the
 						     RIGHT panel enters from the right edge. The real
-						     content mounts on landing. Preloading the
-						     destination's data is a coordinator / Layer 4
-						     concern. -->
+						     content + its data mount on navigation land via
+						     SvelteKit's `load` (this layer shows the skeleton
+						     and does not preload). -->
 						<DeepPreviewSkeleton />
 					{:else}
 						<!-- No forward deep-to-deep in flight: the RIGHT panel
