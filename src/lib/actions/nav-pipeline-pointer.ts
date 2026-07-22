@@ -9,8 +9,9 @@
  * NOT own animation or navigation. It is gesture DETECTION only: it
  * converts pointer events into `(deltaX, velocity, reversed)` callbacks
  * and forwards them to the orchestrator. The orchestrator runs the
- * resolver + executor + driver; the executor drives the rAF that
- * writes the track transform. There is no CSS transition and no
+ * resolver + executor + driver; the executor writes the track
+ * transform (synchronously per pointermove during a drag, via its
+ * commit rAF during a commit/cancel slide). There is no CSS transition and no
  * `transitionend` handler on this action's surface.
  *
  * Mounted on the viewport element of both pipeline hosts

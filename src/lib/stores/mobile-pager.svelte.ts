@@ -23,8 +23,7 @@
  * The store carries the per-frame gesture signals the MobileTabBar and the
  * SearchTabBar read, plus the Header morph signals (`tapMorph`,
  * `backMorph`, `transitionTarget`, `scrubIconEndpoint`,
- * `fractionalIndex`, `dragging`, `active`,
- * `targetIndex`). The FAB layer reads the orchestrator's publication
+ * `dragging`). The FAB layer reads the orchestrator's publication
  * directly (not these fields). The Header's settle ease state (the
  * post-release / post-title-change crossfade) and the `searchScrubbing`
  * flag live on `NavStateMachine` (private class `$state`); the

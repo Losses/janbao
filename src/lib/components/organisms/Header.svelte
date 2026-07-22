@@ -29,7 +29,9 @@
 	 * `pager.scrubIconEndpoint`, and `pager.transitionTarget`, and derives
 	 * every visual from them.
 	 * No Header-owned rAF, no Header-owned animation state, no CSS transitions
-	 * in this layer. §5: one rAF (the orchestrator's) owns every motion; the
+	 * in this layer. §5: the orchestrator's publication (synchronous per
+	 * pointermove during a drag, via the rAF channels during a commit/settle/scrub)
+	 * drives every motion; the
 	 * hide-on-scroll `translateY` is a reactive read of the scroll-chrome
 	 * store (its own rAF-throttled scroll listener publishes each frame).
 	 */
@@ -376,7 +378,8 @@
 	const trackStyle = $derived(`transform: translateX(${-(searchProgress * 50).toFixed(2)}%);`);
 
 	// The SINGLE search button: absolute, slides from right to left. Driven by
-	// the SAME searchProgress as the track so it is sync'd with the rAF.
+	// the SAME searchProgress as the track so it is sync'd with the
+	// orchestrator's publication.
 	// `left` is a linear interp from calc(100% - 3rem) at progress 0 to
 	// 0.5rem at progress 1.
 	const searchButtonLeft = $derived(
@@ -420,7 +423,8 @@
 		// Search-input debounce (coalesce rapid keystrokes), not an
 		// animation-alignment timer; the §5 "no setTimeout in the
 		// animation layer" bar targets the Header's morph / title
-		// animation (rAF-driven), not input handling.
+		// animation (publication-driven, not setTimeout), not input
+		// handling.
 		debounceId = setTimeout(() => commitQuery(inputValue), 400);
 	}
 	function onInput(): void {
