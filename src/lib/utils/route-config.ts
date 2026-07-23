@@ -163,9 +163,9 @@ export function getFabRouteAttributes(pathname: string): FabRouteAttributes | nu
 // ('discussions' | 'activity' | 'messages' | 'active' | 'none'). The
 // 'active' value is the §3 rename of 'inherit': the route follows the
 // currently-active tab (the global routes /admin, /profile, /search,
-// /bookmarks, /notifications). For Cycle 1 'active' routes return -1
-// from `getCurrentTabIndex`, matching the current codebase; the
-// tab-bar consumer resolves 'active' to the live tab in a later cycle.
+// /bookmarks, /notifications). `getCurrentTabIndex` returns -1 for
+// 'active' routes; the tab-bar consumer does not resolve 'active' to a
+// live index (it falls back to the URL index).
 
 export type TabBarPillTarget = 'discussions' | 'activity' | 'messages' | 'active' | 'none';
 

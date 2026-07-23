@@ -128,8 +128,9 @@ test.describe('SSR style serialization: FAB transform resolves in the server ren
 		{ path: '/', expectedScale: 1, family: 'list' },
 		{ path: '/messages/inbox', expectedScale: 1, family: 'list' }
 	];
-	// Compose routes rest at scale 0 via the layer's `cfg.family !== 'list'`
-	// branch. The atom gates pointer-events via `pointer-events-none`
+	// Compose routes rest at scale 0 because their `RouteData.fab === false`
+	// (the layer's scale derivation returns `getRouteData(pathname).fab ? 1 : 0`).
+	// The atom gates pointer-events via `pointer-events-none`
 	// (scale < 0.01). The FAB atom carries no transition class, so a compose SSR
 	// class string carries pointer-events-none and no transition class.
 	const composeAssertions: readonly SsrFabAssertion[] = [
@@ -794,20 +795,28 @@ test('pointer-events: FAB is non-interactive when scroll-hidden', async ({ page 
 
 	const pe = await page.evaluate(async () => {
 		const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-		const afterFrame = (): Promise<void> =>
-			new Promise<void>((resolve) =>
-				requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-			).then(() => sleep(160));
 		// Scroll the active panel well past the Header threshold so the FAB is
 		// fully translated off-screen (hideProgress >= 0.99 -> pointer-events: none).
 		const panel = document.querySelector(
 			'section[data-tab-panel="discussions"]'
 		) as HTMLElement;
 		panel.scrollTo(0, 1200);
-		await afterFrame();
-		const fab = document.querySelector('[data-testid="fab"]') as HTMLElement | null;
-		if (!fab) return 'no-fab';
-		return getComputedStyle(fab).pointerEvents;
+		// Poll until the FAB's pointer-events reflects the scroll-hidden state.
+		// Under CI load the rAF-throttled scroll-chrome listener + the reactive
+		// binding can take longer than a couple of frames to propagate, so a
+		// fixed wait flakes under concurrent load; poll for the condition instead.
+		const deadline = Date.now() + 2000;
+		let peValue = 'no-fab';
+		while (Date.now() < deadline) {
+			await new Promise<void>((resolve) =>
+				requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+			);
+			const fab = document.querySelector('[data-testid="fab"]') as HTMLElement | null;
+			peValue = fab ? getComputedStyle(fab).pointerEvents : 'no-fab';
+			if (peValue === 'none') break;
+			await sleep(20);
+		}
+		return peValue;
 	});
 
 	expect(pe, 'pointer-events must be none when scroll-hidden').toBe('none');

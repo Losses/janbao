@@ -5364,3 +5364,50 @@ mid-round; both this round's findings are in that class (illustrating the bias)
 but are real and fixed. R128 onwards uses a stripped prompt. check 0 errors (1467
 files); lint exit 0; prettier clean; no U+2014. Comment-only; R122's e2e (210 / 0
 flaky) remains valid. Counter 0/5. R128 next.
+
+## Session 132: R128 A BLOCK + B PASS; two stale e2e-spec comments on deleted FAB family-swap fixed; counter 0/5
+
+R128 (spec scope), the first round under the stripped prompt (no cycle-history
+recap, no pre-explained mechanism). Auditor A BLOCK; auditor B PASS. A found two
+stale comments in e2e spec files describing the deleted FAB family-swap
+mechanism: e2e/fab.spec.ts:131 ("the layer's cfg.family !== 'list' branch"; no
+such field exists, and the actual mechanism is getRouteData(pathname).fab ? 1 : 0
+with compose routes having RouteData.fab === false) and
+e2e/messages-back-swipe.spec.ts:588-589 ("the layer's family-swap ease, which
+holds at the destination scale (0)"; the layer owns no ease, and the scale is the
+reactive fabScale half-mapping
+max(0, 1 - progress\*2), reaching 0 at progress 0.5). Both fixed. The orchestrator
+adjudicated e2e .spec.ts comments as in scope (R87 precedent plus the
+arch-cleanliness directive) and updated the audit prompt's extension list to
+explicitly include .spec.ts. B PASSed examining production code only (a coverage
+gap; the two-auditor model surfaced the defect via A). check 0 errors (1467
+files); lint exit 0; prettier clean; no U+2014. Comment-only; R122's e2e (210 / 0
+flaky) remains valid. Counter 0/5. R129 next.
+
+## Session 133: R129 both BLOCK; 14 comment/dead-code fixes (fixer) + 1 flaky root-cause (orchestrator); counter 0/5
+
+R129 (spec scope). Both auditors BLOCK on two classes. A: four production-docstring
+siblings in nav-pipeline-orchestrator.svelte.ts (compose routes omitted from
+parenthetical route partitions). B: eight e2e/helpers stale references to removed
+mechanisms (LoadingChip cross-tab overlay, chip-mode, leftNeedsLoading, follow()),
+including dead fields in e2e/helpers.ts. A fixer sub-agent fixed the twelve cited
+plus two horizontal siblings (14 total). The fixer's full-e2e surfaced one flaky
+(fab.spec.ts:791, FAB pointer-events when scroll-hidden) which it flagged
+out-of-scope; the orchestrator did NOT accept the deferral (a flaky is a defect,
+never an exception), root-caused it (load-induced timing race: a fixed 160ms wait
+insufficient under concurrent CI load), and fixed it with a deterministic poll
+(assertion unchanged). Post-fix full e2e 210 / 0 flaky. check 0 errors (1467
+files); lint exit 0; prettier clean; no U+2014. Counter 0/5. R130 next.
+
+## Session 134: R130 both PASS; clean round (first since R121) + proactive tidy; counter 2/5
+
+R130 (spec scope, stripped prompt). Both auditors PASS: zero in-scope concerns. A
+ran a 791-hit sibling grep (all legitimate); B examined all spec areas. The R129
+fixes held. This is the first clean round since R121. Post-clean-round, the
+orchestrator proactively tidied two below-bar items that had recurred across
+rounds (recurring-nitpick-verify lesson plus "cleanliness at all costs" directive):
+nav-state-machine.svelte.ts:20-22 grammar ("register as dependents" became "which
+registers dependencies") and route-config.ts:166-168 temporal anchor ("For Cycle
+1 ... in a later cycle" became present-state). Comment-only; check 0 errors (1467
+files); lint exit 0; prettier clean; no U+2014; R129's e2e (210 / 0 flaky) stands.
+Counter 2/5. R131 next.

@@ -784,19 +784,19 @@ export async function captureGplTrackPresence(
 	});
 }
 
-// --- GPL back-swipe chip-mode capture ---------------------------------------
+// --- GPL back-swipe capture -------------------------------------------------
 // Drives a partial (held) rightward back-swipe via CDP touch from `startX` to
-// `endX`, holds one frame, snapshots whether NavPipelineHost entered chip
-// mode (the `.loading-overlay` with its tanh-clamped width + base-200 bg
-// stands in for an un-previewable back target), then releases. A real preview
-// renders a sibling `<section data-tab-panel>`; chip mode renders the overlay
-// with NO sibling section. The overlay width is clamped to ~0.3 * viewport by
-// the tanh damper, so a width well under the drag distance signals chip mode.
+// `endX`, holds one frame, snapshots the back-preview state the
+// NavPipelineHost publishes, then releases. The snapshot records the left
+// panel's `data-tab-panel` (the seeded back-preview, or null when no preview
+// rendered) and the track's translateX (`trackM41`) for geometry checks.
+// `chipMode` and `chipText` are kept as a regression guard for spec End state
+// #4 (the cross-tab chip overlay is absent everywhere): they query for a
+// `.loading-overlay` element and its label text, and are always false / null
+// on a passing run.
 
 export interface GplChipSwipeCapture {
 	chipMode: boolean;
-	overlayWidth: number;
-	overlayBg: string | null;
 	previewPanel: string | null;
 	chipText: string | null;
 	trackM41: number | null;
@@ -832,8 +832,6 @@ export async function captureGplBackSwipe(
 		) as HTMLElement | null;
 		return {
 			chipMode: !!overlay,
-			overlayWidth: overlay ? Math.round(overlay.getBoundingClientRect().width) : 0,
-			overlayBg: overlay ? getComputedStyle(overlay).backgroundColor : null,
 			previewPanel: leftSection?.getAttribute('data-tab-panel') ?? null,
 			chipText: overlay?.querySelector('span')?.textContent ?? null,
 			trackM41: track ? Math.round(new DOMMatrix(getComputedStyle(track).transform).m41) : null

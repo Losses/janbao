@@ -17,12 +17,13 @@ import { prepareContext, waitForHydration, swipeBack, openSidebarAndGoto } from 
  * Discriminator: a per-frame `{scale, pathname}` probe across the gesture. The
  * back-swipe contract holds iff the FAB scale rises above threshold AND passes
  * through an intermediate value WHILE the URL is still the compose route
- * (pre-swap). The chip-exit contract holds iff the FAB scale stays below
- * threshold for every frame the `.loading-overlay` is mounted. Both sample the
- * resolved `getComputedStyle(fab).transform` (tautology-resistant) and key the
- * window to live DOM state (the pathname / the overlay element), not to internal
- * flags. A CALIBRATION spec on the overlay route `/bookmarks` proves the probe
- * and the CDP gesture surface work for a family that already reads `publication.progress`.
+ * (pre-swap). The cross-tab transition contract holds iff the FAB scale stays
+ * below threshold across the orchestrator-driven slide (no resting FAB on the
+ * destination tab). Both sample the resolved `getComputedStyle(fab).transform`
+ * (tautology-resistant) and key the window to live DOM state (the pathname),
+ * not to internal flags. A CALIBRATION spec on the deep route `/bookmarks`
+ * proves the probe and the CDP gesture surface work for a family that already
+ * reads `publication.progress`.
  */
 
 test.beforeEach(async ({ context }) => {

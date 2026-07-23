@@ -538,8 +538,8 @@ test.describe('forward-swipe into a tab then back-swipe', () => {
 		expect(restPreview.hasLoadingChip, 'a cold-cache back-preview must not be a bare loading chip').toBe(false);
 		expect(restPreview.discussionLinks, 'the discussions list must render in the back-preview').toBeGreaterThan(0);
 
-		// During the back-swipe itself: the cache is seeded, so leftNeedsLoading is
-		// false and no loading overlay appears.
+		// During the back-swipe itself: the cache is seeded, so the left panel
+		// renders the real discussions list (no loading overlay is involved).
 		const held = await holdDrag(page, 'back');
 		const during = await page.evaluate(() => ({
 			loadingOverlay: !!document.querySelector('.loading-overlay')

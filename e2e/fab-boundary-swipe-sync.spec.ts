@@ -11,14 +11,16 @@ import {
  * Preventive regression spec for FAB boundary-swipe sync (Family A).
  *
  * At the FIRST and LAST tab, a swipe toward the boundary with no neighbour (a
- * void swipe) rubber-bands the track: follow() applies a 0.4x factor, so the
- * global nav-pipeline orchestrator publishes `fromPathname === toPathname`
- * with the raw drag progress on its per-frame publication. The FAB layer is a
- * reactive reader of that same publication. On a real transition it computes
- * `fabScale(publication.progress, fromHasFab, toHasFab)`, the icon-handoff
- * half-mapping that dips to 0 at progress=0.5, but on a boundary void-swipe
- * (the very condition this spec exercises) the FAB does NOT use `fabScale`;
- * it reacts proportionally to the rubber-band via
+ * void swipe) rubber-bands the track: the global nav-pipeline orchestrator
+ * applies the boundary void-swipe proportional reaction inline in its
+ * `#interpretIntent` (`startProgress + Math.max(0, rawDrag) *
+ * BOUNDARY_RUBBER_BAND_FACTOR`), so `fromPathname === toPathname` and the
+ * raw drag progress is published on its per-frame publication. The FAB layer
+ * is a reactive reader of that same publication. On a real transition it
+ * computes `fabScale(publication.progress, fromHasFab, toHasFab)`, the
+ * icon-handoff half-mapping that dips to 0 at progress=0.5, but on a boundary
+ * void-swipe (the very condition this spec exercises) the FAB does NOT use
+ * `fabScale`; it reacts proportionally to the rubber-band via
  * `1 - progress * BOUNDARY_RUBBER_BAND_FACTOR` (reaching 0.6 at full drag),
  * so the FAB stays visible and tracks the reduced-amplitude drag from the
  * first frame.
@@ -57,9 +59,9 @@ test('Family A boundary: FAB tracks the void-swipe rubber-band on the first tab 
 });
 
 // Messages FAB (tab 2, the last tab). swipeForward swipes leftward toward the
-// non-existent next tab. Leftward swipes always take the follow() branch (the
-// back-chip check is rightward-only), so this is the clean boundary case.
-// Symmetric guard against a fix that lands the tracking on one end only.
+// non-existent next tab. The orchestrator's bidirectional host claims both
+// directions symmetrically, so this is the clean boundary case. Symmetric
+// guard against a fix that lands the tracking on one end only.
 test('Family A boundary: FAB tracks the void-swipe rubber-band on the last tab (messages)', async ({
 	page
 }) => {

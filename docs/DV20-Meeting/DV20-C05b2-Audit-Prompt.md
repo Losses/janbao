@@ -100,7 +100,8 @@ exactly one of:
 - **PASS**: zero in-scope concerns. You exhaustively examined the spec subject
   (End state, §5 invariant, Constraints, migration completeness, comment
   accuracy) and found no defect at any severity. Every code comment in the
-  navigation/animation files (`.ts` / `.svelte.ts` / `.test.ts`) accurately
+  navigation/animation files (`.ts` / `.svelte.ts` / `.test.ts` / `.spec.ts`,
+  including the e2e spec files) accurately
   describes the current code.
 - **BLOCK**: one or more in-scope concerns. This is ANY defect at any severity
   (concern, low, or very low), and explicitly includes inaccurate, overclaiming,

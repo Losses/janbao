@@ -33,9 +33,9 @@
  * type on EVERY mobile route. No `gestureSource` selector; no intent
  * mirror into the host component's `$state`; no CSS-transition +
  * `transitionend` path. Every mobile route mounts `NavPipelineHost` (the
- * thread and deep-page routes) or `NavPipelineTabHost` (the three tab
- * roots); the shared singleton orchestrator drives every transition
- * through the executor.
+ * thread, compose, and deep-page routes) or `NavPipelineTabHost` (the
+ * three tab roots); the shared singleton orchestrator drives every
+ * transition through the executor.
  *
  * The orchestrator coordinates; it does NOT bypass SvelteKit (§9).
  * Settle on a commit dispatches the SvelteKit navigation via `goto`
@@ -246,14 +246,14 @@ export interface PipelineMountInputs {
 	 *  the Header stays in root mode end to end (tab bar visible,
 	 *  hamburger icon) and the pill stays on the thread's tab
 	 *  throughout the gesture. When undefined, the morph/pill values
-	 *  apply (deep page or tab host). */
+	 *  apply (compose route, deep page, or tab host). */
 	readonly centerTab?: number;
 	/** When true the orchestrator claims BOTH rightward and leftward
 	 *  drags (`NavPipelineTabHost`, the three tab roots). Rightward
 	 *  targets the back-target (previous tab); leftward targets the
 	 *  next tab. When false or undefined, only rightward back-swipes
-	 *  are claimed (`NavPipelineHost`, the thread and deep-page
-	 *  routes). */
+	 *  are claimed (`NavPipelineHost`, the thread, compose, and
+	 *  deep-page routes). */
 	readonly bidirectional?: boolean;
 }
 
@@ -944,8 +944,8 @@ export class NavPipelineOrchestrator {
 		// are derived from `inputs.backTarget` (the source route) and
 		// `inputs.fromPathname` (the host route) so the morph runs from the
 		// source's tab-ness to the host route's tab-ness (e.g. tab mode at
-		// the source tab root easing into deep mode on a thread / deep
-		// page). The outgoing title uses `resolveDeepHeaderTitle(inputs.backTarget)`
+		// the source tab root easing into deep mode on a thread, compose,
+		// or deep page). The outgoing title uses `resolveDeepHeaderTitle(inputs.backTarget)`
 		// (the source/back-target route's STATIC title), NOT `#prevHeaderTitle`:
 		// the Header's `$effect.pre` fires BEFORE `onMount` (where
 		// `playEnterAnimation` runs), so `#prevHeaderTitle` has already been
@@ -1189,7 +1189,7 @@ export class NavPipelineOrchestrator {
 			// 1:1 only from rest (startProgress = 0); a mid-commit re-grab
 			// (startProgress != 0) scales the rate by (1 - startProgress) so
 			// the full [startProgress, 1] span completes in one drag. For
-			// non-bidirectional hosts (thread / deep page) the same window
+			// non-bidirectional hosts (thread, compose, deep page) the same window
 			// mapping is threshold-absorbed (the first 20% of drag is absorbed
 			// AT the start position), so the track never snaps back when a
 			// gesture begins mid-transition.
@@ -3134,9 +3134,9 @@ export class NavPipelineOrchestrator {
 			});
 			return;
 		}
-		// No centerTab: tab host (bidirectional) or deep page. The pill
-		// interpolation is shared; the backMorph publication differs by
-		// destination (see the docstring above for the four sub-cases).
+		// No centerTab: tab host (bidirectional), compose route, or deep page.
+		// The pill interpolation is shared; the backMorph publication differs
+		// by destination (see the docstring above for the four sub-cases).
 		const fromIdx = inputs?.fromTabIndex ?? -1;
 		const toIdx = this.#gestureToTabIndex ?? inputs?.toTabIndex ?? -1;
 		const bidirectional = inputs?.bidirectional === true;

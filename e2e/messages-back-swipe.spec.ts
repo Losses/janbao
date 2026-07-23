@@ -585,10 +585,11 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		).toBeLessThan(-50);
 
 		// The forward-enter's target is the conversation (overlay family, no
-		// resting FAB). The FAB scales 1->0 across the enter via the layer's
-		// family-swap ease, which holds at the destination scale (0) until the
-		// transition lands (publication.progress resets), so the FAB never spikes back
-		// up after easing out. Sample the FAB scale across the enter and assert
+		// resting FAB). The FAB scales 1->0 across the enter via the reactive
+		// `fabScale(progress, fromHasFab=true, toHasFab=false)` half-mapping
+		// (max(0, 1 - progress*2): reaches 0 at progress 0.5 and holds at 0 through
+		// landing), so the FAB never spikes back up. Sample the FAB scale across the
+		// enter and assert
 		// no flicker: once the scale first drops below 0.1 it stays below 0.5.
 		const fabSamples = (await page.evaluate(() => (window as any).__fabEnterSamples)) as number[];
 		if (fabSamples.length > 4) {

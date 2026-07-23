@@ -191,11 +191,13 @@ test.describe('Compose-as-module-child fix (FAB, Messages, chip)', () => {
 		).toBe('/messages/inbox');
 	});
 
-	// ---- Bug 3 edge: chip on a compose back-target renders the arrow + 返回
-	// fallback. Stack [/ -> /post/discussion -> /bookmarks]; back-swipe on
-	// /bookmarks toward the compose route enters chip mode (compose has no
-	// preview panel), and the chip renders the back-arrow + back-label fallback.
-	test('Bug 3 edge: chip toward a compose back-target renders the arrow + back fallback', async ({
+	// ---- Bug 3 edge: regression guard for spec End state #4. Stack
+	// [/ -> /post/discussion -> /bookmarks]; a back-swipe on /bookmarks toward
+	// the compose route finds no pre-rendered preview panel (compose has no
+	// list cache here), so the back-preview renders <DeepPreviewSkeleton /> as
+	// the fallback for an unmatched deep back-target. The cross-tab chip overlay
+	// is absent; chipMode stays false and chipText stays null end to end.
+	test('Bug 3 edge: chip overlay stays absent on a compose back-target (spec End state #4)', async ({
 		page
 	}) => {
 		await page.goto('/');

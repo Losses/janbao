@@ -567,13 +567,17 @@ test.describe('Reproduction of User Reported Navigation Bugs', () => {
 		});
 		await page.waitForTimeout(50);
 
-		// Drag right to 180px (since discussion has no preview panel, it should show LoadingChip overlay)
+		// Drag right to 180px. /discussion/ has no pre-rendered preview panel
+		// here (the user entered the thread directly, so no list cache is seeded),
+		// so the back-preview renders <DeepPreviewSkeleton /> as the fallback for
+		// an unmatched deep back-target.
 		await move(180);
 		await page.waitForTimeout(100);
 
-		// The loading overlay should be visible because there's no pre-rendered preview panel for /discussion/
+		// The cross-tab loading overlay is removed (spec End state #4); the
+		// back-preview is the DeepPreviewSkeleton fallback, never an overlay.
 		const loadingOverlay = page.locator('.loading-overlay');
-		// loadingOverlay removed by the pipeline (spec end-state #4). Skipped.();
+		await expect(loadingOverlay).not.toBeVisible();
 
 		// Clean up touch
 		await client.send('Input.dispatchTouchEvent', {

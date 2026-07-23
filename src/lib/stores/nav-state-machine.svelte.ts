@@ -18,7 +18,7 @@
  * have left in any phase; `setSettleState()` writes the settle fields
  * (active / progress / latched / direction / awaitTitle); and
  * `setSearchScrubbing()` writes the search-scrub flag. The orchestrator
- * reads the state through `$derived` and register as dependents on the
+ * reads the state through `$derived` , which registers dependencies on the
  * underlying `$state`.
  *
  * Module-singleton pattern, matching the other stores in this
