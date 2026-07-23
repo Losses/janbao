@@ -51,12 +51,38 @@ a real out-of-scope defect, name it in a separate "Out-of-scope observations"
 section at the end of your report (it does not affect your vote and is not fixed
 in this cycle); spend your effort on the spec subject.
 
-## Before you finish (binding)
+## Sibling search (binding, the moment you find a defect)
 
-For every in-scope defect you find, search the navigation/animation pipeline for
-the SAME bug class in sibling paths and report whether each sibling has the
-defect. One defect usually has siblings; reporting only the cited case is
-incomplete.
+The instant you identify ANY in-scope defect, STOP and run a class-wide sibling
+search before you move on or write it up alone. One defect almost always has
+siblings, and this cycle's recurring convergence failure is an auditor who
+reports one phrasing of a claim and leaves sibling phrasings for the next round:
+the rAF-ownership-overclaim class leaked a sibling in R110, R112, R113, R115, and
+R116 because each round's grep targeted one literal phrase (first "single rAF",
+then "executor's rAF", then "gesture rAF", then "one rAF"). Do NOT repeat that.
+
+Run the search like this:
+
+1. Abstract the defect into a CLASS, not the one string you found. "A comment
+   that overclaims which mechanism drives motion" is the class; the exact words
+   are one instance.
+2. Grep the whole navigation/animation pipeline (`src/lib/stores`,
+   `src/lib/components`, `src/lib/utils`) with SEVERAL BROAD phrasings that each
+   cover the class differently, never one literal pattern. For a "what drives
+   motion" claim, grep at minimum `rAF`, `frame`, `every motion`, `every frame`,
+   `drives`, `publishes`, `publication`, `orchestrator`, `synchronous`,
+   `pointermove`, `owns`, and union the hits. Add phrasings until a new grep
+   returns nothing you have not already read.
+3. Read EVERY hit and classify each: defect (same class, same inaccuracy) or
+   legitimate (accurate, or names a different mechanism correctly). Do not skip
+   a hit because it "looks fine"; read it.
+4. Report ALL sibling defects in the SAME finding set as the original, each with
+   its own `file:line`. Reporting one sibling and leaving another for the next
+   round is an incomplete audit, and the orchestrator independently re-runs the
+   broad grep and cross-checks your enumeration: a sibling you missed is a defect
+   in your audit.
+
+## Verify before you report (binding)
 
 Verify any "visible behavior" or "this is broken" claim against the actual code
 and the actual runtime timing before reporting it; a code path that looks wrong

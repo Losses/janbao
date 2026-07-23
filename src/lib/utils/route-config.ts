@@ -31,14 +31,9 @@ import type { Component } from 'svelte';
 import ProfileMenuPanel from '$lib/components/panels/ProfileMenuPanel.svelte';
 import SettingsMenuPanel from '$lib/components/panels/SettingsMenuPanel.svelte';
 import AdminMenuPanel from '$lib/components/panels/AdminMenuPanel.svelte';
-import TabDiscussionsPanel from '$lib/components/panels/TabDiscussionsPanel.svelte';
-import TabActivityPanel from '$lib/components/panels/TabActivityPanel.svelte';
-import TabMessagesPanel from '$lib/components/panels/TabMessagesPanel.svelte';
 import { mdiPlus, mdiEmailPlus } from '@mdi/js';
 import type { TranslationDict } from '$lib/types/translation';
-import { MOBILE_TAB_DEFS, type TabDef, type MobileTabLabelKey } from './tab-config';
-import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
-import type { TabsLayoutData } from '$lib/types/tabs';
+import { MOBILE_TAB_DEFS, type TabDef } from './tab-config';
 
 export type { MobileTabLabelKey, PathMatcher } from './tab-config';
 
@@ -226,10 +221,10 @@ export function getTabBarPillTarget(pathname: string): TabBarPillTarget {
 // Preview-panel config (§3 consumer config #4).
 //
 // The component rendered in NavPipelineHost's left-panel preview slot when
-// a back-swipe targets a route that captures a snippet. Routes that
-// capture a snippet but render the source tab's panel (e.g. compose
-// forms) are absent here; the layer's fallback to
-// `MOBILE_TABS[activeTab].panel` covers them.
+// a back-swipe targets a route that captures a snippet. Routes not listed
+// here are handled by the host's own left-panel branch (the tab-root panel
+// for a tab path, <DeepPreviewSkeleton /> for an unmatched deep path); see
+// NavPipelineHost.svelte / NavPipelineTabHost.svelte.
 //
 // Preview panels source their own data from the page store / page cache,
 // so the slot holds a prop-less Svelte component.
@@ -260,8 +255,10 @@ const PREVIEW_PANEL_CONFIG: readonly PreviewPanelEntry[] = [
 
 /**
  * Lookup the back-preview snippet component for `pathname`. Returns
- * `null` when the route has no dedicated preview panel; the FAB layer
- * falls back to the active tab's panel.
+ * `null` when the route has no dedicated preview panel; the caller
+ * (NavPipelineHost / NavPipelineTabHost) then falls back to its own
+ * left-panel branch (the tab-root panel for a tab path, or
+ * <DeepPreviewSkeleton /> for an unmatched deep path).
  */
 export function getPreviewPanel(pathname: string): SvelteComponentType | null {
 	return PREVIEW_PANEL_CONFIG.find((e) => e.pattern.test(pathname))?.panel ?? null;
@@ -311,67 +308,11 @@ export function getCurrentTabIndex(pathname: string): number {
 }
 
 // ---------------------------------------------------------------------------
-// Mobile tabs: the browser-side tier of tab knowledge.
+// Mobile tabs.
 //
 // tab-config.ts is the pure source (tab order, hrefs, prefix matchers, data
-// keys); navigation-logic imports it for unit tests. Here we layer the
-// browser-only bits on top: the page-cache populated check (a $state store),
-// the list panel component. The store is read lazily inside the closures, so
-// importing this module (incl. under bun:test) never instantiates it.
+// keys); navigation-logic imports it for unit tests under bun:test. MOBILE_TABS
+// is the browser-side handle the pipeline consumers (NavPipelineTabHost, the
+// orchestrator) index by position.
 
-// Each tab's list panel is a prop-less Component that pulls its data from the
-// page cache and page data itself.
-const TAB_LIST_PANELS: Record<MobileTabLabelKey, Component> = {
-	discussions: TabDiscussionsPanel,
-	activity: TabActivityPanel,
-	messages: TabMessagesPanel
-};
-
-type CacheCheckFn = () => boolean;
-type TabDataCheck = (data: Partial<TabsLayoutData>) => boolean;
-
-export interface MobileTab extends TabDef {
-	checkCache: CacheCheckFn;
-	/** A tab's list is available when the cache OR the root-layout data has items. */
-	hasData: TabDataCheck;
-	panel: Component;
-}
-
-/**
- * Whether a tab's list is present in the root layout data. The root load
- * eager-loads page 1 of every tab on every route, so a tab's list is available
- * via `data` even on a deep page that never captured into the page cache.
- * Reads the tab's declared dataKey/listKey, so no per-tab switch lives here.
- */
-function tabListPopulated(tab: TabDef, data: Partial<TabsLayoutData>): boolean {
-	const section = (data as Record<string, unknown>)[tab.dataKey] as
-		| Record<string, unknown[]>
-		| undefined;
-	const list = section?.[tab.listKey];
-	return list ? list.length > 0 : false;
-}
-
-/**
- * Whether the page cache holds a populated list entry for `tab`. Reads
- * the entry keyed by the tab's root href and inspects the same list
- * field declared on the tab definition. The cache entry's `data` is
- * opaque to the store; this consumer narrows via the tab's `listKey`
- * (the route-keyed lookup guarantees the shape).
- */
-function tabListCached(tab: TabDef): boolean {
-	const entry = getPageCacheStore().get(tab.href);
-	if (!entry?.data) return false;
-	// The cache entry's data is opaque (`unknown`); narrow it to a
-	// record of arrays so the tab's `listKey` field reads as a list.
-	const data = entry.data as Record<string, unknown[] | undefined> | null;
-	if (!data) return false;
-	const list = data[tab.listKey];
-	return list ? list.length > 0 : false;
-}
-
-export const MOBILE_TABS: readonly MobileTab[] = MOBILE_TAB_DEFS.map((tab) => ({
-	...tab,
-	checkCache: () => tabListCached(tab),
-	hasData: (data) => tabListCached(tab) || tabListPopulated(tab, data),
-	panel: TAB_LIST_PANELS[tab.labelKey]
-}));
+export const MOBILE_TABS: readonly TabDef[] = MOBILE_TAB_DEFS;

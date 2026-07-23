@@ -593,8 +593,8 @@
 					     always truthy and the panel renders the real list, or
 					     the truthy-but-empty EMPTY_* on a partial-load failure.
 					     The panels render with paginate={true} to match the
-					     landing tab page (TabDiscussionsPanel /
-					     TabActivityPanel), so the preview is faithful when
+					     landing tab page (DiscussionsPanel /
+					     ActivityPanel), so the preview is faithful when
 					     totalPages > 1. The messages case additionally guards
 					     against the array shadow: on `/messages/[id]` the
 					     route's message-row array replaces

@@ -8,8 +8,9 @@
 	 * Animation (DV20 §5): the panel track has NO CSS transition. `visualIndex`
 	 * is the authoritative visual position; during a drag it follows the finger
 	 * 1:1, and on release or a URL-driven switch a self-owned rAF eases it to
-	 * `activeIndex` with the constant-deceleration curve `2u - u²` (the same ease
-	 * the orchestrator's commit / tap-scrub rAFs use). `prefers-reduced-motion`
+	 * `activeIndex` with the constant-deceleration curve `2u - u²` (the pipeline's
+	 * shared commit-ease curve; see `commitEase` in `nav-executor-logic.ts`).
+	 * `prefers-reduced-motion`
 	 * snaps. The rAF, not CSS, owns the settle phase; during a drag `swipeMove`
 	 * writes `visualIndex` directly per `pointermove` (the rAF is cancelled).
 	 *
@@ -209,8 +210,9 @@
 	}
 
 	/** Ease `visualIndex` to `target` over `SCOPE_SETTLE_MS` with the
-	 *  constant-deceleration curve `2u - u²` (the ease the orchestrator's
-	 *  commit and tap-scrub rAFs use). Cancels any in-flight settle first
+	 *  constant-deceleration curve `2u - u²` (the pipeline's shared
+	 *  commit-ease curve; see `commitEase` in `nav-executor-logic.ts`).
+	 * Cancels any in-flight settle first
 	 *  so a re-grab or a new target mid-settle interrupts cleanly. Reduced
 	 *  motion snaps to the target with no rAF. */
 	function settleTo(target: number): void {

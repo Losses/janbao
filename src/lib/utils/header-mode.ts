@@ -23,8 +23,9 @@ import { getCurrentTabIndex } from '$lib/utils/route-config';
  * over Header morph.
  *
  * Pure and runes-free (no $state) so it is SSR-safe. The Header reads
- * it via `resolveHeaderMode(page.url.pathname)`; the morph progress
- * itself comes from the pager store's `backMorph`.
+ * it via `resolveHeaderMode(page.url.pathname)`; this returns the
+ * at-rest mode only. The live morph progress is a separate value sourced
+ * in Header.svelte's `morph` derivation, not from this function.
  */
 export type HeaderMode = 'root' | 'deep' | 'search';
 

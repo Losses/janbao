@@ -5152,3 +5152,107 @@ orchestrator). Both fixed. Counter 0/5.
 
 R114 (spec scope). Both auditors voted PASS: zero in-scope concerns. The R113
 fixes held. This is the third clean round (R109, R111, R114). Counter 2/5.
+
+## Session 119: R115 both BLOCK; 7 comment concerns fixed; counter 0/5
+
+R115 (spec scope). Both auditors BLOCK on seven combined comment-accuracy
+concerns, all fixed. A found one: MobileTabBar.svelte:13 overstated which rAF
+channels publish its fields (MobileTabBar reads only fractionalIndex /
+targetIndex / backMorph, published by the executor's commit rAF; the comment
+said "via the rAF channels during a commit/settle/scrub"). B found six, all the
+rAF-ownership-overclaim class: SearchScopePager (three sites; during a drag
+swipeMove writes visualIndex directly and the rAF is cancelled), SearchTabBar,
+and Header (two sites). Every fix now distinguishes the drag phase (pointermove
+driven) from the settle phase (rAF driven). Counter 0/5.
+
+## Session 120: R116 A BLOCK + B PASS on fixed state; 2 comment concerns fixed; counter 0/5
+
+R116 (spec scope). Auditor A BLOCK on two concerns; auditor B read the file
+after the fixes and voted PASS. A1: mobile-pager.svelte.ts:24-27 Header morph
+signals list included fractionalIndex, active, and targetIndex, which the
+Header does not read (they are MobileTabBar / SearchTabBar signals); a sibling
+of the R104 replaceStateIntent removal from the same list. A2: Header.svelte:32
+"one rAF owns every motion" overclaim, a sibling of the R108 single-rAF and R113
+gesture-rAF classes (missed because those greps did not target the "one rAF"
+phrasing). Both fixed; the rAF-ownership-overclaim class is now at roughly
+twenty sites across R106 to R116. Counter 0/5.
+
+## Session 121: R117 both BLOCK; 2 comment concerns in two classes fixed; counter 0/5
+
+R117 (spec scope), the first round under the strengthened sibling-search prompt
+(abstract to a class, multi-phrasing broad grep, read every hit, report all
+siblings together). Both auditors BLOCK on two concerns in two DIFFERENT classes.
+A: nav-pipeline-orchestrator.svelte.ts:264-265 OrchestratorPublication interface
+docstring overclaimed the Header reads macro fields directly off the orchestrator
+(it reads backMorph / tapMorph / transitionTarget via the pager store; only the
+settle / scrub fields directly off the orchestrator), contradicting the getter
+docstring at 657-667. B: nav-executor-logic.ts:10-13 file docstring overclaimed
+the executor's rAF writes FAB / Header visuals through the driver (production
+writes only the page track; FAB / Header are reactive readers; the hosts pass
+null element refs and the plan omits the fab / header fns), a sibling of the
+R104 to R116 rAF-ownership-overclaim class missed because prior greps did not
+target the executor-file phrasing. Both fixed; the orchestrator independently
+re-ran the broad grep for each class and confirmed one site each, no remaining
+siblings. check 0 errors (1470 files); lint exit 0; prettier clean; no U+2014.
+Comment-only; R98's e2e (210 / 0 flaky) remains valid. Counter 0/5. R118 next.
+
+## Session 122: R118 both PASS; clean round; counter 2/5
+
+R118 (spec scope). Both auditors voted PASS: zero in-scope concerns. The R117
+comment fixes held. Auditor B explicitly validated the C04 to C05b2 spec citation
+change at nav-executor-logic.ts:10 (the remaining C04 citations at
+nav-executor.svelte.ts:10, nav-executor-logic.ts:34 and :49 are correct
+historical attributions of where the rAF model and tuning constants were
+established, and the behavior they describe matches the current code). Both
+auditors read every docstring in the navigation / animation files and found them
+accurate; no stale former / old / previously markers. This is the first clean
+round after R117 (prior clean rounds: R101, R102, R104, R109, R111, R114). No
+code changes in R118; the R117 gate stands (check 0 errors, lint exit 0, e2e 210
+/ 0 flaky). Counter 2/5. Three more PASS votes close the cycle at 5/5. R119 next.
+
+## Session 123: R119 A PASS + B BLOCK; header-mode morph-source overclaim fixed; counter resets to 0/5
+
+R119 (spec scope). Auditor A PASS: zero concerns, all R116 / R117 fixes held, and
+the OrchestratorPublication 3-item macro-field list verified accurate. Auditor B
+BLOCK: header-mode.ts:25-27 claimed "the morph progress itself comes from the
+pager store's backMorph" (an unqualified sole-source claim; morph actually comes
+from pager.backMorph during a drag, orchestrator.settleProgress during a settle,
+and the static tab-ness at rest, per Header.svelte:153-176). Fixed: the docstring
+now states resolveHeaderMode returns the at-rest mode only and the live morph is
+sourced separately in Header.svelte's morph derivation (pointing to the
+authoritative source, not duplicating it). The orchestrator's broad grep
+confirmed this was the only unqualified single-source claim in the class. B also
+flagged an out-of-scope stale app.css reference to the deleted MobileTabPager's
+.mobile-tab-pager-viewport class (behavior correct; comment / selector stale; the
+mobile-content-gutter-excludes-pager memory is stale on the same point). check 0
+errors (1470 files); lint exit 0; prettier clean; no U+2014. Comment-only; R98's
+e2e (210 / 0 flaky) remains valid. Counter resets to 0/5 (B's concern wipes
+R118's two votes). R120 next.
+
+## Session 124: R120 both PASS; clean round; counter 2/5
+
+R120 (spec scope). Both auditors voted PASS: zero in-scope concerns. The R119
+header-mode fix held. Auditor B ran an expanded sole-rAF / sole-source-morph
+sibling grep and classified every hit legitimate (the executor's "single rAF
+loop" / "one writer owns the visual" claims are scoped to the executor's own
+page-track loop; executor-logic.ts:334 "all three rAF channels" matches the
+architecture). Auditor A recorded three non-BLOCKing nitpicks, all judged below
+the BLOCK bar and tracked in Audit-120, not fixed: (1) nav-resolvers.ts "Header
+reacts through its own layer reading the pager store" comments do not mention the
+orchestrator-singleton settle / scrub reads but are contextually accurate; (2)
+mobile-pager.svelte.ts:23-26 framing; (3) header-mode.ts target-state note. The
+orchestrator does not second-guess a PASS by pre-emptively rewriting comments the
+auditors deemed acceptable. No code changes in R120; the R119 gate stands (check
+0 errors, lint exit 0, e2e 210 / 0 flaky). Counter 2/5. R121 next.
+
+## Session 125: R121 both PASS; clean round; counter 4/5
+
+R121 (spec scope). Both auditors voted PASS: zero in-scope concerns. The R119
+header-mode fix held; class-wide sibling greps classified every hit legitimate.
+Auditor A noted one new non-BLOCKing nitpick (FloatingActionButton.svelte:14-18
+attributes the style:transform binding to the layer when the atom owns it) plus
+the R120-carried nitpicks, all judged below the BLOCK bar and tracked in
+Audit-121, not fixed. No code changes in R121; the R119 gate stands. This is the
+second consecutive clean round (R120 + R121). Counter 4/5 (four consecutive PASS
+votes). One more PASS vote closes the cycle at 5/5. R122 next; the orchestrator
+declares closure only on a fully clean R122.

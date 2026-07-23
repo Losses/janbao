@@ -261,8 +261,10 @@ export interface PipelineMountInputs {
  *  consumers. The FAB layer reads this publication directly; the
  *  orchestrator publishes the in-flight pager fields via
  *  `#republishToPager` (a host calls only `resetPagerStore` for the
- *  at-rest reset), and the Header reads the macro + settle/scrub fields
- *  directly off this orchestrator singleton (not via the pager store). Per DV20 §13.5 the NavStateMachine is the sole
+ *  at-rest reset). The Header reads the macro morph / FROM-TO fields
+ *  (`backMorph`, `tapMorph`, `transitionTarget`) via the pager store,
+ *  and reads only the settle / scrub fields directly off this
+ *  orchestrator singleton. Per DV20 §13.5 the NavStateMachine is the sole
  *  authority for the macro fields (plan, FROM/TO, direction, in-flight)
  *  and the settle + tap-scrub micro animation state; `progress` is the
  *  orchestrator's per-frame contribution (synchronous per pointermove

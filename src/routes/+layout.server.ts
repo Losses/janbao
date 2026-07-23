@@ -45,7 +45,7 @@ export const load: LayoutServerLoad = async (event) => {
 	// never received this data and their swipe-back previews were cold-cache
 	// loading chips. Loading it at the root exposes the lists via `data` on every
 	// route, so deep pages render real previews (`cache ?? data`) and the swipe's
-	// "is the data available?" check (`MobileTab.hasData`) is true. Input-free on
+	// "is the data available?" check is true. Input-free on
 	// `url`, so SvelteKit reuses the result across navigations (no per-nav
 	// refetch); the active tab's `?page` pagination still comes from the
 	// per-route page loads.
