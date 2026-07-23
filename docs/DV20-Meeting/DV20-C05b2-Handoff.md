@@ -1,5 +1,12 @@
 # DV20 Cycle 5b2 - Handoff Document
 
+> **CONVERGED 2026-07-24 (R135, 5/5).** This cycle is COMPLETE. The spec-scoped
+> audit loop ran R99 to R135 (37 rounds) to five consecutive PASS votes. See
+> `docs/RV20-C05b2-Audit-135.md` (closing round + cycle summary) and
+> `docs/DV20-Meeting/DV20-C06-Readiness.md` (the next development cycle). The text
+> below is the R95 point-in-time handoff (superseded by the audit trail R96 to
+> R135); keep it as history.
+
 **Date:** 2026-07-19 (updated through R95). **For:** the next agent continuing the
 DV20 5b2 audit loop.
 

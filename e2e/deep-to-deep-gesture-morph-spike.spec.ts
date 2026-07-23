@@ -18,9 +18,11 @@ import { prepareContext, waitForHydration, swipeBack } from './helpers';
  * target is '/' (a TAB), so `targetHasTabs` flips false→true mid-settle. With
  * `settling` still true, `settleProgress` already ≈1 and `target` now 1, the
  * settle arm returns `current*(1-p) + target*p` ≈ 1 → morph spikes to 1 for the
- * flush(es) before Effect C/D end the settle. The 200ms CSS transition on the
- * tabs layer + icon turns that one-frame internal spike into a visible
- * "arrow→hamburger→arrow" + "tabs sink down then float up" flicker.
+ * flush(es) before Effect C/D end the settle. The Header has no CSS transition
+ * (the morph derives from `settleProgress` each flush), so the latched-record
+ * layer-style fix is the suppression: when settling consumers source endpoint
+ * identity from the latched record (effectiveTabsOut/In) instead of the live
+ * targetHasTabs, the one-frame internal spike cannot reach the layer styles.
  *
  * The back BUTTON does not spike: it is a popstate (no gesture), so Effect B
  * never fires and `morph` rests at `currentHasTabs ? 1 : 0` (= 0 on a deep
@@ -153,8 +155,9 @@ test('DEFECT: gesture-back /profile/edit → /profile/settings must not spike mo
 
 	await swipeBack(page);
 	await page.waitForFunction(() => location.pathname === '/profile/settings', { timeout: 6000 });
-	// Hold past the 200ms CSS transition window so the full settle + recovery lands
-	// in the trace.
+	// Hold past the settle window (TITLE_CROSSFADE_MS = 200, driven by the
+	// orchestrator's settle rAF) so the full settle + recovery lands in the
+	// trace.
 	await page.waitForTimeout(700);
 
 	const snaps = await readProbe(page);

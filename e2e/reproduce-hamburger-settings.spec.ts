@@ -67,10 +67,10 @@ test.describe('Hamburger to Arrow back animation stutter bug', () => {
 		expect(transitionFrame.titleTexts).toContain('账号设置');
 		expect(transitionFrame.titleTexts).toContain('');
 
-		// 2. The morph animates via the Header's rAF settle (no CSS transition on
-		// the root layer): the root layer's style must vary across the sampled
-		// frames, proving the rAF publishes intermediate morph values (no sudden
-		// snap / jump).
+		// 2. The morph animates via the orchestrator settle ease (no CSS
+		// transition on the root layer): the root layer's style must vary across
+		// the sampled frames, proving the orchestrator's settle rAF publishes
+		// intermediate morph values (no sudden snap / jump).
 		const rootLayerStyles = states
 			.filter((s) => s && typeof s.rootLayer === 'string' && s.rootLayer.length > 0)
 			.map((s) => s.rootLayer);

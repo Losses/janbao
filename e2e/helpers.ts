@@ -214,13 +214,15 @@ export function collectConsole(page: Page): string[] {
 }
 
 // --- Thread enter-animation capture ----------------------------------------
-// NavPipelineHost plays a list→thread slide-in when a discussion is reached
-// from `/` (shouldAnimateEnter): the track starts at translateX(0%) and animates
-// to translateX(-33.3%) over ~200ms. We sample the track's computed translateX
-// to prove the animation ran - the only behavioural signal that the transition
-// animated. The regression test for the tab-tap-return bug relies on this: a
-// stale thread entry in the nav stack suppresses the slide-in (the track is born
-// already centred and never moves).
+// NavPipelineHost plays a list→thread slide-in when the discussion is reached
+// from the resolved left href (the `shouldEnter` $derived.by gate: forward
+// direction AND the stack's previous pathname === resolvedLeftHref): the track
+// is seeded at translateX(0px) and slides to its resting translateX(-33.333%)
+// over ~200ms. We sample the track's computed translateX to prove the animation
+// ran - the only behavioural signal that the transition animated. The regression
+// test for the tab-tap-return bug relies on this: a stale thread entry in the
+// nav stack breaks the shouldEnter precondition and suppresses the slide-in
+// (the track is born already at rest and never moves).
 
 interface EnterAnimState {
 	samples: number[];
@@ -356,9 +358,11 @@ export interface HeaderScrollCapture {
 export async function captureHeaderOnThreadScroll(page: Page): Promise<HeaderScrollCapture> {
 	return page.evaluate(async () => {
 		const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-		// Wait for a layout frame AND for the Header's hide/show
-		// `transition-transform duration-200` to settle before reading geometry:
-		// the assertions check the SETTLED state, not mid-animation.
+		// Wait for a layout frame AND for the Header's hide/show translateY to
+		// reach its settled value before reading geometry: the hide/show is a
+		// reactive read of the scroll-chrome store (its own rAF-throttled
+		// scroll listener publishes each frame; no CSS transition on the
+		// Header). The assertions check the SETTLED state, not mid-animation.
 		const afterFrame = (): Promise<void> =>
 			new Promise<void>((resolve) =>
 				requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
@@ -725,13 +729,14 @@ export async function capturePagerSwitch(
 }
 
 // --- NavPipelineHost track-presence capture ------------------------------
-// Polls `.detail-scroll-pane` (the GPL centre panel, present only when a
-// NavPipelineHost is mounted) each frame for ~700ms across `trigger`. The
-// push animation (shouldAnimateEnter) needs that track to slide, so a route
-// that never mounts a GPL (the compose routes /post/discussion, /messages/new,
-// which render DualColumnLayout only) records zero track frames = no push
-// animation. Contrasts with thread/deep routes where the track mounts and the
-// enter slide plays (use captureEnterAnimation for the slide magnitude there).
+// Polls `.detail-scroll-pane` (the centre panel, present only when a
+// NavPipelineHost is mounted) each frame for ~700ms across `trigger`. Every
+// mobile route that mounts NavPipelineHost (the thread / deep routes AND the
+// three compose routes /post/discussion, /messages/new, /messages/add/[userId],
+// which mount NavPipelineHost via MessageCompose / directly) owns a track the
+// enter animation (`shouldEnter`) slides. The capture's track-presence signal
+// distinguishes a route that mounts the host from one that does not; use
+// captureEnterAnimation for the slide magnitude on a thread / deep route.
 
 interface GplTrackFrame {
 	t: number;

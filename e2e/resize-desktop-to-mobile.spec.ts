@@ -4,18 +4,21 @@ import { prepareContext, waitForHydration, clickDiscussion } from './helpers';
 /**
  * Desktop→mobile resize regression coverage for NavPipelineHost.
  *
- * The pager initialises `snapIndex = isEntering ? 0 : ACTIVE`. On a list→thread
- * SPA navigation `navStore.direction` is `'forward'` and the stack is
- * `['/', '/discussion/x']`, so `shouldAnimateEnter()` is true and `snapIndex`
- * starts at 0 - the first frame of the mobile slide-in. The one-frame `enterRaf`
- * that advances it back to ACTIVE (centre) is gated `if (isEntering && isMobile)`,
- * so on a DESKTOP mount it never runs and `snapIndex` is stranded at 0. Desktop
- * hides this (the track is `display:block; transform:none`, snapIndex unused);
- * resizing into mobile then rests the pager on panel 0 - the LEFT / discussions
- * list ("homepage") - pushing the thread off-screen. Hard deep-links are immune
- * (`beforeNavigate` doesn't fire on load → direction stays `'none'` → snapIndex
- * starts at ACTIVE), so the reproduction MUST go through an in-app list→thread
- * navigation at desktop size.
+ * The enter animation gate is the `shouldEnter` $derived.by in
+ * NavPipelineHost.svelte (forward direction AND the stack's previous pathname
+ * === resolvedLeftHref). On a list→thread SPA navigation `navStore.direction`
+ * is `'forward'` and the stack is `['/', '/discussion/x']`, so `shouldEnter` is
+ * true and `orchestrator.playEnterAnimation()` seeds the track at
+ * translateX(0px) on the first mobile frame and slides to its resting
+ * translateX(-33.333%). The play is gated on a mobile check inside the
+ * orchestrator, so on a DESKTOP mount it never runs and the track rests at
+ * translateX(0px) = panel 0 (the LEFT / discussions list, "homepage"),
+ * pushing the thread off-screen. Desktop hides this (the track is
+ * `display:block` at desktop); resizing into mobile then leaves the pager
+ * resting on panel 0. Hard deep-links are immune (`beforeNavigate` doesn't fire
+ * on load → direction stays `'none'` → shouldEnter is false → the track seeds
+ * at its resting -33.333% with the centre panel in view), so the reproduction
+ * MUST go through an in-app list→thread navigation at desktop size.
  */
 
 const DESKTOP_VIEWPORT = { width: 1280, height: 800 } as const;
@@ -28,8 +31,8 @@ test.beforeEach(async ({ context }) => {
 /**
  * The thread's centre panel (`.detail-scroll-pane`) is the panel the user was
  * reading on desktop. After a resize into mobile it MUST remain in the viewport.
- * Pre-fix: snapIndex=0 → translateX(0%) → the centre panel sits at left≈vw
- * (off-screen) while the left list panel takes the viewport.
+ * The defect: track resting at translateX(0px) → the centre panel sits at
+ * left≈vw (off-screen) while the left list panel takes the viewport.
  */
 async function centrePanelLeft(page: import('@playwright/test').Page): Promise<number> {
 	return page.evaluate(() => {
@@ -46,7 +49,9 @@ test('thread stays centred after a desktop list→thread SPA nav + resize to mob
 	await page.goto('/');
 	await waitForHydration(page);
 
-	// 2. In-app list→thread navigation at desktop: arms the stale snapIndex=0.
+	// 2. In-app list→thread navigation at desktop: arms the resting translateX(0px)
+	//    (the enter-animation seeds the track at 0px and the desktop mount never
+	//    slides it to -33.333%).
 	await clickDiscussion(page, 0);
 	await page.waitForURL(/\/discussion\//);
 
@@ -72,9 +77,10 @@ test('thread stays centred after a desktop list→thread SPA nav + resize to mob
 
 test('hard deep-link to a thread is immune (sanity for the reproduction path)', async ({ page }) => {
 	// A full load never fires beforeNavigate, so direction stays 'none',
-	// shouldAnimateEnter() is false, and snapIndex starts at ACTIVE. Resizing to
-	// mobile must therefore leave the thread centred - guards against a "fix" that
-	// happens to pass by accident on the deep-link path while missing the SPA path.
+	// shouldEnter is false, and the track seeds at its resting translateX(-33.333%)
+	// with the centre panel in view. Resizing to mobile must therefore leave the
+	// thread centred - guards against a "fix" that happens to pass by accident on
+	// the deep-link path while missing the SPA path.
 	await page.setViewportSize(DESKTOP_VIEWPORT);
 	await page.goto('/');
 	await waitForHydration(page);

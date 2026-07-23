@@ -79,7 +79,9 @@ function clone(state: NavState): NavState {
  * cross-tab branch of handleBeforeNavigateNav. Centralising this is what
  * prevents a stale thread entry from a prior visit surviving below the stack
  * top after returning to a tab - which would otherwise break the list→thread
- * enter animation's `prevPath === '/'` precondition (shouldAnimateEnter).
+ * enter animation's `shouldEnter` precondition (the stack's previous pathname
+ * must equal `resolvedLeftHref`, so a stale thread entry there suppresses the
+ * slide-in).
  */
 function seedStackForLanding(
 	stacks: Record<number, RouteEntry[]>,

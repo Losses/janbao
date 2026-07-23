@@ -3,12 +3,14 @@
  * Layer 1 reactive wrapper around the pure orchestrator reducer in
  * `nav-state-machine-logic.ts`.
  *
- * Per `docs/DV20-Plan.md` §2 Layer 1 + §9: the orchestrator owns the
- * macro state of a navigation transition and the SvelteKit interop
- * boundary. It does NOT touch the DOM (the executor owns that); it
- * models the macro phases the orchestrator dispatches to. Every
- * mobile gesture route mounts a pipeline host whose orchestrator feeds
- * this store; there is no parallel gesture state machine.
+ * Per DV20 §13.5: this store (the NavStateMachine) is the sole authority
+ * for the macro transition state (phase, plan, FROM/TO, direction). The
+ * NavPipelineOrchestrator dispatches intent / resolved / land events into
+ * it and reads its state via `$derived`; the orchestrator (not this store)
+ * owns the SvelteKit interop boundary. This store does NOT touch the DOM
+ * (the executor owns that). Every mobile gesture route mounts a pipeline
+ * host whose orchestrator feeds this store; there is no parallel gesture
+ * state machine.
  *
  * The wrapper is a thin `$state` shell with FOUR mutation methods:
  * `dispatch()` delegates every transition event to the pure reducer

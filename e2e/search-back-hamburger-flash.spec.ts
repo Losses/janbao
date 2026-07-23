@@ -189,8 +189,8 @@ async function loadTabRoot(page: Page, href: string): Promise<void> {
 async function enterSearch(page: Page): Promise<void> {
 	await page.locator('header a[href="/search"][aria-label]').click();
 	await page.waitForURL('**/search', { timeout: 8000 });
-	// Let the entry scrub + CSS transitions fully settle so the back nav starts
-	// from the steady search state.
+	// Let the entry scrub (orchestrator tap-scrub rAF) + the settle ease fully
+	// settle so the back nav starts from the steady search state.
 	await page.waitForTimeout(450);
 }
 
@@ -255,7 +255,7 @@ test('REGRESSION: browser-back /search -> / keeps the hamburger down (no arrow f
 	await installIconSampler(page);
 	await page.goBack();
 	await page.waitForURL('**/', { timeout: 8000 });
-	// Capture through the ~200ms scrub + the CSS transition settle.
+	// Capture through the ~200ms tap-scrub rAF + the orchestrator settle ease.
 	await waitForIconSamplerDone(page);
 
 	const log = await readIconLog(page);

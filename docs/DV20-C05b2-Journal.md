@@ -5411,3 +5411,69 @@ registers dependencies") and route-config.ts:166-168 temporal anchor ("For Cycle
 1 ... in a later cycle" became present-state). Comment-only; check 0 errors (1467
 files); lint exit 0; prettier clean; no U+2014; R129's e2e (210 / 0 flaky) stands.
 Counter 2/5. R131 next.
+
+## Session 135: R131 A PASS + B BLOCK; nav-state-machine docstring stale pre-§13.5 framing fixed; counter resets to 0/5
+
+R131 (spec scope, stripped prompt). Auditor A PASS; auditor B BLOCK on
+nav-state-machine.svelte.ts:6-8: the file docstring used the pre-§13.5 plan
+terminology ("the orchestrator owns the macro state ... and the SvelteKit interop
+boundary"), conflating the NavStateMachine (the §13.5 sole macro-state authority)
+with the NavPipelineOrchestrator (which owns the SvelteKit interop and dispatches
+events into the state machine). Fixed: the docstring now states this store is the
+sole §13.5 macro-state authority; the orchestrator dispatches intent / resolved /
+land events plus owns the SvelteKit interop. R130 had been clean (2/5); B's concern
+resets to 0/5. check 0 errors (1467 files); lint exit 0; prettier clean; no U+2014.
+Comment-only; R129's e2e (210 / 0 flaky) stands. Counter 0/5. R132 next.
+
+## Session 136: R132 A PASS + B BLOCK; 16 e2e/production stale comments + 1 flake root-cause fixed; counter 0/5
+
+R132 (spec scope, stripped prompt). Auditor A PASS (production focus); auditor B
+BLOCK on a 16-site stale-comment class: e2e specs + helpers.ts +
+navigation-logic.ts:82, all describing removed animation mechanisms (Header CSS
+transitions, Header-owned rAFs, snapIndex / shouldAnimateEnter / enterRaf),
+including factual errors (compose routes DO mount NavPipelineHost; track is
+-33.333% not -50%). A fixer fixed all 16 plus a comprehensive e2e sweep (zero
+removed-mechanism refs remain; the third e2e-staleness round after R128 / R129).
+The fixer also root-caused a flake (fab-release-snap assertSmoothRelease:
+wall-clock 18ms guard miscalibrated after the FAB curve steepened), fixed with a
+deterministic intermediate-publications guard (bar-preserving; a pop still fails).
+The orchestrator independently verified the guard logic (bar-preserving +
+deterministic) and re-ran the full e2e (210 / 0 flaky). check 0 errors (1467
+files); lint exit 0; prettier clean; no U+2014. Counter 0/5. R133 next.
+
+## Session 137: R133 both PASS; clean round; counter 2/5
+
+R133 (spec scope, stripped prompt). Both auditors PASS: zero in-scope concerns. Both
+read every navigation/animation file in full; the R132 comprehensive e2e cleanup
+held. Out-of-scope: the driver-interface FAB / Header write extensibility hook
+(unused in production, tested, documented; recurring since R117; intentional
+extensibility, left) and nav-state-machine-logic.test.ts:7 "reserved for Cycle 5"
+stale cycle anchor (test-file, substance correct). No code changes in R133; R132's
+e2e (210 / 0 flaky) stands. Counter 2/5. Two more consecutive clean rounds reach
+5/5. R134 next.
+
+## Session 138: R134 both PASS; clean round; counter 4/5
+
+R134 (spec scope, stripped prompt). Both auditors PASS: zero in-scope concerns. Both
+read every navigation/animation file in full; both ran the rAF-ownership sibling grep
+(all legitimate). The R132 e2e cleanup held. No code changes in R134; R132's e2e
+(210 / 0 flaky) stands. This is the second consecutive clean round (R133 + R134).
+Counter 4/5 (four consecutive PASS votes). One more PASS vote closes the cycle at
+5/5. R135 next; the orchestrator declares closure only on a fully clean R135.
+
+## Session 139: R135 both PASS; CYCLE CONVERGED at 5/5; DV20-C05b2 COMPLETE
+
+R135 (spec scope, stripped prompt). Both auditors PASS: zero in-scope concerns. Both
+read every navigation/animation file in full; both ran the binding rAF-ownership
+sibling grep (all legitimate). This is the fifth consecutive PASS vote (R133 + R134
+
+- R135 = six votes). DV20-C05b2 is CONVERGED at the full 5/5 bar. The pipeline
+  satisfies the spec on every point; full e2e 210 / 0 flaky (last independently
+  verified at R132; R133-R135 made no code changes, so the state is identical). check
+  0 errors (1467 files); lint exit 0; prettier clean; no U+2014. **DV20-C05b2
+  COMPLETE.** The spec-scoped convergence (R99 onward) ran 37 rounds; the long tail
+  was comment accuracy plus e2e-suite staleness (rAF-ownership overclaims, the A111/
+  A116 publication regression, a route-config dead-code cluster, systematic e2e stale
+  comments, two load-induced flakes), all fixed. Next: per DV20-Plan §11, the next
+  development cycle is Cycle 6 (Offline unification), which requires a Cycle spec
+  (the architect's role).

@@ -7,8 +7,8 @@ import { prepareContext, waitForHydration } from './helpers';
  * Symptom: during a tab-swipe drag the FAB scale tracks the finger 1:1 (the live
  * `pager.fractionalIndex` drives it), but the moment the finger lifts the scale
  * LEAPS to its resting endpoint in a single frame instead of easing across the
- * pager's 200ms CSS snap like the track itself does. The FAB "pops" while the
- * panels are still sliding.
+ * orchestrator's ~200ms commit-slide rAF like the track itself does. The FAB
+ * "pops" while the panels are still sliding.
  *
  * This spec isolates the RELEASE window (the existing fab.spec.ts trajectory
  * tests sample the whole gesture and mask this jump with a 0.25 tolerance plus
@@ -120,21 +120,23 @@ async function captureFabScale(
 }
 
 /**
- * Assert the release scaled SMOOTHLY using two sample-independent guards:
- *   1. TIME-based descent: the wall-clock span from the LAST sample above `hi`
- *      to the FIRST subsequent sample at or below `lo` must exceed
- *      DESCENT_MS_FLOOR. rAF timestamps advance through main-thread blocks, so
- *      this measures real elapsed time regardless of how many rAF ticks the
- *      sampler happened to capture. A correct ease crosses in 30+ ms; a
- *      one-frame pop crosses in ~16ms (a single rAF tick).
+ * Assert the release scaled SMOOTHLY using two deterministic guards (neither
+ * depends on rAF sample timing: rAF timestamps can compress multiple FAB
+ * publications into a few-ms window under main-thread pressure):
+ *   1. INTERMEDIATE-PUBLICATIONS check: between the LAST sample above `hi` and
+ *      the FIRST subsequent sample at or below `lo`, the FAB scale must take at
+ *      least `MIN_INTERMEDIATES` distinct intermediate values. A one-frame pop
+ *      (e.g. 0.39 -> 0.00) publishes ZERO intermediate values; a correct ease
+ *      publishes at least one (the FAB scale is a continuous function of the
+ *      commit-slide progress, and the orchestrator's per-tick progress clamp
+ *      guarantees the progress advances incrementally).
  *   2. LEAP check: no single captured frame may leap from above `gapHi` to
  *      below `gapLo` with magnitude >= 0.2. A pop (e.g. 0.39 -> 0.00)
  *      registers a ~0.39 drop, well over the threshold; a correct ease produces
  *      successive samples close enough that no step approaches it.
- * Both guards are rAF-tick-count-independent: the route-navigation main-thread
- * block can leave the sampler with very few ticks in the (lo, hi) band on a
- * correct ease, so the assertion must not depend on how many ticks landed
- * inside that band.
+ * Both guards are wall-clock-independent: the route-navigation main-thread
+ * block can compress the rAF timestamps of consecutive FAB publications, so the
+ * assertion must not depend on wall-clock span.
  */
 function assertSmoothRelease(
 	capture: TrajectoryCapture,
@@ -143,12 +145,13 @@ function assertSmoothRelease(
 	gapHi: number,
 	gapLo: number
 ): void {
-	// Guard 1: time-based descent. The release must spend real wall-clock time
-	// descending from above `hi` to at-or-below `lo`. rAF timestamps advance
-	// through main-thread blocks, so this is sample-count-independent: a
-	// one-frame pop crosses in ~16ms (a single tick); a correct ease takes
-	// 30+ ms. The floor sits between those regimes.
-	const DESCENT_MS_FLOOR = 18;
+	// Guard 1: intermediate-publications. A one-frame pop publishes ZERO
+	// intermediate scale values between the > hi sample and the <= lo sample;
+	// a correct ease publishes at least MIN_INTERMEDIATES distinct values in
+	// the (lo, hi] band. This is wall-clock-independent (counts FAB
+	// publications, not rAF ticks), so main-thread rAF compression cannot
+	// flake it.
+	const MIN_INTERMEDIATES = 1;
 	let lastHighIdx = -1;
 	for (let i = 0; i < capture.samples.length; i++) {
 		if (capture.samples[i].scale > hi) lastHighIdx = i;
@@ -162,16 +165,19 @@ function assertSmoothRelease(
 			}
 		}
 	}
-	const descentMs =
-		lastHighIdx >= 0 && firstLowIdx > lastHighIdx
-			? capture.samples[firstLowIdx].t - capture.samples[lastHighIdx].t
-			: Number.NaN;
+	const intermediateValues = new Set<number>();
+	if (lastHighIdx >= 0 && firstLowIdx > lastHighIdx) {
+		for (let i = lastHighIdx + 1; i < firstLowIdx; i++) {
+			const s = capture.samples[i].scale;
+			if (Number.isFinite(s)) intermediateValues.add(s);
+		}
+	}
 	expect(
-		descentMs,
-		`release must take at least ${DESCENT_MS_FLOOR}ms to descend from >${hi} to <=${lo} (a one-frame pop crosses in ~16ms). descentMs=${descentMs.toFixed(1)} scales=[${capture.finiteScales
+		intermediateValues.size,
+		`release must publish at least ${MIN_INTERMEDIATES} intermediate scale value(s) between >${hi} and <=${lo} (a one-frame pop publishes zero). intermediates=${[...intermediateValues].map((s) => s.toFixed(2)).join(',')} scales=[${capture.finiteScales
 			.map((s) => s.toFixed(2))
 			.join(',')}]`
-	).toBeGreaterThanOrEqual(DESCENT_MS_FLOOR);
+	).toBeGreaterThanOrEqual(MIN_INTERMEDIATES);
 
 	// Guard 2: leap check. No single captured frame may leap from above `gapHi`
 	// to below `gapLo`. A one-frame pop (0.39 -> 0.00) registers a ~0.39

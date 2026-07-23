@@ -10,12 +10,16 @@ import {
 /**
  * Thread enter-animation regression coverage.
  *
- * NavPipelineHost's playEnterAnimation plays a list→thread slide-in (track translateX 0% → -50%
- * over ~200ms) only when the discussion was reached from `/`
- * (shouldAnimateEnter: prevPath === '/'). A tab-bar tap that returns to the list
- * goes through switchTab; if that leaves a stale thread entry in the tab's nav
- * stack, the NEXT list→thread push sees prevPath = that stale thread, the
- * precondition fails, and the slide-in is silently suppressed. These tests
+ * NavPipelineHost's orchestrator.playEnterAnimation plays a list→thread
+ * slide-in (track seeded at translateX(0px) and slid to its resting
+ * translateX(-33.333%) over ~200ms on the 3-panel-wide track) only when the
+ * `shouldEnter` $derived.by gate passes: `navStore.direction === 'forward'`
+ * AND the stack's previous pathname === resolvedLeftHref (the resolved left
+ * href for a thread is the discussions list root). A tab-bar tap that returns
+ * to the list goes through switchTab; if that leaves a stale thread entry in
+ * the tab's nav stack, the NEXT list→thread push sees a previous pathname that
+ * is the stale thread, not the resolved left href, so the `shouldEnter`
+ * precondition fails and the slide-in is silently suppressed. These tests
  * sample the track's translateX to prove the animation actually ran.
  *
  * Faithfulness note: the tab-tap return MUST be a real click on

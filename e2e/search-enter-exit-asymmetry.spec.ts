@@ -20,10 +20,10 @@ import { prepareContext, waitForHydration } from './helpers';
  * The gesture exit scrubs `morph` continuously: NavPipelineHost writes
  * pager.backMorph 0->1 with the finger and Header `morph` reads it. The tap nav
  * has no finger and no title change (/search has no deep title, so the
- * title-settle driver stays idle), so Header.startSearchScrub drives the same
- * timeline with a rAF (1->0 on enter, 0->1 on exit) over ~200ms. While it runs,
- * the search consumers drop their CSS transition and follow `morph` 1:1, as a
- * drag does.
+ * title-settle driver stays idle), so the orchestrator's tap-scrub rAF drives
+ * the same timeline via `pager.tapMorph` (1->0 on enter, 0->1 on exit) over
+ * ~200ms. The search consumers have no CSS transition; they reactively follow
+ * `morph` 1:1, as a drag does.
  *
  * The tests sample the header track translateX + the SearchTabBar max-height
  * (+ pager.backMorph) every frame and assert the spec for both directions:
@@ -249,10 +249,10 @@ test('EXIT search via back-swipe: scope-tab bar collapses to ~0 while the track 
 });
 
 // --- ENTER (tap): slide the track in, THEN expand the scope-tab bar (SPEC) ---
-// Guards the rAF scrub in Header.startSearchScrub. A regression that reverts
-// the tap-enter to a morph jump makes the track slide and the scope-tab bar
-// expand fire their CSS transitions in parallel, leaving no frame where the
-// track has slid but the scope-tab bar has not yet expanded.
+// Guards the tap-scrub rAF in the orchestrator (publishing pager.tapMorph). A
+// regression that reverts the tap-enter to a morph jump makes the track slide
+// and the scope-tab bar expand land in the same flush, leaving no frame where
+// the track has slid but the scope-tab bar has not yet expanded.
 test('ENTER search via tap: track slides in BEFORE the scope-tab bar expands (spec: slide-then-expand)', async ({
 	page
 }) => {
@@ -305,10 +305,11 @@ test('ENTER search via tap: track slides in BEFORE the scope-tab bar expands (sp
 	// DV17 sync + CALIBRATION. The Header track and the Page panel both read
 	// pager.tapMorph, so they move together. Assert their normalized progress
 	// stays within a tight band across the active slide. CALIBRATION baseline:
-	// on master the Header track scrubs in ~83ms (cubic morph) while the Page
-	// panel CSS-slides over 200ms (snapIndex + duration-200), so
-	// |trackNorm - pageNorm| peaks near 0.5 mid-flight, failing the <0.2 band.
-	// DV17 drives both from the linear tapMorph, giving maxDelta ~0.000.
+	// a regression that drives the two from separate timings (the Header track
+	// via the orchestrator's tap-scrub rAF, the Page panel via a separate
+	// rAF channel) makes |trackNorm - pageNorm| peak mid-flight, failing the
+	// <0.2 band. DV17 drives both from the linear tapMorph, giving
+	// maxDelta ~0.000.
 	const peakContent = Math.max(...searchFrames.map((f) => Math.abs(f.contentTx ?? 0)));
 	const syncFrames = searchFrames.filter(
 		(f) => f.contentTx !== null && Math.abs(f.contentTx ?? 0) > peakContent * 0.1
