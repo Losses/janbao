@@ -3,9 +3,8 @@ import { mdiForum, mdiLightningBolt, mdiEmailOutline } from '@mdi/js';
 /**
  * tab-config - the pure (runes-free) source of truth for the primary mobile
  * tabs and the global non-tab routes. Shared by:
- *   - route-config.ts, which layers the browser-only bits on top (the page-cache
- *     populated check, the list panel component, and the config-driven
- *     route->tab resolution), and
+ *   - route-config.ts, which layers the browser-only consumer configs on top
+ *     (route->tab resolution, back-preview panels, route classifiers), and
  *   - navigation-logic.ts (stores/navigation-logic.ts), which derives tab count,
  *     root hrefs, and the path->tab mapping from it instead of hardcoding the
  *     site's directory structure.

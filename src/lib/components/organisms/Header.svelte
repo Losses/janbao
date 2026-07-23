@@ -29,7 +29,8 @@
 	 * `pager.scrubIconEndpoint`, and `pager.transitionTarget`, and derives
 	 * every visual from them.
 	 * No Header-owned rAF, no Header-owned animation state, no CSS transitions
-	 * in this layer. §5: the orchestrator's publication (synchronous per
+	 * in this layer. §5: the orchestrator (publication record + pager-store morph
+	 * fields it writes via #republishToPager; synchronous per
 	 * pointermove during a drag, via the rAF channels during a commit/settle/scrub)
 	 * drives every motion; the
 	 * hide-on-scroll `translateY` is a reactive read of the scroll-chrome
@@ -159,7 +160,7 @@
 			// direction), so invert it on a tab host (currentHasTabs): morph =
 			// 1 - backMorph. On a deep host (no tabs) morph follows backMorph
 			// directly (0 -> 1 = deep -> back-target, correct direction). When
-			// backMorph is null (no in-flight publication) fall back to the
+			// backMorph is null (centerTab or tab-to-tab publishes null) fall back to the
 			// static tab-ness.
 			const bm = pager.backMorph;
 			if (bm !== null) {
@@ -199,8 +200,8 @@
 	// target in from above). The title spans read `progress` directly: during
 	// a settle it is the orchestrator-published `settleProgress`, animated
 	// frame-by-frame by the orchestrator's settle rAF; during a drag it is
-	// `pager.backMorph` (the orchestrator's synchronous per-pointermove
-	// publication; the executor's rAF is stopped during a drag); at
+	// `pager.backMorph` (a pager-store field the orchestrator writes synchronously
+	// per pointermove; the executor's rAF is stopped during a drag); at
 	// rest it is 1. No CSS transition is involved on the title spans.
 	interface TitleView {
 		outgoing: string;
@@ -313,16 +314,17 @@
 
 	// Root↔search horizontal track.
 	// During an orchestrator-in-flight transition the track reads
-	// `pager.backMorph` (the orchestrator's publication: synchronous and
-	// raw per pointermove during a drag, eased via the executor's rAF
-	// during a commit/cancel slide) so it stays frame-synced with the
-	// NavPipelineHost Page panel that same publication drives.
+	// `pager.backMorph` (a pager-store field the orchestrator writes via
+	// #republishToPager: raw per pointermove during a drag, eased via the
+	// executor's rAF during a commit/cancel slide) so it stays frame-synced with the
+	// NavPipelineHost Page panel (the executor writes that panel's transform
+	// via `LiveNavDomDriver` from the same per-pointermove progress).
 	// The ENTER and EXIT branches invert because backMorph is the slide
 	// progress 0→1 in both directions, while the morph signal (tab-ness) runs
 	// 1→0 on a forward-enter (transitionTarget === currentPath, arriving at
 	// /search) and 0→1 on a backward-exit (transitionTarget !== currentPath,
 	// leaving /search). Outside an orchestrator transition the track falls
-	// back to pager.tapMorph (the orchestrator's tap-scrub rAF publication),
+	// back to pager.tapMorph (a pager-store field the orchestrator's tap-scrub rAF writes),
 	// then to morph (rest / gesture-settle).
 	const trackMorph = $derived(
 		pager.transitionTarget !== null && pager.backMorph !== null
@@ -335,8 +337,9 @@
 	);
 	// searchProgress is the search-layout position the Header renders: 1 when
 	// the search panel fills the track, 0 when the root panel fills it. The
-	// orchestrator owns the motion; the consumers (track / search button /
-	// scope-tab bar) are pure functions of this value. Three sources by
+	// orchestrator owns the motion; the consumers (track / search button) are
+	// pure functions of this value. The scope-tab bar uses `tabProgress`, not
+	// searchProgress. Three sources by
 	// precedence:
 	//   1. A tap-scrub in flight (pager.tapMorph !== null): tapMorph is
 	//      `isSearch`-inverted (1 = not search, 0 = search), so searchProgress
@@ -371,15 +374,16 @@
 	});
 
 	// Pure functions of searchProgress / tabProgress. No CSS transition: the
-	// orchestrator's publication (synchronous per pointermove during a drag,
-	// via the rAF channels during a commit/settle/scrub) drives every frame;
+	// orchestrator writes the pager-store fields these derive from, every frame
+	// (synchronous per pointermove during a drag, via the rAF channels during a
+	// commit/settle/scrub);
 	// the styles re-render via Svelte's reactive `style=` binding. §5: no
 	// CSS transitions in this layer.
 	const trackStyle = $derived(`transform: translateX(${-(searchProgress * 50).toFixed(2)}%);`);
 
 	// The SINGLE search button: absolute, slides from right to left. Driven by
-	// the SAME searchProgress as the track so it is sync'd with the
-	// orchestrator's publication.
+	// the SAME searchProgress as the track so it stays in sync with it
+	// (searchProgress reads the pager-store fields the orchestrator writes).
 	// `left` is a linear interp from calc(100% - 3rem) at progress 0 to
 	// 0.5rem at progress 1.
 	const searchButtonLeft = $derived(
@@ -623,9 +627,9 @@
 
 			<!-- Single search button: slides from right (root) to left (search =
 			     hamburger position) via the reactive `searchButtonStyle` binding
-			     (no CSS transition; the orchestrator's publication, synchronous
-			     per pointermove during a drag and via the rAF channels during a
-			     commit/settle/scrub, drives `searchProgress`). Always rendered;
+			     (no CSS transition; the orchestrator writes the pager-store fields
+			     `searchProgress` reads, synchronously per pointermove during a drag
+			     and via the rAF channels during a commit/settle/scrub). Always rendered;
 			     ONE icon. -->
 			<a
 				href="/search"

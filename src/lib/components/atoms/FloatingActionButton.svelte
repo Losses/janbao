@@ -13,8 +13,9 @@
 	 * driven by the orchestrator's per-frame publication; the scroll-hide
 	 * translateY is driven by the scroll-chrome store (its own
 	 * rAF-throttled scroll listener). The layer is a reactive reader of
-	 * both sources and binds them through the inline `style:transform`
-	 * binding; the atom has no transition directive.
+	 * both sources, derives `scale` and `translateY`, and passes them as
+	 * props to the atom, which applies the inline `style:transform`
+	 * binding. The atom carries no CSS transition directive.
 	 *
 	 * Visibility gates (both feed `pointer-events` and `aria-hidden`):
 	 *   - scale hidden: `scale < 0.01` (route-transition scale-out)

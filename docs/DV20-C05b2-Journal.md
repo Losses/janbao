@@ -5256,3 +5256,111 @@ Audit-121, not fixed. No code changes in R121; the R119 gate stands. This is the
 second consecutive clean round (R120 + R121). Counter 4/5 (four consecutive PASS
 votes). One more PASS vote closes the cycle at 5/5. R122 next; the orchestrator
 declares closure only on a fully clean R122.
+
+## Session 126: R122 both BLOCK at 4/5; SearchScopePager curve comment + route-config dead-code cluster fixed; counter resets to 0/5
+
+R122 (spec scope), the would-be closing round (counter 4/5, one PASS vote from
+5/5). Both auditors BLOCK. A: SearchScopePager.svelte:11-12 and :212-213
+attributed the `2u - u²` curve to "the orchestrator's commit / tap-scrub rAFs"
+(commit is the executor's; settle omitted); fixed both to point at the
+authoritative `commitEase`. B: the first substantive (non-comment) defect in the
+R99 to R122 stretch, a dead-code cluster in route-config.ts left over from an
+earlier panel-fallback design (`MOBILE_TABS[activeTab].panel`, never read by any
+consumer): the MobileTab .panel, .checkCache, .hasData fields; TAB_LIST_PANELS;
+two helpers; two type aliases; three panel-component imports (TabDiscussionsPanel,
+TabActivityPanel, TabMessagesPanel); and their three orphan files. Plus three
+stale comments (PREVIEW_PANEL_CONFIG header, getPreviewPanel docstring,
+NavPipelineHost:595); the spec's 5b1-skipped #3 was meant to clear this class and
+missed it. Removed the full cluster (including checkCache / hasData, which B
+marked out-of-scope but the horizontal check pulled in as same-class dead
+MobileTab fields); MOBILE_TABS is now `readonly TabDef[] = MOBILE_TAB_DEFS`; fixed
+the five stale comments plus the +layout.server.ts:48 hasData reference. The
+orchestrator independently grep-verified zero readers of every removed identifier.
+check 0 errors (1467 files); lint exit 0; unit 437 pass; FULL e2e 210 / 0 flaky
+(9.2m) re-run because the fix changed code. Counter resets to 0/5 (both BLOCK;
+R120 + R121 votes wiped). R123 next.
+
+## Session 127: R123 both BLOCK; tab-config stale prose + NavPipelineTabHost rAF overclaim fixed; counter 0/5
+
+R123 (spec scope). Both auditors BLOCK, different classes. A: tab-config.ts:6-8
+header docstring still claimed route-config.ts layers "the page-cache populated
+check" and "the list panel component" that R122 deleted; a prose sibling the R122
+horizontal check missed (it grepped identifiers, not conceptual phrasings in
+sibling files). B: NavPipelineTabHost.svelte:352 runPassthrough comment overclaimed
+"the orchestrator's gesture-animation rAF" (the slide rAF is the executor's; no
+rAF during a drag), a sibling of the R122 SearchScopePager rAF-ownership class.
+Both fixed (tab-config now lists route->tab resolution, back-preview panels,
+route classifiers; NavPipelineTabHost now says "the in-flight gesture / commit-slide
+animation"). The R122 horizontal-check gap (identifiers vs conceptual prose)
+recorded in auto-memory. check 0 errors (1467 files); lint exit 0; prettier clean;
+no U+2014. Comment-only; R122's e2e (210 / 0 flaky) remains valid. Counter 0/5.
+R124 next.
+
+## Session 128: R124 A PASS + B BLOCK; publication-writes-track overclaim (3 siblings) fixed; counter 0/5
+
+R124 (spec scope). Auditor A PASS; auditor B BLOCK on three sibling comments that
+overclaim the orchestrator's publication writes or drives the page-track slide.
+The track transform is written by the executor via LiveNavDomDriver (executor
+#publish -> publishFrame -> driver.write -> pageTrack.style.transform,
+nav-dom-driver-live.ts:118-127); the publication is the separate reactive record
+for FAB / Header. The three comments (NavPipelineHost.svelte:506-508, :509-511,
+Header.svelte:319) contradicted NavPipelineHost's own top docstring (line 11:
+"track's transform is written by LiveNavDomDriver"). B notes A111 / A116
+introduced the "publication" phrasing, a regression from those rAF-ownership
+fixes. All three fixed to attribute the track write to the executor via
+LiveNavDomDriver. Notably A's own mechanism description agreed with B but A did
+not flag the comments. check 0 errors (1467 files; an IDE TS 6133 on
+NavPipelineHost rightEl is a false positive, bound via bind:this at line 670,
+which svelte-check understands); lint exit 0; prettier clean; no U+2014.
+Comment-only; R122's e2e (210 / 0 flaky) remains valid. Counter 0/5. R125 next.
+
+## Session 129: R125 A BLOCK + B PASS; FloatingActionButton binding-site mis-attribution fixed; counter 0/5
+
+R125 (spec scope). Auditor A BLOCK; auditor B PASS. A escalated
+FloatingActionButton.svelte:14-18, a comment R121 to R124 had tracked as a
+non-blocking nitpick, to a real defect: the atom docstring said "the layer binds
+them through the inline style:transform binding", but the layer has no
+style:transform (it derives scale / translateY and passes props) and the binding
+is on the atom (line 64); the comment also contradicted the docstring's own first
+paragraph. The orchestrator's independent verification confirms A is correct
+(literal mis-attribution plus internal contradiction); the prior "nitpick"
+framing under-classified a real inaccuracy. Fixed: the docstring now attributes
+the binding to the atom (layer derives and passes props; atom applies
+style:transform). check 0 errors (1467 files); lint exit 0; prettier clean; no
+U+2014. Comment-only; R122's e2e (210 / 0 flaky) remains valid. Counter 0/5. R126
+next.
+
+## Session 130: R126 A PASS + B BLOCK; publication-vs-pager-store conflation (7 siblings + 1 borderline) fixed; counter 0/5
+
+R126 (spec scope). Auditor A PASS; auditor B BLOCK on a 7-sibling class: Header
+.svelte and BurgerArrowIcon.svelte comments that call pager-store fields
+(backMorph / tapMorph) or derivations reading them (searchProgress / trackMorph /
+iconProgress) "the orchestrator's publication". The OrchestratorPublication
+interface (R117 fix) is explicit that backMorph / tapMorph / transitionTarget are
+pager-store fields via #republishToPager; only settle / searchScrubbing are
+publication fields. This is the A111 / A116 regression (swapping "rAF" to
+"publication" over-fixed rAF-ownership and introduced a publication-vs-pager-store
+conflation); R124 fixed three sites (publication-WRITES-track) and missed these
+seven (publication-vs-pager-store-field), and A's grep shared R124's scope and
+missed them too. Fixed all seven (B1-B7) plus Header.svelte:337-340 (A's
+borderline, independently verified: scope-tab bar is tabProgress not searchProgress;
+fixed per "architecture cleanliness at all costs"). check 0 errors (1467 files);
+lint exit 0; prettier clean; no U+2014. Comment-only; R122's e2e (210 / 0 flaky)
+remains valid. Counter 0/5. R127 next.
+
+## Session 131: R127 both BLOCK (corroborated); Header:327 tapMorph conflation + Header:163 inverted parenthetical fixed; counter 0/5
+
+R127 (spec scope). Both auditors BLOCK, independently surfacing the same two
+findings. Header.svelte:327 called pager.tapMorph "the orchestrator's tap-scrub
+rAF publication" (tapMorph is a pager-store field; a sibling of the R126 class
+nine lines below the B1 fix). Header.svelte:163 said backMorph===null means "(no
+in-flight publication)", inverted: the drag branch runs only when
+publication.inFlight is true, and null-backMorph during a drag is a centerTab /
+tab-to-tab transition. Both fixed (327: "a pager-store field the orchestrator's
+tap-scrub rAF writes"; 163: "(centerTab or tab-to-tab publishes null)"). Note:
+R127's prompt carried a cycle-history recap plus a pre-explained
+publication-vs-pager-store distinction, which the owner flagged as focus-shifting
+mid-round; both this round's findings are in that class (illustrating the bias)
+but are real and fixed. R128 onwards uses a stripped prompt. check 0 errors (1467
+files); lint exit 0; prettier clean; no U+2014. Comment-only; R122's e2e (210 / 0
+flaky) remains valid. Counter 0/5. R128 next.

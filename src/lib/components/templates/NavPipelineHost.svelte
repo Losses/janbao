@@ -503,14 +503,12 @@
 
 	// The structural style: the track is `panelCount * 100%` wide and
 	// a flex row of equal-width panels. The CSS carries no transition
-	// (the slide is driven by the orchestrator's per-pointermove
-	// publication during a drag and the executor's rAF during a
-	// commit/cancel slide, not a CSS transition).
-	// The transform is written by the orchestrator's publication
-	// (synchronous per pointermove during a drag, via the executor's rAF
-	// during a commit/cancel slide), and by the SSR seed
-	// (`initialTrackTransform`), the at-rest
-	// `$effect`, and the forward-enter seed when at rest.
+	// (the slide is written by the executor via `LiveNavDomDriver`:
+	// synchronously per pointermove during a drag, and via the executor's
+	// rAF during a commit/cancel slide; never a CSS transition).
+	// The transform is written by `LiveNavDomDriver` each frame, and also
+	// by the SSR seed (`initialTrackTransform`), the at-rest `$effect`,
+	// and the forward-enter seed when at rest.
 	const viewportStyle = $derived(
 		!isMobile
 			? 'touch-action: auto; overflow: visible; height: auto; width: 100%; position: relative;'

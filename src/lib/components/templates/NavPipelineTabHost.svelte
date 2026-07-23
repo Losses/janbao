@@ -349,7 +349,7 @@
 	// The writeList call is deferred to `requestIdleCallback` (with a
 	// `setTimeout(0)` fallback for runtimes without it) so the IDB write's
 	// synchronous prep (data mapping, transaction open) does not contend with
-	// the orchestrator's gesture-animation rAF on this same host. The write
+	// the in-flight gesture / commit-slide animation on this same host. The write
 	// is best-effort and survives host destroy (the data is the same regardless
 	// of host lifecycle), so a long idle wait is acceptable.
 	function runPassthrough(items: DiscussionListItem[]): void {
