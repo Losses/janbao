@@ -134,7 +134,7 @@ export interface DragUpdate {
 /** Apply a drag move. Sets `phase: 'live'`, updates the progress, and
  *  clears any in-flight commit metadata. Returns a fresh state record
  *  (the reactive shell's `$state` assignment notifies dependents). */
-export function applyDrag(state: ExecutorState, update: DragUpdate): ExecutorState {
+export function applyDrag(_state: ExecutorState, update: DragUpdate): ExecutorState {
 	return {
 		phase: 'live',
 		progress: update.progress,
@@ -419,7 +419,7 @@ export function settlePerTickCap(durationMs: number, span: number): number {
  *
  *  Outside the committing phase this is a no-op: it returns the
  *  unchanged state with `done: true` so the shell stops the rAF. */
-export function sampleFrame(state: ExecutorState, plan: TransitionPlan, now: number): FrameSample {
+export function sampleFrame(state: ExecutorState, _plan: TransitionPlan, now: number): FrameSample {
 	if (state.phase !== 'committing' || !state.commitStart) {
 		return { state, done: true };
 	}
@@ -511,25 +511,14 @@ export function progressAtTranslateX(plan: TransitionPlan, tx: number): number {
 	return (tx - base) / span;
 }
 
-/** Build the per-frame visual record by calling the plan's consumer
- *  functions. Pure: returns the visual; the reactive shell hands it to
- *  the driver. The `fab` / `header` fields are computed only when the
- *  plan supplies the corresponding fn; otherwise the field is
- *  `undefined` and the driver skips that write branch. */
+/** Build the per-frame visual record. Pure: returns the visual; the
+ *  reactive shell hands it to the driver. Carries only the page-track
+ *  translate; the FAB and Header are reactive readers the executor
+ *  does not write through the driver. */
 export function buildVisual(plan: TransitionPlan, progress: number): NavVisualWrite {
-	const fab = plan.fab?.(progress);
-	const header = plan.header?.(progress);
 	const translateX = trackTranslateX(plan, progress);
 	return {
-		pageTrack: { translateX },
-		fab: fab ? { scale: fab.scale, translateY: fab.translateY, visible: fab.visible } : undefined,
-		header: header
-			? {
-					morph: header.morph,
-					titleCrossfade: header.titleCrossfade,
-					translateY: header.translateY
-				}
-			: undefined
+		pageTrack: { translateX }
 	};
 }
 

@@ -2,15 +2,17 @@
 /**
  * The real `NavDomDriver` for the Layer 5 executor. Implements the
  * `NavDomDriver` interface (`write(NavVisualWrite)` +
- * `prefersReducedMotion()`), proxying the live page-track / FAB /
- * Header element refs and reading
- * `matchMedia('(prefers-reduced-motion: reduce)')`.
+ * `prefersReducedMotion()`), proxying the live page-track element ref
+ * and reading `matchMedia('(prefers-reduced-motion: reduce)')`.
  *
- * The driver is the only component that touches the DOM. It does not
- * read the gesture surface's own state back; the executor publishes
- * authoritative `progress` and the driver is write-only
- * (plus the media-query read for the reduced-motion snap, which is not
- * a read of the gesture surface's own state).
+ * The driver is the only component that touches the DOM. It writes
+ * ONLY the page track; the FAB and Header are reactive readers
+ * (Svelte `$derived` + `style=` bindings driven by the orchestrator's
+ * publication and the pager store) and are not driven by this driver.
+ * The driver does not read the gesture surface's own state back; the
+ * executor publishes authoritative `progress` and the driver is
+ * write-only (plus the media-query read for the reduced-motion snap,
+ * which is not a read of the gesture surface's own state).
  *
  * Testability: the driver takes an injectable `resolveElements`
  * callback (called each `write` so a fresh `bind:this` reference is
@@ -47,13 +49,11 @@ export interface DriverElement {
 	readonly style: DriverElementStyle;
 }
 
-/** The element refs the driver writes to. Each field may be null when
- *  the corresponding element is not bound yet (e.g. a Header that has
- *  not mounted); the driver skips null fields without throwing. */
+/** The element refs the driver writes to. Only the page track; the
+ *  field may be null when the element is not bound yet, in which case
+ *  the driver skips the write without throwing. */
 export interface LiveDriverElements {
 	readonly pageTrack: DriverElement | null;
-	readonly fab: DriverElement | null;
-	readonly header: DriverElement | null;
 }
 
 /** Resolver called each `write`. Returning a fresh record per call
@@ -101,8 +101,8 @@ function defaultMatchMedia(query: string): LiveDriverMatchMediaResult {
 }
 
 /** The live `NavDomDriver`. Applies a `NavVisualWrite` to the resolved
- *  page-track / FAB / Header elements each frame and reads the
- *  reduced-motion media query.
+ *  page-track element each frame and reads the reduced-motion media
+ *  query.
  *
  *  The orchestrator constructs this driver and hands it to the
  *  executor, which writes through it every frame. */
@@ -124,26 +124,6 @@ export class LiveNavDomDriver implements NavDomDriver {
 			// The driver applies the value as given; it does not recompute
 			// the sign.
 			pageTrack.style.setProperty('transform', `translateX(${visual.pageTrack.translateX}px)`);
-		}
-		const fab = els.fab;
-		if (fab && visual.fab) {
-			const f = visual.fab;
-			fab.style.setProperty('transform', `scale(${f.scale}) translateY(${f.translateY}px)`);
-			fab.style.setProperty('visibility', f.visible ? 'visible' : 'hidden');
-		}
-		const header = els.header;
-		if (header && visual.header) {
-			const h = visual.header;
-			header.style.setProperty('transform', `translateY(${h.translateY}px)`);
-			// CSS custom properties for a Header consumer that reads them
-			// via `var(--header-morph)` / `var(--header-title-crossfade)`.
-			// The pipeline host passes `header: null` in resolveElements AND the
-			// pipeline host's plan omits the `header` fn (so `visual.header` is
-			// undefined); either condition skips this block. A consumer
-			// that binds a header element AND supplies a plan `header` fn
-			// receives these writes.
-			header.style.setProperty('--header-morph', String(h.morph));
-			header.style.setProperty('--header-title-crossfade', String(h.titleCrossfade));
 		}
 	}
 

@@ -12,11 +12,10 @@
  *   - Cross-tag axes follow direction (forward -> left, backward -> right).
  *   - The {search, search} resolver is reserved (distance 0).
  *   - progressDirection follows intent.micro (committed / cancelled).
- *   - The resolvers omit `fab` / `header` (the pipeline orchestrator drives
- *     the FAB layer through its direct publication: the FAB reads
- *     `orchestrator.publication.progress` + `RouteData.fab`, not the pager
- *     store. The orchestrator drives the Header through both its direct
- *     settle/scrub getters and the pager store, never through the plan).
+ *   - Every resolver returns a page-track-only plan: the FAB and Header
+ *     are reactive readers (the FAB reads `orchestrator.publication.progress`
+ *     + `RouteData.fab`; the Header reads the orchestrator's settle / scrub
+ *     getters + the pager store) and are not driven through the plan.
  */
 
 import { describe, test, expect } from 'bun:test';
@@ -235,8 +234,8 @@ describe('resolve wrapper', () => {
 	});
 });
 
-describe('plan shape: fab / header are omitted', () => {
-	test('every resolver returns a plan without fab / header fns', () => {
+describe('plan shape: page-track only', () => {
+	test('every resolver returns a plan with only page-track / progressDirection / commitPhysics', () => {
 		const cases = [
 			{ name: 'tabTab', plan: tabTabResolver(baseInput()) },
 			{ name: 'detailDetail', plan: detailDetailResolver(baseInput({ from: DETAIL, to: DETAIL })) },
@@ -246,8 +245,11 @@ describe('plan shape: fab / header are omitted', () => {
 			{ name: 'detailSearch', plan: detailSearchResolver(baseInput({ from: DETAIL, to: SEARCH })) }
 		];
 		for (const { name, plan } of cases) {
-			expect(plan.fab, `${name}.fab should be undefined`).toBeUndefined();
-			expect(plan.header, `${name}.header should be undefined`).toBeUndefined();
+			expect(Object.keys(plan).sort(), `${name} should expose only page-track fields`).toEqual([
+				'commitPhysics',
+				'pageTrack',
+				'progressDirection'
+			]);
 		}
 	});
 });

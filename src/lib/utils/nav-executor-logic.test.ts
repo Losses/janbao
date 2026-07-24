@@ -6,8 +6,7 @@
  * (`nav-executor.svelte.ts`) is exercised in Cycle 5.
  *
  * Coverage focus (per the C04 spec deliverables):
- *   - The build-visual function: pageTrack.axis sign convention,
- *     FAB/Header pass-through.
+ *   - The build-visual function: pageTrack.axis sign convention.
  *   - applyDrag updates progress.
  *   - Velocity-to-duration mapping (slow release > fast release; near-
  *     zero fallback; high-velocity clamp; wrong-direction fallback).
@@ -49,9 +48,8 @@ import { MockNavDomDriver } from './nav-dom-driver';
 import type { TransitionPlan } from './nav-resolvers';
 
 // ---------------------------------------------------------------------------
-// Plan fixtures. The plan's consumer functions are pure; the suite
-// builds minimal stubs that record the progress the executor passed
-// in so the per-frame call sequence is assertable.
+// Plan fixtures. The plan is page-track-only; the suite builds minimal
+// stubs exercising the geometry the executor reads.
 
 interface PlanStubOptions {
 	axis: 'left' | 'right';
@@ -59,37 +57,11 @@ interface PlanStubOptions {
 	progressDirection: 0 | 1;
 }
 
-/** Recorded progress the plan's consumer functions were called with.
- *  Used by the suite to assert the per-frame call sequence. */
-interface PlanCallRecord {
-	progress: number;
-}
-
-/** A plan stub plus the call-record arrays its consumer functions
- *  append to. The suite reads `fabCalls` / `headerCalls` to verify the
- *  executor passed the expected progress each frame. */
-interface RecordedPlan extends TransitionPlan {
-	readonly fabCalls: PlanCallRecord[];
-	readonly headerCalls: PlanCallRecord[];
-}
-
-function planStub(opts: PlanStubOptions): RecordedPlan {
-	const fabCalls: PlanCallRecord[] = [];
-	const headerCalls: PlanCallRecord[] = [];
+function planStub(opts: PlanStubOptions): TransitionPlan {
 	return {
 		pageTrack: { axis: opts.axis, distance: opts.distance },
-		fab: (progress) => {
-			fabCalls.push({ progress });
-			return { scale: 1 - progress, translateY: 0, visible: progress < 0.5 };
-		},
-		header: (progress) => {
-			headerCalls.push({ progress });
-			return { morph: progress, titleCrossfade: progress, translateY: 0 };
-		},
 		progressDirection: opts.progressDirection,
-		commitPhysics: 'momentum',
-		fabCalls,
-		headerCalls
+		commitPhysics: 'momentum'
 	};
 }
 
@@ -141,21 +113,14 @@ describe('buildVisual', () => {
 		expect(visual.pageTrack.translateX).toBe(375);
 	});
 
-	test('FAB and Header visuals are passed through unchanged from the plan functions', () => {
+	test('buildVisual carries only the page-track translate', () => {
+		// The FAB and Header are reactive readers the executor does not
+		// write through the driver; the visual record carries only the
+		// page-track field.
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
 		const visual = buildVisual(plan, 0.3);
-		const fab = visual.fab;
-		const header = visual.header;
-		expect(fab, 'planStub supplies a fab fn so visual.fab must be set').toBeDefined();
-		expect(header, 'planStub supplies a header fn so visual.header must be set').toBeDefined();
-		if (!fab || !header) return; // narrows for the typechecker
-		expect(fab.scale).toBe(0.7);
-		expect(fab.visible).toBe(true);
-		expect(header.morph).toBe(0.3);
-		expect(header.titleCrossfade).toBe(0.3);
-		// The plan recorded the progress it was called with.
-		expect(plan.fabCalls[0]).toEqual({ progress: 0.3 });
-		expect(plan.headerCalls[0]).toEqual({ progress: 0.3 });
+		expect(Object.keys(visual)).toEqual(['pageTrack']);
+		expect(visual.pageTrack.translateX).toBeCloseTo(-112.5, 5);
 	});
 });
 
@@ -707,11 +672,7 @@ describe('publishFrame + tickFrame', () => {
 		publishFrame(state, plan, driver);
 		expect(driver.writes.length).toBe(1);
 		expect(driver.lastWrite?.pageTrack.translateX).toBe(-187.5);
-		const fab = driver.lastWrite?.fab;
-		expect(fab, 'planStub supplies a fab fn so the write carries fab').toBeDefined();
-		if (fab) {
-			expect(fab.scale).toBeCloseTo(0.5, 5);
-		}
+		expect(Object.keys(driver.lastWrite ?? {})).toEqual(['pageTrack']);
 	});
 
 	test('tickFrame samples one commit step and publishes it in one call', () => {
@@ -783,8 +744,7 @@ describe('shouldScheduleRaf', () => {
 // orchestrator's #startProgressFromCurrentVisual.
 
 describe('track geometry helpers (interrupt handoff)', () => {
-	// A minimal plan exercising only the page-track geometry; the fab /
-	// header consumer stubs are unused by the geometry helpers.
+	// A minimal plan exercising only the page-track geometry.
 	function trackPlan(
 		axis: 'left' | 'right',
 		distance: number,
@@ -792,8 +752,6 @@ describe('track geometry helpers (interrupt handoff)', () => {
 	): TransitionPlan {
 		return {
 			pageTrack: { axis, distance, restingTranslate },
-			fab: () => ({ scale: 0, translateY: 0, visible: false }),
-			header: () => ({ morph: 0, titleCrossfade: 0, translateY: 0 }),
 			progressDirection: 0,
 			commitPhysics: 'momentum'
 		};

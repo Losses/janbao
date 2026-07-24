@@ -7,11 +7,9 @@
  * no real DOM is required.
  *
  * Coverage:
- *  - Write mapping: axis/progress -> translateX sign + magnitude; FAB
- *    scale + translateY + visibility; Header transform + CSS custom
- *    properties (--header-morph, --header-title-crossfade).
- *  - Null-element skip (the driver does not throw when an element is
- *    not yet bound).
+ *  - Write mapping: axis/progress -> translateX sign + magnitude.
+ *  - Null-element skip (the driver does not throw when the page-track
+ *    element is not yet bound).
  *  - The element resolver is called each `write` so a re-bound
  *    reference is picked up automatically.
  *  - Reduced-motion read: matchMedia receives the exact query string
@@ -47,42 +45,21 @@ class CapturingElement implements DriverElement {
 
 interface ElementBag {
 	pageTrack: CapturingElement | null;
-	fab: CapturingElement | null;
-	header: CapturingElement | null;
 }
 
 function makeElements(overrides?: Partial<ElementBag>): ElementBag {
 	const pageTrack = overrides?.pageTrack === undefined ? null : overrides.pageTrack;
-	const fab = overrides?.fab === undefined ? null : overrides.fab;
-	const header = overrides?.header === undefined ? null : overrides.header;
-	return { pageTrack, fab, header };
+	return { pageTrack };
 }
 
 interface SampleVisualOverrides {
 	readonly translateX?: number;
-	readonly scale?: number;
-	readonly fabTranslateY?: number;
-	readonly visible?: boolean;
-	readonly morph?: number;
-	readonly titleCrossfade?: number;
-	readonly headerTranslateY?: number;
 }
 
 function sampleVisual(overrides?: SampleVisualOverrides): NavVisualWrite {
 	const o = overrides ?? {};
-	const visible = o.visible ?? true;
 	return {
-		pageTrack: { translateX: o.translateX ?? 0 },
-		fab: {
-			scale: o.scale ?? 1,
-			translateY: o.fabTranslateY ?? 0,
-			visible
-		},
-		header: {
-			morph: o.morph ?? 0,
-			titleCrossfade: o.titleCrossfade ?? 0,
-			translateY: o.headerTranslateY ?? 0
-		}
+		pageTrack: { translateX: o.translateX ?? 0 }
 	};
 }
 
@@ -158,87 +135,21 @@ describe('LiveNavDomDriver.write: page-track translateX', () => {
 });
 
 // ---------------------------------------------------------------------------
-// write: FAB.
-
-describe('LiveNavDomDriver.write: FAB', () => {
-	test('writes scale + translateY + visibility when visible', () => {
-		const el = new CapturingElement();
-		const driver = new LiveNavDomDriver({
-			resolveElements: () => makeElements({ fab: el })
-		});
-		driver.write(sampleVisual({ scale: 0.5, fabTranslateY: 12, visible: true }));
-		expect(el.style.get('transform')).toBe('scale(0.5) translateY(12px)');
-		expect(el.style.get('visibility')).toBe('visible');
-	});
-
-	test('writes visibility:hidden when not visible', () => {
-		const el = new CapturingElement();
-		const driver = new LiveNavDomDriver({
-			resolveElements: () => makeElements({ fab: el })
-		});
-		driver.write(sampleVisual({ visible: false }));
-		expect(el.style.get('visibility')).toBe('hidden');
-	});
-
-	test('FAB scale=0 + visible=false together', () => {
-		// Drives the driver with a synthetic FAB visual at scale 0 and
-		// hidden, verifying the write branch co-handles the scale and
-		// visibility on the FAB element.
-		const el = new CapturingElement();
-		const driver = new LiveNavDomDriver({
-			resolveElements: () => makeElements({ fab: el })
-		});
-		driver.write(sampleVisual({ scale: 0, fabTranslateY: 0, visible: false }));
-		expect(el.style.get('transform')).toBe('scale(0) translateY(0px)');
-		expect(el.style.get('visibility')).toBe('hidden');
-	});
-});
-
-// ---------------------------------------------------------------------------
-// write: Header.
-
-describe('LiveNavDomDriver.write: Header', () => {
-	test('writes transform + morph + titleCrossfade', () => {
-		const el = new CapturingElement();
-		const driver = new LiveNavDomDriver({
-			resolveElements: () => makeElements({ header: el })
-		});
-		driver.write(sampleVisual({ morph: 0.5, titleCrossfade: 0.25, headerTranslateY: -10 }));
-		expect(el.style.get('transform')).toBe('translateY(-10px)');
-		expect(el.style.get('--header-morph')).toBe('0.5');
-		expect(el.style.get('--header-title-crossfade')).toBe('0.25');
-	});
-
-	test('zero-morph Header write', () => {
-		const el = new CapturingElement();
-		const driver = new LiveNavDomDriver({
-			resolveElements: () => makeElements({ header: el })
-		});
-		driver.write(sampleVisual({ morph: 0, titleCrossfade: 0, headerTranslateY: 0 }));
-		expect(el.style.get('transform')).toBe('translateY(0px)');
-		expect(el.style.get('--header-morph')).toBe('0');
-		expect(el.style.get('--header-title-crossfade')).toBe('0');
-	});
-});
-
-// ---------------------------------------------------------------------------
 // write: null-element handling + resolver behavior.
 
 describe('LiveNavDomDriver.write: resolver and null handling', () => {
-	test('null elements are skipped without throwing', () => {
+	test('a null page-track element is skipped without throwing', () => {
 		const driver = new LiveNavDomDriver({
-			resolveElements: () => makeElements({ pageTrack: null, fab: null, header: null })
+			resolveElements: () => makeElements({ pageTrack: null })
 		});
 		expect(() => driver.write(sampleVisual())).not.toThrow();
 	});
 
-	test('default resolver return (no overrides) is all-null', () => {
+	test('default resolver return (no overrides) is pageTrack null', () => {
 		// Verifies the `makeElements` helper's default shape so the
 		// null-skip test above is unambiguous.
 		const els = makeElements();
 		expect(els.pageTrack).toBeNull();
-		expect(els.fab).toBeNull();
-		expect(els.header).toBeNull();
 	});
 
 	test('the element resolver is called each write', () => {

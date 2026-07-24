@@ -38,9 +38,9 @@ export interface RouteData {
 	 * (`FloatingActionButtonLayer.svelte`) reads the from/to fab booleans
 	 * directly off each transition's `RouteData` to drive
 	 * `fabScale(progress, fromHasFab, toHasFab)`; the resolver does NOT
-	 * read this field (the plan it returns carries no FAB function, as
-	 * asserted by `nav-resolvers.test.ts`'s `plan.fab should be
-	 * undefined`). The FAB atom also stays mounted at scale 0 on Family
+	 * read this field (the plan it returns is page-track-only, as
+	 * asserted by `nav-resolvers.test.ts`'s `plan shape: page-track
+	 * only`). The FAB atom also stays mounted at scale 0 on Family
 	 * B/C routes; that mount decision is a Layer 5 concern that reads
 	 * the consumer FAB-route-attributes config, not this boolean.
 	 */

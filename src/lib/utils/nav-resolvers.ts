@@ -28,10 +28,6 @@
  * `progressDirection` field encodes which way the plan plays.
  *
  * Each resolver produces a page-track plan (axis + distance). The
- * `TransitionPlan` also carries OPTIONAL `fab` / `header` per-frame
- * functions a consumer may bind; the pipeline hosts omit them (the
- * FAB layer reads the orchestrator's publication directly, and the
- * Header reacts through its own layer reading the pager store). The
  * plan is resolved ONCE per gesture (FROM and TO locked at gesture
  * start); the per-frame drag progress streams to the executor via
  * `onDragMove`.
@@ -71,31 +67,6 @@ export interface PageTrackPlan {
 	readonly restingTranslate?: number;
 }
 
-/** The FAB's per-frame visual state, returned by a plan's FAB function. */
-export interface FabVisual {
-	readonly scale: number;
-	readonly translateY: number;
-	readonly visible: boolean;
-}
-
-/** The Header's per-frame visual state, returned by a plan's Header
- *  function. `morph` is the back-arrow / mode-morph progress (1 = root /
- *  tab mode, 0 = deep or search mode). `titleCrossfade` is the title-swap
- *  progress (0 = old title, 1 = new title). */
-export interface HeaderVisual {
-	readonly morph: number;
-	readonly titleCrossfade: number;
-	readonly translateY: number;
-}
-
-/** Per-frame FAB plan function. Takes the gesture progress (0..1,
- *  where 0 = FROM visible, 1 = TO visible). Returns the FAB's visual
- *  for that frame. */
-export type FabPlanFn = (progress: number) => FabVisual;
-
-/** Per-frame Header plan function. Same inputs as the FAB plan. */
-export type HeaderPlanFn = (progress: number) => HeaderVisual;
-
 /** Commit-physics selector. 'momentum' uses the release velocity
  *  integral; 'snap' is the reduced-motion instant translate. */
 export type CommitPhysics = 'momentum' | 'snap';
@@ -104,19 +75,14 @@ export type CommitPhysics = 'momentum' | 'snap';
  *  cancelled gesture snapping back to FROM). §4. */
 export type ProgressDirection = 0 | 1;
 
-/** The plan a resolver produces. §4's binding shape. The `fab` and
- *  `header` fields are OPTIONAL: a resolver supplies them only when a
- *  consumer is bound to drive that visual through the executor. The
- *  pipeline hosts pass `fab: null, header: null` element refs to
- *  the driver, so the resolvers omit these fields; the FAB layer
- *  reads the orchestrator's publication directly and the Header
- *  reacts through its own layer reading the pager store. A future
- *  consumer that binds a FAB / Header element would receive the
- *  per-frame writes the plan's fns produce. */
+/** The plan a resolver produces. §4's binding shape. Carries ONLY the
+ *  page-track plan; the FAB layer reads the orchestrator's publication
+ *  directly (`publication.progress` + `RouteData.fab`) and the Header
+ *  reacts through its own `$derived` reads of the pager store + the
+ *  orchestrator's settle / scrub getters. Neither consumer is driven
+ *  by the plan. */
 export interface TransitionPlan {
 	readonly pageTrack: PageTrackPlan;
-	readonly fab?: FabPlanFn;
-	readonly header?: HeaderPlanFn;
 	readonly progressDirection: ProgressDirection;
 	readonly commitPhysics: CommitPhysics;
 }
@@ -211,9 +177,9 @@ function commitPhysicsFor(reducedMotion: boolean): CommitPhysics {
 //
 // Spatial axis resolved by tab position. Forward (toTabIndex >
 // fromTabIndex) slides the track left; backward slides it right. The
-// FAB layer reads the orchestrator's publication directly and the
-// Header reacts through its own layer reading the pager store (the
-// plan carries no `fab` / `header` fns).
+// plan carries only the page-track fields; the FAB layer reads the
+// orchestrator's publication directly and the Header reacts through
+// its own `$derived` reads of the pager store.
 //
 // EXCEPTION: backward-to-higher-indexed tab. A backward gesture whose
 // target sits at a HIGHER spatial index than the source (e.g. the user

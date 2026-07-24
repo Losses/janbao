@@ -12,6 +12,13 @@
  * reduced-motion snap, which is a media-query read, not a read of the
  * gesture surface's own state).
  *
+ * The driver writes ONLY the page track. The FAB and Header are
+ * reactive readers: the FAB layer reads the orchestrator's publication
+ * directly (`publication.progress` + `RouteData.fab`) and the Header
+ * reacts through its own `$derived` reads of the pager store + the
+ * orchestrator's settle / scrub getters. Neither is driven by this
+ * interface.
+ *
  * Implementations: `MockNavDomDriver` (unit tests) and
  * `LiveNavDomDriver` (production, constructed by the orchestrator).
  */
@@ -24,30 +31,13 @@ export interface PageTrackWrite {
 	readonly translateX: number;
 }
 
-/** The FAB write. Mirrors `FabVisual` from `nav-resolvers.ts`. */
-export interface FabWrite {
-	readonly scale: number;
-	readonly translateY: number;
-	readonly visible: boolean;
-}
-
-/** The Header write. Mirrors `HeaderVisual` from `nav-resolvers.ts`. */
-export interface HeaderWrite {
-	readonly morph: number;
-	readonly titleCrossfade: number;
-	readonly translateY: number;
-}
-
 /** A single per-frame visual write. The executor computes one of these
  *  per frame (during drag events and during the commit rAF loop) and
- *  hands it to `NavDomDriver.write`. The `fab` / `header` fields are
- *  optional: when a plan supplies no per-frame fn for a consumer (the
- *  pipeline hosts omit both), `buildVisual` sets the field to
- *  `undefined` and the driver skips that write branch. */
+ *  hands it to `NavDomDriver.write`. Carries only the page-track
+ *  translate; the FAB and Header are reactive readers the driver does
+ *  not touch. */
 export interface NavVisualWrite {
 	readonly pageTrack: PageTrackWrite;
-	readonly fab?: FabWrite;
-	readonly header?: HeaderWrite;
 }
 
 /** The DOM abstraction the executor writes through. Implementations:
@@ -56,7 +46,7 @@ export interface NavVisualWrite {
  *    suite can assert the per-frame sequence; `prefersReducedMotion`
  *    is configurable per-test.
  *  - `LiveNavDomDriver` (`nav-dom-driver-live.ts`): proxies through to
- *    the live track / FAB / Header elements.
+ *    the live page-track element.
  *
  *  The driver does NOT expose a read-back method. The executor holds
  *  the authoritative `progress` in its own state record;

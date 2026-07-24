@@ -368,7 +368,7 @@
 			const fromData = getRouteData(fromPathname);
 			const toData = getRouteData(resolvedLeftHref);
 			orchestrator.configure({
-				resolveElements: () => ({ pageTrack: trackEl, fab: null, header: null }),
+				resolveElements: () => ({ pageTrack: trackEl }),
 				viewportWidth: viewportEl.clientWidth,
 				restingTranslate: -viewportEl.clientWidth,
 				backTarget: resolvedLeftHref,

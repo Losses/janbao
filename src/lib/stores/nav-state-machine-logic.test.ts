@@ -25,8 +25,6 @@ import type { TransitionPlan } from '$lib/utils/nav-resolvers';
 
 const noopPlan: TransitionPlan = {
 	pageTrack: { axis: 'left', distance: 375 },
-	fab: () => ({ scale: 0, translateY: 0, visible: false }),
-	header: () => ({ morph: 0, titleCrossfade: 0, translateY: 0 }),
 	progressDirection: 0,
 	commitPhysics: 'momentum'
 };

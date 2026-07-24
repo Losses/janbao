@@ -12,9 +12,7 @@ import { MockNavDomDriver, type NavVisualWrite } from './nav-dom-driver';
 
 function sampleVisual(translateX: number): NavVisualWrite {
 	return {
-		pageTrack: { translateX },
-		fab: { scale: 1, translateY: 0, visible: true },
-		header: { morph: 0, titleCrossfade: 0, translateY: 0 }
+		pageTrack: { translateX }
 	};
 }
 

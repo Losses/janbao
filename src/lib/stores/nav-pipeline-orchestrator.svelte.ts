@@ -17,10 +17,10 @@
  *      commits).
  *   3. Executor + driver -> elements: `configure({ resolveElements, ... })`
  *      constructs (once) a `LiveNavDomDriver` whose `resolveElements` returns
- *      `{ pageTrack: trackEl, fab: null, header: null }` - the FAB and Header
- *      are reactive readers of the pager store / orchestrator publication;
- *      the executor never writes to them. The executor writes the per-frame
- *      track translate to the resolved `pageTrack` element.
+ *      `{ pageTrack: trackEl }` - the FAB and Header are reactive readers
+ *      of the pager store / orchestrator publication; the executor never
+ *      writes to them. The executor writes the per-frame track translate
+ *      to the resolved `pageTrack` element.
  *   4. Lifecycle: the host calls `configure` / `releaseInputs` from its
  *      onMount / onDestroy and releases the html-singletons (viewport-lock)
  *      directly with a `browser` guard. Route swaps use `configure` /
@@ -113,20 +113,16 @@ import type { TranslationDict } from '$lib/types/translation';
 import type { RouteTag } from '$lib/utils/route-data';
 import type { TransitionPlan } from '$lib/utils/nav-resolvers';
 
-/** The host's track / FAB / Header element refs as supplied to the
- *  driver each `write`. Mirrors the structural shape of
- *  `LiveDriverElements` but widened to the production `HTMLElement`
- *  (the driver's own interface accepts a structural `DriverElement`
- *  subset). */
+/** The host's track element ref as supplied to the driver each
+ *  `write`. Mirrors the structural shape of `LiveDriverElements` but
+ *  widened to the production `HTMLElement` (the driver's own interface
+ *  accepts a structural `DriverElement` subset). */
 interface PipelineElementRefs {
 	readonly pageTrack: HTMLElement | null;
-	readonly fab: HTMLElement | null;
-	readonly header: HTMLElement | null;
 }
 
-/** Returns the host's track / FAB / Header element refs each
- *  `write`. Called once per frame so a re-bound `bind:this` is picked
- *  up automatically. */
+/** Returns the host's track element ref each `write`. Called once per
+ *  frame so a re-bound `bind:this` is picked up automatically. */
 type PipelineElementResolver = () => PipelineElementRefs;
 
 /** A pending gesture transition (a swipe). `to` is the
@@ -207,9 +203,8 @@ interface NavPipelineBeforeNavigateEvent {
  *  the bound element's `clientWidth` and supplies it; the orchestrator
  *  does not read the DOM directly. */
 export interface PipelineMountInputs {
-	/** Returns the host's track / FAB / Header element refs each
-	 *  `write`. Called once per frame so a re-bound `bind:this` is
-	 *  picked up automatically. */
+	/** Returns the host's track element ref each `write`. Called once
+	 *  per frame so a re-bound `bind:this` is picked up automatically. */
 	readonly resolveElements: PipelineElementResolver;
 	/** The current viewport width (px). */
 	readonly viewportWidth: number;
@@ -338,9 +333,7 @@ export class NavPipelineOrchestrator {
 	// supplies fresh `bind:this` refs) takes effect on the next frame
 	// without reconstructing the driver.
 	#elementResolver: PipelineElementResolver = () => ({
-		pageTrack: null,
-		fab: null,
-		header: null
+		pageTrack: null
 	});
 	// True between configure() and releaseInputs(). Guards #publication
 	// so the derived returns at-rest during the gap frame between an old

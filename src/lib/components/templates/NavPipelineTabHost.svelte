@@ -249,7 +249,7 @@
 		const fromData = getRouteData(fromPathname);
 		const w = viewportEl?.clientWidth ?? 0;
 		orchestrator.configure({
-			resolveElements: () => ({ pageTrack: trackEl, fab: null, header: null }),
+			resolveElements: () => ({ pageTrack: trackEl }),
 			viewportWidth: w,
 			restingTranslate: -activeIndex * w,
 			backTarget: fromPathname,
