@@ -139,9 +139,9 @@ test.describe('NavPipelineTabHost tab-swipe regression', () => {
 
 		// (2) FAB animates: the scale delta across the window must exceed 0.1.
 		// The discussions FAB rests at scale 1 on `/` and the activity tab has
-		// no FAB, so the orchestrator publishes the fractional index / family
-		// swap scale and the FAB layer reads it reactively; the published scale
-		// eases toward 0 across the slide.
+		// no FAB, so the orchestrator publishes `progress` and the FAB layer
+		// reactively computes `fabScale(progress, fromHasFab=true, toHasFab=false)`,
+		// which eases toward 0 across the slide.
 		const fabScales = frames
 			.map((f) => f.fabScale)
 			.filter((s): s is number => s !== null && Number.isFinite(s));

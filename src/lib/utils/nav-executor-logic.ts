@@ -12,9 +12,9 @@
  * track through an injected `NavDomDriver`. The FAB and Header are NOT
  * written by this loop; they are reactive readers of the orchestrator's
  * publication (`fabScale(progress, ...)` and the Header's `$derived`
- * reads). The production wiring passes null FAB / Header element refs
- * to the driver and the plan omits the `fab` / `header` fns, so the
- * driver's `write()` only ever fires its page-track branch. The commit
+ * reads). The driver interface is page-track-only (no FAB or Header write
+ * surface); `write()` applies the page-track transform when the element is
+ * bound. The commit
  * phase uses a velocity-matched momentum
  * integral (variable duration), NOT a hardcoded ease. Reduced-motion
  * snaps. Interruption cancels the commit and hands off from the

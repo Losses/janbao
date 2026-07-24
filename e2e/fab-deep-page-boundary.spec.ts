@@ -11,11 +11,11 @@ import { prepareContext, waitForHydration, openSidebarAndGoto, swipeBack, mintAd
  * route the atom stays mounted at scale 0 (invisible, non-interactive).
  *
  * Mechanism (see docs/FAB-Deep-Boundary-Fix-Plan.md): the 24 non-FAB
- * NavPipelineHost routes carry `fab: { family: 'overlay', kind: 'deep' }`. The
- * layer's `fabConfig` derivation resolves the `deep` kind from the back target
- * into a concrete list kind and returns `family: 'overlay'`, so the atom stays
- * mounted (scale 0 at rest, SSR-safe) and the existing overlay-family sampler
- * drives its scale across the boundary reading the NavPipelineHost track.
+ * NavPipelineHost routes carry `fab: false` in RouteData and `kind: 'deep'` in
+ * FabRouteAttributes. The layer's `fabConfig` derivation resolves the `deep` kind
+ * into a concrete list kind (for the icon / href) so the atom stays mounted (scale
+ * 0 at rest, SSR-safe); the FAB layer drives its scale across the boundary via
+ * `fabScale(progress, fromHasFab, toHasFab)` reading the NavPipelineHost track.
  *
  * A per-frame rAF probe records BOTH the atom's presence and its resolved scale.
  * The regressions assert the trajectory SHAPE: the atom stays present through the
