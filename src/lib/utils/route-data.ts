@@ -3,12 +3,9 @@
  * RouteData - the per-route navigation/gesture attribute record.
  *
  * The authoritative source of truth for a route's navigation attributes
- * per `docs/DV20-Plan.md` §3. The record holds exactly three fields:
+ * per `docs/DV20-Plan.md` §3. The record holds exactly two fields:
  *
  *   - `tag`              selects the resolver pair (§4)
- *   - `snapshotCapture`  whether the page captures data + snippet on
- *                        leave (no production consumer; see the field
- *                        docstring)
  *   - `fab`              whether the FAB is visible on this page
  *
  * Per §3's clarity principle, NO stored field duplicates the tag. The
@@ -29,21 +26,13 @@ export type RouteTag = 'tab' | 'detail' | 'search';
 
 /**
  * The per-route navigation record. The shape is exactly `docs/DV20-Plan.md`
- * §3: three fields, none of them a tag-duplicate or a renamed
+ * §3: two fields, none of them a tag-duplicate or a renamed
  * `gestureOwner`/`headerMode`/`fabFamily` style discriminator. §3 lists
  * those as derived or moved to consumer configs.
  */
 export interface RouteData {
 	/** Selects the resolver pair (§4). */
 	readonly tag: RouteTag;
-	/**
-	 * Whether the page captures its data + render snippet into the cache
-	 * on leave. `/discussion/*` is the single capturing route in this
-	 * registry. Retained per spec Known #1 (RouteData holds three
-	 * fields); no production consumer reads it in the integrated
-	 * pipeline.
-	 */
-	readonly snapshotCapture: boolean;
 	/**
 	 * Whether the FAB is visible at rest on this page. The FAB layer
 	 * (`FloatingActionButtonLayer.svelte`) reads the from/to fab booleans
@@ -61,7 +50,6 @@ export interface RouteData {
 interface RouteEntry {
 	readonly pattern: RegExp;
 	readonly tag: RouteTag;
-	readonly snapshotCapture: boolean;
 	readonly fab: boolean;
 }
 
@@ -77,11 +65,6 @@ interface RouteEntry {
  *   - 'detail': every other route, including the offline detail mirrors
  *     `/offline/bookmarks` and `/offline/[discussionId]`
  *
- * `snapshotCapture` is `true` on `/discussion/*` only; every other
- * route is `false`. `PageCacheStore` (the unified cache) is a separate
- * capture mechanism that does NOT consult this field; see the field
- * docstring for the current reader status.
- *
  * `fab` is true where the FAB is visible at rest: `/`, `/messages/inbox`,
  * and `/discussions/p\d+` (the FAB is visible on every page of the
  * discussions list, including within-tab pagination); every other route is
@@ -94,19 +77,16 @@ const ROUTE_ENTRIES: readonly RouteEntry[] = [
 	{
 		pattern: /^\/$/,
 		tag: 'tab',
-		snapshotCapture: false,
 		fab: true
 	},
 	{
 		pattern: /^\/activity$/,
 		tag: 'tab',
-		snapshotCapture: false,
 		fab: false
 	},
 	{
 		pattern: /^\/messages\/inbox$/,
 		tag: 'tab',
-		snapshotCapture: false,
 		fab: true
 	},
 	{
@@ -116,21 +96,18 @@ const ROUTE_ENTRIES: readonly RouteEntry[] = [
 		// (the user can create a discussion from any page), matching `/`.
 		pattern: /^\/discussions\/p\d+$/,
 		tag: 'tab',
-		snapshotCapture: false,
 		fab: true
 	},
 	{
 		// /offline mirrors / (the offline discussions list).
 		pattern: /^\/offline$/,
 		tag: 'tab',
-		snapshotCapture: false,
 		fab: false
 	},
 	{
 		// /offline/activity mirrors /activity.
 		pattern: /^\/offline\/activity$/,
 		tag: 'tab',
-		snapshotCapture: false,
 		fab: false
 	},
 
@@ -138,46 +115,38 @@ const ROUTE_ENTRIES: readonly RouteEntry[] = [
 	{
 		pattern: /^\/search$/,
 		tag: 'search',
-		snapshotCapture: false,
 		fab: false
 	},
 
 	// --- Detail: thread / conversation / compose ---
 	{
-		// The single route that captures a deep-page snapshot.
 		pattern: /^\/discussion\//,
 		tag: 'detail',
-		snapshotCapture: true,
 		fab: false
 	},
 	{
 		pattern: /^\/messages\/\d/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 	{
 		pattern: /^\/messages\/new$/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 	{
 		pattern: /^\/messages\/add\/\d+/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 	{
 		pattern: /^\/post\/discussion$/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 	{
 		pattern: /^\/post\/editDiscussion\/\d+$/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 
@@ -185,32 +154,27 @@ const ROUTE_ENTRIES: readonly RouteEntry[] = [
 	{
 		pattern: /^\/bookmarks$/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 	{
 		pattern: /^\/notifications$/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 	{
 		pattern: /^\/categories$/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 	{
 		// Category page with optional paginator: /category/<slug> or /category/<slug>/p<N>
 		pattern: /^\/category\/[^/]+(\/p\d+)?$/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 	{
 		pattern: /^\/drafts$/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 
@@ -218,34 +182,29 @@ const ROUTE_ENTRIES: readonly RouteEntry[] = [
 	{
 		pattern: /^\/profile$/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 	{
 		pattern: /^\/profile\/settings$/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 	{
 		// /profile/<userId>/<userSlug>
 		pattern: /^\/profile\/\d+\/[^/]+$/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 	{
 		// /profile/comments/<userId>/<userSlug>
 		pattern: /^\/profile\/comments\/\d+\/[^/]+$/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 	{
 		// /profile/discussions/<userId>/<userSlug>
 		pattern: /^\/profile\/discussions\/\d+\/[^/]+$/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 	{
@@ -253,13 +212,11 @@ const ROUTE_ENTRIES: readonly RouteEntry[] = [
 		pattern:
 			/^\/profile\/(?:appearance|edit|editor|offlineReading|onlineNow|password|picture|preferences)$/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 	{
 		pattern: /^\/profile\/invitations$/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 
@@ -267,13 +224,11 @@ const ROUTE_ENTRIES: readonly RouteEntry[] = [
 	{
 		pattern: /^\/admin$/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 	{
 		pattern: /^\/admin\/(?:backups|categories|maintenance|permissions|stats|user-groups)$/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 
@@ -282,14 +237,12 @@ const ROUTE_ENTRIES: readonly RouteEntry[] = [
 		// /offline/bookmarks mirrors /bookmarks.
 		pattern: /^\/offline\/bookmarks$/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	},
 	{
 		// /offline/<discussionId> mirrors /discussion/<id>.
 		pattern: /^\/offline\/\d+/,
 		tag: 'detail',
-		snapshotCapture: false,
 		fab: false
 	}
 ];
@@ -298,11 +251,10 @@ const ROUTE_ENTRIES: readonly RouteEntry[] = [
  * The default for unmatched pathnames. Routes like `/entry/*`,
  * `/avatar/*`, `/attachment/*`, `/api/*`, `/upload`,
  * `/manifest.webmanifest` fall through to this: none participates in
- * the gesture layer, none shows a FAB, none captures a snapshot.
+ * the gesture layer and none shows a FAB.
  */
 const DEFAULT_ROUTE_DATA: RouteData = {
 	tag: 'detail',
-	snapshotCapture: false,
 	fab: false
 };
 
@@ -316,7 +268,6 @@ export function getRouteData(pathname: string): RouteData {
 	if (!entry) return DEFAULT_ROUTE_DATA;
 	return {
 		tag: entry.tag,
-		snapshotCapture: entry.snapshotCapture,
 		fab: entry.fab
 	};
 }

@@ -3,7 +3,6 @@ import {
 	getFabRouteAttributes,
 	getTabBarPillTarget,
 	getCurrentTabIndex,
-	isPagerRoute,
 	backTargetListKind,
 	getPreviewPanel
 } from './route-config';
@@ -151,34 +150,6 @@ describe('getCurrentTabIndex - one-line read of the tab-bar config', () => {
 	test('unmatched routes return -1', () => {
 		expect(getCurrentTabIndex('/categories')).toBe(-1);
 		expect(getCurrentTabIndex('/entry/signin')).toBe(-1);
-	});
-});
-
-describe('isPagerRoute - positional query over MOBILE_TAB_DEFS', () => {
-	test('true only for the three spatial tab positions', () => {
-		expect(isPagerRoute('/')).toBe(true);
-		expect(isPagerRoute('/activity')).toBe(true);
-		expect(isPagerRoute('/messages/inbox')).toBe(true);
-	});
-	test('false for tab-internal pagination, deep routes, offline mirrors', () => {
-		const notRoots = [
-			'/discussions/p2',
-			'/discussion/123',
-			'/messages/123',
-			'/messages/new',
-			'/messages/add/55',
-			'/messages/inbox/extra',
-			'/search',
-			'/bookmarks',
-			'/profile',
-			'/admin',
-			'/offline',
-			'/offline/activity',
-			'/offline/123'
-		];
-		for (const p of notRoots) {
-			expect(isPagerRoute(p), `${p} is not a pager route`).toBe(false);
-		}
 	});
 });
 

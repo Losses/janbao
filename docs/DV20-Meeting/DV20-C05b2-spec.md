@@ -21,7 +21,7 @@ Roll the new pipeline out to every remaining route that mounts `GesturePageLayou
 2. **FAB atom CSS transition → rAF.** The `.fab-transition { transition: transform 200ms ease-out }` CSS class + `discreteNavInFlight` 280ms `setTimeout` latch are replaced with an rAF-driven scale on the orchestrator. The FAB layer computes `fabScale(progress, fromHasFab, toHasFab)` reactively from the published transition progress and the FROM / TO `RouteData.fab` booleans.
 3. **Skeleton branches audited.** The eager-load model is permanent (the root layout's `Promise.allSettled` always returns truthy `EMPTY_*` objects on rejection, never null). The dead `ActivitySkeleton` and `DiscussionsSkeleton` `{:else}` branches and their component files are removed; only `MessagesSkeleton` remains, reachable via the `/messages/[id]` route shadowing the layout's `messages` field with its message-row array (the preview cannot render an array, so the skeleton stands in until the back-swipe lands).
 4. **`isGesturePageLayoutRoute` rename.** The function covers NavPipelineHost routes too; renamed to `isPipelineRoute` (or similar).
-5. **`backParent` removed.** The field and its sole consumer `isPipelineSwipeDisabledRoute` are deleted (see Known #1); `RouteData` holds three fields.
+5. **`backParent` removed.** The field and its sole consumer `isPipelineSwipeDisabledRoute` are deleted (see Known #1); `RouteData` holds two fields.
 
 ## End state
 
@@ -303,8 +303,8 @@ passes release velocity 0 to the solver, which returns
 1. **`isPipelineSwipeDisabledRoute` and `backParent` are deleted.** The
    classifier served only to gate `DualColumnLayout`'s tab-swipe, and
    `backParent` served only to feed that classifier (`backParent !==
-undefined`). With both gone, `RouteData` holds three fields (`tag`,
-   `snapshotCapture`, `fab`). The `FabFamily` enum (the `family` field on
+undefined`). With both gone, `RouteData` holds two fields (`tag`,
+   `fab`). The `FabFamily` enum (the `family` field on
    `FabRouteAttributes`) is removed with the classifier that read it; the
    FAB layer reads `kind` alone.
 

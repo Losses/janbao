@@ -304,18 +304,12 @@ header nav {
 		background-color: transparent;
 		border-bottom: 0;
 	}
-	/* Mobile content gutter for non-gesture, non-pager routes: the 0.75rem
-	   content padding (matches .gpl-card on gesture routes and the p-3 on the
-	   pager's own panels). Two exclusions, both structural:
+	/* Mobile content gutter for non-pipeline-host routes: the 0.75rem content
+	   padding (matches .gpl-card on gesture routes). One structural exclusion:
 	   - html.fixed-viewport (pipeline host): .gpl-card already supplies
 	     0.75rem inside a full-bleed page-bg scroll surface.
-	   - .mobile-tab-pager-viewport descendant: the pager's overflow-hidden
-	     viewport MUST sit edge-to-edge so neighbour panels clip at the screen
-	     edge when swiping (the panels carry their own p-3 inside it). Padding
-	     here would inset the viewport and make panels slide within a gutter
-	     instead of off-screen.
 	   Desktop padding lives on .dual-column-layout-columns (md:p-3). */
-	html:not(.fixed-viewport) .dual-column-layout-content:not(:has(.mobile-tab-pager-viewport)) {
+	html:not(.fixed-viewport) .dual-column-layout-content {
 		padding: 0.75rem;
 	}
 	html.fixed-viewport .scroll-pane {

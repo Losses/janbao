@@ -46,7 +46,7 @@ interface RouteDataInput {
 }
 
 function routeData(input: RouteDataInput): RouteData {
-	return { tag: input.tag, snapshotCapture: false, fab: input.fab };
+	return { tag: input.tag, fab: input.fab };
 }
 
 function stackWith(entries: RouteStack['entries']): RouteStack {

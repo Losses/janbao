@@ -3,8 +3,8 @@
  * route-config - the consumer-rendering configs that sit on top of the
  * core `RouteData` record (in `route-data.ts`).
  *
- * Per `docs/DV20-Plan.md` §3 the core record holds only `tag`,
- * `snapshotCapture`, and `fab`. Everything that the renderer (Layer 5),
+ * Per `docs/DV20-Plan.md` §3 the core record holds only `tag` and
+ * `fab`. Everything that the renderer (Layer 5),
  * the FAB atom, the tab bar, or the deep-page preview reads lives here
  * as a separate consumer config keyed by route pattern.
  *
@@ -22,8 +22,7 @@
  *   - `PREVIEW_PANEL_CONFIG`      the back-preview snippet component
  *                                  per route that captures one.
  *
- * The classifier functions below are positional queries over
- * `MOBILE_TAB_DEFS` (`isPagerRoute`), one-line reads of the consumer
+ * The classifier functions below are one-line reads of the consumer
  * configs (`getCurrentTabIndex`), or the non-route classifier
  * `backTargetListKind` (which classifies a back-target string).
  */
@@ -269,8 +268,7 @@ export function getPreviewPanel(pathname: string): SvelteComponentType | null {
 //
 // Most of the classifier surface lives in the core `RouteData` record
 // or the consumer configs above. The remaining functions below are
-// positional queries (`isPagerRoute`), consumer-config reads
-// (`getCurrentTabIndex`), and the non-route classifier
+// consumer-config reads (`getCurrentTabIndex`) and the non-route classifier
 // `backTargetListKind`.
 
 /**
@@ -285,14 +283,6 @@ export function backTargetListKind(backTargetHref: string | null): FabListKind {
 	const queryIdx = backTargetHref.indexOf('?');
 	const pathname = queryIdx >= 0 ? backTargetHref.slice(0, queryIdx) : backTargetHref;
 	return pathname === '/messages/inbox' ? 'messages' : 'discussions';
-}
-
-/** True for the exact pager routes (the three tab roots, where
- *  `NavPipelineTabHost` owns the tab swipe). A positional query over
- *  `MOBILE_TAB_DEFS` (the spatial tab metadata), not a per-route
- *  `RouteData` field. */
-export function isPagerRoute(pathname: string): boolean {
-	return MOBILE_TAB_DEFS.some((tab) => tab.href === pathname);
 }
 
 /**

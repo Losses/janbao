@@ -1,11 +1,23 @@
 # DV20 Cycle 5b2 - Handoff Document
 
-> **CONVERGED 2026-07-24 (R135, 5/5).** This cycle is COMPLETE. The spec-scoped
-> audit loop ran R99 to R135 (37 rounds) to five consecutive PASS votes. See
-> `docs/RV20-C05b2-Audit-135.md` (closing round + cycle summary) and
-> `docs/DV20-Meeting/DV20-C06-Readiness.md` (the next development cycle). The text
-> below is the R95 point-in-time handoff (superseded by the audit trail R96 to
-> R135); keep it as history.
+> **CONVERGED 2026-07-24 (R135, 5/5) + post-convergence dead-code cleanup.** This
+> cycle is COMPLETE. The spec-scoped audit loop ran R99 to R135 (37 rounds) to five
+> consecutive PASS votes; the full gate is green (check 0/0 1467 files, lint exit 0,
+> full e2e 210 / 0 flaky). After convergence, three production-dead items were
+> removed and gated: the `app.css` `.mobile-tab-pager-viewport` vestigial selector
+> (referenced the deleted MobileTabPager), the `isPagerRoute` dead export, and the
+> `RouteData.snapshotCapture` dead field (the spec's "three fields" became "two
+> fields" = `tag`, `fab`). One item remains pending an architect decision: the
+> driver FAB / Header write extensibility hook (`LiveNavDomDriver.write` FAB / Header
+> branches + the `FabWrite` / `HeaderWrite` types + `TransitionPlan.fab` / `header`
+>
+> - `buildVisual`'s `plan.fab` / `plan.header`): production-unused but tested and
+>   documented; collapsing it to page-track-only would align the driver interface with
+>   the spec's "FAB and Header are reactive readers" mandate. See
+>   `docs/RV20-C05b2-Audit-135.md` (closing round + cycle summary) and
+>   `docs/DV20-Meeting/DV20-C06-Readiness.md` (the next development cycle, Cycle 6
+>   Offline unification). The text below is the R95 point-in-time handoff (superseded
+>   by the audit trail R96 to R135); keep it as history.
 
 **Date:** 2026-07-19 (updated through R95). **For:** the next agent continuing the
 DV20 5b2 audit loop.

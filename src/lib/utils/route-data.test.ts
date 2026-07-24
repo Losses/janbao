@@ -83,37 +83,12 @@ describe('getRouteData - fab visibility (record boolean)', () => {
 	});
 });
 
-describe('getRouteData - snapshotCapture', () => {
-	test('/discussion/* captures a deep-page snapshot', () => {
-		expect(getRouteData('/discussion/123/slug/p1').snapshotCapture).toBe(true);
-	});
-	test('every other route does not capture', () => {
-		const nonCapturing = [
-			'/',
-			'/activity',
-			'/messages/inbox',
-			'/messages/123',
-			'/messages/new',
-			'/post/discussion',
-			'/bookmarks',
-			'/search',
-			'/profile',
-			'/profile/settings',
-			'/admin',
-			'/offline/123'
-		];
-		for (const p of nonCapturing) {
-			expect(getRouteData(p).snapshotCapture, `${p} should not capture`).toBe(false);
-		}
-	});
-});
-
 describe('getRouteData - clarity principle (§3)', () => {
-	test('the record exposes exactly three fields (matched and unmatched routes)', () => {
+	test('the record exposes exactly two fields (matched and unmatched routes)', () => {
 		const cases = ['/discussion/123', '/api/users', '/entry/signin', '/upload'];
 		for (const p of cases) {
 			const keys = Object.keys(getRouteData(p)).sort();
-			expect(keys, p).toEqual(['fab', 'snapshotCapture', 'tag']);
+			expect(keys, p).toEqual(['fab', 'tag']);
 		}
 	});
 	test('no migration-era fields leak into the record', () => {
