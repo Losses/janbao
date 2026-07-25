@@ -32,6 +32,12 @@
  *  - The three tab roots `/`, `/activity`, `/messages/inbox` and the
  *    within-tab pagination `/discussions/p\d+` (these mount
  *    `NavPipelineTabHost` via the `(tabs)` layout).
+ *  - The offline reader tree `/offline` (mirror of `/`),
+ *    `/offline/activity` (mirror of `/activity`), `/offline/bookmarks`
+ *    (mirror of `/bookmarks`), and `/offline/<numeric discussionId>`
+ *    (mirror of the discussion thread). These mount `NavPipelineHost`
+ *    inside their `DualColumnLayout` shells, matching how `/bookmarks`
+ *    composes the two (Cycle 6).
  *
  *  A pathname not listed here does not mount a pipeline host (it is
  *  outside the mobile gesture layer). */
@@ -62,6 +68,15 @@ export function isNavPipelineRoute(pathname: string): boolean {
 	if (pathname === '/activity') return true;
 	if (pathname === '/messages/inbox') return true;
 	if (/^\/discussions\/p\d+$/.test(pathname)) return true;
+	// Cycle 6: the offline reader routes mirror their online counterparts and
+	// mount `NavPipelineHost` inside their `DualColumnLayout` shells. The
+	// thread mirror matches a numeric discussionId only (mirroring the online
+	// thread gate's strict shape); any other `/offline/<slug>` is a 404 and
+	// must not be gated.
+	if (pathname === '/offline') return true;
+	if (pathname === '/offline/activity') return true;
+	if (pathname === '/offline/bookmarks') return true;
+	if (/^\/offline\/\d+$/.test(pathname)) return true;
 	return false;
 }
 

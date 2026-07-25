@@ -629,7 +629,7 @@ export class NavPipelineOrchestrator {
 	 *     stale true would suppress the destination's
 	 *     `playEnterAnimation` and land the route with a hard cut.
 	 *     Covers a pipeline destination (`/profile` -> `/search`) and
-	 *     a non-pipeline destination (`/profile` -> `/offline/bookmarks`).
+	 *     a non-pipeline destination (`/profile` -> `/drafts`).
 	 *     (d) `#beginGesture`, which clears `#navDispatchInFlight`
 	 *     alongside this flag (a new gesture invalidates the in-flight
 	 *     dispatch's markers); the same ordering rationale as for
@@ -1938,7 +1938,7 @@ export class NavPipelineOrchestrator {
 		// detail -> detail nav between two PIPELINE routes (a push like
 		// /profile -> /profile/settings, or a sidebar link like
 		// /messages/<id> -> /discussion/<id>). A detail -> detail nav to
-		// a NON-pipeline route (e.g. /profile -> /offline/bookmarks)
+		// a NON-pipeline route (e.g. /profile -> /drafts)
 		// fails `isNavPipelineRoute(to)` in the isDeepToDeep check below
 		// and falls through to the non-intercepted path. The
 		// slide uses the 3-panel track geometry (LEFT=back-target,
@@ -1985,7 +1985,7 @@ export class NavPipelineOrchestrator {
 			// target, so it covers the pipeline-destination case (`/profile`
 			// -> `/search`: the orchestrator stays active and `releaseInputs`
 			// does not clear the flag) and the non-pipeline-destination case
-			// (`/profile` -> `/offline/bookmarks`: the flag would otherwise
+			// (`/profile` -> `/drafts`: the flag would otherwise
 			// survive the detour until the next mobile re-mount).
 			this.#lastDispatchWasDeepToDeep = false;
 			return false;
@@ -3150,12 +3150,13 @@ export class NavPipelineOrchestrator {
 			pillToIdx >= 0
 				? Math.max(0, rawDragFraction - PILL_EXPANSION_THRESHOLD) / (1 - PILL_EXPANSION_THRESHOLD)
 				: 0;
-		// backMorph: raw slide fraction on a deep-page host OR a
-		// backward-to-deep-page gesture on a bidirectional host (the
-		// destination is a deep page, so the Header morph must reveal the
-		// back-arrow during the slide). null for tab-to-tab on a
-		// bidirectional host (tab-to-tab stays in hamburger mode).
-		const backMorphValue = bidirectional && !targetIsDeepPage ? null : rawDragFraction;
+		// backMorph: raw slide fraction for a deep-page morph (deep host OR
+		// backward-to-deep-page on a bidirectional host). null when both source
+		// and target pill-map to a tab index (tab-to-tab on any host type: the
+		// Header stays in hamburger mode throughout, including offline LIST
+		// routes on NavPipelineHost that pill-map to a tab via TAB_BAR_CONFIG).
+		const backMorphValue =
+			(bidirectional && !targetIsDeepPage) || (fromIdx >= 0 && toIdx >= 0) ? null : rawDragFraction;
 		// targetIndex: null when the pill is held at fromIdx (a held pill
 		// has no destination tab to highlight) or when the resolved
 		// toTabIndex is -1 (no tab association).

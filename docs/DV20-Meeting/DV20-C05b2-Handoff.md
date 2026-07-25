@@ -1,21 +1,18 @@
 # DV20 Cycle 5b2 - Handoff Document
 
-> **CONVERGED 2026-07-24 (R135, 5/5) + post-convergence dead-code cleanup.** This
-> cycle is COMPLETE. The spec-scoped audit loop ran R99 to R135 (37 rounds) to five
-> consecutive PASS votes; the full gate is green (check 0/0 1467 files, lint exit 0,
-> full e2e 210 / 0 flaky). After convergence, four production-dead items were
-> removed and gated: the `app.css` `.mobile-tab-pager-viewport` vestigial selector
-> (referenced the deleted MobileTabPager), the `isPagerRoute` dead export, and the
-> `RouteData.snapshotCapture` dead field (the spec's "three fields" became "two
-> fields" = `tag`, `fab`), and the `LiveNavDomDriver` FAB / Header write extensibility hook (the driver is now
-> page-track-only; the `FabWrite` / `HeaderWrite` / `FabPlanFn` / `HeaderPlanFn`
-> types + the write branches + the plan fields + the `buildVisual` calls + the tests
-> are all removed, matching the spec's "FAB and Header are reactive readers"
-> architecture). No remaining dead-code items in the C05b2 scope. See
-> `docs/RV20-C05b2-Audit-135.md` (closing round + cycle summary) and
-> `docs/DV20-Meeting/DV20-C06-Readiness.md` (the next development cycle, Cycle 6
-> Offline unification). The text below is the R95 point-in-time handoff (superseded
-> by the audit trail R96 to R135); keep it as history.
+> **C05b2 CONVERGED 2026-07-24 (R135, 5/5) + C05c3 CONVERGED 2026-07-24 (R06, 5/5).**
+> Both cycles COMPLETE. C05b2 ran R99 to R135 (37 rounds) to 5/5; C05c3 (the post
+> -convergence dead-code cleanup + re-verification) ran R01 to R06 to 5/5. Four
+> production-dead items removed: app.css `.mobile-tab-pager-viewport` vestigial
+> selector, `isPagerRoute` dead export, `RouteData.snapshotCapture` dead field (spec
+> "three fields" became "two fields" = `tag`, `fab`), and the `LiveNavDomDriver`
+> FAB / Header write extensibility hook (driver now page-track-only). Final gate:
+> check 0/0 (1467 files), lint exit 0, full e2e 210 / 0 flaky. Audit trails:
+> `RV20-C05b2-Audit-{99..135}.md` + `RV20-C05c3-Audit-{01..06}.md`. Journal:
+> `DV20-C05b2-Journal.md` (sessions through 145). Next: per DV20-Plan §11, Cycle 6
+> (Offline unification); `docs/DV20-Meeting/DV20-C06-Readiness.md` has the inventory.
+> The text below is the R95 point-in-time handoff (superseded by the audit trail);
+> keep it as history.
 
 **Date:** 2026-07-19 (updated through R95). **For:** the next agent continuing the
 DV20 5b2 audit loop.

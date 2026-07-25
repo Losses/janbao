@@ -43,7 +43,7 @@ describe('getFabRouteAttributes - the FAB atom-mount registry', () => {
 	test('routes that do not mount the FAB atom return null', () => {
 		// /categories, /drafts, /post/editDiscussion/<id>,
 		// /entry/*, /avatar/*, /api/*, /upload, /offline/* (offline routes mount
-		// DualColumnLayout only and do not participate in the FAB layer).
+		// NavPipelineHost inside DualColumnLayout; they do not participate in the FAB layer).
 		const none = [
 			'/categories',
 			'/category/news',

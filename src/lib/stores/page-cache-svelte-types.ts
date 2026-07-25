@@ -62,7 +62,8 @@ export interface PageCacheCaptureInput {
  * A pluggable source the store can consult when `get` misses. The
  * online default is "no source" (the cache is populated by `capture`
  * calls from page layouts). Cycle 6 registers an IDB-backed source so
- * `/offline/*` routes resolve through the same store interface.
+ * the offline LIST routes (`/offline`, `/offline/activity`, `/offline/bookmarks`)
+ * resolve through the same store interface.
  */
 export interface PageCacheDataSource {
 	/** Whether this source owns entries for the given key. The first

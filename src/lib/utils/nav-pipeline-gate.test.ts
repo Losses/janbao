@@ -71,6 +71,25 @@ describe('isNavPipelineRoute', () => {
 		expect(isNavPipelineRoute('/discussions/p10')).toBe(true);
 	});
 
+	test('matches the offline reader routes (Cycle 6)', () => {
+		// The four /offline/* mirrors mount NavPipelineHost inside their
+		// DualColumnLayout shells; the gate must recognize them so the
+		// orchestrator + the layout hooks treat them as pipeline routes.
+		expect(isNavPipelineRoute('/offline')).toBe(true);
+		expect(isNavPipelineRoute('/offline/activity')).toBe(true);
+		expect(isNavPipelineRoute('/offline/bookmarks')).toBe(true);
+		expect(isNavPipelineRoute('/offline/123')).toBe(true);
+		expect(isNavPipelineRoute('/offline/12345')).toBe(true);
+	});
+
+	test('rejects a non-numeric offline thread id (mirrors the online thread gate)', () => {
+		// `/offline/<slug>` is a 404; only `/offline/<numeric id>` is a real
+		// route. A non-numeric segment must not be gated (matches the online
+		// thread's strict shape).
+		expect(isNavPipelineRoute('/offline/some-slug')).toBe(false);
+		expect(isNavPipelineRoute('/offline/123/extra')).toBe(false);
+	});
+
 	test('rejects non-migrated routes', () => {
 		expect(isNavPipelineRoute('/messages')).toBe(false);
 		expect(isNavPipelineRoute('/discussion/123')).toBe(false);
@@ -117,6 +136,14 @@ describe('isPipelineTransition', () => {
 		expect(isPipelineTransition('/messages/inbox', '/messages/123')).toBe(true);
 		expect(isPipelineTransition('/', '/messages/123/p2')).toBe(true);
 		expect(isPipelineTransition('/', '/bookmarks')).toBe(true);
+	});
+
+	test('owns the offline list-to-detail transition (Cycle 6)', () => {
+		// /offline -> /offline/<id> mirrors / -> /discussion/<id>; both ends
+		// are pipeline routes so the orchestrator owns the gesture.
+		expect(isPipelineTransition('/offline', '/offline/123')).toBe(true);
+		expect(isPipelineTransition('/offline/bookmarks', '/offline/123')).toBe(true);
+		expect(isPipelineTransition('/offline/123', '/offline')).toBe(true);
 	});
 
 	test('does not own a transition between two non-pipeline routes', () => {

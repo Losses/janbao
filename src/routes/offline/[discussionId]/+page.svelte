@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
+	import NavPipelineHost from '$lib/components/templates/NavPipelineHost.svelte';
 	import DiscussionMetadata from '$lib/components/molecules/DiscussionMetadata.svelte';
 	import LexicalRenderer from '$lib/components/molecules/LexicalRenderer.svelte';
 	import BookmarkButton from '$lib/components/atoms/BookmarkButton.svelte';
@@ -128,101 +129,103 @@
 {/snippet}
 
 <DualColumnLayout t={data.t} user={data.user} {sidebar}>
-	<div class="space-y-3">
-		{#if data.discussion}
-			<!-- Discussion Header: single subtle "offline" badge, no repetition per reply -->
-			<div class="border-b border-base-300 flex justify-between items-center pb-3 gap-3">
-				<div class="flex items-center gap-2 min-w-0">
-					<h1
-						class="text-lg font-extrabold tracking-tight text-base-content break-words leading-tight"
-					>
-						{data.discussion.title}
-					</h1>
-				</div>
-				<BookmarkButton
-					discussionId={data.discussionId}
-					bookmarked={data.isBookmarked}
-					t={data.t}
-					class="flex-shrink-0 mt-0.5"
-				/>
-			</div>
-
-			{#if partitioned.op}
-				<!-- Original Post -->
-				<div id="reply-{partitioned.op.id}" class="space-y-4 pb-4">
-					<DiscussionMetadata
-						userId={partitioned.op.authorId}
-						username={resolveUsername(partitioned.op)}
-						displayName={resolveName(partitioned.op)}
-						avatarUrl={partitioned.op.author.avatarUrl}
-						createdAt={partitioned.op.createdAt * 1000}
-						editedAt={partitioned.op.editedAt ? partitioned.op.editedAt * 1000 : null}
+	<NavPipelineHost leftHref="/offline" centerTab={0}>
+		<div class="space-y-3">
+			{#if data.discussion}
+				<!-- Discussion Header: single subtle "offline" badge, no repetition per reply -->
+				<div class="border-b border-base-300 flex justify-between items-center pb-3 gap-3">
+					<div class="flex items-center gap-2 min-w-0">
+						<h1
+							class="text-lg font-extrabold tracking-tight text-base-content break-words leading-tight"
+						>
+							{data.discussion.title}
+						</h1>
+					</div>
+					<BookmarkButton
+						discussionId={data.discussionId}
+						bookmarked={data.isBookmarked}
 						t={data.t}
+						class="flex-shrink-0 mt-0.5"
 					/>
-					<article class="prose prose-sm max-w-none">
-						<LexicalRenderer contentJson={partitioned.op.contentJson} t={data.t} />
-					</article>
 				</div>
-			{/if}
 
-			{#if partitioned.rest.length === 0 && !partitioned.op}
-				<p class="text-sm opacity-70">
-					{#if data.listingOnly}
-						{data.t.offline.reader.listingOnly}
-					{:else}
-						{data.t.offline.reader.empty}
-					{/if}
-				</p>
-			{:else if partitioned.rest.length > 0}
-				<!-- Replies Stream -->
-				<div class="divide-y divide-base-300 border-t border-base-300">
-					{#each partitioned.rest as reply, i (reply.id)}
-						{@const placement = placementBeforeIndex(i)}
-						{#if placement}
-							<!-- DV07 multi-range gap divider: rendered at the boundary
+				{#if partitioned.op}
+					<!-- Original Post -->
+					<div id="reply-{partitioned.op.id}" class="space-y-4 pb-4">
+						<DiscussionMetadata
+							userId={partitioned.op.authorId}
+							username={resolveUsername(partitioned.op)}
+							displayName={resolveName(partitioned.op)}
+							avatarUrl={partitioned.op.author.avatarUrl}
+							createdAt={partitioned.op.createdAt * 1000}
+							editedAt={partitioned.op.editedAt ? partitioned.op.editedAt * 1000 : null}
+							t={data.t}
+						/>
+						<article class="prose prose-sm max-w-none">
+							<LexicalRenderer contentJson={partitioned.op.contentJson} t={data.t} />
+						</article>
+					</div>
+				{/if}
+
+				{#if partitioned.rest.length === 0 && !partitioned.op}
+					<p class="text-sm opacity-70">
+						{#if data.listingOnly}
+							{data.t.offline.reader.listingOnly}
+						{:else}
+							{data.t.offline.reader.empty}
+						{/if}
+					</p>
+				{:else if partitioned.rest.length > 0}
+					<!-- Replies Stream -->
+					<div class="divide-y divide-base-300 border-t border-base-300">
+						{#each partitioned.rest as reply, i (reply.id)}
+							{@const placement = placementBeforeIndex(i)}
+							{#if placement}
+								<!-- DV07 multi-range gap divider: rendered at the boundary
 							     between a cached block and the uncached page range that
 							     follows it (or precedes it, for a leading divider). -->
-							<p class="py-3 text-center text-xs italic text-base-content/50">
-								{gapLabel(placement)}
-							</p>
-						{/if}
-						<div id="reply-{reply.id}" class="space-y-4 py-4">
-							<DiscussionMetadata
-								userId={reply.authorId}
-								username={resolveUsername(reply)}
-								displayName={resolveName(reply)}
-								avatarUrl={reply.author.avatarUrl}
-								createdAt={reply.createdAt * 1000}
-								editedAt={reply.editedAt ? reply.editedAt * 1000 : null}
-								t={data.t}
-							/>
-							<article class="prose prose-sm max-w-none">
-								<LexicalRenderer contentJson={reply.contentJson} t={data.t} />
-							</article>
-						</div>
-					{/each}
-					{#if gapView.trailingPlacement}
-						<!-- DV07 trailing gap divider: the uncached page range that
+								<p class="py-3 text-center text-xs italic text-base-content/50">
+									{gapLabel(placement)}
+								</p>
+							{/if}
+							<div id="reply-{reply.id}" class="space-y-4 py-4">
+								<DiscussionMetadata
+									userId={reply.authorId}
+									username={resolveUsername(reply)}
+									displayName={resolveName(reply)}
+									avatarUrl={reply.author.avatarUrl}
+									createdAt={reply.createdAt * 1000}
+									editedAt={reply.editedAt ? reply.editedAt * 1000 : null}
+									t={data.t}
+								/>
+								<article class="prose prose-sm max-w-none">
+									<LexicalRenderer contentJson={reply.contentJson} t={data.t} />
+								</article>
+							</div>
+						{/each}
+						{#if gapView.trailingPlacement}
+							<!-- DV07 trailing gap divider: the uncached page range that
 						     follows the last cached block. Its slot index lands at
 						     rest.length, past the each loop's [0, rest.length) range,
 						     so it is rendered separately after the reply stream. -->
-						<p class="py-3 text-center text-xs italic text-base-content/50">
-							{gapLabel(gapView.trailingPlacement)}
-						</p>
-					{/if}
-				</div>
-			{:else if gapView.restNotCached}
-				<!-- CO-C04-3: OP is cached but no paginated replies to anchor a
+							<p class="py-3 text-center text-xs italic text-base-content/50">
+								{gapLabel(gapView.trailingPlacement)}
+							</p>
+						{/if}
+					</div>
+				{:else if gapView.restNotCached}
+					<!-- CO-C04-3: OP is cached but no paginated replies to anchor a
 				     divider - show a single "rest not cached" hint after the OP. -->
-				<p class="py-3 text-center text-xs italic text-base-content/50">
-					{restNotCachedLabel()}
-				</p>
+					<p class="py-3 text-center text-xs italic text-base-content/50">
+						{restNotCachedLabel()}
+					</p>
+				{/if}
+			{:else}
+				<p class="text-sm opacity-70">{data.t.offline.reader.notCached}</p>
+				<a class="btn btn-outline btn-sm" href="/offline">
+					← {data.t.offline.reader.backToList}
+				</a>
 			{/if}
-		{:else}
-			<p class="text-sm opacity-70">{data.t.offline.reader.notCached}</p>
-			<a class="btn btn-outline btn-sm" href="/offline">
-				← {data.t.offline.reader.backToList}
-			</a>
-		{/if}
-	</div>
+		</div>
+	</NavPipelineHost>
 </DualColumnLayout>

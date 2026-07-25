@@ -1,25 +1,37 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import DualColumnLayout from '$lib/components/templates/DualColumnLayout.svelte';
+	import NavPipelineHost from '$lib/components/templates/NavPipelineHost.svelte';
 	import EmptyState from '$lib/components/molecules/EmptyState.svelte';
 	import DiscussionRow from '$lib/components/organisms/DiscussionRow.svelte';
 	import { generateSlug } from '$lib/utils/slug';
 	import { getSiteName } from '$lib/utils/title';
-	import { loadOfflineDiscussions, mapOfflineDiscussionRow } from '$lib/offline/queries';
+	import { mapOfflineDiscussionRow } from '$lib/offline/queries';
+	// Importing the offline cache source module eagerly-registers it with the
+	// singleton PageCacheStore as a side-effect, so the `ensure` call below
+	// sees the IDB source in place on the first navigation.
+	import '$lib/offline/offline-page-cache-source';
+	import { getPageCacheStore } from '$lib/stores/page-cache.svelte';
 	import type { OfflineDiscussionView } from '$lib/offline/types';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
-	// Cached content is read from IndexedDB after hydration (client-only). The
-	// route itself is server-rendered, so the layout's user/t - and therefore the
+	// Cached content is read through the unified PageCacheStore: the store's
+	// registered IDB source wraps `loadOfflineDiscussions` and is consulted on
+	// the first `ensure` for `/offline`. Subsequent visits (e.g. a back-swipe
+	// from `/offline/<id>`) hit the cache without re-reading IDB. The route
+	// itself is server-rendered, so the layout's user/t - and therefore the
 	// sidebar's logged-in state - are embedded in the document and survive a
 	// direct load / offline navigation. See $lib/offline/queries.ts.
+	const pageCache = getPageCacheStore();
 	let discussions = $state<OfflineDiscussionView[]>([]);
 	let loading = $state(true);
 
 	onMount(async () => {
-		discussions = await loadOfflineDiscussions();
+		const entry = await pageCache.ensure(page.url.pathname, undefined);
+		discussions = (entry?.data as OfflineDiscussionView[] | null) ?? [];
 		loading = false;
 	});
 
@@ -49,30 +61,32 @@
 {/snippet}
 
 <DualColumnLayout t={data.t} user={data.user} {sidebar}>
-	<div class="space-y-3">
-		{#if loading}
-			<div class="flex items-center justify-center gap-2 py-10 text-sm text-base-content/50">
-				<span class="loading loading-spinner loading-sm"></span>
-				{data.t.common.loading}
-			</div>
-		{:else if discussions.length === 0}
-			<EmptyState message={data.t.offline.reader.empty} bordered={false} />
-		{:else}
-			<!-- Same wrapper + row component as the home page (DiscussionListPage)
-			     so the offline list stays pixel-aligned with the online front page.
-			     Rows link to the offline reader and omit the bookmark star. -->
-			<div class="bg-base-100 overflow-hidden border-t border-b border-base-300">
-				<div class="divide-y divide-base-300">
-					{#each discussions as d (d.id)}
-						<DiscussionRow
-							discussion={mapOfflineDiscussionRow(d, unknownUser)}
-							discussionHref={`/offline/${d.id}`}
-							showBookmark={false}
-							t={data.t}
-						/>
-					{/each}
+	<NavPipelineHost leftHref="/">
+		<div class="space-y-3">
+			{#if loading}
+				<div class="flex items-center justify-center gap-2 py-10 text-sm text-base-content/50">
+					<span class="loading loading-spinner loading-sm"></span>
+					{data.t.common.loading}
 				</div>
-			</div>
-		{/if}
-	</div>
+			{:else if discussions.length === 0}
+				<EmptyState message={data.t.offline.reader.empty} bordered={false} />
+			{:else}
+				<!-- Same wrapper + row component as the home page (DiscussionListPage)
+				     so the offline list stays pixel-aligned with the online front page.
+				     Rows link to the offline reader and omit the bookmark star. -->
+				<div class="bg-base-100 overflow-hidden border-t border-b border-base-300">
+					<div class="divide-y divide-base-300">
+						{#each discussions as d (d.id)}
+							<DiscussionRow
+								discussion={mapOfflineDiscussionRow(d, unknownUser)}
+								discussionHref={`/offline/${d.id}`}
+								showBookmark={false}
+								t={data.t}
+							/>
+						{/each}
+					</div>
+				</div>
+			{/if}
+		</div>
+	</NavPipelineHost>
 </DualColumnLayout>
