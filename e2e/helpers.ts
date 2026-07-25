@@ -419,7 +419,7 @@ export async function captureHeaderOnThreadScroll(page: Page): Promise<HeaderScr
 // Tapping a tab from a NavPipelineHost deep page (thread / messages
 // conversation) cancels the SvelteKit nav in beforeNavigate, slides the track
 // to reveal a neighbouring panel as the exit "preview", then navigates on
-// transitionend. The detail page FIXES which lists those panels hold:
+// the orchestrator's commit-settle. The detail page FIXES which lists those panels hold:
 //   discussion -> left=DiscussionsPanel, right=ActivityPanel
 //   messages   -> left=MessagesPanel only (no right)
 // So tapping a tab that is NOT one of the pre-rendered panels reveals the

@@ -16,9 +16,18 @@
  * for every pipeline transition (back-swipe, tab-to-tab, deep-to-deep forward,
  * search scope switch). Both actions swallow the synthetic click that follows a
  * real drag so a swipe never double-fires as a tap.
+ *
+ * The two actions share their pointer-lifecycle plumbing via the internal
+ * `createSwipeRuntime` factory: the captured-pointer set, the pointerup /
+ * pointercancel / lostpointercapture wiring, the sample + rebound bookkeeping,
+ * and the `finish` sequence (delta / velocity / rebound / onEnd /
+ * suppressNextClick). Each action supplies only the state and hooks that differ:
+ * captureSwipe commits from pointerdown with no intent detection; detectSwipe
+ * runs a deciding phase and only commits once a horizontal drag is recognised.
  */
 import type { Action } from 'svelte/action';
 import { EDGE_DEAD_ZONE } from '$lib/utils/gesture-constants';
+import type { VoidHandler } from '$lib/types/handlers';
 
 // `onMove` fires per pointermove with the live displacement only; `onEnd` adds
 // `velocity` (release px/ms) and `reversed` (the cancel signal: true when the
@@ -203,20 +212,61 @@ export function shouldCancelOnRelease(
 	return event.type === 'pointercancel' || reversedAtRelease(deltaX, velocity, rebound);
 }
 
-export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => {
-	let params = initial;
-	// Capture is best-effort: we request it so the browser yields native pan /
-	// edge-back to us, but the gesture MUST complete (onEnd) on up / cancel even
-	// if capture failed or was lost. `capturedPointers` therefore only gates the
-	// release cleanup - never the call to `finish`.
+/** True while the gesture is in its committing phase: a terminal event in this
+ *  state fires onEnd. captureSwipe is active from pointerdown; detectSwipe only
+ *  once its deciding→swipe transition fires. */
+type SwipeActiveGetter = () => boolean;
+
+/** True when the trailing click after onEnd should be swallowed. captureSwipe
+ *  gates this on whether the finger actually travelled past the click
+ *  threshold; detectSwipe always suppresses once it has committed. */
+type SwipeSuppressClickGetter = () => boolean;
+
+/** Returns the action's current SwipeParams (re-read on every finish so the
+ *  runtime always sees the latest `onEnd` after an `update`). */
+type SwipeParamsGetter = () => SwipeParams;
+
+/** Action-specific hooks the runtime consults from its shared finish / onUp
+ *  sequence. Each action fills these in to express only what differs (the
+ *  committing-phase predicate and its cleanup, the abort path for a primary
+ *  pointer that lifts mid-deciding, and the click-suppression gate). */
+interface SwipeRuntimeHooks {
+	isActive: SwipeActiveGetter;
+	/** Leave the committing phase. Called from `finish` before `onEnd` fires.
+	 *  Must NOT clear `primaryPointerId` (the runtime owns that). */
+	deactivate: VoidHandler;
+	/** Reset action state when the primary pointer lifts without the gesture
+	 *  ever committing (a detectSwipe deciding/ignore abort). No-op for
+	 *  captureSwipe, which has no deciding phase. */
+	onAbortRelease: VoidHandler;
+	shouldSuppressClick: SwipeSuppressClickGetter;
+}
+
+/**
+ * Shared pointer-lifecycle plumbing for the two swipe actions. Owns the
+ * captured-pointer set, the primary-pointer id, the drag's start X / sample
+ * window / rebound extremes, and the terminal-event handlers (`finish`,
+ * `onUp`, `onLostCapture`) that compute release metrics and drive `onEnd`.
+ * Each action binds its own pointerdown / pointermove handlers and delegates
+ * only the shared terminal + capture wiring here.
+ *
+ * Capture is best-effort throughout: each action requests it in its own
+ * `onDown` / `onMove` handler so the browser yields native pan / edge-back,
+ * but the gesture MUST complete (onEnd) on up / cancel even if capture failed
+ * or was lost. `capturedPointers` therefore only gates the release cleanup -
+ * never the call to `finish`.
+ */
+function createSwipeRuntime(
+	node: HTMLElement,
+	getParams: SwipeParamsGetter,
+	hooks: SwipeRuntimeHooks
+) {
 	const capturedPointers = new Set<number>();
+	let primaryPointerId = NO_POINTER;
 	let startX = 0;
+	let samples: PositionSample[] = [];
 	let maxX = 0;
 	let minX = 0;
-	let moved = false;
-	let active = false;
-	let primaryPointerId = NO_POINTER;
-	let samples: PositionSample[] = [];
 
 	function releaseIfHeld(id: number): void {
 		if (!capturedPointers.has(id)) return;
@@ -230,63 +280,35 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 		capturedPointers.delete(id);
 	}
 
-	/** Complete the active primary gesture exactly once on the terminal event. */
+	/** Complete the active primary gesture exactly once on the terminal event.
+	 *  Computes release metrics from the live-tracked drag extreme (rebound is
+	 *  independent of the 32-sample cap, which prunes the early part of long
+	 *  drags), forwards them to `onEnd` via `shouldCancelOnRelease`, and
+	 *  suppresses the trailing click when the action asks for it. */
 	function finish(event: PointerEvent): void {
-		if (!active) return;
-		active = false;
+		if (!hooks.isActive()) return;
+		hooks.deactivate();
 		primaryPointerId = NO_POINTER;
 		const deltaX = event.clientX - startX;
 		const velocity = releaseVelocity(samples);
-		// rebound = how far the finger pulled back from the drag's extreme toward
-		// the origin (≥ 0). Tracked live (maxX/minX) so it is unaffected by the
-		// 32-sample cap on `samples`, which prunes the early part of long drags.
 		const rebound = deltaX >= 0 ? maxX - event.clientX : event.clientX - minX;
-		params.onEnd(deltaX, velocity, shouldCancelOnRelease(event, deltaX, velocity, rebound));
-		if (moved) suppressNextClick(node);
-	}
-
-	function onDown(event: PointerEvent): void {
-		if (event.pointerType === 'mouse' || params.disabled?.()) {
-			return;
-		}
-
-		const id = event.pointerId;
-		if (primaryPointerId === NO_POINTER) {
-			primaryPointerId = id;
-			startX = event.clientX;
-			maxX = event.clientX;
-			minX = event.clientX;
-			moved = false;
-			active = true;
-			samples = [];
-		}
-
-		try {
-			node.setPointerCapture(id);
-			capturedPointers.add(id);
-		} catch {
-			// Capture is optional; the gesture still completes on up / cancel.
+		getParams().onEnd(deltaX, velocity, shouldCancelOnRelease(event, deltaX, velocity, rebound));
+		if (hooks.shouldSuppressClick()) {
+			suppressNextClick(node);
 		}
 	}
 
-	function onMove(event: PointerEvent): void {
-		if (event.pointerId !== primaryPointerId || !active) return;
-		event.preventDefault();
-		const delta = event.clientX - startX;
-		if (!moved && Math.abs(delta) > CLICK_THRESHOLD) {
-			moved = true;
-		}
-		if (event.clientX > maxX) maxX = event.clientX;
-		if (event.clientX < minX) minX = event.clientX;
-		recordSample(samples, event.clientX, event.timeStamp);
-		params.onMove(delta);
-	}
-
-	// In captureSwipe we also block body elastic bounce when dragging the edge
 	function onUp(event: PointerEvent): void {
 		releaseIfHeld(event.pointerId);
-		if (event.pointerId === primaryPointerId) {
+		if (event.pointerId !== primaryPointerId) return;
+		if (hooks.isActive()) {
 			finish(event);
+		} else {
+			// Primary pointer lifted mid-deciding (detectSwipe) or otherwise
+			// without committing: hand the action its abort path. For
+			// captureSwipe the hook is a no-op (active and primaryPointerId are
+			// always cleared together, so this branch is unreachable in practice).
+			hooks.onAbortRelease();
 		}
 	}
 
@@ -300,77 +322,153 @@ export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) =>
 		capturedPointers.delete(event.pointerId);
 	}
 
+	function bindTerminal(): void {
+		node.addEventListener('pointerup', onUp);
+		node.addEventListener('pointercancel', onUp);
+		node.addEventListener('lostpointercapture', onLostCapture);
+	}
+
+	function destroy(): void {
+		for (const id of capturedPointers) {
+			releaseIfHeld(id);
+		}
+		capturedPointers.clear();
+		node.removeEventListener('pointerup', onUp);
+		node.removeEventListener('pointercancel', onUp);
+		node.removeEventListener('lostpointercapture', onLostCapture);
+	}
+
+	return {
+		capturedPointers,
+		get primaryPointerId() {
+			return primaryPointerId;
+		},
+		set primaryPointerId(value: number) {
+			primaryPointerId = value;
+		},
+		get startX() {
+			return startX;
+		},
+		set startX(value: number) {
+			startX = value;
+		},
+		releaseIfHeld,
+		finish,
+		onUp,
+		onLostCapture,
+		resetSamples() {
+			samples = [];
+		},
+		resetBounds(initial: number) {
+			maxX = initial;
+			minX = initial;
+		},
+		trackX(x: number) {
+			if (x > maxX) maxX = x;
+			if (x < minX) minX = x;
+		},
+		recordSample(x: number, t: number) {
+			recordSample(samples, x, t);
+		},
+		bindTerminal,
+		destroy
+	};
+}
+
+export const captureSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => {
+	let params = initial;
+	// `moved` tracks whether the finger actually travelled past the click
+	// threshold: captureSwipe only suppresses the trailing click for a real drag,
+	// not a stationary press.
+	let active = false;
+	let moved = false;
+
+	const runtime = createSwipeRuntime(node, () => params, {
+		isActive: () => active,
+		deactivate: () => {
+			active = false;
+		},
+		onAbortRelease: () => {
+			// No deciding phase; active and primaryPointerId are cleared together
+			// in finish, so a non-committing primary release is unreachable here.
+		},
+		shouldSuppressClick: () => moved
+	});
+
+	function onDown(event: PointerEvent): void {
+		if (event.pointerType === 'mouse' || params.disabled?.()) {
+			return;
+		}
+
+		const id = event.pointerId;
+		if (runtime.primaryPointerId === NO_POINTER) {
+			runtime.primaryPointerId = id;
+			runtime.startX = event.clientX;
+			runtime.resetBounds(event.clientX);
+			moved = false;
+			active = true;
+			runtime.resetSamples();
+		}
+
+		try {
+			node.setPointerCapture(id);
+			runtime.capturedPointers.add(id);
+		} catch {
+			// Capture is optional; the gesture still completes on up / cancel.
+		}
+	}
+
+	function onMove(event: PointerEvent): void {
+		if (event.pointerId !== runtime.primaryPointerId || !active) return;
+		event.preventDefault();
+		const delta = event.clientX - runtime.startX;
+		if (!moved && Math.abs(delta) > CLICK_THRESHOLD) {
+			moved = true;
+		}
+		runtime.trackX(event.clientX);
+		runtime.recordSample(event.clientX, event.timeStamp);
+		params.onMove(delta);
+	}
+
 	node.style.touchAction = 'none';
 	node.addEventListener('pointerdown', onDown);
 	node.addEventListener('pointermove', onMove);
-	node.addEventListener('pointerup', onUp);
-	node.addEventListener('pointercancel', onUp);
-	node.addEventListener('lostpointercapture', onLostCapture);
+	runtime.bindTerminal();
 
 	return {
 		update(next: SwipeParams): void {
 			params = next;
 		},
 		destroy(): void {
-			for (const id of capturedPointers) {
-				releaseIfHeld(id);
-			}
-			capturedPointers.clear();
 			node.removeEventListener('pointerdown', onDown);
 			node.removeEventListener('pointermove', onMove);
-			node.removeEventListener('pointerup', onUp);
-			node.removeEventListener('pointercancel', onUp);
-			node.removeEventListener('lostpointercapture', onLostCapture);
+			runtime.destroy();
 		}
 	};
 };
 
 export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => {
 	let params = initial;
-	// See captureSwipe: capture is best-effort. A recognised swipe MUST fire onEnd
-	// on up / cancel regardless of capture state, otherwise the pager / tab-slide
-	// animation freezes mid-transition.
-	const capturedPointers = new Set<number>();
-	let startX = 0;
 	let startY = 0;
 	let startTime = 0;
 	let target: EventTarget | null = null;
 	let targetWasFocused = false;
 	let phase: SwipePhase = 'idle';
-	let primaryPointerId = NO_POINTER;
-	let samples: PositionSample[] = [];
-	let maxX = 0;
-	let minX = 0;
 
-	function releaseIfHeld(id: number): void {
-		if (!capturedPointers.has(id)) return;
-		try {
-			if (node.hasPointerCapture(id)) {
-				node.releasePointerCapture(id);
-			}
-		} catch {
-			// Ignore release failure
-		}
-		capturedPointers.delete(id);
-	}
-
-	/** Fire onEnd for an in-flight swipe exactly once on the terminal event. */
-	function finish(event: PointerEvent): void {
-		if (phase !== 'swipe') return;
-		phase = 'idle';
-		primaryPointerId = NO_POINTER;
-		const deltaX = event.clientX - startX;
-		const velocity = releaseVelocity(samples);
-		// See captureSwipe.finish: live-tracked extreme → rebound, independent of
-		// the 32-sample cap (which prunes the early part of long drags).
-		const rebound = deltaX >= 0 ? maxX - event.clientX : event.clientX - minX;
-		params.onEnd(deltaX, velocity, shouldCancelOnRelease(event, deltaX, velocity, rebound));
-		suppressNextClick(node);
-	}
+	const runtime = createSwipeRuntime(node, () => params, {
+		isActive: () => phase === 'swipe',
+		deactivate: () => {
+			phase = 'idle';
+		},
+		onAbortRelease: () => {
+			reset();
+		},
+		shouldSuppressClick: () => true
+	});
 
 	function reset(): void {
 		phase = 'idle';
-		primaryPointerId = NO_POINTER;
+		runtime.primaryPointerId = NO_POINTER;
 	}
 
 	function onDown(event: PointerEvent): void {
@@ -394,14 +492,13 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 			return;
 		}
 
-		primaryPointerId = event.pointerId;
-		startX = event.clientX;
+		runtime.primaryPointerId = event.pointerId;
+		runtime.startX = event.clientX;
 		startY = event.clientY;
 		startTime = event.timeStamp;
 		target = event.target;
-		samples = [];
-		maxX = event.clientX;
-		minX = event.clientX;
+		runtime.resetSamples();
+		runtime.resetBounds(event.clientX);
 
 		const editingAncestor =
 			target instanceof Element
@@ -417,14 +514,13 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 	}
 
 	function onMove(event: PointerEvent): void {
-		if (event.pointerId !== primaryPointerId) return;
+		if (event.pointerId !== runtime.primaryPointerId) return;
 		if (phase === 'idle' || phase === 'ignore') return;
-		const dx = event.clientX - startX;
+		const dx = event.clientX - runtime.startX;
 		const dy = event.clientY - startY;
 		// Track the drag's extreme on every move (incl. while still deciding) so
 		// rebound reflects the true peak even when the deciding phase travels.
-		if (event.clientX > maxX) maxX = event.clientX;
-		if (event.clientX < minX) minX = event.clientX;
+		runtime.trackX(event.clientX);
 		if (phase === 'deciding') {
 			const absDx = Math.abs(dx);
 			const absDy = Math.abs(dy);
@@ -454,7 +550,7 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 					phase = 'swipe';
 					try {
 						node.setPointerCapture(event.pointerId);
-						capturedPointers.add(event.pointerId);
+						runtime.capturedPointers.add(event.pointerId);
 					} catch {
 						// Capture is best-effort: a failure (pointer already released) just means the gesture proceeds without capture.
 					}
@@ -483,26 +579,8 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 			// handled by onUp (not stopped) so the ancestor still receives them.
 			event.stopImmediatePropagation();
 		}
-		recordSample(samples, event.clientX, event.timeStamp);
+		runtime.recordSample(event.clientX, event.timeStamp);
 		params.onMove(dx);
-	}
-
-	function onUp(event: PointerEvent): void {
-		releaseIfHeld(event.pointerId);
-		if (event.pointerId !== primaryPointerId) return;
-		if (phase === 'swipe') {
-			finish(event);
-		} else {
-			reset();
-		}
-	}
-
-	function onLostCapture(event: PointerEvent): void {
-		// See captureSwipe.onLostCapture: losing capture does not end the gesture.
-		// The real pointerup / pointercancel still arrives and completes the swipe
-		// via onUp, so only sync the capture set; never snap from here (doing so
-		// sprang the pager back on a mid-swipe lostpointercapture).
-		capturedPointers.delete(event.pointerId);
 	}
 
 	// Intercept touchmove events to lock vertical scroll when horizontal swipe is active
@@ -514,7 +592,7 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 		} else if (phase === 'deciding') {
 			const touch = event.touches[0];
 			if (touch) {
-				const dx = touch.clientX - startX;
+				const dx = touch.clientX - runtime.startX;
 				const dy = touch.clientY - startY;
 				// If horizontal movement is dominant, prevent default early (even before DEAD_ZONE)
 				// to lock vertical scrolling and prevent the browser from claiming the gesture.
@@ -530,9 +608,7 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 
 	node.addEventListener('pointerdown', onDown);
 	node.addEventListener('pointermove', onMove);
-	node.addEventListener('pointerup', onUp);
-	node.addEventListener('pointercancel', onUp);
-	node.addEventListener('lostpointercapture', onLostCapture);
+	runtime.bindTerminal();
 	node.addEventListener('touchmove', preventTouchMove, { passive: false });
 
 	return {
@@ -540,16 +616,10 @@ export const detectSwipe: Action<HTMLElement, SwipeParams> = (node, initial) => 
 			params = next;
 		},
 		destroy(): void {
-			for (const id of capturedPointers) {
-				releaseIfHeld(id);
-			}
-			capturedPointers.clear();
 			node.removeEventListener('pointerdown', onDown);
 			node.removeEventListener('pointermove', onMove);
-			node.removeEventListener('pointerup', onUp);
-			node.removeEventListener('pointercancel', onUp);
-			node.removeEventListener('lostpointercapture', onLostCapture);
 			node.removeEventListener('touchmove', preventTouchMove);
+			runtime.destroy();
 		}
 	};
 };

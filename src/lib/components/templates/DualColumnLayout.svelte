@@ -12,7 +12,10 @@
 	interface DualColumnLayoutProps {
 		children: Snippet;
 		sidebar?: Snippet;
-		/** Accepted for call-site compatibility but unused now that the Header lives in AppShell. */
+		/** Optional explicit user; falls back to `page.data.user` when omitted.
+		 *  Drives `resolvedUser`, which selects between the signed-in
+		 *  UserInfoBlock and the sign-in / register prompt shown at the top of
+		 *  the desktop aside and the mobile drawer. */
 		user?: UserInfoSummary | null;
 		t: TranslationDict;
 	}
@@ -158,6 +161,22 @@
 	});
 </script>
 
+{#snippet sidebarTop()}
+	{#if resolvedUser}
+		<UserInfoBlock user={resolvedUser} {t} />
+	{:else}
+		<div class="space-y-2">
+			<h3 class="text-sm font-semibold text-base-content/70">{t.home.welcomeTo}</h3>
+			<div class="flex gap-2">
+				<a href={buildSignInRedirectUrl(page.url.pathname)} class="btn btn-sm btn-primary flex-1"
+					>{t.nav.signin}</a
+				>
+				<a href="/entry/register" class="btn btn-sm btn-outline flex-1">{t.nav.register}</a>
+			</div>
+		</div>
+	{/if}
+{/snippet}
+
 <div class="dual-column-layout relative flex min-h-0 flex-1 flex-col text-base-content">
 	<!-- Main Content Container -->
 	<div
@@ -183,20 +202,7 @@
 					class="hidden w-full shrink-0 md:flex md:flex-col md:gap-4 md:w-[280px] sidebar"
 				>
 					<!-- Top Widget -->
-					{#if resolvedUser}
-						<UserInfoBlock user={resolvedUser} {t} />
-					{:else}
-						<div class="space-y-2">
-							<h3 class="text-sm font-semibold text-base-content/70">{t.home.welcomeTo}</h3>
-							<div class="flex gap-2">
-								<a
-									href={buildSignInRedirectUrl(page.url.pathname)}
-									class="btn btn-sm btn-primary flex-1">{t.nav.signin}</a
-								>
-								<a href="/entry/register" class="btn btn-sm btn-outline flex-1">{t.nav.register}</a>
-							</div>
-						</div>
-					{/if}
+					{@render sidebarTop()}
 
 					<!-- Middle Content -->
 					<div bind:this={middleContentEl} class="space-y-3">
@@ -268,20 +274,7 @@
 		<!-- Scrollable content area: contains Top Widget and Middle Content -->
 		<div class="flex-1 overflow-y-auto p-6 space-y-4">
 			<!-- Top Widget -->
-			{#if resolvedUser}
-				<UserInfoBlock user={resolvedUser} {t} />
-			{:else}
-				<div class="space-y-2">
-					<h3 class="text-sm font-semibold text-base-content/70">{t.home.welcomeTo}</h3>
-					<div class="flex gap-2">
-						<a
-							href={buildSignInRedirectUrl(page.url.pathname)}
-							class="btn btn-sm btn-primary flex-1">{t.nav.signin}</a
-						>
-						<a href="/entry/register" class="btn btn-sm btn-outline flex-1">{t.nav.register}</a>
-					</div>
-				</div>
-			{/if}
+			{@render sidebarTop()}
 
 			<!-- Middle Content -->
 			<div class="space-y-3">

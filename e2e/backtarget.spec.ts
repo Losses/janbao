@@ -13,9 +13,7 @@ import {
 /**
  * Mobile back-swipe backTarget matrix - behavioural twin of the bun:test suite
  * in src/lib/stores/navigation-logic.test.ts. Drives real touch swipes through
- * CDP and asserts the landing URL. Each test is gated on the
- * `[detectSwipe] swipe activated!` console log so a silently-failed gesture
- * fails loudly instead of returning a misleading landing URL.
+ * CDP and asserts the landing URL.
  */
 
 interface Scenario {

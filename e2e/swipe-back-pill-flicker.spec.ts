@@ -127,7 +127,7 @@ test('REGRESSION: deep-page back-swipe holds the Discussions pill active (no col
 	await installPillSampler(page);
 	await swipeBack(page);
 	await page.waitForURL('/', { timeout: 5000 });
-	// Capture through the transitionend reset and the homepage-pager handoff.
+	// Capture through the orchestrator's at-rest reset and the homepage-pager handoff.
 	await page.waitForTimeout(900);
 
 	const log = await readPillLog(page);
