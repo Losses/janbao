@@ -238,11 +238,24 @@ motion, decided solely by the orchestrator's phase. CSS transitions and
   `settleProgress`, not `pager.backMorph`); the back-arrow reveal is armed
   at release by `#armSettleEaseFromGesture` and driven by the settle rAF,
   NOT by the executor's rAF via `pager.backMorph`. CSS-transition-free.
-- **Header morph / title crossfade on a tab-click commit:** owned by the
-  orchestrator's settle rAF via the `settleProgress` getter. The morph runs
-  POST-LANDING (the slide is a discrete nav with no live backMorph to
-  drive the morph, so the settle ease owns the crossfade after the route
-  lands). CSS-transition-free.
+- **Header morph / title crossfade on a tab-ness-changing discrete nav**
+  (a tab-click exit, the back-button from a deep page to its tab root, a
+  cross-tab bidirectional click): owned by the orchestrator's settle rAF
+  via the `settleProgress` getter. The morph runs CONCURRENTLY with the
+  slide (armed inside the discrete-nav branch of
+  `onSvelteKitBeforeNavigate` when the source and target tab-ness differ,
+  velocity-matched to the slide via `commitStart.durationMs`,
+  `awaitTitle: true` so the settle holds at progress 1 until the
+  navigation landing clears it; the same pattern the gesture-commit and
+  forward-enter slides use). CSS-transition-free.
+- **Header title crossfade on a deep→deep discrete nav** (e.g.
+  `/profile/settings` -> `/profile/edit`): armed AT THE NAVIGATION LANDING
+  by `notifyHeaderState`'s idle title-change arm with
+  `TITLE_CROSSFADE_MS`. The morph stays at 0 (both endpoints are deep, no
+  layer motion to drive), so no concurrent arm runs during the slide; the
+  crossfade is the only visual and runs post-landing, matching the
+  deep→deep title-crossfade regression (`e2e/reproduce-user-bugs.spec.ts`
+  Bug 10). CSS-transition-free.
 - **Header title crossfade during a settle:** owned by the orchestrator's
   settle rAF via the `settleProgress` getter. CSS-transition-free; the
   `setTimeout` settle backstop is deleted.

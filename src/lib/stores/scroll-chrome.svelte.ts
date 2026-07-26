@@ -179,11 +179,40 @@ function setScrollContainer(el: HTMLElement | null): void {
 	if (el) {
 		el.addEventListener('scroll', onScroll, { passive: true });
 		el.addEventListener('scrollend', onScrollEnd, { passive: true });
-		// Re-seed to the container's current position so the first real scroll
-		// produces the right delta (not a jump from the window's stale lastY).
-		lastY = el.scrollTop;
-	} else if (typeof window !== 'undefined') {
-		lastY = window.scrollY;
+		// Defer the scroll-position seed to the next animation frame. Reading
+		// `el.scrollTop` synchronously here, on a host that just mounted and
+		// wrote a batch of DOM (panels, scope content), forces the browser to
+		// flush pending layout work to satisfy the read; under mobile-class
+		// CPU that forced reflow dominates the search-enter frame budget (the
+		// host has two setScrollContainer calls in its reactive cascade, so
+		// the cost stacks). rAF is the existing mechanism the layer already
+		// uses for per-frame work; no setTimeout, no CSS transition. The seed
+		// only feeds `evaluate()`'s delta math on the first real scroll,
+		// which always fires after this rAF has run (the user cannot scroll
+		// the destination inside the same frame as the click). The identity
+		// guard re-checks `containerEl === el` inside the rAF so a stale
+		// callback (the host unmounted before the next frame) cannot write a
+		// detached element's scrollTop into lastY.
+		const target = el;
+		window.requestAnimationFrame(() => {
+			if (containerEl === target) lastY = target.scrollTop;
+		});
+	} else {
+		// Null branch (host unmount / no scroll container): defer the window
+		// scrollY read for the same reason - it is a geometry read that
+		// would otherwise force a layout flush in the middle of the route
+		// swap's reactive cascade. lastY stays at its previous value until
+		// the next frame, which is safe: with containerEl null the next
+		// scroll event reads `readY()` which returns `window.scrollY`
+		// directly, so the seed here only avoids a one-frame delta miscalc
+		// if the user scrolls the window during the next frame (a path that
+		// never runs on a NavPipelineHost route, where the window does not
+		// scroll).
+		window.requestAnimationFrame(() => {
+			if (containerEl === null && typeof window !== 'undefined') {
+				lastY = window.scrollY;
+			}
+		});
 	}
 }
 

@@ -846,3 +846,420 @@ export async function captureGplBackSwipe(
 	await client.detach();
 	return snap;
 }
+
+// --- Multi-signal header/track sampler (DV20 drag-sync + jank tests) --------
+// Records a bundle of header + track signals each rAF frame so a test can
+// prove they move IN SYNC with the finger during a held drag (the DV20 §5
+// invariant: every visual is a pure function of the one published progress,
+// written synchronously per pointermove), and measure frame intervals to
+// detect jank. One sampler covers the header morph (root layer / title layer
+// translateY), the BurgerArrowIcon rotation, the root<->search header track,
+// the NavPipelineHost (deep) + NavPipelineTabHost (tab) tracks, the FAB scale,
+// the primary pager store's live values, and the active tab pill.
+//
+// Signals and their meaning:
+//   hdrTrackTx    header root<->search track translateX (px). ~0 at a tab
+//                 root, ~-viewport/2 when the search panel covers the bar.
+//   rootLayerTy   header root layer (MobileTabBar wrapper) translateY (px).
+//                 0 = visible (tab bar shown), -headerHeight = hidden (deep).
+//   deepLayerTy   header title layer translateY (px). 0 = visible (deep title),
+//                 +headerHeight = hidden (tab-root mode).
+//   burgerRot     BurgerArrowIcon group rotation (deg). 0 = hamburger,
+//                 180 = back-arrow; values between are the live morph.
+//   deepTrackTx   NavPipelineHost track translateX (px) on a deep page.
+//   tabTrackTx    NavPipelineTabHost track translateX (px) on a tab root.
+//   fabScale      [data-testid="fab"] computed scale (matrix a).
+//   fractionalIndex / backMorph / tapMorph / transitionTarget  primary pager
+//                 store live values (the orchestrator's per-frame publication).
+//   activePill    the aria-current="page" tab pill href, or null when no pill.
+
+export interface MultiSignalFrame {
+	t: number;
+	path: string;
+	hdrTrackTx: number | null;
+	rootLayerTy: number | null;
+	deepLayerTy: number | null;
+	burgerRot: number | null;
+	deepTrackTx: number | null;
+	tabTrackTx: number | null;
+	fabScale: number | null;
+	fractionalIndex: number | null;
+	backMorph: number | null;
+	tapMorph: number | null;
+	transitionTarget: string | null;
+	activePill: string | null;
+}
+
+interface MultiSignalWindow extends Window {
+	__ms?: { frames: MultiSignalFrame[]; done: boolean };
+}
+
+interface PrimaryPagerRead {
+	fractionalIndex: number;
+	backMorph: number | null;
+	tapMorph: number | null;
+	transitionTarget: string | null;
+}
+
+/**
+ * Install a rAF sampler that records the multi-signal bundle each frame for
+ * `windowMs`. Call before triggering the gesture/animation, then drive the
+ * gesture, then await `waitForMultiSignalDone` and read with
+ * `readMultiSignalFrames`.
+ */
+export async function installMultiSignalSampler(page: Page, windowMs: number): Promise<void> {
+	await page.evaluate(
+		(windowMs) => {
+			const w = window as unknown as MultiSignalWindow;
+			w.__ms = { frames: [], done: false };
+			const start = performance.now();
+			const txOf = (el: Element | null): number | null => {
+				if (!el) return null;
+				try {
+					return new DOMMatrix(getComputedStyle(el).transform).m41;
+				} catch {
+					return null;
+				}
+			};
+			const tyOf = (el: Element | null): number | null => {
+				if (!el) return null;
+				const tr = getComputedStyle(el).transform;
+				if (tr === 'none') return 0;
+				try {
+					return new DOMMatrix(tr).m42;
+				} catch {
+					return null;
+				}
+			};
+			const burgerRot = (): number | null => {
+				const g = document.querySelector('header svg mask g') as HTMLElement | null;
+				if (!g) return null;
+				const m = g.style.transform.match(/rotate\(([-\d.]+)deg\)/);
+				return m ? parseFloat(m[1]) : 0;
+			};
+			const tick = (): void => {
+				const pp = (window as unknown as { __primaryPager?: PrimaryPagerRead }).__primaryPager;
+				// The two stacked layers inside the title slot: [0] = root (tab
+				// bar), [1] = deep (title). Both carry an inline translateY.
+				const layers = document.querySelectorAll(
+					'header div.relative.h-10.flex-1 > div.absolute.inset-0'
+				);
+				const deepCentre = document.querySelector('.detail-scroll-pane');
+				const hdrTrack = document.querySelector('header div.flex.w-\\[200\\%\\]');
+				const pill = document.querySelector(
+					'header nav a[data-tab-nav][aria-current="page"]'
+				);
+				const fab = document.querySelector('[data-testid="fab"]');
+				let fabScale: number | null = null;
+				if (fab) {
+					const m = getComputedStyle(fab).transform.match(/matrix\(([^)]+)\)/);
+					fabScale = m ? Number(m[1].split(',')[0]) : 1;
+				}
+				w.__ms!.frames.push({
+					t: Math.round(performance.now() - start),
+					path: location.pathname,
+					hdrTrackTx: txOf(hdrTrack),
+					rootLayerTy: tyOf(layers[0] ?? null),
+					deepLayerTy: tyOf(layers[1] ?? null),
+					burgerRot: burgerRot(),
+					deepTrackTx: txOf(deepCentre ? deepCentre.parentElement : null),
+					tabTrackTx: txOf(document.querySelector('[data-testid="nav-pipeline-tab-track"]')),
+					fabScale,
+					fractionalIndex: pp ? pp.fractionalIndex : null,
+					backMorph: pp ? pp.backMorph : null,
+					tapMorph: pp ? pp.tapMorph : null,
+					transitionTarget: pp ? pp.transitionTarget : null,
+					activePill: pill ? pill.getAttribute('href') : null
+				});
+				if (performance.now() - start > windowMs) {
+					w.__ms!.done = true;
+					return;
+				}
+				requestAnimationFrame(tick);
+			};
+			requestAnimationFrame(tick);
+		},
+		windowMs
+	);
+}
+
+/** Await the multi-signal sampler's window elapsing. */
+export async function waitForMultiSignalDone(page: Page, timeout = 10_000): Promise<void> {
+	await page.waitForFunction(
+		() => (window as unknown as MultiSignalWindow).__ms?.done === true,
+		{ timeout }
+	);
+}
+
+/** Read the captured multi-signal frames (call after `waitForMultiSignalDone`). */
+export async function readMultiSignalFrames(page: Page): Promise<MultiSignalFrame[]> {
+	return page.evaluate(() => {
+		const w = window as unknown as MultiSignalWindow;
+		return w.__ms?.frames ?? [];
+	});
+}
+
+// --- Slow / held CDP touch drag ---------------------------------------------
+// `swipeBack`/`swipeForward` fire a fast gesture that lands past SWIPE_COMMIT in
+// one burst. The drag-sync tests need to (a) capture mid-drag frames (so the
+// rAF sampler sees the finger-move window) and (b) HOLD the finger down without
+// releasing (so all sampled frames are during-drag, not post-release). This
+// helper drives a configurable CDP touch sequence with a per-step delay and an
+// optional hold (no touchEnd).
+
+export interface SlowTouchDragOpts {
+	startX: number;
+	endX: number;
+	/** touchMove dispatch count (higher = slower, more mid-drag frames). */
+	steps?: number;
+	/** ms waited after each touchStart/touchMove so rAF samplers keep up. */
+	stepDelayMs?: number;
+	/** touch y coordinate. */
+	y?: number;
+	/** when true, do NOT dispatch touchEnd (hold the drag mid-gesture). */
+	hold?: boolean;
+	/** when holding, ms to wait (finger down) before returning. */
+	holdMs?: number;
+}
+
+/**
+ * Drive a horizontal CDP touch drag with per-step timing. `hold: true` leaves
+ * the finger down (no touchEnd) so a sampler records pure during-drag frames.
+ */
+export async function slowTouchDrag(page: Page, opts: SlowTouchDragOpts): Promise<void> {
+	const {
+		startX,
+		endX,
+		steps = 24,
+		stepDelayMs = 28,
+		y = 400,
+		hold = false,
+		holdMs = 400
+	} = opts;
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', {
+		enabled: true,
+		maxTouchPoints: 5
+	});
+	const dispatch = (type: 'touchStart' | 'touchMove' | 'touchEnd', x: number, state: string) =>
+		client.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: [{ state, x, y, id: 1 }] as unknown as never,
+			modifiers: 0,
+			timestamp: 0
+		});
+	await dispatch('touchStart', startX, 'touchPressed');
+	await page.waitForTimeout(stepDelayMs);
+	for (let i = 1; i <= steps; i++) {
+		const x = Math.round(startX + (endX - startX) * (i / steps));
+		await dispatch('touchMove', x, 'touchMoved');
+		await page.waitForTimeout(stepDelayMs);
+	}
+	if (hold) {
+		await page.waitForTimeout(holdMs);
+	} else {
+		await dispatch('touchEnd', endX, 'touchReleased');
+	}
+	await client.detach();
+}
+
+// --- Animation jank + curve analyzer (pure) ---------------------------------
+// Given a series of `{ t, value }` samples (a subset of MultiSignalFrame
+// projected onto one signal), characterize the active animation window: its
+// duration, the rAF frame cadence (mean + worst interval), the largest
+// single-frame jump, and whether the curve decelerates (ease-out, snappy) vs.
+// runs linear / accelerating (feels sluggish). Used by the search-enter and
+// header-back-button jank tests. Pure (no Page), so it runs in the test
+// process over frames read back from the page.
+
+export interface AnimationAnalysis {
+	/** ms from the first moving frame to the last moving frame. */
+	durationMs: number;
+	/** total rAF frames in the active window. */
+	frameCount: number;
+	/** frames whose value moved more than `epsilon` from the previous frame. */
+	movingFrameCount: number;
+	/** mean rAF interval (ms) across the active window. ~16 at 60fps. */
+	meanIntervalMs: number;
+	/** worst rAF interval (ms) across the active window. A jank spike. */
+	maxIntervalMs: number;
+	/** largest absolute single-frame value delta (a "jump"). */
+	maxDelta: number;
+	/** total value distance covered (|last - first| of the active window). */
+	travel: number;
+	/** mean |delta| of the active window's first half minus its second half.
+	 *  Positive => the animation front-loads its motion (ease-out, decelerates,
+	 *  feels snappy). Near zero => linear. Negative => accelerates (ease-in,
+	 *  feels draggy / sluggish at the start). */
+	deceleration: number;
+}
+
+/**
+ * Characterize the active animation in a sampled series. The active window is
+ * the span from the first frame whose value moved more than `epsilon` to the
+ * last such frame. Frames outside it (idle tail / head) are excluded.
+ */
+export function analyzeAnimation(
+	frames: { t: number; value: number | null }[],
+	epsilon = 1
+): AnimationAnalysis {
+	const series = frames.filter((f): f is { t: number; value: number } => f.value !== null);
+	if (series.length < 2) {
+		return {
+			durationMs: 0,
+			frameCount: series.length,
+			movingFrameCount: 0,
+			meanIntervalMs: 0,
+			maxIntervalMs: 0,
+			maxDelta: 0,
+			travel: 0,
+			deceleration: 0
+		};
+	}
+	const absDelta = (i: number): number => Math.abs(series[i].value - series[i - 1].value);
+	let first = -1;
+	let last = -1;
+	for (let i = 1; i < series.length; i++) {
+		if (absDelta(i) > epsilon) {
+			if (first === -1) first = i - 1;
+			last = i;
+		}
+	}
+	if (first === -1) {
+		return {
+			durationMs: 0,
+			frameCount: series.length,
+			movingFrameCount: 0,
+			meanIntervalMs: 0,
+			maxIntervalMs: 0,
+			maxDelta: 0,
+			travel: 0,
+			deceleration: 0
+		};
+	}
+	const span = series.slice(first, last + 1);
+	const intervals: number[] = [];
+	const deltas: number[] = [];
+	for (let i = 1; i < span.length; i++) {
+		intervals.push(span[i].t - span[i - 1].t);
+		deltas.push(Math.abs(span[i].value - span[i - 1].value));
+	}
+	const mean = (xs: number[]): number => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+	const half = Math.floor(deltas.length / 2);
+	const firstHalfMean = half > 0 ? mean(deltas.slice(0, half)) : mean(deltas);
+	const secondHalfMean = half > 0 ? mean(deltas.slice(half)) : 0;
+	return {
+		durationMs: span[span.length - 1].t - span[0].t,
+		frameCount: span.length,
+		movingFrameCount: deltas.filter((d) => d > epsilon).length,
+		meanIntervalMs: mean(intervals),
+		maxIntervalMs: intervals.length ? Math.max(...intervals) : 0,
+		maxDelta: deltas.length ? Math.max(...deltas) : 0,
+		travel: Math.abs(span[span.length - 1].value - span[0].value),
+		deceleration: firstHalfMean - secondHalfMean
+	};
+}
+
+/** Range (max - min) of a numeric signal over the given frames. */
+export function signalRange<F>(
+	frames: F[],
+	pick: (f: F) => number | null
+): { range: number; min: number; max: number; first: number | null; last: number | null } {
+	const vals = frames.map(pick).filter((v): v is number => v !== null);
+	if (vals.length === 0) return { range: 0, min: 0, max: 0, first: null, last: null };
+	return {
+		range: Math.max(...vals) - Math.min(...vals),
+		min: Math.min(...vals),
+		max: Math.max(...vals),
+		first: vals[0],
+		last: vals[vals.length - 1]
+	};
+}
+
+// --- CPU throttle + Long Animation Frames (authoritative jank) --------------
+// Two tools the rAF-interval proxy lacks:
+//  - `withCpuThrottle` slows the page's CPU via CDP Emulation so main-thread-
+//    bound jank surfaces as on a mobile-class device (desktop Chromium is far
+//    faster than a real phone and hides device jank).
+//  - The Long Animation Frames API (PerformanceObserver 'long-animation-frame')
+//    is the browser's own flag for render frames whose total work exceeded
+//    ~50ms, carrying the offending script. Authoritative for main-thread render
+//    jank and names the cause; under throttle it reproduces the reported severe
+//    frame drops that a desktop rAF sampler misses.
+
+export interface LoafEntry {
+	/** Frame start, ms from time origin. */
+	startTime: number;
+	/** Total frame work, ms. >50 means the browser flagged it long. */
+	duration: number;
+	/** Time the frame blocked other input, ms. */
+	blockingDuration: number;
+	/** Source URL of the heaviest script in the frame. */
+	scriptUrl: string | null;
+	/** Function name of the heaviest script (best effort). */
+	scriptFn: string | null;
+	/** Self ms of the heaviest script. */
+	scriptMs: number | null;
+}
+
+interface LoafWindow extends Window {
+	__loaf?: LoafEntry[];
+	__loafObs?: PerformanceObserver;
+}
+
+/** Install (or reset) a Long Animation Frames observer capturing every long
+ *  render frame from now on. */
+export async function resetLoaf(page: Page): Promise<void> {
+	await page.evaluate(() => {
+		const w = window as unknown as LoafWindow;
+		try {
+			w.__loafObs?.disconnect();
+		} catch {
+			/* ignore */
+		}
+		w.__loaf = [];
+		const obs = new PerformanceObserver((list) => {
+			for (const e of list.getEntries() as unknown as Array<Record<string, unknown>>) {
+				const scripts = ((e.scripts as Array<Record<string, unknown>>) ?? []).slice();
+				scripts.sort((a, b) => Number(b.duration ?? 0) - Number(a.duration ?? 0));
+				const top = scripts[0];
+				w.__loaf!.push({
+					startTime: Number(e.startTime),
+					duration: Number(e.duration),
+					blockingDuration: Number(e.blockingDuration ?? 0),
+					scriptUrl: (top?.sourceURL as string) ?? null,
+					scriptFn:
+						(top?.sourceFunctionName as string) ??
+						(top?.invoker as string) ??
+						null,
+					scriptMs: top ? Number(top.duration) : null
+				});
+			}
+		});
+		obs.observe({ type: 'long-animation-frame', buffered: false });
+		w.__loafObs = obs;
+	});
+}
+
+/** Read the captured long-animation-frame entries (call after the animation). */
+export async function readLoaf(page: Page): Promise<LoafEntry[]> {
+	return page.evaluate(() => (window as unknown as LoafWindow).__loaf ?? []);
+}
+
+/** Run `fn` with the page CPU throttled to `rate` (e.g. 4 = 4x slower), then
+ *  restore 1x. The throttle applies to the whole page target, so in-page
+ *  observers (LoAF, rAF samplers) see the throttled execution. */
+export async function withCpuThrottle<T>(
+	page: Page,
+	rate: number,
+	fn: () => Promise<T>
+): Promise<T> {
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setCPUThrottlingRate', { rate });
+	try {
+		return await fn();
+	} finally {
+		await client.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+		await client.detach();
+	}
+}

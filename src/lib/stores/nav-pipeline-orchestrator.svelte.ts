@@ -100,6 +100,7 @@ import { MOBILE_TABS } from '$lib/utils/route-config';
 import { getCurrentTabIndex } from '$lib/utils/route-config';
 import { hopForHref, isTabRootPath, previousEntryPathname } from '$lib/utils/history-nav';
 import { isNavPipelineRoute } from '$lib/utils/nav-pipeline-gate';
+import { resolveHeaderMode } from '$lib/utils/header-mode';
 import {
 	HEADER_MORPH_THRESHOLD,
 	PILL_EXPANSION_THRESHOLD,
@@ -236,12 +237,19 @@ export interface PipelineMountInputs {
 	readonly toTabIndex: number;
 	/** The thread host's `centerTab` prop (the tab index the thread
 	 *  page is centered on, e.g. 0 for discussions). When set, the
-	 *  orchestrator publishes `backMorph: null, targetIndex: null,
-	 *  fractionalIndex: centerTab` (constant) to the pager store so
-	 *  the Header stays in root mode end to end (tab bar visible,
-	 *  hamburger icon) and the pill stays on the thread's tab
-	 *  throughout the gesture. When undefined, the morph/pill values
-	 *  apply (compose route, deep page, or tab host). */
+	 *  orchestrator publishes a live `backMorph: rawDragFraction` (the same
+	 *  gesture-feedback signal the deep-page path publishes) plus a
+	 *  `fractionalIndex` that interpolates from `centerTab` toward the
+	 *  gesture's resolved destination tab, so the Header's morph derivation
+	 *  and the tab-bar pill both track the finger during a drag (gesture
+	 *  feedback: the morph eases toward the back-arrow as the swipe
+	 *  advances, then the settle ease armed at release returns the morph to
+	 *  the destination's tab-ness via the captured `startMorph`). At rest
+	 *  the publication holds `fractionalIndex: centerTab`,
+	 *  `targetIndex: null`, `backMorph: 0` so the Header rests in root mode
+	 *  (tab bar visible, hamburger icon) on the thread route. When
+	 *  undefined, the deep-page / tab-host publication paths apply (compose
+	 *  route, deep page, or tab host). */
 	readonly centerTab?: number;
 	/** When true the orchestrator claims BOTH rightward and leftward
 	 *  drags (`NavPipelineTabHost`, the three tab roots). Rightward
@@ -284,8 +292,31 @@ export interface OrchestratorPublication {
 	readonly direction: TransitionDirection | null;
 	/** True while the settle ease owns the morph / title crossfade. */
 	readonly settleActive: boolean;
-	/** The eased settle progress 0..1. */
+	/** The eased settle progress. The raw rAF-tick value the state machine
+	 *  owns; runs from `settleStartProgress` to `settleTargetProgress` across
+	 *  the eased curve. The title crossfade reads this directly (the span
+	 *  positions are continuous with the live-drag `pager.backMorph` value
+	 *  because both share the raw scale). The morph derivation reads
+	 *  `settleMorphFraction` instead, because the morph must interpolate from
+	 *  the drag's terminal value (captured in `settleLatched.startMorph`) to
+	 *  `settleLatched.destMorph`, which is a different [0, 1] window than the
+	 *  raw `settleProgress` for a gesture-release settle. */
 	readonly settleProgress: number;
+	/** The eased settle progress captured at arm time (the release raw for a
+	 *  gesture-release settle, 0 for a non-gesture arm). Paired with
+	 *  `settleTargetProgress` to define the eased window the morph
+	 *  interpolation reads from. */
+	readonly settleStartProgress: number;
+	/** The eased settle progress's terminal value (1 for a commit / click,
+	 *  0 for a cancel). */
+	readonly settleTargetProgress: 0 | 1;
+	/** Normalized 0..1 fraction of the eased settle curve traversed so far,
+	 *  computed from `settleProgress`, `settleStartProgress`, and
+	 *  `settleTargetProgress`. The Header's morph derivation reads this to
+	 *  interpolate `settleLatched.startMorph` to `settleLatched.destMorph`
+	 *  across the settle so the morph stays continuous across the
+	 *  drag-to-settle handoff for every gesture shape (DV21 §5). */
+	readonly settleMorphFraction: number;
 	/** The latched endpoint identity of the in-flight settle. null at rest. */
 	readonly settleLatched: HeaderSettleTransition | null;
 	/** The direction of the in-flight settle (forward / back). */
@@ -421,6 +452,9 @@ export class NavPipelineOrchestrator {
 				direction: null,
 				settleActive: this.#stateMachine.settleActive,
 				settleProgress: this.#stateMachine.settleProgress,
+				settleStartProgress: this.#settleStartProgress,
+				settleTargetProgress: this.#settleTargetProgress,
+				settleMorphFraction: this.#settleMorphFraction(),
 				settleLatched: this.#stateMachine.settleLatched,
 				settleDirection: this.#stateMachine.settleDirection,
 				settleAwaitTitle: this.#stateMachine.settleAwaitTitle,
@@ -438,6 +472,9 @@ export class NavPipelineOrchestrator {
 			direction: sm.direction,
 			settleActive: this.#stateMachine.settleActive,
 			settleProgress: this.#stateMachine.settleProgress,
+			settleStartProgress: this.#settleStartProgress,
+			settleTargetProgress: this.#settleTargetProgress,
+			settleMorphFraction: this.#settleMorphFraction(),
 			settleLatched: this.#stateMachine.settleLatched,
 			settleDirection: this.#stateMachine.settleDirection,
 			settleAwaitTitle: this.#stateMachine.settleAwaitTitle,
@@ -445,6 +482,26 @@ export class NavPipelineOrchestrator {
 			lastDispatchWasDeepToDeep: this.#lastDispatchWasDeepToDeep
 		};
 	});
+
+	/** Normalized 0..1 fraction of the eased settle curve traversed so far.
+	 *  Computed from the state machine's `settleProgress` plus this
+	 *  orchestrator's `#settleStartProgress` / `#settleTargetProgress` pair.
+	 *  The morph derivation in the Header reads this (via the publication's
+	 *  `settleMorphFraction` field) to interpolate from the latched
+	 *  `startMorph` to `destMorph`, so the morph stays continuous across the
+	 *  drag-to-settle handoff for every gesture shape. Returns 0 at rest (the
+	 *  at-rest branch in the Header reads the static tab-ness instead). */
+	#settleMorphFraction(): number {
+		const sp = this.#stateMachine.settleProgress;
+		const start = this.#settleStartProgress;
+		const target = this.#settleTargetProgress;
+		const denom = target - start;
+		if (Math.abs(denom) < 1e-6) return 1;
+		const frac = (sp - start) / denom;
+		if (frac < 0) return 0;
+		if (frac > 1) return 1;
+		return frac;
+	}
 	/** The raw drag-fraction published at the moment a commit / cancel
 	 *  began. The commit-phase publication lerps from this value to the
 	 *  target (1 commit / 0 cancel) along the executor's eased fraction,
@@ -480,11 +537,14 @@ export class NavPipelineOrchestrator {
 	// Reduced-motion snaps (no rAF integration).
 	#settleRafId: number | undefined;
 	/** The eased settle progress's start value (the release position for a
-	 *  gesture-release settle, 0 for a non-gesture title-change settle). */
-	#settleStartProgress = 0;
+	 *  gesture-release settle, 0 for a non-gesture title-change settle).
+	 *  Backed by `$state` so the publication derived (which reads it to
+	 *  compute `settleMorphFraction`) re-runs on a fresh arm. */
+	#settleStartProgress = $state(0);
 	/** The eased settle progress's terminal value (1 for commit / click, 0
-	 *  for cancel). */
-	#settleTargetProgress: 0 | 1 = 1;
+	 *  for cancel). `$state`-backed for the same reason as
+	 *  `#settleStartProgress`. */
+	#settleTargetProgress = $state<0 | 1>(1);
 	/** Wall-clock start time of the ease (set on the first tick). */
 	#settleStartTs = 0;
 	/** True while a commit settle holds at progress 1 awaiting the
@@ -674,6 +734,26 @@ export class NavPipelineOrchestrator {
 	 *  state machine via the publication. */
 	get settleProgress(): number {
 		return this.#publication.settleProgress;
+	}
+	/** Reactive read of the eased settle progress's start value (the release
+	 *  raw for a gesture-release settle, 0 for a non-gesture arm). Read by
+	 *  the Header (via the publication) to compute the morph interpolation
+	 *  window. */
+	get settleStartProgress(): number {
+		return this.#publication.settleStartProgress;
+	}
+	/** Reactive read of the eased settle progress's terminal value (1 for a
+	 *  commit / click, 0 for a cancel). Read by the Header to compute the
+	 *  morph interpolation window. */
+	get settleTargetProgress(): 0 | 1 {
+		return this.#publication.settleTargetProgress;
+	}
+	/** Reactive read of the normalized 0..1 fraction of the eased settle
+	 *  curve traversed so far. Read by the Header's morph derivation to
+	 *  interpolate `settleLatched.startMorph` to `settleLatched.destMorph`
+	 *  across the settle. */
+	get settleMorphFraction(): number {
+		return this.#publication.settleMorphFraction;
 	}
 	/** Reactive read of the latched settle record. Delegates to the
 	 *  state machine via the publication. */
@@ -963,15 +1043,32 @@ export class NavPipelineOrchestrator {
 			const incomingTitle = resolveDeepHeaderTitle(inputs.fromPathname, t) ?? '';
 			const outgoingHasTabs = getCurrentTabIndex(inputs.backTarget) >= 0;
 			const incomingHasTabs = getCurrentTabIndex(inputs.fromPathname) >= 0;
+			// No preceding drag for a forward-enter: the morph at the arm is
+			// the source route's at-rest morph; the settle interpolates from
+			// there to the host route's at-rest morph as the slide runs.
+			const startMorph = this.#atRestMorph(outgoingHasTabs);
+			const destMorph = this.#atRestMorph(incomingHasTabs);
 			const latched: HeaderSettleTransition = {
 				outgoingTitle,
 				incomingTitle,
 				outgoingHasTabs,
-				incomingHasTabs
+				incomingHasTabs,
+				startMorph,
+				destMorph
 			};
 			const commitDurationMs = executor.state.commitStart?.durationMs ?? TITLE_CROSSFADE_MS;
 			this.#armSettleEase(latched, 0, 1, false, 'forward', commitDurationMs);
 		}
+	}
+
+	/** The at-rest morph for a route with the given tab-ness: 1 = tab/root
+	 *  mode (hamburger, tab bar visible), 0 = deep mode (back-arrow, tab bar
+	 *  hidden). Used by the non-gesture settle arm sites (forward-enter,
+	 *  discrete-nav, idle title-change) to capture the morph at the arm
+	 *  instant, which equals the source route's at-rest morph in those cases
+	 *  (no preceding live drag owned the morph). */
+	#atRestMorph(hasTabs: boolean): number {
+		return hasTabs ? 1 : 0;
 	}
 
 	/** Land an in-flight COMMIT transition when the platform flips mobile ->
@@ -1432,13 +1529,15 @@ export class NavPipelineOrchestrator {
 		this.#pendingDiscreteNav = null;
 		this.#queuedDiscreteNav = null;
 		if (target === null) {
-			// Boundary void-swipe on a bidirectional host (first/last tab):
-			// start a rubber-band gesture that tracks the finger at a reduced
-			// factor and always snaps back on release. No navigation is
-			// dispatched. (`target === null` implies `inputs.bidirectional`:
-			// the backward ternary returns `inputs.backTarget` (non-null) for
-			// non-bidirectional hosts; `#nextTabTarget`/`#backwardTabTarget`
-			// return null only on bidirectional hosts at the boundary.)
+			// Boundary void-swipe on a bidirectional host (first tab with no
+			// previous history entry): start a rubber-band gesture that tracks
+			// the finger at a reduced factor and always snaps back on release.
+			// No navigation is dispatched. (`target === null` is reachable
+			// only via `#backwardTabTarget` returning null on the first tab
+			// with no previous entry; the backward ternary returns
+			// `inputs.backTarget` (non-null) for non-bidirectional hosts, and
+			// `#nextTabTarget` resolves every forward target including the
+			// last-tab to `/search`.)
 			const boundaryPlan: TransitionPlan = {
 				pageTrack: {
 					axis: direction === 'backward' ? 'right' : 'left',
@@ -1519,11 +1618,20 @@ export class NavPipelineOrchestrator {
 		this.#executor?.onDragStart(plan, startProgress);
 	}
 
-	/** Resolve the next-tab target for a leftward (forward) gesture. Returns
-	 *  null when the active tab is the last tab (no next neighbour). */
+	/** Resolve the forward-gesture target for a leftward drag. The active
+	 *  tab's spatial neighbour is the target. For the last tab there is no
+	 *  spatial neighbour, so per DV20-Plan §6 the target falls through to
+	 *  `/search`: the `{tab, search}` pair (`tabSearchResolver`) drives
+	 *  the root<->search slide and the orchestrator publishes
+	 *  `transitionTarget='/search'` plus the live `backMorph` so the
+	 *  Header's searchProgress / trackMorph scrub the root<->search track
+	 *  during the drag and on the commit slide. The return is non-null for
+	 *  every tab host mount (`fromTabIndex >= 0`); the `string | null`
+	 *  signature mirrors the backward ternary's union type at the call
+	 *  site. */
 	#nextTabTarget(inputs: PipelineMountInputs): string | null {
 		const nextIdx = inputs.fromTabIndex + 1;
-		if (nextIdx >= MOBILE_TABS.length) return null;
+		if (nextIdx >= MOBILE_TABS.length) return '/search';
 		return MOBILE_TABS[nextIdx].href;
 	}
 
@@ -1621,8 +1729,9 @@ export class NavPipelineOrchestrator {
 			toTabIndex >= 0 &&
 			Math.abs(toTabIndex - inputs.fromTabIndex) > 1 &&
 			!backwardToHigher;
-		// Suppress the track slide (distance = 0) in two cases where there
-		// is no panel to reveal:
+		// Suppress the track slide (distance = 0) in three cases where
+		// there is no panel in the slide direction on the bidirectional
+		// tab host:
 		// 1. Backward to a deep page from the leftmost tab (panel 0 has
 		//    no left neighbour; the deep-snapshot overlay covers
 		//    activeIndex >= 1). `backMorph` still drives the Header morph
@@ -1637,6 +1746,16 @@ export class NavPipelineOrchestrator {
 		//    returns -1 for non-tab-roots). The gesture path needs this
 		//    because the click-path guard in `onSvelteKitBeforeNavigate`
 		//    is not reached for gestures.
+		// 3. Forward to `/search` from the last tab (the rightmost panel
+		//    has no right neighbour in the 3-panel track, so a leftward
+		//    slide would reveal empty space). The `/search` panel mounts
+		//    in its own NavPipelineHost on commit, not in this tab-host
+		//    track. The Header root<->search track still scrubs during
+		//    the drag: `backMorph` and `transitionTarget='/search'` are
+		//    published by `#republishToPager` independent of the slide
+		//    distance, and the Header's `searchProgress` derivation
+		//    consumes them; the commit dispatches `goto('/search')` and
+		//    the NavPipelineHost enter slide plays on landing.
 		const suppressSlide =
 			(inputs.bidirectional === true &&
 				inputs.fromTabIndex === 0 &&
@@ -1647,7 +1766,11 @@ export class NavPipelineOrchestrator {
 				inputs.fromTabIndex === getCurrentTabIndex(toPathname) &&
 				fromData.tag === 'tab' &&
 				toData.tag === 'tab' &&
-				inputs.fromPathname !== toPathname);
+				inputs.fromPathname !== toPathname) ||
+			(inputs.bidirectional === true &&
+				inputs.fromTabIndex === MOBILE_TABS.length - 1 &&
+				direction === 'forward' &&
+				toData.tag === 'search');
 		const distance = suppressSlide
 			? 0
 			: multiPanel
@@ -2146,18 +2269,86 @@ export class NavPipelineOrchestrator {
 		this.#executor?.onDragStart(plan, startProgress);
 		// No finger-release velocity on a tab-click: pass 0 and let the
 		// velocity-matched solver pick the default duration
-		// (`COMMIT_T_DEFAULT_MS`). The settle is NOT armed here (armed at
-		// landing via `notifyHeaderState`'s idle title-change arm with
-		// `TITLE_CROSSFADE_MS`). The slide and settle are sequential
-		// (slide finishes -> lands -> settle arms), not concurrent, so
-		// there is no duration-matching requirement and no desync.
+		// (`COMMIT_T_DEFAULT_MS`).
 		this.#executor?.onCommit(0);
 		this.#stateMachine.onCommit();
-		// The title / morph settle for this discrete nav is armed at landing
-		// (not in this branch), so a cross-host tab landing (deep / search ->
-		// tab root) crossfades rather than snaps. `header-tab-descent-cross-
-		// tab-exit`'s CALIBRATION asserts settling === true at the deep->tab
-		// landing flush; arming the settle here instead breaks that timing.
+		// Arm the settle ease CONCURRENTLY with the slide ONLY when the
+		// morph visibly changes (the source and target tab-ness differ).
+		// This is the deep↔tab case (a tab-click exit, the back-button
+		// from a deep page to its tab root, a cross-tab bidirectional
+		// click): the morph drives the root-layer `translateY` (the tab
+		// bar descent) and the title-layer `translateY`, both of which
+		// must overlap with the page slide per Bug 7 (no sequential gap).
+		// The settle uses the same pattern `playEnterAnimation` and
+		// `#armSettleEaseFromGesture` use for the forward-enter and
+		// gesture-commit slides: velocity-matched to the slide via
+		// `commitStart.durationMs`, `awaitTitle: true` so the settle
+		// holds at progress 1 once the rAF reaches u=1, cleared by the
+		// navigation landing via `onSvelteKitAfterNavigate` (and
+		// `notifyHeaderState`'s mid-settle branch absorbs the destination
+		// title when it arrives, matching the gesture-commit path's
+		// land-clear).
+		// The deep→deep case (both endpoints have no tabs, e.g.
+		// `/profile/settings` -> `/profile/edit`) is EXCLUDED: the morph
+		// stays at 0 across the whole slide (no layer motion to drive),
+		// and the title crossfade for a deep→deep nav is armed AT THE
+		// NAVIGATION LANDING by `notifyHeaderState`'s idle title-change
+		// arm with `TITLE_CROSSFADE_MS` (200ms). Arming here instead
+		// would run the settle's 300ms `commitStart.durationMs` cycle
+		// during the slide, reach u=1 with `awaitTitle: true` right when
+		// the URL lands, and `notifyHeaderState`'s mid-settle branch
+		// would `#endSettleEase()` immediately - the title crossfade
+		// would be gone by the first post-landing frame, collapsing the
+		// 2-span crossfade to 1 (`e2e/reproduce-user-bugs.spec.ts` Bug 10).
+		// The same exclusion applies to a tab→tab discrete nav on the
+		// bidirectional tab host (both endpoints have tabs, morph stays
+		// at 1): the pill highlight interpolates via `pager.fractionalIndex`
+		// (a separate field the orchestrator publishes per frame), not
+		// via the morph, so no concurrent arm is needed there either.
+		// Outgoing = the source host route (the live `#prevHeaderTitle`,
+		// captured before the destination's `$effect.pre` flips it; mirrors
+		// `#armSettleEaseFromGesture`, which also runs on the SOURCE host
+		// pre-landing). Incoming = the destination via the static resolver
+		// (the live destination title is not available until the route
+		// mounts; a dynamic-title destination resolves to '' here, and if
+		// the live title then differs from the latched incoming,
+		// `notifyHeaderState`'s mid-settle re-arm picks it up without a
+		// snap - the same handoff the gesture-release path relies on).
+		const settleT = this.#headerT;
+		if (settleT !== null && this.#executor !== null) {
+			const outgoingHasTabs = inputs.fromTabIndex >= 0;
+			const incomingHasTabs = getCurrentTabIndex(toPathname) >= 0;
+			if (outgoingHasTabs !== incomingHasTabs) {
+				const outgoingTitle = this.#prevHeaderTitle;
+				const incomingTitle = resolveDeepHeaderTitle(toPathname, settleT) ?? '';
+				// Capture the morph at the arm instant: if a live drag was
+				// interrupted (the executor was in the 'live' phase when the
+				// discrete nav arrived), `#publication.progress` still holds
+				// the raw drag fraction and the Header's morph was reading the
+				// drag branch (`currentHasTabs ? 1 - raw : raw`). Otherwise
+				// (`#publication.progress === 0`) this collapses to the
+				// source's at-rest morph. Either way the settle continues from
+				// the morph value the Header was rendering (DV21 §5: no snap
+				// at the discrete-nav interrupt handoff).
+				const raw = this.#publication.progress;
+				const startMorph = this.#dragMorphAtRaw(outgoingHasTabs, raw);
+				const destMorph = this.#atRestMorph(incomingHasTabs);
+				const latched: HeaderSettleTransition = {
+					outgoingTitle,
+					incomingTitle,
+					outgoingHasTabs,
+					incomingHasTabs,
+					startMorph,
+					destMorph
+				};
+				const commitDurationMs = this.#executor.state.commitStart?.durationMs ?? TITLE_CROSSFADE_MS;
+				// `direction` is a TransitionDirection ('forward' | 'backward');
+				// the settle enum is 'forward' | 'back'. Mirror the gesture-release
+				// path's conversion in `#armSettleEaseFromGesture`.
+				const settleDirection = direction === 'forward' ? 'forward' : 'back';
+				this.#armSettleEase(latched, 0, 1, true, settleDirection, commitDurationMs);
+			}
+		}
 		return true;
 	}
 
@@ -2418,11 +2609,59 @@ export class NavPipelineOrchestrator {
 		const incomingTitle = t ? (resolveDeepHeaderTitle(back, t) ?? '') : '';
 		const outgoingHasTabs = inputs.fromTabIndex >= 0;
 		const incomingHasTabs = getCurrentTabIndex(back) >= 0;
+		// Capture the drag branch's terminal morph (the value the Header was
+		// rendering the instant before the settle took over) so the settle
+		// interpolation starts where the drag ended (DV21 §5: no morph snap at
+		// the release handoff). The drag morph depends on the gesture shape:
+		//  - `isDeepToDeep` hardcodes 0 across the whole drag (both endpoints
+		//    are deep, no layer motion to drive);
+		//  - a `targetIsSearch` gesture holds the source's at-rest morph
+		//    (`currentHasTabs ? 1 : 0`) across the whole drag (the vertical
+		//    layer group stays out of the horizontal root<->search scrub);
+		//  - a tab↔tab bidirectional gesture publishes `backMorph: null` end
+		//    to end, so the Header falls back to the source's at-rest morph
+		//    (1 on a tab root) across the whole drag;
+		//  - every other shape eases the morph through the raw drag fraction
+		//    (`currentHasTabs ? 1 - raw : raw`).
+		// The orchestrator's publication matches the Header's drag derivation
+		// because both read the same endpoints + raw.
+		const raw = this.#publication.progress;
+		const targetIsSearch = resolveHeaderMode(back) === 'search';
+		const isDeepToDeep = !outgoingHasTabs && !incomingHasTabs;
+		const isTabToTabBidirectional =
+			inputs.bidirectional === true && outgoingHasTabs && incomingHasTabs;
+		const dragMorphWasStatic = targetIsSearch || isTabToTabBidirectional;
+		const startMorph = isDeepToDeep
+			? 0
+			: dragMorphWasStatic
+				? this.#atRestMorph(outgoingHasTabs)
+				: this.#dragMorphAtRaw(outgoingHasTabs, raw);
+		// destMorph is the morph value the settle ends at. For most shapes
+		// this is the incoming route's at-rest morph on a commit (going to
+		// the destination), the outgoing route's at-rest morph on a cancel
+		// (returning to the source). The `/search` destination is special:
+		// at landing `isSearch` flips to true and the Header's `iconProgress`
+		// and `rootLayerStyle` derivations override the morph-based branch
+		// (`iconProgress = isSearch ? 0`, `rootLayerStyle = isSearch ?
+		// 'transform: none'`), so the morph value at landing has no visual
+		// effect. Animating toward the `/search` at-rest morph during the
+		// settle would rotate the icon to back-arrow (iconProgress = 1 -
+		// morph as the morph drops) then snap it back to hamburger at
+		// landing; holding the morph at `startMorph` throughout the settle
+		// keeps the visuals continuous with both the drag's terminal value
+		// and the landing's overridden state.
+		const destMorph = isDeepToDeep
+			? 0
+			: targetIsSearch
+				? startMorph
+				: this.#atRestMorph(committed ? incomingHasTabs : outgoingHasTabs);
 		const latched: HeaderSettleTransition = {
 			outgoingTitle,
 			incomingTitle,
 			outgoingHasTabs,
-			incomingHasTabs
+			incomingHasTabs,
+			startMorph,
+			destMorph
 		};
 		const startProgress = this.#publication.progress;
 		const commitDurationMs = executor.state.commitStart?.durationMs ?? TITLE_CROSSFADE_MS;
@@ -2438,6 +2677,18 @@ export class NavPipelineOrchestrator {
 			pending.direction === 'forward' ? 'forward' : 'back',
 			commitDurationMs
 		);
+	}
+
+	/** The drag-branch morph for a non-targetIsSearch, non-isDeepToDeep
+	 *  gesture at the given raw drag fraction. Mirrors the Header's drag
+	 *  branch `currentHasTabs ? 1 - raw : raw`: a backward swipe on a tab
+	 *  host (or a centerTab thread route) eases morph from 1 (root) toward 0
+	 *  (deep) as the raw advances; a backward swipe on a deep host follows
+	 *  the raw directly (0 = deep at rest, 1 = back-target tab root at
+	 *  commit). Used by `#armSettleEaseFromGesture` to capture the
+	 *  drag-terminal morph for the settle's `startMorph` field. */
+	#dragMorphAtRaw(currentHasTabs: boolean, raw: number): number {
+		return currentHasTabs ? 1 - raw : raw;
 	}
 
 	// -----------------------------------------------------------------------
@@ -2572,9 +2823,23 @@ export class NavPipelineOrchestrator {
 		executor.onCommit(0, acceleratedMs);
 		// Accelerate the settle ease so the morph + title crossfade track
 		// the accelerated slide (no visual desync between slide and header).
+		// The latched record's endpoints survive the acceleration (the
+		// source and destination do not change), but its `startMorph` must
+		// shift to the morph value the settle is currently producing so the
+		// accelerated interpolation starts where the in-flight one ended
+		// (DV21 §5: no morph snap at the re-arm).
 		if (this.#stateMachine.settleActive && this.#stateMachine.settleLatched !== null) {
+			const prevLatched = this.#stateMachine.settleLatched;
+			const latched: HeaderSettleTransition = {
+				outgoingTitle: prevLatched.outgoingTitle,
+				incomingTitle: prevLatched.incomingTitle,
+				outgoingHasTabs: prevLatched.outgoingHasTabs,
+				incomingHasTabs: prevLatched.incomingHasTabs,
+				startMorph: this.#morphAtSettleInstant(prevLatched),
+				destMorph: prevLatched.destMorph
+			};
 			this.#armSettleEase(
-				this.#stateMachine.settleLatched,
+				latched,
 				this.#stateMachine.settleProgress,
 				this.#settleTargetProgress,
 				this.#settleAwaitTitle,
@@ -2759,20 +3024,28 @@ export class NavPipelineOrchestrator {
 			// `#settleTargetProgress` so the in-flight settle's direction
 			// survives the re-arm: a cancel settle (target 0) interrupted
 			// by a live-title resolution stays a cancel, and a commit
-			// settle (target 1) stays a commit. The morph derivation
-			// re-evaluates against the new latched endpoints
-			// (`outgoingHasTabs` is the prior incoming, `incomingHasTabs`
-			// is the current value), so the morph value can jump at the
-			// re-arm when the new endpoints differ from the prior latched
-			// pair; it does not continue from the in-flight position.
+			// settle (target 1) stays a commit. The new latched's
+			// `startMorph` is the morph VALUE at the re-arm instant
+			// (interpolated from the prior latched's startMorph / destMorph
+			// at the current `settleMorphFraction`), so the morph continues
+			// from the in-flight position rather than re-evaluating against
+			// the new endpoints (DV21 §5: no morph snap at the re-arm).
 			if (newTitle !== this.#resolveSettleOutgoingTitle()) {
 				const prevLatched = this.#readSettleLatched();
 				if (prevLatched !== null) {
+					const newOutgoingHasTabs = prevLatched.incomingHasTabs;
+					const newIncomingHasTabs = currentHasTabs;
+					const startMorph = this.#morphAtSettleInstant(prevLatched);
+					const destMorph = this.#atRestMorph(
+						this.#settleTargetProgress === 1 ? newIncomingHasTabs : newOutgoingHasTabs
+					);
 					const latched: HeaderSettleTransition = {
 						outgoingTitle: prevLatched.incomingTitle,
 						incomingTitle: newTitle,
-						outgoingHasTabs: prevLatched.incomingHasTabs,
-						incomingHasTabs: currentHasTabs
+						outgoingHasTabs: newOutgoingHasTabs,
+						incomingHasTabs: newIncomingHasTabs,
+						startMorph,
+						destMorph
 					};
 					this.#armSettleEase(
 						latched,
@@ -2880,17 +3153,37 @@ export class NavPipelineOrchestrator {
 		// rAF; the idle settle arm here is restricted to the title
 		// crossfade case it correctly owns.
 		if (newTitle !== this.#prevHeaderTitle) {
+			// No preceding gesture owns the morph at an idle title-change
+			// arm (the navigation already landed; this arm crossfades the
+			// title only). The morph holds at the current route's at-rest
+			// value across the whole settle, so startMorph and destMorph
+			// both equal the source's at-rest morph.
+			const startMorph = this.#atRestMorph(this.#prevHeaderHasTabs);
+			const destMorph = this.#atRestMorph(currentHasTabs);
 			const latched: HeaderSettleTransition = {
 				outgoingTitle: this.#prevHeaderTitle,
 				incomingTitle: newTitle,
 				outgoingHasTabs: this.#prevHeaderHasTabs,
-				incomingHasTabs: currentHasTabs
+				incomingHasTabs: currentHasTabs,
+				startMorph,
+				destMorph
 			};
 			this.#armSettleEase(latched, 0, 1, false, this.#resolveNavDirection());
 		}
 		this.#prevHeaderTitle = newTitle;
 		this.#prevHeaderHasTabs = currentHasTabs;
 		this.#prevHeaderIsSearch = currentIsSearch;
+	}
+
+	/** Compute the morph value the in-flight settle is currently producing
+	 *  from its latched startMorph / destMorph pair and the current
+	 *  `settleMorphFraction`. Used by the mid-settle absorb re-arm in
+	 *  `notifyHeaderState` and `#accelerateInFlight` so the new settle's
+	 *  `startMorph` continues from the in-flight morph value rather than
+	 *  re-evaluating against the new endpoints (no snap at the re-arm). */
+	#morphAtSettleInstant(latched: HeaderSettleTransition): number {
+		const frac = this.#settleMorphFraction();
+		return latched.startMorph + (latched.destMorph - latched.startMorph) * frac;
 	}
 
 	#resolveSettleIncomingTitle(): string {
@@ -3057,20 +3350,26 @@ export class NavPipelineOrchestrator {
 
 	/** Republish the current publication to the pager store. Three modes:
 	 *
-	 *  Thread mode (centerTab set): publishes `backMorph: null` so the
-	 *  Header stays in root mode (hamburger + tab bar - centerTab routes
-	 *  carry a pillTarget, so `resolveHeaderMode` returns 'root', not
-	 *  'deep'). The tab-bar pill interpolates from `centerTab` toward the
-	 *  gesture's target tab (a tab-click exit to a different tab) so the
-	 *  highlight tracks the slide instead of jumping at landing; for a
-	 *  same-tab back-swipe the target equals `centerTab` so the pill
-	 *  holds. `targetIndex` stays null (the pill uses the fractionalIndex
-	 *  path, not the deep-swipe path). `backMorph` is null here
-	 *  (centerTab routes stay in root mode end to end), so the Header
-	 *  morph does not track the slide on a thread-host gesture. The FAB
-	 *  layer reads the orchestrator's publication directly (the raw
-	 *  slide fraction via `progress` + FROM/TO FAB presence) for its
-	 *  scale, NOT these pager fields.
+	 *  Thread mode (centerTab set): publishes `backMorph: rawDragFraction`
+	 *  so the Header's morph / layer derivation tracks the live drag on a
+	 *  centerTab route the same way it tracks a non-centerTab deep route.
+	 *  The morph derivation in the Header (`currentHasTabs ? 1 - bm : bm`)
+	 *  eases morph from 1 (root / hamburger) toward 0 (deep / back-arrow)
+	 *  as the swipe advances, giving the user gesture feedback that the
+	 *  back-swipe is engaged. centerTab routes pill-map to a tab index
+	 *  (`getCurrentTabIndex >= 0`) so `resolveHeaderMode` returns 'root'
+	 *  and the tab bar stays visible at rest; the drag-time morph is the
+	 *  gesture-feedback signal, not the destination state, and the
+	 *  settle ease armed at release returns morph to the destination's
+	 *  tab-ness (1 for a tab-root target, 0 for a deep target). The
+	 *  tab-bar pill interpolates from `centerTab` toward the gesture's
+	 *  target tab (a tab-click exit to a different tab) so the highlight
+	 *  tracks the slide; for a same-tab back-swipe the target equals
+	 *  `centerTab` so the pill holds. `targetIndex` stays null (the pill
+	 *  uses the fractionalIndex path, not the deep-swipe path). The FAB
+	 *  layer reads the orchestrator's publication directly (the raw slide
+	 *  fraction via `progress` + FROM/TO FAB presence) for its scale,
+	 *  NOT these pager fields.
 	 *
 	 *  Tab-host mode (no centerTab, bidirectional): interpolates
 	 *  `fractionalIndex` between `fromTabIndex` and `toTabIndex`
@@ -3109,9 +3408,12 @@ export class NavPipelineOrchestrator {
 			// The pill interpolates from centerTab toward the gesture's
 			// target tab so a tab-click exit to a different tab tracks the
 			// slide (a same-tab back-swipe targets centerTab, so the pill
-			// holds). backMorph stays null so the Header does not morph
-			// (centerTab routes are in root mode end to end); targetIndex
-			// stays null so the pill uses the fractionalIndex path.
+			// holds). backMorph is the raw slide fraction so the Header's
+			// morph / layer derivation tracks the live drag (gesture
+			// feedback: the morph eases toward the back-arrow as the swipe
+			// advances, then returns to the destination's tab-ness via the
+			// settle ease at release). targetIndex stays null so the pill
+			// uses the fractionalIndex path.
 			const toIdx = this.#gestureToTabIndex ?? -1;
 			const pillProgress =
 				toIdx >= 0
@@ -3121,7 +3423,7 @@ export class NavPipelineOrchestrator {
 				fractionalIndex: toIdx >= 0 ? centerTab + (toIdx - centerTab) * pillProgress : centerTab,
 				dragging: publication.inFlight && this.#liveDragging,
 				active: true,
-				backMorph: null,
+				backMorph: rawDragFraction,
 				targetIndex: null,
 				transitionTarget: publication.toPathname
 			});
@@ -3133,15 +3435,18 @@ export class NavPipelineOrchestrator {
 		const fromIdx = inputs?.fromTabIndex ?? -1;
 		const toIdx = this.#gestureToTabIndex ?? inputs?.toTabIndex ?? -1;
 		const bidirectional = inputs?.bidirectional === true;
-		// Backward-to-deep-page on a bidirectional host: the in-flight
-		// target is a deep page (the user is leaving the tab host via
-		// history.back to /profile, /bookmarks, etc.). The resolved
-		// `toTabIndex` is `#tabIndexFor(to)`, which returns -1 for a deep
-		// page, so the pill has no destination tab to interpolate toward
-		// and must HOLD at fromIdx while the Header morph reveals the
-		// back-arrow over the slide. Forward gestures on a bidirectional
-		// host always target a tab root (`#nextTabTarget`), so a deep-page
-		// target implies a backward gesture.
+		// Non-tab target on a bidirectional host: the in-flight target is
+		// not a tab root. Two reach paths: backward-to-deep-page
+		// (`history.back` to /profile, /bookmarks, etc.) and the
+		// forward-from-last-tab gesture whose target is `/search` (per
+		// `#nextTabTarget`). The resolved `toTabIndex` is `#tabIndexFor(to)`,
+		// which returns -1 for either path, so the pill has no destination
+		// tab to interpolate toward and must HOLD at fromIdx while the
+		// Header reacts to the published `backMorph` (the deep-page morph
+		// for a backward gesture; the root<->search scrub for a forward
+		// last-tab gesture, where the Header's `morph` derivation ignores
+		// `backMorph` and the searchProgress / trackMorph derivation
+		// consumes it).
 		const targetPath = publication.toPathname;
 		const targetIsDeepPage = targetPath !== null && getRouteData(targetPath).tag !== 'tab';
 		const holdPillAtFromIdx = bidirectional && targetIsDeepPage;
@@ -3150,11 +3455,13 @@ export class NavPipelineOrchestrator {
 			pillToIdx >= 0
 				? Math.max(0, rawDragFraction - PILL_EXPANSION_THRESHOLD) / (1 - PILL_EXPANSION_THRESHOLD)
 				: 0;
-		// backMorph: raw slide fraction for a deep-page morph (deep host OR
-		// backward-to-deep-page on a bidirectional host). null when both source
-		// and target pill-map to a tab index (tab-to-tab on any host type: the
-		// Header stays in hamburger mode throughout, including offline LIST
-		// routes on NavPipelineHost that pill-map to a tab via TAB_BAR_CONFIG).
+		// backMorph: raw slide fraction when the target is not a tab (deep
+		// host backward-exit, bidirectional backward-to-deep-page, or
+		// bidirectional forward-last-tab-to-`/search`). null when both
+		// source and target pill-map to a tab index (tab-to-tab on any host
+		// type: the Header stays in hamburger mode throughout, including
+		// offline LIST routes on NavPipelineHost that pill-map to a tab via
+		// TAB_BAR_CONFIG).
 		const backMorphValue =
 			(bidirectional && !targetIsDeepPage) || (fromIdx >= 0 && toIdx >= 0) ? null : rawDragFraction;
 		// targetIndex: null when the pill is held at fromIdx (a held pill

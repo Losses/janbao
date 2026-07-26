@@ -86,6 +86,38 @@
 	let viewportWidth = $state(0);
 	let panelEls = $state<(HTMLElement | null)[]>(SEARCH_SCOPES.map(() => null));
 
+	// Lazy panel content: the four `<section>` shells always mount (they own
+	// the track geometry, the `bind:this` refs `scrollChrome.setOverride`
+	// consumes, and the per-scope `data-scope-panel` markers), but their
+	// inner content (LoadingChip or SearchResultsList) only mounts for panels
+	// the user can actually see. At rest that is exactly the active scope;
+	// during a drag the destination scope joins (Math.round(visualIndex));
+	// once a scope has been active it stays renderable so a back-swipe to a
+	// visited scope shows its content instantly instead of re-mounting it
+	// mid-slide. Seeded with the URL scope so SSR and the first client render
+	// agree on which panel renders content (no hydration mismatch), and only
+	// the active panel's content mounts on the search-APPEAR frame (mounting
+	// all four panels' content eagerly would dominate the click frame under
+	// 4x CPU; the LoAF bar in e2e/reproduce-dv20-search-swipe.spec.ts "Bug 4"
+	// fails at 4x CPU).
+	let visitedScopes = $state<ReadonlySet<SearchScope>>(
+		untrack(() => new Set<SearchScope>([data.scope]))
+	);
+	$effect(() => {
+		const current = SEARCH_SCOPES[activeIndex];
+		if (!visitedScopes.has(current)) {
+			visitedScopes = new Set<SearchScope>([...visitedScopes, current]);
+		}
+	});
+
+	/** A panel's content renders when it is the active scope, the in-flight
+	 *  swipe destination, or a previously visited scope. */
+	function shouldRenderPanel(idx: number): boolean {
+		if (idx === activeIndex) return true;
+		if (idx === Math.round(visualIndex)) return true;
+		return visitedScopes.has(SEARCH_SCOPES[idx]);
+	}
+
 	// Sync activeIndex from the URL (deep link / browser back-forward). Writes
 	// activeIndex only, gated on a scope change so a programmatic switch (which
 	// sets activeIndex before the load resolves) is not overridden mid-flight.
@@ -290,7 +322,19 @@
 		const update = () => {
 			viewportWidth = node.clientWidth;
 		};
-		update();
+		// Defer the initial width read to the next animation frame. Calling
+		// `update()` synchronously on mount reads `clientWidth` after the host
+		// just mounted a batch of DOM (the four scope panels, the track, the
+		// panels' content) and that read forces the browser to flush the
+		// pending layout work; under mobile-class CPU that forced reflow
+		// stacks with the other geometry reads on this path and pushes the
+		// search-enter frame past its budget. The ResizeObserver fires its
+		// first callback on the next frame anyway, so the rAF below only
+		// aligns the seed with that cadence; no setTimeout, no CSS transition.
+		// `viewportWidth` is consumed by `swipeMove`'s 1:1 follow, which only
+		// runs once a drag starts (a drag always starts after this rAF has
+		// run), so the deferral has no observable effect.
+		window.requestAnimationFrame(update);
 		const ro = new ResizeObserver(update);
 		ro.observe(node);
 		return {
@@ -338,23 +382,25 @@
 			class="scroll-pane h-full overflow-y-auto"
 			style="width: 25%; touch-action: pan-y pinch-zoom; -webkit-overflow-scrolling: touch;"
 		>
-			<div class="p-3">
-				{#if online.online && hasQuery && !fresh('discussions')}
-					<div class="flex justify-center py-10"><LoadingChip icon={mdiMagnify} /></div>
-				{:else}
-					<SearchResultsList
-						scope="discussions"
-						items={discussionsScope?.items ?? null}
-						{query}
-						page={discussionsScope?.page ?? 1}
-						totalPages={discussionsScope?.totalPages ?? 0}
-						total={discussionsScope?.total ?? 0}
-						online={online.online}
-						{t}
-						onPageChange={(p) => handlePage('discussions', p)}
-					/>
-				{/if}
-			</div>
+			{#if shouldRenderPanel(0)}
+				<div class="p-3">
+					{#if online.online && hasQuery && !fresh('discussions')}
+						<div class="flex justify-center py-10"><LoadingChip icon={mdiMagnify} /></div>
+					{:else}
+						<SearchResultsList
+							scope="discussions"
+							items={discussionsScope?.items ?? null}
+							{query}
+							page={discussionsScope?.page ?? 1}
+							totalPages={discussionsScope?.totalPages ?? 0}
+							total={discussionsScope?.total ?? 0}
+							online={online.online}
+							{t}
+							onPageChange={(p) => handlePage('discussions', p)}
+						/>
+					{/if}
+				</div>
+			{/if}
 		</section>
 		<section
 			bind:this={panelEls[1]}
@@ -362,23 +408,25 @@
 			class="scroll-pane h-full overflow-y-auto"
 			style="width: 25%; touch-action: pan-y pinch-zoom; -webkit-overflow-scrolling: touch;"
 		>
-			<div class="p-3">
-				{#if online.online && hasQuery && !fresh('activities')}
-					<div class="flex justify-center py-10"><LoadingChip icon={mdiMagnify} /></div>
-				{:else}
-					<SearchResultsList
-						scope="activities"
-						items={activitiesScope?.items ?? null}
-						{query}
-						page={activitiesScope?.page ?? 1}
-						totalPages={activitiesScope?.totalPages ?? 0}
-						total={activitiesScope?.total ?? 0}
-						online={online.online}
-						{t}
-						onPageChange={(p) => handlePage('activities', p)}
-					/>
-				{/if}
-			</div>
+			{#if shouldRenderPanel(1)}
+				<div class="p-3">
+					{#if online.online && hasQuery && !fresh('activities')}
+						<div class="flex justify-center py-10"><LoadingChip icon={mdiMagnify} /></div>
+					{:else}
+						<SearchResultsList
+							scope="activities"
+							items={activitiesScope?.items ?? null}
+							{query}
+							page={activitiesScope?.page ?? 1}
+							totalPages={activitiesScope?.totalPages ?? 0}
+							total={activitiesScope?.total ?? 0}
+							online={online.online}
+							{t}
+							onPageChange={(p) => handlePage('activities', p)}
+						/>
+					{/if}
+				</div>
+			{/if}
 		</section>
 		<section
 			bind:this={panelEls[2]}
@@ -386,23 +434,25 @@
 			class="scroll-pane h-full overflow-y-auto"
 			style="width: 25%; touch-action: pan-y pinch-zoom; -webkit-overflow-scrolling: touch;"
 		>
-			<div class="p-3">
-				{#if online.online && hasQuery && !fresh('messages')}
-					<div class="flex justify-center py-10"><LoadingChip icon={mdiMagnify} /></div>
-				{:else}
-					<SearchResultsList
-						scope="messages"
-						items={messagesScope?.items ?? null}
-						{query}
-						page={messagesScope?.page ?? 1}
-						totalPages={messagesScope?.totalPages ?? 0}
-						total={messagesScope?.total ?? 0}
-						online={online.online}
-						{t}
-						onPageChange={(p) => handlePage('messages', p)}
-					/>
-				{/if}
-			</div>
+			{#if shouldRenderPanel(2)}
+				<div class="p-3">
+					{#if online.online && hasQuery && !fresh('messages')}
+						<div class="flex justify-center py-10"><LoadingChip icon={mdiMagnify} /></div>
+					{:else}
+						<SearchResultsList
+							scope="messages"
+							items={messagesScope?.items ?? null}
+							{query}
+							page={messagesScope?.page ?? 1}
+							totalPages={messagesScope?.totalPages ?? 0}
+							total={messagesScope?.total ?? 0}
+							online={online.online}
+							{t}
+							onPageChange={(p) => handlePage('messages', p)}
+						/>
+					{/if}
+				</div>
+			{/if}
 		</section>
 		<section
 			bind:this={panelEls[3]}
@@ -410,23 +460,25 @@
 			class="scroll-pane h-full overflow-y-auto"
 			style="width: 25%; touch-action: pan-y pinch-zoom; -webkit-overflow-scrolling: touch;"
 		>
-			<div class="p-3">
-				{#if online.online && hasQuery && !fresh('users')}
-					<div class="flex justify-center py-10"><LoadingChip icon={mdiMagnify} /></div>
-				{:else}
-					<SearchResultsList
-						scope="users"
-						items={usersScope?.items ?? null}
-						{query}
-						page={usersScope?.page ?? 1}
-						totalPages={usersScope?.totalPages ?? 0}
-						total={usersScope?.total ?? 0}
-						online={online.online}
-						{t}
-						onPageChange={(p) => handlePage('users', p)}
-					/>
-				{/if}
-			</div>
+			{#if shouldRenderPanel(3)}
+				<div class="p-3">
+					{#if online.online && hasQuery && !fresh('users')}
+						<div class="flex justify-center py-10"><LoadingChip icon={mdiMagnify} /></div>
+					{:else}
+						<SearchResultsList
+							scope="users"
+							items={usersScope?.items ?? null}
+							{query}
+							page={usersScope?.page ?? 1}
+							totalPages={usersScope?.totalPages ?? 0}
+							total={usersScope?.total ?? 0}
+							online={online.online}
+							{t}
+							onPageChange={(p) => handlePage('users', p)}
+						/>
+					{/if}
+				</div>
+			{/if}
 		</section>
 	</div>
 </div>

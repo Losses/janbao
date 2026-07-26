@@ -6,20 +6,33 @@ import { prepareContext, waitForHydration } from './helpers';
  *
  * The mobile Header's tabs layer sits at translateY(-100%) on a deep page and
  * descends to translateY(0%) when the route returns to a tab route (the "Tab
- * descent" animation). The descent is rAF-driven: on the post-landing title
- * change the orchestrator's settle rAF interpolates `settleProgress` 0→1 with
- * the constant-deceleration ease `2u - u²` over TITLE_CROSSFADE_MS. The morph
- * derivation reads `settleProgress` directly and the layer transform follows
- * `morph` 1:1, so the descent animates through real intermediate values every
- * frame. No CSS transition is involved.
+ * descent" animation). The descent is rAF-driven. Two arm timings cover the
+ * cycle exercised here:
+ *
+ *   - Forward (tab to deep, e.g. /messages/inbox to /bookmarks): the
+ *     orchestrator does NOT intercept this nav (the destination is not a tab
+ *     root and not a deep-to-deep), so the settle is armed at the navigation
+ *     landing by `notifyHeaderState`'s idle title-change arm. The rAF owns the
+ *     descent from the landing flush onward.
+ *   - Back (deep to tab, e.g. /bookmarks to /messages/inbox): the orchestrator
+ *     intercepts the nav in `onSvelteKitBeforeNavigate`'s discrete-nav branch
+ *     and arms the settle rAF CONCURRENTLY with the slide, velocity-matched to
+ *     the slide via `commitStart.durationMs`. The rAF publishes
+ *     `settleProgress` 0 to 1 with the constant-deceleration ease `2u - u²`
+ *     while the route is still on the source path; the morph derivation reads
+ *     `settleProgress` and the layer transform follows `morph` 1:1.
+ *
+ * In both directions the descent animates through real intermediate values
+ * every frame. No CSS transition is involved.
  *
  * Tests:
- *   - CALIBRATION: documents the symmetry - the forward and the back landing
- *     flushes both arm a settle (settling === true at the flush, with the
- *     rAF mid-animation), sampled via the internal per-flush probe
- *     window.__headerMorphProbe.
- *   - DEFECT: across multiple messages↔bookmarks cycles the back landing flush
- *     must arm a settle (the rAF owns the descent, never a static snap).
+ *   - CALIBRATION: documents both arm timings in one cycle - the forward
+ *     landing flush has settling === true (the idle arm), and the back slide
+ *     has settling === true with intermediate morph on the source route
+ *     (sampled via the internal per-flush probe window.__headerMorphProbe).
+ *   - DEFECT: across multiple messages to bookmarks cycles every back slide
+ *     must arm the settle and animate the morph (the rAF owns the descent,
+ *     never a static snap).
  */
 
 test.beforeEach(async ({ context }) => {
@@ -140,6 +153,39 @@ function landings(snaps: HeaderSnap[], dir: 'in' | 'out'): LandingFlush[] {
 	return out;
 }
 
+/** A single slide's worth of probe entries where the rAF settle was actively
+ *  animating the morph on `sourcePath` (the source route during the slide).
+ *  Returns the count of distinct contiguous runs (one per slide on
+ *  `sourcePath`); each run is a settling episode where the morph was
+ *  mid-transition. The slide runs concurrently with the page track, so while
+ *  `path === sourcePath` (the route has not landed yet) the settle rAF publishes
+ *  intermediate `settleProgress` values that drive the morph derivation.
+ *  `midMorphRange` filters to entries where the morph is genuinely between the
+ *  endpoints (not the armed-at-start value), proving the rAF ticked. */
+function slideAnimationRuns(
+	snaps: HeaderSnap[],
+	sourcePath: string,
+	midMorphRange: { min: number; max: number } = { min: 0.1, max: 0.9 }
+): HeaderSnap[][] {
+	const runs: HeaderSnap[][] = [];
+	let current: HeaderSnap[] = [];
+	for (const s of snaps) {
+		const inSlide =
+			s.path === sourcePath &&
+			s.settling &&
+			s.morph > midMorphRange.min &&
+			s.morph < midMorphRange.max;
+		if (inSlide) {
+			current.push(s);
+		} else if (current.length > 0) {
+			runs.push(current);
+			current = [];
+		}
+	}
+	if (current.length > 0) runs.push(current);
+	return runs;
+}
+
 /** External computed-px documentary sequence across a path-change index:
  *  collapsed run-length encoding so a smooth descent reads as many small steps
  *  and a jump reads as one big step. Window-sensitive (rAF drops frames during
@@ -204,22 +250,33 @@ test('CALIBRATION: forward and back descents both keep their transition (documen
 	const fwdOut = landings(snaps, 'out');
 	const backIn = landings(snaps, 'in');
 	const fwdLanding = fwdOut[0];
-	const backLanding = backIn[0];
+	// Back: the orchestrator intercepts the deep->tab nav and arms the settle
+	// rAF CONCURRENTLY with the slide, so the descent animates DURING the
+	// slide (path is still the source route). One contiguous run of
+	// settling+mid-morph entries on /bookmarks per back slide.
+	const backSlideRuns = slideAnimationRuns(snaps, '/bookmarks');
 
 	console.log(`forward external seq: ${fwdAt ? externalSeq(frames, fwdAt) : 'n/a'}`);
 	console.log(`back     external seq: ${backAt ? externalSeq(frames, backAt) : 'n/a'}`);
 	console.log(`forward landing flush:`, fwdLanding);
-	console.log(`back    landing flush:`, backLanding);
+	console.log(`back    slide runs:`, backSlideRuns.length);
 
 	expect(fwdLanding, 'forward landing flush captured').toBeDefined();
-	expect(backLanding, 'back landing flush captured').toBeDefined();
-	// Symmetry: forward and back both arm a settle at the landing flush (the
-	// rAF owns the descent, no static snap).
+	// Forward: the orchestrator does not intercept tab -> non-tab-root deep,
+	// so the settle is armed at the landing flush by the idle title-change
+	// arm. The rAF must be active at that flush.
 	expect((fwdLanding as LandingFlush).settling, 'forward landing arms the settle rAF').toBe(true);
-	expect((backLanding as LandingFlush).settling, 'back landing arms the settle rAF').toBe(true);
+	// Back: the orchestrator intercepts the deep -> tab nav and arms the
+	// settle rAF concurrent with the slide. The morph must animate during
+	// the slide (settling === true with intermediate morph on the source
+	// route, before the navigation lands).
+	expect(
+		backSlideRuns.length,
+		'back slide animates the morph via the settle rAF during the slide'
+	).toBeGreaterThanOrEqual(1);
 });
 
-test(`DEFECT: back descent from a NavPipelineHost deep page to a tab route must arm the settle rAF at landing (${BACK_CYCLES} cycles)`, async ({
+test(`DEFECT: back descent from a NavPipelineHost deep page to a tab route animates via the settle rAF during the slide (${BACK_CYCLES} cycles)`, async ({
 	page
 }) => {
 	await page.goto('/messages/inbox');
@@ -233,36 +290,40 @@ test(`DEFECT: back descent from a NavPipelineHost deep page to a tab route must 
 
 	const frames = await stopAndRead(page);
 	const snaps = await readHeaderLog(page);
-	const backIn = landings(snaps, 'in');
 	const changes = pathChangeIndices(frames);
 	const backObserved = changes.filter(
 		(at) => frames[at - 1].path === '/bookmarks' && frames[at].path === '/messages/inbox'
 	).length;
+	const backRuns = slideAnimationRuns(snaps, '/bookmarks');
 
-	console.log(`observed ${backObserved} back path-changes, ${backIn.length} back landing flushes`);
-	for (const l of backIn) {
-		console.log(`  back landing t=${Math.round(l.t)} morph=${l.morph.toFixed(2)} settling=${l.settling}`);
+	console.log(`observed ${backObserved} back path-changes, ${backRuns.length} back slide runs`);
+	for (const run of backRuns) {
+		const first = run[0];
+		const last = run[run.length - 1];
+		console.log(
+			`  back slide t=${Math.round(first.t)}..${Math.round(last.t)} entries=${run.length} morph ${first.morph.toFixed(2)} -> ${last.morph.toFixed(2)}`
+		);
 	}
 
-	expect(backIn.length, 'captured a back landing flush per cycle').toBeGreaterThanOrEqual(BACK_CYCLES - 1);
+	expect(backObserved, 'captured a back path-change per cycle').toBeGreaterThanOrEqual(BACK_CYCLES - 1);
 
-	// The settle rAF must be armed at every back-to-tab landing flush so the
-	// descent animates rather than snapping. A regression that drops Effect C's
-	// settle arming on a tab-root landing (or zero-settling-at-landing because
-	// the rAF already finished pre-nav) lands a `settling === false` here.
-	const notSettling = backIn.filter((l) => !l.settling);
+	// Every back slide must arm the settle rAF and animate the morph during the
+	// slide (no static snap). A regression that arms the settle only at the
+	// navigation landing (after the slide completes) lands zero
+	// settling+mid-morph entries on the source path during the slide; a
+	// regression that drops the arm entirely leaves the same shape.
 	expect(
-		notSettling.length,
-		`back landing must arm the settle rAF. ${notSettling.length}/${backIn.length} landings had settling=false (snap to rest)`
-	).toBe(0);
+		backRuns.length,
+		`every back slide must animate the morph via the settle rAF during the slide. got ${backRuns.length} runs across ${backObserved} observed back navs`
+	).toBeGreaterThanOrEqual(BACK_CYCLES - 1);
 
 	// Trajectory: the descent must animate through real intermediate computed
-	// translateY values, not a single-frame jump. The `settling` check above
-	// proves the rAF owns the descent; this proves the tabs layer actually moved.
-	// A regression where settling is true but the rAF never publishes intermediate
-	// `settleProgress` values (zero intermediate delta) leaves zero values in the
-	// (-38, -2) px band and fails here. `installSampler` records the live m42
-	// every animation frame.
+	// translateY values, not a single-frame jump. The slide-runs check above
+	// proves the rAF owns the descent via the probe; this proves the tabs layer
+	// actually moved. A regression where the rAF never publishes intermediate
+	// `settleProgress` values (zero intermediate delta) leaves zero values in
+	// the (-38, -2) px band and fails here. `installSampler` records the live
+	// m42 every animation frame.
 	const intermediatePx = new Set<number>();
 	for (const f of frames) {
 		const px = f.rootComputedPx;

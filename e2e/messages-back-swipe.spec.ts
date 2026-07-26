@@ -3,7 +3,11 @@ import {
 	prepareContext,
 	waitForHydration,
 	swipeBack,
-	collectConsole
+	collectConsole,
+	installMultiSignalSampler,
+	waitForMultiSignalDone,
+	readMultiSignalFrames,
+	type MultiSignalFrame
 } from './helpers';
 
 /**
@@ -1484,4 +1488,91 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 				`fastVel=${fast.computedReleaseVel}, slowVel=${slow.computedReleaseVel})`
 		).toBeGreaterThan(fast.commitMovingFrames);
 	});
+
+	// DV21 R1 continuity guard: the centerTab -> tab-root back-swipe
+	// (`/messages/<id>` -> `/messages/inbox`) must keep the vertical-channel
+	// morph continuous across the whole gesture (drag + release + commit).
+	// The drag branch eases the morph via `1 - backMorph` (gesture feedback:
+	// the icon rotates from hamburger toward back-arrow as the swipe
+	// advances, and the tab-bar translateY descends); the settle that takes
+	// over at release must interpolate from the captured `startMorph` (the
+	// drag's terminal value) toward the destination's at-rest morph across
+	// `settleMorphFraction`, never collapsing to a constant that disagrees
+	// with the drag's terminal value (which would snap the icon
+	// `backMorph * 180deg` -> 0deg and the tab-bar translateY
+	// `-backMorph * 100%` -> `0%` in one rAF frame at release).
+	test('centerTab -> tab-root back-swipe keeps the vertical morph continuous across the release handoff', async ({
+		page
+	}) => {
+		await page.goto('/');
+		await waitForHydration(page);
+		await page.locator('a[data-tab-nav][href="/messages/inbox"]').click();
+		await page.waitForURL('/messages/inbox');
+		await page.waitForTimeout(200);
+		await page
+			.locator('a[href^="/messages/"]:not([href="/messages/inbox"]):not([href="/messages/new"])')
+			.first()
+			.click();
+		await page.waitForURL(/\/messages\/\d+/);
+		await page.waitForSelector('.detail-scroll-pane');
+		await page.waitForTimeout(500);
+
+		await installMultiSignalSampler(page, 2200);
+		await swipeBack(page);
+		await waitForMultiSignalDone(page);
+		const frames = await readMultiSignalFrames(page);
+
+		const rootJumps = maxFrameJumps(frames, (f) => f.rootLayerTy);
+		const deepJumps = maxFrameJumps(frames, (f) => f.deepLayerTy);
+		const burgerJumps = maxFrameJumps(frames, (f) => f.burgerRot);
+		console.log('centerTab -> tab-root continuity:', {
+			rootJumps,
+			deepJumps,
+			burgerJumps,
+			finalPath: new URL(page.url()).pathname
+		});
+
+		expect(page.url(), 'back-swipe must land on /messages/inbox').toMatch(/\/messages\/inbox/);
+		// The threshold allows one rAF of regular progress (~12px / ~22deg
+		// at this viewport's header height); a snap lands ~26px / ~82deg.
+		expect(
+			rootJumps.max,
+			`rootLayerTy must not snap at release (max jump ${rootJumps.max.toFixed(2)}px at t=${rootJumps.maxAt}ms)`
+		).toBeLessThan(15);
+		expect(
+			burgerJumps.max,
+			`burgerRot must not snap at release (max jump ${burgerJumps.max.toFixed(2)}deg at t=${burgerJumps.maxAt}ms)`
+		).toBeLessThan(35);
+	});
 });
+
+/** Compute the max frame-to-frame absolute jump of a sampled signal across
+ *  the multi-signal frame series, plus the timestamp of that max jump. Null
+ *  samples (signal absent in that frame) are skipped. Used by the no-snap
+ *  guards to assert the morph stays continuous across the drag-to-settle
+ *  release boundary (a snap shows up as one frame's delta dwarfing the
+ *  regular per-rAF cadence). */
+function maxFrameJumps(
+	frames: MultiSignalFrame[],
+	pick: (f: MultiSignalFrame) => number | null
+): { max: number; maxAt: number } {
+	let max = 0;
+	let maxAt = 0;
+	let prev: number | null = null;
+	for (const f of frames) {
+		const v = pick(f);
+		if (v === null) {
+			prev = null;
+			continue;
+		}
+		if (prev !== null) {
+			const d = Math.abs(v - prev);
+			if (d > max) {
+				max = d;
+				maxAt = f.t;
+			}
+		}
+		prev = v;
+	}
+	return { max, maxAt };
+}

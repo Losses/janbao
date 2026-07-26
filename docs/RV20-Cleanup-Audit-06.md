@@ -11,12 +11,14 @@ that reference removed mechanisms.
 ## B findings (4, 2 classes, fixed)
 
 ### Class 1 - stale "swipe activated!" console-log gating (1 site)
+
 - **e2e/backtarget.spec.ts:13-19 (very low).** The file docstring claimed each test
   is gated on the `[detectSwipe] swipe activated!` console log. That log was removed
   in a prior log-removal pass; the test actually gates on URL change. Fixed: removed
   the stale gating claim.
 
 ### Class 2 - stale "navigates on transitionend" mechanism (3 sites)
+
 - **e2e/tab-exit-preview.spec.ts:20 (very low).** Claimed navigation happens "on
   transitionend." Navigation is rAF-driven (orchestrator commit-settle). Fixed: "on
   the orchestrator's commit-settle."

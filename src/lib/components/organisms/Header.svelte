@@ -20,9 +20,10 @@
 	 *
 	 * RENDER-ONLY (DV20 step 3): the Header is a reader of the pipeline
 	 * orchestrator's reactive class fields. The orchestrator owns the
-	 * settle ease (the post-release / post-title-change morph + title
-	 * crossfade), the root↔search tap-scrub ease, and the `searchScrubbing`
-	 * flag; this component reads `orchestrator.settleProgress`,
+	 * settle ease (the morph + title crossfade during a gesture release,
+	 * a discrete nav, or an idle title change at landing), the root↔search
+	 * tap-scrub ease, and the `searchScrubbing` flag; this component reads
+	 * `orchestrator.settleProgress`,
 	 * `orchestrator.settleLatched`, `orchestrator.settleActive`,
 	 * `orchestrator.settleDirection`, `orchestrator.searchScrubbing`,
 	 * `pager.tapMorph`, `pager.backMorph`, `pager.dragging`,
@@ -110,16 +111,18 @@
 
 	// Settle / tap-scrub state comes straight from the orchestrator's
 	// reactive class getters. The orchestrator owns the settle ease
-	// (the post-release / post-title-change morph + title crossfade),
-	// the tap-scrub ease, and the `searchScrubbing` flag; the
-	// underlying `$state` fields live on the `NavStateMachine` singleton
-	// (the §13.5 authority), exposed by the orchestrator via `$derived`
-	// pass-throughs in its `#publication` and read by the Header through
-	// the public getters. `orchestrator.settleLatched` carries
-	// the endpoint identity frozen at settle-arm; `orchestrator.settleDirection`
-	// selects the title-span slide axis.
+	// (the morph + title crossfade during a gesture release, a discrete
+	// nav, or an idle title change at landing), the tap-scrub ease, and
+	// the `searchScrubbing` flag; the underlying `$state` fields live on
+	// the `NavStateMachine` singleton (the §13.5 authority), exposed by
+	// the orchestrator via `$derived` pass-throughs in its `#publication`
+	// and read by the Header through the public getters.
+	// `orchestrator.settleLatched` carries the endpoint identity frozen
+	// at settle-arm; `orchestrator.settleDirection` selects the title-span
+	// slide axis.
 	const settleActive = $derived(orchestrator.settleActive);
 	const settleProgress = $derived(orchestrator.settleProgress);
+	const settleMorphFraction = $derived(orchestrator.settleMorphFraction);
 	const settleLatched = $derived(orchestrator.settleLatched);
 	const settleDirection = $derived(orchestrator.settleDirection);
 	const searchScrubbing = $derived(orchestrator.searchScrubbing);
@@ -154,14 +157,35 @@
 	const morph = $derived.by(() => {
 		if (dragging) {
 			if (isDeepToDeep) return 0;
+			// A forward swipe from a tab root to `/search` is horizontal-only
+			// DURING THE DRAG PHASE: the search panel slides via
+			// `searchProgress` (driven by `pager.backMorph`), and the
+			// vertical layer group (MobileTabBar / deep title) holds at the
+			// source's tab-ness so the bar slides off-screen with panel 0
+			// (no diagonal motion). The settle that takes over at release
+			// interpolates the morph from this held value (captured as the
+			// latched `startMorph`) toward the destination's at-rest morph
+			// across `settleMorphFraction`, so the vertical layer group
+			// animates continuously into the search-mode layout (no
+			// one-frame snap at the release handoff). The back-swipe EXIT
+			// from `/search` is horizontal-only via the `isSearch` branch
+			// of `rootLayerStyle`; this branch covers the ENTER direction's
+			// drag phase.
+			if (targetIsSearch) {
+				return currentHasTabs ? 1 : 0;
+			}
 			// morph semantics: 1 = tab/root (hamburger), 0 = deep (back-arrow).
 			// A backward swipe on a tab host toward a deep page must run 1 -> 0,
 			// but `pager.backMorph` is the slide progress 0 -> 1 (the reverse
 			// direction), so invert it on a tab host (currentHasTabs): morph =
 			// 1 - backMorph. On a deep host (no tabs) morph follows backMorph
-			// directly (0 -> 1 = deep -> back-target, correct direction). When
-			// backMorph is null (centerTab or tab-to-tab publishes null) fall back to the
-			// static tab-ness.
+			// directly (0 -> 1 = deep -> back-target, correct direction). The
+			// orchestrator publishes `backMorph` for every claimed drag on a
+			// NavPipelineHost route (deep page, compose, and centerTab threads
+			// alike) so the icon and layers track the finger; the only null
+			// publication is a tab-to-tab swipe on the bidirectional tab host
+			// (NavPipelineTabHost), where both endpoints are already root mode
+			// and the morph stays at the static `currentHasTabs ? 1 : 0`.
 			const bm = pager.backMorph;
 			if (bm !== null) {
 				return currentHasTabs ? 1 - bm : bm;
@@ -169,9 +193,23 @@
 			return currentHasTabs ? 1 : 0;
 		}
 		if (settleActive && settleLatched) {
-			const outgoing = settleLatched.outgoingHasTabs ? 1 : 0;
-			const incoming = settleLatched.incomingHasTabs ? 1 : 0;
-			return outgoing * (1 - settleProgress) + incoming * settleProgress;
+			// Interpolate from the latched `startMorph` (the drag's terminal
+			// value, captured at settle-arm time) to `destMorph` (the
+			// destination's at-rest morph) across `settleMorphFraction` (the
+			// normalized 0..1 fraction of the eased settle curve traversed so
+			// far). Reading `settleProgress` directly here would collapse to
+			// a constant for shapes where `outgoingHasTabs ===
+			// incomingHasTabs` (e.g. a centerTab -> tab-root back-swipe) and
+			// snap the icon plus layer translateY in one rAF frame at the
+			// release handoff (DV21 §5: every visual is a pure function of
+			// the one published progress, no discontinuity at the handoff).
+			// The orchestrator owns the capture (the startMorph / destMorph
+			// fields on `HeaderSettleTransition`), so this branch is a pure
+			// lerp on the latched pair and `settleMorphFraction`.
+			return (
+				settleLatched.startMorph +
+				(settleLatched.destMorph - settleLatched.startMorph) * settleMorphFraction
+			);
 		}
 		return currentHasTabs ? 1 : 0;
 	});
@@ -241,14 +279,35 @@
 	// latched record during a settle (frozen), live at rest. Consuming the SAME
 	// derived here means a revert to live in either layer style is observable
 	// via effectiveTabsOut/In in the probe (the §7 source-attribution guard).
-	// At rest (no settle) both endpoints fall back to the CURRENT route's
-	// tab-ness (currentHasTabs): the tab bar's visibility and interactivity
-	// follow the route the user is on, not the back-target. The back-target's
-	// tab-ness is irrelevant at rest (only its title drives the back-arrow
-	// label); reading it here would disable the bar on a tab root whenever the
-	// back-target is a deep page.
+	// At rest (no settle, no drag) both endpoints fall back to the CURRENT
+	// route's tab-ness (currentHasTabs): the tab bar's visibility and
+	// interactivity follow the route the user is on, not the back-target. The
+	// back-target's tab-ness is irrelevant at rest (only its title drives the
+	// back-arrow label); reading it here would disable the bar on a tab root
+	// whenever the back-target is a deep page. During a drag the INCOMING
+	// endpoint reads `pager.transitionTarget` (the orchestrator-published
+	// destination pathname, republished per pointermove) so the layer guards
+	// `!(tabsOut || tabsIn)` and `!tabsOut && !tabsIn` see the real endpoints
+	// of the in-flight transition, not the current route twice. Without this,
+	// a deep-host back-swipe toward a tab root (e.g. `/profile/settings` ->
+	// `/`) sees `tabsOut === tabsIn === false` and force-freezes the root
+	// layer at -100% and the title layer at 0%, so `morph` advancing on
+	// `pager.backMorph` never reaches either style. The outgoing endpoint
+	// during a drag is still the current route (the drag has not landed
+	// yet); only the incoming endpoint is drag-aware.
+	const dragTargetHasTabs = $derived(
+		pager.transitionTarget !== null
+			? getCurrentTabIndex(pager.transitionTarget) >= 0
+			: currentHasTabs
+	);
 	const tabsOut = $derived(settleLatched ? settleLatched.outgoingHasTabs : currentHasTabs);
-	const tabsIn = $derived(settleLatched ? settleLatched.incomingHasTabs : currentHasTabs);
+	const tabsIn = $derived(
+		settleLatched
+			? settleLatched.incomingHasTabs
+			: dragging && pager.transitionTarget !== null
+				? dragTargetHasTabs
+				: currentHasTabs
+	);
 	// Root↔deep vertical morph: FROZEN in search mode so the tabs exit
 	// horizontally with the track, never float up. The transform follows
 	// `morph` directly (no `transition:` inline): during a settle `morph`
@@ -278,12 +337,12 @@
 	// `lastGestureMorph`, `isSettleMode`, and `prevHasTabs` are kept in the
 	// snapshot shape (the e2e tests mirror the shape) and carry stable
 	// values: `settleActive` is the single settle-mode signal (aliased into
-	// `isSettleMode`); the orchestrator seeds `settleProgress` directly from
-	// its own `#publication.progress` at release (the published raw, not the
-	// executor's threshold-absorbed `state.progress`), so there is no
-	// separate gesture-morph latch (`lastGestureMorph` reads 0); the Header
-	// does not track a
-	// previous path (`prevHasTabs` mirrors `currentHasTabs`).
+	// `isSettleMode`); the gesture-terminal morph that drives the §5
+	// continuity lives on the latched record (`settleLatched.startMorph`,
+	// captured at arm time by the orchestrator), so the snapshot's
+	// `lastGestureMorph` slot stays 0 (no separate probe-only field);
+	// the Header does not track a previous path (`prevHasTabs` mirrors
+	// `currentHasTabs`).
 	$effect(() => {
 		if (!import.meta.env.DEV || !browser) return;
 		if (!window.__headerMorphProbe) window.__headerMorphProbe = [];
@@ -335,6 +394,17 @@
 				? pager.tapMorph
 				: morph
 	);
+	// `transitionTarget` resolves to a search-mode route (the `/search`
+	// pathname). Drives the forward-swipe-from-last-tab branch in
+	// `searchProgress` and the `morph`-skip in the morph derivation: the
+	// orchestrator's gesture path publishes `transitionTarget='/search'` +
+	// the live `backMorph` while the source tab root is still mounted, so
+	// the search panel slides in via `searchProgress = trackMorph` (the
+	// `isSearch`-gated fallback would otherwise clamp it to 0 across the
+	// whole drag, since `isSearch` follows the pre-flip source endpoint).
+	const targetIsSearch = $derived(
+		pager.transitionTarget !== null && resolveHeaderMode(pager.transitionTarget) === 'search'
+	);
 	// searchProgress is the search-layout position the Header renders: 1 when
 	// the search panel fills the track, 0 when the root panel fills it. The
 	// orchestrator owns the motion; the consumers (track / search button) are
@@ -349,29 +419,38 @@
 	//      is required for the deep↔search EXIT: once the URL lands on a
 	//      deep page isSearch is false and the gated fallback below would
 	//      clamp to 0; tapMorph drives the slide back to 0 over the scrub.
-	//   2. A gesture in flight (transitionTarget + backMorph): follows
-	//      trackMorph, gated by isSearch (the orchestrator's publication
-	//      runs while the source route is still mounted, so isSearch
-	//      matches the pre-flip endpoint).
+	//   2. A gesture in flight (transitionTarget + backMorph). The publication
+	//      runs while the source route is still mounted, so isSearch matches
+	//      the pre-flip endpoint:
+	//      - EXIT (isSearch, source is /search): the search panel leaves,
+	//        1 → 0, so searchProgress = 1 - trackMorph.
+	//      - ENTER (targetIsSearch, target is /search from a forward
+	//        last-tab swipe): the search panel enters, 0 → 1, so
+	//        searchProgress = trackMorph.
 	//   3. At rest: isSearch ? 1 : 0.
 	const searchProgress = $derived.by(() => {
 		if (pager.tapMorph !== null) {
 			return 1 - pager.tapMorph;
 		}
 		if (pager.transitionTarget !== null && pager.backMorph !== null) {
-			return isSearch ? 1 - trackMorph : 0;
+			return isSearch ? 1 - trackMorph : targetIsSearch ? trackMorph : 0;
 		}
 		return isSearch ? 1 : 0;
 	});
-	const tabProgress = $derived.by(() => {
-		if (pager.tapMorph !== null) {
-			return Math.max(0, 1 - pager.tapMorph / HEADER_MORPH_THRESHOLD);
-		}
-		if (pager.transitionTarget !== null && pager.backMorph !== null) {
-			return isSearch ? Math.max(0, 1 - trackMorph / HEADER_MORPH_THRESHOLD) : 0;
-		}
-		return isSearch ? 1 : 0;
-	});
+	// Scope-tab bar expansion. Pure function of `searchProgress` (one
+	// derivation, one consumer): the bar expands once the search panel is
+	// past the `1 - HEADER_MORPH_THRESHOLD` threshold of the way in, so a
+	// forward-enter slides the track BEFORE the scope-tab bar expands and a
+	// backward-exit collapses the scope-tab bar BEFORE the track slides out
+	// (the slide-then-expand / collapse-then-slide asymmetry the
+	// `search-enter-exit-asymmetry` spec enforces). The tap-scrub, the
+	// backward-exit, and the forward-last-tab ENTER all derive from the
+	// single relation `max(0, (searchProgress - (1 - HMT)) / HMT)`, since
+	// each of searchProgress's branches substitutes back to the bar's
+	// intended expansion curve for that source.
+	const tabProgress = $derived(
+		Math.max(0, (searchProgress - (1 - HEADER_MORPH_THRESHOLD)) / HEADER_MORPH_THRESHOLD)
+	);
 
 	// Pure functions of searchProgress / tabProgress. No CSS transition: the
 	// orchestrator writes the pager-store fields these derive from, every frame
