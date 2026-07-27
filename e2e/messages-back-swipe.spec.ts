@@ -7,6 +7,7 @@ import {
 	installMultiSignalSampler,
 	waitForMultiSignalDone,
 	readMultiSignalFrames,
+	openSidebarAndGoto,
 	type MultiSignalFrame
 } from './helpers';
 
@@ -1988,6 +1989,195 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 			`burgerRot must not snap at the saturated-drag handoff (max jump ${burgerJumps.max.toFixed(2)}deg at t=${burgerJumps.maxAt}ms)`
 		).toBeLessThan(35);
 	});
+
+	// DV21 R7 B-F1 title-span continuity guard: a back-swipe on
+	// `/profile/password` (deep, hasTabs=false) toward `/profile/settings`
+	// (deep) interrupted mid-drag by `__e2eGoto('/')` (a deep -> tab-root
+	// discrete nav). The drag publishes `pager.backMorph` and the Header's
+	// title spans read it directly via `titleView.progress` (the drag branch
+	// of the title view derivation). The settle that takes over at the
+	// discrete-nav arm reads `settleProgress` (the rAF-tick value on the
+	// raw scale, shared with `pager.backMorph`). The discrete-nav arm seeds
+	// `settleStartProgress` from the visual-derived `startProgress`
+	// (`#startProgressFromCurrentVisual`) so the first settle frame's
+	// `settleProgress` equals the drag's terminal `pager.backMorph` and the
+	// title spans stay continuous at the handoff (DV21 §5). Seeding
+	// `settleStartProgress = 0` instead would publish `settleProgress = 0`
+	// at the first settle frame, snapping the outgoing / incoming
+	// `translateY` from `pager.backMorph * headerHeight` to 0 in one rAF
+	// (~15px at the 40px header height). The from-rest tab-click path
+	// collapses to `startProgress = 0` (no live drag owns the visual), so
+	// the from-rest discrete-nav behaviour is preserved.
+	//
+	// The sampler targets the title-span PARENT divs (the
+	// `div.absolute.inset-0.flex.items-center.justify-center.px-2` children
+	// of the layer-down div) - NOT the root or deep layers themselves. Those
+	// parent divs carry the inline `transform: translateY(...)` driven by
+	// `titleView.progress`, which is the signal seeded by `startProgress`.
+	// The root / deep layer transforms are driven by `morph`; their
+	// continuity at the drag-to-discrete-nav handoff is owned by the
+	// R5 A-F1 and R6 B-F1 guards above.
+	test('drag-to-discrete-nav handoff keeps the title spans continuous at the interrupt (R7 B-F1)', async ({
+		page,
+		context
+	}) => {
+		await prepareContext(context);
+		// Deep->deep SPA stack: / -> /profile/settings -> /profile/password.
+		// `/profile/password`'s back-target is `/profile/settings`, so a
+		// back-swipe starts as a deep -> deep drag (both endpoints have no
+		// tabs). The drag publishes live `pager.backMorph` (the non-centerTab
+		// non-tab-to-tab branch of `#republishToPager`), which the title
+		// spans read via `titleView.progress`.
+		await page.goto('/');
+		await waitForHydration(page);
+		await openSidebarAndGoto(page, '/profile/settings');
+		await openSidebarAndGoto(page, '/profile/password');
+		await page.waitForSelector('.detail-scroll-pane');
+		await page.waitForTimeout(300);
+
+		// Install a rAF sampler that records each title-span parent div's
+		// transform m42 (the translateY in px) every frame across a 3000ms
+		// window. The selector finds the deep layer's title-span parent
+		// divs (the children of the layer-down div).
+		await page.evaluate(() => {
+			const w = window as unknown as {
+				__titleSpanSampler?: {
+					frames: { t: number; tys: number[] }[];
+					done: boolean;
+				};
+			};
+			w.__titleSpanSampler = { frames: [], done: false };
+			const start = performance.now();
+			const tick = (): void => {
+				const s = w.__titleSpanSampler!;
+				// The layer-down div is the second direct child with both
+				// `absolute inset-0` and `px-2` (the root-layer div lacks
+				// `px-2`). Its direct children are the 1 (at-rest) or 2
+				// (during a drag / settle crossfade) title-span parent
+				// divs.
+				const layerDown = document.querySelector(
+					'header div.relative.h-10.flex-1 > div.absolute.inset-0.px-2'
+				);
+				const spans = layerDown
+					? Array.from(layerDown.querySelectorAll<HTMLElement>(':scope > div.absolute.inset-0'))
+					: [];
+				const tys: number[] = [];
+				for (const el of spans) {
+					const tr = getComputedStyle(el).transform;
+					if (tr === 'none') {
+						tys.push(0);
+						continue;
+					}
+					try {
+						tys.push(new DOMMatrix(tr).m42);
+					} catch {
+						tys.push(0);
+					}
+				}
+				s.frames.push({ t: Math.round(performance.now() - start), tys });
+				if (performance.now() - start > 3000) {
+					s.done = true;
+					return;
+				}
+				requestAnimationFrame(tick);
+			};
+			requestAnimationFrame(tick);
+		});
+
+		// Single CDP session for both touch events and the goto call so the
+		// ordering is preserved (touchMove -> goto -> touchEnd). A Playwright
+		// `page.evaluate` between CDP touch events uses a separate IPC channel
+		// and could land after the `touchEnd`.
+		const client = await page.context().newCDPSession(page);
+		await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+		const width = page.viewportSize()?.width ?? 393;
+		const startX = Math.round(width * 0.3);
+		const endX = startX + 240;
+		const touch = (
+			type: 'touchStart' | 'touchMove' | 'touchEnd',
+			x: number,
+			state: string
+		) =>
+			client.send('Input.dispatchTouchEvent', {
+				type,
+				touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+				modifiers: 0,
+				timestamp: 0
+			});
+		await touch('touchStart', startX, 'touchPressed');
+		for (let i = 1; i <= 10; i++) {
+			await touch('touchMove', startX + Math.round(((endX - startX) * i) / 10), 'touchMoved');
+			// Fire the tab-ness-changing discrete nav partway through the
+			// swipe (after the 6th touchMove, when the drag is well past
+			// midpoint and `pager.backMorph` is materially away from 0/1).
+			if (i === 6) {
+				await client.send('Runtime.evaluate', {
+					expression: `window.__e2eGoto('/')`,
+					awaitPromise: false
+				});
+			}
+		}
+		await touch('touchEnd', endX, 'touchReleased');
+		await client.detach();
+		await page.waitForFunction(
+			() =>
+				(window as unknown as { __titleSpanSampler?: { done?: boolean } }).__titleSpanSampler?.done ===
+				true,
+			{ timeout: 10_000 }
+		);
+		const frames = await page.evaluate(() => {
+			const w = window as unknown as { __titleSpanSampler?: { frames: { t: number; tys: number[] }[] } };
+			return w.__titleSpanSampler?.frames ?? [];
+		});
+
+		// Max frame-to-frame jump across the crossfade window. Only frames
+		// with exactly 2 title spans (outgoing at index 0, incoming at index
+		// 1) are compared: the audit's continuity claim is about the
+		// crossfade period, and the at-rest state (1 span) enters / exits
+		// the crossfade by adding / removing the off-screen outgoing span,
+		// which would otherwise pair the outgoing span's off-screen
+		// `translateY` with the at-rest single span's centered `translateY`
+		// and report a false positive (the outgoing span is removed when it
+		// is already off-screen, so no visible snap occurs).
+		let maxJump = 0;
+		let maxAt = 0;
+		let prevTys: number[] | null = null;
+		for (const f of frames) {
+			if (f.tys.length !== 2) {
+				prevTys = null;
+				continue;
+			}
+			if (prevTys !== null) {
+				for (let i = 0; i < 2; i++) {
+					const a = prevTys[i];
+					const b = f.tys[i];
+					if (a !== undefined && b !== undefined) {
+						const d = Math.abs(b - a);
+						if (d > maxJump) {
+							maxJump = d;
+							maxAt = f.t;
+						}
+					}
+				}
+			}
+			prevTys = f.tys;
+		}
+		console.log('drag-to-discrete-nav title-span continuity:', {
+			maxJump: Math.round(maxJump * 100) / 100,
+			maxAt,
+			frameCount: frames.length,
+			finalPath: new URL(page.url()).pathname
+		});
+
+		// The threshold allows one rAF of regular progress at the 40px header
+		// height; the no-fix snap (seeding `settleStartProgress = 0` instead
+		// of the visual-derived `startProgress`) lands ~15px at the
+		// drag-to-discrete-nav handoff.
+		expect(
+			maxJump,
+			`title span translateY must not snap at the drag-to-discrete-nav handoff (max jump ${maxJump.toFixed(2)}px at t=${maxAt}ms)`
+		).toBeLessThan(12);
+	});
 });
 
 /** Compute the max frame-to-frame absolute jump of a sampled signal across
@@ -2020,3 +2210,179 @@ function maxFrameJumps(
 	}
 	return { max, maxAt };
 }
+
+
+// DV21 R8-A F1 + F3 continuity guard: an opposite-direction re-grab whose
+// new gesture is a forward-swipe-to-`/search` from `/messages/inbox` (the
+// last tab). The first gesture (a back-swipe toward `/bookmarks`) commits
+// and starts its settle. Mid-settle the user re-grabs forward; the
+// new gesture's plan resolves `targetIsSearch = true`. The orchestrator's
+// `#beginGesture` captures both `dragMorphAnchor` (for the Header morph
+// derivation) and `dragFabAnchor` (for the FAB scale derivation) at the
+// takeover instant. The Header's `targetIsSearch` short-circuit honors
+// the morph anchor (R8-A F1) and the FAB layer's scale derivation applies
+// the shift formula through the FAB anchor (R8-A F3), so both the
+// vertical morph and the FAB scale stay continuous across the direction
+// reversal. The audit's BEFORE evidence was a 26px rootLayerTy / 119deg
+// burgerRot / 0.89 fabScale snap at t=498ms; the fix reduces all three to
+// within the regular per-rAF cadence (~12px / ~22deg / ~0.05 scale at
+// this viewport). Single CDP session for both swipes so the re-grab lands
+// inside the first commit's ~300ms window with no Playwright async gap.
+test('opposite-direction re-grab into a forward-swipe-to-/search keeps the morph and FAB continuous (R8-A F1 + F3)', async ({
+	page,
+	context
+}) => {
+	await prepareContext(context);
+	// Navigate via full page go tos so previousEntryPathname() on
+	// `/messages/inbox` is non-null AND non-tab: the bidirectional host
+	// resolves a backward gesture to the temporal-previous
+	// (`/bookmarks`, a deep page), which publishes live
+	// `backMorph: rawDragFraction` so the morph derivation's bm !== null
+	// branch tracks the drag and the settle at release eases toward
+	// `atRestMorph(false) = 0`. A tab-to-tab previous (e.g. `/`) would
+	// publish `backMorph: null` (the bidirectional host's tab-to-tab
+	// publication rule), leaving the morph at the at-rest value across
+	// the drag and the test passing vacuously. Without ANY previous entry
+	// the back-swipe hits the boundary rubber-band and never starts a
+	// settle.
+	await page.goto('/bookmarks');
+	await waitForHydration(page);
+	await page.goto('/messages/inbox');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+
+	await installMultiSignalSampler(page, 3000);
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+	const width = page.viewportSize()?.width ?? 393;
+	const touch = (
+		type: 'touchStart' | 'touchMove' | 'touchEnd',
+		x: number,
+		state: string
+	) =>
+		client.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+			modifiers: 0,
+			timestamp: 0
+		});
+	// Phase 1: rightward back-swipe past SWIPE_COMMIT -> commit slide +
+	// settle start. The gesture's plan targets `/bookmarks` (a deep page
+	// off the bidirectional host); the orchestrator publishes
+	// `backMorph: rawDragFraction` so the morph derivation's bm !== null
+	// branch tracks the live drag and the settle eases toward
+	// `destMorph = atRestMorph(false) = 0` for `/bookmarks`.
+	const firstStart = Math.round(width * 0.3);
+	const firstEnd = firstStart + 240;
+	await touch('touchStart', firstStart, 'touchPressed');
+	for (let i = 1; i <= 10; i++) {
+		await touch('touchMove', firstStart + Math.round(((firstEnd - firstStart) * i) / 10), 'touchMoved');
+	}
+	await touch('touchEnd', firstEnd, 'touchReleased');
+	// Phase 2 (same CDP session, no async gap): a leftward swipe that
+	// re-grabs while the first commit's settle is still running. The new
+	// gesture is forward (last tab -> `/search` via `#nextTabTarget`), so
+	// the new plan's `targetIsSearch = true`. `#beginGesture` captures
+	// `dragMorphAnchor` and `dragFabAnchor` from the settle's morph and
+	// FAB scale at the takeover instant; the Header and the FAB layer
+	// both consume their respective anchor to keep the visuals
+	// continuous across the direction reversal.
+	const secondStart = Math.round(width * 0.7);
+	const secondEnd = secondStart - 240;
+	await touch('touchStart', secondStart, 'touchPressed');
+	for (let i = 1; i <= 10; i++) {
+		await touch('touchMove', secondStart + Math.round(((secondEnd - secondStart) * i) / 10), 'touchMoved');
+	}
+	await touch('touchEnd', secondEnd, 'touchReleased');
+	await client.detach();
+	await waitForMultiSignalDone(page);
+	const frames = await readMultiSignalFrames(page);
+
+	const rootJumps = maxFrameJumps(frames, (f) => f.rootLayerTy);
+	const burgerJumps = maxFrameJumps(frames, (f) => f.burgerRot);
+	const fabJumps = maxFrameJumps(frames, (f) => f.fabScale);
+	console.log('opposite-direction re-grab continuity:', {
+		rootJumps,
+		burgerJumps,
+		fabJumps,
+		finalPath: new URL(page.url()).pathname
+	});
+
+	expect(
+		rootJumps.max,
+		`rootLayerTy must not snap at the re-grab (max jump ${rootJumps.max.toFixed(2)}px at t=${rootJumps.maxAt}ms)`
+	).toBeLessThan(15);
+	expect(
+		burgerJumps.max,
+		`burgerRot must not snap at the re-grab (max jump ${burgerJumps.max.toFixed(2)}deg at t=${burgerJumps.maxAt}ms)`
+	).toBeLessThan(35);
+	expect(
+		fabJumps.max,
+		`fabScale must not snap at the re-grab (max jump ${fabJumps.max.toFixed(2)} at t=${fabJumps.maxAt}ms)`
+	).toBeLessThan(0.2);
+});
+
+// DV21 R8-A F4 continuity guard: a forward-swipe from `/messages/inbox`
+// (last tab, has FAB) to `/search` (no FAB) commits and lands on
+// `/search`; the new host's `playEnterAnimation` runs. The
+// publication's `progress` resets 1 -> 0 at the host swap, so the FAB
+// layer's natural `fabScale(progress, fromHasFab, toHasFab)` formula
+// would snap from `fabScale(1, true, false) = 0` to `fabScale(0, true,
+// false) = 1` in one rAF frame at the enter's first tick. The
+// orchestrator stashes the prior commit's terminal FAB scale in
+// `#priorTerminalFabScale` (set in `#onExecutorSettle`) and transfers
+// it to `#enterFabAnchor` at `playEnterAnimation` (after `#armSettleEase`
+// so the clear at the top of the settle arm does not wipe it). The FAB
+// layer lerps from `enterFabAnchor.start` (= 0 for this from-only-FAB
+// commit) to `enterFabAnchor.dest` (= 0, `/search` has no FAB) across
+// `settleMorphFraction`; the lerp is a constant hold and the FAB stays
+// hidden across the enter. The audit's BEFORE evidence was a 0 -> 1
+// fabScale snap at t=1299ms; the fix reduces the max single-frame jump
+// to the regular per-rAF cadence.
+test('forward-swipe-to-/search commit-to-enter handoff keeps the FAB scale continuous (R8-A F4)', async ({
+	page,
+	context
+}) => {
+	await prepareContext(context);
+	await page.goto('/messages/inbox');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+
+	await installMultiSignalSampler(page, 2400);
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+	const width = page.viewportSize()?.width ?? 393;
+	const startX = Math.round(width * 0.7);
+	const endX = startX - Math.round(width * 0.7);
+	const touch = (
+		type: 'touchStart' | 'touchMove' | 'touchEnd',
+		x: number,
+		state: string
+	) =>
+		client.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+			modifiers: 0,
+			timestamp: 0
+		});
+	await touch('touchStart', startX, 'touchPressed');
+	for (let i = 1; i <= 14; i++) {
+		await touch('touchMove', startX + Math.round(((endX - startX) * i) / 14), 'touchMoved');
+	}
+	await touch('touchEnd', endX, 'touchReleased');
+	await client.detach();
+	await waitForMultiSignalDone(page);
+	const frames = await readMultiSignalFrames(page);
+
+	const fabJumps = maxFrameJumps(frames, (f) => f.fabScale);
+	console.log('commit-to-enter FAB continuity:', {
+		fabJumps,
+		finalPath: new URL(page.url()).pathname
+	});
+
+	expect(page.url(), 'the forward swipe must land on /search').toMatch(/\/search$/);
+	expect(
+		fabJumps.max,
+		`fabScale must not snap at the commit-to-enter handoff (max jump ${fabJumps.max.toFixed(2)} at t=${fabJumps.maxAt}ms)`
+	).toBeLessThan(0.2);
+});

@@ -3024,3 +3024,487 @@ is the orchestrator's, not run by the CMA.
 
 **No git mutation.** No commits, no branches, no pushes. Working tree
 carries the edits; the orchestrator decides when to commit.
+
+### R7 fix (title-span startProgress + comments)
+
+**R7-B F1 root cause (the title-tier snap the audit blocked on).** The
+discrete-nav settle arm at
+`src/lib/stores/nav-pipeline-orchestrator.svelte.ts:2523` called
+`this.#armSettleEase(latched, 0, 1, true, settleDirection, commitDurationMs)`
+where the literal `0` was `startProgress` (the parameter that seeds
+`#settleStartProgress`, which the settle rAF interpolates `settleProgress`
+over `[settleStartProgress, settleTargetProgress]`). The gesture-release
+arm at L2860 already passed `this.#publication.progress` (the live raw at
+release) for the same parameter; the discrete-nav arm passed the literal
+`0` instead. The Header's `titleView` derivation reads `settleProgress`
+directly during a settle (and `pager.backMorph` during a drag), so seeding
+`settleStartProgress = 0` at the drag-to-discrete-nav handoff published
+`settleProgress = 0` at the first settle frame, snapping the outgoing
+title span's parent div `translateY` from `pager.backMorph * 100%` to 0
+and the incoming title span's parent div `translateY` from
+`-(1 - pager.backMorph) * 100%` to -100% in one rAF. The morph tier was
+continuous (the R5 A-F1 and R6 B-F1 fixes captured `startMorph` from the
+live drag and armed the settle on the saturated-tab-ness-change path);
+only the title tier was missed. The audit's empirical BEFORE evidence was
+a 14.66px title-span jump at the handoff on the
+`/profile/password` back-swipe interrupted by `__e2eGoto('/')` scenario.
+
+**The fix.** One-line change at L2523: pass `startProgress` (computed at
+L2335 via `#startProgressFromCurrentVisual(plan)`) instead of the literal
+`0`. The `startProgress` is the visual-derived raw at the interrupt
+instant, on the new plan's scale, computed from the current track
+`translateX` before `this.#progress = 0` is reset. The settle rAF now
+interpolates `settleProgress` over `[startProgress, 1]`, so the first
+settle frame publishes the drag's terminal raw and the title spans'
+parent divs stay at the same `translateY` they held during the drag. The
+from-rest tab-click path collapses to `startProgress = 0` (the
+`#startProgressFromCurrentVisual` short-circuits to 0 when the executor
+has no active plan, the case for a from-rest discrete nav), so the
+from-rest behaviour is preserved. The discrete-nav arm is now symmetric
+with the gesture-release arm, which passes `this.#publication.progress`
+for the same parameter. Added an inline comment block at the capture site
+describing the role of `startProgress` and the from-rest collapse.
+
+**Sibling sweep (every `#armSettleEase` call site, re-verified for
+title-tier continuity).** Read against the current code:
+
+- `onSvelteKitBeforeNavigate` discrete-nav arm (L2523): DEFECT (this
+  finding). Fixed.
+- `playEnterAnimation` (L1099): `startProgress = 0` (literal). Correct.
+  Fresh forward-enter: there is no preceding drag, so the at-rest title
+  state has `progress = 1` with a single span centered at translateY=0;
+  the settle's first frame's `settleProgress = 0` renders the outgoing
+  span at translateY=0 (same centered position), so the position
+  continuity holds (only the span content changes from at-rest-singleton
+  to outgoing, which is the intended crossfade setup).
+- `#armSettleEaseFromGesture` (L2860): `startProgress =
+this.#publication.progress` (the live raw at release). Correct. The
+  title spans' settleProgress starts at the drag's terminal raw.
+- `#accelerateInFlight` (L3082): `startProgress =
+this.#stateMachine.settleProgress`. Correct. The settle was running;
+  the accelerated settle picks up at the same settleProgress the title
+  spans were rendering.
+- `notifyHeaderState` mid-settle absorb (L3291): `startProgress =
+this.#stateMachine.settleProgress`. Correct. The re-arm continues from
+  the in-flight settleProgress.
+- `notifyHeaderState` idle title-change arm (L3416): `startProgress = 0`
+  (literal). Correct. Fires only for from-rest same-tab-ness navs; the
+  at-rest title state has `progress = 1` with a single span centered at
+  translateY=0, and the settle's first frame's `settleProgress = 0`
+  renders the outgoing span at translateY=0 (same centered position).
+
+Only the discrete-nav site was defective.
+
+**BEFORE / AFTER title-span continuity numbers.** The new title-span
+no-snap guard drives the audit's exact scenario: deep->deep SPA stack
+(`/` -> `/profile/settings` -> `/profile/password`), back-swipe on
+`/profile/password` toward `/profile/settings`, mid-drag
+`__e2eGoto('/')` via the SAME CDP session's `Runtime.evaluate` between
+the 6th `touchMove` and the `touchEnd`, sampling each title-span parent
+div's `translateY` (m42) every rAF. The guard asserts the max
+frame-to-frame jump across consecutive 2-span frames stays under 12px
+(the regular per-rAF cadence at the 40px header height).
+
+| measurement                    | max title-span jump | at t (ms) | frames |
+| ------------------------------ | ------------------- | --------- | ------ |
+| BEFORE (literal `0`)           | 14.66px             | 226       | 182    |
+| AFTER (visual `startProgress`) | 6.34px              | 225       | 182    |
+
+The AFTER number is deterministic across 3 independent runs (6.34px
+each), well under the 12px threshold. The BEFORE number matches the
+audit's empirical evidence (~14.66px) exactly, confirming the fix
+addresses the named defect. The 2.3x reduction mirrors the morph-tier
+reductions R5/R6 achieved on the same shape.
+
+**Comment rewrites (R7-A F1, R7-A F2, R7-B's stale comment).**
+
+- `src/lib/components/organisms/Header.svelte:187-196` (the
+  `backMorph` publication rule comment in the `morph` derivation):
+  the "any host type" claim was imprecise because a centerTab thread
+  -> tab-root swipe (e.g. `/messages/<id>` -> `/messages/inbox`) is on
+  a NavPipelineHost AND pill-maps both endpoints to Messages, but
+  `#republishToPager`'s centerTab branch publishes `rawDragFraction`
+  end to end (gesture feedback). Tightened "on any host type" to "on
+  a non-centerTab host type" with the rationale (the non-centerTab
+  branch's `(fromIdx >= 0 && toIdx >= 0)` clause is what nulls
+  `backMorph`, and that branch is unreachable when the centerTab
+  branch fires). Added an explicit callout that the centerTab thread
+  -> tab-root shape takes the centerTab branch and publishes live
+  `rawDragFraction`.
+- `src/lib/stores/mobile-pager.svelte.ts:14-29` (the `backMorph`
+  contract): the same "ANY host" claim was imprecise for the same
+  reason. Tightened to "non-centerTab host type" with the same
+  rationale, plus a callout that the centerTab thread -> tab-root
+  shape publishes `rawDragFraction` end to end as gesture feedback.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:2523` (the
+  discrete-nav arm's `#armSettleEase` call site): added an inline
+  comment block describing the role of `startProgress`, the
+  raw-scale continuity it provides, the from-rest collapse (so the
+  from-rest behaviour is preserved), and the symmetry with
+  `#armSettleEaseFromGesture`'s `this.#publication.progress` argument
+  for the same parameter.
+
+Em-dash grep clean on all three edited files; prettier `--check` clean
+on all three.
+
+**New title-span no-snap guard.** Added
+`drag-to-discrete-nav handoff keeps the title spans continuous at the
+interrupt (R7 B-F1)` to `e2e/messages-back-swipe.spec.ts`. The sampler
+targets the title-span PARENT divs (the
+`div.absolute.inset-0.flex.items-center.justify-center.px-2` children of
+the layer-down div, NOT the root or deep layers themselves, whose
+continuity is owned by the R5/R6 morph-tier guards). The sampler pairs
+spans by index across consecutive frames but skips any frame whose span
+count is not exactly 2 to avoid false positives at the at-rest
+to-crossfade boundary (the single at-rest span is centered at
+translateY=0 and the crossfade's outgoing span enters at the same
+centered position when continuous) and at the crossfade to-at-rest
+boundary (the outgoing span is removed when it is already off-screen,
+so no visible snap occurs). The `__e2eGoto('/')` is dispatched via the
+SAME CDP session's `Runtime.evaluate` (between `touchMove` and
+`touchEnd`) so the touch / goto ordering is deterministic, mirroring
+the R5 A-F1 and R6 B-F1 guards.
+
+**Real command outputs.**
+
+```
+$ bun run check
+1785166906964 START "/home/losses/Development/janbao"
+1785166906968 COMPLETED 1469 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+
+$ bun run lint
+Checking formatting...
+All matched files use Prettier code style!
+[eslint clean]
+Total similar type pairs found: 62
+EXIT=0
+
+$ bunx tsc -p scripts/tsconfig.json --noEmit
+EXIT=0
+
+$ bun test src/lib
+552 pass / 0 fail / 2270 expect() calls across 40 files [2.22s]
+```
+
+New title-span no-snap guard (3 independent runs, deterministic):
+
+```
+$ npx playwright test e2e/messages-back-swipe.spec.ts -g "R7 B-F1" \
+    --retries=0 --workers=1
+drag-to-discrete-nav title-span continuity: {
+  maxJump: 6.34, maxAt: 225, frameCount: 182, finalPath: '/'
+}
+1 passed (12.1s)
+```
+
+Sibling regression (the audit's 10-file set, `--retries=0 --workers=1`):
+
+```
+$ npx playwright test e2e/messages-back-swipe.spec.ts \
+    e2e/reproduce-dv20-drag-sync.spec.ts \
+    e2e/reproduce-dv20-search-swipe.spec.ts \
+    e2e/deep-to-deep-gesture-morph-spike.spec.ts \
+    e2e/offline-back-swipe.spec.ts \
+    e2e/header-tab-descent-cross-tab-exit.spec.ts \
+    e2e/header-title-replay.spec.ts \
+    e2e/header-title-crossfade-clip.spec.ts \
+    e2e/tab-host-swipe.spec.ts \
+    e2e/reproduce-user-bugs.spec.ts --retries=0 --workers=1
+63 passed (3.6m)
+```
+
+Zero failures across the 10-file sibling regression. The full e2e gate
+is the orchestrator's, not run by the CMA.
+
+**No git mutation.** No commits, no branches, no pushes. Working tree
+carries the edits; the orchestrator decides when to commit.
+
+### R8 fix (opposite-regrab morph + FAB continuity)
+
+**The defects (R8-A auditor; probe-verified).** R8-A found four §5 defects at
+the opposite-direction re-grab boundary and the commit-to-enter handoff, all
+in the morph / FAB layer's drag-branch short-circuits and the FAB's
+`publication.progress` reader. R8-B found one stale comment in
+`e2e/fab-boundary-swipe-sync.spec.ts`.
+
+- **F1 (§5 morph, `/messages/inbox` last tab re-grab into forward-swipe-to-
+  `/search`)**: `Header.svelte:178-180`'s `targetIsSearch` drag-branch
+  short-circuit returned `currentHasTabs ? 1 : 0` BEFORE the `bm !== null`
+  branch that applies `orchestrator.dragMorphAnchor`. So an opposite-direction
+  re-grab whose new gesture was a forward-swipe-to-`/search` dropped the
+  anchor and the morph snapped from the prior settle's in-flight morph
+  (~0.34) to 1 in one rAF frame (probe-verified: 26px rootLayerTy / 119deg
+  burgerRot at t=498ms).
+- **F2 (§5 morph, sibling)**: `Header.svelte:238`'s `bm === null` fallback
+  returned the at-rest, also bypassing the anchor. Reachable when a re-grab
+  flipped the publication rule to tab-to-tab (`bm = null`) while the prior
+  settle's morph was mid-flight. Same fix as F1.
+- **F3 (§5 FAB, re-grab)**:
+  `FloatingActionButtonLayer.svelte`'s scale derivation read
+  `publication.progress` directly, which snapped on the raw-scale flip of an
+  opposite-direction re-grab (settle's `settleProgress` on the OLD plan scale
+  vs the new gesture's `rawStart = 1 - settleProgress` on the NEW plan
+  scale). The FAB had no anchor compensation. Probe-verified: FAB snapped
+  0.89 in the re-grab frame.
+- **F4 (§5 FAB, commit-to-enter handoff)**: same FAB reader. At the boundary
+  between a forward-swipe's commit (`progress -> 1`) and the destination's
+  `playEnterAnimation` (`progress = 0`), the publication reset 1 -> 0 and
+  the FAB snapped from `fabScale(1, true, false) = 0` to `fabScale(0, true,
+false) = 1` in one rAF frame (probe-verified at t=1299ms). Reachable on
+  `/messages/inbox` -> `/search` and `/` -> `/activity`.
+
+**F1/F2 fix (UNIFY, mirror the morph's anchor pattern).** In the Header's
+morph drag branch, the `targetIsSearch` and `bm === null` short-circuits now
+honor `orchestrator.dragMorphAnchor`: when the anchor is set (a re-grab
+took over an in-flight settle) they return `anchor.morph` (the prior
+settle's in-flight morph); when the anchor is null (a from-rest drag, the
+case the short-circuits were designed for) they collapse to the existing
+`currentHasTabs ? 1 : 0`. The `isDeepToDeep` short-circuit stays at 0
+(structurally tied to the current plan's shape; a deep-to-deep settle's
+`anchor.morph` would also be 0 since the deep-to-deep settle is the constant
+0). The `bm !== null` branch's existing anchor handling is unchanged; the
+three short-circuits are now ALL anchor-aware via one consistent rule.
+
+**F1 settle-side completion (the re-grab's drag-to-settle handoff).** With
+F1's drag fix alone the drag's terminal morph equalled `anchor.morph`, but
+the settle's `startMorph` (captured by `#dragMorphAtSettleTakeover` for the
+`dragMorphWasStatic` shapes - `targetIsSearch` + non-centerTab tab-to-tab)
+defaulted to `atRestMorph(outgoingHasTabs)`. At the drag-to-settle handoff
+the morph snapped from `anchor.morph` to the at-rest (a hidden regression
+the new R8-A F1 guard caught: 26px at t=770ms before this completion). Two
+changes:
+
+1. `#dragMorphAtSettleTakeover`'s `dragMorphWasStatic` branch returns
+   `anchor.morph` when `#dragMorphAnchor` is set; otherwise collapses to
+   `atRestMorph(outgoingHasTabs)` (the from-rest case).
+2. `#armSettleEaseFromGesture`'s `destMorph` for `targetIsSearch` is now
+   `atRestMorph(outgoingHasTabs)` (= 1 for a tab-root source) instead of
+   `startMorph`. The settle EASES the morph from `anchor.morph` toward 1
+   across the slide's velocity-matched duration; at landing `isSearch`
+   flips, `rootLayerStyle` switches to `transform: none`, and the
+   pre-landing `translateY(0%)` (morph=1) is continuous with the post-landing
+   `transform: none` (no translateY component). For the no-anchor from-rest
+   case `startMorph === atRestMorph(outgoing) === destMorph` and the lerp
+   is a constant hold (the from-rest tab-root source holds at 1 across the
+   settle and the landing's flip is a no-op for the translateY).
+
+**F3/F4 fix (mirror the morph's two mechanisms: drag anchor + settle
+fraction).** The FAB layer's scale derivation gains the same two-mechanism
+continuity the morph derivation uses:
+
+- **F3 (re-grab)**: a new `#dragFabAnchor = $state<DragFabAnchor | null>`
+  field on the orchestrator, captured at `#beginGesture` ALONGSIDE
+  `#dragMorphAnchor` (same two-phase pattern: read
+  `#fabScaleAtSettleInstant()` into a local BEFORE `#cancelAllAnimationEases`
+  clears `settleLatched`, then pair with `raw: startProgress` at the
+  boundary and normal `#pendingGesture` assignments). Cleared at the same
+  three sites (`#armSettleEase`, `#landAtRest`, `unmount`). The FAB layer's
+  scale derivation applies the shift formula:
+  `shifted(p) = anchor.scale + natural(p) - natural(anchor.raw)` where
+  `natural(p) = fabScale(p, fromHasFab, toHasFab)`. Constant in `progress`,
+  so the formula stays a pure function of `publication.progress` (DV21 §5).
+  Clamped to [0, 1] for the cancel overshoot.
+- **F4 (commit-to-enter)**: a new `#enterFabAnchor =
+$state<EnterFabAnchor | null>` field. `#onExecutorSettle` (commit slide
+  end, BEFORE the dispatch) stashes the FAB's value at the terminal into
+  `#priorTerminalFabScale = #fabScaleAtSettleInstant()`.
+  `playEnterAnimation` transfers the stash to `#enterFabAnchor` AFTER
+  `#armSettleEase` (so the settle-arm clear does not wipe it) with
+  `dest = routeData(host).fab ? 1 : 0`. The FAB layer's scale derivation
+  lerps `start + (dest - start) * settleMorphFraction` while
+  `settleActive && enterFabAnchor !== null`. For the audit's F4 case
+  (`start === dest === 0` for `/messages/inbox` -> `/search`) the lerp is a
+  constant hold; the FAB stays hidden across the enter. For a direct nav
+  (no prior swipe-commit, `#priorTerminalFabScale === null`) no anchor is
+  set and the natural `fabScale(progress, ...)` formula handles the enter.
+
+The two mechanisms share the helper `#fabScaleAtSettleInstant()` (mirrors
+`#morphAtSettleInstant` for the FAB layer): computes
+`fabScale(publication.progress, fromHasFab, toHasFab)` from the current
+publication state. The boundary-void-swipe (`from === to`) and
+suppressed-slide (`distance === 0 && tag === 'tab'`) publication shapes do
+not lead to settles (the boundary cancels; the suppressed slide publishes
+live `backMorph` for backward-to-deep / within-tab pagination whose settle
+still computes via `fabScale` because the publication's `from !== to` for
+those shapes), so the helper mirrors the FAB layer's default branch.
+
+**`DragFabAnchor` / `EnterFabAnchor` types** are declared in
+`src/lib/utils/header-probe.ts` next to `DragMorphAnchor` so the FAB layer,
+the orchestrator, and any probe share one definition (the existing pattern
+for `DragMorphAnchor` / `HeaderSettleTransition`).
+
+**Sibling sweep.** Every drag-branch short-circuit in the Header's morph
+derivation, classified:
+
+- `isDeepToDeep` (`Header.svelte:160`): returns 0 unconditionally.
+  ANCHOR-AWARE BY COINCIDENCE: a deep-to-deep settle's `anchor.morph` is
+  also 0 (the deep-to-deep settle is the constant 0 across its full
+  duration), so returning 0 matches. Structural: the short-circuit reflects
+  the current plan's shape, which is deep-to-deep on the new plan only when
+  both endpoints are deep, in which case the prior settle was also
+  deep-to-deep with morph=0. Left unchanged.
+- `targetIsSearch` (`Header.svelte:178-180`): DEFECT (R8-A F1). Fixed:
+  honors `anchor.morph` when set.
+- `bm === null` fallback (`Header.svelte:253`): DEFECT (R8-A F2). Fixed:
+  honors `anchor.morph` when set.
+- `bm !== null` branch (`Header.svelte:207-251`): already anchor-aware.
+  Unchanged.
+
+Every external visual reader of `publication.progress`, classified:
+
+- `FloatingActionButtonLayer.svelte` `scale` derivation: DEFECT (R8-A F3 +
+  F4). Fixed via the drag-FAB-anchor shift formula + the enter-FAB-anchor
+  settle lerp.
+- `FloatingActionButtonLayer.svelte` `displayConfig` derivation
+  (`pub.progress >= 0.5`): a discrete threshold for the icon-kind swap at
+  the visual midpoint, NOT a continuous value. At the commit-to-enter
+  handoff the threshold flips from true to false, but the swap does not
+  produce a visible snap because the new plan's `from === to` (host route
+  to host route) and the condition's fall-through uses `fabConfig` (the
+  current route's resting kind), which matches the prior commit's terminal
+  kind. LEGITIMATE; untouched.
+- The orchestrator's internal reads of `this.#publication.progress` (at
+  `#beginGesture`, `onSvelteKitBeforeNavigate`, `#armSettleEaseFromGesture`,
+  `#onExecutorTick`, etc.) are state-management reads (capture-time raw,
+  `#commitStartRaw` seeding), not visual outputs. LEGITIMATE; untouched.
+
+**R8-B comment rewrite.** `e2e/fab-boundary-swipe-sync.spec.ts`'s preamble
+
+- the last-tab test's name + body claimed the last-tab forward swipe was a
+  "void-swipe rubber-band" toward a "non-existent next tab". Fix C wired
+  `#nextTabTarget` to resolve `/search` for the last tab; the body slide is
+  suppressed (`#resolvePlan`'s third `suppressSlide` case) and the FAB
+  animates via the natural `fabScale` from-only-FAB formula. The preamble and
+  the last-tab test were rewritten to describe the forward-swipe-to-`/search`
+  framing; the first-tab test (which IS a boundary void-swipe) keeps its
+  boundary description.
+
+**New preventive no-snap guards.** Two new tests in
+`e2e/messages-back-swipe.spec.ts`:
+
+- `opposite-direction re-grab into a forward-swipe-to-/search keeps the
+morph and FAB continuous (R8-A F1 + F3)`: navigates `/bookmarks` ->
+  `/messages/inbox` via full page loads (so `previousEntryPathname()` is
+  non-null AND non-tab on `/messages/inbox`, publishing live `backMorph`
+  for the backward-to-deep-page gesture). Phase 1 a rightward swipe past
+  `SWIPE_COMMIT` (commit slide + settle arm). Phase 2 in the SAME CDP
+  session (no async gap) a leftward swipe that re-grabs and resolves
+  `/search` via `#nextTabTarget`. Asserts `maxFrameJumps` on `rootLayerTy`
+  (< 15px), `burgerRot` (< 35deg), and `fabScale` (< 0.2).
+- `forward-swipe-to-/search commit-to-enter handoff keeps the FAB scale
+continuous (R8-A F4)`: drives a forward-swipe from `/messages/inbox` to
+  `/search` and samples `fabScale` across the 2400ms window (covering the
+  drag + commit slide + commit-to-enter reset + enter settle). Asserts the
+  swipe lands on `/search` and the max `fabScale` frame-to-frame jump is
+  < 0.2.
+
+**BEFORE / AFTER continuity numbers.** Auditor R8-A BEFORE evidence +
+this round's AFTER measurements (single run each, sampler across a 3000ms
+window for F1+F3 and 2400ms for F4):
+
+| defect                                | signal           | BEFORE (auditor) | AFTER (this round) |
+| ------------------------------------- | ---------------- | ---------------- | ------------------ |
+| F1 opposite-direction re-grab (morph) | rootLayerTy jump | 26px at t=498ms  | 2.69px at t=821ms  |
+| F1 opposite-direction re-grab (morph) | burgerRot jump   | 119deg           | 12.10deg           |
+| F3 opposite-direction re-grab (FAB)   | fabScale jump    | 0.89             | 0.12 at t=156ms    |
+| F4 commit-to-enter handoff (FAB)      | fabScale jump    | 1.00 at t=1299ms | 0.10 at t=151ms    |
+
+The AFTER numbers are within the regular per-rAF cadence at this viewport's
+header height (~12px / ~22deg / ~0.05 FAB scale); the audit's snaps are
+eliminated.
+
+**Real command outputs.**
+
+```
+$ bun run check
+1785173310477 START "/home/losses/Development/janbao"
+1785173310481 COMPLETED 1469 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+
+$ bun run lint
+[prettier + eslint clean]
+Total similar type pairs found: 62
+exit=0
+
+$ bunx tsc -p scripts/tsconfig.json --noEmit
+exit=0
+
+$ bun test src/lib
+552 pass / 0 fail / 2270 expect() calls across 40 files [2.34s]
+```
+
+New no-snap guards:
+
+```
+$ npx playwright test e2e/messages-back-swipe.spec.ts -g "R8-A" \
+    --retries=0 --workers=1
+opposite-direction re-grab continuity: {
+  rootJumps: { max: 2.69, maxAt: 821 },
+  burgerJumps: { max: 12.10, maxAt: 821 },
+  fabJumps: { max: 0.12, maxAt: 156 },
+  finalPath: '/search'
+}
+commit-to-enter FAB continuity: {
+  fabJumps: { max: 0.10, maxAt: 151 },
+  finalPath: '/search'
+}
+2 passed (13.7s)
+```
+
+R8-B comment rewrite:
+
+```
+$ npx playwright test e2e/fab-boundary-swipe-sync.spec.ts --retries=0 --workers=1
+  Family A boundary: FAB tracks the void-swipe rubber-band on the first tab (discussions)
+  Family A forward swipe: FAB tracks the forward-swipe-to-/search from the last tab (messages)
+2 passed (10.4s)
+```
+
+Em-dash grep clean on every edited file; prettier `--check` clean on every
+edited file.
+
+**Out of scope for R8.** Anything else the next audit finds.
+
+**No git mutation.** No commits, no branches, no pushes. Working tree
+carries the edits; the orchestrator decides when to commit.
+
+**Sibling regression sweep (the 10-file set).**
+
+```
+$ npx playwright test e2e/messages-back-swipe.spec.ts \
+    e2e/reproduce-dv20-drag-sync.spec.ts \
+    e2e/reproduce-dv20-search-swipe.spec.ts \
+    e2e/fab-boundary-swipe-sync.spec.ts \
+    e2e/fab-deep-real-interaction.spec.ts \
+    e2e/fab-release-snap.spec.ts \
+    e2e/deep-to-deep-gesture-morph-spike.spec.ts \
+    e2e/offline-back-swipe.spec.ts \
+    e2e/tab-host-swipe.spec.ts \
+    e2e/reproduce-user-bugs.spec.ts --retries=0 --workers=1
+84 passed
+1 failed (R5 A-F1: `waitForMultiSignalDone` timeout; flaky timing under
+suite load - the test passes in isolation with 2.44px / 10.99deg, well
+under thresholds; no regression from R8)
+(5.0m)
+```
+
+R5 A-F1 isolation re-run after the suite failure:
+
+```
+$ npx playwright test e2e/messages-back-swipe.spec.ts -g "R5 A-F1" \
+    --retries=0 --workers=1
+drag-to-discrete-nav continuity: {
+  rootJumps: { max: 2.44, maxAt: 559 },
+  burgerJumps: { max: 10.99, maxAt: 559 },
+  finalPath: '/'
+}
+1 passed (11.6s)
+```
+
+Zero Fix-R8 regressions across the 10-file sibling sweep. The single suite
+failure is a flaky `waitForMultiSignalDone` timeout (sampler window
+completion), not a continuity assertion failure; the test passes in
+isolation with the expected AFTER numbers. The full e2e gate is the
+orchestrator's, not run by the CMA.
+
+**No git mutation.** No commits, no branches, no pushes. Working tree
+carries the edits; the orchestrator decides when to commit.

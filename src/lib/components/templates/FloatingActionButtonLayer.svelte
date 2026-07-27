@@ -160,7 +160,34 @@
 	 *  has no FAB the scale stays 0. The e2e `fab-boundary-swipe-sync`
 	 *  spec asserts the dip (scale delta > 0.1 during a first-tab
 	 *  void-swipe); the proportional reaction reaches delta ~0.4 at full
-	 *  drag, well above the threshold. */
+	 *  drag, well above the threshold.
+	 *
+	 *  Re-grab during a settle (R8-A F3): the orchestrator captures a
+	 *  `dragFabAnchor` carrying the FAB scale the settle was rendering
+	 *  at the takeover instant, paired with the new gesture's raw scale.
+	 *  The natural `fabScale(progress, ...)` would recompute from the new
+	 *  raw and snap (the publication's FROM/TO swap on a direction-
+	 *  reversing re-grab, so the natural curve at `startProgress`
+	 *  disagrees with the FAB value at the takeover). Shift the natural
+	 *  curve so it passes through the anchor: `shifted(p) = anchor.scale
+	 *  + natural(p) - natural(anchor.raw)`. The shift is constant in
+	 *  `progress`, so the formula stays a pure function of
+	 *  `publication.progress` (DV21 §5).
+	 *
+	 *  Commit-to-enter handoff (R8-A F4): the orchestrator captures an
+	 *  `enterFabAnchor` at `playEnterAnimation` carrying the prior
+	 *  commit's terminal FAB scale plus the destination route's resting
+	 *  scale. The publication's `progress` resets 1 -> 0 at the host
+	 *  swap, so the natural formula would snap from `fabScale(1, true,
+	 *  false) = 0` to `fabScale(0, true, false) = 1` in one rAF frame.
+	 *  The FAB lerps from `anchor.start` to `anchor.dest` across
+	 *  `settleMorphFraction` (the eased 0..1 fraction of the enter
+	 *  settle), so for the common commit-to-enter shapes (`start ===
+	 *  dest`) the lerp is a constant hold. The anchor is null outside
+	 *  the enter settle (cleared at the next settle arm / `#landAtRest`
+	 *  / `unmount`), so the natural formula handles normal gesture-
+	 *  release settles (where `publication.progress` is continuous with
+	 *  the drag's terminal raw and no snap is possible). */
 	const scale = $derived.by(() => {
 		const pub = publication;
 		if (pub.inFlight && pub.fromPathname && pub.toPathname) {
@@ -183,6 +210,26 @@
 			// (fall through to fabScale).
 			if (pub.plan?.pageTrack.distance === 0 && getRouteData(pub.toPathname).tag === 'tab') {
 				return fromHasFab ? 1 : 0;
+			}
+			// Commit-to-enter handoff (R8-A F4): the settle owns the FAB.
+			// Lerp from the prior commit's terminal scale to the
+			// destination's resting scale across `settleMorphFraction`
+			// so the FAB does not snap at the publication's 1 -> 0 progress
+			// reset at the host swap.
+			const enterAnchor = orchestrator.enterFabAnchor;
+			if (pub.settleActive && enterAnchor !== null) {
+				return enterAnchor.start + (enterAnchor.dest - enterAnchor.start) * pub.settleMorphFraction;
+			}
+			// Re-grab during a settle (R8-A F3): apply the shift formula so
+			// the FAB scale passes through the takeover visual. The shift is
+			// constant in `progress` (the natural slope is preserved), so the
+			// formula stays a pure function of `publication.progress` (DV21
+			// §5). Clamped to [0, 1] for the cancel overshoot.
+			const dragAnchor = orchestrator.dragFabAnchor;
+			if (dragAnchor !== null) {
+				const naturalAtProgress = fabScale(pub.progress, fromHasFab, toHasFab);
+				const naturalAtAnchor = fabScale(dragAnchor.raw, fromHasFab, toHasFab);
+				return Math.max(0, Math.min(1, dragAnchor.scale + naturalAtProgress - naturalAtAnchor));
 			}
 			return fabScale(pub.progress, fromHasFab, toHasFab);
 		}

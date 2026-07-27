@@ -174,8 +174,25 @@
 			// `iconProgress` switch to the search-mode branch). The
 			// back-swipe EXIT from `/search` is horizontal-only via the
 			// `isSearch` branch of `rootLayerStyle`; this branch covers the
-			// ENTER direction's drag phase.
+			// ENTER direction's drag phase. When a re-grab takes over a
+			// non-targetIsSearch settle whose morph was in flight (e.g. a
+			// back-swipe whose new gesture flips to a forward-swipe-to-
+			// `/search`), the at-rest value would snap from the settle's
+			// in-flight morph to the source's at-rest morph in one rAF frame
+			// (R8-A F1: a 26px rootLayerTy / 119deg burgerRot snap at the
+			// re-grab, probe-verified at t=498ms). Honor the drag morph
+			// anchor: it carries the morph the settle was rendering at the
+			// takeover instant, so returning `anchor.morph` keeps the morph
+			// continuous with the prior settle across the direction
+			// reversal. The anchor is null for a from-rest drag (no prior
+			// settle in flight at `#beginGesture`), so the at-rest value
+			// collapses to the existing `currentHasTabs ? 1 : 0` and the
+			// source's tab-ness holds across the drag (the from-rest
+			// behaviour: the vertical layer group stays out of the
+			// horizontal scrub end to end).
 			if (targetIsSearch) {
+				const targetSearchAnchor = orchestrator.dragMorphAnchor;
+				if (targetSearchAnchor !== null) return targetSearchAnchor.morph;
 				return currentHasTabs ? 1 : 0;
 			}
 			// morph semantics: 1 = tab/root (hamburger), 0 = deep (back-arrow).
@@ -188,12 +205,21 @@
 			// NavPipelineHost route (deep page, compose, and centerTab threads
 			// alike) and on every non-tab-to-tab NavPipelineTabHost drag
 			// (backward-to-deep, forward-last-tab-to-`/search`); the only null
-			// publication is a tab-to-tab swipe (both endpoints pill-map to a
-			// tab index on any host type: NavPipelineTabHost tab swipes and
-			// NavPipelineHost offline LIST routes like `/offline`,
-			// `/offline/activity`, `/offline/bookmarks` whose `leftHref`
-			// pill-maps to the same tab), where the morph stays at the static
-			// `currentHasTabs ? 1 : 0`.
+			// publication is a tab-to-tab swipe on a non-centerTab host type
+			// (NavPipelineTabHost tab swipes and NavPipelineHost offline LIST
+			// routes like `/offline`, `/offline/activity`, `/offline/bookmarks`
+			// whose `leftHref` pill-maps to the same tab - both endpoints
+			// pill-map to a tab index AND the source route is not a centerTab
+			// thread, so `#republishToPager`'s non-centerTab branch's
+			// `(fromIdx >= 0 && toIdx >= 0)` clause nulls `backMorph` end to
+			// end), where the morph stays at the static
+			// `currentHasTabs ? 1 : 0`. A centerTab thread -> tab-root swipe
+			// (e.g. `/messages/<id>` -> `/messages/inbox`) pill-maps both
+			// endpoints to Messages but takes the centerTab branch of
+			// `#republishToPager`, which publishes `rawDragFraction` end to
+			// end as gesture feedback, so the morph tracks the live drag and
+			// the settle at release interpolates from the captured
+			// `startMorph` toward the destination's at-rest morph.
 			const bm = pager.backMorph;
 			if (bm !== null) {
 				// When a drag takes over an in-flight settle (re-grab
@@ -226,6 +252,20 @@
 				}
 				return currentHasTabs ? 1 - bm : bm;
 			}
+			// `bm === null` in a drag means the orchestrator's publication
+			// rule for this shape nulls `backMorph` end to end (a tab-to-tab
+			// swipe on a non-centerTab host). When a re-grab takes over a
+			// non-tab-to-tab settle whose morph was in flight (e.g. a
+			// deep->tab settle interrupted by a tab-to-tab re-grab), the
+			// at-rest value would snap from the prior settle's morph to the
+			// source's at-rest morph in one rAF frame (R8-A F2: same shape
+			// as F1, reachable when the re-grab flips the publication rule
+			// to tab-to-tab while the prior settle's morph was mid-flight).
+			// Honor the anchor for the same reason as the `targetIsSearch`
+			// short-circuit above; collapse to the at-rest value when no
+			// anchor is in flight (the from-rest case the fallback serves).
+			const nullBmAnchor = orchestrator.dragMorphAnchor;
+			if (nullBmAnchor !== null) return nullBmAnchor.morph;
 			return currentHasTabs ? 1 : 0;
 		}
 		if (settleActive && settleLatched) {

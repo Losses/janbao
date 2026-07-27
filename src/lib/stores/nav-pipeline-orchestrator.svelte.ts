@@ -109,7 +109,13 @@ import {
 	TITLE_CROSSFADE_MS
 } from '$lib/utils/gesture-constants';
 import { resolveDeepHeaderTitle } from '$lib/utils/deep-header-config';
-import type { DragMorphAnchor, HeaderSettleTransition } from '$lib/utils/header-probe';
+import { fabScale } from '$lib/utils/fab-scale';
+import type {
+	DragFabAnchor,
+	DragMorphAnchor,
+	EnterFabAnchor,
+	HeaderSettleTransition
+} from '$lib/utils/header-probe';
 import type { TranslationDict } from '$lib/types/translation';
 import type { RouteTag } from '$lib/utils/route-data';
 import type { TransitionPlan } from '$lib/utils/nav-resolvers';
@@ -732,6 +738,38 @@ export class NavPipelineOrchestrator {
 	 *  `header-probe.ts` (the shared shape so the Header and the probe
 	 *  snapshot import one definition). */
 	#dragMorphAnchor = $state<DragMorphAnchor | null>(null);
+	/** The FAB scale value at the moment a drag took over an in-flight
+	 *  settle, paired with the publication's raw at that instant (on the
+	 *  NEW gesture's scale). Captured at `#beginGesture` alongside
+	 *  `#dragMorphAnchor` so the FAB layer's scale derivation can shift the
+	 *  natural `fabScale(progress, ...)` curve through the takeover visual
+	 *  (DV21 §5: no jump at the settle-to-drag boundary). null when no
+	 *  settle was in flight at `#beginGesture` or after the drag ends; the
+	 *  same clear sites as `#dragMorphAnchor` keep the two anchors in
+	 *  lockstep. */
+	#dragFabAnchor = $state<DragFabAnchor | null>(null);
+	/** The FAB scale captured at the start of a forward-enter animation
+	 *  (the commit-to-enter handoff). The publication's `progress` resets
+	 *  1 -> 0 at that handoff, so the FAB's natural `fabScale(progress,
+	 *  fromHasFab, toHasFab)` would snap from `fabScale(1, true, false)
+	 *  = 0` to `fabScale(0, true, false) = 1` in one rAF frame (R8-A F4).
+	 *  The `start` field is the FAB value the prior commit was rendering
+	 *  at its terminal; the `dest` field is the destination route's
+	 *  resting FAB scale. The FAB layer lerps between them across
+	 *  `settleMorphFraction`, so for the common commit-to-enter shapes
+	 *  (`start === dest`, e.g. both 0 for `/messages/inbox` -> `/search`)
+	 *  the lerp is a constant hold and the FAB stays continuous. Set by
+	 *  `playEnterAnimation`; cleared at the next settle arm /
+	 *  `#landAtRest` / `unmount`. */
+	#enterFabAnchor = $state<EnterFabAnchor | null>(null);
+	/** The FAB scale captured at the moment a commit slide ends (raw =
+	 *  1), stashed here so the next `playEnterAnimation` can seed
+	 *  `#enterFabAnchor` for the commit-to-enter handoff (R8-A F4).
+	 *  Consumed (set back to null) by `playEnterAnimation`; also cleared
+	 *  by `#landAtRest` / `unmount` so a commit that does NOT lead to an
+	 *  enter (the destination is a non-pipeline route) does not leak the
+	 *  field. */
+	#priorTerminalFabScale = $state<number | null>(null);
 
 	constructor(clock: ClockFn = defaultClock) {
 		this.#clock = clock;
@@ -812,6 +850,23 @@ export class NavPipelineOrchestrator {
 	 *  #beginGesture or after the drag ends. */
 	get dragMorphAnchor(): DragMorphAnchor | null {
 		return this.#dragMorphAnchor;
+	}
+	/** Reactive read of the drag's FAB anchor (the visual scale at the
+	 *  instant a drag took over an in-flight settle). Read by the FAB
+	 *  layer's scale derivation to shift the natural fabScale curve so it
+	 *  passes through the takeover visual (no snap at the
+	 *  settle-to-drag boundary). null when no settle was in flight at
+	 *  #beginGesture or after the drag ends. */
+	get dragFabAnchor(): DragFabAnchor | null {
+		return this.#dragFabAnchor;
+	}
+	/** Reactive read of the enter animation's FAB anchor. Read by the
+	 *  FAB layer's scale derivation during the enter settle to lerp from
+	 *  the prior commit's terminal FAB scale to the destination route's
+	 *  resting scale across `settleMorphFraction` (no snap at the
+	 *  commit-to-enter handoff). null outside the enter settle. */
+	get enterFabAnchor(): EnterFabAnchor | null {
+		return this.#enterFabAnchor;
 	}
 
 	/** Configure: capture the host's mount inputs, rebind the element
@@ -1098,6 +1153,24 @@ export class NavPipelineOrchestrator {
 			const commitDurationMs = executor.state.commitStart?.durationMs ?? TITLE_CROSSFADE_MS;
 			this.#armSettleEase(latched, 0, 1, false, 'forward', commitDurationMs);
 		}
+		// Seed the enter FAB anchor (R8-A F4) AFTER `#armSettleEase` so the
+		// clear at the top of `#armSettleEase` does not wipe it. The prior
+		// commit's terminal FAB scale was stashed in
+		// `#priorTerminalFabScale` by `#onExecutorSettle` (the publication's
+		// `progress` resets 1 -> 0 between that point and this, so without
+		// the stash the value would be lost). The destination's resting
+		// scale is the host route's FAB presence. The FAB layer lerps
+		// between them across `settleMorphFraction`; for the common
+		// commit-to-enter shapes (start === dest, e.g. both 0 for
+		// `/messages/inbox` -> `/search`) the lerp is a constant hold. For
+		// a direct nav (no prior swipe-commit, `#priorTerminalFabScale` is
+		// null) the natural `fabScale(progress, ...)` formula handles the
+		// enter correctly and no anchor is set.
+		if (this.#priorTerminalFabScale !== null) {
+			const destScale = getRouteData(inputs.fromPathname).fab ? 1 : 0;
+			this.#enterFabAnchor = { start: this.#priorTerminalFabScale, dest: destScale };
+			this.#priorTerminalFabScale = null;
+		}
 	}
 
 	/** The at-rest morph for a route with the given tab-ness: 1 = tab/root
@@ -1194,6 +1267,9 @@ export class NavPipelineOrchestrator {
 		this.#lastLandWasPipelineCommit = false;
 		this.#lastDispatchWasDeepToDeep = false;
 		this.#dragMorphAnchor = null;
+		this.#dragFabAnchor = null;
+		this.#enterFabAnchor = null;
+		this.#priorTerminalFabScale = null;
 		this.#mountInputs = null;
 		this.#mounted = false;
 		this.#lifecycle.deactivate();
@@ -1525,7 +1601,25 @@ export class NavPipelineOrchestrator {
 			browser && this.#stateMachine.settleActive && this.#stateMachine.settleLatched !== null
 				? this.#morphAtSettleInstant(this.#stateMachine.settleLatched)
 				: null;
+		// FAB anchor (R8-A F3): capture the FAB scale the settle was
+		// rendering at the takeover instant, paired with the new plan's
+		// raw scale at #beginGesture. The FAB layer's scale derivation
+		// reads `dragFabAnchor` and shifts the natural `fabScale(progress,
+		// fromHasFab, toHasFab)` curve so it passes through
+		// `(startProgress, settleFabAtTakeover)` (mirrors the morph's
+		// `dragMorphAnchor` shift). The boundary-void-swipe and
+		// suppressed-slide publication shapes do not lead to settles
+		// (boundary cancels; suppressed slide is a tag-root
+		// backward-to-deep or within-tab pagination whose settle, if any,
+		// still computes `fabScale` because the publication's from !== to
+		// for those shapes), so the helper mirrors the FAB layer's default
+		// branch (the boundary/suppressed branches are unreachable here).
+		const settleFabAtTakeover: number | null =
+			browser && this.#stateMachine.settleActive && this.#publication.inFlight
+				? this.#fabScaleAtSettleInstant()
+				: null;
 		this.#dragMorphAnchor = null;
+		this.#dragFabAnchor = null;
 		this.#cancelAllAnimationEases();
 		if (this.#publication.inFlight) {
 			this.#stateMachine.onInterrupt(intent);
@@ -1661,6 +1755,9 @@ export class NavPipelineOrchestrator {
 			if (settleMorphAtTakeover !== null) {
 				this.#dragMorphAnchor = { morph: settleMorphAtTakeover, raw: startProgress };
 			}
+			if (settleFabAtTakeover !== null) {
+				this.#dragFabAnchor = { scale: settleFabAtTakeover, raw: startProgress };
+			}
 			this.#executor?.onDragStart(boundaryPlan, startProgress);
 			return;
 		}
@@ -1698,6 +1795,9 @@ export class NavPipelineOrchestrator {
 		// gesture's scale.
 		if (settleMorphAtTakeover !== null) {
 			this.#dragMorphAnchor = { morph: settleMorphAtTakeover, raw: startProgress };
+		}
+		if (settleFabAtTakeover !== null) {
+			this.#dragFabAnchor = { scale: settleFabAtTakeover, raw: startProgress };
 		}
 		this.#executor?.onDragStart(plan, startProgress);
 	}
@@ -1921,6 +2021,17 @@ export class NavPipelineOrchestrator {
 			this.#landAtRest();
 			return;
 		}
+		// Commit slide just reached raw = 1. Stash the FAB scale at this
+		// terminal instant for the next `playEnterAnimation` to seed
+		// `#enterFabAnchor`. The publication's `progress` resets 1 -> 0
+		// between this point and `playEnterAnimation` (the host swap clears
+		// `#progress` in `configure`, then `playEnterAnimation` re-zeroes
+		// it before arming the enter settle), so without this stash the
+		// FAB's value at the commit terminal would be lost across the
+		// reset and the FAB layer's natural `fabScale(progress, ...)` would
+		// snap from `fabScale(1, ...)` to `fabScale(0, ...)` in one rAF
+		// frame at the enter's first tick (R8-A F4).
+		this.#priorTerminalFabScale = this.#fabScaleAtSettleInstant();
 		// Commit: dispatch the SvelteKit navigation via `goto` (or
 		// `history.back` / `history.forward` for a hop). The dispatch
 		// sets `navDispatchInFlight` so the orchestrator's
@@ -2017,10 +2128,15 @@ export class NavPipelineOrchestrator {
 		this.#isEnterAnimation = false;
 		this.#liveDragging = false;
 		this.#gestureToTabIndex = null;
-		// The drag ended without arming a settle; clear the morph anchor so
-		// the next drag starts fresh (no stale anchor from a prior
-		// settle-to-drag handoff).
+		// The drag ended without arming a settle; clear the morph and FAB
+		// anchors so the next drag starts fresh (no stale anchor from a
+		// prior settle-to-drag handoff). The prior terminal FAB scale is
+		// also cleared: a cancel does not lead to a `playEnterAnimation`,
+		// so the stash would otherwise leak.
 		this.#dragMorphAnchor = null;
+		this.#dragFabAnchor = null;
+		this.#enterFabAnchor = null;
+		this.#priorTerminalFabScale = null;
 		this.#executor?.onLand();
 		// Clear the replaceState side-channel: the intent Header.onBack set
 		// must not leak to a later dispatch. #landAtRest runs on a cancel,
@@ -2502,7 +2618,25 @@ export class NavPipelineOrchestrator {
 				// the settle enum is 'forward' | 'back'. Mirror the gesture-release
 				// path's conversion in `#armSettleEaseFromGesture`.
 				const settleDirection = direction === 'forward' ? 'forward' : 'back';
-				this.#armSettleEase(latched, 0, 1, true, settleDirection, commitDurationMs);
+				// `startProgress` (the visual-derived raw at the interrupt,
+				// computed above via `#startProgressFromCurrentVisual`) seeds
+				// `settleStartProgress` so the settle's raw-scale `settleProgress`
+				// starts at the live drag raw the title spans read at the
+				// handoff. The title spans read `settleProgress` directly via
+				// `titleView.progress` during a settle and `pager.backMorph`
+				// during a drag, both on the same raw scale; seeding
+				// `settleStartProgress = startProgress` keeps the first settle
+				// frame's `settleProgress` equal to the drag's terminal
+				// `pager.backMorph`, so the outgoing / incoming title
+				// `translateY` is continuous across the drag-to-discrete-nav
+				// handoff (DV21 §5). The from-rest tab-click path collapses to
+				// `startProgress = 0` (no live drag owns the visual), so
+				// Bug 7's from-rest discrete-nav behaviour is preserved.
+				// Symmetric to `#armSettleEaseFromGesture`, which passes
+				// `this.#publication.progress` (the live raw at release) for
+				// the same parameter so the title spans stay continuous at the
+				// gesture-release handoff.
+				this.#armSettleEase(latched, startProgress, 1, true, settleDirection, commitDurationMs);
 			}
 		}
 		return true;
@@ -2629,9 +2763,15 @@ export class NavPipelineOrchestrator {
 		if (!browser) return;
 		const safeDuration = Math.max(1, durationMs);
 		this.#cancelSettleEaseRaf();
-		// The settle now owns the morph; the drag's morph anchor (if any)
-		// is no longer relevant. Clear so the next drag starts fresh.
+		// The settle now owns the morph and the FAB scale; the drag's morph
+		// and FAB anchors (if any) are no longer relevant. Clear so the next
+		// drag starts fresh. The enter FAB anchor is also cleared: a fresh
+		// settle arm means we are no longer in the commit-to-enter handoff
+		// window, so the FAB scale derivation can resume reading the natural
+		// `fabScale(progress, ...)` formula.
 		this.#dragMorphAnchor = null;
+		this.#dragFabAnchor = null;
+		this.#enterFabAnchor = null;
 		this.#settleStartProgress = startProgress;
 		this.#settleTargetProgress = targetProgress;
 		this.#settleAwaitTitle = awaitTitle;
@@ -2824,10 +2964,32 @@ export class NavPipelineOrchestrator {
 		// landing; holding the morph at `startMorph` throughout the settle
 		// keeps the visuals continuous with both the drag's terminal value
 		// and the landing's overridden state.
+		// destMorph is the morph value the settle ends at. For most shapes
+		// this is the incoming route's at-rest morph on a commit (going to
+		// the destination), the outgoing route's at-rest morph on a cancel
+		// (returning to the source). The `/search` destination is special:
+		// at landing `isSearch` flips to true and the Header's `iconProgress`
+		// and `rootLayerStyle` derivations override the morph-based branch
+		// (`iconProgress = isSearch ? 0`, `rootLayerStyle = isSearch ?
+		// 'transform: none'`), so the morph value at landing has no direct
+		// visual effect BUT the pre-landing `morph` drives `rootLayerStyle`'s
+		// `translateY` until the flip. Easing toward the `/search` at-rest
+		// morph (0) during the settle would rotate the icon to back-arrow
+		// then snap it back to hamburger at landing; easing toward the
+		// SOURCE's at-rest morph (1 for a tab-root source) keeps the
+		// `translateY` at 0% across the whole settle so the flip to
+		// `transform: none` is continuous (R8-A F1: a re-grab whose
+		// `anchor.morph` differs from the source's at-rest must ease
+		// toward the source's at-rest, not hold at `anchor.morph`, or the
+		// landing snaps). For the no-anchor from-rest case
+		// `startMorph === atRestMorph(outgoing)`, so easing toward the
+		// same value is a constant hold (the from-rest tab-root source
+		// holds at 1 across the settle and the landing's flip to
+		// `transform: none` is a no-op for the translateY).
 		const destMorph = isDeepToDeep
 			? 0
 			: targetIsSearch
-				? startMorph
+				? this.#atRestMorph(outgoingHasTabs)
 				: this.#atRestMorph(committed ? incomingHasTabs : outgoingHasTabs);
 		const latched: HeaderSettleTransition = {
 			outgoingTitle,
@@ -2892,9 +3054,26 @@ export class NavPipelineOrchestrator {
 		if (!outgoingHasTabs && !incomingHasTabs) return 0;
 		const isTabToTab = outgoingHasTabs && incomingHasTabs;
 		const dragMorphWasStatic = targetIsSearch || (isTabToTab && !isCenterTabRoute);
-		return dragMorphWasStatic
-			? this.#atRestMorph(outgoingHasTabs)
-			: this.#dragMorphAtAnchorOrRaw(outgoingHasTabs, raw);
+		if (dragMorphWasStatic) {
+			// R8-A F1 / F2: when a re-grab took over a non-tab-to-tab
+			// settle whose morph was in flight (e.g. a deep->tab settle
+			// interrupted by a tab-to-tab re-grab, or a back-swipe whose
+			// new gesture flips to a forward-swipe-to-`/search`), the
+			// drag morph derivation returns `anchor.morph` (the prior
+			// settle's in-flight value) for the drag's whole duration
+			// (see the Header's `targetIsSearch` and `bm === null`
+			// short-circuits). Without this anchor-aware capture the new
+			// settle's `startMorph` would default to
+			// `atRestMorph(outgoingHasTabs)` and the morph would snap
+			// from `anchor.morph` to the at-rest in one rAF frame at the
+			// drag-to-settle handoff. Honor the anchor when set; collapse
+			// to the at-rest when no anchor is in flight (the from-rest
+			// case the static branch was designed for).
+			const anchor = this.#dragMorphAnchor;
+			if (anchor !== null) return anchor.morph;
+			return this.#atRestMorph(outgoingHasTabs);
+		}
+		return this.#dragMorphAtAnchorOrRaw(outgoingHasTabs, raw);
 	}
 
 	/** The drag's terminal morph at release, accounting for the
@@ -3411,6 +3590,20 @@ export class NavPipelineOrchestrator {
 	#morphAtSettleInstant(latched: HeaderSettleTransition): number {
 		const frac = this.#settleMorphFraction();
 		return latched.startMorph + (latched.destMorph - latched.startMorph) * frac;
+	}
+	/** The FAB scale the in-flight settle was rendering at the takeover
+	 *  instant, computed from the publication's current `progress` +
+	 *  FROM/TO FAB presence via the SAME `fabScale` formula the FAB layer
+	 *  reads. Used by `#beginGesture` to capture `#dragFabAnchor` for the
+	 *  FAB layer's shift-formula continuity across a re-grab (R8-A F3).
+	 *  Returns null only when the publication is not in-flight or has no
+	 *  resolved FROM/TO; both are guaranteed while a settle is active. */
+	#fabScaleAtSettleInstant(): number | null {
+		const pub = this.#publication;
+		if (!pub.inFlight || pub.fromPathname === null || pub.toPathname === null) return null;
+		const fromHasFab = getRouteData(pub.fromPathname).fab;
+		const toHasFab = getRouteData(pub.toPathname).fab;
+		return fabScale(pub.progress, fromHasFab, toHasFab);
 	}
 
 	#resolveSettleIncomingTitle(): string {

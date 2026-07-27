@@ -76,6 +76,44 @@ export interface DragMorphAnchor {
 	readonly raw: number;
 }
 
+/**
+ * The FAB scale value the in-flight settle was rendering the instant a drag
+ * took over (re-grab mid-commit, gesture-during-forward-enter), paired with
+ * the publication's raw drag fraction at that instant. null when no settle
+ * was in flight at `#beginGesture` (drag from rest) or after the drag ends
+ * (the next settle's arm / `#landAtRest` / `unmount` clears it). Read by the
+ * FAB layer's scale derivation to shift the natural `fabScale(progress, ...)`
+ * curve so it passes through the takeover visual (DV21 §5 "following-visual":
+ * no jump at the settle-to-drag boundary). Mirrors `DragMorphAnchor` for the
+ * FAB layer (the morph derivation consumes `DragMorphAnchor`, the FAB layer
+ * consumes `DragFabAnchor`; both are captured at the same `#beginGesture
+ * sites so the two visuals stay in lockstep).
+ */
+export interface DragFabAnchor {
+	readonly scale: number;
+	readonly raw: number;
+}
+
+/**
+ * The FAB scale captured at the moment a forward-enter animation begins (the
+ * commit-to-enter handoff). The publication's `progress` resets 1 -> 0 at
+ * that handoff, so the natural `fabScale(progress, fromHasFab, toHasFab)`
+ * formula would snap from `fabScale(1, true, false) = 0` to `fabScale(0,
+ * true, false) = 1` in one rAF frame (R8-A F4). The `start` field holds the
+ * FAB value the prior commit was rendering at its terminal (e.g. 0 for a
+ * from-only-FAB commit); the `dest` field is the destination route's resting
+ * FAB scale. The FAB layer lerps between them across `settleMorphFraction`
+ * (the eased 0..1 fraction of the enter settle), so for the common
+ * commit-to-enter shapes (`start === dest`, e.g. both 0 for
+ * `/messages/inbox` -> `/search`) the lerp is a constant hold and the FAB
+ * stays continuous across the handoff. Cleared at the next settle arm /
+ * `#landAtRest` / `unmount`.
+ */
+export interface EnterFabAnchor {
+	readonly start: number;
+	readonly dest: number;
+}
+
 export interface HeaderStateSnapshot {
 	t: number;
 	path: string;
