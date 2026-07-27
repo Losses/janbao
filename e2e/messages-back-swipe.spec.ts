@@ -1544,6 +1544,450 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 			`burgerRot must not snap at release (max jump ${burgerJumps.max.toFixed(2)}deg at t=${burgerJumps.maxAt}ms)`
 		).toBeLessThan(35);
 	});
+
+	// DV21 R4 F2 continuity guard: a re-grab mid-commit (the user releases
+	// past SWIPE_COMMIT then immediately presses again while the commit
+	// slide is still running) takes over the in-flight settle. The drag's
+	// morph formula (`currentHasTabs ? 1 - bm : bm`) agrees with the
+	// settle's terminal value at the release instant but diverges
+	// mid-commit because the settle interpolates toward
+	// `destMorph = atRestMorph(incoming)` while the drag formula travels
+	// toward the opposite end. Without the `dragMorphAnchor` capture in
+	// `#beginGesture` the drag recomputes the morph from `bm` and snaps
+	// (~180deg icon + ~40px layer snap at this viewport). With the anchor,
+	// the drag's natural curve is shifted to pass through the settle's
+	// current morph at the takeover instant, keeping the morph continuous
+	// at the settle-to-drag boundary.
+	//
+	// Gesture driver: the two swipes share a SINGLE CDP touch session so
+	// the second `touchStart` lands within the first commit's ~300ms
+	// window with no Playwright async gap. Two separate `swipeBack`
+	// calls each open their own session and the await between them leaks
+	// wallclock (the commit's rAF often completes before the second
+	// `touchStart` arrives, leaving the intent state machine in `idle`
+	// and the second `#beginGesture` capture unreachable).
+	test('re-grab mid-commit keeps the vertical morph continuous at the settle-to-drag handoff', async ({
+		page,
+		context
+	}) => {
+		await prepareContext(context);
+		await page.goto('/');
+		await waitForHydration(page);
+		await page.locator('a[data-tab-nav][href="/messages/inbox"]').click();
+		await page.waitForURL('/messages/inbox');
+		await page.waitForTimeout(200);
+		await page
+			.locator('a[href^="/messages/"]:not([href="/messages/inbox"]):not([href="/messages/new"])')
+			.first()
+			.click();
+		await page.waitForURL(/\/messages\/\d+/);
+		await page.waitForSelector('.detail-scroll-pane');
+		await page.waitForTimeout(500);
+
+		await installMultiSignalSampler(page, 2400);
+		// First swipe releases past SWIPE_COMMIT -> the commit slide and
+		// its settle start. The second swipe re-grabs mid-commit; its
+		// `#beginGesture` captures `dragMorphAnchor` from the settle's
+		// current morph (the visual the Header is rendering the instant
+		// before the drag took over).
+		const client = await page.context().newCDPSession(page);
+		await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+		const width = page.viewportSize()?.width ?? 393;
+		const touch = (
+			type: 'touchStart' | 'touchMove' | 'touchEnd',
+			x: number,
+			state: string
+		) =>
+			client.send('Input.dispatchTouchEvent', {
+				type,
+				touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+				modifiers: 0,
+				timestamp: 0
+			});
+		// Phase 1: rightward back-swipe past SWIPE_COMMIT -> commit starts.
+		const firstStart = Math.round(width * 0.3);
+		const firstEnd = firstStart + 240;
+		await touch('touchStart', firstStart, 'touchPressed');
+		for (let i = 1; i <= 10; i++) {
+			await touch('touchMove', firstStart + Math.round(((firstEnd - firstStart) * i) / 10), 'touchMoved');
+		}
+		await touch('touchEnd', firstEnd, 'touchReleased');
+		// Phase 2 (same CDP session, no async gap): a second rightward
+		// swipe that re-grabs while the first commit's settle is still
+		// running. `#beginGesture` captures `dragMorphAnchor` from the
+		// settle's morph at the takeover instant; the drag's shifted
+		// formula then tracks the live finger.
+		const secondStart = Math.round(width * 0.3);
+		const secondEnd = secondStart + 240;
+		await touch('touchStart', secondStart, 'touchPressed');
+		for (let i = 1; i <= 10; i++) {
+			await touch('touchMove', secondStart + Math.round(((secondEnd - secondStart) * i) / 10), 'touchMoved');
+		}
+		await touch('touchEnd', secondEnd, 'touchReleased');
+		await client.detach();
+		await waitForMultiSignalDone(page);
+		const frames = await readMultiSignalFrames(page);
+
+		const rootJumps = maxFrameJumps(frames, (f) => f.rootLayerTy);
+		const burgerJumps = maxFrameJumps(frames, (f) => f.burgerRot);
+		console.log('re-grab mid-commit continuity:', {
+			rootJumps,
+			burgerJumps,
+			finalPath: new URL(page.url()).pathname
+		});
+
+		// The threshold allows one rAF of regular progress (~12px / ~22deg
+		// at this viewport's header height); the R4-audit snap was
+		// ~40px / ~180deg at the re-grab boundary.
+		expect(
+			rootJumps.max,
+			`rootLayerTy must not snap at the re-grab (max jump ${rootJumps.max.toFixed(2)}px at t=${rootJumps.maxAt}ms)`
+		).toBeLessThan(15);
+		expect(
+			burgerJumps.max,
+			`burgerRot must not snap at the re-grab (max jump ${burgerJumps.max.toFixed(2)}deg at t=${burgerJumps.maxAt}ms)`
+		).toBeLessThan(35);
+	});
+
+	// DV21 R4 F3 continuity guard: a back-swipe started during a
+	// forward-enter to a centerTab route takes over the enter's settle.
+	// `playEnterAnimation` arms a settle with
+	// `startMorph = destMorph = atRestMorph(outgoingHasTabs) = 1` for a
+	// forward-enter to a centerTab route; a back-swipe started mid-enter
+	// cancels the settle and seeds `bm = the enter's eased progress (> 0)`,
+	// so the drag branch would recompute `morph = 1 - bm` and snap from 1
+	// toward 0 without the `dragMorphAnchor` capture (a ~61deg icon snap at
+	// this viewport). With the anchor, the drag curve shifts to pass
+	// through the settle's current morph (the value the enter was rendering
+	// at the takeover instant), keeping the morph continuous. The
+	// companion drag-to-settle snap at commit (a saturated drag where
+	// `startProgress === targetProgress === 1`) is handled by the
+	// orchestrator publishing a separate eased-fraction field that
+	// animates 0 -> 1 across the settle's full duration independent of the
+	// raw progress scale.
+	test('gesture-during-forward-enter keeps the vertical morph continuous at the enter-to-drag handoff', async ({
+		page,
+		context
+	}) => {
+		await prepareContext(context);
+		await page.goto('/');
+		await waitForHydration(page);
+		await page.locator('a[data-tab-nav][href="/messages/inbox"]').click();
+		await page.waitForURL('/messages/inbox');
+		await page.waitForTimeout(200);
+
+		await installMultiSignalSampler(page, 2400);
+		// Click a conversation link to trigger the forward-enter to
+		// /messages/<id>. `playEnterAnimation` arms the settle on the
+		// destination host once it mounts (the click's discrete-nav path
+		// does NOT arm a settle for centerTab routes since
+		// `outgoingHasTabs === incomingHasTabs === true`).
+		await page
+			.locator('a[href^="/messages/"]:not([href="/messages/inbox"]):not([href="/messages/new"])')
+			.first()
+			.click();
+		// Wait briefly so the back-swipe lands inside the enter's settle
+		// window (~200-300ms). The exact offset is not load-bearing: any
+		// point inside the settle window captures the anchor and verifies
+		// continuity; the test samples across the whole 2400ms window so
+		// any later morph motion is also captured.
+		await page.waitForTimeout(60);
+		await swipeBack(page);
+		await waitForMultiSignalDone(page);
+		const frames = await readMultiSignalFrames(page);
+
+		const rootJumps = maxFrameJumps(frames, (f) => f.rootLayerTy);
+		const burgerJumps = maxFrameJumps(frames, (f) => f.burgerRot);
+		console.log('gesture-during-forward-enter continuity:', {
+			rootJumps,
+			burgerJumps,
+			finalPath: new URL(page.url()).pathname
+		});
+
+		// The threshold allows one rAF of regular progress (~12px / ~22deg
+		// at this viewport's header height); the R4-audit snap was ~61deg
+		// at the takeover boundary.
+		expect(
+			rootJumps.max,
+			`rootLayerTy must not snap at the enter-to-drag handoff (max jump ${rootJumps.max.toFixed(2)}px at t=${rootJumps.maxAt}ms)`
+		).toBeLessThan(15);
+		expect(
+			burgerJumps.max,
+			`burgerRot must not snap at the enter-to-drag handoff (max jump ${burgerJumps.max.toFixed(2)}deg at t=${burgerJumps.maxAt}ms)`
+		).toBeLessThan(35);
+	});
+
+	// DV21 R5 A-F1 continuity guard: a discrete nav (programmatic
+	// `__e2eGoto`) fired mid-swipe on a centerTab route whose
+	// `dragMorphAnchor` was captured by the gesture-during-forward-enter
+	// path. Both source (`/messages/<id>`, centerTab=2) and destination
+	// (`/`, the discussions tab root) have `hasTabs = true`, so the
+	// discrete-nav arm's morph visibly does NOT change at rest; without
+	// the live-drag awareness the settle arm would be skipped, leaving
+	// the morph to snap from the live anchor-shifted value to the
+	// at-rest value in one rAF frame at the drag-to-discrete-nav
+	// handoff. The orchestrator's settle arm fires whenever
+	// `liveDragMorph !== sourceRest || liveDragMorph !== destMorph`
+	// (subsuming the tab-ness-change case where the at-rests differ,
+	// the same-tab-ness + live-drag case where the live value differs
+	// from the source's at-rest, and the saturated tab-ness-change
+	// case where the live value equals the destination's at-rest but
+	// differs from the source's), easing the morph across the slide's
+	// duration. The discrete nav is fired via the SAME CDP session's
+	// `Runtime.evaluate` between `touchMove` and `touchEnd` so the
+	// touch / goto ordering is deterministic (a Playwright
+	// `page.evaluate` between CDP touch events would use a separate IPC
+	// channel and could land after the `touchEnd`). The audit's
+	// evidence was ~102deg / ~23px; the R5 fix reduces both to within
+	// the regular per-rAF cadence (~22deg / ~12px at this viewport's
+	// header height).
+	test('drag-to-discrete-nav handoff keeps the vertical morph continuous at the interrupt (R5 A-F1)', async ({
+		page,
+		context
+	}) => {
+		await prepareContext(context);
+		await page.goto('/');
+		await waitForHydration(page);
+		await page.locator('a[data-tab-nav][href="/messages/inbox"]').click();
+		await page.waitForURL('/messages/inbox');
+		await page.waitForTimeout(200);
+
+		await installMultiSignalSampler(page, 3000);
+		// Click a conversation link to trigger the forward-enter to
+		// /messages/<id>. The destination's playEnterAnimation arms a
+		// settle with startMorph = destMorph = atRestMorph(true) = 1.
+		await page
+			.locator('a[href^="/messages/"]:not([href="/messages/inbox"]):not([href="/messages/new"])')
+			.first()
+			.click();
+		await page.waitForURL(/\/messages\/\d+/);
+		await page.waitForSelector('.detail-scroll-pane');
+		// Wait briefly so the back-swipe lands inside the enter's settle
+		// window AND the drag saturates before the discrete nav fires.
+		await page.waitForTimeout(60);
+
+		// Single CDP session for both touch events and the goto call so
+		// the ordering is preserved (touchMove -> goto -> touchEnd).
+		const client = await page.context().newCDPSession(page);
+		await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+		const width = page.viewportSize()?.width ?? 393;
+		const startX = Math.round(width * 0.3);
+		const endX = startX + 240;
+		const touch = (
+			type: 'touchStart' | 'touchMove' | 'touchEnd',
+			x: number,
+			state: string
+		) =>
+			client.send('Input.dispatchTouchEvent', {
+				type,
+				touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+				modifiers: 0,
+				timestamp: 0
+			});
+		await touch('touchStart', startX, 'touchPressed');
+		for (let i = 1; i <= 10; i++) {
+			await touch('touchMove', startX + Math.round(((endX - startX) * i) / 10), 'touchMoved');
+			// Fire the discrete nav partway through the swipe (after the
+			// 6th touchMove, when the drag is well past midpoint).
+			if (i === 6) {
+				await client.send('Runtime.evaluate', {
+					expression: `window.__e2eGoto('/')`,
+					awaitPromise: false
+				});
+			}
+		}
+		await touch('touchEnd', endX, 'touchReleased');
+		await client.detach();
+		await waitForMultiSignalDone(page);
+		const frames = await readMultiSignalFrames(page);
+
+		const rootJumps = maxFrameJumps(frames, (f) => f.rootLayerTy);
+		const burgerJumps = maxFrameJumps(frames, (f) => f.burgerRot);
+		console.log('drag-to-discrete-nav continuity:', {
+			rootJumps,
+			burgerJumps,
+			finalPath: new URL(page.url()).pathname
+		});
+
+		// The threshold allows one rAF of regular progress (~12px / ~22deg
+		// at this viewport's header height); the audit's evidence was
+		// ~102deg / ~23px.
+		expect(
+			rootJumps.max,
+			`rootLayerTy must not snap at the drag-to-discrete-nav handoff (max jump ${rootJumps.max.toFixed(2)}px at t=${rootJumps.maxAt}ms)`
+		).toBeLessThan(15);
+		expect(
+			burgerJumps.max,
+			`burgerRot must not snap at the drag-to-discrete-nav handoff (max jump ${burgerJumps.max.toFixed(2)}deg at t=${burgerJumps.maxAt}ms)`
+		).toBeLessThan(35);
+	});
+
+	// DV21 R6 B-F1 continuity guard (centerTab/tab -> deep): a SATURATED
+	// back-swipe on `/messages/<id>` (centerTab=2, hasTabs=true) whose
+	// terminal drag morph coincidentally equals the destination's
+	// at-rest morph (at raw=1, `1 - raw = 0 = atRestMorph(false)` for
+	// `/bookmarks`). The `liveDragMorph !== destMorph` clause alone
+	// collapses to equality (0 === 0); without the
+	// `liveDragMorph !== sourceRest` clause the settle arm would be
+	// SKIPPED, leaving the morph derivation's at-rest branch to return
+	// the SOURCE's at-rest morph (`currentHasTabs ? 1 : 0` = 1, the URL
+	// has not changed yet), snapping the icon 0 -> 180deg and the
+	// tab-bar `translateY` 0 -> -100% in one rAF frame at the
+	// drag-to-discrete-nav handoff. The orchestrator's settle arm fires
+	// whenever
+	// `liveDragMorph !== sourceRest || liveDragMorph !== destMorph`;
+	// the first clause fires for this shape (liveDragMorph=0,
+	// sourceRest=1), easing the morph across the slide's duration. The
+	// drag saturates by travelling the full viewport width (raw clamps
+	// to 1). The discrete nav is fired via the SAME CDP session's
+	// `Runtime.evaluate` between the last `touchMove` and `touchEnd` so
+	// the touch / goto ordering is deterministic.
+	test('saturated drag interrupted by a tab-ness-changing discrete nav keeps the vertical morph continuous (R6 B-F1 centerTab -> deep)', async ({
+		page,
+		context
+	}) => {
+		await prepareContext(context);
+		await page.goto('/');
+		await waitForHydration(page);
+		await page.locator('a[data-tab-nav][href="/messages/inbox"]').click();
+		await page.waitForURL('/messages/inbox');
+		await page.waitForTimeout(200);
+		await page
+			.locator('a[href^="/messages/"]:not([href="/messages/inbox"]):not([href="/messages/new"])')
+			.first()
+			.click();
+		await page.waitForURL(/\/messages\/\d+/);
+		await page.waitForSelector('.detail-scroll-pane');
+		await page.waitForTimeout(300);
+
+		await installMultiSignalSampler(page, 3000);
+		// Single CDP session for both touch events and the goto call so
+		// the ordering is preserved (touchMove -> goto -> touchEnd).
+		const client = await page.context().newCDPSession(page);
+		await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+		const width = page.viewportSize()?.width ?? 393;
+		// Drag the full viewport width so raw clamps to 1 (saturated).
+		const startX = Math.round(width * 0.2);
+		const endX = startX + width;
+		const touch = (
+			type: 'touchStart' | 'touchMove' | 'touchEnd',
+			x: number,
+			state: string
+		) =>
+			client.send('Input.dispatchTouchEvent', {
+				type,
+				touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+				modifiers: 0,
+				timestamp: 0
+			});
+		await touch('touchStart', startX, 'touchPressed');
+		for (let i = 1; i <= 10; i++) {
+			await touch('touchMove', startX + Math.round(((endX - startX) * i) / 10), 'touchMoved');
+			// Fire the tab-ness-changing discrete nav on the LAST
+			// touchMove so the drag is saturated (raw=1) when the
+			// interrupt arrives and the touchEnd follows deterministically.
+			if (i === 10) {
+				await client.send('Runtime.evaluate', {
+					expression: `window.__e2eGoto('/bookmarks')`,
+					awaitPromise: false
+				});
+			}
+		}
+		await touch('touchEnd', endX, 'touchReleased');
+		await client.detach();
+		await waitForMultiSignalDone(page);
+		const frames = await readMultiSignalFrames(page);
+
+		const rootJumps = maxFrameJumps(frames, (f) => f.rootLayerTy);
+		const burgerJumps = maxFrameJumps(frames, (f) => f.burgerRot);
+		console.log('saturated centerTab -> deep continuity:', {
+			rootJumps,
+			burgerJumps,
+			finalPath: new URL(page.url()).pathname
+		});
+
+		expect(
+			rootJumps.max,
+			`rootLayerTy must not snap at the saturated-drag handoff (max jump ${rootJumps.max.toFixed(2)}px at t=${rootJumps.maxAt}ms)`
+		).toBeLessThan(15);
+		expect(
+			burgerJumps.max,
+			`burgerRot must not snap at the saturated-drag handoff (max jump ${burgerJumps.max.toFixed(2)}deg at t=${burgerJumps.maxAt}ms)`
+		).toBeLessThan(35);
+	});
+
+	// DV21 R6 B-F1 continuity guard (deep -> tab): the symmetric shape.
+	// A SATURATED back-swipe on `/profile/settings` (hasTabs=false) whose
+	// terminal drag morph coincidentally equals the destination's
+	// at-rest morph (at raw=1, `raw = 1 = atRestMorph(true)` for
+	// `/messages/inbox`). The `liveDragMorph !== destMorph` clause alone
+	// collapses to equality (1 === 1); without the
+	// `liveDragMorph !== sourceRest` clause the settle arm would be
+	// SKIPPED, leaving the morph derivation's at-rest branch to return
+	// the SOURCE's at-rest morph (`currentHasTabs ? 1 : 0` = 0, the URL
+	// has not changed yet), snapping the icon 180 -> 0deg and the
+	// tab-bar `translateY` -100% -> 0% in one rAF frame at the
+	// drag-to-discrete-nav handoff. The first clause
+	// (`liveDragMorph !== sourceRest`, 1 !== 0) fires for this shape,
+	// easing the morph across the slide's duration.
+	test('saturated drag interrupted by a tab-ness-changing discrete nav keeps the vertical morph continuous (R6 B-F1 deep -> tab)', async ({
+		page,
+		context
+	}) => {
+		await prepareContext(context);
+		await page.goto('/profile/settings');
+		await waitForHydration(page);
+		await page.waitForTimeout(300);
+
+		await installMultiSignalSampler(page, 3000);
+		const client = await page.context().newCDPSession(page);
+		await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+		const width = page.viewportSize()?.width ?? 393;
+		const startX = Math.round(width * 0.2);
+		const endX = startX + width;
+		const touch = (
+			type: 'touchStart' | 'touchMove' | 'touchEnd',
+			x: number,
+			state: string
+		) =>
+			client.send('Input.dispatchTouchEvent', {
+				type,
+				touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+				modifiers: 0,
+				timestamp: 0
+			});
+		await touch('touchStart', startX, 'touchPressed');
+		for (let i = 1; i <= 10; i++) {
+			await touch('touchMove', startX + Math.round(((endX - startX) * i) / 10), 'touchMoved');
+			if (i === 10) {
+				await client.send('Runtime.evaluate', {
+					expression: `window.__e2eGoto('/messages/inbox')`,
+					awaitPromise: false
+				});
+			}
+		}
+		await touch('touchEnd', endX, 'touchReleased');
+		await client.detach();
+		await waitForMultiSignalDone(page);
+		const frames = await readMultiSignalFrames(page);
+
+		const rootJumps = maxFrameJumps(frames, (f) => f.rootLayerTy);
+		const burgerJumps = maxFrameJumps(frames, (f) => f.burgerRot);
+		console.log('saturated deep -> tab continuity:', {
+			rootJumps,
+			burgerJumps,
+			finalPath: new URL(page.url()).pathname
+		});
+
+		expect(
+			rootJumps.max,
+			`rootLayerTy must not snap at the saturated-drag handoff (max jump ${rootJumps.max.toFixed(2)}px at t=${rootJumps.maxAt}ms)`
+		).toBeLessThan(15);
+		expect(
+			burgerJumps.max,
+			`burgerRot must not snap at the saturated-drag handoff (max jump ${burgerJumps.max.toFixed(2)}deg at t=${burgerJumps.maxAt}ms)`
+		).toBeLessThan(35);
+	});
 });
 
 /** Compute the max frame-to-frame absolute jump of a sampled signal across

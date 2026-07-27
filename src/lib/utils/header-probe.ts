@@ -60,6 +60,22 @@ export interface HeaderSettleTransition {
 	readonly destMorph: number;
 }
 
+/**
+ * The morph value the in-flight settle was rendering the instant a drag took
+ * over (re-grab mid-commit, gesture-during-forward-enter), paired with the
+ * publication's raw drag fraction at that instant. null when no settle was in
+ * flight at `#beginGesture` (drag from rest) or after the drag ends (the next
+ * settle's arm / `#landAtRest` / `unmount` clears it). Read by the Header's
+ * morph drag branch to shift the natural drag-morph curve so it passes through
+ * the takeover visual (DV21 §5 "following-visual": a drag tracks from the
+ * current visual, no jump). Symmetric to how the settle's `startMorph` captures
+ * the drag's terminal value at release.
+ */
+export interface DragMorphAnchor {
+	readonly morph: number;
+	readonly raw: number;
+}
+
 export interface HeaderStateSnapshot {
 	t: number;
 	path: string;
