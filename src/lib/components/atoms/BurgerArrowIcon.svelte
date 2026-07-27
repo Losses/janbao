@@ -22,14 +22,15 @@
 	 * Each bar is a fixed <line> reshaped via CSS `transform` (animation-friendly,
 	 * unlike SVG geometry attributes). The `progress` prop is driven 1:1 by the
 	 * Header's `iconProgress` `$derived.by`, which composes the orchestrator's
-	 * published signals (`settleProgress`, `settleLatched`, `searchScrubbing`)
-	 * with the pager store's `backMorph` / `tapMorph` / `scrubIconEndpoint`:
-	 * `pager.backMorph` during a drag, `settleProgress` during a settle, and
-	 * `pager.tapMorph * scrubIconEndpoint` during a root<->search tap-scrub. The
-	 * orchestrator owns the morph's motion (drag and scrub via the pager-store
-	 * fields above; settle via the publication), so this
-	 * atom carries no CSS transition. §5: zero CSS transitions in the animation
-	 * layer.
+	 * published signals (`settleMorphFraction`, `settleLatched`,
+	 * `searchScrubbing`) with the pager store's `backMorph` / `tapMorph` /
+	 * `scrubIconEndpoint`: the morph lerps between the latched `startMorph` /
+	 * `destMorph` across `settleMorphFraction` during a settle, reads
+	 * `pager.backMorph` during a drag, and reads `pager.tapMorph *
+	 * scrubIconEndpoint` during a root<->search tap-scrub. The orchestrator
+	 * owns the morph's motion (drag and scrub via the pager-store fields
+	 * above; settle via the publication), so this atom carries no CSS
+	 * transition. §5: zero CSS transitions in the animation layer.
 	 */
 	interface BurgerArrowIconProps {
 		/** 0 = hamburger, 1 = back arrow. Clamped to [0, 1]. */

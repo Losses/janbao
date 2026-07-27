@@ -14,11 +14,22 @@
  * `backMorph` drives the Header's layer morph during a swipe-back on a deep /
  * search page. It is the swipe-back progress 0..1 (0 at rest on the current
  * page, 1 once committed toward the source), written frame-synced with
- * `fractionalIndex` by the pipeline orchestrator. null on tab roots, threads
- * (centerTab routes), and before mount; 0 on deep pages at rest so the
- * Header's morph derivation takes the explicit deep-mode branch. The Header
- * falls back to a URL-derived default for the null case so a deep link
- * SSRs in the right mode without waiting for hydration.
+ * `fractionalIndex` by the pipeline orchestrator. At rest: null on tab roots
+ * and threads (centerTab routes) so the Header's morph derivation falls back
+ * to the at-rest branch (`currentHasTabs ? 1 : 0`); 0 on deep pages so it
+ * takes the explicit deep-mode branch. During a drag the orchestrator
+ * publishes the live raw drag fraction on centerTab thread routes (Fix A's
+ * gesture-feedback publication), on bidirectional tab-host backward-to-deep
+ * and forward-last-tab-to-`/search` drags, and on every NavPipelineHost drag
+ * that does NOT pill-map both endpoints to a tab (deep page, compose,
+ * `/profile`, `/bookmarks`); the only drag-time null publication is a
+ * tab-to-tab swipe on ANY host (NavPipelineTabHost tab swipes AND
+ * NavPipelineHost offline LIST routes like `/offline`, `/offline/activity`,
+ * `/offline/bookmarks` whose `leftHref` pill-maps to the same tab), where
+ * both endpoints already root mode and the morph stays at the static
+ * `currentHasTabs ? 1 : 0`. The Header falls back to a URL-derived default
+ * for the null case so a deep link SSRs in the right mode without waiting
+ * for hydration.
  *
  * The store carries the per-frame gesture signals the MobileTabBar and the
  * SearchTabBar read, plus the Header morph signals (`tapMorph`,

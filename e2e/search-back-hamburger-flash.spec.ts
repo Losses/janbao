@@ -6,17 +6,25 @@ import { prepareContext, waitForHydration } from './helpers';
  * tab-root transition. The Header `iconProgress` feeds `BurgerArrowIcon` and is
  * frozen during a search transition:
  *
- *   const iconProgress = $derived((isSearch || searchScrubbing) ? 0 : 1 - morph);
+ *   const iconProgress = $derived.by(() => {
+ *     if (searchScrubbing && pager.tapMorph !== null) {
+ *       return pager.tapMorph * (pager.scrubIconEndpoint ?? 0);
+ *     }
+ *     return isSearch || (searchScrubbing && currentHasTabs) ? 0 : 1 - morph;
+ *   });
  *
- * `morph` is a shared signal: it drives the root<->deep VERTICAL morph (the
- * icon's actual domain, where 1 - morph turns the hamburger into a back arrow
- * on a deep page) AND the root<->search HORIZONTAL tap scrub (branch 1b of the
- * `morph` derivation, which sequences the search track / scope-tab bar / search
- * button). The icon must be inert during the horizontal scrub, so `iconProgress`
- * freezes to 0 (hamburger) whenever `isSearch` (search-mode rest) OR
- * `searchScrubbing` (the tap scrub in flight) holds. Both endpoints of a
- * root<->search transition rest the icon at the hamburger, so freezing at 0 is
- * correct for both the enter and the exit direction.
+ * `morph` drives the root<->deep VERTICAL morph (the icon's actual domain,
+ * where `1 - morph` turns the hamburger into a back arrow on a deep page).
+ * The root<->search HORIZONTAL scrub lives in `searchProgress` /
+ * `trackMorph` / `tabProgress` (the search track / scope-tab bar / search
+ * button), and the morph derivation's `targetIsSearch` skip excludes that
+ * scrub from `morph` during a forward-swipe-to-/search drag. The icon must
+ * be inert during the horizontal scrub, so `iconProgress` freezes to 0
+ * (hamburger) whenever `isSearch` (search-mode rest) OR
+ * (`searchScrubbing` && `currentHasTabs`) (the tap scrub in flight on a
+ * tab-root page) holds. Both endpoints of a root<->search transition rest
+ * the icon at the hamburger, so freezing at 0 is correct for both the
+ * enter and the exit direction.
  *
  * Detection: `BurgerArrowIcon` renders `<svg><defs><mask id="burger-arrow">
  * <g style="...rotate(Xdeg)...">`; that group's inline `rotate(Xdeg)` equals

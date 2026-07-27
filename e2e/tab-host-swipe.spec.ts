@@ -14,10 +14,11 @@ import { prepareContext, waitForHydration, swipeForward, swipeBack } from './hel
 //      rotates toward the back-arrow). This is the regression test for the
 //      orchestrator's tab-host pager publication: when `centerTab ===
 //      undefined && bidirectional === true`, `#republishToPager` must
-//      publish `backMorph: null` so the Header's `pager.backMorph ?? 1`
-//      fallback keeps `morph === 1` (hamburger) throughout the swipe.
-//      Publishing `backMorph: rawDragFraction` (the deep-page branch) would
-//      morph the icon toward the back-arrow mid-swipe.
+//      publish `backMorph: null` so the Header's morph derivation takes
+//      the at-rest branch (`currentHasTabs ? 1 : 0`) and `morph === 1`
+//      (hamburger) throughout the swipe. Publishing
+//      `backMorph: rawDragFraction` (the deep-page branch) would morph
+//      the icon toward the back-arrow mid-swipe.
 //
 // detectSwipe rejects pointerType 'mouse', so the gesture is driven via the
 // shared CDP `swipeForward` helper. The rAF sampler is installed via

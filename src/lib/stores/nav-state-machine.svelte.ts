@@ -113,8 +113,16 @@ export class NavStateMachine {
 	get settleActive(): boolean {
 		return this.#settleActive;
 	}
-	/** The eased settle progress 0..1. Read by the Header's morph /
-	 *  titleView derivations via the orchestrator's publication. */
+	/** The eased settle progress 0..1. Read by the Header's titleView
+	 *  derivation (the title spans are continuous with the live-drag
+	 *  `pager.backMorph` because both share the raw 0..1 scale). The
+	 *  Header's morph derivation reads `settleMorphFraction` (the
+	 *  orchestrator's normalized 0..1 fraction of the eased curve
+	 *  traversed so far) instead, because the morph must interpolate
+	 *  between the latched `startMorph` and `destMorph`, which is a
+	 *  different [0, 1] window than the raw `settleProgress` for a
+	 *  gesture-release settle. Exposed via the orchestrator's
+	 *  publication. */
 	get settleProgress(): number {
 		return this.#settleProgress;
 	}

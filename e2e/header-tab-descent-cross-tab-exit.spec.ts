@@ -20,7 +20,10 @@ import { prepareContext, waitForHydration } from './helpers';
  *     the slide via `commitStart.durationMs`. The rAF publishes
  *     `settleProgress` 0 to 1 with the constant-deceleration ease `2u - u²`
  *     while the route is still on the source path; the morph derivation reads
- *     `settleProgress` and the layer transform follows `morph` 1:1.
+ *     `settleMorphFraction` (normalized from `settleProgress`,
+ *     `settleStartProgress`, and `settleTargetProgress`) and lerps between
+ *     `settleLatched.startMorph` and `settleLatched.destMorph`; the layer
+ *     transform follows `morph` 1:1.
  *
  * In both directions the descent animates through real intermediate values
  * every frame. No CSS transition is involved.
@@ -158,8 +161,10 @@ function landings(snaps: HeaderSnap[], dir: 'in' | 'out'): LandingFlush[] {
  *  Returns the count of distinct contiguous runs (one per slide on
  *  `sourcePath`); each run is a settling episode where the morph was
  *  mid-transition. The slide runs concurrently with the page track, so while
- *  `path === sourcePath` (the route has not landed yet) the settle rAF publishes
- *  intermediate `settleProgress` values that drive the morph derivation.
+ *  `path === sourcePath` (the route has not landed yet) the settle rAF
+ *  advances `settleProgress`, the derived `settleMorphFraction` follows it,
+ *  and the morph derivation lerps between `settleLatched.startMorph` and
+ *  `settleLatched.destMorph`.
  *  `midMorphRange` filters to entries where the morph is genuinely between the
  *  endpoints (not the armed-at-start value), proving the rAF ticked. */
 function slideAnimationRuns(
@@ -248,7 +253,6 @@ test('CALIBRATION: forward and back descents both keep their transition (documen
 	const backAt = changes.find((at) => frames[at - 1].path === '/bookmarks' && frames[at].path === '/messages/inbox');
 
 	const fwdOut = landings(snaps, 'out');
-	const backIn = landings(snaps, 'in');
 	const fwdLanding = fwdOut[0];
 	// Back: the orchestrator intercepts the deep->tab nav and arms the settle
 	// rAF CONCURRENTLY with the slide, so the descent animates DURING the

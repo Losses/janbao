@@ -2,34 +2,44 @@ import { test, expect, type Page } from '@playwright/test';
 import { prepareContext, waitForHydration } from './helpers';
 
 /**
- * Search enter/exit animation - one morph timeline played forward and reverse.
+ * Search enter/exit animation - one search-progress timeline played forward
+ * and reverse.
  *
  * SPEC (the scope-tab bar is attached to the search panel, so it arrives AFTER
  * and leaves BEFORE the panel):
  *   ENTER (tap search):  slide the track in, THEN expand the scope-tab bar.
  *   EXIT  (back-swipe):  collapse the scope-tab bar, THEN slide the track out.
  *
- * Both directions come from the SAME piecewise consumers of `morph`
+ * Both directions come from the SAME consumers of `searchProgress`
  * (HEADER_MORPH_THRESHOLD = 0.2):
- *   tabProgress    (SearchTabBar max-height) over morph in [0, 0.2]
- *   searchProgress (header track translateX) over morph in [0.2, 1]
- * A continuous morph 0->1 collapses the tab first then slides; a continuous
- * morph 1->0 slides first then expands the tab. The two are exact mirrors, so a
- * single continuous morph timeline serves both directions.
+ *   searchProgress (header track translateX + search button left) is LINEAR
+ *                   over searchProgress in [0, 1]
+ *   tabProgress    (SearchTabBar max-height) over searchProgress in [0.8, 1.0]
+ *                  via `max(0, (searchProgress - (1 - HMT)) / HMT)`
+ * A continuous searchProgress 0->1 (ENTER: tap) slides the track across the
+ * whole range and expands the scope-tab bar only across the last 20%, so the
+ * slide-then-expand asymmetry is structural in the consumer formulas. A
+ * continuous searchProgress 1->0 (EXIT: back-swipe) collapses the scope-tab
+ * bar across the first 20% then slides the track across the rest, so the
+ * collapse-then-slide asymmetry is the same formula run in reverse. The two
+ * are exact mirrors, so a single continuous search-progress timeline serves
+ * both directions.
  *
- * The gesture exit scrubs `morph` continuously: NavPipelineHost writes
- * pager.backMorph 0->1 with the finger and Header `morph` reads it. The tap nav
- * has no finger and no title change (/search has no deep title, so the
- * title-settle driver stays idle), so the orchestrator's tap-scrub rAF drives
- * the same timeline via `pager.tapMorph` (1->0 on enter, 0->1 on exit) over
- * ~200ms. The search consumers have no CSS transition; they reactively follow
- * `morph` 1:1, as a drag does.
+ * The gesture exit scrubs `searchProgress` continuously: NavPipelineHost
+ * publishes `pager.backMorph` 0->1 with the finger and the Header's
+ * `searchProgress` / `trackMorph` derivations map it to the search-layout
+ * position. The tap nav has no finger and no title change (/search has no
+ * deep title, so the title-settle driver stays idle), so the orchestrator's
+ * tap-scrub rAF drives the same timeline via `pager.tapMorph` (1->0 on
+ * enter, 0->1 on exit) over ~200ms. The search consumers have no CSS
+ * transition; they reactively follow `searchProgress` 1:1, as a drag does.
  *
  * The tests sample the header track translateX + the SearchTabBar max-height
  * (+ pager.backMorph) every frame and assert the spec for both directions:
  * ENTER slides before it expands, EXIT collapses before it slides. A regression
- * that reverts the tap-enter to a morph jump (no continuous scrub) makes the
- * slide and expand run in parallel and fails the ENTER and MIRROR tests.
+ * that reverts the tap-enter to a searchProgress jump (no continuous scrub)
+ * makes the slide and expand run in parallel and fails the ENTER and MIRROR
+ * tests.
  */
 
 interface SearchHdrFrame {
@@ -182,8 +192,11 @@ test.beforeEach(async ({ context }) => {
 });
 
 // --- EXIT (back-swipe): collapse the scope-tab bar, THEN slide (REFERENCE) ---
-// Currently correct: morph is scrubbed 0->1 by pager.backMorph, so tabProgress
-// (morph [0,0.2]) finishes before searchProgress (morph [0.2,1]) starts.
+// Currently correct: on EXIT the source is /search (isSearch = true) so
+// searchProgress = 1 - trackMorph = 1 - pager.backMorph, running 1->0 as the
+// swipe advances. tabProgress tracks searchProgress over [0.8, 1.0] (the
+// first 20% of the EXIT), so the scope-tab bar collapses to ~0 while the
+// header track (linear over searchProgress [0, 1]) is still >=60% slid.
 test('EXIT search via back-swipe: scope-tab bar collapses to ~0 while the track is still at the search position (reference, correct)', async ({
 	page
 }) => {
@@ -402,9 +415,10 @@ test('DV17 NB27: MobileTabBar descends once post-nav on tap-EXIT (no pre-nav app
 		'no pre-nav MobileTabBar descent (rootLayer frozen in search mode)'
 	).toBeGreaterThan(-10);
 
-	// Post-nav (/): the layer group reads master morph; the Effect B settle drives
-	// it to 1, so rootLayerStyle rests at translateY(0%) - MobileTabBar shown in
-	// place. Assert it rests at 0 with no stuck/negative value.
+	// Post-nav (/): the layer group reads `morph`; the orchestrator's
+	// settle ease (armed at the tap) drives it to 1, so rootLayerStyle
+	// rests at translateY(0%) - MobileTabBar shown in place. Assert it
+	// rests at 0 with no stuck/negative value.
 	const postNav = frames.filter((f) => f.path === '/' && f.rootLayerY !== null);
 	const postNavMin = postNav.length ? Math.min(...postNav.map((f) => f.rootLayerY ?? 0)) : 0;
 	const lastY = postNav.length ? postNav[postNav.length - 1]?.rootLayerY ?? 0 : 0;

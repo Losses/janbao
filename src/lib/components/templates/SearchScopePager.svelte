@@ -177,8 +177,11 @@
 
 	// Publish the visual position to the search pager store so SearchTabBar's
 	// underline tracks the track continuously, during both a drag and a settle.
-	// backMorph stays null: scope switching does not morph the header (only the
-	// NavPipelineHost back-swipe does, via the primary store).
+	// backMorph stays null: this is the search-scope sub-pager (orthogonal to
+	// the primary pager the Header reads for `backMorph`), and scope switching
+	// does not morph the header. The primary pager's `backMorph` is owned by
+	// the orchestrator, which publishes the live drag fraction on every
+	// NavPipelineHost / NavPipelineTabHost drag that morphs the header.
 	$effect(() => {
 		pager.set({
 			fractionalIndex: visualIndex,

@@ -46,10 +46,16 @@ export interface HeaderSettleTransition {
 	readonly startMorph: number;
 	/**
 	 * The morph value the settle ends at (the destination of the
-	 * interpolation). A commit (targetProgress = 1) ends at the incoming
-	 * route's at-rest morph. A cancel (targetProgress = 0) ends at the
-	 * outgoing route's at-rest morph (the gesture returns to rest on the
-	 * source route).
+	 * interpolation). For most shapes a commit (targetProgress = 1) ends
+	 * at the incoming route's at-rest morph and a cancel
+	 * (targetProgress = 0) ends at the outgoing route's at-rest morph
+	 * (the gesture returns to rest on the source route). The
+	 * `targetIsSearch` shape is the exception: at landing `isSearch`
+	 * flips to true and `iconProgress` / `rootLayerStyle` switch to the
+	 * search-mode branch, so animating toward the `/search` at-rest
+	 * morph during the settle would rotate the icon to back-arrow then
+	 * snap it back to hamburger at landing; for that shape
+	 * `destMorph = startMorph` and the lerp is a constant hold.
 	 */
 	readonly destMorph: number;
 }

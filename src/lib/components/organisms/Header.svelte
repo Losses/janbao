@@ -23,7 +23,8 @@
 	 * settle ease (the morph + title crossfade during a gesture release,
 	 * a discrete nav, or an idle title change at landing), the root↔search
 	 * tap-scrub ease, and the `searchScrubbing` flag; this component reads
-	 * `orchestrator.settleProgress`,
+	 * `orchestrator.settleProgress` (titleView spans),
+	 * `orchestrator.settleMorphFraction` (morph derivation),
 	 * `orchestrator.settleLatched`, `orchestrator.settleActive`,
 	 * `orchestrator.settleDirection`, `orchestrator.searchScrubbing`,
 	 * `pager.tapMorph`, `pager.backMorph`, `pager.dragging`,
@@ -163,14 +164,17 @@
 			// vertical layer group (MobileTabBar / deep title) holds at the
 			// source's tab-ness so the bar slides off-screen with panel 0
 			// (no diagonal motion). The settle that takes over at release
-			// interpolates the morph from this held value (captured as the
-			// latched `startMorph`) toward the destination's at-rest morph
-			// across `settleMorphFraction`, so the vertical layer group
-			// animates continuously into the search-mode layout (no
-			// one-frame snap at the release handoff). The back-swipe EXIT
-			// from `/search` is horizontal-only via the `isSearch` branch
-			// of `rootLayerStyle`; this branch covers the ENTER direction's
-			// drag phase.
+			// HOLDs the morph at this held value: `#armSettleEaseFromGesture`
+			// captures `startMorph = atRestMorph(outgoingHasTabs)` and sets
+			// `destMorph = startMorph` for the `targetIsSearch` shape, so
+			// the lerp across `settleMorphFraction` is a constant and the
+			// vertical layer group stays at the source's tab-ness across
+			// the whole settle (no one-frame snap at the release handoff;
+			// at landing `isSearch` flips to true and `rootLayerStyle` /
+			// `iconProgress` switch to the search-mode branch). The
+			// back-swipe EXIT from `/search` is horizontal-only via the
+			// `isSearch` branch of `rootLayerStyle`; this branch covers the
+			// ENTER direction's drag phase.
 			if (targetIsSearch) {
 				return currentHasTabs ? 1 : 0;
 			}
@@ -182,23 +186,60 @@
 			// directly (0 -> 1 = deep -> back-target, correct direction). The
 			// orchestrator publishes `backMorph` for every claimed drag on a
 			// NavPipelineHost route (deep page, compose, and centerTab threads
-			// alike) so the icon and layers track the finger; the only null
-			// publication is a tab-to-tab swipe on the bidirectional tab host
-			// (NavPipelineTabHost), where both endpoints are already root mode
-			// and the morph stays at the static `currentHasTabs ? 1 : 0`.
+			// alike) and on every non-tab-to-tab NavPipelineTabHost drag
+			// (backward-to-deep, forward-last-tab-to-`/search`); the only null
+			// publication is a tab-to-tab swipe (both endpoints pill-map to a
+			// tab index on any host type: NavPipelineTabHost tab swipes and
+			// NavPipelineHost offline LIST routes like `/offline`,
+			// `/offline/activity`, `/offline/bookmarks` whose `leftHref`
+			// pill-maps to the same tab), where the morph stays at the static
+			// `currentHasTabs ? 1 : 0`.
 			const bm = pager.backMorph;
 			if (bm !== null) {
+				// When a drag takes over an in-flight settle (re-grab
+				// mid-commit, gesture-during-forward-enter), the orchestrator
+				// publishes `dragMorphAnchor` carrying the morph value the
+				// settle was rendering at the takeover instant plus the raw at
+				// that moment. The natural drag-morph curve
+				// (`currentHasTabs ? 1 - bm : bm`) would recompute from `bm`
+				// and snap (180deg icon + 40px layer snap on a centerTab ->
+				// tab-root re-grab; 61deg icon snap on a gesture-during-
+				// forward-enter): it agrees with the settle at the release
+				// instant but diverges mid-flight because the settle
+				// interpolates toward `destMorph = atRestMorph(incoming)`
+				// (1 for a tab-root destination) while the drag formula
+				// `1 - bm` travels toward 0. Shift the natural curve so it
+				// passes through the anchor instead: shifted(bm) =
+				// anchor.morph + natural(bm) - natural(anchor.raw). The
+				// shift is constant in bm (the natural slope is preserved),
+				// so the formula stays a pure function of `bm` (DV21 §5).
+				// Clamped to [0, 1] for the cancel overshoot (a tab-host
+				// re-grab whose user drags back to bm = 0 lands at
+				// `anchor.morph + anchor.raw`, clamped to 1 = the source's
+				// at-rest morph). The orchestrator clears the anchor when
+				// the drag ends (settle arm / landAtRest / unmount).
+				const anchor = orchestrator.dragMorphAnchor;
+				if (anchor !== null) {
+					const naturalAtBm = currentHasTabs ? 1 - bm : bm;
+					const naturalAtAnchor = currentHasTabs ? 1 - anchor.raw : anchor.raw;
+					return Math.max(0, Math.min(1, anchor.morph + naturalAtBm - naturalAtAnchor));
+				}
 				return currentHasTabs ? 1 - bm : bm;
 			}
 			return currentHasTabs ? 1 : 0;
 		}
 		if (settleActive && settleLatched) {
 			// Interpolate from the latched `startMorph` (the drag's terminal
-			// value, captured at settle-arm time) to `destMorph` (the
-			// destination's at-rest morph) across `settleMorphFraction` (the
-			// normalized 0..1 fraction of the eased settle curve traversed so
-			// far). Reading `settleProgress` directly here would collapse to
-			// a constant for shapes where `outgoingHasTabs ===
+			// value, captured at settle-arm time) to `destMorph` across
+			// `settleMorphFraction` (the normalized 0..1 fraction of the
+			// eased settle curve traversed so far). For most shapes
+			// `destMorph = atRestMorph(incomingHasTabs)` on a commit or
+			// `atRestMorph(outgoingHasTabs)` on a cancel; the `targetIsSearch`
+			// shape is the exception (`destMorph = startMorph`, a hold - see
+			// `#armSettleEaseFromGesture`), so the lerp is a constant and the
+			// vertical layer group stays at the source's tab-ness across the
+			// settle. Reading `settleProgress` directly here would collapse
+			// to a constant for shapes where `outgoingHasTabs ===
 			// incomingHasTabs` (e.g. a centerTab -> tab-root back-swipe) and
 			// snap the icon plus layer translateY in one rAF frame at the
 			// release handoff (DV21 §5: every visual is a pure function of
@@ -311,7 +352,8 @@
 	// Root↔deep vertical morph: FROZEN in search mode so the tabs exit
 	// horizontally with the track, never float up. The transform follows
 	// `morph` directly (no `transition:` inline): during a settle `morph`
-	// reads the orchestrator-published `settleProgress`; during a drag it
+	// reads the orchestrator-published `settleMorphFraction` and lerps
+	// between the latched `startMorph` / `destMorph`; during a drag it
 	// reads `pager.backMorph`; at rest it is the static tab-ness value.
 	const rootLayerStyle = $derived(
 		isSearch

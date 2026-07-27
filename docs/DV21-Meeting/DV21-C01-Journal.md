@@ -1513,3 +1513,560 @@ No failures across the 10-file sibling regression sweep (the audit's
 listed set). The full e2e gate is the orchestrator's, not run by the CMA.
 
 **Out of scope for the R1 fix.** Anything else the next audit finds.
+
+### R2 fix (exhaustive comment sweep)
+
+**The class.** The R2 audit (RV21-C01-Audit-02) BLOCKed with every finding a
+stale code comment - both auditors confirmed the R1 morph-continuity behaviour
+is correct and the gates are green. The R1 rewrite changed the morph settle
+branch from a `settleProgress`-direct formula to a `settleLatched.startMorph +
+(settleLatched.destMorph - settleLatched.startMorph) * settleMorphFraction`
+lerp, and added three special-case shapes in `#armSettleEaseFromGesture`
+(`isDeepToDeep` constant 0; `targetIsSearch` HOLD with `destMorph = startMorph`;
+tab-to-tab bidirectional at-rest). Many comments across the layer still
+described the OLD mechanism. This round is an EXHAUSTIVE class-wide sweep so
+the next audit round finds nothing in this class.
+
+**Phrasings used (broad grep, union of hits, every hit read).**
+`settleProgress`, `settleMorphFraction`, `Effect B`, `branch 1b`,
+`branch 2`, `master morph`, `pager.backMorph ?? 1`, `current*(1-p)`,
+`target = targetHasTabs`, `reads settleProgress`, `derives from settleProgress`,
+`eased by settleProgress`, `animates continuously`, `backMorph: 0`,
+`outgoingHasTabs / incomingHasTabs eased`, `at-rest morph`,
+`iconProgress`, `targetIsSearch`, `isDeepToDeep`, `settle branch`,
+`settle arm`, `drag branch`, plus a final shape-name sweep
+(`targetIsSearch|isDeepToDeep|isTabToTab|dragMorphWasStatic`). Each new
+phrasing was added until a fresh grep returned nothing not already read.
+
+**Full enumeration (every hit, classified).** "Rewritten" = stale, edited.
+"Accurate" = matches current code, left untouched.
+
+- `src/lib/components/atoms/BurgerArrowIcon.svelte:25` - listed
+  `settleProgress` as a published signal the `iconProgress` derivation
+  composes. REWRITTEN: the morph now reads `settleMorphFraction`, so the
+  signal list now names `settleMorphFraction` / `settleLatched` /
+  `searchScrubbing`.
+- `src/lib/components/atoms/BurgerArrowIcon.svelte:27` - "`pager.backMorph`
+  during a drag, `settleProgress` during a settle". REWRITTEN: the morph
+  lerps between the latched `startMorph` / `destMorph` across
+  `settleMorphFraction` during a settle.
+- `src/lib/components/organisms/Header.svelte:20-31` - the consumed-signals
+  docstring listed `orchestrator.settleProgress` but omitted
+  `orchestrator.settleMorphFraction` (the morph derivation's actual read).
+  REWRITTEN: the list now names both, labelled by consumer
+  (`settleProgress` for titleView spans, `settleMorphFraction` for the morph
+  derivation).
+- `src/lib/components/organisms/Header.svelte:160-174` - the `targetIsSearch`
+  skip comment claimed the settle "animates continuously into the search-mode
+  layout". REWRITTEN: the settle HOLDs the morph at the source's tab-ness
+  (`destMorph = startMorph` for the `targetIsSearch` shape, so the lerp is a
+  constant; at landing `isSearch` flips and `rootLayerStyle` / `iconProgress`
+  switch to the search-mode branch).
+- `src/lib/components/organisms/Header.svelte:196-208` - the settle-branch
+  parenthetical stated "destMorph (the destination's at-rest morph)"
+  universally. REWRITTEN: now describes the per-shape rules (commit ends at
+  the incoming route's at-rest morph; cancel at the outgoing route's;
+  `targetIsSearch` is the exception with `destMorph = startMorph`).
+- `src/lib/components/organisms/Header.svelte:311-315` - the `rootLayerStyle`
+  comment claimed "during a settle `morph` reads the orchestrator-published
+  `settleProgress`". REWRITTEN: morph reads `settleMorphFraction` and lerps
+  between the latched `startMorph` / `destMorph`.
+- `src/lib/components/organisms/Header.svelte:653` - title-span inline
+  comment "(settleProgress during a settle, backMorph during a drag)".
+  ACCURATE (the title spans DO read `settleProgress` directly via
+  `titleView.progress`); left untouched.
+- `src/lib/components/organisms/Header.svelte:332-345` - DEV-probe
+  docstring lists `settleProgress` as a probe-read field. ACCURATE (the
+  probe DOES read settleProgress for the snapshot); left untouched.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:247-252` (the
+  `PipelineMountInputs.centerTab` docstring) - claimed the at-rest
+  publication holds `backMorph: 0`. REWRITTEN: the thread-route
+  at-rest publication is `backMorph: null` (so the morph derivation's
+  at-rest branch reads `currentHasTabs ? 1 : 0`; the thread route is deep,
+  morph rests at 0, MobileTabBar hidden, fractionalIndex = centerTab is
+  the value the bar reads the moment a navigation flips tab-ness back).
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:956-964`
+  (`playEnterAnimation` plan-comment) - claimed the morph is driven by
+  "the latched endpoints (outgoingHasTabs / incomingHasTabs eased by
+  settleProgress)". REWRITTEN: the latched `startMorph` is the source
+  route's at-rest morph and `destMorph` is the host route's at-rest
+  morph; the morph derivation lerps between them across
+  `settleMorphFraction`.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:3155-3165` (the idle
+  title-change arm) - claimed "startMorph and destMorph both equal the
+  source's at-rest morph". REWRITTEN: `startMorph = atRestMorph(source)`
+  and `destMorph = atRestMorph(destination)`; the arm only fires when
+  the discrete-nav branch did NOT arm (source and destination tab-ness
+  equal), so the two are numerically equal and the morph holds while the
+  title crossfade plays.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:3266` - the deep-page
+  at-rest inline comment "backMorph: 0 so the Header is in deep (back-arrow)
+  mode". ACCURATE (the deep-page at-rest code path at L3272 ACTUALLY
+  publishes `backMorph: 0`, and the morph at rest on a deep route is 0
+  regardless via the at-rest branch); left untouched. The class member
+  "`backMorph: 0` at rest (it is null)" applies only where the publication
+  is actually null (thread route, tab host) - the deep-page code path is
+  the documented exception.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:3224-3227` - the
+  thread-route at-rest inline comment "backMorph: null so the Header stays
+  in root mode end to end". ACCURATE on the publication value (matches
+  L3232); the "root mode" description is loose (the thread route is deep,
+  morph rests at 0) but not in this audit's class (the class targets
+  comments claiming `backMorph: 0`); left untouched.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:3238-3242` - the
+  tab-host at-rest inline comment. ACCURATE; left untouched.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:2561-2568`
+  (`#endSettleEase`) - describes why ending the settle does not snap. ACCURATE
+  (the morph rest branch returns `currentHasTabs ? 1 : 0` and ignores both
+  `settleProgress` and `settleMorphFraction`; continuity is structural via
+  `destMorph = atRestMorph(post-landing currentHasTabs)`); left untouched.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:295-319` (the
+  publication's `settleProgress` / `settleMorphFraction` field docstrings).
+  ACCURATE (each field's docstring describes its role and consumer
+  correctly); left untouched.
+- `src/lib/stores/nav-state-machine.svelte.ts:116-128` - the
+  `settleProgress` getter docstring claimed it is "Read by the Header's
+  morph / titleView derivations". REWRITTEN: only the titleView derivation
+  reads `settleProgress` directly (the title spans are continuous with the
+  live-drag `pager.backMorph` because both share the raw 0..1 scale); the
+  morph derivation reads `settleMorphFraction` instead, with the rationale.
+- `src/lib/utils/header-probe.ts:47-60` (the `destMorph` field docstring) -
+  stated destMorph = incoming/outgoing route's at-rest morph universally.
+  REWRITTEN: added the `targetIsSearch` exception (`destMorph = startMorph`,
+  a hold, because at landing `isSearch` flips and `iconProgress` /
+  `rootLayerStyle` switch to the search-mode branch).
+- `src/lib/utils/header-probe.ts:22-31` (the `HeaderSettleTransition`
+  docstring) - describes why `startMorph` capture is needed. ACCURATE (the
+  explanation matches the current mechanism); left untouched.
+- `src/lib/utils/header-probe.ts:37-46` (the `startMorph` field docstring).
+  ACCURATE; left untouched.
+- `e2e/deep-to-deep-gesture-morph-spike.spec.ts:4-36` (the preamble) -
+  described the eliminated defect mechanism ("Effect B", "branch 2",
+  `current*(1-p)+target*p`, "derives from settleProgress",
+  "Effect B never fires", "gesture/click asymmetry"). REWRITTEN: the
+  spike is gone; `isDeepToDeep` captures `startMorph = 0` and
+  `destMorph = 0`, so the morph settle branch (a pure lerp across
+  `settleMorphFraction`) is the constant 0; the drag branch hardcodes 0
+  and the at-rest branch returns 0 on a deep route. Both the gesture path
+  and the click path keep the morph at 0 across the whole transition.
+- `e2e/deep-to-deep-gesture-morph-spike.spec.ts:84-91` - the
+  `DEEP_MORPH_EPSILON` guard comment. REWRITTEN: the morph must never leave
+  the deep rest band; the drag branch hardcodes 0, the settle lerp is the
+  constant between `startMorph = 0` and `destMorph = 0` across
+  `settleMorphFraction`, the at-rest branch returns 0 on a deep route.
+  Any frame above epsilon is a regression of the morph continuity fix.
+- `e2e/deep-to-deep-gesture-morph-spike.spec.ts:208-214` (CALIBRATION
+  comment) - claimed "no settle arm, no live-target flip" and "the
+  gesture/click asymmetry that makes the bug a gesture-only regression".
+  REWRITTEN: the discrete-nav branch skips the arm
+  (`outgoingHasTabs === incomingHasTabs`) and the idle title-change arm
+  captures `startMorph = 0` / `destMorph = 0`, so the settle lerp stays
+  at 0 across the title crossfade.
+- `e2e/deep-to-deep-gesture-morph-spike.spec.ts:121` (the `fmt` helper) -
+  includes `settleProgress` in the print. ACCURATE (the snap struct has a
+  `settleProgress` field); left untouched.
+- `e2e/header-tab-descent-cross-tab-exit.spec.ts:17-25` - claimed
+  "the morph derivation reads `settleProgress` and the layer transform
+  follows `morph` 1:1". REWRITTEN: the morph derivation reads
+  `settleMorphFraction` (normalized from `settleProgress`,
+  `settleStartProgress`, `settleTargetProgress`) and lerps between
+  `settleLatched.startMorph` and `settleLatched.destMorph`.
+- `e2e/header-tab-descent-cross-tab-exit.spec.ts:156-167`
+  (`slideAnimationRuns` helper) - claimed the rAF publishes "intermediate
+  `settleProgress` values that drive the morph derivation". REWRITTEN:
+  the rAF advances `settleProgress`, the derived `settleMorphFraction`
+  follows it, and the morph derivation lerps between the latched
+  `startMorph` and `destMorph`.
+- `e2e/header-tab-descent-cross-tab-exit.spec.ts:329` - "A regression
+  where the rAF never publishes intermediate `settleProgress` values".
+  ACCURATE (about the rAF's publication; the chain
+  `settleProgress` -> `settleMorphFraction` -> morph -> translateY is
+  implicit but correct - if `settleProgress` does not advance neither
+  does anything downstream); left untouched.
+- `e2e/search-back-hamburger-flash.spec.ts:9` - the `iconProgress`
+  formula omitted the `&& currentHasTabs` qualifier on the searchScrubbing
+  branch. REWRITTEN: the formula now matches the current derivation
+  (`$derived.by` with the tapMorph branch and the
+  `isSearch || (searchScrubbing && currentHasTabs)` freeze).
+- `e2e/search-back-hamburger-flash.spec.ts:11-19` - the prose claimed
+  "branch 1b of the `morph` derivation" sequences the root<->search
+  horizontal scrub. REWRITTEN: the horizontal scrub lives in
+  `searchProgress` / `trackMorph` / `tabProgress`, and the morph
+  derivation's `targetIsSearch` skip EXCLUDES the scrub from `morph`.
+  The freeze condition now correctly includes the `&& currentHasTabs`
+  qualifier with its rationale.
+- `e2e/search-back-hamburger-flash.spec.ts:389-396` - the OVER-FREEZE
+  note already cited the correct formula
+  `(isSearch || (searchScrubbing && currentHasTabs))`. ACCURATE; left
+  untouched.
+- `e2e/search-enter-exit-asymmetry.spec.ts:4-33` (preamble) - claimed the
+  search axis is "the SAME piecewise consumers of `morph`" and the
+  gesture exit "scrubs `morph` continuously". REWRITTEN: the consumers
+  are piecewise in `searchProgress` (HEADER_MORPH_THRESHOLD = 0.2 on
+  `searchProgress`, not on `morph`); the gesture exit scrubs
+  `searchProgress` (the Header's `searchProgress` / `trackMorph` map
+  `pager.backMorph` to the search-layout position); the tap-scrub rAF
+  drives the same timeline via `pager.tapMorph`.
+- `e2e/search-enter-exit-asymmetry.spec.ts:185-187` (EXIT comment) -
+  claimed "morph is scrubbed 0->1 by pager.backMorph, so tabProgress
+  (morph [0,0.2]) finishes before searchProgress (morph [0.2,1])".
+  REWRITTEN: `searchProgress` is scrubbed 0->1 by `pager.backMorph`, so
+  `tabProgress` (searchProgress [0,0.2]) finishes before the track
+  (searchProgress [0.2,1]) starts moving.
+- `e2e/search-enter-exit-asymmetry.spec.ts:405-407` - "the layer group
+  reads master morph; the Effect B settle drives it to 1". REWRITTEN: the
+  layer group reads `morph`; the orchestrator's settle ease (armed at
+  the tap) drives it to 1.
+- `e2e/tab-host-swipe.spec.ts:13-20` - claimed the orchestrator must
+  publish `backMorph: null` so the Header's `pager.backMorph ?? 1`
+  fallback keeps `morph === 1`. REWRITTEN: the null publication makes
+  the morph derivation take the at-rest branch
+  (`currentHasTabs ? 1 : 0`) so `morph === 1` (hamburger) on a tab root.
+- `src/lib/components/templates/FloatingActionButtonLayer.svelte:177-187`,
+  `src/lib/components/templates/SearchScopePager.svelte`,
+  `src/lib/components/organisms/MobileTabBar.svelte`,
+  `src/lib/components/organisms/SearchTabBar.svelte`,
+  `src/lib/stores/mobile-pager.svelte.ts`,
+  `src/lib/utils/nav-executor-logic.ts`,
+  `src/lib/utils/nav-executor-logic.test.ts`,
+  `src/lib/utils/gesture-constants.ts`,
+  `e2e/intra-tree-deep-to-deep.spec.ts`,
+  `e2e/deep-to-deep-pre-dispatch-interrupt.spec.ts`,
+  `e2e/header-title-replay.spec.ts`,
+  `e2e/reproduce-hamburger-settings.spec.ts`,
+  `e2e/reproduce-dv20-search-swipe.spec.ts`,
+  `e2e/messages-back-swipe.spec.ts`,
+  `e2e/reproduce-dv20-drag-sync.spec.ts` - each settleProgress /
+  backMorph / morph reference read; all describe current behaviour (the
+  publication chain, the drag-time morph, the FAB / pill consumers, the
+  deep-to-deep intercept, the no-snap guards installed in the R1 fix).
+  ACCURATE; left untouched.
+
+**Out-of-scope doc fix.** `docs/RV21-C01-Audit-02.md` (the R2 audit file,
+untracked) contained a U+2014 em-dash at L11 that failed the `local/no-emdash`
+eslint rule and blocked `bun run lint`. Fixed (one-character substitution) so
+the gate is green; the audit content is otherwise the auditor's.
+
+**Real command outputs.**
+
+```
+$ bun run check
+1785097191843 START "/home/losses/Development/janbao"
+1785097191847 COMPLETED 1469 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+
+$ bun run lint
+Checking formatting...
+All matched files use Prettier code style!
+[eslint clean]
+Total similar type pairs found: 62
+EXIT=0
+
+$ bunx tsc -p scripts/tsconfig.json --noEmit
+EXIT=0
+
+$ bun test src/lib
+552 pass / 0 fail / 2270 expect() calls across 40 files [2.13s]
+```
+
+Reproduce-spec spot check (4 specs, comment-only edits must not change
+behaviour):
+
+```
+$ npx playwright test e2e/reproduce-dv20-drag-sync.spec.ts \
+    e2e/reproduce-dv20-search-swipe.spec.ts \
+    -g "Bug 1|Bug 3|Bug 6|Bug 7" --retries=0 --workers=1
+Bug7 active windows: {
+  slideWin: { startT: 56, endT: 339 },
+  barWin:   { startT: 72, endT: 222 }
+}
+Bug7 bar-start minus slide-end = -267ms (negative = overlap)
+Bug3 forward-swipe: {
+  finalPath: '/search',
+  seenPills: [ '/messages/inbox' ],
+  hdrTrackTx: { range: 393, min: -393, max: 0, first: 0, last: -393 },
+  tabTrackTx: { range: 0, min: -786, max: -786, first: -786, last: -786 },
+  rootJumps:  { max: 0, maxAt: 0 },
+  deepJumps:  { max: 4.06, maxAt: 1713 },
+  burgerJumps:{ max: 0, maxAt: 0 }
+}
+4 passed (24.9s)
+```
+
+**No code behaviour changed.** Every edit is a comment / docstring / jest
+preamble / journal note. The R1 morph continuity mechanism, the publication
+chain, and the e2e assertion logic are all untouched. The full e2e gate is
+the orchestrator's, not run by the CMA.
+
+### R3 fix (read-every-comment verification)
+
+**The class.** The R3 audit (RV21-C01-Audit-03) BLOCKed with every finding a
+stale code comment. Both auditors confirmed the BEHAVIOUR is correct (no §5
+violation, gates green) and the R2 sweep's grep-phrasing approach had missed
+two classes of stale comments: the Fix A publication-surface docstrings (the
+`centerTab` thread-route contract, the `backMorph` at-rest publication, the
+SearchScopePager primary-store writer scope) and the Fix C `tabProgress` /
+`searchProgress` / `HEADER_MORPH_THRESHOLD` refactor (the
+`HEADER_MORPH_THRESHOLD` docstring still cited the eliminated
+`1 - min(1, morph / THRESHOLD)` formula over `[0, 0.2]`, and the e2e
+`search-enter-exit-asymmetry` spec's preamble and EXIT direction comments
+carried the same bounds reversal). R3-A also found that the R2 rewrite of the
+`centerTab` docstring INTRODUCED a new error (it claimed thread routes are
+deep with morph 0 / bar hidden; threads are tab-associated routes where
+`getCurrentTabIndex('/messages/<id>') === 2`, `currentHasTabs === true`, morph
+1, bar visible). This pass abandons the grep approach: every comment /
+docstring in each file the cycle touched was READ against the current code
+and verified, not just the known stale phrasings.
+
+**Method.** For each file in the audit's listed set: open it, read every
+comment and docstring, check whether it matches the CURRENT code (after Fix
+A/B/C/D + R1 + R2), fix every mismatch. After each rewrite, RE-READ the
+surrounding code to confirm the new wording is accurate (the R2 `centerTab`
+rewrite was the cautionary example of a rewrite that made it worse). The R3
+seed findings named the known defects; the read-every-comment pass caught
+two siblings the seeds did not name: the `boundary` field docstring on
+`PendingGesture` and the `BOUNDARY_RUBBER_BAND_FACTOR` docstring (both said
+"first/last tab"; only first-tab-backward remains after Fix C resolved
+last-tab forward to `/search`), plus the FloatingActionButtonLayer
+boundary-swipe docstring with the same shape.
+
+**Comments rewritten.**
+
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:248-256`
+  (`PipelineMountInputs.centerTab` docstring): was "the thread route is a
+  deep route (no tab association), so morph rests at 0 (back-arrow mode,
+  MobileTabBar hidden)"; now "the thread route is tab-associated
+  (`getCurrentTabIndex('/messages/<id>') === 2`, so `currentHasTabs ===
+true`), morph rests at 1 (tab bar visible, hamburger icon) and the
+  published `fractionalIndex = centerTab` matches the tab the thread
+  overlays." Verified against the at-rest publication (L3242 publishes
+  `backMorph: null`) and the morph derivation's at-rest branch
+  (`currentHasTabs ? 1 : 0`).
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:146-150`
+  (`PendingGesture.boundary` docstring): was "first/last tab on a
+  bidirectional host"; now "the first tab with no previous history entry
+  on a bidirectional host" (Fix C resolved every forward target including
+  last-tab to `/search`, leaving only the first-tab-backward boundary
+  reachable). Verified against `#backwardTabTarget` + the boundary branch
+  comment at L1538-1547.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:3139-3161`
+  (`notifyHeaderState` idle arm): dropped the false claim that
+  `/search -> tab-root` "deliberately does NOT arm the settle"; the
+  discrete-nav branch intercepts that case (tab-ness differs) and arms
+  the settle CONCURRENTLY with the slide, and on landing the mid-settle
+  absorb branch picks it up. Rewritten to describe the cases that
+  actually fall through to the idle arm (deep->deep forward / popstate
+  and tab->tab clicks on the bidirectional host, no tab-ness change) and
+  to credit the `iconProgress` `isSearch || (searchScrubbing &&
+currentHasTabs)` override for the no-flash guarantee across a
+  `/search <-> tab-root` slide. Verified against the discrete-nav arm
+  condition (`outgoingHasTabs !== incomingHasTabs`, L2328) and the
+  Header's `iconProgress` derivation (L242).
+- `src/lib/utils/gesture-constants.ts:8-13` (`HEADER_MORPH_THRESHOLD`
+  docstring use 2): was "Search tab-bar clip-collapse
+  `1 - min(1, morph / THRESHOLD)` over `[0, 0.2]`"; now "SearchTabBar
+  clip-expand `tabProgress = max(0, (searchProgress - (1 - HMT)) / HMT)`
+  so the SearchTabBar row expands over `searchProgress` in [0.8, 1.0]
+  (the last 20% of an ENTER scrub, slide-then-expand) and collapses over
+  `searchProgress` in [1.0, 0.8] (the first 20% of an EXIT scrub,
+  collapse-then-slide)." Verified against Header.svelte L461-463.
+- `src/lib/utils/gesture-constants.ts:37-41`
+  (`BOUNDARY_RUBBER_BAND_FACTOR` docstring): was "On the first/last tab a
+  swipe toward the absent neighbour"; now "On the first tab a backward
+  swipe with no previous history entry... (The forward direction resolves
+  every tab to a target via `#nextTabTarget`, with the last tab resolving
+  to `/search`, so no forward boundary path remains.)" Verified against
+  the boundary branch at L1538-1547.
+- `src/lib/stores/mobile-pager.svelte.ts:14-25` (`backMorph` contract):
+  was "null on tab roots, threads (centerTab routes), and before mount; 0
+  on deep pages at rest"; now "At rest: null on tab roots and threads
+  (centerTab routes)... 0 on deep pages... During a drag the orchestrator
+  publishes the live raw drag fraction on centerTab thread routes (Fix A's
+  gesture-feedback publication), on bidirectional tab-host
+  backward-to-deep and forward-last-tab-to-`/search` drags, and on every
+  NavPipelineHost drag (deep page, compose); the only drag-time null
+  publication is a tab-to-tab swipe on the bidirectional tab host."
+  Verified against `#republishToPager` L3434-3491.
+- `src/lib/components/templates/SearchScopePager.svelte:178-184`
+  (the search-scope pager's `backMorph: null` rationale): was "scope
+  switching does not morph the header (only the NavPipelineHost
+  back-swipe does, via the primary store)"; now "this is the search-scope
+  sub-pager (orthogonal to the primary pager the Header reads for
+  `backMorph`), and scope switching does not morph the header. The
+  primary pager's `backMorph` is owned by the orchestrator, which
+  publishes the live drag fraction on every NavPipelineHost /
+  NavPipelineTabHost drag that morphs the header." Dropped the misleading
+  "only the NavPipelineHost back-swipe does" qualifier.
+- `src/lib/components/templates/FloatingActionButtonLayer.svelte:149-163`
+  (FAB scale boundary-swipe docstring): was "first/last tab rubber-band";
+  now "first-tab backward rubber-band". Same Fix C correction as the
+  `BOUNDARY_RUBBER_BAND_FACTOR` and `PendingGesture.boundary` comments.
+- `e2e/search-enter-exit-asymmetry.spec.ts:13-26` (preamble): was
+  "tabProgress over searchProgress in [0, 0.2], searchProgress (header
+  track translateX) over searchProgress in [0.2, 1]. A continuous
+  searchProgress 0->1 collapses the tab first then slides..."; now
+  "searchProgress (header track translateX + search button left) is
+  LINEAR over searchProgress in [0, 1]; tabProgress (SearchTabBar
+  max-height) over searchProgress in [0.8, 1.0] via
+  `max(0, (searchProgress - (1 - HMT)) / HMT)`. A continuous
+  searchProgress 0->1 (ENTER) slides the track across the whole range
+  and expands the scope-tab bar only across the last 20%... A continuous
+  searchProgress 1->0 (EXIT) collapses the scope-tab bar across the
+  first 20% then slides the track across the rest."
+- `e2e/search-enter-exit-asymmetry.spec.ts:188-195` (EXIT comment): was
+  "searchProgress is scrubbed 0->1 by pager.backMorph, so tabProgress
+  (searchProgress [0,0.2]) finishes before the track (searchProgress
+  [0.2,1]) starts moving"; now "on EXIT the source is /search (isSearch =
+  true) so searchProgress = 1 - trackMorph = 1 - pager.backMorph, running
+  1->0 as the swipe advances. tabProgress tracks searchProgress over
+  [0.8, 1.0] (the first 20% of the EXIT), so the scope-tab bar collapses
+  to ~0 while the header track (linear over searchProgress [0, 1]) is
+  still >=60% slid."
+
+**Files verified clean (every comment / docstring read against the code,
+no defect found).**
+
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts` (after the
+  rewrites above; the publication field docstrings, `#publish`,
+  `#republishToPager` three-mode docstring, `#armSettleEaseFromGesture`
+  shape analysis, `#endSettleEase` no-snap argument, `#atRestMorph`,
+  `#dragMorphAtRaw`, `playEnterAnimation` plan-comment, the discrete-nav
+  concurrent-arm comment, the mid-settle absorb comment, the
+  `#accelerateInFlight` re-arm comment, the at-rest publication comment
+  for the three modes - all describe current behaviour).
+- `src/lib/stores/mobile-pager.svelte.ts` (after the rewrite; the
+  factory docstring, `PagerUpdate.tapMorph` / `transitionTarget` /
+  `scrubIconEndpoint` field docstrings, the `set` closure's
+  preserve-tapMorph / preserve-scrubIconEndpoint comments).
+- `src/lib/stores/nav-state-machine.svelte.ts` (settleProgress /
+  settleLatched / settleDirection / settleAwaitTitle / searchScrubbing
+  reactive-read docstrings; setSettleState / setSearchScrubbing
+  mutation-method docstrings).
+- `src/lib/stores/scroll-chrome.svelte.ts` (setScrollContainer rAF-defer
+  comments for both branches; releaseContainer identity-guard comment;
+  setOverride / holdThroughNavigation / releaseNavigation comments).
+- `src/lib/components/organisms/Header.svelte` (the consumed-signals
+  top-level docstring; the morph / iconProgress / searchProgress /
+  trackMorph / tabProgress / rootLayerStyle / layerDownStyle derivation
+  comments; the DEV-probe docstring; the title-span `progress` inline
+  comment; the single-search-button comment).
+- `src/lib/components/organisms/MobileTabBar.svelte`,
+  `SearchTabBar.svelte`: top-level docstrings + the deep-swipe pill
+  path comment (MobileTabBar) and the search-scope underline comment
+  (SearchTabBar).
+- `src/lib/components/atoms/BurgerArrowIcon.svelte` (the `progress`
+  prop docstring's compose-signals list now names
+  `settleMorphFraction`, `settleLatched`, `searchScrubbing`).
+- `src/lib/components/templates/NavPipelineHost.svelte` (the
+  UNIFY-DO-NOT-BRIDGE preamble, `resolvedLeftHref`, `shouldEnter`,
+  `crossTabPanelPath`, `forwardDeepTarget`, the at-rest `$effect`,
+  the ResizeObserver comment, the forward-enter seed, the
+  initialTrackTransform comment).
+- `src/lib/components/templates/NavPipelineTabHost.svelte` (the
+  deepSnapshotTarget overlay comment, the active-tab data resolution
+  comment, the mobile -> desktop breakpoint handler comment, the
+  passthrough comment).
+- `src/lib/components/templates/SearchScopePager.svelte` (after the
+  rewrite; the docstring preamble, the lazy-panel-content comment, the
+  scope-switch settle comment, the measureViewport rAF-defer comment).
+- `src/lib/components/templates/FloatingActionButtonLayer.svelte`
+  (after the rewrite; the scale top-level docstring, the retainedConfig
+  / displayConfig comments).
+- `src/lib/utils/header-probe.ts` (`HeaderSettleTransition` docstring,
+  `startMorph` / `destMorph` field docstrings including the
+  `targetIsSearch` exception).
+- `src/lib/utils/route-config.ts` (top-level docstring, the four
+  consumer-config comments, `getCurrentTabIndex`, `backTargetListKind`,
+  `MOBILE_TABS`).
+- `src/lib/utils/nav-resolvers.ts` (top-level docstring, the
+  `TransitionPlan` / `RouteStack` / `ResolverInput` docstrings, all six
+  resolver comments, the dispatch comment).
+- `src/lib/utils/fab-scale.ts` (top-level docstring, `fabScale` cases,
+  `hideProgress`, `translateYFromHideProgress`).
+- e2e specs: `reproduce-dv20-drag-sync.spec.ts`,
+  `reproduce-dv20-search-swipe.spec.ts`, `messages-back-swipe.spec.ts`,
+  `header-tab-descent-cross-tab-exit.spec.ts`,
+  `deep-to-deep-gesture-morph-spike.spec.ts`,
+  `search-back-hamburger-flash.spec.ts`,
+  `search-enter-exit-asymmetry.spec.ts` (after the rewrite),
+  `tab-host-swipe.spec.ts`. Each spec's preamble, helper-docstrings, and
+  inline assertions describe the current publication chain, the
+  `settleMorphFraction` mechanism, and the slide-then-expand /
+  collapse-then-slide asymmetry.
+
+**Sibling regression sweep.** The "first/last tab" phrasing sweep caught
+three siblings of the `BOUNDARY_RUBBER_BAND_FACTOR` docstring (the
+`PendingGesture.boundary` field, the FAB scale boundary-swipe docstring,
+plus the gesture-constants constant itself). All three carried the same
+post-Fix-C inaccuracy and were rewritten together.
+
+**Out-of-scope doc fix.** `docs/RV21-C01-Audit-03.md` (the R3 audit file,
+written by the auditor) contained a U+2014 em dash at L10 that failed the
+`local/no-emdash` eslint rule and blocked `bun run lint`. Fixed
+(one-character substitution, "stale comments, a NEW class" replacing
+"stale comments - a NEW class") so the gate is green; the audit content
+is otherwise the auditor's.
+
+**Real command outputs.**
+
+```
+$ bun run check
+1785100555323 START "/home/losses/Development/janbao"
+1785100555327 COMPLETED 1469 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+
+$ bun run lint
+Checking formatting...
+All matched files use Prettier code style!
+[eslint clean]
+Total similar type pairs found: 62
+EXIT=0
+
+$ bunx tsc -p scripts/tsconfig.json --noEmit
+EXIT=0
+
+$ bun test src/lib
+552 pass / 0 fail / 2270 expect() calls across 40 files [2.16s]
+```
+
+Reproduce-spec spot check (comment-only edits must not change behaviour):
+
+```
+$ npx playwright test e2e/reproduce-dv20-drag-sync.spec.ts \
+    e2e/reproduce-dv20-search-swipe.spec.ts \
+    e2e/search-enter-exit-asymmetry.spec.ts \
+    -g "Bug 1|Bug 3|Bug 6|Bug 7|ENTER|EXIT|MIRROR" --retries=0 --workers=1
+Bug7 active windows: {
+  slideWin: { startT: 58, endT: 341 },
+  barWin:   { startT: 74, endT: 224 }
+}
+Bug7 bar-start minus slide-end = -267ms (negative = overlap)
+Bug3 forward-swipe: {
+  finalPath: '/search',
+  seenPills: [ '/messages/inbox' ],
+  hdrTrackTx: { range: 393, min: -393, max: 0, first: 0, last: -393 },
+  tabTrackTx: { range: 0, min: -786, max: -786, first: -786, last: -786 },
+  rootJumps:  { max: 0, maxAt: 0 },
+  deepJumps:  { max: 4.04, maxAt: 1731 },
+  burgerJumps:{ max: 0, maxAt: 0 }
+}
+EXIT collapse-before-slide: t=471ms morph=0.18 tabNorm=0.08 trackNorm=0.82
+ENTER slide-before-expand: t=304ms trackNorm=0.69 tabNorm=0.00
+ENTER sync maxDelta: 0.177 over 137 frames
+tap-EXIT sync maxDelta: 0.000 over 14 frames
+NB27 pre-nav rootLayerY min: 0
+NB27 post-nav rootLayerY min: 0 last: 0
+MIRROR SUMMARY: { enterSlideFirst: true, exitCollapseFirst: true }
+9 passed (49.5s)
+```
+
+The EXIT evidence (`morph=0.18 tabNorm=0.08 trackNorm=0.82`) confirms the
+rewritten bounds: at `pager.backMorph = 0.18` on a `/search` source,
+`searchProgress = 1 - 0.18 = 0.82`, `tabProgress = max(0, (0.82 - 0.8) /
+0.2) = 0.1` (so `tabNorm ≈ 0.08`, collapsed), and the track is at 0.82 of
+its peak (still slid). The slide-then-expand / collapse-then-slide
+asymmetry is structural in the consumer formulas and the test passes
+unchanged.
+
+**No code behaviour changed.** Every edit is a comment / docstring /
+spec-preamble / journal note. The R1 morph continuity mechanism, the
+publication chain, and the e2e assertion logic are all untouched. The
+full e2e gate is the orchestrator's, not run by the CMA.

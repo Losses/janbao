@@ -10,29 +10,26 @@ import { prepareContext, waitForHydration, swipeBack } from './helpers';
  * /profile/settings, both deep) the morph must stay a constant 0 the whole way:
  * both endpoints are deep, so the icon stays an arrow and the tabs stay hidden.
  *
- * The gesture-commit settle (Header.svelte Effect B → `morph` derived branch 2,
- * the `awaitTitle` arm) computes `target = targetHasTabs ? 1 : 0` from the LIVE
- * `navStore.backTarget`. On a deep→deep commit the reveal target is deep
- * (target 0) DURING the gesture, but the moment the navigation lands,
- * `backTargetFor` re-derives from the new stack top: /profile/settings's back
- * target is '/' (a TAB), so `targetHasTabs` flips false→true mid-settle. With
- * `settling` still true, `settleProgress` already ≈1 and `target` now 1, the
- * settle arm returns `current*(1-p) + target*p` ≈ 1 → morph spikes to 1 for the
- * flush(es) before Effect C/D end the settle. The Header has no CSS transition
- * (the morph derives from `settleProgress` each flush), so the latched-record
- * layer-style fix is the suppression: when settling consumers source endpoint
- * identity from the latched record (effectiveTabsOut/In) instead of the live
- * targetHasTabs, the one-frame internal spike cannot reach the layer styles.
+ * The morph continuity is structural (DV21 §5): the orchestrator's
+ * `#armSettleEaseFromGesture` special-cases `isDeepToDeep` (both endpoints
+ * have no tabs) by capturing `startMorph = 0` and `destMorph = 0`, so the
+ * Header's morph settle branch (a pure lerp from `startMorph` to `destMorph`
+ * across `settleMorphFraction`) is the constant 0 across the whole settle.
+ * The drag branch hardcodes 0 for the same shape and the at-rest branch
+ * returns 0 on a deep route, so the morph stays at 0 across the drag, the
+ * release handoff, the settle, and the landing. The Header has no CSS
+ * transition (the morph derivation re-evaluates each reactive flush).
  *
- * The back BUTTON does not spike: it is a popstate (no gesture), so Effect B
- * never fires and `morph` rests at `currentHasTabs ? 1 : 0` (= 0 on a deep
- * page) the entire time. The asymmetry between the gesture path (settle arm,
- * live target) and the click path (regular arm, prev/current) is the defect.
+ * The back BUTTON path stays at 0 for the same reason (no gesture arm;
+ * `notifyHeaderState`'s idle title-change arm captures `startMorph = 0`
+ * and `destMorph = 0` for a deep→deep shape, so the morph holds at 0
+ * while the title crossfade plays). Both the gesture path and the
+ * click path keep the morph at 0 across the whole transition.
  *
  * The DEV-only `window.__headerMorphProbe` (Header.svelte) pushes a per-flush
  * snapshot of every morph-state dep on each reactive flush, paint-independent,
- * so it catches the spike frame even when the navigation commit blocks the main
- * thread between paints (a rAF sampler would drop it).
+ * so it catches any frame where the morph leaves 0 even when the navigation
+ * commit blocks the main thread between paints (a rAF sampler would drop it).
  */
 
 test.beforeEach(async ({ context }) => {
@@ -85,9 +82,13 @@ async function clearProbe(page: Page): Promise<void> {
 }
 
 // A deep page is at morph 0 (icon arrow, tabs hidden). The morph must NEVER
-// leave the deep rest band during a deep→deep gesture: the drag arm hardcodes 0
-// (isDeepToDeep), the settle arm must hold 0, and the rest arm is 0. Any frame
-// above this epsilon is the commit-landing spike.
+// leave the deep rest band during a deep→deep gesture: the drag branch
+// hardcodes 0 (isDeepToDeep), the settle interpolation is the constant
+// lerp between `startMorph = 0` and `destMorph = 0` across
+// `settleMorphFraction`, and the at-rest branch returns 0 on a deep
+// route. Any frame above this epsilon is a regression of the morph
+// continuity fix (a snap out of and back to 0 at the release handoff
+// or the navigation landing).
 const DEEP_MORPH_EPSILON = 0.25;
 
 interface SpikeSummary {
@@ -205,12 +206,15 @@ test('CALIBRATION: back-button /profile/edit → /profile/settings keeps morph a
 		snaps.filter((s) => s.t >= startT).some((s) => s.path === '/profile/settings'),
 		'landed on /profile/settings'
 	).toBe(true);
-	// Same destination, no gesture: morph rests at 0 the whole way (no settle arm,
-	// no live-target flip). This passing alongside the DEFECT failing is the
-	// gesture/click asymmetry that makes the bug a gesture-only regression.
+	// Same destination reached the non-gesture way (header back-arrow
+	// click → popstate → discrete-nav). The discrete-nav branch skips the
+	// arm (both endpoints have no tabs) and `notifyHeaderState`'s idle
+	// title-change arm captures `startMorph = 0` / `destMorph = 0`, so the
+	// settle lerp stays at 0 across the title crossfade and the morph
+	// rests at 0 the whole way.
 	expect(
 		sum.maxMorph,
-		`back-button path must not spike (maxMorph=${sum.maxMorph.toFixed(3)})`
+		`back-button path must keep morph at 0 (maxMorph=${sum.maxMorph.toFixed(3)})`
 	).toBeLessThan(DEEP_MORPH_EPSILON);
 });
 

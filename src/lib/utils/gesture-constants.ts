@@ -5,9 +5,12 @@
 //      (`NavPipelineOrchestrator.#thresholdAbsorbedProgress`): the track
 //      does not move for the first 20% of a drag so a gesture beginning
 //      mid-transition does not snap back.
-//   2. Search tab-bar clip-collapse (`Header.svelte` `tabProgress`):
-//      `1 - min(1, morph / THRESHOLD)` so the SearchTabBar row collapses
-//      within the first 20% of a root<->search scrub.
+//   2. SearchTabBar clip-expand (`Header.svelte` `tabProgress`):
+//      `tabProgress = max(0, (searchProgress - (1 - HMT)) / HMT)` so the
+//      SearchTabBar row expands over `searchProgress` in [0.8, 1.0] (the
+//      last 20% of an ENTER scrub, slide-then-expand) and collapses over
+//      `searchProgress` in [1.0, 0.8] (the first 20% of an EXIT scrub,
+//      collapse-then-slide).
 // The Header back-arrow morph is NOT threshold-absorbed: it ramps 0..1
 // across the full drag via `pager.backMorph`.
 export const HEADER_MORPH_THRESHOLD = 0.2;
@@ -31,7 +34,9 @@ export const EDGE_DEAD_ZONE = 40;
 // drag-release or a non-gesture nav; the Header reads the published progress
 // and owns no rAF itself.
 export const TITLE_CROSSFADE_MS = 200;
-// Boundary void-swipe rubber-band factor. On the first/last tab a swipe toward
-// the absent neighbour moves the track at this fraction of the drag distance,
-// then snaps back on release.
+// Boundary void-swipe rubber-band factor. On the first tab a backward swipe
+// with no previous history entry moves the track at this fraction of the drag
+// distance, then snaps back on release. (The forward direction resolves every
+// tab to a target via `#nextTabTarget`, with the last tab resolving to
+// `/search`, so no forward boundary path remains.)
 export const BOUNDARY_RUBBER_BAND_FACTOR = 0.4;

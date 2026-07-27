@@ -146,7 +146,7 @@
 	 *  + FROM/TO FAB presence. At rest, visible iff the current route shows
 	 *  a FAB.
 	 *
-	 *  Boundary void-swipe (first/last tab rubber-band, where the
+	 *  Boundary void-swipe (first-tab backward rubber-band, where the
 	 *  orchestrator publishes `fromPathname === toPathname` and no route
 	 *  change occurs): the FAB reacts PROPORTIONALLY to the rubber-band,
 	 *  NOT via `fabScale`'s icon-handoff half-mapping. The half-mapping
@@ -158,7 +158,7 @@
 	 *  full drag, matching the track's reduced amplitude) keeps the FAB
 	 *  visible and still varies from the first drag frame. When the route
 	 *  has no FAB the scale stays 0. The e2e `fab-boundary-swipe-sync`
-	 *  spec asserts the dip (scale delta > 0.1 during a first/last-tab
+	 *  spec asserts the dip (scale delta > 0.1 during a first-tab
 	 *  void-swipe); the proportional reaction reaches delta ~0.4 at full
 	 *  drag, well above the threshold. */
 	const scale = $derived.by(() => {
