@@ -107,7 +107,7 @@ export interface DragFabAnchor {
  *     terminal FAB scale (stashed because the publication's `progress` resets
  *     1 -> 0 between the commit and the enter); `dest` is the host route's
  *     FAB presence (R8-A F4).
- *   - `#accelerateInFlight` at a discrete-nav interrupt of an enter settle:
+ *   - `#accelerateInFlight` at a discrete-nav interrupt of an in-flight settle:
  *     `start` is captured via `#fabScaleAtSettleInstant` before the arm
  *     clears the anchor; `dest` carries over the prior anchor's `dest`
  *     (R10-A F1).

@@ -560,8 +560,9 @@ export async function captureExitPreview(
 // `trigger`. The FAB atom binds `transform: scale(s) translateY(y)`; the scale
 // is driven by the global nav-pipeline orchestrator's per-frame publication of
 // `publication.progress`, which the FAB layer reads directly and maps through
-// `fabScale(publication.progress, fromHasFab, toHasFab)` (a half-mapping that
-// covers same- and cross-family transitions uniformly). A discrete swap that
+// `computeFabScale(inputs)` (the 5-branch derivation: boundary void-swipe,
+// suppressed tab, settle-owned enterAnchor lerp, dragAnchor shift, default
+// natural `fabScale(progress, fromHasFab, toHasFab)`). A discrete swap that
 // eases the scale therefore shows many distinct descending frames (a new
 // `publication.progress` each frame); a snap shows a one-frame jump.
 // `animated` (scale delta > 0.1) is the behavioural signal. The FAB atom

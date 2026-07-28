@@ -239,9 +239,10 @@ test.describe('Compose-as-module-child fix (FAB, Messages, chip)', () => {
 		});
 		// The discrete list -> compose route transition is eased by the
 		// orchestrator's per-frame publication of `publication.progress`
-		// (the FAB layer maps it through `fabScale(progress, fromHasFab,
-		// toHasFab)`, and the inline scale advances each frame via the
-		// reactive `style:transform` binding). The FAB atom carries no CSS
+		// (the FAB layer maps it through `computeFabScale`, whose default
+		// natural branch is `fabScale(progress, fromHasFab, toHasFab)`,
+		// and the inline scale advances each frame via the reactive
+		// `style:transform` binding). The FAB atom carries no CSS
 		// transition directive. The behavioural guard is `animated` (scale
 		// delta > 0.1).
 		expect(cap.animated, 'FAB atom scale eased across the swap').toBe(true);

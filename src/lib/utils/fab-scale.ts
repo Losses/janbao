@@ -153,7 +153,7 @@ export interface FabScaleInputs {
  *     Five reach paths set the anchor (see `EnterFabAnchor`): the
  *     commit-to-enter handoff (`start` = prior commit's terminal scale,
  *     `dest` = destination's resting scale, R8-A F4); the discrete-nav
- *     interrupt of an enter settle (R10-A F1); the gesture-release
+ *     interrupt of an in-flight settle (R10-A F1); the gesture-release
  *     settle (`start` = drag-terminal FAB value via
  *     `#fabScaleAtSettleInstant`, `dest` = destination's at-rest FAB
  *     presence on a commit, source's on a cancel, R12-B F1); the

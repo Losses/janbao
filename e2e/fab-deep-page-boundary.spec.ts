@@ -15,7 +15,8 @@ import { prepareContext, waitForHydration, openSidebarAndGoto, swipeBack, mintAd
  * FabRouteAttributes. The layer's `fabConfig` derivation resolves the `deep` kind
  * into a concrete list kind (for the icon / href) so the atom stays mounted (scale
  * 0 at rest, SSR-safe); the FAB layer drives its scale across the boundary via
- * `fabScale(progress, fromHasFab, toHasFab)` reading the NavPipelineHost track.
+ * `computeFabScale`'s default natural branch `fabScale(progress, fromHasFab,
+ * toHasFab)` reading the NavPipelineHost track.
  *
  * A per-frame rAF probe records BOTH the atom's presence and its resolved scale.
  * The regressions assert the trajectory SHAPE: the atom stays present through the

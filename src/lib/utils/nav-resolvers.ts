@@ -77,10 +77,11 @@ export type ProgressDirection = 0 | 1;
 
 /** The plan a resolver produces. §4's binding shape. Carries ONLY the
  *  page-track plan; the FAB layer reads the orchestrator's publication
- *  directly (`publication.progress` + `RouteData.fab`) and the Header
- *  reacts through its own `$derived` reads of the pager store + the
- *  orchestrator's settle / scrub getters. Neither consumer is driven
- *  by the plan. */
+ *  directly (`publication.progress`, `RouteData.fab`, and the boundary
+ *  / suppressed / anchor overrides) and folds them through
+ *  `computeFabScale`, and the Header reacts through its own `$derived`
+ *  reads of the pager store + the orchestrator's settle / scrub
+ *  getters. Neither consumer is driven by the plan. */
 export interface TransitionPlan {
 	readonly pageTrack: PageTrackPlan;
 	readonly progressDirection: ProgressDirection;

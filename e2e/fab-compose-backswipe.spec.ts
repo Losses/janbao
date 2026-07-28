@@ -7,9 +7,10 @@ import { prepareContext, waitForHydration, swipeBack, openSidebarAndGoto } from 
  * These specs guard two invariants of the FAB scale signal:
  *
  *  1. The compose family reads the orchestrator's `publication.progress`
- *     (like the overlay family) via `fabScale(progress, fromHasFab, toHasFab)`,
- *     so the FAB follows the finger during a drag back-swipe from a compose route
- *     toward its source list, scaling in over the last 50% of the gesture.
+ *     (like the overlay family) via `computeFabScale` (default natural
+ *     branch `fabScale(progress, fromHasFab, toHasFab)`), so the FAB follows
+ *     the finger during a drag back-swipe from a compose route toward its
+ *     source list, scaling in over the last 50% of the gesture.
  *  2. A cross-tab tap from a compose route is intercepted by the pipeline
  *     orchestrator, which publishes `publication.progress` across the slide so the FAB
  *     stays hidden for a destination without a resting FAB.

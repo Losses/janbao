@@ -102,7 +102,8 @@ async function capturePilotBackSwipe(
 					}
 					// Sample the FAB atom's scale. The FAB layer reads
 					// the orchestrator's `publication.progress`
-					// reactively (via `fabScale(progress, fromHasFab,
+					// reactively (via `computeFabScale`, whose default
+					// natural branch is `fabScale(progress, fromHasFab,
 					// toHasFab)`) and writes the atom's `transform:
 					// scale(...)`. The e2e asserts the scale transitions
 					// during the commit slide so the FAB tracks the
@@ -590,8 +591,9 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		).toBeLessThan(-50);
 
 		// The forward-enter's target is the conversation (overlay family, no
-		// resting FAB). The FAB scales 1->0 across the enter via the reactive
-		// `fabScale(progress, fromHasFab=true, toHasFab=false)` half-mapping
+		// resting FAB). The FAB scales 1->0 across the enter via
+		// `computeFabScale`'s default natural branch
+		// `fabScale(progress, fromHasFab=true, toHasFab=false)`
 		// (max(0, 1 - progress*2): reaches 0 at progress 0.5 and holds at 0 through
 		// landing), so the FAB never spikes back up. Sample the FAB scale across the
 		// enter and assert

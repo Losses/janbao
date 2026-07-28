@@ -14,10 +14,11 @@
  *
  * The driver writes ONLY the page track. The FAB and Header are
  * reactive readers: the FAB layer reads the orchestrator's publication
- * directly (`publication.progress` + `RouteData.fab`) and the Header
- * reacts through its own `$derived` reads of the pager store + the
- * orchestrator's settle / scrub getters. Neither is driven by this
- * interface.
+ * directly (`publication.progress`, `RouteData.fab`, and the boundary
+ * / suppressed / anchor overrides) and folds them through
+ * `computeFabScale`, and the Header reacts through its own `$derived`
+ * reads of the pager store + the orchestrator's settle / scrub
+ * getters. Neither is driven by this interface.
  *
  * Implementations: `MockNavDomDriver` (unit tests) and
  * `LiveNavDomDriver` (production, constructed by the orchestrator).

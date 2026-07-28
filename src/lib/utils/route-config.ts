@@ -113,9 +113,10 @@ const FAB_ROUTE_ATTRIBUTES: readonly FabRouteAttributes[] = [
 	{ pattern: /^\/discussion\//, kind: 'discussions' },
 	{ pattern: /^\/messages\/\d/, kind: 'messages' },
 
-	// Family C: compose forms (the FAB scale is fabScale(publication.progress,
-	// fromHasFab, toHasFab), driven by the orchestrator's publication.progress
-	// and FROM/TO RouteData.fab).
+	// Family C: compose forms (the FAB scale is `computeFabScale(...)`'s
+	// default natural branch `fabScale(publication.progress, fromHasFab,
+	// toHasFab)`, driven by the orchestrator's publication.progress and
+	// FROM/TO RouteData.fab).
 	{ pattern: /^\/post\/discussion$/, kind: 'discussions' },
 	{ pattern: /^\/messages\/new$/, kind: 'messages' },
 	// /messages/add/[userId] shares MessageCompose with /messages/new; the
@@ -123,7 +124,8 @@ const FAB_ROUTE_ATTRIBUTES: readonly FabRouteAttributes[] = [
 	{ pattern: /^\/messages\/add\//, kind: 'messages' },
 
 	// Family B 'deep': non-FAB deep routes whose atom stays mounted at scale 0
-	// so fabScale(publication.progress, fromHasFab, toHasFab) drives the scale
+	// so `computeFabScale(...)`'s default natural branch
+	// `fabScale(publication.progress, fromHasFab, toHasFab)` drives the scale
 	// across the list<->deep boundary (orchestrator's publication.progress
 	// and FROM/TO RouteData.fab).
 	{ pattern: /^\/bookmarks$/, kind: 'deep' },

@@ -107,9 +107,9 @@
 
 	// Retain the last non-null FAB config so the atom stays mounted across
 	// every route, including ones with no FAB of their own (e.g. /activity,
-	// /bookmarks, /profile/*). The half-mapping drives the scale to 0 on
-	// those routes (RouteData.fab is false), but the atom must persist so
-	// the scale-in/out has a stable target.
+	// /bookmarks, /profile/*). `computeFabScale`'s default natural branch
+	// drives the scale to 0 on those routes (RouteData.fab is false), but
+	// the atom must persist so the scale-in/out has a stable target.
 	let retainedConfig = $state<FabConfig | null>(null);
 	$effect(() => {
 		if (fabConfig !== null) retainedConfig = fabConfig;

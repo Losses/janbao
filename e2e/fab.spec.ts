@@ -20,13 +20,14 @@ import {
  *   - scale (route transition): scale 1 at rest on a list route, 0 at rest on
  *     overlay / compose routes, scaling through the first/last 50% of a route
  *     transition. The FAB layer is a pure reactive reader of the
- *     orchestrator's `publication.progress`, mapped through the single
- *     half-mapping `fabScale(publication.progress, fromHasFab, toHasFab)`
- *     (where `fromHasFab`/`toHasFab` come from `RouteData.fab`). There is no
- *     separate rAF and no DOM read-back; every motion channel is published by
- *     the orchestrator each frame, and the half-mapping covers Family A
- *     (tab swipe), Family B (thread/conversation enter/exit) and Family C
- *     (compose) uniformly.
+ *     orchestrator's `publication.progress`, mapped through `computeFabScale`
+ *     (the 5-branch derivation: boundary void-swipe, suppressed tab,
+ *     settle-owned enterAnchor lerp, dragAnchor shift, default natural
+ *     `fabScale(progress, fromHasFab, toHasFab)` where `fromHasFab`/`toHasFab`
+ *     come from `RouteData.fab`). There is no separate rAF and no DOM
+ *     read-back; every motion channel is published by the orchestrator each
+ *     frame, and `computeFabScale` covers Family A (tab swipe), Family B
+ *     (thread/conversation enter/exit) and Family C (compose) uniformly.
  *   - translateY (scroll hide): slides off the bottom edge in lockstep with
  *     the Header's hide-on-scroll (driven by the shared scroll-chrome store).
  *
@@ -314,8 +315,9 @@ test('activity tab has no visible FAB at rest', async ({ page }) => {
 	await waitForHydration(page);
 	await page.waitForTimeout(300);
 	// The atom mounts at scale 0 so it can scale in during a swipe from
-	// /activity to a FAB route (the half-mapping publishes scale > 0 in
-	// the second half of the transition). At rest the atom is invisible.
+	// /activity to a FAB route (`computeFabScale`'s default natural branch
+	// publishes scale > 0 in the second half of the transition). At rest
+	// the atom is invisible.
 	const transform = await readFabTransform(page);
 	expect(transform.scale, 'FAB must rest at scale 0 on the Activity tab').toBeCloseTo(0, 1);
 });
@@ -346,9 +348,9 @@ test('compose route shows the FAB at scale 0 (no flash of scale 1)', async ({ pa
 
 // Family A: a tab swipe scales the FAB out as a TRAJECTORY (not a step). The
 // orchestrator's `publication.progress` is continuous 1:1 with the finger, so
-// the FAB scale (derived from `fabScale(publication.progress, fromHasFab,
-// toHasFab)`) ramps from 1 toward 0 across the drag and snaps the rest of the
-// way on release.
+// the FAB scale (the default natural branch of `computeFabScale`,
+// `fabScale(publication.progress, fromHasFab, toHasFab)`) ramps from 1 toward
+// 0 across the drag and snaps the rest of the way on release.
 test('Family A: tab swipe scales the FAB out as a monotonic trajectory', async ({ page }) => {
 	await page.goto('/');
 	await waitForHydration(page);
@@ -386,9 +388,10 @@ test('Family A: tab swipe scales the FAB out as a monotonic trajectory', async (
 // Family B forward: tapping a discussion card slides the thread in over the
 // list (NavPipelineHost enter animation). The orchestrator's executor
 // publishes `publication.progress` 0 -> 1 each frame; the FAB layer's
-// `fabScale(progress, fromHasFab, toHasFab)` (a list-source gesture targeting an
-// overlay/deep route) drives the scale down across the slide (first-half
-// disappear) and rests near 0 on the thread.
+// `computeFabScale` default natural branch `fabScale(progress, fromHasFab,
+// toHasFab)` (a list-source gesture targeting an overlay/deep route) drives
+// the scale down across the slide (first-half disappear) and rests near 0
+// on the thread.
 test('Family B forward: list -> thread scales the FAB out as a monotonic trajectory', async ({
 	page
 }) => {
@@ -999,9 +1002,10 @@ const SAMPLER_WINDOW_MS = 1800;
  * because it resolves the transform string to a `matrix(a, b, c, d, tx, ty)`
  * form, so the sampler reads the scale component `a` directly. The
  * orchestrator publishes a new `publication.progress` each frame; the FAB
- * layer's reactive `scale` derived (from `fabScale(publication.progress,
- * fromHasFab, toHasFab)`) writes a new inline `style.transform` each frame,
- * so the resolved value advances every frame across the ease.
+ * layer's reactive `scale` derived (from `computeFabScale`, whose default
+ * natural branch is `fabScale(publication.progress, fromHasFab, toHasFab)`)
+ * writes a new inline `style.transform` each frame, so the resolved value
+ * advances every frame across the ease.
  * miss the easing trajectory.
  */
 async function sampleFabScale(

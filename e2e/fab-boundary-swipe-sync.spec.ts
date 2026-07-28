@@ -18,14 +18,13 @@ import {
  * (`startProgress + Math.max(0, rawDrag) * BOUNDARY_RUBBER_BAND_FACTOR`), so
  * `fromPathname === toPathname` and the raw drag progress is published on its
  * per-frame publication. The FAB layer is a reactive reader of that same
- * publication. On a real transition it computes
- * `fabScale(publication.progress, fromHasFab, toHasFab)`, the icon-handoff
- * half-mapping that dips to 0 at progress=0.5, but on a boundary void-swipe
- * (the very condition the first-tab test exercises) the FAB does NOT use
- * `fabScale`; it reacts proportionally to the rubber-band via
- * `1 - progress * BOUNDARY_RUBBER_BAND_FACTOR` (reaching 0.6 at full drag),
- * so the FAB stays visible and tracks the reduced-amplitude drag from the
- * first frame.
+ * publication. It folds the publication into `computeFabScale`, whose branch
+ * 1 (boundary void-swipe) reacts proportionally to the rubber-band via
+ * `1 - progress * BOUNDARY_RUBBER_BAND_FACTOR` (reaching 0.6 at full drag)
+ * instead of the default natural `fabScale(progress, fromHasFab, toHasFab)`
+ * icon-handoff that dips to 0 at progress=0.5 (an over-reaction to a ~40%
+ * track displacement), so the FAB stays visible and tracks the
+ * reduced-amplitude drag from the first frame.
  *
  * The LAST-tab test exercises a DIFFERENT gesture: a leftward (forward) swipe
  * at the last tab on a bidirectional host resolves to `/search` via
@@ -34,12 +33,13 @@ import {
  * plus the live `backMorph`, and the body slide is suppressed
  * (`#resolvePlan`'s third `suppressSlide` case: a forward-to-`/search` swipe
  * from the last tab has no panel to reveal, so `distance = 0`). The FAB
- * animates via the natural `fabScale(progress, fromHasFab, toHasFab)`
- * formula (from-only-FAB shape: 1 at rest, 0 at progress=1), NOT via the
- * boundary rubber-band proportional reaction. The test asserts the FAB scale
- * varied (delta > 0.1), which holds under both mechanisms; the second guard
- * below asserts the gesture lands on `/search` and uses the slide-suppressed
- * `fabScale` path (not the boundary rubber-band).
+ * animates via `computeFabScale`'s default natural branch
+ * `fabScale(progress, fromHasFab, toHasFab)` (from-only-FAB shape: 1 at rest,
+ * 0 at progress=1), NOT via branch 1's boundary rubber-band proportional
+ * reaction. The test asserts the FAB scale varied (delta > 0.1), which holds
+ * under both mechanisms; the second guard below asserts the gesture lands on
+ * `/search` and uses the slide-suppressed natural-`fabScale` path (not the
+ * boundary rubber-band).
  *
  * Each test asserts the FAB scale varied (delta > 0.1). A delta near 0 means
  * the FAB is pinned at its resting scale and is not tracking the gesture.

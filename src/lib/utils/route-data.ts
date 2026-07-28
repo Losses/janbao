@@ -36,13 +36,15 @@ export interface RouteData {
 	/**
 	 * Whether the FAB is visible at rest on this page. The FAB layer
 	 * (`FloatingActionButtonLayer.svelte`) reads the from/to fab booleans
-	 * directly off each transition's `RouteData` to drive
-	 * `fabScale(progress, fromHasFab, toHasFab)`; the resolver does NOT
-	 * read this field (the plan it returns is page-track-only, as
-	 * asserted by `nav-resolvers.test.ts`'s `plan shape: page-track
-	 * only`). The FAB atom also stays mounted at scale 0 on Family
-	 * B/C routes; that mount decision is a Layer 5 concern that reads
-	 * the consumer FAB-route-attributes config, not this boolean.
+	 * directly off each transition's `RouteData` as the FROM/TO inputs
+	 * to `computeFabScale` (the 5-branch derivation: boundary,
+	 * suppressed, enterAnchor lerp, dragAnchor shift, natural); the
+	 * resolver does NOT read this field (the plan it returns is
+	 * page-track-only, as asserted by `nav-resolvers.test.ts`'s `plan
+	 * shape: page-track only`). The FAB atom also stays mounted at
+	 * scale 0 on Family B/C routes; that mount decision is a Layer 5
+	 * concern that reads the consumer FAB-route-attributes config, not
+	 * this boolean.
 	 */
 	readonly fab: boolean;
 }

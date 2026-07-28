@@ -142,7 +142,8 @@ interface PendingGestureTransition {
 	/** The raw drag fraction at gesture start (the commit's last
 	 *  published raw for a re-grab, 0 for from-rest). The live-drag's
 	 *  published progress starts from here so the slide (and the FAB
-	 *  half-mapping that reads it) does not jump on a re-grab. */
+	 *  scale, derived from this progress via `computeFabScale`) does
+	 *  not jump on a re-grab. */
 	readonly rawStart: number;
 	/** The gesture's transition direction. 'backward' = rightward
 	 *  (toward the previous tab / back-target); 'forward' = leftward
@@ -759,13 +760,25 @@ export class NavPipelineOrchestrator {
 	 *      `#priorTerminalFabScale` because the publication's `progress`
 	 *      resets 1 -> 0 between the commit and the enter); `dest` is the
 	 *      host route's FAB presence (R8-A F4).
-	 *   2. `#accelerateInFlight` at a discrete-nav interrupt of an enter
-	 *      settle: `start` is the FAB value captured via
-	 *      `#fabScaleAtSettleInstant` BEFORE the arm clear; `dest` carries
-	 *      over the prior anchor's `dest` (the accelerate preserves
-	 *      endpoints, R10-A F1). Skipped when no enter anchor was set
-	 *      (non-enter settle being accelerated); the capture reads the
-	 *      natural formula, no snap.
+	 *   2. `#accelerateInFlight` at a discrete-nav interrupt of an
+	 *      in-flight settle (R10-A F1): `start` is the FAB value
+	 *      captured via `#fabScaleAtSettleInstant` BEFORE the arm
+	 *      clear; `dest` carries over the prior anchor's `dest` (the
+	 *      accelerate preserves endpoints). The capture is non-null
+	 *      here because the commit slide is in flight at the
+	 *      accelerate instant (`pub.inFlight === true`, so the
+	 *      `!pub.inFlight` short-circuit in `#fabScaleAtSettleInstant`
+	 *      does not fire). For an anchor-set settle being accelerated
+	 *      (gesture-release, discrete-nav, mid-settle absorb, R12-B
+	 *      F1 siblings that set `#enterFabAnchor`) the FAB layer
+	 *      reads branch 3 (enterAnchor lerp), not branch 5 (natural
+	 *      formula); the re-seed's skip guard is
+	 *      `prevEnterFabAnchor !== null`, and the capture via
+	 *      `#fabScaleAtSettleInstant` mirrors branch 3 (single source
+	 *      of truth). The re-seed is skipped when the in-flight
+	 *      settle was armed by a path that left `#enterFabAnchor`
+	 *      null at the arm (from-rest discrete-nav or fresh-enter);
+	 *      the FAB layer then reads branch 5 end-to-end.
 	 *   3. `#armSettleEaseFromGesture` at a gesture release: `start` is the
 	 *      FAB value captured via `#fabScaleAtSettleInstant` BEFORE the
 	 *      arm clear; `dest` is the destination's (commit) or source's
@@ -782,18 +795,27 @@ export class NavPipelineOrchestrator {
 	 *      `#fabScaleAtSettleInstant` BEFORE the arm clear; `dest` is the
 	 *      destination's at-rest FAB presence (the arm always targets
 	 *      `settleTargetProgress = 1`, R12-B F1 sibling). For a from-rest
-	 *      tab-click (no live drag) the capture reads the natural formula
-	 *      and the re-seed is a no-op; for a re-grab (a drag that took
-	 *      over an in-flight settle) the capture mirrors the
-	 *      dragAnchor-shifted value, which the natural formula would
-	 *      otherwise snap from at the new `startProgress`.
+	 *      tab-click (no live drag) the publication is at rest at the
+	 *      capture moment, so `#fabScaleAtSettleInstant` returns `null`
+	 *      (its `!pub.inFlight` guard short-circuits); the re-seed's
+	 *      `if (capturedFabScale !== null)` guard skips, leaving
+	 *      `#enterFabAnchor` null so the FAB layer reads branch 5 (the
+	 *      natural `fabScale(progress, ...)` formula) end-to-end across
+	 *      the settle. For a re-grab (a drag that took over an in-flight
+	 *      settle) the capture mirrors the dragAnchor-shifted value,
+	 *      which the natural formula would otherwise snap from at the new
+	 *      `startProgress`.
 	 *   5. The `notifyHeaderState` mid-settle absorb when a dynamic-title
 	 *      route resolves a new title mid-enter: `start` is the FAB value
 	 *      captured via `#fabScaleAtSettleInstant` BEFORE the arm clear;
 	 *      `dest` is the new endpoint's at-rest FAB presence selected by
 	 *      `settleTargetProgress` (commit -> incoming, cancel -> outgoing,
-	 *      R12-B F1 sibling). For a non-enter settle being re-armed the
-	 *      capture reads the natural formula and the re-seed is a no-op.
+	 *      R12-B F1 sibling). For an anchor-set non-enter settle being
+	 *      re-armed (gesture-release, discrete-nav, accelerate-in-flight)
+	 *      the FAB layer reads branch 3 and the re-seed is required for
+	 *      boundary continuity; only the idle title-change arm (from-rest
+	 *      same-tab-ness navs) leaves `#enterFabAnchor` null at the
+	 *      capture so the null-guard skips the re-seed.
 	 *
 	 *  Cleared at the next settle arm (canonical single-site reset inside
 	 *  `#armSettleEase`), `#landAtRest`, and `unmount`. */
@@ -817,10 +839,11 @@ export class NavPipelineOrchestrator {
 	}
 
 	/** Reactive publication for downstream consumers. The FAB layer reads
-	 *  this directly (`progress` + FROM/TO FAB presence drive its
-	 *  half-mapping scale); the host components read `publication` via
-	 *  `$derived` to drive their reactive templates. The orchestrator is
-	 *  the sole writer of the in-flight pager state: `#publish` ->
+	 *  this directly (`progress`, FROM/TO FAB presence, and the boundary
+	 *  / suppressed / anchor overrides drive its `computeFabScale`
+	 *  derivation); the host components read `publication` via `$derived`
+	 *  to drive their reactive templates. The orchestrator is the sole
+	 *  writer of the in-flight pager state: `#publish` ->
 	 *  `#republishToPager` writes the pager fields on every drag-move /
 	 *  commit-tick so the Header layer (reader of `backMorph`) reacts to
 	 *  the orchestrator's state. Hosts call only `resetPagerStore()` for
@@ -901,11 +924,11 @@ export class NavPipelineOrchestrator {
 	get dragFabAnchor(): DragFabAnchor | null {
 		return this.#dragFabAnchor;
 	}
-	/** Reactive read of the enter animation's FAB anchor. Read by the
-	 *  FAB layer's scale derivation during the enter settle to lerp from
-	 *  the prior commit's terminal FAB scale to the destination route's
-	 *  resting scale across `settleMorphFraction` (no snap at the
-	 *  commit-to-enter handoff). null outside the enter settle. */
+	/** Reactive read of the enter FAB anchor. Read by the FAB layer's
+	 *  scale derivation during any settle that set the anchor (five
+	 *  reach paths; see the `#enterFabAnchor` field docstring). null
+	 *  when no settle has set the anchor (the canonical clear runs at
+	 *  the top of `#armSettleEase`, plus `#landAtRest` and `unmount`). */
 	get enterFabAnchor(): EnterFabAnchor | null {
 		return this.#enterFabAnchor;
 	}
@@ -1086,10 +1109,13 @@ export class NavPipelineOrchestrator {
 				distance: w,
 				restingTranslate: 0
 			},
-			// During the enter, the FAB layer reads the orchestrator's
-			// publication directly (progress + FROM/TO FAB presence) to drive
-			// its scale via the half-mapping. The Header morph during the
-			// enter is NOT driven by `backMorph` (which is read only during a
+			// During the enter, the FAB layer reads branch 3 (enterAnchor
+			// lerp via `computeFabScale`) once `#enterFabAnchor` is seeded
+			// below; for a fresh-enter (`#priorTerminalFabScale === null`)
+			// the anchor is never set and the FAB layer reads branch 5 (the
+			// natural `fabScale(progress, ...)` formula) end-to-end. The
+			// Header morph during the enter is NOT driven by `backMorph`
+			// (which is read only during a
 			// live drag); it is driven by the settle ease armed at the bottom
 			// of this method. The latched `startMorph` is the source route's
 			// at-rest morph and `destMorph` is the host route's at-rest
@@ -2554,9 +2580,13 @@ export class NavPipelineOrchestrator {
 		// (R14 F1): the capture must read the drag's plan scale and
 		// endpoints, not the post-reset post-dispatch values the new
 		// settle will operate on. For a from-rest tab-click (no live drag)
-		// the publication is at rest and the capture equals the source's
-		// at-rest FAB presence; the re-seed below is a no-op for that
-		// shape. For a re-grab (a drag that took over an in-flight settle,
+		// the publication is at rest at the capture moment, so
+		// `#fabScaleAtSettleInstant` returns `null` (its `!pub.inFlight`
+		// guard short-circuits); the re-seed below's
+		// `if (capturedFabScale !== null)` guard skips, leaving
+		// `#enterFabAnchor` null so the FAB layer reads branch 5 (the
+		// natural `fabScale(progress, ...)` formula) end-to-end across
+		// the settle. For a re-grab (a drag that took over an in-flight settle,
 		// so `#dragFabAnchor` was set) the capture mirrors the
 		// dragAnchor-shifted value the FAB layer was rendering at the
 		// interrupt, and the re-seed lerps from that value to the
@@ -2735,9 +2765,13 @@ export class NavPipelineOrchestrator {
 				// re-seed's `dest` is the destination's at-rest FAB presence
 				// (`toHasFab ? 1 : 0`; the discrete-nav arm always targets
 				// `settleTargetProgress = 1`); for a from-rest tab-click the
-				// captured value equals the source's at-rest FAB presence
-				// and the re-seed's lerp endpoint matches the natural
-				// formula's post-arm value (no-op). For a re-grab the
+				// publication is at rest at the capture moment, so
+				// `#fabScaleAtSettleInstant` returns `null` (its
+				// `!pub.inFlight` guard short-circuits) and the re-seed's
+				// `if (capturedFabScale !== null)` guard skips, leaving
+				// `#enterFabAnchor` null so the FAB layer reads branch 5
+				// (the natural `fabScale(progress, ...)` formula)
+				// end-to-end across the settle. For a re-grab the
 				// captured value is the dragAnchor-shifted value the FAB
 				// layer was rendering at the interrupt; the re-seed lerps
 				// from that value to the destination's at-rest FAB scale
@@ -2888,10 +2922,20 @@ export class NavPipelineOrchestrator {
 		//   - `playEnterAnimation` (commit-to-enter handoff, R8-A F4):
 		//     stashes the prior terminal scale into
 		//     `#priorTerminalFabScale` and re-seeds from it.
-		//   - `#accelerateInFlight` (discrete-nav interrupt of an enter
-		//     settle, R10-A F1): captures the live FAB value via
-		//     `#fabScaleAtSettleInstant` and re-seeds from that; skipped
-		//     when no enter anchor was set (non-enter settle).
+		//   - `#accelerateInFlight` (discrete-nav interrupt of an
+		//     in-flight settle, R10-A F1): captures the live FAB value
+		//     via `#fabScaleAtSettleInstant` (non-null: the commit slide
+		//     is in flight at the accelerate instant, so
+		//     `pub.inFlight === true`) and re-seeds from that; the
+		//     re-seed's skip guard is `prevEnterFabAnchor !== null`, so
+		//     for an anchor-set settle being accelerated (gesture-
+		//     release, discrete-nav, mid-settle absorb, R12-B F1
+		//     siblings that set `#enterFabAnchor`) the FAB layer reads
+		//     branch 3 (enterAnchor lerp) and the re-seed is required
+		//     for boundary continuity, while for a path that left
+		//     `#enterFabAnchor` null at the arm (from-rest discrete-nav
+		//     or fresh-enter) the guard skips the re-seed and the FAB
+		//     layer reads branch 5 end-to-end.
 		//   - `#armSettleEaseFromGesture` (gesture release, R12-B F1):
 		//     captures the live FAB value via `#fabScaleAtSettleInstant`
 		//     and re-seeds from that for every release; for symmetric
@@ -2902,15 +2946,24 @@ export class NavPipelineOrchestrator {
 		//     / `goto` / popstate interrupt of an in-flight drag or
 		//     settle, R12-B F1 sibling): captures the live FAB value via
 		//     `#fabScaleAtSettleInstant` and re-seeds from that; for a
-		//     from-rest tab-click the capture reads the natural formula
-		//     and the re-seed is a no-op, for a re-grab it mirrors the
+		//     from-rest tab-click the publication is at rest at the
+		//     capture moment, so `#fabScaleAtSettleInstant` returns
+		//     `null` (its `!pub.inFlight` guard short-circuits) and the
+		//     re-seed's `if (capturedFabScale !== null)` guard skips,
+		//     leaving `#enterFabAnchor` null so the FAB layer reads
+		//     branch 5 (the natural `fabScale(progress, ...)` formula)
+		//     end-to-end across the settle; for a re-grab it mirrors the
 		//     dragAnchor-shifted value the FAB layer was rendering.
 		//   - The `notifyHeaderState` mid-settle absorb (a dynamic-title
 		//     route resolves a new title mid-enter, R12-B F1 sibling):
 		//     captures the live FAB value via `#fabScaleAtSettleInstant`
-		//     and re-seeds from that; for a non-enter settle being
-		//     re-armed the capture reads the natural formula and the
-		//     re-seed is a no-op.
+		//     and re-seeds from that; for an anchor-set non-enter
+		//     settle being re-armed (gesture-release, discrete-nav,
+		//     accelerate-in-flight) the FAB layer reads branch 3 and
+		//     the re-seed is required for boundary continuity, while
+		//     for the idle title-change arm (from-rest same-tab-ness
+		//     navs) the capture returns null and the null-guard skips
+		//     the re-seed.
 		// The clear and any post-arm re-seed happen in the caller's same
 		// synchronous block, so Svelte's reactive flush sees only the
 		// re-seeded `#enterFabAnchor`: the FAB layer's `$derived` re-runs
@@ -3420,15 +3473,24 @@ export class NavPipelineOrchestrator {
 		// anchor AFTER the arm so the FAB scale derivation continues from
 		// the visual it was rendering at the accelerate instant (DV21 §5:
 		// no FAB snap at the re-arm). The capture reads the live anchor
-		// state through `#fabScaleAtSettleInstant`, so for an enter settle
-		// it equals the displayed enterAnchor lerp value; the re-seed's
-		// `dest` carries over the prior anchor's `dest` (the destination's
-		// resting FAB presence, which does not change because the
-		// accelerate preserves endpoints). For a non-enter settle being
-		// accelerated (no anchor was set before the arm) the re-seed is
-		// skipped and the FAB layer keeps reading the natural
-		// `fabScale(progress, ...)` formula, which the capture also read,
-		// so no snap is introduced either way.
+		// state through `#fabScaleAtSettleInstant`; the commit slide is
+		// in flight at the accelerate instant, so `pub.inFlight === true`
+		// and the capture is non-null (the `!pub.inFlight` short-circuit
+		// in `#fabScaleAtSettleInstant` does not fire here). For an enter
+		// settle the captured value equals the displayed enterAnchor
+		// lerp. The re-seed's `dest` carries over the prior anchor's
+		// `dest` (the destination's resting FAB presence, which does not
+		// change because the accelerate preserves endpoints). For an
+		// anchor-set settle being accelerated (gesture-release, discrete-
+		// nav, mid-settle absorb, R12-B F1 siblings that set
+		// `#enterFabAnchor`) the FAB layer reads branch 3, so the re-seed
+		// fires whenever `prevEnterFabAnchor !== null` and the capture
+		// mirrors branch 3 (single source of truth); the re-seed is
+		// skipped when the in-flight settle was armed by a path that left
+		// `#enterFabAnchor` null at the arm (from-rest discrete-nav or
+		// fresh-enter), in which case the FAB layer reads branch 5 (the
+		// natural `fabScale(progress, ...)` formula) end-to-end and no
+		// snap is introduced.
 		if (this.#stateMachine.settleActive && this.#stateMachine.settleLatched !== null) {
 			const prevLatched = this.#stateMachine.settleLatched;
 			const prevEnterFabAnchor = this.#enterFabAnchor;
@@ -3664,10 +3726,19 @@ export class NavPipelineOrchestrator {
 					// clears `#enterFabAnchor` (DV21 §5 sibling-visual
 					// rule: the FAB tier needs the same in-flight
 					// capture the morph tier made above as `startMorph`).
-					// For a non-enter settle being re-armed the
-					// publication's FAB reads the natural formula at the
-					// current `settleProgress` and the re-seed's `start`
-					// equals the post-arm natural-formula value (no-op).
+					// For an anchor-set non-enter settle being re-armed
+					// (gesture-release, discrete-nav,
+					// accelerate-in-flight) the FAB layer reads branch 3
+					// (enterAnchor lerp via `computeFabScale`), not
+					// branch 5; the capture via
+					// `#fabScaleAtSettleInstant` mirrors branch 3
+					// (single source of truth), and the re-seed is
+					// required for boundary continuity for the same
+					// reason as the enter-settle case below. The only
+					// no-op case is the idle title-change arm (from-rest
+					// same-tab-ness navs): `#enterFabAnchor` is null at
+					// the capture, so the null-guard skips the re-seed
+					// and the FAB layer reads branch 5 end-to-end.
 					// For an enter settle being re-armed (a different
 					// title arriving mid-enter on a dynamic-title route)
 					// the capture mirrors the enterAnchor lerp value the
@@ -3853,7 +3924,7 @@ export class NavPipelineOrchestrator {
 	 *   - `#onExecutorSettle` stashes `#priorTerminalFabScale` for
 	 *     `playEnterAnimation`'s commit-to-enter handoff (R8-A F4).
 	 *   - `#accelerateInFlight` captures the in-flight FAB value to
-	 *     re-seed `#enterFabAnchor` when accelerating an enter settle
+	 *     re-seed `#enterFabAnchor` when accelerating an in-flight settle
 	 *     (R10-A F1).
 	 *   - `#armSettleEaseFromGesture` captures the drag-terminal FAB
 	 *     value to seed `#enterFabAnchor` for the release settle, so the
@@ -4071,8 +4142,8 @@ export class NavPipelineOrchestrator {
 	 *  slide range. The track translate is unaffected: `trackTranslateX`
 	 *  is linear and well-defined for any progress, so it carries the
 	 *  out-of-range value transiently while the publication stays
-	 *  bounded. Downstream consumers (FAB scale via `fabScale`, Header
-	 *  morph via `BurgerArrowIcon`) self-clamp their outputs too, so the
+	 *  bounded. Downstream consumers (FAB scale via `computeFabScale`,
+	 *  Header morph via `BurgerArrowIcon`) self-clamp their outputs too, so the
 	 *  clamp here is the central contract that lets those consumers
 	 *  assume a bounded input. */
 	#publish(rawDragFraction: number): void {

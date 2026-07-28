@@ -9,7 +9,8 @@ import { prepareContext, waitForHydration, swipeForward, swipeBack } from './hel
 //      the resting m41). A snap or a no-op driver fails this.
 //   2. The FAB animates (scale delta > 0.1). The orchestrator publishes
 //      `publication.progress` across the slide and the FAB layer maps it
-//      through `fabScale(progress, fromHasFab, toHasFab)`.
+//      through `computeFabScale` (default natural branch `fabScale(progress,
+//      fromHasFab, toHasFab)`).
 //   3. The Header stays in hamburger mode (the icon's mask group never
 //      rotates toward the back-arrow). This is the regression test for the
 //      orchestrator's tab-host pager publication: when `centerTab ===
