@@ -164,15 +164,15 @@
 			// vertical layer group (MobileTabBar / deep title) holds at the
 			// source's tab-ness so the bar slides off-screen with panel 0
 			// (no diagonal motion). The settle that takes over at release
-			// HOLDs the morph at this held value: `#armSettleEaseFromGesture`
-			// captures `startMorph = atRestMorph(outgoingHasTabs)` and sets
-			// `destMorph = startMorph` for the `targetIsSearch` shape, so
-			// the lerp across `settleMorphFraction` is a constant and the
-			// vertical layer group stays at the source's tab-ness across
-			// the whole settle (no one-frame snap at the release handoff;
-			// at landing `isSearch` flips to true and `rootLayerStyle` /
-			// `iconProgress` switch to the search-mode branch). The
-			// back-swipe EXIT from `/search` is horizontal-only via the
+			// EASEs the morph from the captured `startMorph` toward
+			// `destMorph = atRestMorph(outgoingHasTabs)` (= 1 for a tab-root
+			// source) across `settleMorphFraction`: the pre-landing `morph`
+			// drives `rootLayerStyle`'s `translateY`, so holding at 1 keeps
+			// the bar at 0% across the settle and the landing's flip to
+			// `transform: none` (search mode) is continuous (R8-A F1: a
+			// re-grab whose `anchor.morph` differs from the source's at-rest
+			// must ease toward the source's at-rest, or the landing snaps).
+			// The back-swipe EXIT from `/search` is horizontal-only via the
 			// `isSearch` branch of `rootLayerStyle`; this branch covers the
 			// ENTER direction's drag phase. When a re-grab takes over a
 			// non-targetIsSearch settle whose morph was in flight (e.g. a
@@ -275,18 +275,22 @@
 			// eased settle curve traversed so far). For most shapes
 			// `destMorph = atRestMorph(incomingHasTabs)` on a commit or
 			// `atRestMorph(outgoingHasTabs)` on a cancel; the `targetIsSearch`
-			// shape is the exception (`destMorph = startMorph`, a hold - see
-			// `#armSettleEaseFromGesture`), so the lerp is a constant and the
-			// vertical layer group stays at the source's tab-ness across the
-			// settle. Reading `settleProgress` directly here would collapse
-			// to a constant for shapes where `outgoingHasTabs ===
-			// incomingHasTabs` (e.g. a centerTab -> tab-root back-swipe) and
-			// snap the icon plus layer translateY in one rAF frame at the
-			// release handoff (DV21 §5: every visual is a pure function of
-			// the one published progress, no discontinuity at the handoff).
-			// The orchestrator owns the capture (the startMorph / destMorph
-			// fields on `HeaderSettleTransition`), so this branch is a pure
-			// lerp on the latched pair and `settleMorphFraction`.
+			// shape eases toward `atRestMorph(outgoingHasTabs)` (= 1 for a
+			// tab-root source) so the pre-landing `morph` keeps the bar at
+			// 0% and the landing's flip to `transform: none` is continuous
+			// (R8-A F1 - see `#armSettleEaseFromGesture`). For the no-anchor
+			// from-rest case `startMorph === destMorph`, so the lerp is a
+			// constant hold; for a re-grab whose `anchor.morph` differs,
+			// the ease bridges the gap. Reading `settleProgress` directly
+			// here would collapse to a constant for shapes where
+			// `outgoingHasTabs === incomingHasTabs` (e.g. a centerTab ->
+			// tab-root back-swipe) and snap the icon plus layer translateY
+			// in one rAF frame at the release handoff (DV21 §5: every
+			// visual is a pure function of the one published progress, no
+			// discontinuity at the handoff). The orchestrator owns the
+			// capture (the startMorph / destMorph fields on
+			// `HeaderSettleTransition`), so this branch is a pure lerp on
+			// the latched pair and `settleMorphFraction`.
 			return (
 				settleLatched.startMorph +
 				(settleLatched.destMorph - settleLatched.startMorph) * settleMorphFraction

@@ -14,8 +14,9 @@ import {
 // (`TAB_BAR_CONFIG` maps `/offline` -> discussions), so a back-swipe
 // `/offline` -> `/` is a non-bidirectional tab-to-tab transition. The
 // orchestrator's publication rule nulls `backMorph` for any tab-to-tab
-// swipe on ANY host (`(fromIdx >= 0 && toIdx >= 0)` in `#republishToPager`),
-// so the drag morph stays at the static at-rest value (hamburger mode) end
+// swipe on non-centerTab host types (`(fromIdx >= 0 && toIdx >= 0)` in
+// `#republishToPager`), so the drag morph stays at the static at-rest
+// value (hamburger mode) end
 // to end. The settle arm's `dragMorphWasStatic` derivation
 // (`targetIsSearch || (isTabToTab && !isCenterTabRoute)`) matches that
 // publication rule: a non-centerTab tab-to-tab shape captures

@@ -2386,3 +2386,561 @@ test('forward-swipe-to-/search commit-to-enter handoff keeps the FAB scale conti
 		`fabScale must not snap at the commit-to-enter handoff (max jump ${fabJumps.max.toFixed(2)} at t=${fabJumps.maxAt}ms)`
 	).toBeLessThan(0.2);
 });
+
+// DV21 R9-A F1 continuity guard: a boundary-cancel re-grab sampling the FAB
+// scale on a first-tab boundary void-swipe whose cancel settle is in flight
+// when the user re-grabs forward. The first gesture (rightward back-swipe on
+// `/` cold-load) hits the boundary rubber-band (the orchestrator publishes
+// `fromPathname === toPathname === '/'` end to end); the FAB layer renders
+// the boundary branch `1 - progress * BOUNDARY_RUBBER_BAND_FACTOR` (the
+// reduced-amplitude proportional reaction, NOT the natural
+// `fabScale(progress, true, true)` icon-handoff half-mapping). Release below
+// SWIPE_COMMIT triggers the boundary cancel slide (a settle armed by
+// `#armSettleEaseFromGesture(false)`); the publication stays boundary across
+// the cancel. Phase 2 (same CDP session, no async gap): a leftward re-grab
+// forward to `/activity` (the second tab via `#nextTabTarget`).
+// `#beginGesture` captures `#dragFabAnchor` via `#fabScaleAtSettleInstant()`,
+// which shares the FAB layer's `computeFabScale` function (R9-A F1) so the
+// captured scale mirrors the boundary branch the FAB is rendering at the
+// takeover instant. The FAB layer's dragAnchor shift then passes through
+// that captured scale and the FAB stays continuous across the
+// settle-to-drag boundary. The threshold (max frame-to-frame jump < 0.2)
+// guards against any divergence between the helper and the FAB layer's
+// branch set (the natural half-mapping at the takeover raw disagrees with
+// the boundary proportional value by ~0.4 at a 0.3 raw, so a stale anchor
+// scale produces a visible snap on the first new-drag frame).
+test('boundary-cancel re-grab into a forward swipe keeps the FAB scale continuous (R9-A F1 boundary)', async ({
+	page,
+	context
+}) => {
+	await prepareContext(context);
+	// Cold-load `/` so the back-swipe hits the boundary (no previous entry
+	// on the first tab; the bidirectional host has nowhere to go back to).
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+
+	await installMultiSignalSampler(page, 3000);
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+	const width = page.viewportSize()?.width ?? 393;
+	const touch = (
+		type: 'touchStart' | 'touchMove' | 'touchEnd',
+		x: number,
+		state: string
+	) =>
+		client.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+			modifiers: 0,
+			timestamp: 0
+		});
+	// Phase 1: rightward back-swipe that reaches ~30% of the viewport then
+	// releases below SWIPE_COMMIT. The boundary case always cancels (never
+	// commits), so any release triggers the cancel settle. ~30% raw lands
+	// the FAB at the boundary proportional value `1 - 0.3 * 0.4 = 0.88`,
+	// well clear of the natural half-mapping `1 - 0.3 * 2 = 0.4` so a
+	// stale anchor would produce a visible snap.
+	const firstStart = Math.round(width * 0.3);
+	const firstEnd = firstStart + Math.round(width * 0.3);
+	await touch('touchStart', firstStart, 'touchPressed');
+	for (let i = 1; i <= 10; i++) {
+		await touch('touchMove', firstStart + Math.round(((firstEnd - firstStart) * i) / 10), 'touchMoved');
+	}
+	await touch('touchEnd', firstEnd, 'touchReleased');
+	// Phase 2 (same CDP session, no async gap): a leftward forward swipe
+	// that re-grabs while the cancel settle is still running. The new
+	// gesture's plan resolves to `/activity` via `#nextTabTarget` (the
+	// second tab on the bidirectional host); the publication's from !== to
+	// after the re-grab. `#beginGesture` captures `#dragFabAnchor` from
+	// `#fabScaleAtSettleInstant()` (boundary branch via the shared
+	// `computeFabScale`), and the FAB layer's dragAnchor shift keeps the
+	// FAB continuous across the direction reversal.
+	const secondStart = Math.round(width * 0.7);
+	const secondEnd = secondStart - Math.round(width * 0.6);
+	await touch('touchStart', secondStart, 'touchPressed');
+	for (let i = 1; i <= 10; i++) {
+		await touch('touchMove', secondStart + Math.round(((secondEnd - secondStart) * i) / 10), 'touchMoved');
+	}
+	await touch('touchEnd', secondEnd, 'touchReleased');
+	await client.detach();
+	await waitForMultiSignalDone(page);
+	const frames = await readMultiSignalFrames(page);
+
+	const fabJumps = maxFrameJumps(frames, (f) => f.fabScale);
+	console.log('boundary-cancel re-grab continuity:', {
+		fabJumps,
+		finalPath: new URL(page.url()).pathname
+	});
+
+	expect(page.url(), 'the forward re-grab must land on /activity').toMatch(/\/activity$/);
+	expect(
+		fabJumps.max,
+		`fabScale must not snap at the boundary-cancel re-grab (max jump ${fabJumps.max.toFixed(2)} at t=${fabJumps.maxAt}ms)`
+	).toBeLessThan(0.2);
+});
+
+// DV21 R9-A F1 continuity guard (sibling): an enter-settle re-grab sampling
+// the FAB scale during a forward-enter animation's settle. The first gesture
+// (a forward-swipe from `/messages/inbox` to `/search`) commits, the
+// navigation lands on `/search`, and the new host's `playEnterAnimation`
+// seeds `#enterFabAnchor` from the stashed prior-terminal FAB scale (R8-A
+// F4) so the FAB layer lerps `enterAnchor.start` to `enterAnchor.dest`
+// across the enter settle. Phase 2 (same CDP session, no async gap, dispatched
+// within the enter settle's ~300ms window): a rightward back-swipe on
+// `/search` that re-grabs mid-enter. `#beginGesture` captures
+// `#dragFabAnchor` via `#fabScaleAtSettleInstant()`, which shares the FAB
+// layer's `computeFabScale` function (R9-A F1) so the captured scale mirrors
+// the enterAnchor lerp value the FAB is rendering at the takeover instant.
+// The FAB layer's dragAnchor shift then passes through that captured scale
+// and the FAB stays continuous across the enter-settle-to-drag handoff. The
+// threshold (max frame-to-frame jump < 0.2) guards against any divergence
+// between the helper and the FAB layer's branch set (the natural
+// `fabScale(progress, fromHasFab, toHasFab)` half-mapping disagrees with the
+// enterAnchor lerp value mid-enter, so a stale anchor scale produces a
+// visible snap on the first new-drag frame).
+test('enter-settle re-grab into a back-swipe keeps the FAB scale continuous (R9-A F1 enterAnchor)', async ({
+	page,
+	context
+}) => {
+	await prepareContext(context);
+	await page.goto('/messages/inbox');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+
+	await installMultiSignalSampler(page, 3000);
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+	const width = page.viewportSize()?.width ?? 393;
+	const touch = (
+		type: 'touchStart' | 'touchMove' | 'touchEnd',
+		x: number,
+		state: string
+	) =>
+		client.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+			modifiers: 0,
+			timestamp: 0
+		});
+	// Phase 1: leftward forward-swipe from `/messages/inbox` to `/search`.
+	// The commit slide ends, navigation lands, `playEnterAnimation` seeds
+	// `#enterFabAnchor` from the stashed terminal FAB scale (R8-A F4) and
+	// arms the enter settle.
+	const firstStart = Math.round(width * 0.7);
+	const firstEnd = firstStart - Math.round(width * 0.7);
+	await touch('touchStart', firstStart, 'touchPressed');
+	for (let i = 1; i <= 14; i++) {
+		await touch('touchMove', firstStart + Math.round(((firstEnd - firstStart) * i) / 14), 'touchMoved');
+	}
+	await touch('touchEnd', firstEnd, 'touchReleased');
+	// Phase 2 (same CDP session, no async gap): wait for the navigation to
+	// land on `/search` so the new host has mounted and `playEnterAnimation`
+	// has armed the enter settle, then immediately dispatch a rightward
+	// back-swipe that re-grabs mid-enter. The 14-step / ~16ms touchMove
+	// sequence spans the first ~220ms of the enter settle's ~300ms window,
+	// landing the re-grab inside the enter.
+	await page.waitForURL(/\/search$/, { timeout: 4000 });
+	const secondStart = Math.round(width * 0.3);
+	const secondEnd = secondStart + Math.round(width * 0.6);
+	await touch('touchStart', secondStart, 'touchPressed');
+	for (let i = 1; i <= 14; i++) {
+		await touch('touchMove', secondStart + Math.round(((secondEnd - secondStart) * i) / 14), 'touchMoved');
+	}
+	await touch('touchEnd', secondEnd, 'touchReleased');
+	await client.detach();
+	await waitForMultiSignalDone(page);
+	const frames = await readMultiSignalFrames(page);
+
+	// Locate the re-grab boundary: the first frame where the orchestrator's
+	// published `transitionTarget` flips from the enter's target (`/search`,
+	// the destination the enter was animating toward) to the new gesture's
+	// target (`/messages/inbox`, the back-swipe destination). `#beginGesture`
+	// fires at or just before this flip; sampling a +-300ms window around it
+	// captures the settle-to-drag handoff (the FAB layer's dragAnchor shift
+	// engaging with the prior settle's enterAnchor lerp value) WITHOUT
+	// capturing the natural commit-slide FAB animation later in the
+	// back-swipe (a fast back-swipe's commit velocity can produce FAB
+	// deltas > 0.2 as the FAB scales in via the natural `(p - 0.5) * 2`
+	// formula in the second half - that is the FAB's intended behaviour,
+	// not a snap at the re-grab boundary).
+	const regabIdx = frames.findIndex(
+		(f, i) => i > 0 && f.transitionTarget === '/messages/inbox' && frames[i - 1].transitionTarget !== '/messages/inbox'
+	);
+	const regabT = regabIdx > 0 ? frames[regabIdx].t : 0;
+	const boundaryFrames = frames.filter((f) => Math.abs(f.t - regabT) <= 300);
+	const fabJumps = maxFrameJumps(boundaryFrames, (f) => f.fabScale);
+	console.log('enter-settle re-grab continuity:', {
+		fabJumps,
+		regabT,
+		finalPath: new URL(page.url()).pathname
+	});
+
+	expect(
+		fabJumps.max,
+		`fabScale must not snap at the enter-settle re-grab (max jump ${fabJumps.max.toFixed(2)} at t=${fabJumps.maxAt}ms)`
+	).toBeLessThan(0.2);
+});
+
+// DV21 R10-A F1 continuity guard: a forward-swipe from `/messages/inbox`
+// (last tab, has FAB) to `/search` (no FAB) commits and lands on `/search`;
+// the new host's `playEnterAnimation` runs and seeds `#enterFabAnchor`
+// (R8-A F4). Mid-enter, a `goto('/messages/inbox')` arrives via the dev-only
+// `__e2eGoto` hook. Because the enter's commit slide puts the executor in
+// `phase === 'committing'`, the `onSvelteKitBeforeNavigate` discrete-nav
+// branch routes to `#accelerateInFlight` instead of the fresh-slide arm.
+// `#accelerateInFlight` calls `#armSettleEase` to accelerate the in-flight
+// settle; without the R10 fix the clear at the top of `#armSettleEase`
+// wiped `#enterFabAnchor`, and the FAB layer's scale derivation fell to the
+// natural `fabScale(progress, ...)` formula. The natural formula disagrees
+// with the held enterAnchor lerp value at the accelerate instant (the
+// publication's `progress` is mid-enter, where `fabScale(progress, true,
+// false)` reads `max(0, 1 - progress*2)`, a nonzero value while the
+// enterAnchor lerp holds 0 end to end for the from-only-FAB shape), so the
+// FAB snapped in one rAF frame. The R10 fix captures the FAB's in-flight
+// value via `#fabScaleAtSettleInstant()` BEFORE the arm clears the anchor
+// and re-seeds `#enterFabAnchor = { start: capturedValue, dest:
+// prevEnterFabAnchor.dest }` AFTER the arm, mirroring the morph/title
+// capture pattern and `playEnterAnimation`'s post-arm re-seed. The audit's
+// BEFORE evidence was a 0.44 to 0.58 fabScale snap on this scenario; the
+// fix reduces the max single-frame jump to the regular per-rAF cadence.
+test('forward-swipe-to-/search enter interrupted by a goto keeps the FAB scale continuous (R10-A F1 accelerateInFlight)', async ({
+	page,
+	context
+}) => {
+	await prepareContext(context);
+	await page.goto('/messages/inbox');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+
+	await installMultiSignalSampler(page, 3000);
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+	const width = page.viewportSize()?.width ?? 393;
+	const startX = Math.round(width * 0.7);
+	const endX = startX - Math.round(width * 0.7);
+	const touch = (
+		type: 'touchStart' | 'touchMove' | 'touchEnd',
+		x: number,
+		state: string
+	) =>
+		client.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+			modifiers: 0,
+			timestamp: 0
+		});
+	// Phase 1: leftward forward-swipe from `/messages/inbox` to `/search`.
+	// The commit slide ends, navigation lands, `playEnterAnimation` seeds
+	// `#enterFabAnchor` (R8-A F4) and arms the enter settle. The executor
+	// is in `phase === 'committing'` for the enter's slide duration.
+	await touch('touchStart', startX, 'touchPressed');
+	for (let i = 1; i <= 14; i++) {
+		await touch('touchMove', startX + Math.round(((endX - startX) * i) / 14), 'touchMoved');
+	}
+	await touch('touchEnd', endX, 'touchReleased');
+	// Phase 2 (same CDP session, no async gap): wait for the navigation to
+	// land on `/search` so the new host has mounted and `playEnterAnimation`
+	// has armed the enter settle, then dispatch `__e2eGoto('/messages/inbox')`
+	// mid-enter via `Runtime.evaluate`. The goto arrives as a beforeNavigate
+	// while the enter's commit is still in flight, so the discrete-nav
+	// branch's `phase === 'committing'` test fires and routes to
+	// `#accelerateInFlight`. A short delay after the URL land lets the
+	// enter slide start before the interrupt; the multi-signal sampler
+	// captures the boundary frame.
+	await page.waitForURL(/\/search$/, { timeout: 4000 });
+	await page.waitForTimeout(60);
+	await client.send('Runtime.evaluate', {
+		expression: `window.__e2eGoto('/messages/inbox')`,
+		awaitPromise: false
+	});
+	await client.detach();
+	await waitForMultiSignalDone(page);
+	const frames = await readMultiSignalFrames(page);
+
+	// Locate the accelerate boundary: the first frame where the orchestrator's
+	// published `transitionTarget` flips from the enter's target (`/search`,
+	// held at rest after the enter slide started) to the accelerated back to
+	// `/messages/inbox`. `#accelerateInFlight` fires at or just before this
+	// flip; sampling a +-300ms window around it captures the settle-to-settle
+	// handoff (the cleared-then-re-seeded enterAnchor engaging with the
+	// captured in-flight FAB value) WITHOUT capturing the natural commit-
+	// slide FAB animation later in the back-to-`/messages/inbox` slide (the
+	// `/search` -> `/messages/inbox` slide animates the FAB in via the natural
+	// `(p - 0.5) * 2` formula in the second half, which can produce FAB
+	// deltas > 0.2 at high commit velocity - that is the FAB's intended
+	// behaviour, not a snap at the accelerate boundary).
+	const accelIdx = frames.findIndex(
+		(f, i) =>
+			i > 0 &&
+			f.transitionTarget === '/messages/inbox' &&
+			frames[i - 1].transitionTarget !== '/messages/inbox'
+	);
+	const accelT = accelIdx > 0 ? frames[accelIdx].t : 0;
+	const boundaryFrames = frames.filter((f) => Math.abs(f.t - accelT) <= 300);
+	const fabJumps = maxFrameJumps(boundaryFrames, (f) => f.fabScale);
+	console.log('accelerateInFlight FAB continuity:', {
+		fabJumps,
+		accelT,
+		finalPath: new URL(page.url()).pathname
+	});
+
+	expect(
+		fabJumps.max,
+		`fabScale must not snap at the accelerateInFlight boundary (max jump ${fabJumps.max.toFixed(2)} at t=${fabJumps.maxAt}ms)`
+	).toBeLessThan(0.2);
+});
+
+// DV21 R12-B F1 continuity guard: a SPA-nav from `/bookmarks` (no FAB) to
+// `/messages/inbox` (has FAB); on landing the new host's
+// `playEnterAnimation` seeds `#enterFabAnchor` (R8-A F4) with
+// `start = dest = 1` (the prior discrete-nav's terminal FAB scale was 1
+// for the to-only-FAB `/bookmarks` -> `/messages/inbox` slide, and the
+// destination `/messages/inbox`'s resting FAB presence is 1). Phase 2
+// (same CDP session, dispatched within the enter settle's ~300ms window):
+// a rightward back-swipe re-grab on `/messages/inbox` toward its back-
+// target `/bookmarks`. `#beginGesture` captures `#dragFabAnchor` via
+// `#fabScaleAtSettleInstant()`, which reads the enterAnchor lerp value
+// (1) at the takeover instant; the FAB layer's dragAnchor shift then
+// keeps the FAB continuous across the takeover (the shift produces a
+// value above the natural `fabScale(progress, true, false) = max(0, 1 -
+// progress*2)` for the from-only-FAB `/messages/inbox` -> `/bookmarks`
+// shape, because `dragAnchor.scale = 1` minus the natural at the
+// takeover raw leaves headroom the natural alone would not reach). The
+// re-grab releases below SWIPE_COMMIT (cancel).
+// `#armSettleEaseFromGesture(false)` clears `#dragFabAnchor` at the arm;
+// without the R12-B F1 fix the FAB layer fell to branch 5 (the natural
+// formula), which disagrees with the dragAnchor-shifted value at the
+// release raw for this asymmetric-FAB shape. The R12-B F1 fix captures
+// the FAB's drag-terminal value via `#fabScaleAtSettleInstant()` BEFORE
+// the arm and re-seeds `#enterFabAnchor = { start: capturedValue, dest:
+// destFabScale }` AFTER the arm; the FAB layer's branch 3 lerps from the
+// captured drag-terminal value to the source's at-rest FAB scale (1,
+// `/messages/inbox` has FAB) across `settleMorphFraction`. The audit's
+// BEFORE evidence was a 0.796 fabScale value snapped away at the release
+// boundary on this scenario.
+test('back-swipe from /bookmarks to /messages/inbox re-grab+cancel keeps the FAB continuous at the release handoff (R12-B F1)', async ({
+	page,
+	context
+}) => {
+	test.setTimeout(60_000);
+	await prepareContext(context);
+	// Cold-load `/messages/inbox`, then SPA-nav to `/bookmarks` via the
+	// dev-only `__e2eGoto` hook (the same path the drawer link takes).
+	// `/bookmarks` host mounts, `playEnterAnimation` seeds `#enterFabAnchor`
+	// with `start = dest = 0` (prior commit's terminal FAB was 0 for the
+	// from-only-FAB `/messages/inbox` -> `/bookmarks` discrete nav, and
+	// `/bookmarks`'s resting FAB presence is 0).
+	await page.goto('/messages/inbox');
+	await waitForHydration(page);
+	await openSidebarAndGoto(page, '/bookmarks');
+	await page.waitForTimeout(300);
+
+	// Set up the CDP session BEFORE triggering the SPA-nav so the touch
+	// dispatch is ready to fire the moment the enter settle starts.
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+	const width = page.viewportSize()?.width ?? 393;
+	const touch = (
+		type: 'touchStart' | 'touchMove' | 'touchEnd',
+		x: number,
+		state: string
+	) =>
+		client.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+			modifiers: 0,
+			timestamp: 0
+		});
+
+	// Install the sampler BEFORE the second SPA-nav so the sampler
+	// captures the entire enter-settle window on `/messages/inbox`.
+	await installMultiSignalSampler(page, 5000);
+	// Trigger the SPA-nav to `/messages/inbox`. The discrete-nav's slide
+	// ends at `/messages/inbox` with terminal FAB = 1 (to-only-FAB shape);
+	// `playEnterAnimation` on `/messages/inbox` seeds `#enterFabAnchor`
+	// with `start = dest = 1` (R8-A F4) and arms the enter settle.
+	await page.evaluate(
+		(target) => (window as { __e2eGoto?: (h: string) => Promise<void> }).__e2eGoto!(target),
+		'/messages/inbox'
+	);
+	await page.waitForURL(/\/messages\/inbox$/, { timeout: 4000 });
+	// Wait briefly so the re-grab's `#beginGesture` lands inside the
+	// enter-settle window (the enter settle's progress is ~0.25 at 50ms
+	// into its ~200ms run). At progress ~0.25 the enterAnchor lerponent
+	// is 1 (a constant hold for this `{1, 1}` anchor), so the captured
+	// `dragAnchor.scale = 1`; the natural at this raw is
+	// `max(0, 1 - 0.25*2) = 0.5`, so the dragAnchor shift leaves the FAB
+	// at `1 + natural - 0.5 = 0.5 + natural` across the re-grab (a value
+	// the post-arm branch 5 could not match without the re-seed).
+	await page.waitForTimeout(50);
+
+	// Phase 2 (no async gap): rightward back-swipe re-grab on
+	// `/messages/inbox` toward its back-target. `#beginGesture` captures
+	// `#dragFabAnchor` via `#fabScaleAtSettleInstant()`, which reads the
+	// enterAnchor lerp value (1) at the takeover instant; the FAB layer's
+	// dragAnchor shift then keeps the FAB continuous across the takeover.
+	// The short drag (40px) stays below SWIPE_COMMIT (60px), so the
+	// release arms the cancel settle.
+	const secondStart = Math.round(width * 0.3);
+	const secondEnd = secondStart + 40;
+	await touch('touchStart', secondStart, 'touchPressed');
+	for (let i = 1; i <= 10; i++) {
+		await touch('touchMove', secondStart + Math.round(((secondEnd - secondStart) * i) / 10), 'touchMoved');
+	}
+	await touch('touchEnd', secondEnd, 'touchReleased');
+	await client.detach();
+	await waitForMultiSignalDone(page);
+	const frames = await readMultiSignalFrames(page);
+
+	// The re-grab's cancel release is the boundary the R12-B F1 fix
+	// targets: `#armSettleEaseFromGesture(false)` clears `#dragFabAnchor`
+	// at the arm and (with the fix) re-seeds `#enterFabAnchor` from the
+	// captured drag-terminal FAB value. The exact boundary is hard to
+	// pinpoint via a single signal flip (the publication's
+	// `transitionTarget` flip pattern depends on the re-grab's resolved
+	// target on the bidirectional host), so the assertion samples the
+	// full post-URL-land window: from the first frame ON `/messages/inbox`
+	// (the host swap complete, enter settle running) to the last frame
+	// before the sampler ends. The natural FAB animation in this window
+	// (enter-settle hold at 1, dragAnchor-shifted values during the
+	// re-grab, settle lerp after the cancel release) all stay within the
+	// regular per-rAF cadence; a snap at the release boundary would dwarf
+	// the surrounding deltas.
+	const onMessagesInboxFrames = frames.filter((f) => f.path === '/messages/inbox');
+	const fabJumps = maxFrameJumps(onMessagesInboxFrames, (f) => f.fabScale);
+	console.log('R12-B F1 release-handoff FAB continuity:', {
+		fabJumps,
+		frameCount: onMessagesInboxFrames.length,
+		firstT: onMessagesInboxFrames[0]?.t ?? 0,
+		finalPath: new URL(page.url()).pathname
+	});
+
+	expect(
+		fabJumps.max,
+		`fabScale must not snap at the cancel-release boundary (max jump ${fabJumps.max.toFixed(2)} at t=${fabJumps.maxAt}ms)`
+	).toBeLessThan(0.2);
+});
+
+// DV21 R14 F1 continuity guard: the discrete-nav arm in
+// `onSvelteKitBeforeNavigate` captures both `liveDragMorph` (for the morph
+// settle's `startMorph`) and the drag-terminal FAB scale (for the
+// `#enterFabAnchor.start` re-seed) BEFORE the state-machine dispatch and
+// `#progress = 0` reset. The scenario is the R5 A-F1 / R6 A-F1 shape: a
+// forward-enter to `/messages/<id>` (centerTab=2, has FAB) arms an enter
+// settle, then a mid-enter rightward back-swipe (240px, saturated) is
+// interrupted by `__e2eGoto('/')` mid-drag via the SAME CDP session's
+// `Runtime.evaluate` (between `touchMove` and `touchEnd` so the touch /
+// goto ordering is deterministic). The discrete-nav arm captures the
+// drag-terminal FAB value at the LIVE `#publication.progress` (the drag's
+// raw on the drag's plan scale and endpoints); the re-seed lerps from
+// that captured value to the destination's at-rest FAB presence across
+// `settleMorphFraction`. The FAB layer's branch 3 reads the seeded
+// `#enterFabAnchor` and stays continuous across the drag-to-discrete-nav
+// handoff. R14 F1: the FAB capture is co-located with `liveDragMorph`
+// because the FAB tier is a sibling visual of the morph tier (DV21 §5)
+// and must read the same drag-terminal state at the takeover instant.
+test('drag-to-discrete-nav handoff keeps the FAB continuous at the interrupt (R14 F1)', async ({
+	page,
+	context
+}) => {
+	await prepareContext(context);
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.locator('a[data-tab-nav][href="/messages/inbox"]').click();
+	await page.waitForURL('/messages/inbox');
+	await page.waitForTimeout(200);
+
+	await installMultiSignalSampler(page, 3000);
+	// Click a conversation link to trigger the forward-enter to
+	// /messages/<id>. The destination's playEnterAnimation arms a settle
+	// with startMorph = destMorph = atRestMorph(true) = 1; the FAB
+	// seeding follows R8-A F4.
+	await page
+		.locator('a[href^="/messages/"]:not([href="/messages/inbox"]):not([href="/messages/new"])')
+		.first()
+		.click();
+	await page.waitForURL(/\/messages\/\d+/);
+	await page.waitForSelector('.detail-scroll-pane');
+	// Wait briefly so the back-swipe lands inside the enter's settle
+	// window AND the drag saturates before the discrete nav fires.
+	await page.waitForTimeout(60);
+
+	// Single CDP session for both touch events and the goto call so the
+	// ordering is preserved (touchMove -> goto -> touchEnd). A Playwright
+	// `page.evaluate` between CDP touch events would use a separate IPC
+	// channel and could land after the `touchEnd`.
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+	const width = page.viewportSize()?.width ?? 393;
+	const startX = Math.round(width * 0.3);
+	// 320px drag saturates past the to-only-FAB midpoint (raw > 0.5) so
+	// the drag's terminal FAB is non-zero (the audit's ~0.34 snap
+	// reproduces only when the FAB has entered mid-drag).
+	const endX = startX + 320;
+	const touch = (
+		type: 'touchStart' | 'touchMove' | 'touchEnd',
+		x: number,
+		state: string
+	) =>
+		client.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+			modifiers: 0,
+			timestamp: 0
+		});
+	await touch('touchStart', startX, 'touchPressed');
+	for (let i = 1; i <= 10; i++) {
+		await touch('touchMove', startX + Math.round(((endX - startX) * i) / 10), 'touchMoved');
+		// Fire the discrete nav late in the swipe (after the 8th
+		// touchMove, when the drag has crossed the to-only-FAB midpoint
+		// and the FAB has started entering). At i=8 the drag raw is
+		// ~0.65, so the drag's terminal FAB is
+		// `max(0, (0.65 - 0.5) * 2) = 0.3` (close to the audit's ~0.34).
+		if (i === 8) {
+			await client.send('Runtime.evaluate', {
+				expression: `window.__e2eGoto('/')`,
+				awaitPromise: false
+			});
+		}
+	}
+	await touch('touchEnd', endX, 'touchReleased');
+	await client.detach();
+	await waitForMultiSignalDone(page);
+	const frames = await readMultiSignalFrames(page);
+
+	// Locate the discrete-nav boundary: the first frame where the
+	// orchestrator's published `transitionTarget` flips from the drag's
+	// back-target (`/messages/inbox`) to the discrete nav's destination
+	// (`/`). The discrete-nav arm fires at or just before this flip;
+	// sampling a +-200ms window around it captures the boundary frame
+	// (where the R14 F1 snap would appear) WITHOUT capturing the natural
+	// commit-slide FAB animation later in the `/` slide (the
+	// `/messages/<id>` -> `/` slide animates the FAB in via the natural
+	// `(p - 0.5) * 2` formula in the second half, which can produce FAB
+	// deltas > 0.2 at high commit velocity - that is the FAB's intended
+	// behaviour, not a snap at the discrete-nav boundary).
+	const discreteNavIdx = frames.findIndex(
+		(f, i) =>
+			i > 0 &&
+			f.transitionTarget === '/' &&
+			frames[i - 1].transitionTarget !== '/' &&
+			frames[i - 1].transitionTarget !== null
+	);
+	const discreteNavT = discreteNavIdx > 0 ? frames[discreteNavIdx].t : 0;
+	const boundaryFrames = frames.filter((f) => Math.abs(f.t - discreteNavT) <= 200);
+	const fabJumps = maxFrameJumps(boundaryFrames, (f) => f.fabScale);
+	console.log('drag-to-discrete-nav FAB continuity (R14 F1):', {
+		fabJumps,
+		discreteNavT,
+		discreteNavIdx,
+		frameCount: frames.length,
+		firstT: frames[0]?.t ?? 0,
+		finalPath: new URL(page.url()).pathname
+	});
+
+	expect(
+		fabJumps.max,
+		`fabScale must not snap at the drag-to-discrete-nav handoff (max jump ${fabJumps.max.toFixed(2)} at t=${fabJumps.maxAt}ms)`
+	).toBeLessThan(0.2);
+});

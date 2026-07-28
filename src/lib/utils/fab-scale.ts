@@ -5,10 +5,13 @@
  *
  * Two independent drivers compose as ONE `transform: scale(s) translateY(y)`:
  *
- *   - Route-transition driver: `s = fabScale(progress, fromHasFab,
- *     toHasFab)`. The FAB exits in the first half of the transition
- *     (0 -> 0.5) if the FROM route shows a FAB, and enters in the second
- *     half (0.5 -> 1) if the TO route shows a FAB. `progress` is the
+ *   - Route-transition driver: `s = computeFabScale(inputs)`, where `inputs`
+ *     bundles the publication's `progress`, FROM/TO FAB presence, and the
+ *     boundary / suppressed / enter-anchor / drag-anchor overrides the FAB
+ *     layer applies on top of the natural `fabScale(progress, fromHasFab,
+ *     toHasFab)` formula. The natural formula exits the FAB in the first
+ *     half of the transition (0 -> 0.5) if FROM shows a FAB, and enters in
+ *     the second half (0.5 -> 1) if TO shows a FAB. `progress` is the
  *     orchestrator's raw drag fraction (`publication.progress`); on a
  *     non-bidirectional host (every NavPipelineHost route: threads,
  *     compose, deep pages) the page-track threshold-absorbs this same
@@ -21,6 +24,9 @@
  * Scale and translateY act on different matrix dimensions, so there is no
  * precedence rule and no contention (orthogonal composition).
  */
+
+import type { DragFabAnchor, EnterFabAnchor } from '$lib/utils/header-probe';
+import { BOUNDARY_RUBBER_BAND_FACTOR } from '$lib/utils/gesture-constants';
 
 interface ClampRange {
 	readonly min: number;
@@ -88,4 +94,104 @@ export function translateYFromHideProgress(
 	bottomClearance: number
 ): number {
 	return clamp(p, SCALE_RANGE) * (fabHeight + bottomClearance);
+}
+
+/**
+ * The full input set the FAB layer's scale derivation reads, mirrored by the
+ * orchestrator's `#fabScaleAtSettleInstant` helper so the two sites cannot
+ * drift. Both consumers build this same shape from their respective reactive
+ * sources and pass it to `computeFabScale`; sharing the function makes the
+ * anchor capture mirror the displayed FAB by construction (DV21 §5: every
+ * visual is a pure function of the one published progress, continuous at
+ * every gesture boundary).
+ */
+export interface FabScaleInputs {
+	/** The publication's raw drag / settle progress in [0, 1]. */
+	readonly progress: number;
+	/** True when the FROM route's `RouteData.fab` is set. */
+	readonly fromHasFab: boolean;
+	/** True when the TO route's `RouteData.fab` is set. */
+	readonly toHasFab: boolean;
+	/** True when the publication's `fromPathname === toPathname` (a
+	 *  boundary void-swipe; the FAB reacts proportionally to the
+	 *  rubber-band instead of running the icon-handoff half-mapping). */
+	readonly isBoundary: boolean;
+	/** True when the publication's plan has `pageTrack.distance === 0`
+	 *  AND the TO route's tag is 'tab' (within-tab pagination; the FAB
+	 *  freezes at the FROM resting scale). */
+	readonly isSuppressedTab: boolean;
+	/** True while a settle ease owns the morph / FAB / title crossfade. */
+	readonly settleActive: boolean;
+	/** The settle rAF's eased 0..1 timeline fraction (read by the enter
+	 *  branch to lerp between `enterAnchor.start` and `enterAnchor.dest`). */
+	readonly settleMorphFraction: number;
+	/** The FAB lerp anchor during a settle (R8-A F4 + R10-A F1 + R12-B F1).
+	 *  null outside a settle that owns the FAB; the FAB lerps between the
+	 *  anchor's `start` and `dest` while
+	 *  `settleActive && enterAnchor !== null`. */
+	readonly enterAnchor: EnterFabAnchor | null;
+	/** The settle-to-drag takeover anchor (R8-A F3). null when no settle
+	 *  was in flight at `#beginGesture`; the FAB shifts the natural
+	 *  `fabScale(progress, ...)` curve so it passes through
+	 *  `(anchor.raw, anchor.scale)` while set. */
+	readonly dragAnchor: DragFabAnchor | null;
+}
+
+/**
+ * The single source of truth for the FAB's route-transition scale. Mirrors
+ * the FAB layer's scale derivation branch-for-branch (R9-A F1):
+ *
+ *  1. Boundary void-swipe (`isBoundary`): react proportionally to the
+ *     rubber-band instead of running the icon-handoff half-mapping (which
+ *     dips to 0 at the midpoint, an over-reaction to a ~40% track
+ *     displacement). When the route has no FAB the scale stays 0.
+ *  2. Suppressed tab slide (`isSuppressedTab`): freeze the FAB at the FROM
+ *     resting scale (within-tab pagination; both endpoints are tab routes,
+ *     same panel, nothing else animates).
+ *  3. Settle-owned FAB lerp (`settleActive && enterAnchor !== null`):
+ *     lerp from the anchor's `start` to `dest` across `settleMorphFraction`.
+ *     Five reach paths set the anchor (see `EnterFabAnchor`): the
+ *     commit-to-enter handoff (`start` = prior commit's terminal scale,
+ *     `dest` = destination's resting scale, R8-A F4); the discrete-nav
+ *     interrupt of an enter settle (R10-A F1); the gesture-release
+ *     settle (`start` = drag-terminal FAB value via
+ *     `#fabScaleAtSettleInstant`, `dest` = destination's at-rest FAB
+ *     presence on a commit, source's on a cancel, R12-B F1); the
+ *     `onSvelteKitBeforeNavigate` discrete-nav arm at a tab-click /
+ *     `goto` / popstate interrupt (`start` = captured in-flight FAB
+ *     value, `dest` = destination's at-rest FAB presence, R12-B F1
+ *     sibling); and the `notifyHeaderState` mid-settle absorb on a
+ *     dynamic-title route (`start` = captured in-flight FAB value,
+ *     `dest` = new endpoint's at-rest FAB presence, R12-B F1 sibling).
+ *  4. Settle-to-drag takeover (`dragAnchor !== null`): shift the natural
+ *     curve so it passes through the takeover visual. Constant in
+ *     `progress`, so the formula stays a pure function of `progress`
+ *     (DV21 §5). Clamped to [0, 1] for the cancel overshoot (R8-A F3).
+ *  5. Default: the natural `fabScale(progress, fromHasFab, toHasFab)`
+ *     formula (exit-then-enter icon handoff).
+ *
+ * Both the FAB layer and `#fabScaleAtSettleInstant` call this with the
+ * current reactive state, so the anchor capture mirrors the displayed FAB
+ * by construction (single source of truth). Pure (runes-free); unit-tested
+ * under `bun test`.
+ */
+export function computeFabScale(inputs: FabScaleInputs): number {
+	if (inputs.isBoundary) {
+		return inputs.fromHasFab ? 1 - inputs.progress * BOUNDARY_RUBBER_BAND_FACTOR : 0;
+	}
+	if (inputs.isSuppressedTab) {
+		return inputs.fromHasFab ? 1 : 0;
+	}
+	if (inputs.settleActive && inputs.enterAnchor !== null) {
+		return (
+			inputs.enterAnchor.start +
+			(inputs.enterAnchor.dest - inputs.enterAnchor.start) * inputs.settleMorphFraction
+		);
+	}
+	if (inputs.dragAnchor !== null) {
+		const naturalAtProgress = fabScale(inputs.progress, inputs.fromHasFab, inputs.toHasFab);
+		const naturalAtAnchor = fabScale(inputs.dragAnchor.raw, inputs.fromHasFab, inputs.toHasFab);
+		return Math.max(0, Math.min(1, inputs.dragAnchor.scale + naturalAtProgress - naturalAtAnchor));
+	}
+	return fabScale(inputs.progress, inputs.fromHasFab, inputs.toHasFab);
 }

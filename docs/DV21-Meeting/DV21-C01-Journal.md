@@ -3508,3 +3508,865 @@ orchestrator's, not run by the CMA.
 
 **No git mutation.** No commits, no branches, no pushes. Working tree
 carries the edits; the orchestrator decides when to commit.
+
+### R9 fix (FAB anchor accuracy + stash lifecycle + comments)
+
+**R9-A F1 (§5, primary): FAB anchor capture mirrors the FAB layer's full
+branching.** `#fabScaleAtSettleInstant`
+(`src/lib/stores/nav-pipeline-orchestrator.svelte.ts:~3600`) computed only
+`fabScale(progress, fromHasFab, toHasFab)` (the natural formula), but the
+FAB layer's scale derivation had FIVE branches that could override the
+natural formula during a settle: boundary void-swipe (`from === to` ->
+`1 - progress * BOUNDARY_RUBBER_BAND_FACTOR`), suppressed tab slide
+(`distance === 0 && toTag === 'tab'` -> `fromHasFab ? 1 : 0`), enterAnchor
+lerp (`settleActive && enterFabAnchor`), dragAnchor shift, and the default
+natural. A re-grab during a boundary-cancel / suppressed / enter settle
+captured an anchor.scale that disagreed with the displayed FAB; the FAB
+layer's dragAnchor shift then snapped to the natural curve at the takeover
+raw. Auditor BEFORE evidence: 0.29 - 0.41 FAB snap on a boundary-cancel
+re-grab.
+
+**The fix (UNIFY - one source of truth).** Extracted the FAB scale
+computation into a shared pure function `computeFabScale(inputs)` in
+`src/lib/utils/fab-scale.ts` (where `fabScale` already lives). The function
+takes the full input set the FAB layer's branches read: `progress`,
+`fromHasFab`, `toHasFab`, `isBoundary`, `isSuppressedTab`, `settleActive`,
+`settleMorphFraction`, `enterAnchor`, `dragAnchor`. It mirrors all five
+branches in the same precedence order as the FAB layer's derivation. Both
+the FAB layer's `scale` derivation and `#fabScaleAtSettleInstant` build the
+same `FabScaleInputs` shape from their respective reactive sources and
+call `computeFabScale`. Sharing the function makes the anchor capture
+mirror the displayed FAB by construction (single source of truth). No CSS
+transition, no setTimeout, no third mechanism.
+
+**R9-B F1 (§5/correctness): `#priorTerminalFabScale` leak across a
+non-pipeline commit.** `#onExecutorSettle` stashed
+`#priorTerminalFabScale` unconditionally on every commit (the line just
+before the non-pipeline branch). The non-pipeline-target branch cleared
+`#queuedDiscreteNav` and ended the settle ease but did NOT clear the
+stash. `releaseInputs` and `configure` also do not clear it (the host
+swap between a pipeline commit and the destination's enter must preserve
+the stash across the swap). So a commit to a non-pipeline route (e.g.
+`/entry/login`) leaked the stash; the next `playEnterAnimation` on a
+pipeline route seeded a stale `#enterFabAnchor` from it, producing a wrong
+FAB animation (FAB stays hidden instead of sliding out).
+
+**The fix.** Added `this.#priorTerminalFabScale = null;` to the
+non-pipeline-target branch alongside the existing `#queuedDiscreteNav`
+clear. Rewrote the field's docstring to enumerate the four sites that
+clear it (the non-pipeline branch, `#landAtRest`, `unmount`, and
+`playEnterAnimation`'s consume-and-null), and to document explicitly that
+`configure` and `releaseInputs` intentionally do NOT clear it (the
+host-swap preservation requirement).
+
+**Sibling sweep.** Every FAB anchor field and every anchor-capture helper,
+verified leak-free and consumer-mirroring:
+
+- `#fabScaleAtSettleInstant` (R9-A F1): now calls `computeFabScale`, the
+  same function the FAB layer reads. Mirrors all five branches. FIXED.
+- `#dragFabAnchor` capture (R8-A F3, at `#beginGesture`): seeded from
+  `#fabScaleAtSettleInstant()`, so it inherits the fix transitively. No
+  drift. Leak-free (cleared at `#armSettleEase`, `#landAtRest`, `unmount`).
+- `#enterFabAnchor` capture (R8-A F4, at `playEnterAnimation`): seeded
+  from `#priorTerminalFabScale`, which is now leak-free (R9-B F1). Cleared
+  at `#armSettleEase`, `#landAtRest`, `unmount`, `releaseInputs`.
+- `#priorTerminalFabScale` (set at `#onExecutorSettle`, consumed at
+  `playEnterAnimation`, cleared at four sites): leak-free end to end after
+  R9-B F1.
+- `#morphAtSettleInstant` and `#dragMorphAtSettleTakeover` (the morph
+  counterparts): both compute via inline shape-classified formulas the
+  Header's drag / settle branches read; the Header's drag branch was made
+  anchor-aware in R8-A F1 / F2 (the `targetIsSearch` and null-`backMorph`
+  short-circuits both honor `anchor.morph`), and `#dragMorphAtSettleTakeover`
+  mirrors the same two paths (`dragMorphWasStatic` returns `anchor.morph`
+  directly; everything else applies the shift inside
+  `#dragMorphAtAnchorOrRaw`). No drift. No new R9 edit needed; the
+  morph-side mirror was already correct.
+- The R8-A F1 + F3 (opposite-direction re-grab into a
+  forward-swipe-to-`/search`) and R8-A F4 (commit-to-enter handoff) guards
+  in `e2e/messages-back-swipe.spec.ts` continue to pass with the unified
+  function; the FAB-layer consumer is unchanged in shape (it still reads
+  the same inputs, just routes them through `computeFabScale`).
+
+**BEFORE / AFTER continuity numbers** (probe via the new R9 no-snap
+guards, single run each, multi-signal sampler):
+
+| shape                                                                 | BEFORE max FAB jump | AFTER max FAB jump | threshold |
+| --------------------------------------------------------------------- | ------------------- | ------------------ | --------- |
+| Boundary-cancel re-grab (`/` first tab -> `/activity`)                | 0.28 (t=444ms)      | 0.12 (t=565ms)     | < 0.2     |
+| Enter-settle re-grab (`/messages/inbox` -> `/search` -> re-grab back) | 0.90 (t=941ms)      | 0.087 (t=952ms)    | < 0.2     |
+
+The AFTER numbers are within the regular per-rAF cadence and well under
+the 0.2 threshold. The BEFORE numbers match the audit's prediction (the
+boundary shape's 0.28 matches the audit's 0.29 - 0.41 evidence; the enter
+shape's 0.90 reflects the larger divergence between the natural formula
+and the enterAnchor lerp value mid-enter).
+
+**New preventive no-snap guards.** Two new tests in
+`e2e/messages-back-swipe.spec.ts`:
+
+- `boundary-cancel re-grab into a forward swipe keeps the FAB scale
+continuous (R9-A F1 boundary)`: cold-load `/`, rightward back-swipe to
+  ~30% raw (boundary void-swipe), release below SWIPE_COMMIT (cancel settle
+  armed), then in the SAME CDP session (no async gap) a leftward forward
+  swipe that re-grabs mid-cancel and resolves to `/activity` via
+  `#nextTabTarget`. Asserts max FAB frame-to-frame jump < 0.2 across a 3000ms
+  sampler window and `finalPath === '/activity'`.
+- `enter-settle re-grab into a back-swipe keeps the FAB scale continuous
+(R9-A F1 enterAnchor)`: forward-swipe from `/messages/inbox` to `/search`
+  (commits, navigation lands, `playEnterAnimation` seeds `#enterFabAnchor`),
+  then in the SAME CDP session (no async gap) a rightward back-swipe that
+  re-grabs mid-enter. The sampler filters to a +-300ms window around the
+  re-grab boundary (the first frame where `transitionTarget` flips from the
+  enter's target to the new gesture's target), so the assertion targets the
+  settle-to-drag handoff. A fast back-swipe's natural commit-slide FAB
+  animation later in the drag (slope-2 `(p - 0.5) * 2` formula at high
+  velocity) is outside the window and unaffected by the assertion.
+
+**Comment rewrites (R9-A F4 + R9-B C1-C5).** Rewrote every stale
+destMorph / targetIsSearch / `#fabScaleAtSettleInstant` /
+`#dragMorphAtSettleTakeover` comment after R8 (R8 changed targetIsSearch
+destMorph from hold to ease toward source's at-rest; added the
+anchor-aware `dragMorphWasStatic` branch):
+
+- `src/lib/utils/header-probe.ts:47-65` (`HeaderSettleTransition.destMorph`
+  docstring): rewritten to ease toward `atRestMorph(outgoingHasTabs)` for
+  the `targetIsSearch` shape (was: "destMorph = startMorph, a hold").
+- `src/lib/components/organisms/Header.svelte:160-186` (the
+  `targetIsSearch` skip comment): rewritten to "the settle EASEs the morph
+  from the captured `startMorph` toward `destMorph = atRestMorph(outgoing)
+(= 1 for a tab-root source) across `settleMorphFraction`" (was: "HOLDs
+  the morph at this held value").
+- `src/lib/components/organisms/Header.svelte:271-294` (the settle branch
+  comment): rewritten to "the `targetIsSearch` shape eases toward
+  `atRestMorph(outgoingHasTabs)` so the pre-landing `morph` keeps the bar
+  at 0% and the landing's flip to `transform: none` is continuous"
+  (was: "`destMorph = startMorph`, a hold").
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:~2950` (the
+  `destMorph` capture block in `#armSettleEaseFromGesture`): deleted the
+  duplicate pre-R8 "hold" block (the second R8-correct block stayed).
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:~2470` (the
+  `liveDragMorph` capture comment in the discrete-nav arm): rewritten to
+  describe both anchor-aware paths (the `dragMorphWasStatic` direct
+  `anchor.morph` return AND the `#dragMorphAtAnchorOrRaw` shift) instead
+  of only the shift.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:~2615` (the
+  `startMorph = liveDragMorph` comment in the discrete-nav arm): same
+  rewrite as above.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:~2950` (the
+  `startMorph` capture comment in `#armSettleEaseFromGesture`): same
+  rewrite as above (the helper has TWO anchor-aware paths; describe both).
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:~3033` (the
+  `#dragMorphAtSettleTakeover` docstring): rewritten to merge
+  `targetIsSearch` and non-centerTab tab-to-tab into one
+  `dragMorphWasStatic` bullet that explicitly names the
+  `anchor.morph`-on-re-grab return AND the from-rest `atRestMorph(outgoing)`
+  return, instead of two bullets that each describe only the from-rest
+  case.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:~1611` (the
+  `settleFabAtTakeover` capture comment in `#beginGesture`): rewritten to
+  "`#fabScaleAtSettleInstant` computes via the shared `computeFabScale`
+  function the FAB layer also calls, so the capture mirrors EVERY branch
+  the FAB layer renders" (was: "the helper mirrors the FAB layer's default
+  branch (the boundary/suppressed branches are unreachable here)").
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:~3613` (the
+  `#fabScaleAtSettleInstant` docstring): rewritten to "computed via the
+  SAME `computeFabScale` function the FAB layer reads (single source of
+  truth)" (was: "computed from the publication's current `progress` +
+  FROM/TO FAB presence via the SAME `fabScale` formula the FAB layer
+  reads").
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:~765` (the
+  `#priorTerminalFabScale` field docstring): rewritten to enumerate the
+  four clear sites and explicitly call out that `configure` and
+  `releaseInputs` do NOT clear it (was: the wrong claim that `#landAtRest`
+  covers the non-pipeline case).
+
+Em-dash grep clean on every edited file; prettier `--check` clean on every
+edited file.
+
+**Real command outputs.**
+
+```
+$ bun run check
+1785183831475 START "/home/losses/Development/janbao"
+1785183831480 COMPLETED 1469 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+
+$ bun run lint
+[prettier + eslint clean]
+Total similar type pairs found: 62
+EXIT=0
+
+$ bunx tsc -p scripts/tsconfig.json --noEmit
+EXIT=0
+
+$ bun test src/lib
+552 pass / 0 fail / 2270 expect() calls across 40 files [2.26s]
+```
+
+New no-snap guards:
+
+```
+$ npx playwright test e2e/messages-back-swipe.spec.ts -g "R9-A F1" \
+    --retries=0 --workers=1
+boundary-cancel re-grab continuity: {
+  fabJumps: { max: 0.12213799999999997, maxAt: 565 },
+  finalPath: '/activity'
+}
+enter-settle re-grab continuity: {
+  fabJumps: { max: 0.086514, maxAt: 952 },
+  regabT: 952,
+  finalPath: '/messages/inbox'
+}
+2 passed (15.0s)
+```
+
+Sibling regression sweep (the audit's 11-file set, `--retries=0 --workers=1`):
+
+```
+$ npx playwright test e2e/messages-back-swipe.spec.ts \
+    e2e/reproduce-dv20-drag-sync.spec.ts \
+    e2e/reproduce-dv20-search-swipe.spec.ts \
+    e2e/fab-boundary-swipe-sync.spec.ts \
+    e2e/fab-deep-real-interaction.spec.ts \
+    e2e/fab-release-snap.spec.ts \
+    e2e/fab.spec.ts \
+    e2e/deep-to-deep-gesture-morph-spike.spec.ts \
+    e2e/offline-back-swipe.spec.ts \
+    e2e/tab-host-swipe.spec.ts \
+    e2e/reproduce-user-bugs.spec.ts --retries=0 --workers=1
+112 passed (5.4m)
+```
+
+Zero failures across the 11-file sibling regression. The full e2e gate is
+the orchestrator's, not run by the CMA.
+
+**No git mutation.** No commits, no branches, no pushes. Working tree
+carries the edits; the orchestrator decides when to commit.
+
+### R10 fix (FAB at accelerateInFlight)
+
+**The defect (R10-A F1, probe-verified 5/5).**
+`#accelerateInFlight`
+(`src/lib/stores/nav-pipeline-orchestrator.svelte.ts:~3232`, the
+discrete-nav-interrupts-in-flight-enter path) accelerates the in-flight
+commit's settle by calling `#armSettleEase`. The morph tier and the title
+tier were both captured at the accelerate instant so the new settle's
+`startMorph` and `startProgress` continued from the visual the prior settle
+was rendering: `startMorph = #morphAtSettleInstant(prevLatched)` and
+`startProgress = stateMachine.settleProgress`. The FAB tier had no
+equivalent. `#armSettleEase` unconditionally clears `#enterFabAnchor`
+(plus `#dragMorphAnchor` / `#dragFabAnchor`); after the clear the FAB
+layer's `scale` derivation fell to `computeFabScale`'s default branch
+(`fabScale(progress, fromHasFab, toHasFab)`), which disagreed with the
+held enterAnchor lerp value at the accelerate instant. For the audit's
+flagship shape (a forward-swipe from `/messages/inbox` to `/search`
+interrupted mid-enter by `__e2eGoto('/messages/inbox')`), the publication
+had `fromPathname = '/messages/inbox'`, `toPathname = '/search'`,
+`fromHasFab = true`, `toHasFab = false`, so the natural formula
+`fabScale(progress, true, false) = max(0, 1 - progress*2)` returned
+0.40 to 0.55 at the mid-enter progress while the enterAnchor lerp held
+the FAB at 0 end to end (start === dest === 0, the R8-A F4 from-only-FAB
+handoff). The FAB snapped in one rAF frame at the accelerate boundary.
+
+**The fix (mirror the morph/title capture + `playEnterAnimation`'s
+post-arm re-seed).** In `#accelerateInFlight`, BEFORE the `#armSettleEase`
+call, capture the FAB's in-flight value via `#fabScaleAtSettleInstant()`
+and stash the prior `#enterFabAnchor` reference. AFTER the arm (so the
+clear at the top of the arm does not wipe the new value), if a prior
+enter anchor was set (`prevEnterFabAnchor !== null`) re-seed
+`#enterFabAnchor = { start: capturedFabScale, dest: prevEnterFabAnchor.dest }`.
+The `dest` carries over the prior anchor's `dest` because the accelerate
+preserves endpoints (the in-flight settle's source and destination do
+not change). The FAB layer's branch 3 (`settleActive && enterAnchor !==
+null`) then lerps from the captured in-flight value to the destination's
+resting scale across the accelerated settle's `settleMorphFraction`,
+which the arm reset to 0 on the first frame (so the first post-arm FAB
+value equals the captured value, continuous with the displayed value at
+the accelerate instant). The capture reads the live anchor state through
+`#fabScaleAtSettleInstant`, which shares the FAB layer's
+`computeFabScale` function (R9-A F1) so the captured scale mirrors
+whatever branch the FAB layer was rendering (enterAnchor lerp, dragAnchor
+shift, boundary, suppressed, or natural). For the audit's flagship shape
+the re-seed collapses to `{ start: 0, dest: 0 }` (same as the prior
+anchor), the lerp is a constant hold, and the FAB stays hidden across
+the accelerated settle. For a non-enter settle being accelerated (no
+anchor was set before the arm) `prevEnterFabAnchor === null` and the
+re-seed is skipped; the FAB layer keeps reading the natural
+`fabScale(progress, ...)` formula, which the capture also read, so no
+snap is introduced either way (the "no-op for the non-enter case" the
+R10-A analysis names). No third mechanism: the FAB layer's branch 3 and
+the orchestrator's `#fabScaleAtSettleInstant` / `#enterFabAnchor` fields
+are the existing R8-A F4 / R9-A F1 infrastructure; the fix adds the
+missing re-seed at the one site that accelerates an enter settle.
+
+**Sibling sweep (every `#armSettleEase` call site, re-verified for
+FAB-tier continuity).** Read against the current code:
+
+- `playEnterAnimation` (L1159): the prior commit's terminal FAB scale
+  was stashed into `#priorTerminalFabScale` by `#onExecutorSettle` (the
+  publication's `progress` resets 1 -> 0 between that point and this, so
+  the stash is required to preserve the value). After `#armSettleEase`
+  clears `#enterFabAnchor`, the call site re-seeds it from the stash
+  with `dest = hostRouteHasFab ? 1 : 0` (R8-A F4). LEGITIMATE; untouched.
+- `onSvelteKitBeforeNavigate` discrete-nav arm (L2667): runs only when
+  `executor.state.phase !== 'committing'` (the `phase === 'committing'`
+  branch at L2377 routes to `#accelerateInFlight` and returns). An enter
+  settle's commit slide puts the executor in `'committing'` for the
+  enter's duration, so the discrete-nav arm cannot fire during an enter
+  settle. The fresh-slide path that reaches L2667 always follows
+  `#cancelAllAnimationEases` (L2396), which ends any in-flight settle
+  via `#endSettleEase` (drops `settleActive`, making the FAB layer's
+  branch 3 condition false). LEGITIMATE; untouched.
+- `#armSettleEaseFromGesture` (L3025): the gesture-release arm. A drag
+  is initiated by `#beginGesture`, which calls `#cancelAllAnimationEases`
+  to end any in-flight settle (drops `settleActive`, making branch 3
+  inactive). The drag's FAB continuity is owned by `#dragFabAnchor`
+  (R8-A F3 / R9-A F1 enterAnchor), which `#beginGesture` captures BEFORE
+  the cancel via `#fabScaleAtSettleInstant()` and which the FAB layer's
+  branch 4 reads during the drag. The `#armSettleEase` clear at release
+  drops the drag anchor; the FAB falls to the natural formula, which is
+  continuous with the dragAnchor shift value at the release instant for
+  the tested scenarios (R9-A F1 enterAnchor guard passes at 0.087 max
+  jump). LEGITIMATE; untouched.
+- `#accelerateInFlight` (L3283): the defective site. FIXED this round.
+- `notifyHeaderState` mid-settle absorb (L3501): re-arms the settle when
+  a different title arrives mid-settle. For an enter settle the latched
+  incoming title is the destination's static title (resolved by
+  `resolveDeepHeaderTitle(inputs.fromPathname, t)`); a different title
+  arriving mid-enter requires a dynamic-title destination, not the
+  audit's flagship shape. The discrete-nav sibling that DOES interrupt
+  an enter settle routes to `#accelerateInFlight` instead. LEGITIMATE;
+  untouched.
+- `notifyHeaderState` idle title-change arm (L3626): fires only for
+  from-rest same-tab-ness navs (the live-drag and tab-ness-change shapes
+  armed earlier in the discrete-nav branch). At rest there is no
+  in-flight enter settle, so `#enterFabAnchor` is already null. LEGITIMATE;
+  untouched.
+
+Only `#accelerateInFlight` needed the re-seed. R10-A's analysis (only
+the site that accelerates an ENTER settle is defective) holds.
+
+**BEFORE / AFTER fabScale continuity numbers** (probe via the new R10
+no-snap guard, +-300ms window around the accelerate boundary, single
+runs for AFTER and 4 runs for BEFORE to capture the variance):
+
+| measurement                  | max fabScale jump | at t (ms) | finalPath       |
+| ---------------------------- | ----------------- | --------- | --------------- |
+| BEFORE (run 1, fix disabled) | 0.44              | 1025      | /messages/inbox |
+| BEFORE (run 2, fix disabled) | 0.50              | 1015      | /messages/inbox |
+| BEFORE (run 3, fix disabled) | 0.40              | 1038      | /messages/inbox |
+| BEFORE (run 4, fix disabled) | 0.55              | 1026      | /messages/inbox |
+| AFTER (fix enabled)          | 0.14              | 1264      | /messages/inbox |
+
+The AFTER number sits well under the 0.2 threshold and within the
+regular per-rAF cadence; the BEFORE envelope matches the audit's
+0.44 to 0.58 prediction. The accelerate boundary was empirically
+located at `accelT = 1147ms` (the first frame where `transitionTarget`
+flips from the enter's `/search` to the accelerated back to
+`/messages/inbox`), and the max jump at `t=1264ms` falls inside the
++-300ms boundary window, confirming the snap was at the accelerate
+handoff (not later in the back-to-`/messages/inbox` slide where the
+natural `(p - 0.5) * 2` FAB-in curve can produce deltas > 0.2 at high
+commit velocity, which is the FAB's intended behaviour).
+
+**New preventive no-snap guard.** Added
+`forward-swipe-to-/search enter interrupted by a goto keeps the FAB
+scale continuous (R10-A F1 accelerateInFlight)` to
+`e2e/messages-back-swipe.spec.ts`. The guard drives the audit's exact
+scenario: a 14-step leftward forward-swipe from `/messages/inbox` to
+`/search` (commits, navigation lands, `playEnterAnimation` seeds
+`#enterFabAnchor` and arms the enter settle), then in the SAME CDP
+session (no async gap) `__e2eGoto('/messages/inbox')` dispatched via
+`Runtime.evaluate` after a 60ms post-land delay (the enter slide starts
+inside that window; the goto arrives mid-enter as a `beforeNavigate`
+while the executor is still `phase === 'committing'`, so the
+discrete-nav branch routes to `#accelerateInFlight`). A multi-signal
+sampler samples `fabScale` every rAF across a 3000ms window. The
+assertion targets a +-300ms window around the accelerate boundary
+(located as the first frame where `transitionTarget` flips from the
+enter's `/search` to the accelerated `/messages/inbox`), so the
+assertion captures the settle-to-settle handoff (the cleared-then-
+re-seeded enterAnchor engaging with the captured in-flight FAB value)
+WITHOUT capturing the natural commit-slide FAB animation later in the
+back-to-`/messages/inbox` slide. Asserts `maxFrameJumps(fabScale).max <
+0.2` and `finalPath === '/messages/inbox'`. Modelled on the R8-A F4
+(commit-to-enter) and R9-A F1 (enterAnchor re-grab) guards.
+
+**Comment rewrites (R10-A F1).**
+
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:~3245` (the
+  `#accelerateInFlight` capture comment block): rewritten to describe
+  the FAB-tier mirror alongside the morph/title capture pattern. The
+  prior version documented only the morph capture; the new version
+  describes the FAB capture (via `#fabScaleAtSettleInstant`, BEFORE the
+  arm clear), the post-arm re-seed (mirrors `playEnterAnimation`), the
+  `dest` carry-over rationale (endpoints do not change), and the
+  non-enter no-op case (the capture reads the natural formula, so
+  skipping the re-seed introduces no snap).
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts:~2794` (the
+  `#armSettleEase` clear-site comment): the prior version claimed "the
+  settle now owns the morph AND the FAB scale" and "no longer in the
+  commit-to-enter handoff window, so the FAB scale derivation can
+  resume reading the natural `fabScale(progress, ...)` formula". The
+  claim was false for the FAB after the clear at the two call sites
+  that re-seed the anchor (`playEnterAnimation` via `#priorTerminalFabScale`,
+  `#accelerateInFlight` via `#fabScaleAtSettleInstant`): between the
+  clear and any post-arm re-seed the FAB reads the natural formula,
+  which the capture made equal to the displayed value, and the re-seed
+  then restores the enterAnchor lerp. Rewritten to describe the
+  canonical single-site reset and the two call sites that re-seed after
+  the arm, with the explicit note that between the clear and any
+  re-seed the FAB reads the natural formula at the captured value (no
+  snap).
+
+Em-dash grep clean on every edited file; `bunx prettier --check` clean
+on every edited file.
+
+**Real command outputs.**
+
+```
+$ bun run check
+1785188217278 START "/home/losses/Development/janbao"
+1785188217283 COMPLETED 1469 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+
+$ bun run lint
+Checking formatting...
+All matched files use Prettier code style!
+[eslint clean]
+Total similar type pairs found: 62
+EXIT=0
+
+$ bunx tsc -p scripts/tsconfig.json --noEmit
+EXIT=0
+
+$ bun test src/lib
+552 pass / 0 fail / 2270 expect() calls across 40 files [2.28s]
+```
+
+New no-snap guard (R10-A F1):
+
+```
+$ npx playwright test e2e/messages-back-swipe.spec.ts -g "R10-A F1" \
+    --retries=0 --workers=1
+accelerateInFlight FAB continuity: {
+  fabJumps: { max: 0.1404336, maxAt: 1264 },
+  accelT: 1147,
+  finalPath: '/messages/inbox'
+}
+1 passed (10.5s)
+```
+
+Sibling regression sweep (the audit's 10-file set, `--retries=0
+--workers=1`):
+
+```
+$ npx playwright test e2e/messages-back-swipe.spec.ts \
+    e2e/reproduce-dv20-drag-sync.spec.ts \
+    e2e/reproduce-dv20-search-swipe.spec.ts \
+    e2e/fab-boundary-swipe-sync.spec.ts \
+    e2e/fab-deep-real-interaction.spec.ts \
+    e2e/fab-release-snap.spec.ts \
+    e2e/fab.spec.ts \
+    e2e/offline-back-swipe.spec.ts \
+    e2e/tab-host-swipe.spec.ts \
+    e2e/reproduce-user-bugs.spec.ts --retries=0 --workers=1
+108 passed (5.2m)
+```
+
+Zero failures across the 10-file sibling regression. The full e2e gate
+is the orchestrator's, not run by the CMA.
+
+**No git mutation.** No commits, no branches, no pushes. Working tree
+carries the edits; the orchestrator decides when to commit.
+
+### R12 fix (FAB at release handoff)
+
+**R12-B F1 (§5, primary): FAB scale snaps at the release/drag-to-settle
+handoff.** The morph tier is continuous at the release handoff (R1's
+`#dragMorphAtSettleTakeover` captures the drag's terminal morph value
+as the settle's `startMorph`). The FAB tier had NO equivalent:
+`#armSettleEaseFromGesture` cleared `#dragFabAnchor` at the arm, and
+during the settle the FAB layer read the natural `fabScale(progress,
+...)` formula (branch 5 of `computeFabScale`), which disagreed with the
+drag's terminal FAB value for the asymmetric shapes (from-only-FAB,
+to-only-FAB, boundary, suppressed, enterAnchor). Probe-verified: 0.796
+FAB snap at the release boundary on `/bookmarks` -> `/messages/inbox`.
+
+**The fix (mirror the morph tier's settle lerp for the FAB).** Reuse
+the existing `#enterFabAnchor` mechanism (R8-A F4 commit-to-enter,
+R10-A F1 accelerateInFlight) and extend it to cover the release-settle
+case. In `#armSettleEaseFromGesture`:
+
+1. Capture `capturedFabScale = #fabScaleAtSettleInstant()` BEFORE the
+   `#armSettleEase` call (the arm clears `#dragFabAnchor` at its top).
+   `#fabScaleAtSettleInstant` reads the live FAB layer state through
+   the shared `computeFabScale` function, so the captured value mirrors
+   whatever branch the FAB layer was rendering (dragAnchor shift,
+   enterAnchor lerp, boundary, suppressed, or natural).
+2. AFTER the `#armSettleEase` call, if a value was captured, seed
+   `#enterFabAnchor = { start: capturedFabScale, dest: destFabScale }`.
+   `destFabScale` is the at-rest FAB presence the FAB layer WILL read
+   at this settle's end via branch 5: `toHasFab ? 1 : 0` for a commit
+   (progress=1), `fromHasFab ? 1 : 0` for a cancel (progress=0). The
+   FAB layer's branch 3 then lerps from the captured drag-terminal
+   value to `destFabScale` across `settleMorphFraction`, mirroring the
+   morph settle branch's `startMorph + (destMorph - startMorph) *
+settleMorphFraction`. The lerp hits `destFabScale` at fraction=1,
+   matching branch 5's post-settle value (no snap when `settleActive`
+   flips false).
+
+**Sibling sweep (every `#armSettleEase` call site, FAB continuity
+verified).** Read against the current code; the prompt's invariant is
+"if the morph needs a settle-start capture, the FAB does too." Three
+sites captured the morph but not the FAB; all three now capture both:
+
+- `#armSettleEaseFromGesture` (the gesture-release arm): the audit's
+  flagship site. FIXED this round.
+- `onSvelteKitBeforeNavigate`'s discrete-nav arm: captures
+  `liveDragMorph` for the morph; now also captures `capturedFabScale`
+  before the arm and re-seeds `#enterFabAnchor` after the arm with
+  `dest = toHasFab ? 1 : 0` (the discrete-nav always targets
+  `settleTargetProgress = 1`). For a from-rest tab-click the re-seed
+  is a no-op (natural formula was already reading the at-rest value);
+  for a re-grab during a live drag the re-seed prevents the
+  dragAnchor-shifted value from snapping to branch 5 at the interrupt.
+- `notifyHeaderState` mid-settle absorb: captures
+  `startMorph = #morphAtSettleInstant(prevLatched)` for the morph; now
+  also captures `capturedFabScale` before the re-arm and re-seeds
+  `#enterFabAnchor` after the arm with `dest` chosen by
+  `settleTargetProgress` (= 1: destination's at-rest; = 0: source's
+  at-rest). For a non-enter settle being re-armed the re-seed is a
+  no-op (natural formula was already reading the in-flight value); for
+  an enter settle being re-armed (a different title arriving mid-enter
+  on a dynamic-title route) the re-seed prevents the enterAnchor lerp
+  value from snapping to branch 5 at the re-arm.
+
+The other three sites do not need the FAB capture (the prompt's
+analysis held for these):
+
+- `playEnterAnimation` (forward-enter): seeds `#enterFabAnchor` from
+  `#priorTerminalFabScale` (R8-A F4). The prior commit's terminal FAB
+  scale IS the drag's terminal value when there was a preceding drag
+  commit; for a direct nav (no prior swipe-commit) the natural formula
+  handles the enter correctly and no anchor is set.
+- `#accelerateInFlight` (discrete-nav interrupt of an enter settle):
+  re-seeds `#enterFabAnchor` from `#fabScaleAtSettleInstant()` BEFORE
+  the arm and the prior anchor's `dest` AFTER the arm (R10-A F1).
+  LEGITIMATE; untouched.
+- `notifyHeaderState` idle title-change arm: fires only for from-rest
+  same-tab-ness navs (no preceding drag, no in-flight settle). The
+  morph and FAB both hold at the source's at-rest value end to end;
+  no capture is needed.
+
+**BEFORE / AFTER fabScale continuity numbers.** The audit's BEFORE
+evidence was a 0.796 fabScale value snapped away at the release
+boundary on `/bookmarks` -> `/messages/inbox` re-grab+cancel. The new
+no-snap guard samples fabScale across the full post-URL-land window
+on `/messages/inbox` (the enter settle + the re-grab + the cancel
+release). The AFTER max frame-to-frame jump on this window is 0.061
+at t=481ms (within the regular per-rAF cadence), well under the 0.2
+threshold. The e2e probe could not reliably reproduce the audit's
+exact 0.796 snap value (the snap requires the re-grab to land at a
+specific raw mid-enter-settle, which the e2e timing does not
+deterministically achieve); the fix is verified by reading against
+the code (the FAB layer's branch 3 lerp from the captured
+drag-terminal value to `destFabScale` is continuous at the release
+boundary by construction), and the new guard serves as a regression
+guard against future breaks.
+
+**New preventive no-snap guard.** Added
+`back-swipe from /bookmarks to /messages/inbox re-grab+cancel keeps
+the FAB continuous at the release handoff (R12-B F1)` to
+`e2e/messages-back-swipe.spec.ts`. The guard drives the audit's
+flagship shape: SPA-nav `/bookmarks` -> `/messages/inbox` (to-only-
+FAB; `playEnterAnimation` seeds `#enterFabAnchor = { 1, 1 }`), then
+in the same CDP session (no async gap) a rightward back-swipe re-grab
+on `/messages/inbox` whose short drag (40px) stays below SWIPE_COMMIT
+(60px). The multi-signal sampler samples `fabScale` every rAF across a
+5000ms window; the assertion checks the max frame-to-frame jump on
+the `/messages/inbox` segment is under 0.2.
+
+**Comment rewrites.**
+
+- `src/lib/utils/header-probe.ts` `EnterFabAnchor` interface
+  docstring: rewritten to describe all three reach paths that set the
+  anchor (commit-to-enter R8-A F4, accelerate-in-flight R10-A F1,
+  gesture-release R12-B F1), the lerp semantics, and the cleared
+  sites.
+- `src/lib/utils/fab-scale.ts` `FabScaleInputs.enterAnchor` field
+  docstring: rewritten to name all three reach paths.
+- `src/lib/utils/fab-scale.ts` `computeFabScale` branch 3 description:
+  rewritten to describe the three reach paths' lerps.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts` `#enterFabAnchor`
+  field docstring: rewritten to enumerate the three reach paths.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts`
+  `#armSettleEase` clear-site comment: rewritten to enumerate the
+  three re-seeding callers.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts`
+  `#fabScaleAtSettleInstant` docstring: rewritten to enumerate the
+  four capture sites (R8-A F3, R8-A F4, R10-A F1, R12-B F1).
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts`
+  `#armSettleEaseFromGesture` capture-block comment: NEW, describes
+  the FAB-tier mirror of the morph-tier capture (DV21 §5 sibling-visual
+  rule).
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts` discrete-nav
+  arm FAB capture-block comment: NEW, describes the from-rest no-op
+  case and the re-grab snap case.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts` mid-settle
+  absorb FAB capture-block comment: NEW, describes the non-enter
+  no-op case and the enter-settle re-grab snap case.
+
+Em-dash grep clean on every edited file; `bunx prettier --check`
+clean on every edited file.
+
+**Real command outputs.**
+
+```
+$ bun run check
+1785208518874 START "/home/losses/Development/janbao"
+1785208518880 COMPLETED 1469 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+
+$ bun run lint
+[prettier + eslint clean]
+Total similar type pairs found: 62
+EXIT=0
+
+$ bunx tsc -p scripts/tsconfig.json --noEmit
+EXIT=0
+
+$ bun test src/lib
+552 pass / 0 fail / 2270 expect() calls across 40 files [2.28s]
+```
+
+New no-snap guard (R12-B F1):
+
+```
+$ npx playwright test e2e/messages-back-swipe.spec.ts -g "R12-B F1" \
+    --retries=0 --workers=1
+R12-B F1 release-handoff FAB continuity: {
+  fabJumps: { max: 0.06106900000000004, maxAt: 481 },
+  frameCount: 281,
+  firstT: 364,
+  finalPath: '/messages/inbox'
+}
+1 passed (12.6s)
+```
+
+Sibling regression sweep (the audit's 10-file set, `--retries=0
+--workers=1`):
+
+```
+$ npx playwright test e2e/messages-back-swipe.spec.ts \
+    e2e/reproduce-dv20-drag-sync.spec.ts \
+    e2e/reproduce-dv20-search-swipe.spec.ts \
+    e2e/fab-boundary-swipe-sync.spec.ts \
+    e2e/fab-deep-real-interaction.spec.ts \
+    e2e/fab-release-snap.spec.ts \
+    e2e/fab.spec.ts \
+    e2e/offline-back-swipe.spec.ts \
+    e2e/tab-host-swipe.spec.ts \
+    e2e/reproduce-user-bugs.spec.ts --retries=0 --workers=1
+109 passed (5.3m)
+```
+
+Zero failures across the 10-file sibling regression. The full e2e gate
+is the orchestrator's, not run by the CMA.
+
+**No git mutation.** No commits, no branches, no pushes. Working tree
+carries the edits; the orchestrator decides when to commit.
+
+### R14 fix (FAB capture pre-reset at discrete-nav)
+
+**R14 F1 (§5, primary, probe-verified by both auditors): FAB scale snaps
+at the drag-to-discrete-nav handoff.** The morph tier was continuous at
+the handoff (R5 / R6's `liveDragMorph` capture pre-reset, fed to the
+settle's `startMorph`). The FAB tier had NO equivalent: the discrete-nav
+arm in `onSvelteKitBeforeNavigate`
+(`src/lib/stores/nav-pipeline-orchestrator.svelte.ts`) called
+`#fabScaleAtSettleInstant()` AFTER the state-machine dispatch and AFTER
+`this.#progress = 0`, so the helper read `progress = 0` with the NEW
+plan's FROM/TO endpoints, not the drag's live raw on the drag's plan
+scale and endpoints. The captured value then seeded
+`#enterFabAnchor.start`, which disagreed with the FAB layer's last
+drag-frame value at the boundary -> one-frame FAB snap (probe-verified
+~0.34 by both auditors on `/messages/<id>` back-swipe interrupted by
+`__e2eGoto('/')`).
+
+**The fix (co-locate the FAB capture with `liveDragMorph`).** In
+`onSvelteKitBeforeNavigate`'s discrete-nav arm:
+
+1. Capture `const liveDragFabScale = this.#fabScaleAtSettleInstant();`
+   immediately AFTER the `liveDragMorph` capture and BEFORE the
+   state-machine dispatch (`onIntent` / `onResolved`) and the
+   `this.#progress = 0` reset. The helper reads the LIVE
+   `#publication`: the drag's raw on its own plan scale, the drag's
+   FROM/TO endpoints, the live `#dragFabAnchor` / `#enterFabAnchor`. The
+   captured value mirrors whatever branch the FAB layer was rendering at
+   the last drag frame (dragAnchor shift, enterAnchor lerp, boundary,
+   suppressed, or natural formula).
+2. Inside the conditional arm (where `liveDragMorph !== sourceRest ||
+liveDragMorph !== destMorph`), consume the local:
+   `const capturedFabScale = liveDragFabScale;` instead of re-calling
+   `#fabScaleAtSettleInstant()`. `#armSettleEase` does not modify the
+   value (the capture is a local, not a publication read), so it is
+   invariant across the arm.
+3. The post-arm re-seed is unchanged: AFTER `#armSettleEase` (which
+   clears `#dragFabAnchor` / `#enterFabAnchor`), set
+   `this.#enterFabAnchor = { start: capturedFabScale, dest: toHasFab ? 1 : 0 }`.
+   The FAB layer's branch 3 lerps from the captured drag-terminal value
+   to the destination's at-rest FAB scale across `settleMorphFraction`,
+   matching the morph settle's `startMorph + (destMorph - startMorph) *
+settleMorphFraction` (R12-B F1 sibling).
+
+**Sibling sweep (every `#fabScaleAtSettleInstant()` capture site,
+re-verified).** The prompt's invariant is "if the morph capture is
+pre-reset, the FAB capture must also be pre-reset." Read against the
+current code:
+
+- `onSvelteKitBeforeNavigate` discrete-nav arm (the audit's site):
+  FIXED. The FAB capture is co-located with `liveDragMorph` (R14 F1).
+  Both read `#publication.progress` BEFORE the dispatch / reset.
+- `#beginGesture` (L1659): reads `#fabScaleAtSettleInstant()` at the
+  gesture start. There is no morph-tier capture here that the FAB
+  capture could be asymmetric with; the gesture starts fresh (no
+  in-flight settle whose state could be reset before the capture).
+  LEGITIMATE; untouched.
+- `#onExecutorSettle` (L2078): stashes `#priorTerminalFabScale` for
+  `playEnterAnimation`'s commit-to-enter handoff. There is no morph-tier
+  capture sibling here (the morph-tier commit-handoff is via
+  `playEnterAnimation`'s own `atRestMorph` seeding, which also runs
+  before its arm). LEGITIMATE; untouched.
+- `#accelerateInFlight` (L3435): captures the FAB value BEFORE the arm
+  clear and re-seeds AFTER (R10-A F1). The morph-tier capture
+  (`#morphAtSettleInstant(prevLatched)`) is also BEFORE the arm. Both
+  pre-arm; symmetric. LEGITIMATE; untouched.
+- `#armSettleEaseFromGesture` (L3163): captures the FAB value BEFORE
+  the arm clear and re-seeds AFTER (R12-B F1). The morph-tier capture
+  (`#dragMorphAtSettleTakeover`) is also BEFORE the arm. Both pre-arm;
+  symmetric. LEGITIMATE; untouched.
+- `notifyHeaderState` mid-settle absorb (L3679): captures the FAB value
+  BEFORE the arm clear and re-seeds AFTER (R12-B F1 sibling). The
+  morph-tier capture (`#morphAtSettleInstant(prevLatched)`) is also
+  BEFORE the arm. Both pre-arm; symmetric. LEGITIMATE; untouched.
+
+Only the discrete-nav site had the post-reset capture asymmetry.
+
+**BEFORE / AFTER fabScale continuity numbers.** The new no-snap guard
+samples `fabScale` every rAF across a +-200ms window around the
+discrete-nav boundary (the `transitionTarget` flip from the drag's
+back-target `/messages/inbox` to the discrete-nav destination `/`).
+The audit's BEFORE evidence was a ~0.34 snap on `/messages/<id>`
+back-swipe interrupted by `__e2eGoto('/')` mid-drag. This round's
+probe with a 320px drag (raw ~0.65 at the interrupt) and the goto at
+the 8th `touchMove` reproduces a 0.485 max jump WITHOUT the fix (the
+drag's terminal FAB is `max(0, (0.65 - 0.5) * 2) = 0.3`; the post-reset
+captured value reads the NEW plan's from=`/messages/<id>` (no FAB),
+to=`/` (has FAB) at `progress = 0` = 0, then the re-seed lerps from 0
+to 1 across `settleMorphFraction`, so the first settle frame's FAB
+reads 0 while the drag's last frame FAB was 0.3 -> 0.3 snap at the
+boundary). WITH the fix the captured value is 0.3 and the first settle
+frame's FAB reads 0.3 (no snap); the AFTER max jump in the +-200ms
+boundary window is 0.163 at t=587ms (the regular settle lerp cadence at
+this duration), well under the 0.2 threshold.
+
+| run                                              | max fabScale jump |
+| ------------------------------------------------ | ----------------- |
+| Audit's empirical probe (R14, BEFORE)            | ~0.34             |
+| This round, BEFORE fix (320px drag, goto at i=8) | 0.485 at t=690ms  |
+| This round, AFTER fix (same scenario)            | 0.163 at t=587ms  |
+
+**New preventive no-snap guard.** Added
+`drag-to-discrete-nav handoff keeps the FAB continuous at the interrupt
+(R14 F1)` to `e2e/messages-back-swipe.spec.ts`. The guard drives the
+audit's flagship shape: click-navigate `/` -> `/messages/inbox`, click a
+conversation to trigger the forward-enter to `/messages/<id>`, then in
+the same CDP session (no async gap) a rightward back-swipe (320px) is
+interrupted by `__e2eGoto('/')` at the 8th `touchMove`. The multi-signal
+sampler samples `fabScale` every rAF across a 3000ms window; the
+assertion locates the discrete-nav boundary frame via the
+`transitionTarget` flip (`/messages/inbox` -> `/`) and checks the max
+frame-to-frame `fabScale` jump in a +-200ms window around that flip is
+under 0.2. The +-200ms window excludes the natural commit-slide FAB
+animation later in the `/` slide (the `/messages/<id>` -> `/` slide
+animates the FAB in via the natural `(p - 0.5) * 2` formula in the
+second half, which can produce FAB deltas > 0.2 at high commit velocity
+
+- intended behaviour, not a snap at the discrete-nav boundary).
+
+**Comment rewrites.**
+
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts` discrete-nav arm
+  FAB capture-site comment (NEW, ~L2543-2567): describes the pre-reset
+  co-location with `liveDragMorph`, the LIVE `#publication` read (drag's
+  raw, drag's FROM/TO, live `#dragFabAnchor` / `#enterFabAnchor`), the
+  from-rest no-op case, and the re-grab dragAnchor-shifted case.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts` discrete-nav arm
+  FAB consumption-site comment (rewritten, ~L2729-2744): describes the
+  local consumption (the capture is invariant across `#armSettleEase`),
+  the re-seed's `dest` choice, the from-rest no-op case, and the re-grab
+  case.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts`
+  `#fabScaleAtSettleInstant` docstring's discrete-nav-arm bullet
+  (rewritten, ~L3863-3872): describes the pre-reset capture
+  co-located with `liveDragMorph`, the re-seed that runs AFTER
+  `#armSettleEase`, and the R14 F1 + R12-B F1 sibling framing.
+
+Em-dash grep clean on every edited file; `bunx prettier --check` clean
+on every edited file.
+
+**Real command outputs.**
+
+```
+$ bun run check
+1785248637563 START "/home/losses/Development/janbao"
+1785248637569 COMPLETED 1469 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+
+$ bunx tsc -p scripts/tsconfig.json --noEmit
+EXIT=0
+
+$ bun test src/lib
+552 pass / 0 fail / 2270 expect() calls across 40 files [2.20s]
+```
+
+The `bun run lint` chain exits 1 on a pre-existing prettier failure in
+`docs/RV21-C01-Audit-14.md` (an untracked audit file this fix did not
+touch). Every file this fix edited passes `bunx prettier --check` and
+`bunx eslint` individually; `bun scripts/ensure-similarity.ts` and
+`bin/similarity-ts ./src --types` both exit 0 (62 type pairs, same as
+the R13 baseline).
+
+New no-snap guard (R14 F1):
+
+```
+$ npx playwright test e2e/messages-back-swipe.spec.ts -g "R14 F1" \
+    --retries=0 --workers=1
+drag-to-discrete-nav FAB continuity (R14 F1): {
+  fabJumps: { max: 0.16285000000000005, maxAt: 587 },
+  discreteNavT: 703,
+  discreteNavIdx: 42,
+  frameCount: 180,
+  firstT: 3,
+  finalPath: '/'
+}
+1 passed (11.3s)
+```
+
+Sibling regression sweep (the task's 7-file set, `--retries=0
+--workers=1`):
+
+```
+$ npx playwright test e2e/messages-back-swipe.spec.ts \
+    e2e/reproduce-dv20-drag-sync.spec.ts \
+    e2e/reproduce-dv20-search-swipe.spec.ts \
+    e2e/fab-boundary-swipe-sync.spec.ts \
+    e2e/offline-back-swipe.spec.ts \
+    e2e/tab-host-swipe.spec.ts \
+    e2e/reproduce-user-bugs.spec.ts --retries=0 --workers=1
+59 passed (3.3m)
+```
+
+Zero failures across the 7-file sibling regression. The full e2e gate
+is the orchestrator's, not run by the CMA.
+
+**No git mutation.** No commits, no branches, no pushes. Working tree
+carries the edits; the orchestrator decides when to commit.

@@ -50,12 +50,16 @@ export interface HeaderSettleTransition {
 	 * at the incoming route's at-rest morph and a cancel
 	 * (targetProgress = 0) ends at the outgoing route's at-rest morph
 	 * (the gesture returns to rest on the source route). The
-	 * `targetIsSearch` shape is the exception: at landing `isSearch`
-	 * flips to true and `iconProgress` / `rootLayerStyle` switch to the
-	 * search-mode branch, so animating toward the `/search` at-rest
-	 * morph during the settle would rotate the icon to back-arrow then
-	 * snap it back to hamburger at landing; for that shape
-	 * `destMorph = startMorph` and the lerp is a constant hold.
+	 * `targetIsSearch` shape eases toward `atRestMorph(outgoingHasTabs)`
+	 * (= 1 for a tab-root source): at landing `isSearch` flips to true
+	 * and `iconProgress` / `rootLayerStyle` switch to the search-mode
+	 * branch, but the pre-landing `morph` drives `rootLayerStyle`'s
+	 * `translateY` until the flip, so easing toward 1 keeps the
+	 * `translateY` at 0% across the settle and the landing's flip to
+	 * `transform: none` is continuous (R8-A F1). For the no-anchor
+	 * from-rest case `startMorph === destMorph`, so the lerp is a
+	 * constant hold; for a re-grab whose `anchor.morph` differs, the
+	 * ease bridges the gap.
 	 */
 	readonly destMorph: number;
 }
@@ -95,19 +99,43 @@ export interface DragFabAnchor {
 }
 
 /**
- * The FAB scale captured at the moment a forward-enter animation begins (the
- * commit-to-enter handoff). The publication's `progress` resets 1 -> 0 at
- * that handoff, so the natural `fabScale(progress, fromHasFab, toHasFab)`
- * formula would snap from `fabScale(1, true, false) = 0` to `fabScale(0,
- * true, false) = 1` in one rAF frame (R8-A F4). The `start` field holds the
- * FAB value the prior commit was rendering at its terminal (e.g. 0 for a
- * from-only-FAB commit); the `dest` field is the destination route's resting
- * FAB scale. The FAB layer lerps between them across `settleMorphFraction`
- * (the eased 0..1 fraction of the enter settle), so for the common
- * commit-to-enter shapes (`start === dest`, e.g. both 0 for
- * `/messages/inbox` -> `/search`) the lerp is a constant hold and the FAB
- * stays continuous across the handoff. Cleared at the next settle arm /
- * `#landAtRest` / `unmount`.
+ * The FAB lerp anchor the FAB layer's `computeFabScale` branch 3 interpolates
+ * from `start` to `dest` across `settleMorphFraction` during a settle. Five
+ * reach paths set this anchor, each capturing `start` as the FAB value the
+ * visual was rendering the instant before the settle took over:
+ *   - `playEnterAnimation` at a forward-enter: `start` is the prior commit's
+ *     terminal FAB scale (stashed because the publication's `progress` resets
+ *     1 -> 0 between the commit and the enter); `dest` is the host route's
+ *     FAB presence (R8-A F4).
+ *   - `#accelerateInFlight` at a discrete-nav interrupt of an enter settle:
+ *     `start` is captured via `#fabScaleAtSettleInstant` before the arm
+ *     clears the anchor; `dest` carries over the prior anchor's `dest`
+ *     (R10-A F1).
+ *   - `#armSettleEaseFromGesture` at a gesture release: `start` is captured
+ *     via `#fabScaleAtSettleInstant` before the arm clears the drag anchor;
+ *     `dest` is the destination's (commit) or source's (cancel) at-rest FAB
+ *     presence (R12-B F1). For asymmetric shapes (from-only-FAB,
+ *     to-only-FAB, boundary, suppressed) the captured value disagrees with
+ *     the natural `fabScale(progress, ...)` formula at the release raw, so
+ *     the lerp is the only continuity guard; for symmetric shapes the lerp
+ *     is a no-op for the visual but still correct.
+ *   - The `onSvelteKitBeforeNavigate` discrete-nav arm at a tab-click /
+ *     `goto` / popstate interrupt of an in-flight drag or settle: `start`
+ *     is captured via `#fabScaleAtSettleInstant` before the arm clears the
+ *     anchors; `dest` is the destination's at-rest FAB presence (the arm
+ *     always targets `settleTargetProgress = 1`, R12-B F1 sibling).
+ *   - The `notifyHeaderState` mid-settle absorb when a dynamic-title route
+ *     resolves a new title mid-enter: `start` is captured via
+ *     `#fabScaleAtSettleInstant` before the arm clears `#enterFabAnchor`;
+ *     `dest` is the new endpoint's at-rest FAB presence selected by
+ *     `settleTargetProgress` (commit -> incoming, cancel -> outgoing,
+ *     R12-B F1 sibling).
+ *
+ * The FAB layer reads the anchor via `orchestrator.enterFabAnchor` and
+ * `computeFabScale` lerps between `start` and `dest` while
+ * `settleActive && enterAnchor !== null`. Cleared at the next settle arm
+ * (canonical single-site reset inside `#armSettleEase`), `#landAtRest`,
+ * and `unmount`.
  */
 export interface EnterFabAnchor {
 	readonly start: number;

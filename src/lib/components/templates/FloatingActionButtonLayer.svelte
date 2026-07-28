@@ -7,19 +7,21 @@
 	 * Scale is a pure function of a single transition signal, read from the
 	 * orchestrator's publication:
 	 *
-	 *   - In flight (publication.inFlight): `fabScale(progress, fromHasFab,
-	 *     toHasFab)` where `progress` is the orchestrator's raw drag
-	 *     fraction (`publication.progress`); on a non-bidirectional host
-	 *     (every NavPipelineHost route: threads, compose, deep pages) the
-	 *     page-track threshold-absorbs this same drag (`trackProgress`
-	 *     absorbs the first 20% as a deadzone), so the FAB reacts from
-	 *     the first pixel while the track absorbs the deadzone (spec §5),
-	 *     and fromHasFab / toHasFab come from
-	 *     `RouteData.fab` on the from/to pathnames. The FAB exits in the
-	 *     first half (0 -> 0.5) if FROM shows a FAB and enters in the
-	 *     second half (0.5 -> 1) if TO shows a FAB; a tab-to-tab swap
-	 *     (both have a FAB) dips to 0 at the midpoint, handing off the
-	 *     icon at the visual centre.
+	 *   - In flight (publication.inFlight): `computeFabScale(inputs)` where
+	 *     `inputs.progress` is the orchestrator's raw drag fraction
+	 *     (`publication.progress`); on a non-bidirectional host (every
+	 *     NavPipelineHost route: threads, compose, deep pages) the page-track
+	 *     threshold-absorbs this same drag (`trackProgress` absorbs the first
+	 *     20% as a deadzone), so the FAB reacts from the first pixel while
+	 *     the track absorbs the deadzone (spec §5), and fromHasFab /
+	 *     toHasFab come from `RouteData.fab` on the from/to pathnames. The
+	 *     natural formula (`fabScale`) exits the FAB in the first half
+	 *     (0 -> 0.5) if FROM shows a FAB and enters in the second half
+	 *     (0.5 -> 1) if TO shows a FAB; a tab-to-tab swap (both have a FAB)
+	 *     dips to 0 at the midpoint, handing off the icon at the visual
+	 *     centre. The boundary / suppressed / enter-anchor / drag-anchor
+	 *     branches override the natural formula; see `computeFabScale`'s
+	 *     docstring for the branch-by-branch behaviour.
 	 *   - At rest: 1 if the current route shows a FAB (`RouteData.fab`),
 	 *     0 otherwise.
 	 *
@@ -40,8 +42,7 @@
 		backTargetListKind
 	} from '$lib/utils/route-config';
 	import { getRouteData } from '$lib/utils/route-data';
-	import { fabScale, translateYFromHideProgress, hideProgress } from '$lib/utils/fab-scale';
-	import { BOUNDARY_RUBBER_BAND_FACTOR } from '$lib/utils/gesture-constants';
+	import { translateYFromHideProgress, hideProgress, computeFabScale } from '$lib/utils/fab-scale';
 	import type { FabListKind } from '$lib/utils/route-config';
 	import type { TranslationDict } from '$lib/types/translation';
 
@@ -143,97 +144,35 @@
 	});
 
 	/** FAB scale: a pure function of the orchestrator's transition progress
-	 *  + FROM/TO FAB presence. At rest, visible iff the current route shows
+	 *  + FROM/TO FAB presence + the boundary / suppressed / enter-anchor /
+	 *  drag-anchor overrides. At rest, visible iff the current route shows
 	 *  a FAB.
 	 *
-	 *  Boundary void-swipe (first-tab backward rubber-band, where the
-	 *  orchestrator publishes `fromPathname === toPathname` and no route
-	 *  change occurs): the FAB reacts PROPORTIONALLY to the rubber-band,
-	 *  NOT via `fabScale`'s icon-handoff half-mapping. The half-mapping
-	 *  (`progress < 0.5 ? 1 - progress*2 : (progress-0.5)*2`) dips to
-	 *  exactly 0 at progress=0.5, fully hiding the FAB mid-rubber-band
-	 *  even though the track only rubber-bands ~40% (the track uses
-	 *  `BOUNDARY_RUBBER_BAND_FACTOR = 0.4`). Returning
-	 *  `1 - progress * BOUNDARY_RUBBER_BAND_FACTOR` (which reaches 0.6 at
-	 *  full drag, matching the track's reduced amplitude) keeps the FAB
-	 *  visible and still varies from the first drag frame. When the route
-	 *  has no FAB the scale stays 0. The e2e `fab-boundary-swipe-sync`
-	 *  spec asserts the dip (scale delta > 0.1 during a first-tab
-	 *  void-swipe); the proportional reaction reaches delta ~0.4 at full
-	 *  drag, well above the threshold.
-	 *
-	 *  Re-grab during a settle (R8-A F3): the orchestrator captures a
-	 *  `dragFabAnchor` carrying the FAB scale the settle was rendering
-	 *  at the takeover instant, paired with the new gesture's raw scale.
-	 *  The natural `fabScale(progress, ...)` would recompute from the new
-	 *  raw and snap (the publication's FROM/TO swap on a direction-
-	 *  reversing re-grab, so the natural curve at `startProgress`
-	 *  disagrees with the FAB value at the takeover). Shift the natural
-	 *  curve so it passes through the anchor: `shifted(p) = anchor.scale
-	 *  + natural(p) - natural(anchor.raw)`. The shift is constant in
-	 *  `progress`, so the formula stays a pure function of
-	 *  `publication.progress` (DV21 §5).
-	 *
-	 *  Commit-to-enter handoff (R8-A F4): the orchestrator captures an
-	 *  `enterFabAnchor` at `playEnterAnimation` carrying the prior
-	 *  commit's terminal FAB scale plus the destination route's resting
-	 *  scale. The publication's `progress` resets 1 -> 0 at the host
-	 *  swap, so the natural formula would snap from `fabScale(1, true,
-	 *  false) = 0` to `fabScale(0, true, false) = 1` in one rAF frame.
-	 *  The FAB lerps from `anchor.start` to `anchor.dest` across
-	 *  `settleMorphFraction` (the eased 0..1 fraction of the enter
-	 *  settle), so for the common commit-to-enter shapes (`start ===
-	 *  dest`) the lerp is a constant hold. The anchor is null outside
-	 *  the enter settle (cleared at the next settle arm / `#landAtRest`
-	 *  / `unmount`), so the natural formula handles normal gesture-
-	 *  release settles (where `publication.progress` is continuous with
-	 *  the drag's terminal raw and no snap is possible). */
+	 *  Branch-by-branch behaviour and the anchor-shift / enter-lerp
+	 *  rationale live in `computeFabScale`'s docstring (single source of
+	 *  truth; the orchestrator's `#fabScaleAtSettleInstant` helper calls
+	 *  the same function so the anchor capture mirrors the displayed FAB
+	 *  by construction - DV21 §5). */
 	const scale = $derived.by(() => {
 		const pub = publication;
-		if (pub.inFlight && pub.fromPathname && pub.toPathname) {
-			const fromHasFab = getRouteData(pub.fromPathname).fab;
-			const toHasFab = getRouteData(pub.toPathname).fab;
-			// Boundary void-swipe: orchestrator publishes fromPathname ===
-			// toPathname (same route, no real transition). React proportionally
-			// to the rubber-band instead of running fabScale's icon-handoff
-			// half-mapping (which would dip to 0 at the midpoint, an
-			// over-reaction to a ~40% track displacement).
-			if (pub.fromPathname === pub.toPathname) {
-				return fromHasFab ? 1 - pub.progress * BOUNDARY_RUBBER_BAND_FACTOR : 0;
-			}
-			// Suppressed slide (distance === 0): freeze the FAB at the
-			// FROM scale only for within-tab pagination (both endpoints
-			// are tab routes, same panel, nothing else animates). For a
-			// backward-to-deep-page from the leftmost tab (also distance
-			// = 0, no panel to reveal), the Header morph animates
-			// (backMorph published) so the FAB should animate too
-			// (fall through to fabScale).
-			if (pub.plan?.pageTrack.distance === 0 && getRouteData(pub.toPathname).tag === 'tab') {
-				return fromHasFab ? 1 : 0;
-			}
-			// Commit-to-enter handoff (R8-A F4): the settle owns the FAB.
-			// Lerp from the prior commit's terminal scale to the
-			// destination's resting scale across `settleMorphFraction`
-			// so the FAB does not snap at the publication's 1 -> 0 progress
-			// reset at the host swap.
-			const enterAnchor = orchestrator.enterFabAnchor;
-			if (pub.settleActive && enterAnchor !== null) {
-				return enterAnchor.start + (enterAnchor.dest - enterAnchor.start) * pub.settleMorphFraction;
-			}
-			// Re-grab during a settle (R8-A F3): apply the shift formula so
-			// the FAB scale passes through the takeover visual. The shift is
-			// constant in `progress` (the natural slope is preserved), so the
-			// formula stays a pure function of `publication.progress` (DV21
-			// §5). Clamped to [0, 1] for the cancel overshoot.
-			const dragAnchor = orchestrator.dragFabAnchor;
-			if (dragAnchor !== null) {
-				const naturalAtProgress = fabScale(pub.progress, fromHasFab, toHasFab);
-				const naturalAtAnchor = fabScale(dragAnchor.raw, fromHasFab, toHasFab);
-				return Math.max(0, Math.min(1, dragAnchor.scale + naturalAtProgress - naturalAtAnchor));
-			}
-			return fabScale(pub.progress, fromHasFab, toHasFab);
+		if (!pub.inFlight || !pub.fromPathname || !pub.toPathname) {
+			return getRouteData(page.url.pathname).fab ? 1 : 0;
 		}
-		return getRouteData(page.url.pathname).fab ? 1 : 0;
+		const fromPathname = pub.fromPathname;
+		const toPathname = pub.toPathname;
+		const fromHasFab = getRouteData(fromPathname).fab;
+		const toHasFab = getRouteData(toPathname).fab;
+		return computeFabScale({
+			progress: pub.progress,
+			fromHasFab,
+			toHasFab,
+			isBoundary: fromPathname === toPathname,
+			isSuppressedTab: pub.plan?.pageTrack.distance === 0 && getRouteData(toPathname).tag === 'tab',
+			settleActive: pub.settleActive,
+			settleMorphFraction: pub.settleMorphFraction,
+			enterAnchor: orchestrator.enterFabAnchor,
+			dragAnchor: orchestrator.dragFabAnchor
+		});
 	});
 
 	const fabHideProgress = $derived(
