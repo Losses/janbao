@@ -114,7 +114,8 @@ import type {
 	DragFabAnchor,
 	DragMorphAnchor,
 	EnterFabAnchor,
-	HeaderSettleTransition
+	HeaderSettleTransition,
+	SearchAnchor
 } from '$lib/utils/header-probe';
 import type { TranslationDict } from '$lib/types/translation';
 import type { RouteTag } from '$lib/utils/route-data';
@@ -820,6 +821,19 @@ export class NavPipelineOrchestrator {
 	 *  Cleared at the next settle arm (canonical single-site reset inside
 	 *  `#armSettleEase`), `#landAtRest`, and `unmount`. */
 	#enterFabAnchor = $state<EnterFabAnchor | null>(null);
+	/** The search-axis lerp anchor for the Header's `searchProgress`
+	 *  derivation. Two reach paths set this anchor (see `SearchAnchor` in
+	 *  `header-probe.ts` for the full rationale): `playEnterAnimation` at a
+	 *  forward-swipe-to-`/search` commit-to-enter handoff (hold at 1 so the
+	 *  search panel stays slid in across the enter settle), and the
+	 *  `onSvelteKitBeforeNavigate` discrete-nav arm at a non-search
+	 *  interrupt of a forward-swipe-to-`/search` (retreat from the live
+	 *  `bm` to 0 across the discrete-nav settle). The Header's
+	 *  `searchProgress` derivation lerps from `start` to `dest` across
+	 *  `settleMorphFraction` while `settleActive && searchAnchor !== null`.
+	 *  Cleared at the next settle arm (canonical single-site reset inside
+	 *  `#armSettleEase`), `#landAtRest`, and `unmount`. */
+	#searchAnchor = $state<SearchAnchor | null>(null);
 	/** The FAB scale captured at the moment a commit slide ends (raw =
 	 *  1), stashed here so the next `playEnterAnimation` can seed
 	 *  `#enterFabAnchor` for the commit-to-enter handoff (R8-A F4).
@@ -833,6 +847,13 @@ export class NavPipelineOrchestrator {
 	 *  clear is the only guard against a stale stash surviving a detour
 	 *  through a non-pipeline route. */
 	#priorTerminalFabScale = $state<number | null>(null);
+	/** The search-axis position captured at the moment a commit slide ends
+	 *  (raw = 1), stashed here so the next `playEnterAnimation` can seed
+	 *  `#searchAnchor` for the commit-to-enter handoff (R23-B F2). Consumed
+	 *  (set back to null) by `playEnterAnimation`; cleared at the same sites
+	 *  as `#priorTerminalFabScale` (`#onExecutorSettle`'s non-pipeline-target
+	 *  branch, `#landAtRest`, and `unmount`) so the stash cannot leak. */
+	#priorTerminalSearchProgress = $state<number | null>(null);
 
 	constructor(clock: ClockFn = defaultClock) {
 		this.#clock = clock;
@@ -931,6 +952,14 @@ export class NavPipelineOrchestrator {
 	 *  the top of `#armSettleEase`, plus `#landAtRest` and `unmount`). */
 	get enterFabAnchor(): EnterFabAnchor | null {
 		return this.#enterFabAnchor;
+	}
+	/** Reactive read of the search anchor. Read by the Header's
+	 *  `searchProgress` derivation during any settle that set the anchor
+	 *  (two reach paths; see the `#searchAnchor` field docstring). null
+	 *  when no settle has set the anchor (the canonical clear runs at the
+	 *  top of `#armSettleEase`, plus `#landAtRest` and `unmount`). */
+	get searchAnchor(): SearchAnchor | null {
+		return this.#searchAnchor;
 	}
 
 	/** Configure: capture the host's mount inputs, rebind the element
@@ -1237,6 +1266,26 @@ export class NavPipelineOrchestrator {
 			const destScale = getRouteData(inputs.fromPathname).fab ? 1 : 0;
 			this.#enterFabAnchor = { start: this.#priorTerminalFabScale, dest: destScale };
 			this.#priorTerminalFabScale = null;
+		}
+		// Seed the search anchor (R23-B F2) AFTER `#armSettleEase` and AFTER
+		// the FAB anchor seed above. Same stash pattern: the prior commit's
+		// terminal searchProgress was stashed in
+		// `#priorTerminalSearchProgress` by `#onExecutorSettle`. The
+		// destination's at-rest searchProgress is `isSearch(host route) ? 1
+		// : 0`. For the audit's flagship shape (a forward-swipe-to-
+		// `/search` commit) the stash is `1` (the drag slid the panel fully
+		// in) and the host route is `/search` so `dest = 1`: the lerp holds
+		// the panel fully in across the enter settle, suppressing the
+		// natural `searchProgress = 1 - trackMorph = bm` curve (which would
+		// reset to 0 at the boundary then re-animate 0 -> 1 across the
+		// enter slide). For a non-search direct nav
+		// (`#priorTerminalSearchProgress` is null because no `isSearch` or
+		// `targetIsSearch` flip occurred during the prior commit) no anchor
+		// is set and the natural `searchProgress` handles the enter.
+		if (this.#priorTerminalSearchProgress !== null) {
+			const destSearch = resolveHeaderMode(inputs.fromPathname) === 'search' ? 1 : 0;
+			this.#searchAnchor = { start: this.#priorTerminalSearchProgress, dest: destSearch };
+			this.#priorTerminalSearchProgress = null;
 		}
 	}
 
@@ -2102,6 +2151,14 @@ export class NavPipelineOrchestrator {
 		// landing fires `#landAtRest` after `playEnterAnimation` consumes
 		// the stash, so the lifecycle is leak-free end to end.
 		this.#priorTerminalFabScale = this.#fabScaleAtSettleInstant();
+		// Stash the search-axis position at the same commit-terminal instant
+		// for the next `playEnterAnimation` to seed `#searchAnchor` (R23-B F2
+		// sibling of the FAB stash above). Same rationale: the publication's
+		// `progress` resets 1 -> 0 across the host swap, so without this stash
+		// the search-axis value at the commit terminal would be lost and the
+		// Header's `searchProgress` derivation would snap from the pre-boundary
+		// value to the post-boundary natural value in one rAF frame.
+		this.#priorTerminalSearchProgress = this.#searchProgressAtSettleInstant();
 		// Commit: dispatch the SvelteKit navigation via `goto` (or
 		// `history.back` / `history.forward` for a hop). The dispatch
 		// sets `navDispatchInFlight` so the orchestrator's
@@ -2131,6 +2188,7 @@ export class NavPipelineOrchestrator {
 		if (!isNavPipelineRoute(target)) {
 			this.#queuedDiscreteNav = null;
 			this.#priorTerminalFabScale = null;
+			this.#priorTerminalSearchProgress = null;
 			this.#endSettleEase();
 		}
 		// Commit: dispatch the SvelteKit navigation. The slide reveals the
@@ -2488,6 +2546,24 @@ export class NavPipelineOrchestrator {
 		// override. A backward deep-to-deep returns axis='right' and
 		// reveals the LEFT panel (the back-target).
 		const plan = resolvedPlan;
+		// Capture the in-flight drag's target BEFORE the resets below clear
+		// `#pendingGesture`. The helper `#dragMorphAtSettleTakeover` (called
+		// below) classifies the DRAG's shape (mirroring the Header's drag
+		// branch, which reads the live `bm` and the drag's plan), so its
+		// `incomingHasTabs` / `targetIsSearch` parameters must be sourced
+		// from the drag's target, not the discrete-nav's destination. When
+		// the drag's target has different tab-ness than the discrete-nav
+		// destination (the R22-A shapes), sourcing from `toPathname`
+		// misclassifies the drag and the settle-arm condition evaluates
+		// false, snapping the morph at the drag-to-discrete-nav handoff.
+		// `null` when no drag was in flight at the interrupt (the from-rest
+		// tab-click case); the helper's parameters collapse to
+		// `outgoingHasTabs` / `false` in that case (the source host's
+		// tab-ness with no search target), matching the from-rest at-rest
+		// behaviour of the helper's output (R22-A safe-by-construction).
+		// Mirrors the gesture-release site `#armSettleEaseFromGesture`,
+		// which reads `pending.to` for the same parameters (R22-A sibling).
+		const dragTargetPathname = this.#pendingGesture?.to ?? null;
 		this.#pendingGesture = null;
 		this.#liveDragging = false;
 		this.#gestureToTabIndex = toTabIndex;
@@ -2555,10 +2631,31 @@ export class NavPipelineOrchestrator {
 		// reads the live `#publication.progress` at release: every
 		// drag<->settle handoff captures the morph the visual was rendering
 		// at the takeover instant.
+		// Helper parameters describe the DRAG's shape (the in-flight drag's
+		// plan), not the discrete-nav's destination: the Header's drag branch
+		// reads the live `bm` and the drag's plan endpoints, and the helper
+		// mirrors that branch end-to-end, so its `incomingHasTabs` /
+		// `targetIsSearch` must be sourced from the drag's target
+		// (`dragTargetPathname`, captured above before the resets). When the
+		// drag's target has different tab-ness than the discrete-nav
+		// destination (the R22-A shapes), sourcing these from `toPathname`
+		// misclassifies the drag and the settle-arm condition evaluates false,
+		// snapping the morph at the drag-to-discrete-nav handoff. The
+		// collapse-when-no-drag fallbacks (`outgoingHasTabs` for
+		// `incomingHasTabs`, `false` for `targetIsSearch`) are safe for the
+		// helper's output: at raw=0 with no anchor the helper returns
+		// `atRestMorph(outgoingHasTabs)` regardless of `incomingHasTabs`
+		// (except for the `isDeepToDeep` short-circuit, which also returns
+		// `atRestMorph(false) = 0`); the helper's output therefore matches
+		// the from-rest at-rest morph whether or not a drag was in flight.
 		const liveDragMorphOutgoingHasTabs = inputs.fromTabIndex >= 0;
-		const liveDragMorphIncomingHasTabs = getCurrentTabIndex(toPathname) >= 0;
+		const liveDragMorphIncomingHasTabs =
+			dragTargetPathname !== null
+				? getCurrentTabIndex(dragTargetPathname) >= 0
+				: liveDragMorphOutgoingHasTabs;
 		const liveDragMorphIsCenterTabRoute = inputs.centerTab !== undefined;
-		const liveDragMorphTargetIsSearch = resolveHeaderMode(toPathname) === 'search';
+		const liveDragMorphTargetIsSearch =
+			dragTargetPathname !== null && resolveHeaderMode(dragTargetPathname) === 'search';
 		const liveDragMorph = this.#dragMorphAtSettleTakeover(
 			liveDragMorphOutgoingHasTabs,
 			liveDragMorphIncomingHasTabs,
@@ -2596,6 +2693,25 @@ export class NavPipelineOrchestrator {
 		// drag-terminal FAB value before its arm for the release-settle
 		// handoff (R12-B F1).
 		const liveDragFabScale = this.#fabScaleAtSettleInstant();
+		// Capture the search-axis position the drag was rendering at the
+		// interrupt instant BEFORE the state-machine dispatch and
+		// `#progress = 0` reset below (DV21 §5 sibling-visual rule: the
+		// search axis needs the same drag-terminal capture the morph and
+		// FAB tiers made above). Co-located with `liveDragMorph` and
+		// `liveDragFabScale` so the three captures cannot drift apart at
+		// the boundary. The helper mirrors the Header's `searchProgress`
+		// derivation end-to-end via the LIVE `#publication` (the drag's
+		// raw on its own plan, the drag's FROM/TO endpoints), so for a
+		// forward-swipe-to-`/search` interrupted by a non-search goto it
+		// returns the live `bm` (the panel is `bm` of the way in). For a
+		// from-rest tab-click (no live drag, no in-flight transition) the
+		// helper returns the at-rest searchProgress (`isSearch(source) ?
+		// 1 : 0`); the re-seed below's `if (capturedSearchProgress !==
+		// null)` guard skips when no transition was in flight at the
+		// capture (the helper's `pub.inFlight` short-circuit), leaving
+		// `#searchAnchor` null so the Header's natural `searchProgress`
+		// derivation handles the discrete-nav settle.
+		const liveDragSearchProgress = this.#searchProgressAtSettleInstant();
 		// Dispatch through the state machine so its macro state is the
 		// authority the derived publication reads.
 		const toData = getRouteData(toPathname);
@@ -2697,9 +2813,53 @@ export class NavPipelineOrchestrator {
 		const settleT = this.#headerT;
 		if (settleT !== null && this.#executor !== null) {
 			const outgoingHasTabs = inputs.fromTabIndex >= 0;
-			const incomingHasTabs = liveDragMorphIncomingHasTabs;
+			// Two `incomingHasTabs` values, decoupled because they serve two
+			// different consumers with different continuity requirements.
+			//
+			// `destMorphIncomingHasTabs` (sourced from `toPathname`, the
+			// discrete-nav dest) drives `destMorph =
+			// atRestMorph(destMorphIncomingHasTabs)`: the morph value the
+			// settle eases TOWARD across `settleMorphFraction`. At the settle
+			// end the URL has landed on the discrete-nav's destination, so the
+			// post-landing at-rest morph is `currentHasTabs(destPathname) ?
+			// 1 : 0`; `destMorph` must equal that or the morph snaps at the
+			// landing boundary.
+			//
+			// `latchedIncomingHasTabs` feeds the Header's `tabsIn` derivation
+			// via `settleLatched.incomingHasTabs`. The layer guard
+			// `!(tabsOut || tabsIn)` decides whether the morph-based
+			// `translateY` formula applies (guard false) or the layers freeze
+			// at the dest's at-rest (guard true). During the settle the morph
+			// eases from the drag's terminal value toward `destMorph`, so the
+			// layers must follow morph end-to-end (guard false) whenever the
+			// morph trajectory passes through non-deep-at-rest values. The
+			// trajectory does so when EITHER the drag's target OR the
+			// discrete-nav dest is a tab:
+			//  - Shape (F,F,T) (deep source, deep discrete-nav dest, tab drag
+			//    target): morph eases from the drag's terminal (~0.37) TO
+			//    `destMorph = 0`; sourcing tabsIn from only the dest (false)
+			//    would freeze the layers at `-100%` while morph is mid-ease
+			//    (~14.66px snap at the first settle frame).
+			//  - Shape (F,T,F) (deep source, tab discrete-nav dest, deep drag
+			//    target): morph eases FROM `startMorph = 0` to `destMorph = 1`;
+			//    sourcing tabsIn from only the drag's target (false) would
+			//    freeze the layers at `-100%` while morph rises and snap to
+			//    `0%` at the landing boundary.
+			// The OR of the two endpoints' tab-ness is the minimal predicate
+			// that covers both: `dragTargetIncomingHasTabs ||
+			// destMorphIncomingHasTabs`. Deep-to-deep (both endpoints deep)
+			// collapses to false: morph stays at 0 end to end and the layer
+			// freeze is correct. From-rest (`dragTargetPathname === null`)
+			// collapses `dragTargetIncomingHasTabs` to false, so
+			// `latchedIncomingHasTabs === destMorphIncomingHasTabs` (the
+			// from-rest tab-click case: both endpoints reflect the
+			// discrete-nav dest, so the layer guard and `destMorph` agree).
+			const destMorphIncomingHasTabs = getCurrentTabIndex(toPathname) >= 0;
+			const dragTargetIncomingHasTabs =
+				dragTargetPathname !== null && getCurrentTabIndex(dragTargetPathname) >= 0;
+			const latchedIncomingHasTabs = dragTargetIncomingHasTabs || destMorphIncomingHasTabs;
 			const sourceRest = this.#atRestMorph(outgoingHasTabs);
-			const destMorph = this.#atRestMorph(incomingHasTabs);
+			const destMorph = this.#atRestMorph(destMorphIncomingHasTabs);
 			if (liveDragMorph !== sourceRest || liveDragMorph !== destMorph) {
 				const outgoingTitle = this.#prevHeaderTitle;
 				const incomingTitle = resolveDeepHeaderTitle(toPathname, settleT) ?? '';
@@ -2729,7 +2889,7 @@ export class NavPipelineOrchestrator {
 					outgoingTitle,
 					incomingTitle,
 					outgoingHasTabs,
-					incomingHasTabs,
+					incomingHasTabs: latchedIncomingHasTabs,
 					startMorph,
 					destMorph
 				};
@@ -2778,6 +2938,7 @@ export class NavPipelineOrchestrator {
 				// across `settleMorphFraction` (R12-B F1 sibling at the
 				// drag-to-discrete-nav handoff).
 				const capturedFabScale = liveDragFabScale;
+				const capturedSearchProgress = liveDragSearchProgress;
 				this.#armSettleEase(latched, startProgress, 1, true, settleDirection, commitDurationMs);
 				// Re-seed `#enterFabAnchor` AFTER the arm so the FAB
 				// layer's branch 3 lerps from the captured drag-terminal
@@ -2787,6 +2948,27 @@ export class NavPipelineOrchestrator {
 				if (capturedFabScale !== null) {
 					const toHasFab = getRouteData(toPathname).fab;
 					this.#enterFabAnchor = { start: capturedFabScale, dest: toHasFab ? 1 : 0 };
+				}
+				// Re-seed `#searchAnchor` AFTER the arm so the Header's
+				// `searchProgress` derivation lerps from the captured
+				// drag-terminal value to the destination's at-rest
+				// searchProgress across `settleMorphFraction` (R23-B F1).
+				// `dest` is the discrete-nav dest's at-rest searchProgress
+				// (`isSearch(dest) ? 1 : 0`): the settle ends with the URL
+				// landed on the dest, so the post-settle natural
+				// `searchProgress` is the dest's at-rest value, and the
+				// lerp must match it to avoid a snap at the settle end.
+				// For the audit's flagship (F,F,*) shape (a
+				// forward-swipe-to-`/search` interrupted by a non-search
+				// `goto`), `capturedSearchProgress` is the drag's live `bm`
+				// (e.g. 0.43) and `dest` is 0, so the lerp retreats the
+				// search panel from `bm` to 0 across the discrete-nav
+				// settle. For a from-rest tab-click (no live drag) the
+				// helper returned null and the re-seed skips; the Header's
+				// natural `searchProgress` derivation handles the settle.
+				if (capturedSearchProgress !== null) {
+					const destSearch = resolveHeaderMode(toPathname) === 'search' ? 1 : 0;
+					this.#searchAnchor = { start: capturedSearchProgress, dest: destSearch };
 				}
 			}
 		}
@@ -3968,6 +4150,35 @@ export class NavPipelineOrchestrator {
 			enterAnchor: this.#enterFabAnchor,
 			dragAnchor: this.#dragFabAnchor
 		});
+	}
+
+	/** The Header's `searchProgress` value at the current publication instant,
+	 *  mirroring the derivation in `Header.svelte` so capture sites can stash
+	 *  the in-flight search-axis position at a boundary (the discrete-nav
+	 *  interrupt for R23-B F1, the commit slide end for R23-B F2). Returns
+	 *  null when no transition is in flight (mirroring `#fabScaleAtSettleInstant`'s
+	 *  `!pub.inFlight` short-circuit), so the discrete-nav re-seed's
+	 *  `if (capturedSearchProgress !== null)` guard skips for a from-rest
+	 *  tab-click and the Header's natural `searchProgress` derivation handles
+	 *  the settle.
+	 *
+	 *  Reads `inputs.fromPathname` (the Header's `currentPath`), the
+	 *  publication's `toPathname` (what `#republishToPager` writes to
+	 *  `pager.transitionTarget`), and `progress` (what `#republishToPager`
+	 *  writes to `pager.backMorph`). Does NOT read the tap-scrub branch
+	 *  (`pager.tapMorph`): the capture sites fire during a drag / commit /
+	 *  enter settle, never during a tap-scrub, so the tapMorph branch is
+	 *  unreachable here. */
+	#searchProgressAtSettleInstant(): number | null {
+		const inputs = this.#mountInputs;
+		if (inputs === null) return null;
+		const pub = this.#publication;
+		if (!pub.inFlight || pub.toPathname === null) return null;
+		const currentPath = inputs.fromPathname;
+		const isSearch = resolveHeaderMode(currentPath) === 'search';
+		const targetIsSearch = resolveHeaderMode(pub.toPathname) === 'search';
+		const trackMorph = pub.toPathname === currentPath ? 1 - pub.progress : pub.progress;
+		return isSearch ? 1 - trackMorph : targetIsSearch ? trackMorph : 0;
 	}
 
 	#resolveSettleIncomingTitle(): string {

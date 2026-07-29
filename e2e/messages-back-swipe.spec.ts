@@ -2946,3 +2946,253 @@ test('drag-to-discrete-nav handoff keeps the FAB continuous at the interrupt (R1
 		`fabScale must not snap at the drag-to-discrete-nav handoff (max jump ${fabJumps.max.toFixed(2)} at t=${fabJumps.maxAt}ms)`
 	).toBeLessThan(0.2);
 });
+
+// DV21 R22-A F1 continuity guard (shape T,T,F): a back-swipe on `/activity`
+// (tab source) whose drag's target is the temporal-previous `/profile/settings`
+// (deep), interrupted mid-swipe by `goto('/messages/inbox')` (tab
+// destination). The source and the discrete-nav destination share tab-ness
+// (both T), but the drag's target is F. The helper
+// `#dragMorphAtSettleTakeover` classifies the DRAG's shape from its
+// parameters; sourcing them from the discrete-nav destination
+// (outgoing=true, incoming=true, isTabToTab, dragMorphWasStatic) returns
+// `atRestMorph(true) = 1` = `sourceRest` = `destMorph`, the settle-arm
+// condition evaluates false, the settle is SKIPPED, and the morph snaps
+// from the drag's terminal (1 - raw) to the at-rest (1) at the
+// drag-to-discrete-nav handoff. Sourcing from the drag's target
+// (outgoing=true, incoming=false) returns `dragMorphAtAnchorOrRaw(true,
+// raw) = 1 - raw`; liveDragMorph differs from sourceRest (1) and destMorph
+// (1), the settle fires, and the morph eases across the slide. The drag
+// is fired via the SAME CDP session's `Runtime.evaluate` between the 6th
+// touchMove and the touchEnd so the touch / goto ordering is deterministic.
+test('drag-to-discrete-nav handoff: shape (T,T,F) tab source, tab discrete-nav dest, deep drag target (R22-A F1)', async ({
+	page,
+	context
+}) => {
+	await prepareContext(context);
+	await page.goto('/profile/settings');
+	await waitForHydration(page);
+	// SPA-nav to `/activity` so the temporal-previous is `/profile/settings`
+	// (deep), making the backward gesture target a deep route from a tab
+	// source (the shape R22-A names).
+	await page.evaluate(() => window.__e2eGoto('/activity'));
+	await page.waitForURL('/activity');
+	await page.waitForTimeout(300);
+
+	await installMultiSignalSampler(page, 3000);
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+	const width = page.viewportSize()?.width ?? 393;
+	const startX = Math.round(width * 0.3);
+	const endX = startX + 240;
+	const touch = (
+		type: 'touchStart' | 'touchMove' | 'touchEnd',
+		x: number,
+		state: string
+	) =>
+		client.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+			modifiers: 0,
+			timestamp: 0
+		});
+	await touch('touchStart', startX, 'touchPressed');
+	for (let i = 1; i <= 10; i++) {
+		await touch('touchMove', startX + Math.round(((endX - startX) * i) / 10), 'touchMoved');
+		if (i === 6) {
+			await client.send('Runtime.evaluate', {
+				expression: `window.__e2eGoto('/messages/inbox')`,
+				awaitPromise: false
+			});
+		}
+	}
+	await touch('touchEnd', endX, 'touchReleased');
+	await client.detach();
+	await waitForMultiSignalDone(page);
+	const frames = await readMultiSignalFrames(page);
+
+	const rootJumps = maxFrameJumps(frames, (f) => f.rootLayerTy);
+	const burgerJumps = maxFrameJumps(frames, (f) => f.burgerRot);
+	console.log('R22-A F1 (T,T,F) continuity:', {
+		rootJumps,
+		burgerJumps,
+		finalPath: new URL(page.url()).pathname
+	});
+
+	expect(
+		rootJumps.max,
+		`rootLayerTy must not snap at the drag-to-discrete-nav handoff (max jump ${rootJumps.max.toFixed(2)}px at t=${rootJumps.maxAt}ms)`
+	).toBeLessThan(15);
+	expect(
+		burgerJumps.max,
+		`burgerRot must not snap at the drag-to-discrete-nav handoff (max jump ${burgerJumps.max.toFixed(2)}deg at t=${burgerJumps.maxAt}ms)`
+	).toBeLessThan(35);
+});
+
+// DV21 R22-A F1 continuity guard (shape F,F,T): a back-swipe on
+// `/profile/settings` (deep source) whose drag's target is the
+// temporal-previous `/` (tab), interrupted mid-swipe by `goto('/bookmarks')`
+// (deep destination). The source and the discrete-nav destination share
+// tab-ness (both F), but the drag's target is T. Sourcing the helper's
+// parameters from the discrete-nav destination (outgoing=false,
+// incoming=false, isDeepToDeep) returns the hardcoded 0 = `sourceRest` =
+// `destMorph`, the settle-arm condition evaluates false, the settle is
+// SKIPPED, and the morph snaps from the drag's terminal (raw) to the
+// at-rest (0). Sourcing from the drag's target (outgoing=false,
+// incoming=true) returns `dragMorphAtAnchorOrRaw(false, raw) = raw`;
+// liveDragMorph differs from sourceRest (0) and destMorph (0), the settle
+// fires, and the morph eases across the slide.
+test('drag-to-discrete-nav handoff: shape (F,F,T) deep source, deep discrete-nav dest, tab drag target (R22-A F1)', async ({
+	page,
+	context
+}) => {
+	await prepareContext(context);
+	await page.goto('/');
+	await waitForHydration(page);
+	// SPA-nav to `/profile/settings` so the temporal-previous is `/` (tab),
+	// making the backward gesture target a tab route from a deep source.
+	await page.evaluate(() => window.__e2eGoto('/profile/settings'));
+	await page.waitForURL('/profile/settings');
+	await page.waitForTimeout(300);
+
+	await installMultiSignalSampler(page, 3000);
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+	const width = page.viewportSize()?.width ?? 393;
+	const startX = Math.round(width * 0.3);
+	const endX = startX + 240;
+	const touch = (
+		type: 'touchStart' | 'touchMove' | 'touchEnd',
+		x: number,
+		state: string
+	) =>
+		client.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+			modifiers: 0,
+			timestamp: 0
+		});
+	await touch('touchStart', startX, 'touchPressed');
+	for (let i = 1; i <= 10; i++) {
+		await touch('touchMove', startX + Math.round(((endX - startX) * i) / 10), 'touchMoved');
+		if (i === 6) {
+			await client.send('Runtime.evaluate', {
+				expression: `window.__e2eGoto('/bookmarks')`,
+				awaitPromise: false
+			});
+		}
+	}
+	await touch('touchEnd', endX, 'touchReleased');
+	await client.detach();
+	await waitForMultiSignalDone(page);
+	const frames = await readMultiSignalFrames(page);
+
+	const rootJumps = maxFrameJumps(frames, (f) => f.rootLayerTy);
+	const deepJumps = maxFrameJumps(frames, (f) => f.deepLayerTy);
+	const burgerJumps = maxFrameJumps(frames, (f) => f.burgerRot);
+	console.log('R22-A F1 (F,F,T) continuity:', {
+		rootJumps,
+		deepJumps,
+		burgerJumps,
+		finalPath: new URL(page.url()).pathname
+	});
+
+	expect(
+		rootJumps.max,
+		`rootLayerTy must not snap at the drag-to-discrete-nav handoff (max jump ${rootJumps.max.toFixed(2)}px at t=${rootJumps.maxAt}ms)`
+	).toBeLessThan(15);
+	// R23-A: the deep title layer must also stay continuous. The layer-tier
+	// `tabsIn` decoupling keeps the layer guard `!(tabsOut || tabsIn) = false`
+	// during the settle (the drag's target was a tab, so the OR yields true),
+	// so the morph-based `translateY(morph*100%)` formula drives the title
+	// layer end-to-end and converges to `0%` as morph eases to `destMorph = 0`
+	// (the deep discrete-nav dest's at-rest). Without the decoupling the layer
+	// would freeze at `0%` while morph is mid-ease (the audit's ~14.66px snap
+	// applied to both layers).
+	expect(
+		deepJumps.max,
+		`deepLayerTy must not snap at the drag-to-discrete-nav handoff (max jump ${deepJumps.max.toFixed(2)}px at t=${deepJumps.maxAt}ms)`
+	).toBeLessThan(15);
+	expect(
+		burgerJumps.max,
+		`burgerRot must not snap at the drag-to-discrete-nav handoff (max jump ${burgerJumps.max.toFixed(2)}deg at t=${burgerJumps.maxAt}ms)`
+	).toBeLessThan(35);
+});
+
+// DV21 R22-A F1 continuity guard (shape F,T,F): a back-swipe on `/bookmarks`
+// (deep source) whose drag's target is the temporal-previous
+// `/profile/settings` (deep), interrupted mid-swipe by
+// `goto('/messages/inbox')` (tab destination). The source and the drag's
+// target share tab-ness (both F, a deep-to-deep drag whose morph
+// hardcodes 0), but the discrete-nav destination is T. Sourcing the
+// helper's parameters from the discrete-nav destination (outgoing=false,
+// incoming=true) returns `dragMorphAtAnchorOrRaw(false, raw) = raw`,
+// which DISAGREES with the drag's actual terminal morph (0, hardcoded by
+// the deep-to-deep drag branch); the settle's `startMorph = raw` then
+// snaps from the drag's terminal (0) to raw at the handoff. Sourcing from
+// the drag's target (outgoing=false, incoming=false, isDeepToDeep)
+// returns 0, matching the drag's actual terminal morph; the settle
+// continues from 0 and eases toward destMorph = 1 (the tab destination's
+// at-rest) across the slide.
+test('drag-to-discrete-nav handoff: shape (F,T,F) deep source, tab discrete-nav dest, deep drag target (R22-A F1)', async ({
+	page,
+	context
+}) => {
+	await prepareContext(context);
+	await page.goto('/profile/settings');
+	await waitForHydration(page);
+	// SPA-nav to `/bookmarks` so the temporal-previous is
+	// `/profile/settings` (deep), making the backward gesture target a deep
+	// route from a deep source (a deep-to-deep drag).
+	await page.evaluate(() => window.__e2eGoto('/bookmarks'));
+	await page.waitForURL('/bookmarks');
+	await page.waitForTimeout(300);
+
+	await installMultiSignalSampler(page, 3000);
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+	const width = page.viewportSize()?.width ?? 393;
+	const startX = Math.round(width * 0.3);
+	const endX = startX + 240;
+	const touch = (
+		type: 'touchStart' | 'touchMove' | 'touchEnd',
+		x: number,
+		state: string
+	) =>
+		client.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+			modifiers: 0,
+			timestamp: 0
+		});
+	await touch('touchStart', startX, 'touchPressed');
+	for (let i = 1; i <= 10; i++) {
+		await touch('touchMove', startX + Math.round(((endX - startX) * i) / 10), 'touchMoved');
+		if (i === 6) {
+			await client.send('Runtime.evaluate', {
+				expression: `window.__e2eGoto('/messages/inbox')`,
+				awaitPromise: false
+			});
+		}
+	}
+	await touch('touchEnd', endX, 'touchReleased');
+	await client.detach();
+	await waitForMultiSignalDone(page);
+	const frames = await readMultiSignalFrames(page);
+
+	const rootJumps = maxFrameJumps(frames, (f) => f.rootLayerTy);
+	const burgerJumps = maxFrameJumps(frames, (f) => f.burgerRot);
+	console.log('R22-A F1 (F,T,F) continuity:', {
+		rootJumps,
+		burgerJumps,
+		finalPath: new URL(page.url()).pathname
+	});
+
+	expect(
+		rootJumps.max,
+		`rootLayerTy must not snap at the drag-to-discrete-nav handoff (max jump ${rootJumps.max.toFixed(2)}px at t=${rootJumps.maxAt}ms)`
+	).toBeLessThan(15);
+	expect(
+		burgerJumps.max,
+		`burgerRot must not snap at the drag-to-discrete-nav handoff (max jump ${burgerJumps.max.toFixed(2)}deg at t=${burgerJumps.maxAt}ms)`
+	).toBeLessThan(35);
+});

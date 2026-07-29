@@ -4370,3 +4370,235 @@ is the orchestrator's, not run by the CMA.
 
 **No git mutation.** No commits, no branches, no pushes. Working tree
 carries the edits; the orchestrator decides when to commit.
+
+### R22 fix (drag target endpoint)
+
+**R22-A F1 (§5, primary, probe-verified 3/3): morph snaps at the
+drag-to-discrete-nav handoff when the drag's target's tab-ness differs from
+the discrete-nav's destination's tab-ness.** The discrete-nav arm's
+`liveDragMorph` capture in `onSvelteKitBeforeNavigate`
+(`src/lib/stores/nav-pipeline-orchestrator.svelte.ts`) computed the helper
+`#dragMorphAtSettleTakeover`'s `incomingHasTabs` and `targetIsSearch`
+parameters from `toPathname` (the DISCRETE-NAV's destination), not from the
+drag's target (`#pendingGesture.to`). The helper classifies the DRAG's shape
+(mirroring the Header's drag branch, which reads the live `bm` and the drag's
+plan endpoints), so its parameters must describe the drag, not the discrete
+nav. When the drag's target's tab-ness differs from the discrete-nav
+destination's (the three R22-A shapes), the helper misclassifies:
+
+- Shape (T,T,F) (tab source, tab discrete-nav dest, deep drag target):
+  helper reads `incoming=true` (tab dest), classifies as tab-to-tab
+  (`dragMorphWasStatic`), returns `atRestMorph(true) = 1`. The drag's actual
+  terminal morph is `1 - raw` (tab-to-deep drag branch).
+- Shape (F,F,T) (deep source, deep discrete-nav dest, tab drag target):
+  helper reads `incoming=false` (deep dest), classifies as deep-to-deep,
+  returns 0. The drag's actual terminal morph is `raw` (deep-to-tab drag
+  branch).
+- Shape (F,T,F) (deep source, tab discrete-nav dest, deep drag target):
+  helper reads `incoming=true` (tab dest), returns `raw` (deep-to-tab
+  shape); the drag's actual terminal morph is 0 (deep-to-deep drag branch
+  hardcodes 0).
+
+In all three shapes the helper's return value disagrees with the drag's
+actual terminal morph, so either the settle-arm condition evaluates false
+(shapes T,T,F and F,F,T: `liveDragMorph === sourceRest === destMorph`) and
+the settle is SKIPPED, leaving the morph derivation's at-rest branch to snap
+to the source's at-rest morph in one rAF frame; OR the settle fires with a
+`startMorph` that disagrees with the drag's terminal morph (shape F,T,F),
+snapping from the drag's terminal to `startMorph` at the first settle frame.
+Probe-verified BEFORE: ~66deg / ~15px snap across all three shapes.
+
+**The fix (mirror the gesture-release site).** The gesture-release site
+`#armSettleEaseFromGesture` already passes `back = pending.to` (the drag's
+target) for the helper's `incomingHasTabs` and `targetIsSearch` parameters.
+The discrete-nav arm was the lone outlier sourcing them from `toPathname`.
+Two changes in `onSvelteKitBeforeNavigate`'s discrete-nav branch:
+
+1. Capture `const dragTargetPathname = this.#pendingGesture?.to ?? null;`
+   BEFORE the resets (the `#pendingGesture = null` clear and the
+   `this.#progress = 0` reset). Compose the helper's parameters from this
+   captured value:
+
+   ```ts
+   const liveDragMorphIncomingHasTabs =
+   	dragTargetPathname !== null
+   		? getCurrentTabIndex(dragTargetPathname) >= 0
+   		: liveDragMorphOutgoingHasTabs;
+   const liveDragMorphTargetIsSearch =
+   	dragTargetPathname !== null && resolveHeaderMode(dragTargetPathname) === 'search';
+   ```
+
+   Safe by construction for the helper's output: when `#pendingGesture ===
+null` (from-rest tab-click case), the parameters collapse to
+   `outgoingHasTabs` / `false`, and at `raw = 0` with no anchor the helper
+   returns `atRestMorph(outgoingHasTabs)` regardless of `incomingHasTabs`
+   (except for the `isDeepToDeep` short-circuit, which also returns
+   `atRestMorph(false) = 0`); the helper's output therefore matches the
+   from-rest at-rest morph whether or not a drag was in flight.
+
+2. Decouple the settle-arm's `incomingHasTabs` from the helper's value. The
+   existing code `const incomingHasTabs = liveDragMorphIncomingHasTabs;`
+   was correct when both were sourced from `toPathname`, but with the
+   helper now sourced from the drag's target the two values can diverge
+   (the three R22-A shapes). The settle eases the morph toward the
+   DISCRETE-NAV's destination's at-rest morph (where the nav is landing),
+   so `destMorph` and the latched's `incomingHasTabs` (read by the
+   Header's `tabsIn` derivation via `settleLatched`) must reflect the
+   discrete-nav's destination. Changed to
+   `const incomingHasTabs = getCurrentTabIndex(toPathname) >= 0;` so the
+   settle-arm reads the discrete-nav's destination directly. For the
+   from-rest case this is identical to the prior value (both sourced from
+   `toPathname`); for the R22-A shapes this is what makes the settle-arm
+   condition evaluate true (the helper's corrected `liveDragMorph` differs
+   from `destMorph = atRestMorph(discrete-nav dest's tab-ness)`).
+
+No third mechanism: the helper stays a pure function of its parameters; the
+settle-arm condition stays `liveDragMorph !== sourceRest || liveDragMorph
+!== destMorph`; no CSS transition, no setTimeout.
+
+**Sibling sweep.** Every `#dragMorphAtSettleTakeover` call site, read
+against the current code:
+
+- `onSvelteKitBeforeNavigate` discrete-nav arm (L2601): DEFECT (this
+  finding). Fixed: helper parameters sourced from `dragTargetPathname`;
+  settle-arm's `incomingHasTabs` decoupled to read `toPathname` directly.
+- `#armSettleEaseFromGesture` (L3217): CORRECT. Reads `back = pending.to`
+  for both `incomingHasTabs` (`getCurrentTabIndex(back) >= 0`) and
+  `targetIsSearch` (`resolveHeaderMode(back) === 'search'`). For the
+  gesture-release site the settle's destination IS the drag's target (on
+  commit) or the source (on cancel), so the helper and settle-arm naturally
+  agree; no decoupling needed.
+
+Only the discrete-nav site was defective. The two sites now stay in sync:
+both source the helper's parameters from the drag's target.
+
+**BEFORE / AFTER continuity numbers** (probe via the new R22-A no-snap
+guards, single run each, multi-signal sampler across a 3000ms window):
+
+| shape   | signal           | BEFORE (no fix)     | AFTER (fix)         |
+| ------- | ---------------- | ------------------- | ------------------- |
+| (T,T,F) | burgerRot jump   | 65.95deg at t=236ms | 10.99deg at t=217ms |
+| (T,T,F) | rootLayerTy jump | 14.66px             | 2.44px              |
+| (F,F,T) | burgerRot jump   | 65.95deg at t=241ms | 10.99deg at t=92ms  |
+| (F,F,T) | rootLayerTy jump | 14.66px             | 14.66px             |
+| (F,T,F) | burgerRot jump   | 65.95deg at t=239ms | 19.60deg at t=263ms |
+| (F,T,F) | rootLayerTy jump | 14.66px             | 4.35px              |
+
+All three shapes' burgerRot snaps (~66deg, the morph-tier snap the audit
+flagged) drop to within the regular per-rAF cadence (~22deg at this
+viewport's header height), well under the 35deg threshold. The (F,F,T)
+shape's rootLayerTy stays at 14.66px across BEFORE and AFTER (under the 15px
+threshold); this is the deep-layer-style transition for a deep source,
+unrelated to the morph-tier snap the audit named. The (T,T,F) and (F,T,F)
+rootLayerTy numbers both drop to well under 5px.
+
+**New preventive no-snap guards.** Three new tests in
+`e2e/messages-back-swipe.spec.ts`, one per R22-A shape:
+
+- `drag-to-discrete-nav handoff: shape (T,T,F) tab source, tab
+discrete-nav dest, deep drag target (R22-A F1)`: setup
+  `/profile/settings` -> SPA-nav `/activity` (history:
+  [/profile/settings, /activity]); back-swipe on `/activity` targets
+  `/profile/settings` (deep); `__e2eGoto('/messages/inbox')` (tab) at the
+  6th `touchMove`.
+- `drag-to-discrete-nav handoff: shape (F,F,T) deep source, deep
+discrete-nav dest, tab drag target (R22-A F1)`: setup `/` -> SPA-nav
+  `/profile/settings` (history: [/, /profile/settings]); back-swipe on
+  `/profile/settings` targets `/` (tab); `__e2eGoto('/bookmarks')` (deep)
+  at the 6th `touchMove`.
+- `drag-to-discrete-nav handoff: shape (F,T,F) deep source, tab
+discrete-nav dest, deep drag target (R22-A F1)`: setup
+  `/profile/settings` -> SPA-nav `/bookmarks` (history:
+  [/profile/settings, /bookmarks]); back-swipe on `/bookmarks` targets
+  `/profile/settings` (deep); `__e2eGoto('/messages/inbox')` (tab) at the
+  6th `touchMove`.
+
+Each drives the goto via the SAME CDP session's `Runtime.evaluate`
+(between `touchMove` and `touchEnd`) so the touch / goto ordering is
+deterministic. Asserts `maxFrameJumps` on `rootLayerTy` (< 15px) and
+`burgerRot` (< 35deg).
+
+**Comment rewrites.**
+
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts` `dragTargetPathname`
+  capture-site comment (NEW, ~L2491-2509): describes why the capture must
+  precede the resets, the R22-A defect (sourcing from `toPathname`
+  misclassifies the drag's shape), the from-rest safe-by-construction
+  collapse, and the mirroring of the gesture-release site.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts` helper-parameters
+  comment (rewritten, ~L2577-2598): describes the drag-target sourcing for
+  `liveDragMorphIncomingHasTabs` / `liveDragMorphTargetIsSearch`, the
+  collapse-when-no-drag fallbacks, and the safe-by-construction argument
+  for the helper's output.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts` settle-arm
+  `incomingHasTabs` comment (NEW, ~L2738-2762): describes the decoupling
+  (settle-arm reads `toPathname` for `destMorph` / latched's
+  `incomingHasTabs`; helper reads `dragTargetPathname`), the rationale
+  (settle eases toward the discrete-nav's destination, not the drag's
+  target), and the from-rest tab-ness-changing preservation (Bug 7's
+  concurrent arm).
+
+Em-dash grep clean on every edited file; `bunx prettier --check` clean on
+every edited file.
+
+**Real command outputs.**
+
+```
+$ bun run check
+1785290211894 START "/home/losses/Development/janbao"
+1785290211898 COMPLETED 1469 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+
+$ bun run lint
+Checking formatting...
+All matched files use Prettier code style!
+[eslint clean]
+Total similar type pairs found: 62
+EXIT=0
+
+$ bunx tsc -p scripts/tsconfig.json --noEmit
+EXIT=0
+
+$ bun test src/lib
+552 pass / 0 fail / 2270 expect() calls across 40 files [2.31s]
+```
+
+New no-snap guards (3 independent runs, single run each shown):
+
+```
+$ npx playwright test e2e/messages-back-swipe.spec.ts -g "R22-A F1" \
+    --retries=0 --workers=1
+R22-A F1 (T,T,F) continuity: {
+  rootJumps: { max: 2.4428, maxAt: 217 },
+  burgerJumps: { max: 10.992400000000004, maxAt: 217 },
+  finalPath: '/messages/inbox'
+}
+R22-A F1 (F,F,T) continuity: {
+  rootJumps: { max: 14.656500000000001, maxAt: 243 },
+  burgerJumps: { max: 10.993000000000023, maxAt: 92 },
+  finalPath: '/bookmarks'
+}
+R22-A F1 (F,T,F) continuity: {
+  rootJumps: { max: 4.354599999999998, maxAt: 263 },
+  burgerJumps: { max: 19.596000000000004, maxAt: 263 },
+  finalPath: '/messages/inbox'
+}
+3 passed (19.1s)
+```
+
+Sibling regression sweep (the task's 6-file set, `--retries=0 --workers=1`):
+
+```
+$ npx playwright test e2e/messages-back-swipe.spec.ts \
+    e2e/reproduce-dv20-drag-sync.spec.ts \
+    e2e/reproduce-dv20-search-swipe.spec.ts \
+    e2e/offline-back-swipe.spec.ts \
+    e2e/tab-host-swipe.spec.ts \
+    e2e/reproduce-user-bugs.spec.ts --retries=0 --workers=1
+60 passed (3.5m)
+```
+
+Zero failures across the 6-file sibling regression. The full e2e gate is
+the orchestrator's, not run by the CMA.
+
+**No git mutation.** No commits, no branches, no pushes. Working tree
+carries the edits; the orchestrator decides when to commit.

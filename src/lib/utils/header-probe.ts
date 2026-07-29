@@ -142,6 +142,45 @@ export interface EnterFabAnchor {
 	readonly dest: number;
 }
 
+/**
+ * The search-axis lerp anchor the Header's `searchProgress` derivation
+ * interpolates from `start` to `dest` across `settleMorphFraction` during a
+ * settle. Mirrors `EnterFabAnchor` for the search axis (the morph axis uses
+ * `HeaderSettleTransition.startMorph` / `destMorph`; the FAB axis uses
+ * `EnterFabAnchor`; the search axis uses `SearchAnchor`).
+ *
+ * Two reach paths set this anchor, each capturing `start` as the search-axis
+ * position the Header was rendering the instant before the settle took over:
+ *   - `playEnterAnimation` at a forward-swipe-to-`/search` commit-to-enter
+ *     handoff: `start` is the prior commit's terminal searchProgress (= 1;
+ *     the drag slid the search panel fully in via `searchProgress = bm` and
+ *     the commit slide ended at `bm = 1`); `dest = 1` (hold) so the panel
+ *     stays slid in across the enter settle and the enter slide's natural
+ *     `searchProgress = 1 - trackMorph = bm` curve (which would re-animate
+ *     the panel out then in as `bm` resets 1 -> 0 then runs 0 -> 1) is
+ *     suppressed. At settle end the natural formula reads `bm = 1` again,
+ *     continuous with the hold. Without the anchor the panel snaps fully
+ *     out at the boundary then slides back in (~393px snap, R23-B F2).
+ *   - The `onSvelteKitBeforeNavigate` discrete-nav arm at a non-search
+ *     `goto` / tab-click / popstate interrupt of a forward-swipe-to-
+ *     `/search`: `start` is captured via `#searchProgressAtSettleInstant`
+ *     before the publication reset (the drag's live `bm`, e.g. 0.43);
+ *     `dest = 0` (the non-search discrete-nav dest's at-rest searchProgress)
+ *     so the search panel smoothly retreats during the discrete-nav settle.
+ *     Without the anchor the panel snaps to 0 at the boundary
+ *     (~168px snap at raw=0.43, R23-B F1).
+ *
+ * The Header reads the anchor via `orchestrator.searchAnchor` and the
+ * `searchProgress` derivation lerps between `start` and `dest` while
+ * `settleActive && searchAnchor !== null`. Cleared at the next settle arm
+ * (canonical single-site reset inside `#armSettleEase`), `#landAtRest`,
+ * and `unmount`.
+ */
+export interface SearchAnchor {
+	readonly start: number;
+	readonly dest: number;
+}
+
 export interface HeaderStateSnapshot {
 	t: number;
 	path: string;
