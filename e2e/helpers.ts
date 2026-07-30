@@ -218,7 +218,7 @@ export function collectConsole(page: Page): string[] {
 // from the resolved left href (the `shouldEnter` $derived.by gate: forward
 // direction AND the stack's previous pathname === resolvedLeftHref): the track
 // is seeded at translateX(0px) and slides to its resting translateX(-33.333%)
-// over ~200ms. We sample the track's computed translateX to prove the animation
+// over ~300ms. We sample the track's computed translateX to prove the animation
 // ran - the only behavioural signal that the transition animated. The regression
 // test for the tab-tap-return bug relies on this: a stale thread entry in the
 // nav stack breaks the shouldEnter precondition and suppresses the slide-in

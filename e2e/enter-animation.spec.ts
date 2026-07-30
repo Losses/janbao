@@ -12,7 +12,7 @@ import {
  *
  * NavPipelineHost's orchestrator.playEnterAnimation plays a list→thread
  * slide-in (track seeded at translateX(0px) and slid to its resting
- * translateX(-33.333%) over ~200ms on the 3-panel-wide track) only when the
+ * translateX(-33.333%) over ~300ms on the 3-panel-wide track) only when the
  * `shouldEnter` $derived.by gate passes: `navStore.direction === 'forward'`
  * AND the stack's previous pathname === resolvedLeftHref (the resolved left
  * href for a thread is the discussions list root). A tab-bar tap that returns

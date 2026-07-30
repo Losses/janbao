@@ -10,7 +10,8 @@ import { prepareContext, waitForHydration, clickDiscussion, openSidebarAndGoto }
  * or animate on click nav. This spec drives the THREE real interaction paths a
  * user performs - drawer link tap, realistic-speed edge swipe, back-arrow tap -
  * and asserts a smooth, gesture-synchronized, multi-frame animation for each.
- * All three FAIL on the current code, surfacing the reported defects:
+ * Each test guards against one of the three reported defects (asserting
+ * the fixes hold):
  *
  *   A. drawer `/` -> `/bookmarks`: the FAB holds at scale 1 through the mount,
  *      then drops in ~2 intermediate frames (a late fast fade, perceived as a

@@ -679,7 +679,7 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		await page.click('a[href^="/messages/"]:not([href="/messages/new"]):not([href="/messages/inbox"])');
 		await page.waitForURL(/\/messages\/\d+/);
 		// Do NOT wait out the enter animation; click a tab immediately.
-		// The enter animation is ~200ms; the tab-click must begin within
+		// The enter animation is ~300ms; the tab-click must begin within
 		// that window to exercise the onSvelteKitBeforeNavigate interrupt
 		// path.
 		await page.click('[data-tab-nav][href="/messages/inbox"]');
@@ -878,7 +878,7 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		// runs a fresh slide plan. During that intercept cycle the URL
 		// transiently flips `/activity` -> '/' (popstate) -> '/activity'
 		// (cancel revert) -> '/' (the slide's eventual #dispatchNav
-		// history.back, ~200ms later). A `waitForFunction` poll can
+		// history.back, ~300ms later). A `waitForFunction` poll can
 		// resolve on the FIRST transient '/' while Playwright's tracked
 		// `page.url()` still reads the reverted '/activity', desyncing
 		// the assertion. `navigation.entries()` reads the session history
@@ -909,8 +909,8 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 	});
 
 	// The gesture-during-tab-click-commit interrupt is not separately
-	// e2e'd here: the gesture must catch the tab-click's ~200ms slide
-	// slide, a race too tight to be reliable under varying dev-server
+	// e2e'd here: the gesture must catch the tab-click's ~300ms slide,
+	// a race too tight to be reliable under varying dev-server
 	// load. The fix (#beginGesture clears #pendingTabExit so a gesture's
 	// settle dispatches its own target) is code-verified, and the
 	// gesture-during-commit interrupt IS covered by the "re-grab
@@ -1353,7 +1353,7 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		// realistic `event.timeStamp` values that the releaseVelocity
 		// window can differentiate. The fast variant spaces the touchmoves
 		// 4ms apart (a 56ms total drag -> multi-px/ms slope); the slow
-		// variant spaces them 40ms apart (a 520ms total drag -> sub-1
+		// variant spaces them 40ms apart (a 560ms total drag -> sub-1
 		// px/ms slope). The wall-clock dispatch is identical in both
 		// variants (CDP round-trip overhead dominates either way), so the
 		// velocity the solver sees comes from the synthetic timestamps,
@@ -2768,12 +2768,12 @@ test('back-swipe from /bookmarks to /messages/inbox re-grab+cancel keeps the FAB
 	);
 	await page.waitForURL(/\/messages\/inbox$/, { timeout: 4000 });
 	// Wait briefly so the re-grab's `#beginGesture` lands inside the
-	// enter-settle window (the enter settle's progress is ~0.25 at 50ms
-	// into its ~200ms run). At progress ~0.25 the enterAnchor lerponent
+	// enter-settle window (the enter settle's progress is ~0.31 at 50ms
+	// into its ~300ms run). At progress ~0.31 the enterAnchor lerponent
 	// is 1 (a constant hold for this `{1, 1}` anchor), so the captured
 	// `dragAnchor.scale = 1`; the natural at this raw is
-	// `max(0, 1 - 0.25*2) = 0.5`, so the dragAnchor shift leaves the FAB
-	// at `1 + natural - 0.5 = 0.5 + natural` across the re-grab (a value
+	// `max(0, 1 - 0.31*2) = 0.38`, so the dragAnchor shift leaves the FAB
+	// at `1 + natural - 0.38 = 0.62 + natural` across the re-grab (a value
 	// the post-arm branch 5 could not match without the re-seed).
 	await page.waitForTimeout(50);
 
@@ -3351,7 +3351,7 @@ test('forward-swipe-to-/search commit-to-enter handoff keeps the header search t
 // frame itself (a one-sided slice, not a symmetric +-ms window like
 // the R10-A F1 FAB guard): the back-to-`/messages/inbox` slide
 // animates the search track out via the natural `searchProgress = 1 -
-// bm` formula across the whole ~160ms slide (a large intended
+// bm` formula across the whole ~300ms slide (a large intended
 // slide-out, eased so most motion is early), so the no-snap assertion
 // excludes post-flip frames to keep that natural slide-out out of the
 // metric.
@@ -3417,7 +3417,7 @@ test('forward-swipe-to-/search enter interrupted by a goto keeps the header sear
 	// or just before this flip. The no-snap window is the pre-flip frames
 	// plus the flip frame itself: the back-to-`/messages/inbox` slide
 	// animates the search track out via the natural
-	// `searchProgress = 1 - bm` formula across the slide's ~160ms duration
+	// `searchProgress = 1 - bm` formula across the slide's ~300ms duration
 	// (the panel's intended full-range slide-out, eased to ~35-40px per
 	// rAF at the start), so including post-flip frames in the window would
 	// mix the natural slide motion into the no-snap assertion. The

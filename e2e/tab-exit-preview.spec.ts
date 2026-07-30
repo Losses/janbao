@@ -20,7 +20,7 @@ import {
  * track toward index 0 or panelCount-1, and navigates on the orchestrator's
  * commit-settle. When
  * the tapped tab is NOT one of the pre-rendered panels, the slide reveals the
- * WRONG list for ~200ms before the real destination loads.
+ * WRONG list for ~300ms before the real destination loads.
  *
  * This is systemic, so the cases form a source x target grid. Three are
  * same-panel controls (the animation legitimately previews the target) and

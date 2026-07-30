@@ -6085,3 +6085,89 @@ enter settle ease drives the morph; `backMorph` drives the search axis.
 em-dash clean. Comment-only; runtime unchanged.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R42 fix (fab-deep stale FAIL + enter-settle 200ms→300ms)
+
+**R42 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `fab-deep-real-interaction.spec.ts:13` "All three FAIL on the
+current code" -> "Each test guards against one of the three reported
+defects (asserting the fixes hold)" (R8-R14 fixed the defects; tests
+pass).
+
+**B.** `messages-back-swipe.spec.ts:2772/682/912` claimed the tab-click
+enter settle is ~200ms; a tab-click is velocity=0 -> `COMMIT_T_DEFAULT_MS
+= 300` (orchestrator:1160 confirms ~300ms). Fixed `~200ms` -> `~300ms`
+and re-derived the 2772 FAB math (progress ~0.31 at 50ms, natural
+~0.38, shift `0.62 + natural`). Fixed a duplicated "slide slide" at
+L912. The swipeBack-driven `~200ms` commit claims (736/831/881/976) are
+velocity-dependent and legitimate.
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; prettier +
+em-dash clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R43 fix (velocity=0 commit-slide duration ~160/~200ms→~300ms)
+
+**R43 result: auditor A BLOCK, auditor B BLOCK (same class). Counter
+0/5.**
+
+A velocity=0 commit (discrete-nav tab-click/goto/popstate, forward-enter
+via `playEnterAnimation`) runs `COMMIT_T_DEFAULT_MS = 300`
+(orchestrator:1160). Six comments understated this as ~160ms/~200ms.
+Fixed all to ~300ms: `messages-back-swipe.spec.ts:3354/3420` (~160ms,
+R24-A replay), `:881` (~200ms, history.back popstate), `helpers.ts:221`
+(~200ms, NavPipelineHost enter), `tab-exit-preview.spec.ts:23` (~200ms,
+tab-click exit), `enter-animation.spec.ts:15` (~200ms, list->thread
+slide-in; A only, B borderline). Note: R42 listed `:881` among the
+swipeBack-driven legitimate sites, but it is `history.back` (popstate ->
+velocity 0 -> 300ms); B is correct, so it was fixed this round. The
+remaining swipeBack-driven `~200ms` claims (`736/831/976`) are
+velocity-matched and legitimate.
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; prettier +
+em-dash clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R44 fix (header-title-replay stale pre-unify docstring)
+
+**R44 result: auditor A BLOCK, auditor B BLOCK (same file). Counter
+0/5.**
+
+`e2e/header-title-replay.spec.ts` carried pre-DV20-C05B2 Header symbols
+(removed in the `a64af71` unification). Two sites: L12-31 "Root cause"
+(auditor B) referenced `prevTitle`/`displayedTitle`/`transitionProgress`/
+`titleTransitionActive`/`onSwipeEnd`/`dragOffset`/title `$effect` ->
+rewrote to the current `titleView` $derived (drag/settle/rest) with
+`settleLatched` + `settleProgress`. L222-224 setup comment (auditor A)
+referenced a "250ms safety timeout" (actual `TITLE_CROSSFADE_MS = 200ms`)
+and `titleTransitionActive` (actual `settleActive`) -> rewrote to the
+current field/duration.
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; prettier +
+em-dash clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R45 fix (nav-executor-logic cap docstring + velocity-test arithmetic)
+
+**R45 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `nav-executor-logic.ts:364-374` SETTLE_PER_TICK_CLAMP_FACTOR
+docstring cited the FAB release-snap as "~300ms commit duration" (the
+unit test's backward-velocity `COMMIT_T_DEFAULT_MS` fallback); the e2e
+is ~200ms (`fab-release-snap.spec.ts` 4 sites). Rewrote to ~200ms (cap
+~0.145, `2*cap ≈ 0.290`) and corrected the safety rationale (the e2e
+leap-guard `< 0.2` holds via commitEase intermediate values, not
+`2*cap < 0.2`).
+
+**B.** `messages-back-swipe.spec.ts:1355-1356` slow "total drag" 520ms
+-> 560ms (touchEnd = `stepCount * stepSec = 14*40ms`, matching the fast
+variant's 56ms = `14*4ms`).
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; prettier +
+em-dash clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.

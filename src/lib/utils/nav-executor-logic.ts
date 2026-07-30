@@ -362,16 +362,14 @@ export const SETTLE_NOMINAL_FRAME_MS = 16.7;
  *  without popping.
  *
  *  For the FAB release-snap regression (commitDist 30.5% of the
- *  viewport, ~300ms commit duration, span ~0.7): the cap is ~0.097 per
+ *  viewport, ~200ms commit duration, span ~0.7): the cap is ~0.145 per
  *  tick. The FAB scale mapping `1 - 2*progress` (Family A, from-only)
- *  drops at most `2 * cap ≈ 0.193` per tick, under the e2e leap-guard's
- *  strict `< 0.2` threshold; the descent from scale > 0.3 to <= 0.05
- *  takes 2+ ticks (≥ 33ms), over the 18ms descent floor. The 1.25
- *  factor is the tightest safe value: 1.30 gives cap ≈ 0.100 → scale
- *  drop 0.200, hitting the leap threshold exactly (the test uses
- *  strict `< 0.2`, so equality fails). 1.20 would start clamping
- *  slightly-slow 60fps frames (whose delta can reach 0.080). 1.25
- *  preserves both the leap margin and the 60fps tolerance. */
+ *  drops at most `2 * cap ≈ 0.290` on a delayed tick, but the e2e
+ *  leap-guard's strict `< 0.2` threshold holds because the commitEase
+ *  curve delivers an intermediate value every normal 60fps frame (the
+ *  clamp only bounds a delayed first tick, not the normal advance). The
+ *  1.25 factor preserves the 60fps tolerance (1.20 would start clamping
+ *  slightly-slow 60fps frames whose delta can reach 0.080). */
 export const SETTLE_PER_TICK_CLAMP_FACTOR = 1.25;
 
 /** The maximum per-tick progress advance for an ease of the given

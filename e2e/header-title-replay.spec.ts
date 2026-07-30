@@ -9,26 +9,20 @@ import { prepareContext, waitForHydration, openSidebarAndGoto } from './helpers'
  * release the outgoing and incoming titles swap in a single frame and the whole
  * title-crossfade then plays a second time.
  *
- * Root cause (see the audit report). The Header has TWO decoupled title render
- * paths keyed off the same deep-title container:
- *
- *   - DRAG branch   (pager.dragging === true): renders currentTitle (this page)
- *                   + incomingTitle (navStore.backTarget), both positioned live
- *                   by `morph` (pager.backMorph). No module state involved.
- *   - TRANSITION/STATIC branches (pager.dragging === false): render module-level
- *                   `prevTitle` + `displayedTitle`, driven by `transitionProgress`.
- *                   These only update when the `$effect` over `title` fires.
- *
- * On a back-swipe COMMIT, onSwipeEnd clears `dragOffset` synchronously, so the
- * NavPipelineHost pager effect flips `dragging` false + `backMorph` 1 BEFORE
- * the SvelteKit navigation has landed. `title` is still the source page's title,
- * so the title `$effect` has NOT fired → `titleTransitionActive` is false → the
- * Header drops from the DRAG branch (two titles, mid-crossfade) straight to the
- * STATIC branch (one title, `displayedTitle` = the SOURCE page). The incoming
- * title that was sliding in vanishes and the outgoing title snaps back to
- * centre: the "instant swap". ~200ms later the navigation lands, `title`
- * finally changes, the `$effect` re-triggers from `transitionProgress` 0→1, and
- * the full crossfade plays again: the "replay".
+ * Root cause. The title flows through a single `titleView` $derived
+ * (Header.svelte) with three branches: a drag branch
+ * ({outgoing: currentTitle, incoming: backTitle, progress: backMorph}),
+ * a settle branch (reading the orchestrator's `settleLatched` endpoints
+ * + `settleProgress`), and a rest branch. The back-swipe commit handoff
+ * is drag -> settle: the orchestrator's settle latches the drag's
+ * outgoing/incoming titles and carries the drag's `backMorph` into
+ * `settleProgress` so the crossfade stays continuous across the release.
+ * This spec guards that continuity: any regression that re-introduces a
+ * discontinuity at the drag-to-settle handoff (a settle that does not
+ * latch the drag's endpoints, or a progress that does not carry the
+ * drag's `backMorph` into `settleProgress`) reproduces an instant title
+ * swap at the release followed by the full crossfade replaying - the
+ * reported signature.
  *
  * Faithfulness: the swipe is a real CDP touch gesture (detectSwipe rejects
  * mouse), dragged to ~half width (morph ≈ 0.5, past SWIPE_COMMIT 60 so it
@@ -225,9 +219,10 @@ async function setupEditFromSettings(page: Page): Promise<SetupTitles> {
 
 	await page.locator('a[href="/profile/edit"]').first().click();
 	await page.waitForURL('/profile/edit');
-	// Let the forward title crossfade + its 250ms safety timeout settle so the
-	// subsequent back-swipe starts from the steady STATIC state (titleTransition
-	// Active === false) - the realistic precondition for the reported bug.
+	// Let the forward title crossfade (TITLE_CROSSFADE_MS = 200ms) settle so
+	// the subsequent back-swipe starts from the steady rest state
+	// (settleActive === false) - the realistic precondition for the reported
+	// bug.
 	await page.waitForTimeout(400);
 	const editTitle = await readDeepTitle(page);
 	return { settingsTitle, editTitle };
