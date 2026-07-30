@@ -115,7 +115,7 @@ export interface DragFabAnchor {
  * when a search settle is in flight at `#beginGesture`
  * (`settleActive && #searchAnchor !== null`): a re-grab taking over a
  * search-retreat or search-enter settle would otherwise snap the header
- * search track ~96-143px (R26-A defect) because the post-cancel
+ * search track ~238px (R26-A defect) because the post-cancel
  * `#searchAnchor` clear hands the search axis to the natural `bm`-driven
  * formula whose value at the takeover disagrees with the held settle lerp.
  */
@@ -190,11 +190,11 @@ export interface EnterFabAnchor {
  *   - The `onSvelteKitBeforeNavigate` discrete-nav arm at a non-search
  *     `goto` / tab-click / popstate interrupt of a forward-swipe-to-
  *     `/search`: `start` is captured via `#searchProgressAtSettleInstant`
- *     before the publication reset (the drag's live `bm`, e.g. 0.43);
+ *     before the publication reset (the drag's live `bm`, e.g. 0.30);
  *     `dest = 0` (the non-search discrete-nav dest's at-rest searchProgress)
  *     so the search panel smoothly retreats during the discrete-nav settle.
  *     Without the anchor the panel snaps to 0 at the boundary
- *     (~168px snap at raw=0.43, R23-B F1).
+ *     (~118px snap at raw=0.30, R23-B F1).
  *   - `#accelerateInFlight` at a discrete-nav interrupt of an in-flight
  *     enter settle on `/search` (R24-A, R10-A F1 sibling): `start` is the
  *     search-axis position captured via `#searchProgressAtSettleInstant`
@@ -209,7 +209,7 @@ export interface EnterFabAnchor {
  *     `#searchAnchor = null` would hand the search axis to the natural
  *     `searchProgress = bm` formula, whose `bm` value at the accelerate
  *     instant disagrees with the held-at-1 value the Header was rendering,
- *     snapping the panel partially out at the boundary (~240px snap on a
+ *     snapping the panel partially out at the boundary (~304px snap on a
  *     393px viewport, R24-A).
  *   - The `notifyHeaderState` mid-settle absorb when a dynamic-title route
  *     resolves a new title mid-enter on a `/search` commit (R24-A, R12-B F1

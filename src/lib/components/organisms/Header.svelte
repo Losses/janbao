@@ -229,7 +229,7 @@
 				// that moment. The natural drag-morph curve
 				// (`currentHasTabs ? 1 - bm : bm`) would recompute from `bm`
 				// and snap (180deg icon + 40px layer snap on a centerTab ->
-				// tab-root re-grab; 61deg icon snap on a gesture-during-
+				// tab-root re-grab; ~103deg icon snap on a gesture-during-
 				// forward-enter): it agrees with the settle at the release
 				// instant but diverges mid-flight because the settle
 				// interpolates toward `destMorph = atRestMorph(incoming)`
@@ -541,7 +541,7 @@
 	//      and the `settleActive` flag flip makes branch 2 short-circuit, handing the search
 	//      axis to the natural gesture formula below, whose `bm` value at
 	//      the takeover disagrees with the held settle lerp (R26-A:
-	//      ~96-143px snap on a 393px viewport). The orchestrator captures
+	//      ~238px snap on a 393px viewport). The orchestrator captures
 	//      the search-axis position via `#searchProgressAtSettleInstant`
 	//      BEFORE the cancel and exposes it via `dragSearchAnchor`; this
 	//      branch shifts the natural gesture formula so it passes through

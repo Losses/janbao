@@ -28,11 +28,15 @@ import {
 // `startMorph = #dragMorphAtAnchorOrRaw(outgoingHasTabs, raw)`, i.e.
 // `1 - raw` at the release instant, to mirror the drag's terminal value.)
 // A regression that splits the publication rule from the settle's
-// static-morph classification (e.g. by dropping the `!isCenterTabRoute`
-// qualifier here) snaps the morph in one rAF frame at release: the drag
-// stays at `currentHasTabs ? 1 : 0 = 1` while the settle collapses to a
-// non-static `startMorph` and the icon rotates toward the back-arrow
-// (a snap of ~119deg / ~26px at this viewport's header height).
+// static-morph classification snaps the morph. Dropping the
+// `!isCenterTabRoute` qualifier here over-classifies the centerTab
+// tab-to-tab shape (`/messages/<id>` -> `/messages/inbox`, whose live
+// `backMorph` makes its drag non-static) as static, so the settle
+// captures `startMorph = atRestMorph` instead of the drag's terminal
+// value and the icon snaps ~119deg / ~26px at release; that snap is
+// caught by the R1 centerTab test. This offline guard instead asserts
+// the non-centerTab `/offline` -> `/` shape (whose `backMorph` is null
+// and drag is genuinely static) stays continuous.
 
 test.describe('DV21 R4 F1: /offline -> / back-swipe morph continuity', () => {
 	test.beforeEach(async ({ context }) => {
@@ -65,7 +69,7 @@ test.describe('DV21 R4 F1: /offline -> / back-swipe morph continuity', () => {
 
 		expect(page.url(), 'back-swipe must land on /').toMatch(/\/$/);
 
-		// The threshold allows one rAF of regular progress (~12px / ~22deg
+		// The threshold allows one rAF of regular progress (~3px / ~13deg
 		// at this viewport's header height); the R4-audit snap was
 		// ~26.46px / ~119deg.
 		expect(

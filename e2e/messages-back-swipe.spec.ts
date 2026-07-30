@@ -1536,8 +1536,8 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		});
 
 		expect(page.url(), 'back-swipe must land on /messages/inbox').toMatch(/\/messages\/inbox/);
-		// The threshold allows one rAF of regular progress (~12px / ~22deg
-		// at this viewport's header height); a snap lands ~26px / ~82deg.
+		// The threshold allows one rAF of regular progress (~3px / ~13deg
+		// at this viewport's header height); a snap lands ~26px / ~119deg.
 		expect(
 			rootJumps.max,
 			`rootLayerTy must not snap at release (max jump ${rootJumps.max.toFixed(2)}px at t=${rootJumps.maxAt}ms)`
@@ -1639,7 +1639,7 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 			finalPath: new URL(page.url()).pathname
 		});
 
-		// The threshold allows one rAF of regular progress (~12px / ~22deg
+		// The threshold allows one rAF of regular progress (~3px / ~13deg
 		// at this viewport's header height); the R4-audit snap was
 		// ~40px / ~180deg at the re-grab boundary.
 		expect(
@@ -1659,7 +1659,7 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 	// forward-enter to a centerTab route; a back-swipe started mid-enter
 	// cancels the settle and seeds `bm = the enter's eased progress (> 0)`,
 	// so the drag branch would recompute `morph = 1 - bm` and snap from 1
-	// toward 0 without the `dragMorphAnchor` capture (a ~61deg icon snap at
+	// toward 0 without the `dragMorphAnchor` capture (a ~103deg icon snap at
 	// this viewport). With the anchor, the drag curve shifts to pass
 	// through the settle's current morph (the value the enter was rendering
 	// at the takeover instant), keeping the morph continuous. The
@@ -1707,8 +1707,8 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 			finalPath: new URL(page.url()).pathname
 		});
 
-		// The threshold allows one rAF of regular progress (~12px / ~22deg
-		// at this viewport's header height); the R4-audit snap was ~61deg
+		// The threshold allows one rAF of regular progress (~3px / ~13deg
+		// at this viewport's header height); the formalized guard's suite-context BEFORE is ~103deg
 		// at the takeover boundary.
 		expect(
 			rootJumps.max,
@@ -1740,9 +1740,9 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 	// `Runtime.evaluate` between `touchMove` and `touchEnd` so the
 	// touch / goto ordering is deterministic (a Playwright
 	// `page.evaluate` between CDP touch events would use a separate IPC
-	// channel and could land after the `touchEnd`). The audit's
-	// evidence was ~102deg / ~23px; the R5 fix reduces both to within
-	// the regular per-rAF cadence (~22deg / ~12px at this viewport's
+	// channel and could land after the `touchEnd`). The formalized
+	// guard's BEFORE is ~66deg / ~15px; the R5 fix reduces both to within
+	// the regular per-rAF cadence (~13deg / ~3px at this viewport's
 	// header height).
 	test('drag-to-discrete-nav handoff keeps the vertical morph continuous at the interrupt (R5 A-F1)', async ({
 		page,
@@ -1812,9 +1812,9 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 			finalPath: new URL(page.url()).pathname
 		});
 
-		// The threshold allows one rAF of regular progress (~12px / ~22deg
-		// at this viewport's header height); the audit's evidence was
-		// ~102deg / ~23px.
+		// The threshold allows one rAF of regular progress (~3px / ~13deg
+		// at this viewport's header height); the formalized guard's
+		// BEFORE was ~66deg / ~15px.
 		expect(
 			rootJumps.max,
 			`rootLayerTy must not snap at the drag-to-discrete-nav handoff (max jump ${rootJumps.max.toFixed(2)}px at t=${rootJumps.maxAt}ms)`
@@ -2227,7 +2227,7 @@ function maxFrameJumps(
 // vertical morph and the FAB scale stay continuous across the direction
 // reversal. The audit's BEFORE evidence was a 26px rootLayerTy / 119deg
 // burgerRot / 0.89 fabScale snap at t=498ms; the fix reduces all three to
-// within the regular per-rAF cadence (~12px / ~22deg / ~0.05 scale at
+// within the regular per-rAF cadence (~3px / ~13deg / ~0.12 scale at
 // this viewport). Single CDP session for both swipes so the re-grab lands
 // inside the first commit's ~300ms window with no Playwright async gap.
 test('opposite-direction re-grab into a forward-swipe-to-/search keeps the morph and FAB continuous (R8-A F1 + F3)', async ({
@@ -2409,7 +2409,7 @@ test('forward-swipe-to-/search commit-to-enter handoff keeps the FAB scale conti
 // settle-to-drag boundary. The threshold (max frame-to-frame jump < 0.2)
 // guards against any divergence between the helper and the FAB layer's
 // branch set (the natural half-mapping at the takeover raw disagrees with
-// the boundary proportional value by ~0.4 at a 0.3 raw, so a stale anchor
+// the boundary proportional value by ~0.48 at a 0.3 raw, so a stale anchor
 // scale produces a visible snap on the first new-drag frame).
 test('boundary-cancel re-grab into a forward swipe keeps the FAB scale continuous (R9-A F1 boundary)', async ({
 	page,
@@ -3203,7 +3203,7 @@ test('drag-to-discrete-nav handoff: shape (F,T,F) deep source, tab discrete-nav 
 // = bm`), interrupted mid-swipe by `__e2eGoto('/activity')` (a non-search
 // tab-root discrete nav, the shape the orchestrator's discrete-nav arm
 // intercepts). At the interrupt the orchestrator's
-// `#searchProgressAtSettleInstant` captures the live `bm` (e.g. 0.43) and
+// `#searchProgressAtSettleInstant` captures the live `bm` (e.g. 0.30) and
 // re-seeds `#searchAnchor = { start: bm, dest: 0 }` AFTER the discrete-nav
 // arm. The Header's `searchProgress` derivation's settle-anchor branch
 // lerps `start` -> `dest` across `settleMorphFraction`, keeping the header
@@ -3211,8 +3211,8 @@ test('drag-to-discrete-nav handoff: shape (F,T,F) deep source, tab discrete-nav 
 // at-rest / gesture switch collapses `searchProgress` from `bm` to 0 in
 // one rAF frame at the boundary (targetIsSearch flips to false when
 // `transitionTarget` clears, so the `targetIsSearch ? trackMorph : 0` arm
-// returns 0), snapping the header track by `bm * viewport-width` (~168px at
-// raw=0.43 on a 393px viewport).
+// returns 0), snapping the header track by `bm * viewport-width` (~118px at
+// raw=0.30 on a 393px viewport).
 test('drag-to-discrete-nav handoff with a non-search goto keeps the header search track continuous (R23-B F1)', async ({
 	page,
 	context
@@ -3346,7 +3346,7 @@ test('forward-swipe-to-/search commit-to-enter handoff keeps the header search t
 // would hand the search axis to the natural `searchProgress = bm` formula,
 // whose `bm` value at the accelerate instant disagrees with the held-at-1
 // value the Header was rendering, snapping the header search track partially
-// out at the boundary (~240px snap on a 393px viewport, R24-A defect). The
+// out at the boundary (~304px snap on a 393px viewport, R24-A defect). The
 // boundary window is the pre-flip frames plus the accelerate flip
 // frame itself (a one-sided slice, not a symmetric +-ms window like
 // the R10-A F1 FAB guard): the back-to-`/messages/inbox` slide
@@ -3462,7 +3462,7 @@ test('forward-swipe-to-/search enter interrupted by a goto keeps the header sear
 // drag-anchor branch shifts the natural gesture formula through
 // `(anchor.raw, anchor.search)` so the search track stays continuous with
 // the prior settle across the takeover (DV21 §5). The R26-A defect
-// (~96-143px snap on a 393px viewport) is the search-axis sibling of the
+// (~238px snap on a 393px viewport) is the search-axis sibling of the
 // morph axis's R8-A F1 re-grab snap and the FAB axis's R8-A F3 re-grab
 // snap: without a drag-owned anchor the cleared `#searchAnchor` hands the
 // search axis to the natural `bm`-driven gesture formula at the

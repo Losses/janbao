@@ -5950,3 +5950,138 @@ em-dash clean. Comment-only; runtime unchanged (R34/R35 continuity
 guards green).
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R36 fix (R24-A / R26-A snap-magnitude comments vs formalized-test BEFORE)
+
+**R36 result: auditor A PASS, auditor B BLOCK. Counter 0/5.** Auditor B
+found five code comments cited the R24-A / R26-A defect magnitudes from
+the preliminary audit probes (~240px, ~96-143px) instead of the
+formalized preventive tests' BEFORE measurements (journal L4974
+303.87px, L5134 237.69px). Cross-checked the journal BEFORE numbers and
+the geometry; confirmed. The two `messages-back-swipe.spec.ts` sites are
+the tests' own docstrings, so they directly contradicted the test.
+
+**Fix.** R24-A `~240px` -> `~304px` (header-probe.ts:212,
+messages-back-swipe.spec.ts:3349); R26-A `~96-143px` -> `~238px`
+(header-probe.ts:118, Header.svelte:544, messages-back-swipe.spec.ts:3465).
+
+**Non-blocking (B, borderline; left).** R23-B F1's `~168px at raw=0.43`
+is parametrized at the goto-injection raw (`0.43 * 393 = 168.69`),
+defensible vs the snap-frame bm=0.30 (117.98px). Left this round.
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; prettier +
+em-dash clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R37 fix (F3 docstring magnitude ~61deg vs formalized BEFORE 102.7deg)
+
+**R37 result: auditor A BLOCK, auditor B PASS. Counter 0/5.** Auditor A
+found the F3 (gesture-during-forward-enter) docstring cited the R4-audit
+manual probe `~61deg` (taken while the F3 guard was `test.skip`) instead
+of the formalized guard's own BEFORE `102.7deg` (journal L2272). Same
+class as R36.
+
+**Orchestrator cross-check (A reported 2 sites; a deg-unit grep found a
+3rd A missed).** `Header.svelte:232` also carries "61deg icon snap on a
+gesture-during-forward-enter" in the morph derivation docstring. Fixed
+all three: `e2e/messages-back-swipe.spec.ts:1662`, `:1711` (reworded to
+the formalized guard's suite-context BEFORE), and `Header.svelte:232`.
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; prettier +
+em-dash clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R38 fix (R1 snap ~82deg + regular-cadence px/deg ratio)
+
+**R38 result: auditor A PASS, auditor B BLOCK. Counter 0/5.**
+
+**F1.** `e2e/messages-back-swipe.spec.ts:1540` R1 snap `~26px / ~82deg`
+cited the audit's manual-swipe probe (bm=0.458); the formalized
+swipeBack test snaps at bm=0.66 -> 119deg (journal L2093; four siblings
+say `~119deg`). Fixed `~82deg` -> `~119deg`.
+
+**F2 (8 sites).** The "regular per-rAF cadence `~12px / ~22deg`" comments
+have ratio 1.83, but rootLayerTy(40px)/burgerRot(180deg) geometry is 4.5
+and the formalized tests' actual deltas follow 4.5 (journal L2314-2328:
+2.78px/12.52deg, 4.04/18.18, 1.93/8.70). Fixed to `~3px / ~13deg` (actual
+R1 baseline). Sites: `messages-back-swipe.spec.ts:1539/1642/1710/1815/
+2230/1745`, `offline-back-swipe.spec.ts:68`,
+`reproduce-dv20-search-swipe.spec.ts:136`.
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; prettier +
+em-dash clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R39 fix (A-F1 + R23-B F1 docstring magnitudes vs formalized BEFORE)
+
+**R39 result: auditor A BLOCK, auditor B BLOCK (different drifts).
+Counter 0/5.**
+
+**A-F1 (auditor B).** `messages-back-swipe.spec.ts:1744` + `:1817` cited
+the audit probe `~102deg / ~23px` (journal L2545) instead of the
+formalized guard's BEFORE `65.95deg / 14.66px` (journal L2710). Reworded
+to the formalized guard's BEFORE (`~66deg / ~15px`).
+
+**R23-B F1 (auditor A; overturns R36's borderline call).** R36 left
+`~168px at raw=0.43` as borderline, believing the goto-injection raw was
+0.43. Geometrically verified the formalized test injects the goto at
+raw=0.30 (startX=round(0.7*393)=275, endX=0, goto at i=6 -> x=157,
+raw=(275-157)/393=0.30; bm*393=117.9px = journal L4739 BEFORE 117.98px).
+Fixed 5 sites to `0.30 / ~118px`: `messages-back-swipe.spec.ts:3206`,
+`:3214-3215`, `header-probe.ts:193`, `:197`, `orchestrator:3080`.
+`orchestrator:2975` ("the audit's ~168px snap") left unchanged (A:
+explicit audit attribution, accurate per journal L4746).
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; prettier +
+em-dash clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R40 fix (FAB cadence at L2230 + offline guard regression example)
+
+**R40 result: auditor A BLOCK, auditor B BLOCK (different findings).
+Counter 0/5.**
+
+**A (FAB cadence).** `messages-back-swipe.spec.ts:2230` "regular per-rAF
+cadence ... ~0.05 scale": R38 fixed the px/deg of this comment but
+missed the FAB component. Formalized AFTER `fabJumps.max = 0.12`
+(journal L3443); FAB derivative ±2 at progress ~0.06 = 0.12. Fixed
+`~0.05 scale` -> `~0.12 scale`.
+
+**B (offline guard regression example).** `offline-back-swipe.spec.ts:30`
+claimed dropping `!isCenterTabRoute` snaps `/offline` -> `/`. Verified:
+for that shape `dragMorphWasStatic` is `true` with or without the
+qualifier (`backMorph` null, drag static); the qualifier drop actually
+snaps the centerTab shape (live `backMorph`), guarded by R1. Reworded
+the example to attribute the snap to centerTab and state the offline
+guard asserts the non-centerTab shape stays continuous.
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; prettier +
+em-dash clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R41 fix (FAB disagreement + trackTx scrub + enter-slide backMorph→morph)
+
+**R41 result: auditor A PASS, auditor B BLOCK. Counter 0/5.**
+
+**F1.** `messages-back-swipe.spec.ts:2412` FAB disagreement "~0.4" ->
+"~0.48" (actual `0.88 - 0.4 = 0.48`; the same test's inline L2443 states
+both values).
+
+**F2.** `search-back-hamburger-flash.spec.ts:51` trackTx "scrub drove
+`morph`" -> "scrub drove the search track" (the scrub drives
+searchProgress/trackMorph; the vertical morph excludes the search scrub).
+
+**F3.** `orchestrator:4189` "enter slide's `backMorph` drives the morph"
+contradicts `playEnterAnimation` (L1187: morph driven by settle ease, not
+`backMorph`, since `dragging` is false during the enter). Reworded: the
+enter settle ease drives the morph; `backMorph` drives the search axis.
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; prettier +
+em-dash clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.

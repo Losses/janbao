@@ -48,7 +48,7 @@ interface IconFrame {
 	 * actual on-screen rotation mid-transition. Null when unreadable. */
 	paintedRot: number | null;
 	/** Header search track translateX (px). ~0 at a tab root, ~-viewport-width in
-	 * search. Corroborates that the scrub drove `morph`. */
+	 * search. Corroborates that the scrub drove the search track. */
 	trackTx: number | null;
 }
 

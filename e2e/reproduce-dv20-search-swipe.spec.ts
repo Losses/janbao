@@ -133,7 +133,7 @@ test('Bug 3: leftward swipe from /messages/inbox reaches /search with a real ani
 	// Vertical-channel morph continuity guard (DV21 §5). The drag's terminal
 	// morph must agree with the settle's startMorph at the release handoff so
 	// the icon and tab-bar translateY stay continuous across the whole
-	// gesture. The threshold allows one rAF of regular progress (~12px / ~22
+	// gesture. The threshold allows one rAF of regular progress (~3px / ~13
 	// deg at this viewport's header height); a snap lands ~26px / ~119deg.
 	expect(
 		rootJumps.max,

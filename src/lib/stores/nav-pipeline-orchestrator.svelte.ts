@@ -3077,7 +3077,7 @@ export class NavPipelineOrchestrator {
 				// For the audit's flagship (F,F,*) shape (a
 				// forward-swipe-to-`/search` interrupted by a non-search
 				// `goto`), `capturedSearchProgress` is the drag's live `bm`
-				// (e.g. 0.43) and `dest` is 0, so the lerp retreats the
+				// (e.g. 0.30) and `dest` is 0, so the lerp retreats the
 				// search panel from `bm` to 0 across the discrete-nav
 				// settle. For a from-rest tab-click (no live drag) the
 				// helper returned null and the re-seed skips; the Header's
@@ -4186,7 +4186,9 @@ export class NavPipelineOrchestrator {
 		// /messages/<id> <-> /search, /search <-> /bookmarks, etc.). A
 		// forward nav whose destination runs `playEnterAnimation` (which
 		// sets `transitionTarget` synchronously in `onMount`) skips the
-		// scrub; the enter slide's `backMorph` drives the morph instead
+		// scrub; the enter settle ease drives the morph instead (the
+		// published `backMorph` drives the search axis, not the vertical
+		// morph, since `dragging` is false during the enter)
 		// (spec Step 5 sanctions the `transitionTarget` arbitration). The
 		// orchestrator owns this motion on its rAF (§5: no CSS
 		// transitions in this layer); the Header's horizontal-track /
