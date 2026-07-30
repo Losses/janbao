@@ -3196,3 +3196,524 @@ test('drag-to-discrete-nav handoff: shape (F,T,F) deep source, tab discrete-nav 
 		`burgerRot must not snap at the drag-to-discrete-nav handoff (max jump ${burgerJumps.max.toFixed(2)}deg at t=${burgerJumps.maxAt}ms)`
 	).toBeLessThan(35);
 });
+
+// DV21 R23-B F1 continuity guard: a forward-swipe-to-`/search` from
+// `/messages/inbox` (the last tab, isSearch=false) whose drag target is
+// `/search` (targetIsSearch=true, the panel slides in via `searchProgress
+// = bm`), interrupted mid-swipe by `__e2eGoto('/activity')` (a non-search
+// tab-root discrete nav, the shape the orchestrator's discrete-nav arm
+// intercepts). At the interrupt the orchestrator's
+// `#searchProgressAtSettleInstant` captures the live `bm` (e.g. 0.43) and
+// re-seeds `#searchAnchor = { start: bm, dest: 0 }` AFTER the discrete-nav
+// arm. The Header's `searchProgress` derivation's settle-anchor branch
+// lerps `start` -> `dest` across `settleMorphFraction`, keeping the header
+// track continuous with the drag's terminal value. Without the anchor the
+// at-rest / gesture switch collapses `searchProgress` from `bm` to 0 in
+// one rAF frame at the boundary (targetIsSearch flips to false when
+// `transitionTarget` clears, so the `targetIsSearch ? trackMorph : 0` arm
+// returns 0), snapping the header track by `bm * viewport-width` (~168px at
+// raw=0.43 on a 393px viewport).
+test('drag-to-discrete-nav handoff with a non-search goto keeps the header search track continuous (R23-B F1)', async ({
+	page,
+	context
+}) => {
+	await prepareContext(context);
+	await page.goto('/messages/inbox');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+
+	await installMultiSignalSampler(page, 3000);
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+	const width = page.viewportSize()?.width ?? 393;
+	const startX = Math.round(width * 0.7);
+	const endX = startX - Math.round(width * 0.7);
+	const touch = (
+		type: 'touchStart' | 'touchMove' | 'touchEnd',
+		x: number,
+		state: string
+	) =>
+		client.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+			modifiers: 0,
+			timestamp: 0
+		});
+	await touch('touchStart', startX, 'touchPressed');
+	for (let i = 1; i <= 14; i++) {
+		await touch('touchMove', startX + Math.round(((endX - startX) * i) / 14), 'touchMoved');
+		if (i === 6) {
+			await client.send('Runtime.evaluate', {
+				expression: `window.__e2eGoto('/activity')`,
+				awaitPromise: false
+			});
+		}
+	}
+	await touch('touchEnd', endX, 'touchReleased');
+	await client.detach();
+	await waitForMultiSignalDone(page);
+	const frames = await readMultiSignalFrames(page);
+
+	const hdrTrackJumps = maxFrameJumps(frames, (f) => f.hdrTrackTx);
+	console.log('R23-B F1 hdrTrackTx continuity:', {
+		hdrTrackJumps,
+		finalPath: new URL(page.url()).pathname
+	});
+
+	expect(
+		page.url(),
+		'the interrupted drag must land on the discrete-nav destination'
+	).toMatch(/\/activity$/);
+	expect(
+		hdrTrackJumps.max,
+		`hdrTrackTx must not snap at the drag-to-discrete-nav handoff (max jump ${hdrTrackJumps.max.toFixed(2)}px at t=${hdrTrackJumps.maxAt}ms)`
+	).toBeLessThan(30);
+});
+
+// DV21 R23-B F2 continuity guard: a saturated forward-swipe from
+// `/messages/inbox` (isSearch=false) to `/search` (targetIsSearch=true) that
+// commits. At raw=1 (the commit slide's terminal) `#onExecutorSettle`
+// stashes `#priorTerminalSearchProgress = 1` (the panel slid fully in).
+// SvelteKit's host swap lands on `/search`, `playEnterAnimation` runs on
+// the new search-mode host, and the search anchor is seeded
+// `{ start: 1, dest: 1 }` AFTER the enter arm so the Header's
+// `searchProgress` derivation's settle-anchor branch holds the panel fully
+// in across the enter settle. Without the anchor the natural
+// `searchProgress = 1 - trackMorph = bm` curve the enter slide publishes
+// resets 1 -> 0 (host swap zeroes `#progress`) then runs 0 -> 1 across the
+// enter slide, snapping the panel fully out (~viewport-width, ~393px on a 393px
+// viewport) and then re-animating it in (R23-B F2: ~393px of wasted motion
+// across the enter).
+test('forward-swipe-to-/search commit-to-enter handoff keeps the header search track continuous (R23-B F2)', async ({
+	page,
+	context
+}) => {
+	await prepareContext(context);
+	await page.goto('/messages/inbox');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+
+	await installMultiSignalSampler(page, 2800);
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+	const width = page.viewportSize()?.width ?? 393;
+	const startX = Math.round(width * 0.7);
+	const endX = startX - Math.round(width * 0.7);
+	const touch = (
+		type: 'touchStart' | 'touchMove' | 'touchEnd',
+		x: number,
+		state: string
+	) =>
+		client.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+			modifiers: 0,
+			timestamp: 0
+		});
+	await touch('touchStart', startX, 'touchPressed');
+	for (let i = 1; i <= 14; i++) {
+		await touch('touchMove', startX + Math.round(((endX - startX) * i) / 14), 'touchMoved');
+	}
+	await touch('touchEnd', endX, 'touchReleased');
+	await client.detach();
+	await waitForMultiSignalDone(page);
+	const frames = await readMultiSignalFrames(page);
+
+	const hdrTrackJumps = maxFrameJumps(frames, (f) => f.hdrTrackTx);
+	console.log('R23-B F2 hdrTrackTx continuity:', {
+		hdrTrackJumps,
+		finalPath: new URL(page.url()).pathname
+	});
+
+	expect(page.url(), 'the forward swipe must land on /search').toMatch(/\/search$/);
+	expect(
+		hdrTrackJumps.max,
+		`hdrTrackTx must not snap at the commit-to-enter handoff (max jump ${hdrTrackJumps.max.toFixed(2)}px at t=${hdrTrackJumps.maxAt}ms)`
+	).toBeLessThan(30);
+});
+
+// DV21 R24-A continuity guard: a saturated forward-swipe from `/messages/inbox`
+// to `/search` commits and lands on `/search`, `playEnterAnimation` seeds
+// `#searchAnchor = { start: 1, dest: 1 }` (R23-B F2) and arms the enter
+// settle. While the enter slide is still in flight a same-session CDP
+// `__e2eGoto('/messages/inbox')` arrives; the discrete-nav branch's
+// `phase === 'committing'` test routes to `#accelerateInFlight`, which re-arms
+// the settle ease and (R24-A) captures the in-flight search-axis position via
+// `#searchProgressAtSettleInstant` BEFORE the arm clears `#searchAnchor`, then
+// re-seeds the anchor AFTER the arm so the Header's `searchProgress`
+// derivation's settle-anchor branch holds the panel position across the
+// accelerated re-arm. Without the re-seed the post-arm `#searchAnchor = null`
+// would hand the search axis to the natural `searchProgress = bm` formula,
+// whose `bm` value at the accelerate instant disagrees with the held-at-1
+// value the Header was rendering, snapping the header search track partially
+// out at the boundary (~240px snap on a 393px viewport, R24-A defect). The
+// boundary window is the pre-flip frames plus the accelerate flip
+// frame itself (a one-sided slice, not a symmetric +-ms window like
+// the R10-A F1 FAB guard): the back-to-`/messages/inbox` slide
+// animates the search track out via the natural `searchProgress = 1 -
+// bm` formula across the whole ~160ms slide (a large intended
+// slide-out, eased so most motion is early), so the no-snap assertion
+// excludes post-flip frames to keep that natural slide-out out of the
+// metric.
+test('forward-swipe-to-/search enter interrupted by a goto keeps the header search track continuous (R24-A accelerateInFlight)', async ({
+	page,
+	context
+}) => {
+	await prepareContext(context);
+	await page.goto('/messages/inbox');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+
+	await installMultiSignalSampler(page, 3000);
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+	const width = page.viewportSize()?.width ?? 393;
+	const startX = Math.round(width * 0.7);
+	const endX = startX - Math.round(width * 0.7);
+	const touch = (
+		type: 'touchStart' | 'touchMove' | 'touchEnd',
+		x: number,
+		state: string
+	) =>
+		client.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+			modifiers: 0,
+			timestamp: 0
+		});
+	// Phase 1: leftward forward-swipe from `/messages/inbox` to `/search`.
+	// The commit slide ends, navigation lands on `/search`, and the new
+	// search-mode host's `playEnterAnimation` seeds `#searchAnchor` (R23-B
+	// F2) and arms the enter settle. The executor is in
+	// `phase === 'committing'` for the enter's slide duration.
+	await touch('touchStart', startX, 'touchPressed');
+	for (let i = 1; i <= 14; i++) {
+		await touch('touchMove', startX + Math.round(((endX - startX) * i) / 14), 'touchMoved');
+	}
+	await touch('touchEnd', endX, 'touchReleased');
+	// Phase 2 (same CDP session, no async gap): wait for the navigation to
+	// land on `/search` so the new host has mounted and
+	// `playEnterAnimation` has armed the enter settle, then dispatch
+	// `__e2eGoto('/messages/inbox')` mid-enter via `Runtime.evaluate`. The
+	// goto arrives as a beforeNavigate while the enter's commit is still in
+	// flight, so the discrete-nav branch's `phase === 'committing'` test
+	// fires and routes to `#accelerateInFlight`. A short delay after the
+	// URL land lets the enter slide start before the interrupt; the
+	// multi-signal sampler captures the boundary frame.
+	await page.waitForURL(/\/search$/, { timeout: 4000 });
+	await page.waitForTimeout(60);
+	await client.send('Runtime.evaluate', {
+		expression: `window.__e2eGoto('/messages/inbox')`,
+		awaitPromise: false
+	});
+	await client.detach();
+	await waitForMultiSignalDone(page);
+	const frames = await readMultiSignalFrames(page);
+
+	// Locate the accelerate boundary: the first frame where the
+	// orchestrator's published `transitionTarget` flips from the enter's
+	// target (`/search`, held at rest after the enter slide started) to the
+	// accelerated back to `/messages/inbox`. `#accelerateInFlight` fires at
+	// or just before this flip. The no-snap window is the pre-flip frames
+	// plus the flip frame itself: the back-to-`/messages/inbox` slide
+	// animates the search track out via the natural
+	// `searchProgress = 1 - bm` formula across the slide's ~160ms duration
+	// (the panel's intended full-range slide-out, eased to ~35-40px per
+	// rAF at the start), so including post-flip frames in the window would
+	// mix the natural slide motion into the no-snap assertion. The
+	// accelerate boundary snap this guard watches for is a one-frame
+	// discontinuity in the pre-flip range, where the cleared-then-re-seeded
+	// `#searchAnchor` engages with the captured in-flight search-axis
+	// value.
+	const accelIdx = frames.findIndex(
+		(f, i) =>
+			i > 0 &&
+			f.transitionTarget === '/messages/inbox' &&
+			frames[i - 1].transitionTarget !== '/messages/inbox'
+	);
+	const accelT = accelIdx > 0 ? frames[accelIdx].t : 0;
+	const boundaryFrames = accelIdx > 0 ? frames.slice(0, accelIdx + 1) : frames;
+	const hdrTrackJumps = maxFrameJumps(boundaryFrames, (f) => f.hdrTrackTx);
+	console.log('R24-A accelerateInFlight hdrTrackTx continuity:', {
+		hdrTrackJumps,
+		accelT,
+		finalPath: new URL(page.url()).pathname
+	});
+
+	expect(page.url(), 'the interrupted enter must land back on /messages/inbox').toMatch(
+		/\/messages\/inbox$/
+	);
+	expect(
+		hdrTrackJumps.max,
+		`hdrTrackTx must not snap at the accelerateInFlight boundary (max jump ${hdrTrackJumps.max.toFixed(2)}px at t=${hdrTrackJumps.maxAt}ms)`
+	).toBeLessThan(30);
+});
+
+// DV21 R26-A continuity guard: a saturated forward-swipe from
+// `/messages/inbox` to `/search` commits and lands on `/search`; the new
+// search-mode host's `playEnterAnimation` seeds `#searchAnchor = { start:
+// 1, dest: 1 }` (R23-B F2 hold) and arms the enter settle. While that
+// settle is in flight a same-session CDP touch dispatch starts a new
+// rightward back-swipe on the `/search` host (a re-grab whose target is
+// the temporal-previous `/messages/inbox`). `#beginGesture` captures
+// `#dragSearchAnchor = { search: <in-flight settle-anchor lerp value at
+// the takeover>, raw: startProgress }` BEFORE `#cancelAllAnimationEases`
+// clears the settle and `#searchAnchor`. The Header's `searchProgress`
+// drag-anchor branch shifts the natural gesture formula through
+// `(anchor.raw, anchor.search)` so the search track stays continuous with
+// the prior settle across the takeover (DV21 §5). The R26-A defect
+// (~96-143px snap on a 393px viewport) is the search-axis sibling of the
+// morph axis's R8-A F1 re-grab snap and the FAB axis's R8-A F3 re-grab
+// snap: without a drag-owned anchor the cleared `#searchAnchor` hands the
+// search axis to the natural `bm`-driven gesture formula at the
+// takeover, which disagrees with the held settle lerp. The boundary
+// window is the pre-flip frames plus the re-grab flip frame (the
+// `transitionTarget` flip from `/search` to `/messages/inbox` as the
+// re-grab takes over; `dragging` flips true and the live `backMorph`
+// value switches from the enter settle's slide fraction to the drag's
+// raw fraction). `backMorph` is a non-null number throughout the enter
+// settle on `/search`, never null here.
+test('re-grab during a search-settle keeps the header search track continuous (R26-A)', async ({
+	page,
+	context
+}) => {
+	await prepareContext(context);
+	await page.goto('/messages/inbox');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+
+	await installMultiSignalSampler(page, 3000);
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+	const width = page.viewportSize()?.width ?? 393;
+	const touch = (
+		type: 'touchStart' | 'touchMove' | 'touchEnd',
+		x: number,
+		state: string
+	) =>
+		client.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+			modifiers: 0,
+			timestamp: 0
+		});
+	// Phase 1: saturated leftward forward-swipe from `/messages/inbox` to
+	// `/search`. The commit slide ends, navigation lands on `/search`, and
+	// the new search-mode host's `playEnterAnimation` seeds `#searchAnchor`
+	// (R23-B F2) and arms the enter settle (Title crossfade easing the
+	// search-axis hold at 1 across the enter slide).
+	const startX = Math.round(width * 0.7);
+	const endX = startX - Math.round(width * 0.7);
+	await touch('touchStart', startX, 'touchPressed');
+	for (let i = 1; i <= 14; i++) {
+		await touch('touchMove', startX + Math.round(((endX - startX) * i) / 14), 'touchMoved');
+	}
+	await touch('touchEnd', endX, 'touchReleased');
+	// Phase 2 (same CDP session): wait for the URL to land on `/search`
+	// and the enter settle to be in flight (the post-commit Title
+	// crossfade), then a rightward back-swipe begins the re-grab.
+	// `#beginGesture` captures `#dragSearchAnchor` from the in-flight
+	// searchAnchor lerp value via `#searchProgressAtSettleInstant` BEFORE
+	// `#cancelAllAnimationEases` clears the settle. The re-grab is a
+	// back-swipe on `/search` (a NavPipelineHost deep page) toward its
+	// temporal-previous (`/messages/inbox`); the orchestrator publishes
+	// live `backMorph` so the drag-anchor branch's bm !== null shift
+	// sub-case fires.
+	await page.waitForURL(/\/search$/, { timeout: 4000 });
+	await page.waitForTimeout(30);
+	const secondStart = Math.round(width * 0.3);
+	const secondEnd = secondStart + 240;
+	await touch('touchStart', secondStart, 'touchPressed');
+	for (let i = 1; i <= 10; i++) {
+		await touch(
+			'touchMove',
+			secondStart + Math.round(((secondEnd - secondStart) * i) / 10),
+			'touchMoved'
+		);
+	}
+	await touch('touchEnd', secondEnd, 'touchReleased');
+	await client.detach();
+	await waitForMultiSignalDone(page);
+	const frames = await readMultiSignalFrames(page);
+
+	// Locate the re-grab boundary: the first frame after Phase 1's URL
+	// land on `/search` where the orchestrator's `transitionTarget`
+	// flips from `/search` (held by the enter settle) to the back-swipe's
+	// `/messages/inbox` target. The no-snap window is the pre-flip frames
+	// plus the flip frame itself (the boundary at which the drag-anchor
+	// branch holds the panel continuous with the prior settle). The
+	// post-flip natural slide motion and the subsequent drag-to-settle
+	// handoff run after the flip and are excluded from the assertion
+	// window (they are separate motion sources, not the R26-A boundary).
+	const landIdx = frames.findIndex(
+		(f, i) => i > 0 && f.path === '/search' && frames[i - 1].path !== '/search'
+	);
+	const searchBoundaryStart = landIdx > 0 ? landIdx : 0;
+	const reGrabIdx = frames.findIndex(
+		(f, i) =>
+			i > searchBoundaryStart &&
+			f.transitionTarget === '/messages/inbox' &&
+			frames[i - 1].transitionTarget !== '/messages/inbox'
+	);
+	const reGrabT = reGrabIdx > 0 ? frames[reGrabIdx].t : 0;
+	const boundaryFrames = reGrabIdx > 0 ? frames.slice(searchBoundaryStart, reGrabIdx + 1) : frames;
+	const hdrTrackJumps = maxFrameJumps(boundaryFrames, (f) => f.hdrTrackTx);
+	console.log('R26-A re-grab hdrTrackTx continuity:', {
+		hdrTrackJumps,
+		reGrabT,
+		landIdx,
+		finalPath: new URL(page.url()).pathname
+	});
+
+	expect(
+		hdrTrackJumps.max,
+		`hdrTrackTx must not snap at the re-grab boundary (max jump ${hdrTrackJumps.max.toFixed(2)}px at t=${hdrTrackJumps.maxAt}ms)`
+	).toBeLessThan(30);
+});
+
+// DV21 R28 continuity guard: a saturated forward-swipe from `/messages/inbox`
+// to `/search` commits and lands on `/search`; the new search-mode host's
+// `playEnterAnimation` seeds `#searchAnchor = { start: 1, dest: 1 }` (R23-B F2
+// hold) and arms the enter settle. A rightward back-swipe begins the re-grab;
+// `#beginGesture` captures `#dragSearchAnchor = { search: 1, raw:
+// startProgress }` BEFORE `#cancelAllAnimationEases` clears the settle. The
+// re-grab's drag publishes live `backMorph` so the Header's `searchProgress`
+// drag-anchor branch (branch 3) fires, returning the shift formula
+// `anchor.search + natural(bm) - natural(anchor.raw)` (the search-axis
+// position the drag was rendering). Mid-drag (BEFORE the re-grab's touchEnd)
+// an external `__e2eGoto('/activity')` dispatches a discrete-nav interrupt
+// that re-enters `onSvelteKitBeforeNavigate`. The discrete-nav arm at L2803
+// captures `liveDragSearchProgress = #searchProgressAtSettleInstant()` and
+// re-seeds `#searchAnchor = { start: captured, dest: 0 }` (dest 0 because
+// `/activity` is not `/search`). The R28 defect (~162-219px snap on a 393px
+// viewport) is the helper omitting the drag-anchor branch: it returns the
+// gesture value `1 - bm` while the Header was rendering branch 3's shift
+// `anchor.search + natural(bm) - natural(anchor.raw)`, disagreeing by
+// `anchor.raw * viewport-width` px (the captured `start` seeds the new
+// settle, so the disagreement snaps the search track at the takeover). The
+// fix mirrors the Header's branch 3 shift formula in the helper, so the
+// captured `start` agrees with the rendering. The boundary window is the
+// pre-flip frames plus the transitionTarget-flip frame (the re-grab's live
+// `/messages/inbox` target flips to `/activity` at the discrete-nav dispatch).
+test('mid-re-grab discrete-nav interrupt keeps the header search track continuous (R28)', async ({
+	page,
+	context
+}) => {
+	await prepareContext(context);
+	await page.goto('/messages/inbox');
+	await waitForHydration(page);
+	await page.waitForTimeout(300);
+
+	await installMultiSignalSampler(page, 3500);
+	const client = await page.context().newCDPSession(page);
+	await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+	const width = page.viewportSize()?.width ?? 393;
+	const touch = (
+		type: 'touchStart' | 'touchMove' | 'touchEnd',
+		x: number,
+		state: string
+	) =>
+		client.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: [{ state, x, y: 400, id: 1 }] as unknown as never,
+			modifiers: 0,
+			timestamp: 0
+		});
+	// Phase 1: saturated leftward forward-swipe from `/messages/inbox` to
+	// `/search`. The commit slide ends, navigation lands on `/search`, and the
+	// new search-mode host's `playEnterAnimation` seeds `#searchAnchor` (R23-B
+	// F2 hold at 1) and arms the enter settle.
+	const startX = Math.round(width * 0.7);
+	const endX = startX - Math.round(width * 0.7);
+	await touch('touchStart', startX, 'touchPressed');
+	for (let i = 1; i <= 14; i++) {
+		await touch('touchMove', startX + Math.round(((endX - startX) * i) / 14), 'touchMoved');
+	}
+	await touch('touchEnd', endX, 'touchReleased');
+	// Phase 2 (same CDP session): wait for the URL to land on `/search` and
+	// the enter settle to be in flight, then start a rightward back-swipe (the
+	// re-grab). `#beginGesture` captures `#dragSearchAnchor = { search: 1, raw:
+	// startProgress }` from the in-flight settle-anchor lerp (held at 1 by
+	// `playEnterAnimation`'s R23-B F2 seed) BEFORE `#cancelAllAnimationEases`
+	// clears the settle. Mid-drag (no touchEnd yet) the live `backMorph` is
+	// non-null so the Header's branch 3 shift sub-case fires.
+	await page.waitForURL(/\/search$/, { timeout: 4000 });
+	await page.waitForTimeout(30);
+	const secondStart = Math.round(width * 0.3);
+	const secondEnd = secondStart + 240;
+	await touch('touchStart', secondStart, 'touchPressed');
+	for (let i = 1; i <= 10; i++) {
+		await touch(
+			'touchMove',
+			secondStart + Math.round(((secondEnd - secondStart) * i) / 10),
+			'touchMoved'
+		);
+	}
+	// Phase 3: mid-re-grab (touch still pressed, no touchEnd), dispatch the
+	// discrete-nav interrupt via `__e2eGoto('/activity')`. The beforeNavigate
+	// hook re-enters `onSvelteKitBeforeNavigate`; the discrete-nav arm at L2803
+	// captures `liveDragSearchProgress = #searchProgressAtSettleInstant()`
+	// BEFORE the state-machine dispatch and `#progress = 0` reset, then
+	// re-seeds `#searchAnchor = { start: captured, dest: 0 }` for the new
+	// `/activity` settle. The helper's drag-anchor branch returns the same
+	// shift value the Header's branch 3 was rendering at the capture instant,
+	// so the new settle's `start` agrees with the rendering and the search
+	// track stays continuous at the takeover.
+	await client.send('Runtime.evaluate', {
+		expression: `window.__e2eGoto('/activity')`,
+		awaitPromise: false
+	});
+	await client.detach();
+	await waitForMultiSignalDone(page);
+	const frames = await readMultiSignalFrames(page);
+
+	// Locate the discrete-nav boundary: the first frame where the
+	// orchestrator's published `transitionTarget` flips from the re-grab's
+	// `/messages/inbox` target to the goto's `/activity` target. The no-snap
+	// window starts at the re-grab's own transitionTarget flip (when the
+	// re-grab's drag publication begins) and ends at the interrupt flip + 1
+	// frame, excluding Phase 1's forward-swipe slide and focusing the
+	// assertion on the re-grab drag motion plus the discrete-nav takeover.
+	// The post-flip `/search` -> `/activity` settle animates the search track
+	// out via the natural settle-anchor lerp from the captured `start` to 0
+	// across the settle's duration (the panel's intended full-range slide-out,
+	// eased to ~35-40px per rAF at the start), so the +1 frame after the flip
+	// is the latest the boundary snap can register; later frames mix the
+	// natural settle motion into the no-snap assertion. The boundary snap
+	// this guard watches for is a one-frame discontinuity at the flip, where
+	// the captured `start` would engage with the gesture value instead of the
+	// drag-anchor shift if the helper's drag-anchor branch were missing.
+	const landIdx = frames.findIndex(
+		(f, i) => i > 0 && f.path === '/search' && frames[i - 1].path !== '/search'
+	);
+	const searchBoundaryStart = landIdx > 0 ? landIdx : 0;
+	const reGrabIdx = frames.findIndex(
+		(f, i) =>
+			i > searchBoundaryStart &&
+			f.transitionTarget === '/messages/inbox' &&
+			frames[i - 1].transitionTarget !== '/messages/inbox'
+	);
+	const reGrabBoundaryStart = reGrabIdx > 0 ? reGrabIdx : searchBoundaryStart;
+	const interruptIdx = frames.findIndex(
+		(f, i) =>
+			i > reGrabBoundaryStart &&
+			f.transitionTarget === '/activity' &&
+			frames[i - 1].transitionTarget !== '/activity'
+	);
+	const interruptT = interruptIdx > 0 ? frames[interruptIdx].t : 0;
+	const boundaryFrames =
+		interruptIdx > 0 ? frames.slice(reGrabBoundaryStart, interruptIdx + 2) : frames;
+	const hdrTrackJumps = maxFrameJumps(boundaryFrames, (f) => f.hdrTrackTx);
+	console.log('R28 mid-re-grab discrete-nav hdrTrackTx continuity:', {
+		hdrTrackJumps,
+		interruptT,
+		reGrabIdx,
+		finalPath: new URL(page.url()).pathname
+	});
+
+	expect(page.url(), 'the interrupted re-grab must land on /activity').toMatch(/\/activity$/);
+	expect(
+		hdrTrackJumps.max,
+		`hdrTrackTx must not snap at the mid-re-grab discrete-nav boundary (max jump ${hdrTrackJumps.max.toFixed(2)}px at t=${hdrTrackJumps.maxAt}ms)`
+	).toBeLessThan(30);
+});

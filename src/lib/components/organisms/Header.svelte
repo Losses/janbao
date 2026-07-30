@@ -495,8 +495,7 @@
 	// the search panel fills the track, 0 when the root panel fills it. The
 	// orchestrator owns the motion; the consumers (track / search button) are
 	// pure functions of this value. The scope-tab bar uses `tabProgress`, not
-	// searchProgress. Three sources by
-	// precedence:
+	// searchProgress. Five sources by precedence:
 	//   1. A tap-scrub in flight (pager.tapMorph !== null): tapMorph is
 	//      `isSearch`-inverted (1 = not search, 0 = search), so searchProgress
 	//      = 1 - tapMorph. Drives the root↔search AND the deep↔search
@@ -505,7 +504,56 @@
 	//      is required for the deep↔search EXIT: once the URL lands on a
 	//      deep page isSearch is false and the gated fallback below would
 	//      clamp to 0; tapMorph drives the slide back to 0 over the scrub.
-	//   2. A gesture in flight (transitionTarget + backMorph). The publication
+	//   2. A settle in flight with a search anchor
+	//      (`orchestrator.searchAnchor !== null`). The orchestrator seeds the
+	//      anchor at four boundary handoffs where the natural switch below
+	//      would snap (R23-B + R24-A): the `playEnterAnimation`
+	//      commit-to-enter handoff (R23-B F2: a forward-swipe-to-`/search`
+	//      commit ends at raw=1 with the panel slid fully in, the enter
+	//      slide's natural `1 - trackMorph = bm` resets 1 -> 0 -> 1 across
+	//      the host swap, snapping fully out then back in; the seed holds
+	//      `start = dest = 1` so the panel stays slid in across the settle);
+	//      the discrete-nav arm drag interrupt (R23-B F1: a non-search
+	//      `goto` / tab-click / popstate interrupts a forward-swipe-to-
+	//      `/search` drag with the panel `bm` of the way in, the dest is
+	//      non-search, the natural switch collapses `bm` -> 0 in one frame;
+	//      the seed lerps from the captured live `bm` to 0 across the
+	//      discrete-nav settle); the `#accelerateInFlight` enter interrupt
+	//      (R24-A: a non-search `goto` interrupts an in-flight enter settle
+	//      on `/search`, the accelerate's `#armSettleEase` clears the anchor
+	//      that the enter seeded at hold-1; the re-seed carries the held-at-1
+	//      panel position across the accelerated re-arm); and the
+	//      `notifyHeaderState` mid-settle absorb (R24-A: a dynamic-title
+	//      route resolves a new title mid-enter on a `/search` commit, the
+	//      re-arm clears the anchor mid-flight; the re-seed carries the
+	//      in-flight search-axis position across the re-arm). The lerp eases
+	//      `start` (the captured pre-boundary value) to `dest` (the dest's
+	//      at-rest searchProgress) across `settleMorphFraction`. At settle
+	//      end (`settleMorphFraction = 1`) the lerp equals `dest`, which
+	//      agrees with the at-rest switch (`isSearch ? 1 : 0`) at the
+	//      post-settle `isSearch`, so the anchor is cleared without a snap.
+	//      Mirrors the morph axis's `settleLatched.startMorph` -> `destMorph`
+	//      lerp and the FAB axis's `#enterFabAnchor` lerp.
+	//   3. A drag in flight with a drag search anchor
+	//      (`orchestrator.dragSearchAnchor !== null`). When a re-grab takes
+	//      over an in-flight search settle (`#beginGesture` with
+	//      `settleActive && #searchAnchor !== null`), the settle is cancelled
+	//      and the `settleActive` flag flip makes branch 2 short-circuit, handing the search
+	//      axis to the natural gesture formula below, whose `bm` value at
+	//      the takeover disagrees with the held settle lerp (R26-A:
+	//      ~96-143px snap on a 393px viewport). The orchestrator captures
+	//      the search-axis position via `#searchProgressAtSettleInstant`
+	//      BEFORE the cancel and exposes it via `dragSearchAnchor`; this
+	//      branch shifts the natural gesture formula so it passes through
+	//      `(anchor.raw, anchor.search)`:
+	//      `shifted(bm) = anchor.search + natural(bm) - natural(anchor.raw)`,
+	//      where `natural(t)` is the gesture formula in branch 4 evaluated
+	//      at `bm = t`. The shift is constant in bm (the natural slope is
+	//      preserved), so the formula stays a pure function of `bm` (DV21
+	//      §5). Clamped to [0, 1] for the cancel overshoot. Mirrors the
+	//      morph axis's `dragMorphAnchor` shift and the FAB axis's
+	//      `dragFabAnchor` shift.
+	//   4. A gesture in flight (transitionTarget + backMorph). The publication
 	//      runs while the source route is still mounted, so isSearch matches
 	//      the pre-flip endpoint:
 	//      - EXIT (isSearch, source is /search): the search panel leaves,
@@ -513,10 +561,46 @@
 	//      - ENTER (targetIsSearch, target is /search from a forward
 	//        last-tab swipe): the search panel enters, 0 → 1, so
 	//        searchProgress = trackMorph.
-	//   3. At rest: isSearch ? 1 : 0.
+	//   5. At rest: isSearch ? 1 : 0.
 	const searchProgress = $derived.by(() => {
 		if (pager.tapMorph !== null) {
 			return 1 - pager.tapMorph;
+		}
+		const searchAnchor = orchestrator.searchAnchor;
+		if (settleActive && searchAnchor !== null) {
+			return searchAnchor.start + (searchAnchor.dest - searchAnchor.start) * settleMorphFraction;
+		}
+		const dragSearchAnchor = orchestrator.dragSearchAnchor;
+		if (dragSearchAnchor !== null) {
+			// Shift the natural gesture formula so the curve passes through
+			// the takeover visual `(anchor.raw, anchor.search)` (R26-A). The
+			// natural formula is the gesture branch below evaluated at a bm
+			// value; trackMorph is `transitionTarget === currentPath ?
+			// 1 - bm : bm`, so the anchor's trackMorph-equivalent at
+			// `anchor.raw` is computed on the same path-equality relation.
+			// When `backMorph === null` (a tab-to-tab re-grab on a non-
+			// centerTab host) the gesture branch below is skipped because
+			// no live morph is published for that shape; hold at
+			// `anchor.search` instead. For the only currently-reachable
+			// shape (a non-search tab-to-tab settle) `playEnterAnimation`
+			// seeds `#searchAnchor = {0, 0}`, so `anchor.search === 0`,
+			// which equals the at-rest fallback's `isSearch ? 1 : 0 = 0`
+			// for the same non-search source; the hold is a no-op against
+			// the at-rest the fallback would return but keeps the
+			// drag-anchor branch structurally exhaustive (mirrors the
+			// morph axis's `nullBmAnchor` hold branch).
+			if (pager.transitionTarget !== null && pager.backMorph !== null) {
+				const anchorTrackMorph =
+					pager.transitionTarget === currentPath ? 1 - dragSearchAnchor.raw : dragSearchAnchor.raw;
+				const naturalAtBm = isSearch ? 1 - trackMorph : targetIsSearch ? trackMorph : 0;
+				const naturalAtAnchor = isSearch
+					? 1 - anchorTrackMorph
+					: targetIsSearch
+						? anchorTrackMorph
+						: 0;
+				return Math.max(0, Math.min(1, dragSearchAnchor.search + naturalAtBm - naturalAtAnchor));
+			}
+			return dragSearchAnchor.search;
 		}
 		if (pager.transitionTarget !== null && pager.backMorph !== null) {
 			return isSearch ? 1 - trackMorph : targetIsSearch ? trackMorph : 0;

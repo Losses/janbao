@@ -4602,3 +4602,1351 @@ the orchestrator's, not run by the CMA.
 
 **No git mutation.** No commits, no branches, no pushes. Working tree
 carries the edits; the orchestrator decides when to commit.
+
+### R23-B completion (wire searchAnchor into searchProgress)
+
+**R23-B F1+F2 (§5): the search axis had no boundary-continuity anchor.**
+The morph axis has `settleMorphFraction` + `settleLatched.startMorph` /
+`destMorph`. The FAB axis has `#enterFabAnchor`. The search axis
+(`searchProgress` / `trackStyle` / `searchButtonLeft` / `tabProgress`)
+had no anchor mechanism, so it snapped at two boundary handoffs the
+audit named:
+
+- **F1 (~118px snap on a 393px viewport, probe-verified):** a
+  forward-swipe-to-`/search` drag from `/messages/inbox` interrupted
+  mid-swipe by a non-search tab-root discrete nav (`__e2eGoto('/activity')`).
+  At the interrupt the drag's `bm` (~0.30) drives `searchProgress =
+trackMorph = bm` via the gesture branch. The discrete-nav arm resets
+  `#progress = 0` and the state-machine dispatch flips the publication's
+  `toPathname` to the discrete-nav dest. The Header's `searchProgress`
+  derivation's gesture branch collapses (`transitionTarget` is now
+  `/activity`, `targetIsSearch` is false, the `targetIsSearch ? trackMorph
+: 0` arm returns 0), so `searchProgress` snaps from `bm` (~0.30) to 0 in
+  one rAF frame. The header track translateX follows (`-bm * viewport/2`
+  -> 0), producing the snap.
+- **F2 (~393px snap on a 393px viewport, probe-verified):** a saturated
+  forward-swipe from `/messages/inbox` to `/search` commits. At raw=1 the
+  search panel is fully in (`searchProgress = bm = 1`). SvelteKit's host
+  swap lands on `/search`; the new search-mode host's `playEnterAnimation`
+  arms the enter settle. The enter slide republishes `bm` from 0
+  (configure-zeroed) toward 1 across the enter duration, so the natural
+  `searchProgress = 1 - trackMorph = bm` curve the Header reads goes 1 -> 0
+  -> 1 across the host swap and enter slide, snapping the panel fully out
+  then re-animating it in (~viewport/2 out and ~viewport/2 back in =
+  ~viewport of wasted motion).
+
+**The fix (mirror the FAB axis's `#enterFabAnchor`).** A search-axis
+anchor (`#searchAnchor: { start, dest } | null`) is captured at the two
+boundary handoffs the audit named and consumed by a new branch in the
+Header's `searchProgress` derivation. The branch takes priority over the
+gesture / at-rest switch while a settle is in flight and the anchor is
+non-null, lerping from `start` to `dest` across `settleMorphFraction`. At
+settle end (`settleMorphFraction = 1`) the lerp equals `dest`, which
+agrees with the at-rest switch (`isSearch ? 1 : 0`) on the post-settle
+`isSearch`, so clearing the anchor (in `#armSettleEase`, `#landAtRest`,
+and `unmount`) introduces no snap. The new branch:
+
+```ts
+const searchAnchor = orchestrator.searchAnchor;
+if (settleActive && searchAnchor !== null) {
+	return searchAnchor.start + (searchAnchor.dest - searchAnchor.start) * settleMorphFraction;
+}
+```
+
+The orchestrator seeds the anchor at two sites (both verified end to end
+via the multi-signal sampler's `hdrTrackTx` axis):
+
+1. `playEnterAnimation` at the commit-to-enter handoff (R23-B F2). The
+   prior commit's terminal searchProgress is stashed in
+   `#priorTerminalSearchProgress` by `#onExecutorSettle` (the
+   publication's `progress` resets 1 -> 0 between that point and this, so
+   without the stash the value would be lost). Seeded AFTER `#armSettleEase`
+   so the arm's canonical clear does not wipe it: `#searchAnchor = { start:
+priorTerminalSearchProgress, dest: isSearch(fromPathname) ? 1 : 0 }`.
+   For the audit's flagship shape (forward-swipe-to-`/search`) the stash
+   is `1` and the dest is `1`, so the lerp is a constant hold at 1,
+   suppressing the natural `bm` curve's 1 -> 0 -> 1 reset across the host
+   swap. For a non-search direct nav (`priorTerminalSearchProgress === null`
+   because no `isSearch` or `targetIsSearch` flip occurred during the
+   prior commit) no anchor is set and the natural `searchProgress` handles
+   the enter.
+2. The `onSvelteKitBeforeNavigate` discrete-nav arm at the
+   drag-to-discrete-nav handoff (R23-B F1). The pre-reset `bm` is captured
+   via `#searchProgressAtSettleInstant` BEFORE the publication reset
+   (mirroring `#fabScaleAtSettleInstant`'s capture pattern). Re-seeded
+   AFTER `#armSettleEase`: `#searchAnchor = { start: capturedSearchProgress,
+dest: isSearch(toPathname) ? 1 : 0 }`. For the audit's flagship
+   (forward-swipe-to-`/search` interrupted by `/activity`) the captured
+   value is the drag's live `bm` (e.g. 0.30) and `dest` is 0, so the lerp
+   retreats the panel from `bm` to 0 across the discrete-nav settle.
+
+**Three sibling defects found and fixed during the wiring.** The prior
+sub-agent's pass added the field, the type (`SearchAnchor` in
+`header-probe.ts`), the getter, the type docstring, and the two seed
+sites, with docstrings claiming clears at `#armSettleEase`, `#landAtRest`,
+and `unmount`. The clears were missing from the code (the docstrings
+lied). Three concrete gaps:
+
+- `#searchAnchor = null` was missing at the canonical clear sites
+  (`#armSettleEase`'s top, `#landAtRest`, `unmount`). Added next to each
+  `#enterFabAnchor = null` so the search anchor cannot leak past the
+  settle that consumed it. Without these the anchor would survive to the
+  next pipeline route's first settle and force a stale lerp.
+- `#priorTerminalSearchProgress = null` was missing at `#landAtRest` and
+  `unmount` (mirroring `#priorTerminalFabScale = null`'s three clear sites
+  minus the non-pipeline-target branch where it was already cleared).
+  Without these a cancel or unmount would leave a stale stash that seeds
+  a bogus `#searchAnchor` on the next enter.
+
+**One structural fix beyond the wiring.** The discrete-nav arm's
+settle-arm condition `liveDragMorph !== sourceRest || liveDragMorph !==
+destMorph` is false for the audit's (tab, tab, search) shape: the drag's
+`#dragMorphAtSettleTakeover` returns `atRestMorph(true) = 1` (the
+`targetIsSearch` short-circuit holds the morph at the source's at-rest),
+`sourceRest === destMorph === 1`, both clauses false. Without the settle
+arming, neither the search anchor nor the FAB anchor nor the title
+crossfade runs, and the search axis snaps from the drag's `bm` to 0 in
+one rAF frame at the boundary. Added a third clause,
+`searchAxisNeedsEase = liveDragSearchProgress !== null &&
+liveDragSearchProgress !== destSearchProgress`, so the settle also arms
+when the search axis has non-trivial motion to retreat. For shapes where
+the morph axis already armed the settle this clause is redundant
+(`capturedSearchProgress` agrees with `destSearchProgress` in that case).
+For shapes where the morph axis did NOT arm (the audit's flagship) this
+clause is the only thing that fires. Safe by construction: the
+settle-arm condition is now a disjunction across the three boundary
+surfaces (morph / FAB / search); each clause holds independently for its
+axis, and the settle eases whichever axes have non-trivial motion.
+
+The discrete-nav arm's capture for the search axis
+(`liveDragSearchProgress`) is sourced from the LIVE `#publication` via
+`#searchProgressAtSettleInstant`, mirroring the FAB axis's
+`#fabScaleAtSettleInstant`. Both helpers read the live `pub.toPathname`
+and `pub.progress` at the capture moment; at that moment `pub.toPathname`
+is still the drag's target (the state-machine dispatch that flips it to
+the discrete-nav dest runs immediately AFTER the capture), so the
+captured value reflects the drag's plan, not the discrete-nav dest's
+at-rest. The capture is invariant across `#armSettleEase` (it is a
+local, not a publication read), so re-seeding after the arm's clear is
+safe.
+
+**BEFORE / AFTER continuity numbers** (probe via the new R23-B guards,
+single run each, multi-signal sampler across a 2800-3000ms window,
+`hdrTrackTx` = `header div.flex.w-[200%]` translateX):
+
+| signal        | BEFORE (no fix)      | AFTER (fix)        |
+| ------------- | -------------------- | ------------------ |
+| F1 hdrTrackTx | 117.98px at t=323ms  | 20.04px at t=123ms |
+| F2 hdrTrackTx | 393.00px at t=1110ms | 20.04px at t=318ms |
+
+Both axes' snaps drop to within the regular per-rAF cadence at this
+viewport's header geometry (the natural eased step at u~=0.06 over a
+196.5px half-viewport is ~20px), well under the 30px threshold. F1's
+pre-fix 117.98px corresponds to the drag's terminal `bm * viewport/2`
+(bm=0.60 at the t=323ms probe instant in this run; the audit's ~168px
+estimate was at raw=0.43). F2's pre-fix 393px is the full viewport
+snap-then-re-animate the audit named.
+
+**New preventive no-snap guards.** Two new tests in
+`e2e/messages-back-swipe.spec.ts`, one per audit finding:
+
+- `drag-to-discrete-nav handoff with a non-search goto keeps the header
+search track continuous (R23-B F1)`: setup `/messages/inbox` (last tab);
+  leftward touch drag (startX=0.7W, endX=0) with `__e2eGoto('/activity')`
+  injected between the 6th and 7th `touchMove` via the SAME CDP session's
+  `Runtime.evaluate` so the touch / goto ordering is deterministic.
+  Asserts `maxFrameJumps(hdrTrackTx) < 30` and final URL on `/activity`.
+  The goto target MUST be a tab root for the orchestrator's discrete-nav
+  arm to intercept (a non-tab-root target like `/bookmarks` falls into
+  `onSvelteKitBeforeNavigate`'s `!isTabRootPath(to) && !isDeepToDeep`
+  early-return and the orchestrator does not intercept).
+- `forward-swipe-to-/search commit-to-enter handoff keeps the header
+search track continuous (R23-B F2)`: setup `/messages/inbox`; saturated
+  leftward touch drag (no goto interrupt) so the drag commits at raw=1
+  and `#onExecutorSettle` stashes `#priorTerminalSearchProgress = 1`.
+  Asserts `maxFrameJumps(hdrTrackTx) < 30` and final URL on `/search`.
+
+Each drives the touch via a dedicated CDP session (`touchStart` /
+`touchMove` / `touchEnd`) with deterministic step counts (14 moves).
+
+**Comment rewrites.**
+
+- `src/lib/utils/header-probe.ts` `SearchAnchor` interface docstring
+  (rewritten, ~L145-182): describes the two reach paths, the start/dest
+  semantics for each, the post-settle agreement with the at-rest switch,
+  and the canonical clear sites.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts` `#searchAnchor`
+  field docstring (~L824-836): describes the two reach paths, the lerp
+  semantics, and the clear sites.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts`
+  `#priorTerminalSearchProgress` field docstring (~L850-856): describes
+  the stash pattern mirroring `#priorTerminalFabScale`.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts` `searchAnchor`
+  getter docstring (~L956-963): describes the reactive publication.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts`
+  `#searchProgressAtSettleInstant` helper docstring (~L4155-4182):
+  describes the live-publication read, the `!pub.inFlight` short-circuit
+  for the from-rest tab-click case, and the mirroring of
+  `#fabScaleAtSettleInstant`.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts`
+  `playEnterAnimation` search-anchor seed site (~L1270-1289): describes
+  the post-arm seed, the stash consumption, the dest computation, and the
+  flagship hold-at-1 case.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts` discrete-nav arm
+  search-anchor re-seed site (~L2953-2973): describes the post-arm
+  re-seed, the captured value's source, the dest computation, and the
+  flagship retreat case.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts` discrete-nav arm
+  settle-arm condition (~L2860-2892): describes the new third clause
+  (`searchAxisNeedsEase`), the (tab, tab, search) shape's morph-axis
+  equality that requires it, and the safe-by-construction disjunction
+  argument.
+- `src/lib/stores/nav-pipeline-orchestrator.svelte.ts`
+  `#armSettleEase` clear site, `#landAtRest` clear site, `unmount` clear
+  site: the `#searchAnchor = null` (and the
+  `#priorTerminalSearchProgress = null` at `#landAtRest` / `unmount`) were
+  added alongside the existing `#enterFabAnchor = null` /
+  `#priorTerminalFabScale = null` lines.
+- `src/lib/components/organisms/Header.svelte` `searchProgress`
+  derivation docstring (~L494-533): rewritten to describe the four
+  branches by precedence (tap-scrub, settle-anchor, gesture, at-rest),
+  the lerp formula, the post-settle agreement, and the sibling-axes
+  mirroring.
+
+Em-dash grep clean on every edited file; `bunx prettier --check` clean on
+every edited file.
+
+**Real command outputs.**
+
+```
+$ bun run check
+1785337372195 START "/home/losses/Development/janbao"
+1785337372200 COMPLETED 1469 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+
+$ bunx tsc -p scripts/tsconfig.json --noEmit
+EXIT=0
+
+$ bun run lint
+Checking formatting...
+All matched files use Prettier code style!
+[eslint clean]
+Total similar type pairs found: 63
+EXIT=0
+
+$ bun test src/lib
+552 pass / 0 fail / 2270 expect() calls across 40 files [3.05s]
+```
+
+New no-snap guards (single run each):
+
+```
+$ npx playwright test e2e/messages-back-swipe.spec.ts -g "R23-B" \
+    --retries=0 --workers=1
+R23-B F1 hdrTrackTx continuity: {
+  hdrTrackJumps: { max: 20.043, maxAt: 123 },
+  finalPath: '/activity'
+}
+R23-B F2 hdrTrackTx continuity: {
+  hdrTrackJumps: { max: 20.043000000000006, maxAt: 318 },
+  finalPath: '/search'
+}
+2 passed (14.6s)
+```
+
+Sibling regression sweep (the task's 5-file set, `--retries=0 --workers=1`):
+
+```
+$ npx playwright test e2e/messages-back-swipe.spec.ts \
+    e2e/reproduce-dv20-search-swipe.spec.ts \
+    e2e/search-enter-exit-asymmetry.spec.ts \
+    e2e/search-back-hamburger-flash.spec.ts \
+    e2e/reproduce-user-bugs.spec.ts --retries=0 --workers=1
+65 passed (4.3m)
+```
+
+Zero failures across the 5-file sibling regression. The full e2e gate is
+the orchestrator's, not run by the CMA.
+
+**No git mutation.** No commits, no branches, no pushes. Working tree
+carries the edits; the orchestrator decides when to commit.
+
+### R24 fix (searchAnchor 2 more sites + comments)
+
+**R24-A (§5): #searchAnchor missing at #accelerateInFlight +
+notifyHeaderState mid-settle absorb.** R23-B wired the search axis's
+`#searchAnchor` at 2 of the 5 settle-arm sites that the FAB axis's
+`#enterFabAnchor` covers (playEnterAnimation + the discrete-nav arm).
+The FAB axis has 5 sites; the search axis was missing at the other 2
+in-flight-settle re-arm sites:
+
+- `#accelerateInFlight` (R10-A F1 sibling): a discrete-nav interrupt
+  of an in-flight enter settle on `/search`. The re-arm clears
+  `#searchAnchor` at the top of `#armSettleEase`; without a re-seed
+  the post-arm `#searchAnchor = null` hands the search axis to the
+  natural `searchProgress = 1 - trackMorph = bm` formula, whose `bm`
+  value at the accelerate instant disagrees with the held-at-1 value
+  the Header was rendering (the prior anchor from
+  `playEnterAnimation` was `{ start: 1, dest: 1 }`), snapping the
+  header search track partially out at the boundary.
+- `notifyHeaderState` mid-settle absorb (R12-B F1 sibling): a
+  dynamic-title route resolves a new title mid-enter on a `/search`
+  commit. Same shape: the re-arm clears the anchor and the natural
+  formula disagrees with the in-flight lerp the Header was rendering.
+
+**The fix (mirror the FAB axis's capture+re-seed at both sites).**
+Both sites now capture `prevSearchAnchor = this.#searchAnchor` and
+`capturedSearchProgress = this.#searchProgressAtSettleInstant()`
+BEFORE the arm clear, then re-seed
+`#searchAnchor = { start: capturedSearchProgress, dest: prevSearchAnchor.dest }`
+AFTER the arm (mirroring `prevEnterFabAnchor` / `capturedFabScale` /
+`prevEnterFabAnchor.dest` at the same site). The re-seed's skip guard
+is `prevSearchAnchor !== null && capturedSearchProgress !== null`, so
+it fires only when the in-flight settle had a search-axis anchor to
+carry across the re-arm; paths that left `#searchAnchor` null at the
+arm (from-rest title-change, fresh-enter, non-search discrete-nav)
+skip the re-seed and the Header's natural `searchProgress` derivation
+handles the settle.
+
+**One structural fix beyond the wiring.** The capture helper
+`#searchProgressAtSettleInstant` only mirrored the gesture branch of
+the Header's `searchProgress` derivation; it did NOT mirror the
+settle-anchor branch that takes precedence while a settle is in flight
+and the anchor is non-null. At the `#accelerateInFlight` capture
+instant the prior anchor was non-null (`{ start: 1, dest: 1 }` from
+`playEnterAnimation`), so the Header was rendering the settle-anchor
+lerp (held at 1), but the helper returned the gesture branch's `bm`
+value (~0.2 at 60ms into the enter). The first version of the
+re-seed captured 0.2 and the post-arm anchor's `start = 0.2`
+disagreed with the pre-arm displayed value (1), introducing a 157px
+snap at the re-arm instead of preventing one. The probe showed a
+partial reduction (280px to 40px), which made the gap visible. The
+helper now mirrors the Header's four-branch derivation by precedence
+(settle-anchor first, then the gesture / at-rest switch), matching
+how `#fabScaleAtSettleInstant` mirrors `computeFabScale` end-to-end
+(including its `enterAnchor` parameter).
+
+**Comment rewrites (R24-B).**
+
+- `playEnterAnimation` search-anchor seed-site docstring (R23-B F2):
+  the prior docstring claimed "no anchor is set" for non-search
+  pipeline commits because "`#priorTerminalSearchProgress` is null".
+  Actually the helper returns 0 (its third clause) when neither side
+  is search, not null; the helper short-circuits to null only when
+  no transition is in flight, which is never the case at a commit
+  terminal. So the anchor IS set to `{ start: 0, dest: 0 }`, a
+  no-op hold that is continuous with the at-rest branch's
+  `isSearch ? 1 : 0 = 0` for the non-search host. Rewritten to
+  describe the actual mechanism (stash always set at a pipeline
+  commit terminal; non-search lerp is a no-op hold at 0; `!== null`
+  guard skips only for a direct `playEnterAnimation` invocation with
+  no preceding pipeline commit).
+- Discrete-nav arm capture docstring (R23-B F1): the prior docstring
+  contradicted itself, claiming the helper "returns the at-rest
+  searchProgress (`isSearch(source) ? 1 : 0`)" for a from-rest
+  tab-click while also saying the re-seed's null-guard "skips when
+  no transition was in flight at the capture (the helper's
+  `pub.inFlight` short-circuit)". The first clause was wrong: the
+  helper returns null via the `!pub.inFlight` short-circuit for a
+  from-rest tab-click, not the at-rest searchProgress. Rewritten to
+  describe the null short-circuit.
+
+**Docstring reach-path enumeration updates.** The `#searchAnchor`
+field docstring (nav-pipeline-orchestrator.svelte.ts) and the
+`SearchAnchor` interface docstring (header-probe.ts) now say "Four
+reach paths" with the two new sites (accelerateInFlight,
+mid-settle absorb) described alongside the two R23-B sites. The
+`#armSettleEase` clear-site comment now has a parallel paragraph
+enumerating the four search-axis re-seeding sites (the FAB axis has
+five; the search axis has four because `#armSettleEaseFromGesture`
+has no search-axis counterpart, since a live drag drives the search
+axis via the gesture branch and the drag's terminal `bm` agrees with
+the post-settle at-rest searchProgress on the release's target).
+
+**BEFORE / AFTER continuity numbers** (probe via the new R24-A guard,
+single run each, multi-signal sampler, `hdrTrackTx` =
+`header div.flex.w-[200%]` translateX; boundary window is pre-flip
+frames plus the transitionTarget flip frame, excluding the
+back-to-`/messages/inbox` slide's natural full-range slide-out
+motion which runs at ~35-40px per rAF under the slide's easing curve):
+
+| signal           | BEFORE (no fix)      | AFTER (fix)        |
+| ---------------- | -------------------- | ------------------ |
+| R24-A hdrTrackTx | 303.87px at t=1008ms | 20.04px at t=323ms |
+
+The pre-fix 303.87px snap is the full held-at-1 value (1.0 \*
+viewport; the panel was at translateX = -393px via the held
+searchProgress = 1, snapping to the natural formula's `bm`-driven
+value mid-enter, ~0.2, then re-animating). The post-fix 20.04px is
+within the regular per-rAF cadence at this viewport's header
+geometry (the natural eased step at u ~= 0.06 over a 196.5px
+half-viewport is ~20px), well under the 30px threshold.
+
+**New preventive no-snap guard.** One new test in
+`e2e/messages-back-swipe.spec.ts`:
+
+- `forward-swipe-to-/search enter interrupted by a goto keeps the
+header search track continuous (R24-A accelerateInFlight)`:
+  setup `/messages/inbox`; saturated leftward touch drag (14 moves)
+  so the drag commits at raw=1 and lands on `/search`;
+  `playEnterAnimation` seeds `#searchAnchor = { start: 1, dest: 1 }`
+  (R23-B F2) and arms the enter settle. Same CDP session then
+  dispatches `__e2eGoto('/messages/inbox')` 60ms after URL land via
+  `Runtime.evaluate`. The goto arrives while the enter's commit is
+  still in flight, so the discrete-nav branch's
+  `phase === 'committing'` test fires and routes to
+  `#accelerateInFlight`. The no-snap window is pre-flip frames plus
+  the transitionTarget flip frame (the boundary detection finds the
+  first frame where `transitionTarget === '/messages/inbox'`).
+  Asserts `maxFrameJumps(hdrTrackTx) < 30` and final URL on
+  `/messages/inbox`.
+
+**Real command outputs.**
+
+```
+$ bun run check
+1785341711218 START "/home/losses/Development/janbao"
+1785341711222 COMPLETED 1469 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+
+$ bunx tsc -p scripts/tsconfig.json --noEmit
+EXIT=0
+
+$ bun run lint
+Checking formatting...
+All matched files use Prettier code style!
+[eslint clean]
+Total similar type pairs found: 63
+EXIT=0
+
+$ bun test src/lib
+552 pass / 0 fail / 2270 expect() calls across 40 files [2.20s]
+```
+
+New no-snap guard (single run each):
+
+```
+$ bunx playwright test e2e/messages-back-swipe.spec.ts -g "R24-A" \
+    --retries=0 --workers=1
+R24-A accelerateInFlight hdrTrackTx continuity: {
+  hdrTrackJumps: { max: 20.043000000000006, maxAt: 323 },
+  accelT: 1016,
+  finalPath: '/messages/inbox'
+}
+1 passed (10.0s)
+```
+
+Sibling regression sweep (the 5-file set, `--retries=0 --workers=1`):
+
+```
+$ bunx playwright test e2e/messages-back-swipe.spec.ts \
+    e2e/reproduce-dv20-search-swipe.spec.ts \
+    e2e/search-enter-exit-asymmetry.spec.ts \
+    e2e/search-back-hamburger-flash.spec.ts \
+    e2e/reproduce-user-bugs.spec.ts --retries=0 --workers=1
+66 passed (4.0m)
+```
+
+66 passed (65 from the R23-B baseline + 1 new R24-A guard). Zero
+failures across the 5-file sibling regression. The full e2e gate is
+the orchestrator's, not run by the CMA.
+
+**No git mutation.** No commits, no branches, no pushes. Working tree
+carries the edits; the orchestrator decides when to commit.
+
+### R26 fix (dragSearchAnchor + computeFabScale docstring + Header comment)
+
+**R26-A (§5): search axis missing drag-owned anchor (parity gap).** The
+morph axis captures `#dragMorphAnchor` at `#beginGesture` (R8-A F1+F2) so
+the drag-branch shift formula bridges the in-flight value across the
+cancelled settle. The FAB axis captures `#dragFabAnchor` (R8-A F3). The
+search axis had `#searchAnchor` (settle-owned, four reach paths) but NO
+drag-owned counterpart, so a re-grab taking over an in-flight
+search-retreat settle snapped the header search track ~96-143px on a
+393px viewport (probe-verified).
+
+**Fix (mirror `#dragFabAnchor`).**
+
+- New `DragSearchAnchor` interface in `header-probe.ts` (`{search: number,
+raw: number}`), paired with a paragraph docstring noting the parity
+  with `DragMorphAnchor` / `DragFabAnchor` and the capture condition
+  (`settleActive && #searchAnchor !== null` at `#beginGesture`).
+- New `#dragSearchAnchor = $state<DragSearchAnchor | null>(null)` field
+  in the orchestrator, captured at `#beginGesture` between
+  `settleFabAtTakeover` and `#cancelAllAnimationEases`. The capture
+  reads `#searchProgressAtSettleInstant` (R24-A's single-source-of-truth
+  helper that mirrors the Header's four-branch derivation by precedence,
+  so the captured value is continuous with what the Header was rendering
+  at the takeover). Paired with the new plan's `rawStart` at the same
+  two-phase capture sites (`boundary` and non-boundary branches of
+  `#beginGesture`) so both halves of the anchor are on the new gesture's
+  scale.
+- New `dragSearchAnchor` getter on the orchestrator.
+- New clear sites: `unmount`, `#beginGesture` (alongside the morph / FAB
+  drag-anchor clears), `#landAtRest`, `#armSettleEase`. All four sites
+  mirror the existing `#dragMorphAnchor` / `#dragFabAnchor` clears so
+  the three anchors stay in lockstep.
+- Header `searchProgress` derivation gains a drag-anchor branch
+  (precedence: tap-scrub, settle-anchor, drag-search-anchor, gesture,
+  at-rest). The branch has two sub-cases:
+  - `backMorph !== null`: shift the natural gesture formula through
+    `(anchor.raw, anchor.search)` so the curve passes through the
+    takeover visual. The shift is constant in `bm`, so the formula stays
+    a pure function of `bm` (DV21 §5). Mirrors the morph axis's
+    `dragMorphAnchor` shift and the FAB axis's `dragFabAnchor` shift.
+  - `backMorph === null`: a tab-to-tab re-grab on a non-centerTab host
+    nulls `backMorph` end to end. The gesture branch below is skipped
+    and the at-rest fallback would collapse the panel to 0 in one
+    frame; hold at `anchor.search` for the drag's duration so the panel
+    stays continuous with the prior settle. Mirrors the morph axis's
+    `nullBmAnchor` hold branch.
+
+**R26-B F1 (comment): computeFabScale docstring overclaim.** The
+docstring at `src/lib/utils/fab-scale.ts:~L175` said "Pure (runes-free);
+unit-tested under `bun test`" but `computeFabScale` has ZERO unit tests
+(only `fabScale` / `hideProgress` / `translateYFromHideProgress` are
+tested under `bun test`). Rewritten to "Pure (runes-free); exercised by
+the R8-R14 e2e continuity guards" with a parenthetical noting the
+re-grab / commit-to-enter / release-handoff specs in
+`e2e/messages-back-swipe.spec.ts` sample the FAB scale per rAF and
+assert no-snap across each boundary. Accurate; the function is tested
+indirectly via the FAB-layer e2e specs.
+
+**R26-B F2 (comment): fabricated "R24-A F1+F2" + under-description.**
+The Header comment at `src/lib/components/organisms/Header.svelte:~L511`
+read "(R23-B F1+F2, R24-A F1+F2)" but R24-A was one finding covering two
+sub-sites (no F-numbering). The body described only the R23-B sites.
+Rewritten to "(R23-B + R24-A)" and expanded to describe all four reach
+paths: `playEnterAnimation` commit-to-enter handoff (R23-B F2), the
+discrete-nav arm drag interrupt (R23-B F1), `#accelerateInFlight` enter
+interrupt (R24-A), and the `notifyHeaderState` mid-settle absorb (R24-A).
+The Header's `searchProgress` derivation's precedence comment also
+updated from "Four sources" to "Five sources" with the new
+drag-search-anchor branch described as source 3 (between settle-anchor
+and gesture).
+
+**BEFORE / AFTER continuity numbers** (probe via the new R26-A guard,
+single run each, multi-signal sampler, `hdrTrackTx` =
+`header div.flex.w-[200%]` translateX; boundary window is the pre-flip
+frames plus the `transitionTarget` flip frame from `/search` (held by
+the enter settle) to `/messages/inbox` (the back-swipe's target)):
+
+| signal           | BEFORE (no fix)      | AFTER (fix)         |
+| ---------------- | -------------------- | ------------------- |
+| R26-A hdrTrackTx | 237.69px at t=1047ms | 23.97px at t=1061ms |
+
+The pre-fix 237.69px snap is the full extent of the natural `1 - bm`
+gesture formula collapsing the search axis at the takeover (the
+settle-anchor branch is gated on `settleActive`, which flips to false
+at `#beginGesture`, and without the drag-anchor the gesture branch
+recomputes `searchProgress` from the new plan's raw). The post-fix
+23.97px is within the regular per-rAF cadence at this viewport's header
+geometry, well under the 30px threshold.
+
+**New preventive no-snap guard.** One new test in
+`e2e/messages-back-swipe.spec.ts`:
+
+- `re-grab during a search-settle keeps the header search track
+continuous (R26-A)`:
+  setup `/messages/inbox`; saturated leftward touch drag (14 moves) so
+  the drag commits at raw=1 and lands on `/search`;
+  `playEnterAnimation` seeds `#searchAnchor = { start: 1, dest: 1 }`
+  (R23-B F2) and arms the enter settle. Same CDP session then
+  dispatches a rightward back-swipe (touchStart + 10 touchMoves +
+  touchEnd) on the `/search` host 30ms after URL land. `#beginGesture`
+  captures `#dragSearchAnchor` from the in-flight searchAnchor lerp
+  value BEFORE the cancel clears the settle. The no-snap window is the
+  pre-flip frames plus the `transitionTarget` flip frame (the moment
+  the back-swipe's `/messages/inbox` target replaces the enter settle's
+  `/search` target). Asserts `maxFrameJumps(hdrTrackTx) < 30`.
+
+**Real command outputs.**
+
+```
+$ bun run check
+1785346360858 START "/home/losses/Development/janbao"
+1785346360862 COMPLETED 1469 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+
+$ bun run lint
+Checking formatting...
+All matched files use Prettier code style!
+[eslint clean]
+Total similar type pairs found: 63
+EXIT=0
+
+$ bun test src/lib
+552 pass / 0 fail / 2270 expect() calls across 40 files [2.17s]
+```
+
+New no-snap guard (single run each, AFTER vs BEFORE):
+
+```
+$ bunx playwright test e2e/messages-back-swipe.spec.ts -g "R26-A" \
+    --retries=0 --workers=1
+R26-A re-grab hdrTrackTx continuity: {
+  hdrTrackJumps: { max: 23.973000000000013, maxAt: 1061 },
+  reGrabT: 1061,
+  landIdx: 57,
+  finalPath: '/messages/inbox'
+}
+1 passed (10.2s)
+```
+
+Sibling regression sweep (the 5-file set, `--retries=0 --workers=1`):
+
+```
+$ bunx playwright test e2e/messages-back-swipe.spec.ts \
+    e2e/reproduce-dv20-search-swipe.spec.ts \
+    e2e/search-enter-exit-asymmetry.spec.ts \
+    e2e/search-back-hamburger-flash.spec.ts \
+    e2e/reproduce-user-bugs.spec.ts --retries=0 --workers=1
+67 passed (4.0m)
+```
+
+67 passed (66 from the R24-A baseline + 1 new R26-A guard). Zero
+failures across the 5-file sibling regression. The full e2e gate is
+the orchestrator's, not run by the CMA.
+
+**Note on the R26-A test boundary.** The back-swipe on `/search`
+travels via the NavPipelineHost back-target resolver, which dispatches
+a `goto` rather than a touch-drag pipeline event. The discrete-nav
+branch's `phase === 'committing'` test fires (the enter's commit slide
+is still in flight) and routes to `#accelerateInFlight`, which re-seeds
+`#searchAnchor = { start: 1, dest: 0 }` (R24-A) and accelerates the
+commit. The takeover boundary this guard samples is the accelerate
+flip, where the search-axis continuity depends on both R24-A's
+settle-anchor re-seed AND the new R26-A drag-anchor shift sub-case
+(the latter fires for the live `bm` publication between touchStart and
+touchEnd). The 237.69px BEFORE snap is the collapse that R26-A
+prevents; the 23.97px AFTER is the natural per-rAF cadence at the
+boundary.
+
+**No git mutation.** No commits, no branches, no pushes. Working tree
+carries the edits; the orchestrator decides when to commit.
+
+### R27 fix (F1 false-positive verdict + four stale-comment rewrites)
+
+**R27-A F1 verdict: FALSE POSITIVE (empirically verified).** R27-A
+claimed `#searchProgressAtSettleInstant`'s omission of a
+`#dragSearchAnchor` branch causes a ~50-150px snap at the L1801
+re-grab capture site. R27-B countered that `#dragSearchAnchor` is null
+at all 5 helper call sites (cleared by `#armSettleEase` /
+`#beginGesture` before the helper runs). The verdict per the task's
+empirical protocol: write a TEMPORARY probe that drives the R26-A
+re-grab scenario and samples `hdrTrackTx` across the re-grab boundary
+plus reads back the L1801 pre-clear state via a temporary
+`window.__r27Probe` hook.
+
+Probe result (single run, AFTER the current R26-A fix, probe code
+deleted after the run):
+
+| signal                                                       | value                                                                  |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `#dragSearchAnchor` at L1801                                 | `null`                                                                 |
+| `settleActive` at L1801                                      | `true`                                                                 |
+| `#searchAnchor` at L1801                                     | `{ start: 1, dest: 1 }` (R23-B F2 hold seeded by `playEnterAnimation`) |
+| `publication.inFlight` at L1801                              | `true`                                                                 |
+| `settleSearchAtTakeover`                                     | `1` (settle-anchor branch's held-at-1 lerp)                            |
+| `hdrTrackTx` max frame-to-frame jump at the re-grab boundary | 23.97px at t=1063ms                                                    |
+
+The 23.97px is well under the 30px threshold, so F1 is a false
+positive. The omission is safe because at the re-grab `#beginGesture`
+the prior gesture has released (Phase 1's saturated forward-swipe),
+`#armSettleEaseFromGesture` ran between the two drags and cleared
+`#dragSearchAnchor` (it was already null because Phase 1 was a
+from-rest drag whose `settleSearchAtTakeover` capture short-circuited
+to null), and `playEnterAnimation` then seeded `#searchAnchor = {1, 1}`
+for the enter settle without touching `#dragSearchAnchor`. The
+existing R26-A guard (`e2e/messages-back-swipe.spec.ts`) already
+asserts this boundary empirically; the probe reproduced the same
+23.97px number, so the guard is reliable.
+
+**R27-A F2 + R27-B F1/F2 (three stale "four-branch" count sites +
+capture-site list).** R26-A added a 5th branch to the Header's
+`searchProgress` derivation (the drag-search-anchor shift / hold) but
+three sites in `src/lib/stores/nav-pipeline-orchestrator.svelte.ts`
+still counted "four-branch" / listed 4 capture sites. Rewrites:
+
+- L1789 inline comment in `#beginGesture`: "four-branch" to
+  "five-branch derivation's settle-anchor + gesture / at-rest
+  clauses", with an explicit note that the helper intentionally omits
+  the tap-scrub clause (unreachable at capture sites) and the
+  drag-search-anchor clause (null at every helper call site per the
+  R27-A F1 verdict).
+- L4343 helper docstring (`#searchProgressAtSettleInstant`): same
+  "four-branch" to "five-branch" rewrite with the same intentional-
+  omissions note.
+- L4332-4341 capture-site list in the helper docstring: added the 5th
+  site (`#beginGesture` re-grab capture for R26-A) to the existing
+  four (R23-B F1 discrete-nav, R23-B F2 commit slide end, R24-A
+  accelerate-in-flight, R24-A mid-settle absorb).
+
+**R27-A F5 (`#dragSearchAnchor` field docstring "null when" claim).**
+The field docstring at `src/lib/stores/nav-pipeline-orchestrator.svelte.ts`
+claimed `#dragSearchAnchor` is "null when no search settle was in
+flight at `#beginGesture` ... or a drag taking over a non-search
+settle whose search axis was already at the at-rest value". This is
+wrong: `playEnterAnimation` seeds `#searchAnchor = {0, 0}` for a
+non-search pipeline commit landing (the prior-terminal stash returns
+0 and the host route's dest is 0), so the L1796-1802 capture
+condition (`settleActive && #searchAnchor !== null && inFlight`)
+fires for those too, producing a no-op hold
+`#dragSearchAnchor = {search: 0, raw: startProgress}`. Rewritten to
+state the capture fires for both search-dest and non-search-dest
+settles, with the explicit `playEnterAnimation` seed shape for the
+non-search case, and to scope the null condition to its actual
+boundaries (`settleActive === false`, `#searchAnchor === null`, or
+`!inFlight`). The inline comment at the L1796-1802 capture site was
+also rewritten to match (it carried the same wrong "null when" claim).
+
+**R27-A F6 (Header nullBm-hold comment at L581-586).** The branch-3
+inline comment in `src/lib/components/organisms/Header.svelte`
+claimed that without the hold "the at-rest fallback would collapse
+the panel to 0 in one frame" when `backMorph === null`. This is
+wrong for the only currently-reachable case (a non-centerTab tab-to-
+tab re-grab): `playEnterAnimation` seeds `#searchAnchor = {0, 0}`
+for the prior non-search settle, so `anchor.search === 0`, which
+equals the at-rest fallback's `isSearch ? 1 : 0 = 0` for the same
+non-search source. The hold is a no-op against the fallback, not a
+collapse preventer. Rewritten to state the actual sub-case shape
+(`anchor.search === 0` equals the at-rest for the non-search tab-to-
+tab source) and reframe the hold as structural exhaustiveness
+(mirrors the morph axis's `nullBmAnchor` hold branch) rather than a
+continuity guard.
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; em-dash grep
+clean across both edited files; `bunx prettier --check` clean on both
+edited files. The existing R26-A guard re-run after the comment
+edits: `hdrTrackTx` max jump 23.97px at t=1064ms (matches the
+pre-edit number, so the comments did not regress the fix). The full
+e2e gate is the orchestrator's, not run by the CMA.
+
+**Real command outputs.**
+
+```
+$ bun run check
+1785356652237 START "/home/losses/Development/janbao"
+1785356652241 COMPLETED 1469 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+
+$ bun run lint
+Checking formatting...
+All matched files use Prettier code style!
+[eslint clean]
+Total similar type pairs found: 63
+EXIT=0
+
+$ grep -nP '\x{2014}' src/lib/stores/nav-pipeline-orchestrator.svelte.ts \
+    src/lib/components/organisms/Header.svelte
+(empty)
+
+$ bunx prettier --check src/lib/stores/nav-pipeline-orchestrator.svelte.ts \
+    src/lib/components/organisms/Header.svelte
+All matched files use Prettier code style!
+```
+
+R27 F1 probe (temporary; the probe hook in
+`nav-pipeline-orchestrator.svelte.ts` and the `e2e/r27-probe.spec.ts`
+file were deleted after the run):
+
+```
+$ bunx playwright test e2e/r27-probe.spec.ts --retries=0 --workers=1
+R27 F1 probe result: {
+  hdrTrackJumps: { max: 23.973000000000013, maxAt: 1063 },
+  reGrabIdx: 63,
+  landIdx: 56,
+  probeEntries: 2,
+  probeLog: [
+    {
+      t: 2009,
+      dragSearchAnchorAtL1801: null,
+      settleActive: false,
+      searchAnchor: null,
+      inFlight: false,
+      settleSearchAtTakeover: null
+    },
+    {
+      t: 3024.8000000715256,
+      dragSearchAnchorAtL1801: null,
+      settleActive: true,
+      searchAnchor: { start: 1, dest: 1 },
+      inFlight: true,
+      settleSearchAtTakeover: 1
+    }
+  ],
+  finalPath: '/messages/inbox'
+}
+1 passed (10.7s)
+```
+
+R26-A guard re-run after the comment edits (regression check):
+
+```
+$ bunx playwright test e2e/messages-back-swipe.spec.ts -g "R26-A" \
+    --retries=0 --workers=1
+R26-A re-grab hdrTrackTx continuity: {
+  hdrTrackJumps: { max: 23.973000000000013, maxAt: 1064 },
+  reGrabT: 1064,
+  landIdx: 58,
+  finalPath: '/messages/inbox'
+}
+1 passed (11.0s)
+```
+
+**Scope not verified.** The probe verified the canonical R26-A re-grab
+boundary (L1801, the helper's `#beginGesture` call site). R27-B's
+broader claim of null at all 5 helper call sites was not empirically
+probed per-site; the L1801 site is the only site R27-A's snap claim
+named, and the task's empirical protocol gated the verdict on this
+site. A theoretical concern remains at L2790
+(`#onSvelteKitBeforeNavigate`'s `liveDragSearchProgress` capture): if
+a discrete-nav interrupts an in-flight drag whose `#dragSearchAnchor`
+is non-null (a re-grab that took over a search settle, then mid-drag
+a tab-click / external `goto`), the helper would return the natural
+formula's value while the Header was rendering branch 3's shift
+(disagreement on the order of `startProgress * viewport-width`
+px). This scenario is more contrived than R26-A's release-then-regrab
+and was not named by R27-A F1; it is left for a future round to
+probe if an auditor raises it.
+
+**No git mutation.** No commits, no branches, no pushes. Working tree
+carries the edits; the orchestrator decides when to commit.
+
+### R28 fix (search helper drag-anchor branch)
+
+**R28 F1 (probe-verified by both auditors at the L2803 site).** The
+R27 "scope not verified" paragraph above named the L2790
+(`#onSvelteKitBeforeNavigate`'s `liveDragSearchProgress` capture)
+site as a theoretical concern: a re-grab drag taking over an enter
+settle is itself interrupted mid-drag by a discrete-nav (a tab-click
+or external `goto`), and at the L2803 capture site `#dragSearchAnchor`
+is set while the helper short-circuits past the (missing) drag-anchor
+branch. R28-A and R28-B both probe-verified the resulting snap at
+~162-219px on a 393px viewport (the gesture value `1 - bm` returned
+by the helper vs. branch 3's shift `anchor.search + natural(bm) -
+natural(anchor.raw)` the Header renders; disagreement is
+`anchor.raw * viewport-width` px). The R27-A verdict was correct
+for the L1801 `#beginGesture` capture site (the only site R27-A F1
+named) but its broader "null at every helper call site" claim was
+wrong: the L2803 site fires with `#dragSearchAnchor` set in the
+re-grab-interrupted-by-discrete-nav scenario, where the helper's
+omission snaps the search track.
+
+**Fix: mirror the Header's branch 3 shift formula in
+`#searchProgressAtSettleInstant`.** Added a drag-search-anchor
+branch between the settle-anchor branch and the gesture branch
+(matching the Header's precedence), computing the same shift the
+Header's branch 3 returns: `anchorTrackMorph = (pub.toPathname ===
+currentPath) ? 1 - anchor.raw : anchor.raw`, then `clamp(0, 1,
+anchor.search + naturalAtBm - naturalAtAnchor)` where `naturalAt*`
+is the gesture formula's `isSearch ? 1 - trackMorph : targetIsSearch
+? trackMorph : 0` evaluated at `bm` and at `anchor.raw` respectively.
+The Header gates the shift on `pager.backMorph !== null` and
+otherwise holds at `anchor.search`; the publication's `progress` is
+the raw-scale analog of `backMorph` and is non-null whenever the
+publication is in flight (guaranteed by the helper's `!pub.inFlight`
+short-circuit), so the bm-null hold sub-case is unreachable in the
+helper. For the only shape where the pager actually nulls `backMorph`
+mid-publication (a tab-to-tab transition on a non-centerTab host,
+where `playEnterAnimation` seeds `#searchAnchor = {0, 0}` per the
+R27-A F5 rewrite) `anchor.search === 0` and both `natural(...)`
+terms resolve to 0, so the shift collapses to `anchor.search` and
+matches the Header's hold without a separate branch. The helper now
+mirrors the Header's `searchProgress` derivation end-to-end by
+precedence (settle-anchor, drag-search-anchor, gesture / at-rest),
+intentionally omitting only the tap-scrub clause (unreachable at
+capture sites).
+
+**R28-A F2-F3 + R28-B F2-F4 (three stale-comment rewrites).** The
+R27 "null at every helper call site" claim and the "mirrors end-to-
+end" claim were both wrong for L2803. Rewrites:
+
+- L2803 inline comment at the `liveDragSearchProgress` capture: the
+  old "returns the live `bm`" / "mirrors end-to-end" language
+  replaced with explicit enumeration of the three branch cases the
+  helper now mirrors (settle-anchor lerp, drag-anchor shift, gesture
+  value), with the R28 F1 re-grab-mid-enter-settle scenario named as
+  the reach path for the drag-anchor branch at this site.
+- L1789 `#beginGesture` inline comment: the "null at every helper
+  call site per the R27-A F1 verdict" clause replaced with the
+  correct scope (`#dragSearchAnchor` is null at THIS `#beginGesture`
+  site, cleared by `#armSettleEase` / `#landAtRest` between the
+  dragged settle and the next event or never set for a from-rest
+  drag; the L2803 site is the reach path where the drag-anchor
+  branch actually fires).
+- L4355 `#searchProgressAtSettleInstant` docstring: the
+  "five-branch derivation's settle-anchor + gesture / at-rest
+  clauses (it intentionally omits the tap-scrub clause and the
+  drag-search-anchor clause)" rewritten to "five-branch derivation
+  end-to-end by precedence (settle-anchor lerp, then drag-search-
+  anchor shift, then gesture / at-rest; intentionally omits only
+  the tap-scrub clause)" with the drag-anchor branch's L2803 reach
+  path described and an explicit "Without the drag-search-anchor
+  branch the L2803 capture would return the gesture value while
+  the Header was rendering the drag-anchor shift value, snapping
+  the search track by `startProgress * viewport-width` px"
+  note.
+
+**Preventive guard.** Added a new e2e guard in
+`e2e/messages-back-swipe.spec.ts`: "mid-re-grab discrete-nav
+interrupt keeps the header search track continuous (R28)". Phase 1
+is the saturated forward-swipe `/messages/inbox` -> `/search` (R23-B
+F2 hold seeds `#searchAnchor = {1, 1}`); Phase 2 (same CDP session)
+starts a rightward back-swipe re-grab on `/search` with a 10-move
+cadence matching R26-A (per-move track delta ~24px, under the 30px
+threshold so the drag motion itself does not trip the assertion);
+Phase 3 dispatches `__e2eGoto('/activity')` mid-re-grab (touch still
+pressed, no `touchEnd`), the discrete-nav interrupt at L2803. The
+assertion window starts at the re-grab's `transitionTarget` flip to
+`/messages/inbox` (excluding Phase 1's rapid forward-swipe slide)
+and ends at the interrupt's `transitionTarget` flip to `/activity`
+plus one frame (the latest the boundary snap can register before
+the post-flip settle's natural slide-out motion takes over). Asserts
+`maxFrameJumps(hdrTrackTx) < 30`.
+
+**BEFORE/AFTER numbers (single run each, on a 393px viewport).**
+
+| metric                                                         | BEFORE (drag-anchor branch disabled) | AFTER (fix applied) |
+| -------------------------------------------------------------- | ------------------------------------ | ------------------- |
+| `hdrTrackTx` max frame-to-frame jump at the interrupt boundary | 214.26px at t=1519ms                 | 24.05px at t=1096ms |
+| `interruptT` (the `transitionTarget` flip to `/activity`)      | 1519ms                               | 1519ms              |
+| final path                                                     | `/activity`                          | `/activity`         |
+
+The BEFORE 214.26px snap registers exactly at the interrupt frame
+(`t=1519ms = interruptT`), confirming the disagreement is the
+one-frame discontinuity between the Header's branch 3 rendering
+(drag-anchor shift value) and the helper's captured `start` (gesture
+value) seeding the new settle. The AFTER 24.05px max registers at
+`t=1096ms` during the re-grab drag itself (the natural per-rAF
+cadence at the 10-move drag cadence, matching R26-A's 23.97px); the
+interrupt boundary itself contributes zero snap. The 214.26px BEFORE
+is in the R28 finding's 162-219px probe-verified range.
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; `bun test
+src/lib` 552 pass / 0 fail; em-dash grep clean across both edited
+files; `bunx prettier --check` clean on both edited files. The new
+R28 guard GREEN. Sibling regression
+(`e2e/messages-back-swipe.spec.ts`,
+`e2e/reproduce-dv20-search-swipe.spec.ts`,
+`e2e/search-enter-exit-asymmetry.spec.ts`,
+`e2e/search-back-hamburger-flash.spec.ts`,
+`e2e/reproduce-user-bugs.spec.ts`, `--retries=0 --workers=1`):
+68 passed (67 from the R26-A baseline + 1 new R28 guard), zero
+failures. The full e2e gate is the orchestrator's, not run by the
+CMA.
+
+**Real command outputs.**
+
+```
+$ bun run check
+1785359917614 START "/home/losses/Development/janbao"
+1785359917618 COMPLETED 1469 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+
+$ bun run lint
+Checking formatting...
+All matched files use Prettier code style!
+[eslint clean]
+Total similar type pairs found: 63
+EXIT=0
+
+$ bun test src/lib
+552 pass
+0 fail
+2270 expect() calls
+Ran 552 tests across 40 files. [2.27s]
+
+$ grep -nP '\x{2014}' src/lib/stores/nav-pipeline-orchestrator.svelte.ts \
+    e2e/messages-back-swipe.spec.ts
+(empty)
+
+$ bunx prettier --check src/lib/stores/nav-pipeline-orchestrator.svelte.ts \
+    e2e/messages-back-swipe.spec.ts
+All matched files use Prettier code style!
+```
+
+R28 guard AFTER (fix applied):
+
+```
+$ bunx playwright test e2e/messages-back-swipe.spec.ts -g "R28" \
+    --retries=0 --workers=1
+R28 mid-re-grab discrete-nav hdrTrackTx continuity: {
+  hdrTrackJumps: { max: 24.051999999999964, maxAt: 1096 },
+  interruptT: 1519,
+  reGrabIdx: 63,
+  finalPath: '/activity'
+}
+1 passed (11.1s)
+```
+
+R28 guard BEFORE (drag-anchor branch temporarily disabled via
+`if (false && dragSearchAnchor !== null)`, restored after the run):
+
+```
+$ bunx playwright test e2e/messages-back-swipe.spec.ts -g "R28" \
+    --retries=0 --workers=1
+R28 mid-re-grab discrete-nav hdrTrackTx continuity: {
+  hdrTrackJumps: { max: 214.264, maxAt: 1519 },
+  interruptT: 1519,
+  reGrabIdx: 63,
+  finalPath: '/activity'
+}
+1 failed
+```
+
+Sibling regression:
+
+```
+$ npx playwright test e2e/messages-back-swipe.spec.ts \
+    e2e/reproduce-dv20-search-swipe.spec.ts \
+    e2e/search-enter-exit-asymmetry.spec.ts \
+    e2e/search-back-hamburger-flash.spec.ts \
+    e2e/reproduce-user-bugs.spec.ts --retries=0 --workers=1
+68 passed (4.2m)
+```
+
+**Scope not verified.** The fix mirrors the Header's branch 3 shift
+formula for the bm-non-null sub-case and collapses to `anchor.search`
+for the bm-null sub-case via the natural-arithmetic coincidence
+described above (both `natural(...)` terms resolve to 0 when neither
+endpoint is search, matching the Header's hold). The bm-null path
+through the helper is not exercised by any reachable scenario (the
+publication's `progress` is non-null whenever the publication is in
+flight), so the collapse-to-anchor.search equivalence is asserted by
+construction rather than by an e2e. The full e2e gate is the
+orchestrator's.
+
+**No git mutation.** No commits, no branches, no pushes. Working tree
+carries the edits; the orchestrator decides when to commit.
+
+### R29 fix (search helper docstring snap-magnitude factor)
+
+**R29 F1 (auditor B BLOCK, code-comment accuracy).** The R28
+docstring on `#searchProgressAtSettleInstant`
+(`src/lib/stores/nav-pipeline-orchestrator.svelte.ts:4386`) claimed
+the omitted drag-anchor branch would snap the search track by
+`startProgress * 50% * viewport-width` px. The `* 50%` factor is
+spurious. R29 probe-verified the px-per-searchProgress-unit factor is
+1.0: at `/search` (searchProgress = 1) on a 393px viewport the header
+track translates -393px, because `translateX(-(searchProgress * 50)%)`
+of the `w-[200%]` element resolves to `-searchProgress * viewport-width`
+(one unit of searchProgress moves the track by one full viewport
+width). A delta of `startProgress` therefore moves it
+`startProgress * viewport-width` px, not half that. For the journal's
+measured BEFORE snap of 214.26px at viewport=393 the docstring's
+formula evaluated to 107.08px, half the real magnitude.
+
+**Fix.** Deleted the spurious `* 50%` so the docstring reads
+`startProgress * viewport-width` px. The described code path (the
+drag-anchor branch at L4410 mirroring the Header's branch 3 shift) is
+unchanged and correct; only the descriptive magnitude was wrong.
+
+**Sibling search (binding).** Grepped the whole navigation/animation
+pipeline (`src/lib/stores`, `src/lib/components`, `src/lib/utils`) for
+`50%`. Two hits: `gesture-constants.ts:17`
+(`PILL_EXPANSION_THRESHOLD = 0.5`, an unrelated drag-distance
+threshold constant) and the L4386 docstring. Every other
+snap-magnitude claim in the layer (header-probe.ts L189/L197/L212,
+Header.svelte L544, orchestrator L2974) already uses the correct
+`delta * viewport-width` factor (1.0). L4386 was the single outlier;
+no sibling phrasings to fix.
+
+**Journal nitpick (.md, same root cause, fixed in passing).** The R28
+journal entry carried the same spurious `* 50%` in three places: the
+R27 "scope not verified" paragraph, the R28 fix paragraph's inline
+formula, and the R28 paragraph quoting the docstring text. The R28
+paragraph's inline formula was also split by a blank line mid
+code-span (rendered broken) and the `#beginGesture` /
+`#dragSearchAnchor` code spans ran into the adjacent words. All three
+formulas corrected to `* viewport-width`, the broken code span
+rejoined, and the code spans respaced. `.md` only, does not block
+convergence, fixed because it is the same inaccuracy.
+
+**Verify.** `bun run check` 0 errors / 0 warnings; `bun run lint`
+exit 0; em-dash grep clean on both edited files; `bunx prettier
+--check` clean on both edited files. e2e regression
+(`e2e/messages-back-swipe.spec.ts` (incl. the R28 guard),
+`e2e/reproduce-dv20-search-swipe.spec.ts`,
+`e2e/search-enter-exit-asymmetry.spec.ts`,
+`e2e/search-back-hamburger-flash.spec.ts`, `--retries=0 --workers=1`):
+55 passed, matching the R29 baseline (41 + 14). Edits are code
+comments and `.md` text only; runtime behavior is unchanged.
+
+**Real command outputs.**
+
+```
+$ bun run check
+COMPLETED 1469 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+
+$ bun run lint
+All matched files use Prettier code style!
+EXIT=0
+Total similar type pairs found: 63
+
+$ grep -nP '\x{2014}' src/lib/stores/nav-pipeline-orchestrator.svelte.ts \
+    docs/DV21-Meeting/DV21-C01-Journal.md
+(empty)
+
+$ bunx prettier --check src/lib/stores/nav-pipeline-orchestrator.svelte.ts \
+    docs/DV21-Meeting/DV21-C01-Journal.md
+All matched files use Prettier code style!
+
+$ bunx playwright test e2e/messages-back-swipe.spec.ts \
+    e2e/reproduce-dv20-search-swipe.spec.ts \
+    e2e/search-enter-exit-asymmetry.spec.ts \
+    e2e/search-back-hamburger-flash.spec.ts --retries=0 --workers=1
+  55 passed (3.6m)
+```
+
+**No git mutation.** No commits, no branches, no pushes. Working tree
+carries the edits; the orchestrator decides when to commit.
+
+### R30 fix (e2e search-track snap-magnitude factor-of-2 siblings)
+
+**R30 result: auditor A PASS, auditor B BLOCK. Counter 0/5 (one BLOCK
+resets).** Auditor B found that the R29 sibling search was scoped to
+`src/lib/{stores,components,utils}` and missed the same factor-of-2
+root cause in `e2e/`. The defect definition covers inaccurate code
+comments in `.spec.ts` / `.ts` files wherever they describe this layer,
+and these e2e comments describe the header root-to-search track
+translate. Auditor B reported four sites; the orchestrator's
+independent grep (below) found two more that auditor B's phrasings
+missed (`half-viewport`, which B's `viewport/2` / `panel.*half`
+patterns did not match). Six sites total, all the same root cause as
+R29 F1: the `translateX(-(searchProgress * 50)%)` of a `w-[200%]`
+element nets to `searchProgress * viewport-width` (factor 1.0, not
+0.5), so every "half viewport" / "viewport/2" / "\* 50%" magnitude for
+this track understates the real snap by 2x.
+
+**The six sites (all in `e2e/`).**
+
+1. `e2e/messages-back-swipe.spec.ts:3214` (R23-B F1 docstring):
+   `bm * viewport/2` -> `bm * viewport-width` (`0.43 * 393 = 169` ~= 168px;
+   `bm * viewport/2` would be 84px).
+2. `e2e/messages-back-swipe.spec.ts:3284` (R23-B F2 docstring):
+   `(~viewport/2, ~196px ...)` -> `(~viewport-width, ~393px ...)`; the
+   panel snaps fully out (one full unit of searchProgress), matching
+   `header-probe.ts:189` ("~393px snap, R23-B F2"). The trailing
+   "~393px of wasted motion" clause (the re-animation distance) was
+   already correct and is unchanged.
+3. `e2e/messages-back-swipe.spec.ts:3586` (R28 docstring):
+   `anchor.raw * 50% * viewport-width` -> `anchor.raw * viewport-width`,
+   identical to the R29 F1 fix at orchestrator L4386.
+4. `e2e/helpers.ts:863` (hdrTrackTx signal doc): `~-viewport/2` ->
+   `~-viewport-width`. R29's probe measured hdrTrackTx = -393px at
+   `/search` (searchProgress = 1) on a 393px viewport.
+5. `e2e/search-back-hamburger-flash.spec.ts:50` (trackTx signal doc,
+   missed by auditor B): `~-half-viewport` -> `~-viewport-width`.
+6. `e2e/search-enter-exit-asymmetry.spec.ts:48` (trackTx signal doc,
+   missed by auditor B): `~-half-viewport` -> `~-viewport-width`.
+
+**Fix.** Corrected all six to the factor-1.0 magnitude (`viewport-width`).
+Edits are comments only; no test logic or assertion changed (the guards
+assert frame-to-frame deltas with a 30px threshold, not absolute
+magnitudes, so the wrong comments never affected a result).
+
+**Sibling search (orchestrator, independent, broader than auditor B's).**
+Grepped `e2e/` for `viewport/2 | viewport-width | half-viewport | 50% |
+0.5 * | ~196 | ~393 | px snap | px on a` and classified every hit. The
+six sites above are the complete factor-of-2 set for the header
+root-to-search track. All other hits are legitimate and untouched: FAB
+`half-mapping` curve comments (`fab.spec.ts`, `fab-deep-real-interaction`,
+`messages-back-swipe` FAB sections), finger-drag "half" distances
+(`backtarget.spec.ts:148`, `header-title-replay`), the page-track
+`translateX(-50%)` SSR rest on the 300%-wide 3-panel track
+(`messages-back-swipe.spec.ts:1149`, `header-tabs-replay`), and the
+correct "full viewport width" / `~240px` / `~96-143px` / `~162-219px`
+magnitude claims.
+
+**Root cause note.** R29's CMA sibling search followed the audit
+prompt's literal grep scope (`src/lib/{stores,components,utils}`) and
+did not extend to `e2e/`. The defect definition's scope (any inaccurate
+comment describing this layer, in any `.ts` / `.spec.ts`) is wider than
+the sibling-search hint's scope. Snap-magnitude sibling searches in
+this cycle now grep `src/lib` AND `e2e/`.
+
+**Verify.** `bun run check` 0 errors / 0 warnings; `bun run lint`
+exit 0; em-dash grep clean on all four edited e2e files; `bunx prettier
+--check` clean on all four. e2e regression (the same four specs,
+`--retries=0 --workers=1`): 55 passed. Runtime behavior unchanged
+(comments only).
+
+**Real command outputs.**
+
+```
+$ bun run check
+COMPLETED 1469 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+
+$ bun run lint
+EXIT=0
+Total similar type pairs found: 63
+
+$ bunx prettier --check e2e/messages-back-swipe.spec.ts e2e/helpers.ts \
+    e2e/search-back-hamburger-flash.spec.ts \
+    e2e/search-enter-exit-asymmetry.spec.ts
+All matched files use Prettier code style!
+
+$ bunx playwright test e2e/messages-back-swipe.spec.ts \
+    e2e/reproduce-dv20-search-swipe.spec.ts \
+    e2e/search-enter-exit-asymmetry.spec.ts \
+    e2e/search-back-hamburger-flash.spec.ts --retries=0 --workers=1
+  55 passed (3.6m)
+```
+
+**No git mutation.** No commits, no branches, no pushes. Working tree
+carries the edits; the orchestrator decides when to commit.
+
+### R31 (double PASS, counter 1/5)
+
+**R31 result: auditor A PASS, auditor B PASS. Counter 1/5** (first
+clean round after the R30 BLOCK; four more consecutive double-PASS
+rounds to converge).
+
+Both auditors independently re-derived the px-per-searchProgress factor
+from the DOM geometry (factor 1.0), verified all six R30 e2e factor-of-2
+corrections are in place, ran a broad sibling grep across `src/lib` +
+`e2e/` (every remaining `half` / `50%` / `viewport` hit classified as
+legitimate: FAB half-mapping, finger-drag half distances, the 3-panel
+page-track `-50%` rest, `PILL_EXPANSION_THRESHOLD`), re-checked the
+reach-path and branch counts, and confirmed the §5 invariant. No code
+defect at any severity. No code change this round.
+
+**Auditor B out-of-scope nitpick (`.md`, does not block).** The
+journal's R23-B entry still carries the old factor-of-2 phrasing in its
+prose (L4625, L4635, L4744, L4745, L4981). The R29/R30 fixes corrected
+the current code, not the historical journal text. Left as historical
+record: L4744 / L4981 (the `196.5px half-viewport` eased-step base) is
+not a simple factor typo and was not re-derived this round, so a partial
+rewrite risks a new inaccuracy. Auditor B notes L4745's `bm=0.60` should
+read ~0.30 (`117.98px = 0.30 * 393`, factor 1.0). Recorded for a future
+tidy-up pass; the current code (src/lib + e2e) is fully factor-1.0 and
+that is what the convergence bar measures.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R32 (double PASS, counter 2/5)
+
+**R32 result: auditor A PASS, auditor B PASS. Counter 2/5.** Both
+auditors re-verified the R30 six-site fix, re-derived the factor-1.0
+geometry, swept the layer, and ran the continuity guards green. No code
+defect.
+
+**Borderline observation (non-blocking, both auditors; orchestrator
+cross-checked and concurs).** Six code comments reference "the L2803
+discrete-nav capture site" (orchestrator L1810, L4374, L4384, L4414;
+e2e/messages-back-swipe.spec.ts L3579, L3648); the actual capture
+statement is at orchestrator L2813 (L2803 lands inside the capture
+block's doc comment). Both auditors classified this non-blocking
+(resolves to the correct block; the described behaviour is accurate;
+reader finds the capture within 10 lines; not an overclaim /
+under-describe / wrong-behaviour inaccuracy). Left in place (double-PASS
+round; non-misleading, and changing code here would break PASS-round
+continuity for no defect); recorded for a future precision-fix or
+post-convergence tidy-up.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R33 fix (e2e window / backMorph docstring accuracy + dead code)
+
+**R33 result: auditor A BLOCK, auditor B BLOCK (different findings).
+Counter 0/5.** Both blocked on `.spec.ts` code-comment inaccuracies; the
+orchestrator cross-checked every claim.
+
+**Auditor A (R24-A docstring, `e2e/messages-back-swipe.spec.ts:3350`).**
+The accelerateInFlight docstring claimed a "+-300ms symmetric window ...
+in the second half of the slide". The actual code (L3432) is a one-sided
+`frames.slice(0, accelIdx + 1)` (pre-flip + flip, no post-flip), and the
+search-track motion is the whole-~160ms-slide settle lerp (ease-out),
+not a second-half FAB-style curve. Rewrote the docstring to match the
+test's own inline comment (L3414): one-sided slice, whole-slide motion,
+post-flip excluded so the natural slide-out stays out of the no-snap
+metric.
+
+**Auditor B (R26-A docstring + type doc).** The R26-A docstring
+(`e2e/messages-back-swipe.spec.ts:3467`) said the re-grab's backMorph
+"replaces the enter settle's null backMorph". A probe plus
+`#republishToPager` (L4758-4759) confirm backMorph is a non-null number
+throughout the `/search` enter settle (forward-last-tab-to-search
+publishes `rawDragFraction`); null is tab-to-tab only. Rewrote to name
+the real boundary signal (the `transitionTarget` `/search` ->
+`/messages/inbox` flip plus the `dragging` flip, with the backMorph
+value switch) and state backMorph is non-null here. The sibling type
+doc at `e2e/search-enter-exit-asymmetry.spec.ts:54` ("null when no
+swipe-back is in progress") rewritten to the accurate null condition
+(non-null during any in-flight non-tab-to-tab transition and at rest on
+NavPipelineHost; null at rest on thread/tab hosts and during tab-to-tab).
+
+**Dead code (flagged by IDE diagnostics on the edited file,
+pre-existing, fixed in passing).** Removed an unused `norm(vals, peak)`
+helper and an unused `w` parameter on a `waitForFunction` callback in
+`e2e/search-enter-exit-asymmetry.spec.ts`.
+
+**Sibling search.** Grepped window/backMorph phrasings across `src/lib`
+
+- `e2e/`; the three docstring sites are the complete set. The other
+  `+-Nms` window claims (R10-A F1 L2561/L2667, R14 L2918) use symmetric
+  `Math.abs <= N` and match their code; the R26-A L3536 / R28 L3589
+  slice-based windows match too.
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; em-dash + prettier
+clean on both edited files; IDE diagnostics clean on
+`search-enter-exit-asymmetry.spec.ts`. e2e regression (the four specs,
+`--retries=0 --workers=1`): 55 passed.
+
+**Real command outputs.**
+
+```
+$ bun run check
+COMPLETED 1469 FILES 0 ERRORS 0 WARNINGS 0 FILES_WITH_PROBLEMS
+
+$ bun run lint
+EXIT=0
+Total similar type pairs found: 63
+
+$ bunx playwright test e2e/messages-back-swipe.spec.ts \
+    e2e/reproduce-dv20-search-swipe.spec.ts \
+    e2e/search-enter-exit-asymmetry.spec.ts \
+    e2e/search-back-hamburger-flash.spec.ts --retries=0 --workers=1
+  55 passed (3.8m)
+```
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R34 (double PASS, counter 1/5)
+
+**R34 result: auditor A PASS, auditor B PASS. Counter 1/5.** Both
+verified the R33 fixes, re-derived factor 1.0, swept the layer, §5
+holds. No code defect.
+
+**Non-blocking observations (both auditors; left in place to keep
+PASS-round continuity).** `e2e/search-enter-exit-asymmetry.spec.ts:60`
+has a duplicated word "descent descent" in a JSDoc (pre-existing since
+DV17; technical content accurate). The "L2803" line-label (6 sites) and
+`e2e/tab-exit-preview.spec.ts:104`'s "~L172-179" approximate pointer
+remain non-blocking. All three are precision/wording issues with
+accurate technical content; recorded for the post-convergence tidy-up.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R35 fix (notifyHeaderState FAB re-seed docstring causal attribution)
+
+**R35 result: auditor A BLOCK, auditor B PASS. Counter 0/5.** Auditor A
+found the `notifyHeaderState` FAB re-seed docstring attributes the
+idle-arm skip to `#enterFabAnchor` being null, but the actual guard
+(L4135) is `if (capturedFabScale !== null)` (it skips because
+`#fabScaleAtSettleInstant` returns null when no transition is in flight).
+
+**Orchestrator cross-check (A reported 3 sibling sites).** L4084-4086
+(notifyHeaderState inline) and L840-842 (`#enterFabAnchor` field
+docstring) confirmed defects and were fixed. L3261-3263 was NOT a
+defect (auditor over-counted): it says "the capture returns null", and
+"capture" is `capturedFabScale`, which IS what the L4135 guard checks.
+Left unchanged.
+
+**Fix.** L4084-4086 rewritten to name the real guard
+(`#fabScaleAtSettleInstant` returns null when no transition is in
+flight, so `if (capturedFabScale !== null)` skips). L840-842 rewritten
+to attribute the skip to the null FAB-value capture rather than
+`#enterFabAnchor`.
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; prettier +
+em-dash clean. Comment-only; runtime unchanged (R34/R35 continuity
+guards green).
+
+**No git mutation.** No commits, no branches, no pushes.

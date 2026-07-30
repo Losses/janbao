@@ -99,6 +99,32 @@ export interface DragFabAnchor {
 }
 
 /**
+ * The search-axis position the in-flight settle was rendering the instant a
+ * drag took over (re-grab mid-commit, gesture-during-forward-enter), paired
+ * with the publication's raw drag fraction at that instant. null when no
+ * settle was in flight at `#beginGesture` (drag from rest) or after the drag
+ * ends (the next settle's arm / `#landAtRest` / `unmount` clears it). Read by
+ * the Header's `searchProgress` drag-anchor branch to shift the natural
+ * `isSearch ? 1 - trackMorph : targetIsSearch ? trackMorph : 0` curve so it
+ * passes through the takeover visual (DV21 §5 "following-visual": no jump at
+ * the settle-to-drag boundary). Mirrors `DragMorphAnchor` / `DragFabAnchor`
+ * for the search axis (the morph derivation consumes `DragMorphAnchor`, the
+ * FAB layer consumes `DragFabAnchor`, the Header search-track derivation
+ * consumes `DragSearchAnchor`; all three are captured at the same
+ * `#beginGesture` sites so the three visuals stay in lockstep). Captured only
+ * when a search settle is in flight at `#beginGesture`
+ * (`settleActive && #searchAnchor !== null`): a re-grab taking over a
+ * search-retreat or search-enter settle would otherwise snap the header
+ * search track ~96-143px (R26-A defect) because the post-cancel
+ * `#searchAnchor` clear hands the search axis to the natural `bm`-driven
+ * formula whose value at the takeover disagrees with the held settle lerp.
+ */
+export interface DragSearchAnchor {
+	readonly search: number;
+	readonly raw: number;
+}
+
+/**
  * The FAB lerp anchor the FAB layer's `computeFabScale` branch 3 interpolates
  * from `start` to `dest` across `settleMorphFraction` during a settle. Five
  * reach paths set this anchor, each capturing `start` as the FAB value the
@@ -149,7 +175,7 @@ export interface EnterFabAnchor {
  * `HeaderSettleTransition.startMorph` / `destMorph`; the FAB axis uses
  * `EnterFabAnchor`; the search axis uses `SearchAnchor`).
  *
- * Two reach paths set this anchor, each capturing `start` as the search-axis
+ * Four reach paths set this anchor, each capturing `start` as the search-axis
  * position the Header was rendering the instant before the settle took over:
  *   - `playEnterAnimation` at a forward-swipe-to-`/search` commit-to-enter
  *     handoff: `start` is the prior commit's terminal searchProgress (= 1;
@@ -169,6 +195,32 @@ export interface EnterFabAnchor {
  *     so the search panel smoothly retreats during the discrete-nav settle.
  *     Without the anchor the panel snaps to 0 at the boundary
  *     (~168px snap at raw=0.43, R23-B F1).
+ *   - `#accelerateInFlight` at a discrete-nav interrupt of an in-flight
+ *     enter settle on `/search` (R24-A, R10-A F1 sibling): `start` is the
+ *     search-axis position captured via `#searchProgressAtSettleInstant`
+ *     before the accelerate's `#armSettleEase` clears the anchor;
+ *     `dest` carries over the prior anchor's `dest` (the accelerate
+ *     preserves endpoints, so the destination's at-rest searchProgress is
+ *     unchanged). For the audit's flagship shape (a forward-swipe-to-
+ *     `/search` commit-to-enter handoff interrupted by a discrete nav) the
+ *     in-flight settle was seeded by `playEnterAnimation` with
+ *     `start = dest = 1`; this re-seed carries the held-at-1 panel position
+ *     across the accelerated re-arm. Without the re-seed the post-arm
+ *     `#searchAnchor = null` would hand the search axis to the natural
+ *     `searchProgress = bm` formula, whose `bm` value at the accelerate
+ *     instant disagrees with the held-at-1 value the Header was rendering,
+ *     snapping the panel partially out at the boundary (~240px snap on a
+ *     393px viewport, R24-A).
+ *   - The `notifyHeaderState` mid-settle absorb when a dynamic-title route
+ *     resolves a new title mid-enter on a `/search` commit (R24-A, R12-B F1
+ *     sibling): `start` is the search-axis position captured via
+ *     `#searchProgressAtSettleInstant` before the re-arm's `#armSettleEase`
+ *     clears the anchor; `dest` is the new endpoint's at-rest
+ *     searchProgress (commit -> incoming route, cancel -> outgoing route).
+ *     Carries the in-flight search-axis position across the re-arm so the
+ *     Header's settle-anchor branch continues from the panel position it
+ *     was rendering. Skipped when `#searchAnchor` was null at the capture
+ *     (the idle title-change arm and any from-rest same-tab-ness nav).
  *
  * The Header reads the anchor via `orchestrator.searchAnchor` and the
  * `searchProgress` derivation lerps between `start` and `dest` while

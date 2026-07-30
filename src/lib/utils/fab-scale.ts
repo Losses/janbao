@@ -172,8 +172,10 @@ export interface FabScaleInputs {
  *
  * Both the FAB layer and `#fabScaleAtSettleInstant` call this with the
  * current reactive state, so the anchor capture mirrors the displayed FAB
- * by construction (single source of truth). Pure (runes-free); unit-tested
- * under `bun test`.
+ * by construction (single source of truth). Pure (runes-free); exercised
+ * by the R8-R14 e2e continuity guards (the re-grab / commit-to-enter /
+ * release-handoff specs in `e2e/messages-back-swipe.spec.ts` sample the
+ * FAB scale per rAF and assert no-snap across each boundary).
  */
 export function computeFabScale(inputs: FabScaleInputs): number {
 	if (inputs.isBoundary) {

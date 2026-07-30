@@ -860,7 +860,7 @@ export async function captureGplBackSwipe(
 //
 // Signals and their meaning:
 //   hdrTrackTx    header root<->search track translateX (px). ~0 at a tab
-//                 root, ~-viewport/2 when the search panel covers the bar.
+//                 root, ~-viewport-width when the search panel covers the bar.
 //   rootLayerTy   header root layer (MobileTabBar wrapper) translateY (px).
 //                 0 = visible (tab bar shown), -headerHeight = hidden (deep).
 //   deepLayerTy   header title layer translateY (px). 0 = visible (deep title),

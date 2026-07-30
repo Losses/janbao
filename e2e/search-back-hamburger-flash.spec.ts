@@ -47,7 +47,7 @@ interface IconFrame {
 	/** Computed (painted) rotation parsed from getComputedStyle's matrix, the
 	 * actual on-screen rotation mid-transition. Null when unreadable. */
 	paintedRot: number | null;
-	/** Header search track translateX (px). ~0 at a tab root, ~-half-viewport in
+	/** Header search track translateX (px). ~0 at a tab root, ~-viewport-width in
 	 * search. Corroborates that the scrub drove `morph`. */
 	trackTx: number | null;
 }

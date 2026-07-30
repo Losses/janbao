@@ -45,13 +45,15 @@ import { prepareContext, waitForHydration } from './helpers';
 interface SearchHdrFrame {
 	t: number;
 	path: string;
-	/** Header root<->search track translateX (px). ~0 at a tab root, ~-half-viewport in search. */
+	/** Header root<->search track translateX (px). ~0 at a tab root, ~-viewport-width in search. */
 	trackTx: number | null;
 	/** SearchTabBar wrapper max-height (px). 0 collapsed, ~48 (3rem) expanded. */
 	tabMaxH: number | null;
 	/** Search button viewport-left (px). Rightmost at a tab root, leftmost in search. */
 	btnLeft: number | null;
-	/** Primary pager store backMorph (0..1, or null when no swipe-back is in progress). */
+	/** Primary pager store backMorph: 0..1 during any in-flight non-tab-to-tab
+	 *  transition and at rest on a NavPipelineHost route; null at rest on a
+	 *  thread/tab host and during tab-to-tab transitions. */
 	backMorph: number | null;
 	/** NavPipelineHost (content) track translateX (px) - the page-change signal on /search. */
 	contentTx: number | null;
@@ -182,11 +184,6 @@ async function slowSwipeBack(page: Page, startX: number, endX: number): Promise<
 	await client.detach();
 }
 
-/** Normalized progress of `vals` toward `peak`, in [0,1]. */
-function norm(vals: number[], peak: number): number[] {
-	return vals.map((v) => (peak > 0 ? Math.min(1, Math.max(0, v / peak)) : 0));
-}
-
 test.beforeEach(async ({ context }) => {
 	await prepareContext(context);
 });
@@ -276,7 +273,7 @@ test('ENTER search via tap: track slides in BEFORE the scope-tab bar expands (sp
 	await page.locator('header a[href="/search"][aria-label]').click();
 	await page.waitForURL('/search', { timeout: 8000 });
 	await page.waitForFunction(
-		(w) => (window as unknown as SearchHdrWindow).__searchHdr?.done === true,
+		() => (window as unknown as SearchHdrWindow).__searchHdr?.done === true,
 		{},
 		{ timeout: 6000 }
 	);
