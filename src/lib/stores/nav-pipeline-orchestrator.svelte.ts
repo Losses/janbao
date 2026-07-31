@@ -320,14 +320,6 @@ export interface OrchestratorPublication {
 	 *  raw-scale window has zero span, so the morph follows the rAF's
 	 *  eased timeline directly. */
 	readonly settleProgress: number;
-	/** The settle progress's start value on the publication's raw scale
-	 *  (the release raw for a gesture-release settle, 0 for a non-gesture
-	 *  arm). The rAF advances `settleProgress` from this value toward
-	 *  `settleTargetProgress`. */
-	readonly settleStartProgress: number;
-	/** The settle progress's terminal value on the publication's raw
-	 *  scale (1 for a commit / click, 0 for a cancel). */
-	readonly settleTargetProgress: 0 | 1;
 	/** The settle rAF's eased timeline fraction (0 at arm, 1 at duration
 	 *  end). The Header's morph derivation reads this to interpolate
 	 *  `settleLatched.startMorph` to `settleLatched.destMorph` across the
@@ -470,8 +462,6 @@ export class NavPipelineOrchestrator {
 				direction: null,
 				settleActive: this.#stateMachine.settleActive,
 				settleProgress: this.#stateMachine.settleProgress,
-				settleStartProgress: this.#settleStartProgress,
-				settleTargetProgress: this.#settleTargetProgress,
 				settleMorphFraction: this.#settleMorphFraction(),
 				settleLatched: this.#stateMachine.settleLatched,
 				settleDirection: this.#stateMachine.settleDirection,
@@ -490,8 +480,6 @@ export class NavPipelineOrchestrator {
 			direction: sm.direction,
 			settleActive: this.#stateMachine.settleActive,
 			settleProgress: this.#stateMachine.settleProgress,
-			settleStartProgress: this.#settleStartProgress,
-			settleTargetProgress: this.#settleTargetProgress,
 			settleMorphFraction: this.#settleMorphFraction(),
 			settleLatched: this.#stateMachine.settleLatched,
 			settleDirection: this.#stateMachine.settleDirection,
@@ -551,12 +539,13 @@ export class NavPipelineOrchestrator {
 	 *  `stateMachine.settleProgress` from this value toward
 	 *  `#settleTargetProgress`, publishing the raw-scale position the
 	 *  title-view spans read (they share the raw scale with
-	 *  `pager.backMorph`). `$state`-backed so the publication derived
-	 *  re-runs on a fresh arm. */
+	 *  `pager.backMorph`). The settle rAF reads this field directly
+	 *  (non-reactive); no reactive consumer reads it. */
 	#settleStartProgress = $state(0);
 	/** The settle progress's terminal value on the publication's raw
-	 *  scale (1 for commit / click, 0 for cancel). `$state`-backed for
-	 *  the same reason as `#settleStartProgress`. */
+	 *  scale (1 for commit / click, 0 for cancel). `$state`-backed
+	 *  because `notifyHeaderState` reads it reactively (called from the
+	 *  Header's `$effect.pre`). */
 	#settleTargetProgress = $state<0 | 1>(1);
 	/** The settle rAF's eased timeline fraction (0 at arm, 1 at duration
 	 *  end). Drives `settleMorphFraction` independent of the raw progress
@@ -914,19 +903,6 @@ export class NavPipelineOrchestrator {
 	 *  state machine via the publication. */
 	get settleProgress(): number {
 		return this.#publication.settleProgress;
-	}
-	/** Reactive read of the eased settle progress's start value (the release
-	 *  raw for a gesture-release settle, 0 for a non-gesture arm). Read by
-	 *  the Header (via the publication) to compute the morph interpolation
-	 *  window. */
-	get settleStartProgress(): number {
-		return this.#publication.settleStartProgress;
-	}
-	/** Reactive read of the eased settle progress's terminal value (1 for a
-	 *  commit / click, 0 for a cancel). Read by the Header to compute the
-	 *  morph interpolation window. */
-	get settleTargetProgress(): 0 | 1 {
-		return this.#publication.settleTargetProgress;
 	}
 	/** Reactive read of the normalized 0..1 fraction of the eased settle
 	 *  curve traversed so far. Read by the Header's morph derivation to
@@ -1413,8 +1389,8 @@ export class NavPipelineOrchestrator {
 		// here would leave a window (flip-without-navigation ->
 		// back-swipe before any nav) where `#armSettleEaseFromGesture`
 		// and `playEnterAnimation`'s `if (t !== null)` guard read
-		// empty / null latched endpoints and run a 200ms title
-		// crossfade against empty titles. `configure()` does not
+		// empty / null latched endpoints and run a title crossfade
+		// against empty titles. `configure()` does not
 		// touch these fields either; a real Header re-mount (an
 		// AppShell unmount / remount across a `/entry/*` detour)
 		// resets them via `resetHeaderState`, which the Header
@@ -3338,8 +3314,9 @@ export class NavPipelineOrchestrator {
 				(this.#settleTargetProgress - this.#settleStartProgress) * eased;
 			// Per-tick clamp (see `settlePerTickCap` in nav-executor-logic):
 			// caps the single-tick advance so a delayed first rAF tick
-			// under main-thread load cannot pop the Header morph / title
-			// crossfade. Same policy as the executor's commit rAF; one
+			// under main-thread load cannot pop the title-span crossfade
+			// (the morph reads the unclamped eased fraction, not
+			// `settleProgress`). Same policy as the executor's commit rAF; one
 			// source of truth for the clamp across every animation channel
 			// that uses `commitEase`.
 			const span = Math.abs(this.#settleTargetProgress - this.#settleStartProgress);
@@ -4093,7 +4070,7 @@ export class NavPipelineOrchestrator {
 					// FAB layer was rendering; without this re-seed the
 					// post-arm branch 5 (natural formula) would snap from
 					// that lerp value to the natural formula at the
-					// current `settleProgress` for asymmetric FAB shapes
+					// current `publication.progress` for asymmetric FAB shapes
 					// (R12-B F1 sibling defect at the mid-settle re-arm).
 					// The search tier mirrors the same capture+re-seed
 					// via `#searchAnchor` (R24-A sibling of the FAB

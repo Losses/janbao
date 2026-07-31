@@ -361,15 +361,16 @@ export const SETTLE_NOMINAL_FRAME_MS = 16.7;
  *  delayed first tick degrades gracefully (slower wall-clock finish)
  *  without popping.
  *
- *  For the FAB release-snap regression (commitDist 30.5% of the
- *  viewport, ~200ms commit duration, span ~0.7): the cap is ~0.145 per
- *  tick. The FAB scale mapping `1 - 2*progress` (Family A, from-only)
- *  drops at most `2 * cap ≈ 0.290` on a delayed tick, but the e2e
- *  leap-guard's strict `< 0.2` threshold holds because the commitEase
- *  curve delivers an intermediate value every normal 60fps frame (the
- *  clamp only bounds a delayed first tick, not the normal advance). The
- *  1.25 factor preserves the 60fps tolerance (1.20 would start clamping
- *  slightly-slow 60fps frames whose delta can reach 0.080). */
+ *  For a velocity=0 commit (~300ms duration, span ~0.7): the cap is
+ *  ~0.097 per tick on the raw-scale `settleProgress`, bounding the
+ *  title-span crossfade (the page-track reads the executor's
+ *  `publication.progress`, not `settleProgress`). The FAB scale does NOT
+ *  read `settleProgress` during a settle (branch 3 lerps off
+ *  `settleMorphFraction`; branch 5 reads `publication.progress`), so
+ *  this settleProgress cap does not bound the FAB; the e2e FAB leap-guard
+ *  (`< 0.2`) and `MIN_INTERMEDIATES` hold under `commitEase`'s normal
+ *  per-frame advance, not under this cap. The 1.25 factor preserves the
+ *  60fps tolerance (1.20 would clamp frames slower than ~20ms). */
 export const SETTLE_PER_TICK_CLAMP_FACTOR = 1.25;
 
 /** The maximum per-tick progress advance for an ease of the given
@@ -402,8 +403,10 @@ export function settlePerTickCap(durationMs: number, span: number): number {
  *  post-commit rAF tick is delayed by many frame periods: the
  *  elapsed-time delta for that tick corresponds to many frames of
  *  advance, and clamping caps the single-tick progress delta so the
- *  FAB scale (which reads `publication.progress`) and the page-track
- *  (driven by the same progress via `publishFrame`) ease smoothly
+ *  page-track (driven by `publication.progress` via `publishFrame`) and
+ *  the FAB (branch 5 reads `publication.progress` when `enterFabAnchor`
+ *  is null; branch 3 reads `settleMorphFraction` when it is set) ease
+ *  smoothly
  *  instead of popping. The rAF reschedules a few extra ticks to close
  *  the remaining gap, so a delayed first tick extends the wall-clock
  *  duration but never pops.

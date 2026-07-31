@@ -262,9 +262,10 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		// The FAB scale must transition during the slide. The pilot's
 		// back-swipe goes from `/messages/<id>` (FAB hidden, scale 0)
 		// to `/messages/inbox` (FAB shown, scale 1); the orchestrator
-		// publishes `publication.progress` each commit rAF tick so the FAB
-		// atom's scale ramps with the slide. A frozen publication
-		// (orchestrator not republishing during commit) leaves the
+		// publishes `settleMorphFraction` across the settle so the FAB
+		// atom's scale ramps with the slide (it lerps off
+		// `settleMorphFraction` via branch 3 during the release settle).
+		// A frozen settle (settleMorphFraction not advancing) leaves the
 		// scale stuck at its initial value (delta 0). The threshold
 		// is small (0.1) to allow for the FAB atom's own CSS easing
 		// while still catching a fully frozen publication.
@@ -733,7 +734,7 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 
 		// Start a back-swipe and release past SWIPE_COMMIT to enter the
 		// commit phase, then immediately click a tab during the commit
-		// rAF window (~200ms). The finish-then-new interruption policy
+		// rAF window (~300ms). The finish-then-new interruption policy
 		// accelerates the in-flight commit to completion, then replays
 		// the tab-click on the landed host. Both the commit and the
 		// tab-click target /messages/inbox here, so the replay is a
@@ -828,7 +829,7 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		await page.waitForURL(/\/messages\/\d+/);
 		await page.waitForTimeout(500);
 
-		// Drive a back-swipe; the commit slide is in flight for ~200ms after
+		// Drive a back-swipe; the commit slide is in flight for ~300ms after
 		// the touch release, which is the window in which a `Header.onBack`
 		// (or any programmatic replace-intent goto) lands and gets queued.
 		await swipeBack(page);
@@ -973,7 +974,7 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 
 		// Pre-arm one CDP touch session for both halves (no Playwright async
 		// gap between the release and the leftward drag, so the leftward
-		// drag lands inside the commit's ~200ms window deterministically).
+		// drag lands inside the commit's ~300ms window deterministically).
 		const client = await page.context().newCDPSession(page);
 		await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
 		const width = page.viewportSize()?.width ?? 393;
@@ -1690,7 +1691,7 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 			.first()
 			.click();
 		// Wait briefly so the back-swipe lands inside the enter's settle
-		// window (~200-300ms). The exact offset is not load-bearing: any
+		// window (~300ms). The exact offset is not load-bearing: any
 		// point inside the settle window captures the anchor and verifies
 		// continuity; the test samples across the whole 2400ms window so
 		// any later morph motion is also captured.

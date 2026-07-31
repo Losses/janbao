@@ -7,7 +7,7 @@ import { prepareContext, waitForHydration } from './helpers';
  * Symptom: during a tab-swipe drag the FAB scale tracks the finger 1:1 (the live
  * `pager.fractionalIndex` drives it), but the moment the finger lifts the scale
  * LEAPS to its resting endpoint in a single frame instead of easing across the
- * orchestrator's ~200ms commit-slide rAF like the track itself does. The FAB
+ * orchestrator's ~300ms commit-slide rAF like the track itself does. The FAB
  * "pops" while the panels are still sliding.
  *
  * This spec isolates the RELEASE window (the existing fab.spec.ts trajectory
@@ -72,7 +72,7 @@ async function swipeExact(page: import('@playwright/test').Page, distance: numbe
  * Install a continuous rAF sampler over the FAB's resolved `transform` (the
  * matrix `a` component === scale, since the atom's transform is a single
  * `scale(s) translateY(y)`), trigger a gesture, hold a capture window open past
- * the 200ms snap, then return the trajectory.
+ * the 300ms snap, then return the trajectory.
  */
 async function captureFabScale(
 	page: import('@playwright/test').Page,
@@ -127,9 +127,10 @@ async function captureFabScale(
  *      the FIRST subsequent sample at or below `lo`, the FAB scale must take at
  *      least `MIN_INTERMEDIATES` distinct intermediate values. A one-frame pop
  *      (e.g. 0.39 -> 0.00) publishes ZERO intermediate values; a correct ease
- *      publishes at least one (the FAB scale is a continuous function of the
- *      commit-slide progress, and the orchestrator's per-tick progress clamp
- *      guarantees the progress advances incrementally).
+ *      publishes at least one (the FAB scale lerps off
+ *      `settleMorphFraction` during the release settle; `commitEase`'s
+ *      per-frame advance publishes at least one intermediate under
+ *      normal main-thread load).
  *   2. LEAP check: no single captured frame may leap from above `gapHi` to
  *      below `gapLo` with magnitude >= 0.2. A pop (e.g. 0.39 -> 0.00)
  *      registers a ~0.39 drop, well over the threshold; a correct ease produces
@@ -203,7 +204,7 @@ function assertSmoothRelease(
 // the viewport (120px on a 393px Pixel 5): it clears the 60px commit threshold but
 // stops the drag at fractionalIndex 0.305, i.e. scale 0.389 (> 0.30) invariant
 // across viewport widths, so the drag itself never enters the (0.05, 0.30) easing
-// band. The release must ease 0.39 down to 0 across the 200ms snap; a one-frame
+// band. The release must ease 0.39 down to 0 across the 300ms snap; a one-frame
 // pop to 0 is the failure.
 test('Family A forward: FAB eases out across the release snap (discussions -> activity)', async ({
 	page
@@ -277,7 +278,7 @@ function assertSmoothScaleIn(capture: TrajectoryCapture): void {
 
 // Family A cancel: a sub-threshold swipe (50px, under the 60px SWIPE_COMMIT line)
 // snaps back to the source tab. The FAB scaled DOWN during the drag (to about
-// 0.69-0.77 across phone widths) and must ease back up to 1 across the 200ms snap;
+// 0.69-0.77 across phone widths) and must ease back up to 1 across the 300ms snap;
 // the bug pops it back to 1 in one frame. Covers the scale-IN manifestation, which
 // the two commit tests (scale out to 0) do not exercise.
 test('Family A cancel: FAB eases back in across the release snap (discussions snap-back)', async ({

@@ -482,11 +482,14 @@ describe('sampleFrame', () => {
 // elapsed wall-clock time. When the first post-commit rAF tick is
 // delayed by main-thread load the elapsed-time delta for that tick
 // corresponds to many frames of advance; without the clamp the
-// resulting single-tick progress jump pops the FAB scale (driven by
-// `publication.progress`) together with the page-track (driven by the
-// same progress via `publishFrame`). The clamp caps the per-tick delta
-// so a delayed tick degrades gracefully (slower wall-clock finish)
-// without popping.
+// resulting single-tick progress jump pops the title-span and page-track
+// positions (driven by `settleProgress` / `publication.progress`). The
+// FAB scale reads `settleMorphFraction` when `enterFabAnchor` is set
+// (branch 3, unclamped) or `publication.progress` when it is null
+// (branch 5, clamped here); this clamp bounds the title/page positions
+// and the branch-5 FAB. The clamp caps the per-tick delta so a
+// delayed tick degrades gracefully (slower wall-clock finish) without
+// popping.
 
 describe('settlePerTickCap: per-tick clamp sizing', () => {
 	test("cap scales with the steepest normal-frame advance (s'(0) = 2)", () => {
@@ -528,8 +531,10 @@ describe('sampleFrame per-tick clamp', () => {
 		// with a ~300ms duration; under 4-worker load the first
 		// post-commit rAF tick is delayed by several frame periods.
 		// Without the clamp the single tick jumps progress to the
-		// elapsed-time value (a 0.3+ delta that pops the FAB scale);
-		// with the clamp the per-tick advance is capped.
+		// elapsed-time value (a 0.3+ delta that pops the page-track
+		// position; the title-span reads the settle rAF's
+		// `settleProgress`, not `publication.progress`); with the clamp
+		// the per-tick advance is capped.
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
 		const start = startCommit(
 			{ phase: 'live', progress: 0.305, commitStart: null },
@@ -625,9 +630,10 @@ describe('sampleFrame per-tick clamp', () => {
 	test('per-tick progress delta is bounded by the cap across the whole commit', () => {
 		// Stress shape: drive the rAF with randomly delayed ticks and
 		// assert no single tick's progress delta exceeds the cap. This
-		// is the property the FAB release-snap e2e relies on (no
-		// single-frame scale leap > 0.2 = no per-tick progress delta
-		// > 0.1 for the from-only FAB mapping).
+		// is a property of the per-tick clamp. The FAB release-snap
+		// e2e's release window reads `settleMorphFraction` (branch 3,
+		// unclamped), not `publication.progress`; its incremental advance
+		// follows from `commitEase`'s per-frame smoothness, not this cap.
 		const plan = planStub({ axis: 'left', distance: 375, progressDirection: 0 });
 		const initial = startCommit(
 			{ phase: 'live', progress: 0.305, commitStart: null },

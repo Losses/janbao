@@ -6171,3 +6171,175 @@ variant's 56ms = `14*4ms`).
 em-dash clean. Comment-only; runtime unchanged.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R46 fix (swipe-commit duration 200ms→300ms; overturns R45)
+
+**R46 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A (overturns R45).** The CDP swipe helpers dispatch `timestamp: 0` ->
+Chrome `event.timeStamp = 0` -> `releaseVelocity` dt=0 -> 0 ->
+`onCommit(0)` -> `COMMIT_T_DEFAULT_MS = 300` (the project's own
+`messages-back-swipe.spec.ts:1347` comment states this; that file's
+velocity test passes explicit timestamps to avoid it). R45 changed the
+`SETTLE_PER_TICK_CLAMP_FACTOR` docstring 300->200 (trusting
+`fab-release-snap`'s own wrong 200ms comments): wrong direction. Reverted
+to 300ms (cap ~0.097, `2*cap ≈ 0.195 < 0.2`). Fixed 12 sibling
+swipe-commit `~200ms` comments: `fab-release-snap.spec.ts` (4),
+`header-title-replay.spec.ts` (2), `fab.spec.ts` (3),
+`messages-back-swipe.spec.ts` (3; R42's "swipeBack-driven 200ms
+legitimate" classification was wrong for the same reason). Legitimate
+`~200ms` (TITLE_CROSSFADE_MS / tap-scrub / sampler / drag / sampling
+window) retained.
+
+**B.** `orchestrator:1416` "200ms title crossfade" for `playEnterAnimation`
+(actual `onCommit(0)` -> 300ms) -> removed the specific figure.
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; prettier +
+em-dash clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R47 fix (clamp 1.20/1.30 rationale + 3 range-duration sites)
+
+**R47 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `nav-executor-logic.ts:372` "1.20 would start clamping slightly-slow
+60fps frames (delta 0.080)" -- actual `cap(1.20) = 0.0929`, so 0.080
+(~17ms) is under the cap (not clamped); 1.20 clamps ~20ms frames (delta
+≈ 0.093). Rewrote.
+
+**B1.** Three "~200-300ms" range comments on deterministic velocity=0
+commits (always 300ms): `deep-to-deep-pre-dispatch-interrupt.spec.ts:13/
+141`, `messages-back-swipe.spec.ts:1693` -> ~300ms.
+
+**B2.** cap docstring "1.30 ... 0.100 -> 0.200 hitting exactly (equality
+fails)" -- actual `cap(1.30) ≈ 0.101`, `2*cap ≈ 0.203` exceeds 0.2 (not
+exactly). Rewrote to 0.101/0.203 exceeding.
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; prettier +
+em-dash clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R48 fix (settleStart/targetProgress getter docstrings + 18ms descent floor)
+
+**R48 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `orchestrator:918-921/925-927` settleStartProgress +
+settleTargetProgress getter docstrings said "Read by the Header ... morph
+interpolation window" -- the Header reads neither (grep = 0); they are
+internal to the settle rAF (L3336-3345). The morph interpolation reads
+`settleMorphFraction` (Header.svelte:294-298). Rewrote both to name the
+settle rAF + note `settleMorphFraction`.
+
+**B.** `nav-executor-logic.ts:369` "the 18ms descent floor" referenced the
+removed `DESCENT_MS_FLOOR = 18` wall-clock guard (deleted DV20-C05b2 R132,
+replaced by `MIN_INTERMEDIATES = 1`). Rewrote to the current count guard.
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; prettier +
+em-dash clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R49 fix (settleStart/targetProgress getter "Read by" + cap 0.193→0.195)
+
+**R49 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `orchestrator:919/927` settleStartProgress + settleTargetProgress
+getter docstrings (R48 rewrote to "Read by the settle rAF") -- the settle
+rAF reads the private `#settleStartProgress`/`#settleTargetProgress`
+fields directly, not the getters (both zero public callers). Rewrote to
+"No reactive consumer reads this getter; the settle rAF reads the private
+#field directly".
+
+**B.** `nav-executor-logic.ts:367` "2 * cap ≈ 0.193" -> "0.195" (actual
+at span 0.7: cap 0.0974, 2*cap 0.1948; inconsistent with the 1.30 case's
+0.203). Synced the R46 journal entry's 0.193 -> 0.195.
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; prettier +
+em-dash clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R50 fix (dead publication getters + cap FAB rationale)
+
+**R50 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** Removed the dead `settleStartProgress` / `settleTargetProgress`
+public getters (zero callers), their backing publication interface
+fields, and the four publication-writer assignments. The settle rAF
+reads the private `#settleStartProgress` / `#settleTargetProgress`
+fields directly; the private fields stay.
+
+**B.** The `SETTLE_PER_TICK_CLAMP_FACTOR` docstring + two test comments
+claimed the per-tick cap bounds the FAB scale's release-snap drop. The
+FAB reads `settleMorphFraction` (unclamped `commitEase(u)` eased), not
+`settleProgress`; the cap bounds `settleProgress` (title spans + page
+track). Rewrote the docstring to name `settleProgress` as the bounded
+signal + note the FAB reads `settleMorphFraction`; rewrote the test
+comments to "title-span / page-track position" instead of "FAB scale".
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; prettier +
+em-dash clean. Comment-only + dead-code removal; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R51 fix (4 per-tick-clamp protected-signal attributions)
+
+**R51 result: auditor A BLOCK, auditor B BLOCK (B = A site 2). Counter
+0/5.**
+
+The settle rAF clamp bounds `settleProgress` (title spans only); the
+executor `sampleFrame` clamp bounds `publication.progress` (page-track
+only); morph / FAB / search read `settleMorphFraction` (unclamped). Four
+comments mis-attributed: `orchestrator:3316` (morph -> title-span),
+`nav-executor-logic.ts:365` (page-track dropped), `:405` (FAB dropped),
+`nav-executor-logic.test.ts:533` (title-span dropped). All four rewrote.
+B's finding (`nav-executor-logic.ts:365` "page-track") was A's site 2
+(parallel audit, same site).
+
+**Verify.** `bun run check` 0/0; `bun run lint` exit 0; prettier +
+em-dash clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R52 fix (branch-5 FAB signal attribution)
+
+**R52 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `orchestrator:4072` (notifyHeaderState mid-settle re-arm) "natural
+formula at the current `settleProgress`" -> `publication.progress`
+(branch 5 reads publication.progress, not settleProgress).
+
+**B.** Three R51-introduced overclaims universalized "FAB reads
+settleMorphFraction during a settle" (branch 3 only). Branch 5
+(`enterFabAnchor === null`, e.g. from-rest tab-click) reads
+`publication.progress` (clamped by sampleFrame). Rewrote
+`nav-executor-logic.ts:367/405` + `nav-executor-logic.test.ts:487` to
+qualify branch 3 vs branch 5. Fixed the R51 sentence fragment at
+`nav-executor-logic.test.ts:535`.
+
+**Verify.** `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R53 fix (release-settle FAB attribution + $state backing rationale)
+
+**R53 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** 3 comments claimed the FAB reads `publication.progress` during a
+release settle. During a gesture-release settle branch 3 reads
+`settleMorphFraction` (unclamped). Rewrote `fab-release-snap.spec.ts:130`,
+`nav-executor-logic.test.ts:634`, `messages-back-swipe.spec.ts:264` to
+name `settleMorphFraction` + `commitEase` per-frame smoothness.
+
+**B.** `#settleStartProgress` docstring "$state-backed so publication
+derived re-runs" -- publication does not read it (zero reactive readers).
+`#settleTargetProgress` "$state-backed same reason" -- actually
+`notifyHeaderState` reads it reactively. Rewrote both.
+
+**Verify.** `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.

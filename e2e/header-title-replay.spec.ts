@@ -278,7 +278,7 @@ test('REGRESSION: back-swipe commit must not collapse-then-replay the deep title
 	await installTitleSampler(page);
 	await swipeBackHalf(page);
 	await page.waitForURL('/profile/settings', { timeout: 5000 });
-	// Capture through the release collapse (~200ms track transition) and the
+	// Capture through the release collapse (~300ms track transition) and the
 	// post-landing replay (~200ms crossfade).
 	await page.waitForTimeout(800);
 
@@ -310,7 +310,7 @@ test('CANCEL: sub-threshold back-swipe retreats the incoming title with no repla
 	await installTitleSampler(page);
 	await swipeBackShort(page);
 	// A cancelled gesture does not navigate; hold long enough to capture the
-	// retreat animation (~200ms) and confirm no late navigation.
+	// retreat animation (~300ms) and confirm no late navigation.
 	await page.waitForTimeout(600);
 
 	expect(new URL(page.url()).pathname).toBe('/profile/edit');

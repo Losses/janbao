@@ -10,7 +10,7 @@ import { prepareContext, waitForHydration } from './helpers';
  * by the DESTINATION host's `shouldEnter` to suppress `playEnterAnimation`
  * (the orchestrator already animated the slide on the source host).
  *
- * The pre-dispatch window is the ~200-300ms gap between `navigation.cancel()`
+ * The pre-dispatch window is the ~300ms gap between `navigation.cancel()`
  * (which arms the source-host slide) and the commit rAF's `#onExecutorSettle`
  * firing `#dispatchNav` (which sets `#navDispatchInFlight = true`). During
  * this window `#navDispatchInFlight` is false, so the supersede branch in
@@ -138,7 +138,7 @@ test('interrupting a deep-to-deep commit with `/profile` -> `/search` plays `/se
 		// Fire the deep-to-deep nav. The orchestrator cancels it and arms
 		// the source-host slide; goto's promise resolves on cancel so the
 		// next line runs in the same microtask as the cancel, well inside
-		// the pre-dispatch window (commit duration ~200-300ms).
+		// the pre-dispatch window (commit duration ~300ms).
 		await page.evaluate(
 			(h: string) =>
 				(window as unknown as { __e2eGoto?: (h: string) => Promise<void> }).__e2eGoto!(h),

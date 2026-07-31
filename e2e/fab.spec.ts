@@ -34,7 +34,7 @@ import {
  * The Family A/B/C specs sample the FAB's RESOLVED `transform` (via
  * getComputedStyle, not the inline `style.transform`) across the gesture /
  * transition window, then assert the TRAJECTORY:
- *   - enough samples to span the window (> 6 frames across the ~200ms),
+ *   - enough samples to span the window (> 6 frames across the ~300ms),
  *   - monotonic within tolerance (non-increasing for scale-out, non-decreasing
  *     for scale-in) so a step function would fail,
  *   - a sample crossing 0.5 INSIDE the window (not only at the endpoints),
@@ -702,7 +702,7 @@ test('Family C back: compose -> list scales the FAB in as a monotonic trajectory
 	).toBeLessThan(0.2);
 	// Robust scale-in completion check: assert the trajectory SHAPE rather than
 	// the absolute last sample. The 1.8s sampler window can cut off ~16ms before
-	// the 200ms rAF ease fully settles under load, so the LAST sample may dip to
+	// the 300ms rAF ease fully settles under load, so the LAST sample may dip to
 	// ~0.84 even on a correct run. The shape that proves the scale-in completed
 	// is: the trajectory REACHED near-1 at some point (maxScale > 0.9), it is
 	// monotonic non-decreasing (no reversal), and it crossed 0.5 inside the
@@ -1236,7 +1236,7 @@ function scaleTrajectoryCrosses(samples: number[], threshold: number): boolean {
  * absolute last sample: the trajectory REACHED near-1 at some point
  * (`maxScale > 0.9`), it is monotonic non-decreasing (no reversal, via
  * `assertNonDecreasingWithinTolerance`), and it crossed 0.5 inside the window.
- * The sampler window (1800ms) can cut off ~16ms before the 200ms rAF ease fully
+ * The sampler window (1800ms) can cut off ~16ms before the 300ms rAF ease fully
  * settles under load, so the LAST sample may dip to ~0.84 on a correct run; the
  * shape guards tolerate that truncation while still failing a stuck-mid or
  * stuck-low trajectory.
