@@ -6582,3 +6582,176 @@ orchestrator:748 correctly listed it).
 runtime unchanged.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R68 fix (3 header-tab-descent idle-arm sites)
+
+**R68 result: auditor A PASS, auditor B BLOCK. Counter 0/5.**
+
+**A.** PASS (exhaustive sweep, no defect).
+
+**B.** `e2e/header-tab-descent-cross-tab-exit.spec.ts:15/33/270`
+forward tab->deep settle attributed to "idle title-change arm" ->
+`playEnterAnimation` on mount (shouldEnter true for forward SPA nav to
+NavPipelineHost deep route; sibling `messages-back-swipe.spec.ts:1685`
+correctly names playEnterAnimation).
+
+**Verify.** `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R69 fix (R68 edit slip: broken CALIBRATION sentence)
+
+**R69 result: auditor A BLOCK, auditor B BLOCK (same finding). Counter
+0/5.**
+
+`e2e/header-tab-descent-cross-tab-exit.spec.ts:33-36` R68's edit 2 left
+the CALIBRATION docstring broken (unclosed paren + dangling back-slide
+clause). Rewrote to the complete two-clause sentence.
+
+**Verify.** `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R70 fix (3 DragFabAnchor inFlight + messages-back-swipe parenthetical)
+
+**R70 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** 3 DragFabAnchor "null when no settle was in flight" -> "null when
+no settle or transition was in flight" (capture guard adds
+`publication.inFlight`; R67-B DragSearchAnchor sibling missed).
+`header-probe.ts:86`, `orchestrator:738/950`.
+
+**B.** `e2e/messages-back-swipe.spec.ts:1686` parenthetical "does NOT
+arm for centerTab routes since outgoingHasTabs === incomingHasTabs" ->
+"does NOT intercept this nav: destination not tab root, not
+deep-to-deep" (orchestrator never enters discrete-nav branch; R68 sibling
+form).
+
+**Verify.** `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R71 fix (R70 replace_all fallout: morph revert + 2 missed FAB siblings)
+
+**R71 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** R70's `replace_all` of "no settle was in flight" -> "no settle or
+transition was in flight" was wrong for the morph anchor and missed two
+FAB siblings. The morph capture guard
+(`settleActive && settleLatched !== null`, line 1750) has NO
+`publication.inFlight` check, so the morph anchor's null condition is
+genuinely just "no settle". The FAB capture guard
+(`settleActive && publication.inFlight`, line 1766) DOES add `inFlight`,
+so its null condition needs "or transition".
+
+- F1: `orchestrator:942` (`dragMorphAnchor` getter docstring) -- the
+  replace_all wrongly added "or transition"; reverted to "no settle was
+  in flight".
+- F2: `orchestrator:739` (`#dragFabAnchor` field docstring) -- the
+  replace_all missed this site; added "or transition".
+
+**B.** `src/lib/utils/fab-scale.ts:133` (`FabScaleInputs.dragAnchor`
+field docstring) -- same DragFabAnchor null condition; R70's grep didn't
+reach `fab-scale.ts`. Added "or transition".
+
+**Orchestrator sibling sweep (post-R71).** Independently read every
+anchor null-condition docstring against its capture guard. DragMorphAnchor
+sites (`header-probe.ts:70`, `orchestrator:723/942`, guard has no
+`inFlight`) all read "no settle"; DragFabAnchor sites
+(`header-probe.ts:86`, `orchestrator:739/951`, `fab-scale.ts:133`, guard
+adds `inFlight`) all read "no settle or transition"; DragSearchAnchor
+sites state the full guard
+(`settleActive && #searchAnchor !== null && publication.inFlight`) at
+`orchestrator:760-764` and `header-probe.ts:117-118`. No missed siblings
+remain in the anchor family.
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R72 fix (DragSearch null-condition under-description + `#fabScaleAtSettleInstant` overclaim)
+
+**R72 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `orchestrator:4322-4324` (`#fabScaleAtSettleInstant` docstring)
+"both guaranteed while a settle or drag is active" -> false. The body's
+`!pub.inFlight` short-circuit (`:4327`) returns null in the R70/R71
+window (`settleActive === true`, `inFlight === false`, macro left
+`transitioning` while the settle rAF still ticks); the absorb-path
+docstring (`:4068-4074`) already documented this null return. Rewrote to
+state `inFlight` is NOT implied by `settleActive`.
+
+**B.** Two DragSearchAnchor null-condition sites under-described (same
+class R71 fixed for DragFabAnchor, missed by R71 because R71 checked that
+the full guard was stated somewhere per cluster, not that the primary
+"null when ..." summary sentence enumerated the conditions).
+
+- F1: `header-probe.ts:106-108` (DragSearchAnchor interface) -- "null
+  when no settle was in flight" omitted the `#searchAnchor === null` and
+  `!inFlight` null-cases. Rewrote to enumerate all three.
+- F2: `orchestrator:961-962` (`dragSearchAnchor` getter) -- "null when
+  no search settle was in flight" omitted the `inFlight` qualifier. Added
+  "or transition" (parallel to the `dragFabAnchor` getter at `:951`).
+
+**Orchestrator verification.** Independently re-ran broad greps for both
+classes; trusted neither auditor's enumeration. A-F1 overclaim localized
+to `:4323` (parallel helpers `#morphAtSettleInstant` /
+`#searchProgressAtSettleInstant` make no overclaim). DragSearch
+null-condition sites fully enumerated; only `header-probe:106` and
+`orchestrator:961` under-described. No missed siblings in either class.
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R73 fix (helper call-site enumeration + `#searchProgressAtSettleInstant` null-condition)
+
+**R73 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** New defect class: helper-docstring "Used by" call-site
+enumeration undercounts (distinct from the R70-R72 null-condition
+class).
+
+- F1: `orchestrator:4276-4281` (`#morphAtSettleInstant`) -- "Used by"
+  listed 2 callers, actual 3; omitted the `#beginGesture:1751` re-grab
+  capture that seeds `#dragMorphAnchor.morph`. Sibling helpers
+  `#fabScaleAtSettleInstant` (6) / `#searchProgressAtSettleInstant` (5)
+  enumerate their beginGesture captures. Rewrote to list all three and
+  distinguish the drag-anchor purpose from the re-arm purpose.
+- F2: `orchestrator:1322-1327` (`#atRestMorph`) -- "non-gesture settle
+  arm sites (forward-enter, discrete-nav, idle title-change)" listed 3,
+  actual 6; "non-gesture" wrong (`#armSettleEaseFromGesture` is a
+  gesture-release site). Rewrote to list all six and drop "non-gesture".
+
+**B.** `orchestrator:4354-4355` (`#searchProgressAtSettleInstant`
+docstring) primary "Returns null when no transition is in flight" named
+only `!inFlight`, omitting the `#mountInputs === null` and
+`toPathname === null` null-cases (body `:4390-4393`). Parallel
+`#fabScaleAtSettleInstant` (R72-fixed) enumerates its null-condition
+groups. Rewrote to enumerate all three. (Auditor A checked the same
+docstring's call-site count 5/5 complete; auditor B checked the
+null-condition sentence incomplete -- different criteria, both hold.)
+
+**Orchestrator-additional.** `:1304-1305` inline "the helper
+short-circuits to null only when no transition is in flight" -- a
+general overclaim (3 null-cases), surfaced in B's out-of-scope note and
+waved as "contextually accurate". Orchestrator verified the "only" is a
+literal overclaim and rewrote to the contextual "at a commit terminal
+the helper does not short-circuit to null (in-flight, `#mountInputs`
+set, `toPathname` resolved)". Left `:4068-4069` (genuinely absorb-scoped
+where `fromPathname` / `toPathname` are always resolved).
+
+**Orchestrator verification.** Independently re-ran the comprehensive
+"Used by" sweep + per-helper call counts. Only `#morphAtSettleInstant`
+(2/3) and `#atRestMorph` (3/6) under-enumerate; all other claimants
+complete. No missed siblings.
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.

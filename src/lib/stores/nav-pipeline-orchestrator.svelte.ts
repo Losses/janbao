@@ -736,7 +736,8 @@ export class NavPipelineOrchestrator {
 	 *  `#dragMorphAnchor` so the FAB layer's scale derivation can shift the
 	 *  natural `fabScale(progress, ...)` curve through the takeover visual
 	 *  (DV21 §5: no jump at the settle-to-drag boundary). null when no
-	 *  settle was in flight at `#beginGesture` or after the drag ends; the
+	 *  settle or transition was in flight at `#beginGesture` or after the
+	 *  drag ends; the
 	 *  same clear sites as `#dragMorphAnchor` keep the two anchors in
 	 *  lockstep. */
 	#dragFabAnchor = $state<DragFabAnchor | null>(null);
@@ -947,7 +948,7 @@ export class NavPipelineOrchestrator {
 	 *  instant a drag took over an in-flight settle). Read by the FAB
 	 *  layer's scale derivation to shift the natural fabScale curve so it
 	 *  passes through the takeover visual (no snap at the
-	 *  settle-to-drag boundary). null when no settle was in flight at
+	 *  settle-to-drag boundary). null when no settle or transition was in flight at
 	 *  #beginGesture or after the drag ends. */
 	get dragFabAnchor(): DragFabAnchor | null {
 		return this.#dragFabAnchor;
@@ -957,8 +958,8 @@ export class NavPipelineOrchestrator {
 	 *  an in-flight search settle). Read by the Header's `searchProgress`
 	 *  drag-anchor branch to shift the natural gesture formula so it
 	 *  passes through the takeover visual (no snap at the
-	 *  settle-to-drag boundary). null when no search settle was in flight
-	 *  at `#beginGesture` or after the drag ends (the canonical clear
+	 *  settle-to-drag boundary). null when no search settle or transition
+	 *  was in flight at `#beginGesture` or after the drag ends (the canonical
 	 *  runs at the top of `#armSettleEase`, plus `#landAtRest` and
 	 *  `unmount`). */
 	get dragSearchAnchor(): DragSearchAnchor | null {
@@ -1300,9 +1301,9 @@ export class NavPipelineOrchestrator {
 		// enter slide). For a non-search pipeline commit landing
 		// (`#priorTerminalSearchProgress === 0` because
 		// `#searchProgressAtSettleInstant`'s third clause returns 0 when
-		// neither side is search; the helper short-circuits to null only
-		// when no transition is in flight, which is never the case at a
-		// commit terminal) the host route is non-search so `dest = 0`:
+		// neither side is search, and at a commit terminal the helper does
+		// not short-circuit to null: it is in-flight with `#mountInputs` set
+		// and `toPathname` resolved) the host route is non-search so `dest = 0`:
 		// the lerp holds at 0 across the enter settle, a no-op against
 		// the at-rest branch's `isSearch ? 1 : 0 = 0` for the non-search
 		// host, so the natural `searchProgress` curve is unaffected. The
@@ -1320,10 +1321,16 @@ export class NavPipelineOrchestrator {
 
 	/** The at-rest morph for a route with the given tab-ness: 1 = tab/root
 	 *  mode (hamburger, tab bar visible), 0 = deep mode (back-arrow, tab bar
-	 *  hidden). Used by the non-gesture settle arm sites (forward-enter,
-	 *  discrete-nav, idle title-change) to capture the morph at the arm
-	 *  instant, which equals the source route's at-rest morph in those cases
-	 *  (no preceding live drag owned the morph). */
+	 *  hidden). Used wherever a settle's `startMorph` / `destMorph` resolves
+	 *  to a route's at-rest morph: `playEnterAnimation` (forward-enter), the
+	 *  `onSvelteKitBeforeNavigate` discrete-nav arm,
+	 *  `#armSettleEaseFromGesture` (gesture-release), the
+	 *  `#dragMorphAtSettleTakeover` from-rest fallback, the
+	 *  `notifyHeaderState` mid-settle absorb re-arm, and the idle
+	 *  title-change arm. The value equals the route's at-rest morph because
+	 *  no live drag owns the morph at these arm instants (a preceding drag
+	 *  hands its terminal morph to the settle via the drag-anchor capture,
+	 *  not via this helper). */
 	#atRestMorph(hasTabs: boolean): number {
 		return hasTabs ? 1 : 0;
 	}
@@ -4274,10 +4281,14 @@ export class NavPipelineOrchestrator {
 
 	/** Compute the morph value the in-flight settle is currently producing
 	 *  from its latched startMorph / destMorph pair and the current
-	 *  `settleMorphFraction`. Used by the mid-settle absorb re-arm in
-	 *  `notifyHeaderState` and `#accelerateInFlight` so the new settle's
-	 *  `startMorph` continues from the in-flight morph value rather than
-	 *  re-evaluating against the new endpoints (no snap at the re-arm). */
+	 *  `settleMorphFraction`. Used by three capture sites: the
+	 *  `#beginGesture` re-grab capture (seeds `#dragMorphAnchor.morph` so
+	 *  the Header's drag-morph branch shifts the natural curve through the
+	 *  takeover visual), the `#accelerateInFlight` re-arm, and the
+	 *  `notifyHeaderState` mid-settle absorb re-arm; for the two re-arm
+	 *  sites the new settle's `startMorph` continues from the in-flight
+	 *  morph value rather than re-evaluating against the new endpoints (no
+	 *  snap at the re-arm). */
 	#morphAtSettleInstant(latched: HeaderSettleTransition): number {
 		const frac = this.#settleMorphFraction();
 		return latched.startMorph + (latched.destMorph - latched.startMorph) * frac;
@@ -4318,9 +4329,13 @@ export class NavPipelineOrchestrator {
 	 *     lerps from the captured in-flight value to the new endpoint's
 	 *     at-rest FAB scale across `settleMorphFraction` (R12-B F1
 	 *     sibling).
-	 *  Returns null only when the publication is not in-flight or has no
-	 *  resolved FROM/TO; both are guaranteed while a settle or drag is
-	 *  active. */
+	 *  Returns null when the publication is not in-flight or has no
+	 *  resolved FROM/TO. `inFlight` is NOT implied by `settleActive`: the
+	 *  macro can leave `transitioning` while the settle rAF is still
+	 *  ticking (`settleActive === true`, `inFlight === false`), in which
+	 *  window this returns null and the mid-settle absorb's `null`-guard
+	 *  skips the re-seed (the FAB layer stays at its at-rest value
+	 *  end-to-end). */
 	#fabScaleAtSettleInstant(): number | null {
 		const pub = this.#publication;
 		if (!pub.inFlight || pub.fromPathname === null || pub.toPathname === null) return null;
@@ -4347,8 +4362,10 @@ export class NavPipelineOrchestrator {
 	 *  interrupt for R23-B F1, the commit slide end for R23-B F2, the
 	 *  accelerate-in-flight re-arm for R24-A, the mid-settle absorb for
 	 *  R24-A, and the `#beginGesture` re-grab capture for R26-A). Returns
-	 *  null when no transition is in flight (mirroring
-	 *  `#fabScaleAtSettleInstant`'s `!pub.inFlight` short-circuit), so the
+	 *  null when `#mountInputs` is null, the publication is not in flight,
+	 *  or `toPathname` is unresolved (the `!inFlight` and `toPathname`
+	 *  short-circuits mirror `#fabScaleAtSettleInstant`; the `#mountInputs`
+	 *  guard fires before this helper reads `inputs.fromPathname`), so the
 	 *  discrete-nav re-seed's `if (capturedSearchProgress !== null)` guard
 	 *  skips for a from-rest tab-click and the Header's natural
 	 *  `searchProgress` derivation handles the settle.

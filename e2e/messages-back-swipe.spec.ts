@@ -1683,9 +1683,9 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		await installMultiSignalSampler(page, 2400);
 		// Click a conversation link to trigger the forward-enter to
 		// /messages/<id>. `playEnterAnimation` arms the settle on the
-		// destination host once it mounts (the click's discrete-nav path
-		// does NOT arm a settle for centerTab routes since
-		// `outgoingHasTabs === incomingHasTabs === true`).
+		// destination host once it mounts (the orchestrator does NOT
+		// intercept this nav: the destination is not a tab root and not a
+		// deep-to-deep).
 		await page
 			.locator('a[href^="/messages/"]:not([href="/messages/inbox"]):not([href="/messages/new"])')
 			.first()

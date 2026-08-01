@@ -11,9 +11,10 @@ import { prepareContext, waitForHydration } from './helpers';
  *
  *   - Forward (tab to deep, e.g. /messages/inbox to /bookmarks): the
  *     orchestrator does NOT intercept this nav (the destination is not a tab
- *     root and not a deep-to-deep), so the settle is armed at the navigation
- *     landing by `notifyHeaderState`'s idle title-change arm. The rAF owns the
- *     descent from the landing flush onward.
+ *     root and not a deep-to-deep), so the settle is armed by
+ *     `playEnterAnimation` on the destination host's onMount (the
+ *     forward-enter path). The rAF owns the morph from the enter slide
+ *     onward.
  *   - Back (deep to tab, e.g. /bookmarks to /messages/inbox): the orchestrator
  *     intercepts the nav in `onSvelteKitBeforeNavigate`'s discrete-nav branch
  *     and arms the settle rAF CONCURRENTLY with the slide, velocity-matched to
@@ -30,9 +31,10 @@ import { prepareContext, waitForHydration } from './helpers';
  *
  * Tests:
  *   - CALIBRATION: documents both arm timings in one cycle - the forward
- *     landing flush has settling === true (the idle arm), and the back slide
- *     has settling === true with intermediate morph on the source route
- *     (sampled via the internal per-flush probe window.__headerMorphProbe).
+ *     landing flush has settling === true (playEnterAnimation armed the
+ *     rAF on mount), and the back slide has settling === true with
+ *     intermediate morph on the source route (sampled via the internal
+ *     per-flush probe window.__headerMorphProbe).
  *   - DEFECT: across multiple messages to bookmarks cycles every back slide
  *     must arm the settle and animate the morph (the rAF owns the descent,
  *     never a static snap).
@@ -267,8 +269,8 @@ test('CALIBRATION: forward and back descents both keep their transition (documen
 
 	expect(fwdLanding, 'forward landing flush captured').toBeDefined();
 	// Forward: the orchestrator does not intercept tab -> non-tab-root deep,
-	// so the settle is armed at the landing flush by the idle title-change
-	// arm. The rAF must be active at that flush.
+	// so the settle is armed by playEnterAnimation on mount. The rAF must
+	// be active at that flush.
 	expect((fwdLanding as LandingFlush).settling, 'forward landing arms the settle rAF').toBe(true);
 	// Back: the orchestrator intercepts the deep -> tab nav and arms the
 	// settle rAF concurrent with the slide. The morph must animate during

@@ -84,7 +84,9 @@ export interface DragMorphAnchor {
  * The FAB scale value the in-flight settle was rendering the instant a drag
  * took over (re-grab mid-commit, gesture-during-forward-enter), paired with
  * the publication's raw drag fraction at that instant. null when no settle
- * was in flight at `#beginGesture` (drag from rest) or after the drag ends
+ * or transition was in flight at `#beginGesture` (drag from rest, or the
+ * window where the macro has left `transitioning` while the settle rAF
+ * is still ticking) or after the drag ends
  * (the next settle's arm / `#landAtRest` / `unmount` clears it). Read by the
  * FAB layer's scale derivation to shift the natural `fabScale(progress, ...)`
  * curve so it passes through the takeover visual (DV21 §5 "following-visual":
@@ -102,8 +104,11 @@ export interface DragFabAnchor {
  * The search-axis position the in-flight settle was rendering the instant a
  * drag took over (re-grab mid-commit, gesture-during-forward-enter), paired
  * with the publication's raw drag fraction at that instant. null when no
- * settle was in flight at `#beginGesture` (drag from rest) or after the drag
- * ends (the next settle's arm / `#landAtRest` / `unmount` clears it). Read by
+ * settle or transition was in flight at `#beginGesture` (drag from rest, or
+ * the window where the macro has left `transitioning` while the settle rAF
+ * is still ticking), or when the in-flight settle had no search anchor
+ * (`#searchAnchor === null`), or after the drag ends (the next settle's
+ * arm / `#landAtRest` / `unmount` clears it). Read by
  * the Header's `searchProgress` drag-anchor branch to shift the natural
  * `isSearch ? 1 - trackMorph : targetIsSearch ? trackMorph : 0` curve so it
  * passes through the takeover visual (DV21 §5 "following-visual": no jump at

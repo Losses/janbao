@@ -131,7 +131,7 @@ export interface FabScaleInputs {
 	 *  `settleActive && enterAnchor !== null`. */
 	readonly enterAnchor: EnterFabAnchor | null;
 	/** The settle-to-drag takeover anchor (R8-A F3). null when no settle
-	 *  was in flight at `#beginGesture`; the FAB shifts the natural
+	 *  or transition was in flight at `#beginGesture`; the FAB shifts the natural
 	 *  `fabScale(progress, ...)` curve so it passes through
 	 *  `(anchor.raw, anchor.scale)` while set. */
 	readonly dragAnchor: DragFabAnchor | null;
