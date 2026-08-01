@@ -6755,3 +6755,246 @@ complete. No missed siblings.
 clean. Comment-only; runtime unchanged.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R74 fix (`#armSettleEase` duration binary mis-classifies tab-click)
+
+**R74 result: auditor A BLOCK, auditor B PASS. Counter 0/5.**
+
+**A.** New defect class: duration-claim binary.
+
+- F1: `orchestrator:3181-3186` (`#armSettleEase` docstring `durationMs`
+  paragraph) -- "A non-gesture settle (tab-click, plain title change)
+  passes `TITLE_CROSSFADE_MS`" was false. The slide-tracking arms
+  (`playEnterAnimation`, the discrete-nav arm) call `executor.onCommit(0)`
+  and pass `commitStart.durationMs` (velocity-0 solver default
+  `COMMIT_T_DEFAULT_MS` 300ms), not `TITLE_CROSSFADE_MS` (200ms); only
+  the idle title-change arm passes `TITLE_CROSSFADE_MS`. Rewrote to
+  enumerate the three real duration patterns (velocity-0 300ms /
+  real-velocity clamped 100..600ms; `acceleratedMs`; `TITLE_CROSSFADE_MS`
+  200ms).
+- F2: `orchestrator:528-530` (settle rAF intro) restated the same binary.
+  Same fix.
+
+**B.** PASS. B's sampling did not reach the discrete-nav arm's
+duration-passing code (`onSvelteKitBeforeNavigate` 2820-3043; B read only
+to 2530), so B missed the class. B's borderline candidate
+(`resetPagerStore` "two sites" vs three) was a defensible generic "host"
+abstraction, correctly not flagged.
+
+**Orchestrator verification.** Independently verified A's behavioral
+chain (`COMMIT_T_DEFAULT_MS=300`, solver velocity-0 fallback,
+`onCommit(0)` -> `commitStart.durationMs` -> arm; `TITLE_CROSSFADE_MS=200`,
+clamp 100..600ms) and confirmed all six `#armSettleEase` callers' duration
+args before rewriting.
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R75 fix (SearchAnchor `playEnterAnimation` values + morph-capture `pointercancel` case)
+
+**R75 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `header-probe.ts:187-196` (SearchAnchor interface
+`playEnterAnimation` bullet) -- cited `/search`-only values
+(`start = 1, dest = 1`) and narrowed the trigger to
+"forward-swipe-to-`/search`", but the code guard (`orchestrator:1318`
+`if (#priorTerminalSearchProgress !== null)`) fires for every pipeline
+commit; non-search yields `{start: 0, dest: 0}`. Same class as R72.
+Rewrote to generalize `start` (1 for `/search`, 0 for non-search) and
+`dest` (the host route's at-rest searchProgress).
+
+A-F2 (`header-probe.ts:200` parenthetical "(live bm, e.g. 0.30)")
+reviewed and rejected -- the bullet is explicitly scoped to a
+`/search`-swipe interrupt (at capture `toPathname` is still `/search`, so
+the helper does return live bm); the parenthetical is accurate for the
+stated scope, not a concern. Left unchanged.
+
+**B.** `orchestrator:1756-1757` (the `settleMorphAtTakeover` capture
+comment) listed "pointercancel during a settle" as a covered
+drag-takes-over-settle boundary. But `pointercancel` routes through
+`onUp` -> `onPointerUp` (release path, `shouldCancelOnRelease` forces
+cancel), never `#beginGesture` (sole caller `:1537` gated on
+`newDragStart`). The capture cannot fire on pointercancel. Replaced with
+"re-grab during a cancel-settle".
+
+**Orchestrator verification.** Independently verified both findings
+(`playEnterAnimation` seed `:1318-1322`; `#beginGesture` sole caller +
+gate; `swipe.ts` pointercancel routing). Re-ran both sibling sweeps; no
+missed siblings.
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R76 fix (`#settleMorphFraction` at-rest value + `#cancelAllAnimationEases` call paths)
+
+**R76 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `orchestrator:492-498` (`#settleMorphFraction` docstring) --
+"Returns 0 at rest" was literally false. The helper returns
+`#settleEasedFraction`, which the tick advances toward 1 and which
+neither the tick's terminal branch nor `#endSettleEase` resets; after any
+completed settle the field holds 1 at rest. Rewrote to state the field
+holds its last tick value at rest (1 after a completed settle, reset by
+the next arm or `unmount`) and the Header's at-rest branch does not read
+it.
+
+**B.** `orchestrator:3876-3879` (`#cancelAllAnimationEases` docstring) --
+"Called from" listed 2 paths but there are 3 call sites. The omitted
+`:2515` is the non-pipeline-destination cleanup (a nav leaving the
+orchestrator's active window, where an in-flight settle would strand the
+Header), distinct from the `:2600` discrete-nav interruption and the
+`:1813` re-grab. Rewrote to enumerate all three paths.
+
+**Orchestrator verification.** Independently verified both
+(`#settleEasedFraction` lifecycle; the 3 call sites + `:2510-2518`
+context). Re-ran both sibling sweeps; no missed siblings.
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R77 (double PASS, counter 1/5)
+
+**R77 result: auditor A PASS, auditor B PASS. Counter 1/5** (first
+double-PASS since R32, which reached 2/5 before R33 reset).
+
+Both auditors exhaustively sampled the layer and re-verified every
+prior-round fix class (R70-R76) against the code; no findings. Gates
+green (`bun run check` 0/0, `bun run lint` exit 0, `bun test src/lib` 552
+pass). Both noted the comment-accuracy phase's diminishing finding rate
+(one-to-two smaller docstring refinements per round) as an out-of-scope
+process observation; the code behavior (Fix A/B/C/D), the §5 invariant,
+and the gate have been stable for many rounds.
+
+**No fix this round.** No code change; `bun run check` 0/0; prettier +
+em-dash unchanged from R76.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R78 fix (e2e spec docstrings: `settleMorphFraction` derivation + `beforeNavigate` attribution)
+
+**R78 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.** (R77's
+1/5 wiped.)
+
+New audit surface: the e2e spec docstrings (the orchestrator /
+header-probe / fab-scale docstrings cleared R70-R76; R77 double-PASSed on
+those).
+
+**B.** `e2e/header-tab-descent-cross-tab-exit.spec.ts:24-25` --
+`settleMorphFraction` described as "normalized from `settleProgress`,
+`settleStartProgress`, `settleTargetProgress`". Actually
+`#settleMorphFraction()` returns `#settleEasedFraction` (independent
+eased timeline); normalizing would divide zero by zero for a saturated
+commit (orchestrator `:555-563`). Rewrote to "the rAF's eased timeline
+fraction, tracked independently of `settleProgress`".
+
+**A.** `e2e/tab-exit-preview.spec.ts:19` -- `beforeNavigate
+(NavPipelineHost.svelte)` misattributed; the hook is registered in
+`+layout.svelte:86` (NavPipelineHost only has a `:457` comment). Rewrote
+to "(registered in `+layout.svelte`)".
+
+**Orchestrator verification.** Independently verified both
+(`#settleMorphFraction` -> `#settleEasedFraction`; `+layout.svelte:7/86`
+registration; NavPipelineHost `:457` comment-only). Sibling sweeps: each
+class has exactly one e2e site. No missed siblings.
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean. Comment-only (e2e spec docstrings); runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R79 fix (e2e Bug 3 `destMorph` for `targetIsSearch`)
+
+**R79 result: auditor A PASS, auditor B BLOCK. Counter 0/5.**
+
+**B.** `e2e/reproduce-dv20-search-swipe.spec.ts:76` (Bug 3 docstring,
+`targetIsSearch` forward-swipe-to-`/search`) -- said the settle
+interpolates "toward the destination's at-rest morph". Actually the code
+holds `destMorph` at the SOURCE's at-rest:
+`#armSettleEaseFromGesture` (`orchestrator:3500-3504`)
+`destMorph = targetIsSearch ? atRestMorph(outgoingHasTabs)` = 1 for a
+tab-root source (the `/search` destination's at-rest is 0). The settle is
+a constant hold at 1; the search-mode flip is a landing event. Rewrote
+to "eases toward the SOURCE's at-rest morph ... never toward the
+destination's at-rest morph".
+
+**A.** PASS. A's sampling did not flag the Bug 3 site; B's reach into the
+`targetIsSearch` destMorph computation found it.
+
+**Orchestrator verification.** Independently verified B-F1 (code
+`:3500-3504` + in-source comment `:3490-3499`). Sibling sweep for
+"destination's at-rest" across e2e: four sites, only the `targetIsSearch`
+morph site is the defect (the other three are non-targetIsSearch morph or
+the FAB axis, where dest IS the destination's at-rest). No missed
+siblings.
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean. Comment-only (e2e spec docstring); runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R80 fix (`#onExecutorTick` `tapMorph` field + e2e `fallbackRoute` prop)
+
+**R80 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**B.** `orchestrator:2180-2181` (`#onExecutorTick` docstring) listed
+`tapMorph` among the pager fields it "keeps continuous". The helper only
+calls `#publish` -> `#republishToPager` (writes `backMorph` /
+`fractionalIndex` / `dragging` / `active` / `targetIndex` /
+`transitionTarget`, not `tapMorph`). `tapMorph` is written only via the
+separate tap-scrub rAF's `setTapMorph`; it stays continuous here only
+because the pager store preserves it. Removed `tapMorph` from the
+enumeration.
+
+**A.** `e2e/swipe-back-pill-flicker.spec.ts:10` -- `NavPipelineHost
+fallbackRoute="/"` references a non-existent prop (zero `fallbackRoute`
+hits in `src/`; the real prop is `leftHref`, `NavPipelineHost.svelte:47`,
+used at `+page.svelte:53`). Stale name from the deleted
+`GesturePageLayout`. Rewrote to `leftHref="/"`.
+
+**Orchestrator verification.** Independently verified both
+(`#onExecutorTick` body -> only `#publish`; `setTapMorph` write sites;
+zero `fallbackRoute` in `src/`; `leftHref` interface + usage). Sibling
+sweeps: each class has exactly one site. No missed siblings.
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean. Comment-only (orchestrator + e2e spec docstrings); runtime
+unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R81 fix (`/discussion/*` "True deep page" examples + `NavExecutorTickFn` `tapMorph`)
+
+**R81 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `orchestrator:4530-4534` (`resetPagerStore`) and `:4698-4700`
+(`#republishToPager`) both listed `/discussion/*` outside centerTab as a
+"True deep page (`fromTabIndex === -1`)" example. Doubly wrong:
+`/discussion/*` mounts `centerTab={0}` (never reaches the deep-page
+else-branch), and even non-centerTab it pill-maps to discussions
+(`getCurrentTabIndex` -> 0, not -1). Removed `/discussion/*` from both.
+The remaining `/profile/*`, `/bookmarks`, `/search` are correct (pill-map
+'active' -> `getCurrentTabIndex` returns -1).
+
+**B.** `nav-executor.svelte.ts:70-79` (`NavExecutorTickFn` type
+docstring) listed `tapMorph` among pager fields the commit callback
+publishes. The callback writes only `backMorph`; `tapMorph` is published
+by the separate tap-scrub rAF. Sibling of R80's `#onExecutorTick` fix
+(the type-docstring site R80 missed). Removed `/ \`tapMorph\``.
+
+**Orchestrator verification.** Independently verified all three
+(`/discussion/*` `centerTab={0}` mount; `getCurrentTabIndex` -1 rule for
+'active' / 'none'; callback chain writes no `tapMorph`). Sibling sweeps:
+A two sites both fixed; B one site (R80 fixed the orchestrator sibling).
+No missed siblings.
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean. Comment-only (orchestrator + nav-executor docstrings); runtime
+unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.

@@ -7,7 +7,7 @@ import { prepareContext, swipeBack, openSidebarAndGoto, waitForHydration } from 
  * Sibling of backtarget.spec.ts "Bug3" (which proves the pill EXPANDS gradually
  * DURING the drag). This file covers the moment Bug3 stops sampling: AFTER the
  * finger lifts. On a back-swipe from a deep page (/bookmarks - a page with no
- * tab of its own, NavPipelineHost fallbackRoute="/") back to a tab root (/),
+ * tab of its own, NavPipelineHost leftHref="/") back to a tab root (/),
  * the top Discussions pill must HOLD active+expanded through the handoff to the
  * homepage pager. Pre-fix it collapsed and lost its highlight, then re-expanded
  * - a visible flicker.

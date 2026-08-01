@@ -21,8 +21,9 @@ import { prepareContext, waitForHydration } from './helpers';
  *     the slide via `commitStart.durationMs`. The rAF publishes
  *     `settleProgress` 0 to 1 with the constant-deceleration ease `2u - u²`
  *     while the route is still on the source path; the morph derivation reads
- *     `settleMorphFraction` (normalized from `settleProgress`,
- *     `settleStartProgress`, and `settleTargetProgress`) and lerps between
+ *     `settleMorphFraction` (the rAF's eased timeline fraction, tracked
+ *     independently of `settleProgress` so a saturated commit does not
+ *     divide zero by zero) and lerps between
  *     `settleLatched.startMorph` and `settleLatched.destMorph`; the layer
  *     transform follows `morph` 1:1.
  *

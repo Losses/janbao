@@ -184,16 +184,21 @@ export interface EnterFabAnchor {
  *
  * Four reach paths set this anchor, each capturing `start` as the search-axis
  * position the Header was rendering the instant before the settle took over:
- *   - `playEnterAnimation` at a forward-swipe-to-`/search` commit-to-enter
- *     handoff: `start` is the prior commit's terminal searchProgress (= 1;
- *     the drag slid the search panel fully in via `searchProgress = bm` and
- *     the commit slide ended at `bm = 1`); `dest = 1` (hold) so the panel
- *     stays slid in across the enter settle and the enter slide's natural
+ *   - `playEnterAnimation` at any pipeline-commit-to-enter handoff: `start`
+ *     is the prior commit's terminal searchProgress stashed by
+ *     `#onExecutorSettle` (1 for a forward-swipe-to-`/search` commit whose
+ *     drag slid the panel fully in via `searchProgress = bm`; 0 for a
+ *     non-search commit, whose `#searchProgressAtSettleInstant` returns 0
+ *     when neither side is search); `dest` is the host route's at-rest
+ *     searchProgress (`resolveHeaderMode(host) === 'search' ? 1 : 0`). A
+ *     `/search` host thus holds the panel fully in (`start = dest = 1`)
+ *     across the enter settle, suppressing the natural
  *     `searchProgress = 1 - trackMorph = bm` curve (which would re-animate
- *     the panel out then in as `bm` resets 1 -> 0 then runs 0 -> 1) is
- *     suppressed. At settle end the natural formula reads `bm = 1` again,
- *     continuous with the hold. Without the anchor the panel snaps fully
- *     out at the boundary then slides back in (~393px snap, R23-B F2).
+ *     the panel out then in as `bm` resets 1 -> 0 then runs 0 -> 1); a
+ *     non-search host holds at 0, a no-op against the at-rest
+ *     `isSearch ? 1 : 0 = 0`. Without the anchor the panel snaps fully
+ *     out at the boundary then slides back in (~393px snap on a `/search`
+ *     commit, R23-B F2).
  *   - The `onSvelteKitBeforeNavigate` discrete-nav arm at a non-search
  *     `goto` / tab-click / popstate interrupt of a forward-swipe-to-
  *     `/search`: `start` is captured via `#searchProgressAtSettleInstant`

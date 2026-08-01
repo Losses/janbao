@@ -16,7 +16,7 @@ import {
  * reveal a neighbouring panel, but those panels are FIXED by the detail page:
  *   discussion -> left = DiscussionsPanel, right = ActivityPanel
  *   messages   -> left = MessagesPanel only (no right panel)
- * beforeNavigate (NavPipelineHost.svelte) cancels the tab nav, snaps the
+ * beforeNavigate (registered in `+layout.svelte`) cancels the tab nav, snaps the
  * track toward index 0 or panelCount-1, and navigates on the orchestrator's
  * commit-settle. When
  * the tapped tab is NOT one of the pre-rendered panels, the slide reveals the

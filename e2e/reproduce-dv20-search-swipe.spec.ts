@@ -72,12 +72,13 @@ test('Bug 3: leftward swipe from /messages/inbox reaches /search with a real ani
 	// Vertical-channel morph continuity across the whole gesture (drag +
 	// release + commit). The drag branch holds the morph at the source's
 	// tab-ness for a `targetIsSearch` forward swipe; the settle that takes
-	// over at release must interpolate from that held value (captured as the
-	// latched `startMorph`) toward the destination's at-rest morph across
-	// `settleMorphFraction`, never collapsing to a constant that disagrees
-	// with the drag's terminal value (which would snap the icon 0deg ->
-	// ~119deg and the tab-bar translateY 0% -> -66% in one rAF frame at
-	// release). The multi-signal sampler records rootLayerTy / deepLayerTy
+	// over at release latches `startMorph` at that held value and eases
+	// toward the SOURCE's at-rest morph (`destMorph = atRestMorph(outgoing)`,
+	// matching `startMorph` for a from-rest tab-root source so the morph
+	// holds constant and the search-mode flip is carried by the landing),
+	// never toward the destination's at-rest morph (which would snap the
+	// icon 0deg -> ~119deg and the tab-bar translateY 0% -> -66% in one
+	// rAF frame at release). The multi-signal sampler records rootLayerTy / deepLayerTy
 	// / burgerRot every frame; the max frame-to-frame jump of each must
 	// stay small.
 	const rootJumps = maxFrameJumps(frames, (f) => f.rootLayerTy);

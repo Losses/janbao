@@ -494,8 +494,10 @@ export class NavPipelineOrchestrator {
 	 *  publication's `settleMorphFraction` field) to interpolate from the
 	 *  latched `startMorph` to `destMorph`, so the morph stays continuous
 	 *  across the drag-to-settle handoff for every gesture shape and
-	 *  every commit saturation. Returns 0 at rest (the at-rest branch in
-	 *  the Header reads the static tab-ness instead). */
+	 *  every commit saturation. At rest the field holds its last tick
+	 *  value (1 after a normal settle completion, until the next arm
+	 *  resets it to 0 or `unmount` clears it); the Header's at-rest
+	 *  branch does not read it (it reads the static tab-ness instead). */
 	#settleMorphFraction(): number {
 		return this.#settleEasedFraction;
 	}
@@ -525,10 +527,13 @@ export class NavPipelineOrchestrator {
 	// Settle ease state. The orchestrator owns the Header's post-release /
 	// post-title-change crossfade. The rAF below eases the settle progress
 	// toward `#settleTargetProgress` over the duration passed to
-	// `#armSettleEase` (the velocity-matched commit duration for a
-	// gesture-release settle, `TITLE_CROSSFADE_MS` for a non-gesture
-	// settle) with the constant-deceleration curve `s(u) = 2u - u²` (the
-	// same curve the executor's commit loop and the tap-scrub ease use).
+	// `#armSettleEase` (the executor's velocity-matched commit duration
+	// for a slide-tracking settle -- `playEnterAnimation`, the discrete-nav
+	// arm, `#armSettleEaseFromGesture`; a shortened `acceleratedMs` for
+	// `#accelerateInFlight`; or the default `TITLE_CROSSFADE_MS` for the
+	// absorb and idle title-change arms) with the constant-deceleration
+	// curve `s(u) = 2u - u²` (the same curve the executor's commit loop
+	// and the tap-scrub ease use).
 	// Each tick writes the eased progress to the state machine (the §13.5
 	// authority); the Header reads it via the orchestrator's publication.
 	// Reduced-motion snaps (no rAF integration).
@@ -1751,7 +1756,7 @@ export class NavPipelineOrchestrator {
 		// two-phase capture (morph here, raw at the `#pendingGesture`
 		// assignments below) puts both halves on the new gesture's scale.
 		// Covers every drag-takes-over-settle boundary (re-grab mid-commit,
-		// gesture-during-forward-enter, pointercancel during a settle).
+		// gesture-during-forward-enter, re-grab during a cancel-settle).
 		const settleMorphAtTakeover: number | null =
 			browser && this.#stateMachine.settleActive && this.#stateMachine.settleLatched !== null
 				? this.#morphAtSettleInstant(this.#stateMachine.settleLatched)
@@ -2173,7 +2178,7 @@ export class NavPipelineOrchestrator {
 	 *  captured at commit start) to the target raw (1 for a commit, 0
 	 *  for a cancel) along the executor's eased fraction of the
 	 *  progressStart -> progressTarget span. This keeps `backMorph`
-	 *  / `tapMorph` / `fractionalIndex` (and the FAB's
+	 *  / `fractionalIndex` (and the FAB's
 	 *  `publication.progress`) continuous across the
 	 *  drag-to-commit boundary for every transition that runs a
 	 *  commit/cancel rAF - a from-rest gesture, a mid-transition
@@ -3178,12 +3183,20 @@ export class NavPipelineOrchestrator {
 	 *  watcher clear it via `#endSettleEase` when the nav lands. The
 	 *  direction (`forward` / `back`) selects the title-span slide axis.
 	 *
-	 *  `durationMs`: the settle ease duration. A gesture-release settle
-	 *  passes the executor's velocity-matched commit duration so the Header
-	 *  morph / title crossfade tracks the slide end-to-end (§5 unified
-	 *  following-visual model). A non-gesture settle (tab-click, plain title
-	 *  change) passes `TITLE_CROSSFADE_MS`: those transitions are discrete
-	 *  navs with no finger-release velocity to match.
+	 *  `durationMs`: the settle ease duration. The slide-tracking arms pass
+	 *  the executor's velocity-matched commit duration
+	 *  (`commitStart.durationMs`) so the Header morph / title crossfade
+	 *  tracks the slide end-to-end (§5 unified following-visual model):
+	 *  `playEnterAnimation` (forward-enter) and the
+	 *  `onSvelteKitBeforeNavigate` discrete-nav arm (tab-click / back-button
+	 *  / deep-to-deep) pass the velocity-0 solver default
+	 *  (`COMMIT_T_DEFAULT_MS`, 300ms); `#armSettleEaseFromGesture`
+	 *  (gesture-release) passes the real-velocity clamped duration
+	 *  (`COMMIT_T_MIN_MS`..`COMMIT_T_MAX_MS`, 100..600ms).
+	 *  `#accelerateInFlight`'s accelerated re-arm passes a shortened
+	 *  `acceleratedMs`. The `notifyHeaderState` mid-settle absorb and the
+	 *  idle title-change arm pass the default `TITLE_CROSSFADE_MS` (200ms;
+	 *  no slide to track).
 	 *
 	 *  Cancels any in-flight settle first (a rapid back-to-back nav). */
 	#armSettleEase(
@@ -3863,9 +3876,13 @@ export class NavPipelineOrchestrator {
 	 *  (settle + tap-scrub) so a new gesture or a fresh discrete nav owns
 	 *  the morph from the current visual position with no competing rAF
 	 *  underneath. Called from `#beginGesture` on every re-grab (from-rest
-	 *  or mid-transition) AND from the `onSvelteKitBeforeNavigate`
+	 *  or mid-transition), from the `onSvelteKitBeforeNavigate`
 	 *  discrete-nav path (a tab-click or deep-to-deep nav arriving outside
-	 *  the `phase === 'committing'` finish-then-new branch). This is ONE
+	 *  the `phase === 'committing'` finish-then-new branch), and from the
+	 *  same hook's non-pipeline-destination cleanup (a nav to a
+	 *  non-pipeline route that leaves the orchestrator's active window,
+	 *  where an in-flight settle would strand the Header on its stale
+	 *  latched endpoint). This is ONE
 	 *  of several settle-cancellation sites, not the sole point: the
 	 *  settle ease is also ended by `#onExecutorSettle`'s
 	 *  `#endSettleEase` for a non-pipeline commit target, the
@@ -4511,7 +4528,7 @@ export class NavPipelineOrchestrator {
 			// NavPipelineHost at rest (no centerTab, not bidirectional). Two
 			// sub-cases share this branch:
 			//  - True deep pages (`/profile/*`, `/bookmarks`, `/search`,
-			//    `/discussion/*` outside the centerTab shape, etc.) have
+			//    etc.) have
 			//    `fromTabIndex === -1` (no pill mapping); the Header reads
 			//    `currentHasTabs === false` and the morph derivation's
 			//    at-rest branch returns 0 (back-arrow mode). The
@@ -4679,8 +4696,8 @@ export class NavPipelineOrchestrator {
 	 *  interpolation, plus a `backMorph` publication that splits by
 	 *  pill-mapping:
 	 *    - True deep page (`fromTabIndex === -1`, e.g. `/profile/*`,
-	 *      `/bookmarks`, `/search`, `/discussion/*` outside the centerTab
-	 *      shape): publishes `backMorph: rawDragFraction` so the Header
+	 *      `/bookmarks`, `/search`): publishes `backMorph: rawDragFraction`
+	 *      so the Header
 	 *      morph tracks the finger.
 	 *    - Offline LIST mirror whose target is also pill-mapped
 	 *      (`fromTabIndex >= 0 && toIdx >= 0`, e.g. `/offline` -> `/`):
