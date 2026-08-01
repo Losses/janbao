@@ -6343,3 +6343,242 @@ derived re-runs" -- publication does not read it (zero reactive readers).
 runtime unchanged.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R54 fix (test title attribution + CSS easing + no-op claim)
+
+**R54 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `nav-executor-logic.test.ts:489` section header "this clamp bounds
+the title/page positions" -> page-track only (title-span reads
+settleProgress, settle rAF clamp).
+
+**B1.** `messages-back-swipe.spec.ts:270` "FAB atom's own CSS easing" ->
+commitEase per-frame (FAB atom has no CSS transition).
+
+**B2.** 4 sites "for symmetric shapes the re-seed is a no-op for the
+visual" -> for symmetric both-have-FAB shapes the re-seed smooths over
+the natural handoff dip (visible); no-op only for neither-has-FAB.
+`header-probe.ts:146`, `orchestrator:799/3217/3530`.
+
+**Verify.** `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R55 fix (captured==natural overclaim + dip-smoothing qualify)
+
+**R55 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** 4 comments overclaimed "For symmetric shapes the captured value
+equals the natural formula" (only true for branch-5 from-rest; branch-4
+re-grab captures dragAnchor-shifted). header-probe "cancels no-op" also
+wrong (both-have-FAB cancels raw > 0.5 smooths dip). Rewrote all 4 to
+branch-qualified style + cancels.
+
+**B.** 4 sites overclaimed dip-smoothing universally (only raw < 0.5
+commits). Rewrote to qualify. Fixed grammar fragment
+(`messages-back-swipe.spec.ts:270` "per-frame" -> "per-frame advance").
+
+**Verify.** `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R56 fix (orchestrator:3532-3533 R55 edit slip)
+
+**R56 result: auditor A BLOCK, auditor B BLOCK (same finding). Counter
+0/5.**
+
+The R55 rewrite left an orphaned "For" + duplicated clause at
+`orchestrator:3532-3533`. Fixed (removed the duplicate, aligned to the
+sibling at `orchestrator:3215-3222`). Both auditors reported the same
+site (parallel audit). B noted the CMA's verify triplet cannot catch
+comment-prose corruption (prettier doesn't reflow `//` comments).
+
+**Verify.** `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R57 fix (R55 sibling + 6 stale L2803 line-number references)
+
+**R57 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `orchestrator:3501-3504` R55 sibling: "dropping to branch 5 ...
+disagrees for asymmetric shapes (list)" -> branch-qualified ("branch-4
+re-grab drops to branch 5, disagreeing with dragAnchor-shifted value").
+
+**B.** 6 stale "L2803" line-number references. R32/R34 classified
+non-blocking ("within 10 lines") but R50-A dead-code removal shifted
+capture L2814->L2792; L2803 is now executable code, 11 lines away.
+Removed all 6 (name-based references to avoid future drift).
+
+**Verify.** `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R58 fix (search-axis formula + captured value binary classification)
+
+**R58 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `orchestrator:3262-3267` "searchProgress = trackMorph = bm"
+universalized (only ENTER; EXIT is `1 - trackMorph`). Rewrote to qualify
+ENTER vs EXIT + generic "gesture-branch value equals at-rest".
+
+**B.** `orchestrator:799-801` "branch 5 natural for from-rest, branch 4
+for re-grab" binary classification omitted boundary (branch 1) /
+suppressed (branch 2). Rewrote to "whatever branch won" (universal,
+matching orchestrator:3500 pattern).
+
+**Verify.** `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R59 fix (3 binary-classification siblings of R58-B)
+
+**R59 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `header-probe.ts:144` "may differ for a branch-4 re-grab"
+(single-case) -> removed parenthetical; universal clause covers.
+
+**B.** `orchestrator:3497` "branch 4... branch 5..." + `orchestrator:4309`
+"dragAnchor-shifted (or natural-formula)" -> both rewrote to universal
+"whatever branch won" (matching `orchestrator:799-801`).
+
+**Verify.** `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R60 fix (orchestrator:3251-3254 inverse "disagrees" claim)
+
+**R60 result: auditor A BLOCK, auditor B PASS. Counter 0/5.**
+
+**A.** `orchestrator:3251-3254` "for the enterFabAnchor-set shapes (branch 3) it disagrees with the displayed value" -- for from-rest releases
+captured == natural (AGREE). Rewrote to "the branch-3 lerp and the
+natural formula diverge across the settle's trajectory".
+
+**B.** PASS (exhaustive sweep, no defect). First PASS vote since R34.
+
+**Verify.** `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R61 fix (4 no-op qualifier + "holds" -> "interpolates")
+
+**R61 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** 4 "re-seed is required" sites universal (omitted "otherwise a
+no-op"). A verified both-have-FAB commit raw=0.6 -> branch-3 identical to
+branch-5 (no-op). Added qualifier to `orchestrator:3252/3210/3241/830`.
+
+**B.** `orchestrator:3254` "the lerp holds the captured value" ->
+"interpolates from the captured value toward dest".
+
+**Verify.** `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R62 fix (orchestrator:4079 "asymmetric" + fab-release-snap field attribution)
+
+**R62 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `orchestrator:4079` "for asymmetric FAB shapes" -> "wherever they
+diverge" (both-have-FAB enter also snaps; universal).
+
+**B.** `e2e/fab-release-snap.spec.ts:8/205` `pager.fractionalIndex` ->
+`publication.progress` (FAB scale driver; fractionalIndex is pill position).
+
+**Verify.** `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R63 fix (orchestrator:4065 no-op qualifier + fab-release-snap:10 rAF attribution)
+
+**R63 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `orchestrator:4065-4072` "re-seed is required" + "only no-op is
+idle title-change arm" -> "where the natural formula would differ
+(otherwise a no-op)" + "only null-guard skip is idle" (R61 sibling,
+missed by line-wrapped grep).
+
+**B.** `e2e/fab-release-snap.spec.ts:10` "orchestrator's ~300ms
+commit-slide rAF" -> "~300ms release settle" (orchestrator doesn't own
+commit-slide rAF; FAB reads settle rAF at release).
+
+**Verify.** `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R64 fix (tab-exit-preview:104 stale line ref)
+
+**R64 result: auditor A PASS, auditor B BLOCK. Counter 0/5.**
+
+**A.** PASS (exhaustive sweep, no defect).
+
+**B.** `e2e/tab-exit-preview.spec.ts:104` "Header.svelte ~L172-179" -> "via
+`rootLayerStyle`" (actual derivation at L402-408; drift ~230 lines;
+R32/R34 non-blocking never applied; R57-B missed). Last stale `~L` ref in
+the layer.
+
+**Verify.** `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R65 fix (branch 5 at-rest + 5 idle-arm conflation sites)
+
+**R65 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `orchestrator:4072-4073` "branch 5 end-to-end" when `!pub.inFlight`
+-> "at-rest value end-to-end" (FloatingActionButtonLayer short-circuits
+before computeFabScale when !pub.inFlight).
+
+**B.** 5 "idle title-change arm" null-guard attribution sites -> "no
+transition in flight" (idle arm is mutually exclusive branch with no
+guard). `orchestrator:832/3245/4068/4094`, `header-probe.ts:223`.
+
+**Verify.** `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R66 fix (2 SEARCH skip conditions + sampleFrame branch-3 overclaim)
+
+**R66 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `orchestrator:4094` + `header-probe.ts:223` SEARCH re-seed skip ->
+two-condition form ("prevSearchAnchor === null OR helper returned null"),
+matching `orchestrator:4129-4140`.
+
+**B.** `nav-executor-logic.ts:405` sampleFrame "the FAB (branch 5...;
+branch 3...)" -> "the branch-5 FAB (...; branch 3 reads the unclamped
+settleMorphFraction and is not bounded by this cap)".
+
+**Verify.** `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R67 fix (test:485 title-span + header-probe:116 inFlight)
+
+**R67 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `nav-executor-logic.test.ts:485-486` "pops the title-span and
+page-track" -> "page-track position" (title-span reads settleProgress,
+not publication.progress; R66-B missed this site).
+
+**B.** `header-probe.ts:115-116` DragSearchAnchor guard parenthetical ->
+add `publication.inFlight` (four-way conjunction; sibling at
+orchestrator:748 correctly listed it).
+
+**Verify.** `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.

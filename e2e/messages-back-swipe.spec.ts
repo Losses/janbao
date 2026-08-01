@@ -267,7 +267,7 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 		// `settleMorphFraction` via branch 3 during the release settle).
 		// A frozen settle (settleMorphFraction not advancing) leaves the
 		// scale stuck at its initial value (delta 0). The threshold
-		// is small (0.1) to allow for the FAB atom's own CSS easing
+		// is small (0.1) to allow for the commitEase curve's per-frame advance
 		// while still catching a fully frozen publication.
 		expect(
 			capture.fabScaleDelta,
@@ -3583,7 +3583,7 @@ test('re-grab during a search-settle keeps the header search track continuous (R
 // `anchor.search + natural(bm) - natural(anchor.raw)` (the search-axis
 // position the drag was rendering). Mid-drag (BEFORE the re-grab's touchEnd)
 // an external `__e2eGoto('/activity')` dispatches a discrete-nav interrupt
-// that re-enters `onSvelteKitBeforeNavigate`. The discrete-nav arm at L2803
+// that re-enters `onSvelteKitBeforeNavigate`. The discrete-nav arm
 // captures `liveDragSearchProgress = #searchProgressAtSettleInstant()` and
 // re-seeds `#searchAnchor = { start: captured, dest: 0 }` (dest 0 because
 // `/activity` is not `/search`). The R28 defect (~162-219px snap on a 393px
@@ -3652,7 +3652,7 @@ test('mid-re-grab discrete-nav interrupt keeps the header search track continuou
 	}
 	// Phase 3: mid-re-grab (touch still pressed, no touchEnd), dispatch the
 	// discrete-nav interrupt via `__e2eGoto('/activity')`. The beforeNavigate
-	// hook re-enters `onSvelteKitBeforeNavigate`; the discrete-nav arm at L2803
+	// hook re-enters `onSvelteKitBeforeNavigate`; the discrete-nav arm
 	// captures `liveDragSearchProgress = #searchProgressAtSettleInstant()`
 	// BEFORE the state-machine dispatch and `#progress = 0` reset, then
 	// re-seeds `#searchAnchor = { start: captured, dest: 0 }` for the new

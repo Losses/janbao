@@ -101,7 +101,7 @@ const CASES: ExitCase[] = [
 // Deep pages WITHOUT a centerTab (bookmarks, profile, search, notifications,
 // admin/*) were considered as additional sources. They are EXCLUDED: in deep
 // mode the Header slides the MobileTabBar off-screen and shows the page title
-// instead (Header.svelte ~L172-179), so there is no visible tab to tap. A user
+// instead (via `rootLayerStyle`), so there is no visible tab to tap. A user
 // leaves those pages via the back arrow, never a tab tap. The cross-tab-exit
 // beforeNavigate path is therefore unreachable from them by any real
 // interaction, and the audits' open question (does activeTab flip before the

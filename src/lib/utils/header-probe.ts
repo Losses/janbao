@@ -113,7 +113,8 @@ export interface DragFabAnchor {
  * consumes `DragSearchAnchor`; all three are captured at the same
  * `#beginGesture` sites so the three visuals stay in lockstep). Captured only
  * when a search settle is in flight at `#beginGesture`
- * (`settleActive && #searchAnchor !== null`): a re-grab taking over a
+ * (`settleActive && #searchAnchor !== null && publication.inFlight`): a
+ * re-grab taking over a
  * search-retreat or search-enter settle would otherwise snap the header
  * search track ~238px (R26-A defect) because the post-cancel
  * `#searchAnchor` clear hands the search axis to the natural `bm`-driven
@@ -140,11 +141,12 @@ export interface DragSearchAnchor {
  *   - `#armSettleEaseFromGesture` at a gesture release: `start` is captured
  *     via `#fabScaleAtSettleInstant` before the arm clears the drag anchor;
  *     `dest` is the destination's (commit) or source's (cancel) at-rest FAB
- *     presence (R12-B F1). For asymmetric shapes (from-only-FAB,
- *     to-only-FAB, boundary, suppressed) the captured value disagrees with
- *     the natural `fabScale(progress, ...)` formula at the release raw, so
- *     the lerp is the only continuity guard; for symmetric shapes the lerp
- *     is a no-op for the visual but still correct.
+ *     presence (R12-B F1). The captured value equals the displayed FAB at
+ *     the release raw. The re-seed keeps the FAB continuous across the
+ *     settle where the natural formula would differ from the captured
+ *     value, and smooths over the natural handoff dip for both-have-FAB
+ *     releases that cross the icon-handoff midpoint (commits at raw < 0.5,
+ *     cancels at raw > 0.5); otherwise a no-op.
  *   - The `onSvelteKitBeforeNavigate` discrete-nav arm at a tab-click /
  *     `goto` / popstate interrupt of an in-flight drag or settle: `start`
  *     is captured via `#fabScaleAtSettleInstant` before the arm clears the
@@ -219,8 +221,9 @@ export interface EnterFabAnchor {
  *     searchProgress (commit -> incoming route, cancel -> outgoing route).
  *     Carries the in-flight search-axis position across the re-arm so the
  *     Header's settle-anchor branch continues from the panel position it
- *     was rendering. Skipped when `#searchAnchor` was null at the capture
- *     (the idle title-change arm and any from-rest same-tab-ness nav).
+ *     was rendering. Skipped when no search anchor was in flight at the
+ *     capture (`prevSearchAnchor === null`) or when the helper returned
+ *     null (no transition in flight).
  *
  * The Header reads the anchor via `orchestrator.searchAnchor` and the
  * `searchProgress` derivation lerps between `start` and `dest` while

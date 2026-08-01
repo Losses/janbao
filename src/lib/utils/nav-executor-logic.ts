@@ -404,9 +404,9 @@ export function settlePerTickCap(durationMs: number, span: number): number {
  *  elapsed-time delta for that tick corresponds to many frames of
  *  advance, and clamping caps the single-tick progress delta so the
  *  page-track (driven by `publication.progress` via `publishFrame`) and
- *  the FAB (branch 5 reads `publication.progress` when `enterFabAnchor`
- *  is null; branch 3 reads `settleMorphFraction` when it is set) ease
- *  smoothly
+ *  the branch-5 FAB (`publication.progress` when `enterFabAnchor` is
+ *  null; branch 3 reads the unclamped `settleMorphFraction` and is not
+ *  bounded by this cap) ease smoothly
  *  instead of popping. The rAF reschedules a few extra ticks to close
  *  the remaining gap, so a delayed first tick extends the wall-clock
  *  duration but never pops.

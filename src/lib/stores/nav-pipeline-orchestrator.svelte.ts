@@ -795,13 +795,15 @@ export class NavPipelineOrchestrator {
 	 *   3. `#armSettleEaseFromGesture` at a gesture release: `start` is the
 	 *      FAB value captured via `#fabScaleAtSettleInstant` BEFORE the
 	 *      arm clear; `dest` is the destination's (commit) or source's
-	 *      (cancel) at-rest FAB presence (R12-B F1). For symmetric shapes
-	 *      the captured value already equals the natural formula at the
-	 *      release raw, so the lerp is a no-op for the visual but still
-	 *      correct; for asymmetric shapes (from-only-FAB, to-only-FAB,
-	 *      boundary, suppressed) the lerp is the only continuity guard
-	 *      because the natural formula disagrees with the drag-terminal
-	 *      FAB value at the release raw.
+	 *      (cancel) at-rest FAB presence (R12-B F1). The captured value
+	 *      equals the displayed FAB at the release raw (the same
+	 *      `computeFabScale` value the FAB layer was rendering, whatever
+	 *      branch won). The re-seed keeps the FAB continuous across the
+	 *      settle where the natural formula would differ from the
+	 *      captured value, and smooths over the natural handoff dip for
+	 *      both-have-FAB releases that cross the icon-handoff midpoint
+	 *      (commits at raw < 0.5, cancels at raw > 0.5); otherwise a
+	 *      no-op.
 	 *   4. The `onSvelteKitBeforeNavigate` discrete-nav arm at a tab-click
 	 *      / `goto` / popstate interrupt of an in-flight drag or settle:
 	 *      `start` is the FAB value captured via
@@ -826,10 +828,10 @@ export class NavPipelineOrchestrator {
 	 *      R12-B F1 sibling). For an anchor-set non-enter settle being
 	 *      re-armed (gesture-release, discrete-nav, accelerate-in-flight)
 	 *      the FAB layer reads branch 3 and the re-seed is required for
-	 *      boundary continuity; only the idle title-change arm (from-rest
-	 *      same-tab-ness navs) leaves `#enterFabAnchor` null and the
-	 *      FAB-value capture null (no transition in flight), so the
-	 *      re-seed's null-guard skips.
+	 *      boundary continuity where the natural formula would differ
+	 *      (otherwise a no-op); the re-seed's null-guard skips when no
+	 *      transition is in flight (the macro has left `transitioning`
+	 *      while the settle rAF is still ticking).
 	 *
 	 *  Cleared at the next settle arm (canonical single-site reset inside
 	 *  `#armSettleEase`), `#landAtRest`, and `unmount`. */
@@ -1784,7 +1786,7 @@ export class NavPipelineOrchestrator {
 		// `#dragSearchAnchor` is null (cleared by the `#armSettleEase` /
 		// `#landAtRest` between the dragged settle and this re-grab, or
 		// never set for a from-rest drag), so the helper's drag-anchor branch
-		// short-circuits past; the L2803 discrete-nav capture site is the
+		// short-circuits past; the discrete-nav capture site is the
 		// reach path where the branch actually fires. null when no applicable
 		// settle is in flight (from-rest drag, a settle whose arm path left
 		// `#searchAnchor === null`, or `!inFlight`).
@@ -3206,16 +3208,19 @@ export class NavPipelineOrchestrator {
 		//     release, discrete-nav, mid-settle absorb, R12-B F1
 		//     siblings that set `#enterFabAnchor`) the FAB layer reads
 		//     branch 3 (enterAnchor lerp) and the re-seed is required
-		//     for boundary continuity, while for a path that left
+		//     for boundary continuity where the natural formula would
+		//     differ (otherwise a no-op), while for a path that left
 		//     `#enterFabAnchor` null at the arm (from-rest discrete-nav
 		//     or fresh-enter) the guard skips the re-seed and the FAB
 		//     layer reads branch 5 end-to-end.
 		//   - `#armSettleEaseFromGesture` (gesture release, R12-B F1):
 		//     captures the live FAB value via `#fabScaleAtSettleInstant`
-		//     and re-seeds from that for every release; for symmetric
-		//     shapes the re-seed is a no-op for the visual but still
-		//     correct, for asymmetric shapes (from-only-FAB, to-only-FAB,
-		//     boundary, suppressed) it is the only continuity guard.
+		//     and re-seeds from that for every release. The re-seed keeps
+		//     the FAB continuous across the settle where the natural
+		//     formula would differ from the captured value, and smooths
+		//     over the natural handoff dip for both-have-FAB releases
+		//     that cross the icon-handoff midpoint (commits at raw < 0.5,
+		//     cancels at raw > 0.5); otherwise a no-op.
 		//   - The `onSvelteKitBeforeNavigate` discrete-nav arm (tab-click
 		//     / `goto` / popstate interrupt of an in-flight drag or
 		//     settle, R12-B F1 sibling): captures the live FAB value via
@@ -3234,10 +3239,11 @@ export class NavPipelineOrchestrator {
 		//     and re-seeds from that; for an anchor-set non-enter
 		//     settle being re-armed (gesture-release, discrete-nav,
 		//     accelerate-in-flight) the FAB layer reads branch 3 and
-		//     the re-seed is required for boundary continuity, while
-		//     for the idle title-change arm (from-rest same-tab-ness
-		//     navs) the capture returns null and the null-guard skips
-		//     the re-seed.
+		//     the re-seed is required for boundary continuity where
+		//     the natural formula would differ (otherwise a no-op), while
+		//     the null-guard skips the re-seed when no transition is in
+		//     flight (the macro has left `transitioning` while the
+		//     settle rAF is still ticking).
 		// The clear and any post-arm re-seed happen in the caller's same
 		// synchronous block, so Svelte's reactive flush sees only the
 		// re-seeded `#enterFabAnchor`: the FAB layer's `$derived` re-runs
@@ -3245,9 +3251,10 @@ export class NavPipelineOrchestrator {
 		// anchor and `settleEasedFraction = 0` (reset above), which equals
 		// the captured value the caller stashed, continuous with the
 		// pre-arm displayed value. The natural `fabScale(progress, ...)`
-		// formula is NOT what the FAB layer reads here; for the
-		// `enterFabAnchor`-set shapes (branch 3) it disagrees with the
-		// displayed value, which is exactly why the re-seed is required.
+		// formula is NOT what the FAB layer reads here; the re-seed is
+		// required where the branch-3 lerp and the natural formula
+		// diverge across the settle's trajectory (for no-op shapes they
+		// are algebraically equal and the re-seed is a no-op).
 		// The search anchor (`#searchAnchor`) follows the same canonical
 		// reset here and the same post-arm re-seed discipline at four of
 		// the five FAB re-seeding sites (R23-B + R24-A): the
@@ -3256,11 +3263,12 @@ export class NavPipelineOrchestrator {
 		// `#accelerateInFlight` discrete-nav interrupt, and the
 		// `notifyHeaderState` mid-settle absorb. The gesture-release site
 		// `#armSettleEaseFromGesture` has no search-axis counterpart: a
-		// live drag drives the search axis via the gesture branch
-		// (`searchProgress = trackMorph = bm`), and the release settles
+		// live drag drives the search axis via the gesture branch (the
+		// ENTER shape `searchProgress = trackMorph`, the EXIT shape
+		// `searchProgress = 1 - trackMorph`), and the release settles
 		// the morph / FAB / title tiers but does not need a search-axis
-		// anchor because the drag's terminal `bm` agrees with the
-		// post-settle at-rest searchProgress on the release's target.
+		// anchor because the drag's terminal gesture-branch value
+		// already equals the target's at-rest searchProgress.
 		this.#dragMorphAnchor = null;
 		this.#dragFabAnchor = null;
 		this.#dragSearchAnchor = null;
@@ -3488,16 +3496,13 @@ export class NavPipelineOrchestrator {
 		// the settle takes over (DV21 §5 sibling-visual rule: the FAB tier
 		// needs the same drag-terminal capture the morph tier just made via
 		// `startMorph`). `#fabScaleAtSettleInstant` reads the live FAB layer
-		// state through the shared `computeFabScale` function, so for shapes
-		// where the FAB layer reads branch 4 (`dragAnchor !== null`) it
-		// returns the dragAnchor-shifted value; for shapes where it reads
-		// branch 5 (the natural formula) it returns that formula at the
-		// release raw; either way the captured value equals the displayed
-		// FAB at the release instant. Stashed BEFORE `#armSettleEase`
-		// because the arm clears `#dragFabAnchor` at its top, dropping the
-		// FAB layer to branch 5 (the natural formula), which disagrees with
-		// the drag's terminal FAB value for asymmetric shapes
-		// (from-only-FAB, to-only-FAB, boundary, suppressed, enterAnchor).
+		// state through the shared `computeFabScale` function; either way
+		// the captured value equals the displayed FAB at the release
+		// instant (whatever branch won). Stashed BEFORE `#armSettleEase`
+		// because the arm clears `#dragFabAnchor` at its top; for a
+		// branch-4 re-grab the post-arm FAB would drop to branch 5 (the
+		// natural formula), disagreeing with the dragAnchor-shifted value
+		// the FAB was rendering.
 		// The post-arm re-seed below restores a lerp anchor so the FAB
 		// layer's branch 3 interpolates from the captured drag-terminal
 		// value to the destination's at-rest FAB scale across
@@ -3525,12 +3530,12 @@ export class NavPipelineOrchestrator {
 		// `progress = 0` (cancel) returns `fromHasFab ? 1 : 0`. The lerp
 		// hits that value at `settleMorphFraction = 1`, so the
 		// settle-to-at-rest handoff is continuous (no snap when
-		// `settleActive` flips false and branch 5 takes over). For
-		// symmetric shapes (`fromHasFab === toHasFab`) on a commit the
-		// handoff dip (both have FAB) or the no-op hold (neither has FAB)
-		// already made the drag-terminal equal to the natural formula at
-		// the release raw, so the re-seed is a no-op for the visual but
-		// still correct.
+		// `settleActive` flips false and branch 5 takes over). The
+		// re-seed keeps the FAB continuous across the settle where the
+		// natural formula would differ from the captured value, and
+		// smooths over the natural handoff dip for both-have-FAB
+		// releases that cross the icon-handoff midpoint (commits at
+		// raw < 0.5, cancels at raw > 0.5); otherwise a no-op.
 		if (capturedFabScale !== null) {
 			const back = pending.to;
 			const fromHasFab = getRouteData(inputs.fromPathname).fab;
@@ -4057,20 +4062,22 @@ export class NavPipelineOrchestrator {
 					// branch 5; the capture via
 					// `#fabScaleAtSettleInstant` mirrors branch 3
 					// (single source of truth), and the re-seed is
-					// required for boundary continuity for the same
+					// required for boundary continuity where the natural
+					// formula would differ (otherwise a no-op) for the same
 					// reason as the enter-settle case below. The only
-					// no-op case is the idle title-change arm (from-rest
-					// same-tab-ness navs): no transition is in flight, so
-					// `#fabScaleAtSettleInstant` returns null and the
-					// `if (capturedFabScale !== null)` guard skips the
-					// re-seed, leaving the FAB layer on branch 5 end-to-end.
+					// null-guard skip is the no-transition-in-flight case
+					// (the macro has left `transitioning` while the settle
+					// rAF is still ticking): `#fabScaleAtSettleInstant`
+					// returns null and the `if (capturedFabScale !== null)`
+					// guard skips the re-seed, leaving the FAB layer at
+					// its at-rest value end-to-end.
 					// For an enter settle being re-armed (a different
 					// title arriving mid-enter on a dynamic-title route)
 					// the capture mirrors the enterAnchor lerp value the
 					// FAB layer was rendering; without this re-seed the
 					// post-arm branch 5 (natural formula) would snap from
 					// that lerp value to the natural formula at the
-					// current `publication.progress` for asymmetric FAB shapes
+					// current `publication.progress` wherever they diverge
 					// (R12-B F1 sibling defect at the mid-settle re-arm).
 					// The search tier mirrors the same capture+re-seed
 					// via `#searchAnchor` (R24-A sibling of the FAB
@@ -4084,9 +4091,10 @@ export class NavPipelineOrchestrator {
 					// (`settleTargetProgress === 1`) the destination is
 					// the new incoming route's at-rest searchProgress;
 					// on a cancel (target 0) it is the new outgoing
-					// route's. Skipped when `#searchAnchor` was null at
-					// the capture (the idle title-change arm and any
-					// from-rest same-tab-ness nav), so the natural
+					// route's. Skipped when no search anchor was in
+					// flight at the capture (`prevSearchAnchor === null`)
+					// or when the helper returned null (no transition in
+					// flight), so the natural
 					// `searchProgress` derivation handles those.
 					const capturedFabScale = this.#fabScaleAtSettleInstant();
 					const prevSearchAnchor = this.#searchAnchor;
@@ -4301,8 +4309,8 @@ export class NavPipelineOrchestrator {
 	 *     popstate interrupt. The capture reads the drag's live raw on
 	 *     the drag's plan scale and endpoints (R14 F1). The re-seed
 	 *     runs AFTER `#armSettleEase` so the FAB layer's branch 3 lerps
-	 *     from the captured dragAnchor-shifted (or natural-formula)
-	 *     value to the destination's at-rest FAB scale across
+	 *     from the captured displayed-FAB value (whatever branch won)
+	 *     to the destination's at-rest FAB scale across
 	 *     `settleMorphFraction` (R12-B F1 sibling).
 	 *   - The `notifyHeaderState` mid-settle absorb captures the in-flight
 	 *     FAB value to seed `#enterFabAnchor` when a dynamic-title route
@@ -4352,7 +4360,7 @@ export class NavPipelineOrchestrator {
 	 *  intentionally omits only the tap-scrub clause: the capture sites fire
 	 *  during a drag / commit / enter settle, never during a tap-scrub, so
 	 *  `pager.tapMorph` is unreachable here. The drag-search-anchor branch
-	 *  (R28 F1) fires at the L2803 discrete-nav capture site when a re-grab
+	 *  (R28 F1) fires at the discrete-nav capture site when a re-grab
 	 *  taking over an enter settle is itself interrupted mid-drag by the
 	 *  tab-click / `goto` driving the dispatch; at the other capture sites
 	 *  `#dragSearchAnchor` is null (cleared by `#armSettleEase` /
@@ -4362,7 +4370,7 @@ export class NavPipelineOrchestrator {
 	 *  capture the gesture branch's `bm` value while the Header was actually
 	 *  rendering the settle-anchor's lerp (held at 1 by `playEnterAnimation`'s
 	 *  seed), introducing a snap at the re-arm (R24-A). Without the
-	 *  drag-search-anchor branch the L2803 capture would return the gesture
+	 *  drag-search-anchor branch the capture would return the gesture
 	 *  value while the Header was rendering the drag-anchor shift value,
 	 *  snapping the search track by `startProgress * viewport-width` px
 	 *  (R28 F1).
@@ -4392,7 +4400,7 @@ export class NavPipelineOrchestrator {
 		if (dragSearchAnchor !== null) {
 			// R28 F1: mirror the Header's branch 3 shift so the captured
 			// value agrees with the search-axis position the Header was
-			// rendering at the L2803 discrete-nav interrupt of a re-grab
+			// rendering at the discrete-nav interrupt of a re-grab
 			// drag. The shift passes the natural gesture formula through
 			// the takeover point `(anchor.raw, anchor.search)` so the
 			// curve the drag was rendering stays continuous at the

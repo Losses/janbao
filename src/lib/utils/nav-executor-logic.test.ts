@@ -482,12 +482,15 @@ describe('sampleFrame', () => {
 // elapsed wall-clock time. When the first post-commit rAF tick is
 // delayed by main-thread load the elapsed-time delta for that tick
 // corresponds to many frames of advance; without the clamp the
-// resulting single-tick progress jump pops the title-span and page-track
-// positions (driven by `settleProgress` / `publication.progress`). The
+// resulting single-tick progress jump pops the page-track position
+// (driven by `publication.progress`; the title-span reads the settle
+// rAF's `settleProgress`, not `publication.progress`). The
 // FAB scale reads `settleMorphFraction` when `enterFabAnchor` is set
 // (branch 3, unclamped) or `publication.progress` when it is null
-// (branch 5, clamped here); this clamp bounds the title/page positions
-// and the branch-5 FAB. The clamp caps the per-tick delta so a
+// (branch 5, clamped here); this clamp bounds the page-track position
+// and the branch-5 FAB (the title-span reads the settle rAF's
+// `settleProgress`, not `publication.progress`). The clamp caps the
+// per-tick delta so a
 // delayed tick degrades gracefully (slower wall-clock finish) without
 // popping.
 

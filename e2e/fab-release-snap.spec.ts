@@ -5,9 +5,9 @@ import { prepareContext, waitForHydration } from './helpers';
  * FAB release-snap jump (Family A) - reproduction spec.
  *
  * Symptom: during a tab-swipe drag the FAB scale tracks the finger 1:1 (the live
- * `pager.fractionalIndex` drives it), but the moment the finger lifts the scale
- * LEAPS to its resting endpoint in a single frame instead of easing across the
- * orchestrator's ~300ms commit-slide rAF like the track itself does. The FAB
+ * `publication.progress` drives it), but the moment the finger lifts the scale
+ * LEAPS to its resting endpoint in a single frame instead of easing across
+ * the ~300ms release settle. The FAB
  * "pops" while the panels are still sliding.
  *
  * This spec isolates the RELEASE window (the existing fab.spec.ts trajectory
@@ -202,7 +202,7 @@ function assertSmoothRelease(
 
 // Discussions FAB (tab 0), forward commit to Activity. The distance is 30.5% of
 // the viewport (120px on a 393px Pixel 5): it clears the 60px commit threshold but
-// stops the drag at fractionalIndex 0.305, i.e. scale 0.389 (> 0.30) invariant
+// stops the drag at publication.progress 0.305, i.e. scale 0.389 (> 0.30) invariant
 // across viewport widths, so the drag itself never enters the (0.05, 0.30) easing
 // band. The release must ease 0.39 down to 0 across the 300ms snap; a one-frame
 // pop to 0 is the failure.
