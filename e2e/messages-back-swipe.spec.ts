@@ -1656,8 +1656,9 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 	// DV21 R4 F3 continuity guard: a back-swipe started during a
 	// forward-enter to a centerTab route takes over the enter's settle.
 	// `playEnterAnimation` arms a settle with
-	// `startMorph = destMorph = atRestMorph(outgoingHasTabs) = 1` for a
-	// forward-enter to a centerTab route; a back-swipe started mid-enter
+	// `startMorph = atRestMorph(outgoingHasTabs) = 1`,
+	// `destMorph = atRestMorph(incomingHasTabs) = 1` for a forward-enter to a
+	// centerTab route; a back-swipe started mid-enter
 	// cancels the settle and seeds `bm = the enter's eased progress (> 0)`,
 	// so the drag branch would recompute `morph = 1 - bm` and snap from 1
 	// toward 0 without the `dragMorphAnchor` capture (a ~103deg icon snap at

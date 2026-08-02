@@ -83,8 +83,8 @@ for (const sc of [...A_GROUP, ...B_GROUP]) {
 	});
 }
 
-// --- Bug2: an empty-cache list panel renders the shared LoadingChip (the
-// card-scaling target-page pill), not the old spinner + localized loading text.
+// --- Bug2: an empty-cache list panel renders discussions from SvelteKit
+// layout data, not a spinner + localized loading text.
 // Triggered by landing directly on a global route (init sets activeTab=0; home
 // is never visited so its cache is cold), so the back-preview's DiscussionsPanel
 // falls back to SvelteKit layout data.
@@ -100,7 +100,7 @@ test('Bug2: cold-cache panel falls back to layout data, rendering discussions in
 	const discussionsCount = await page.locator('a[href^="/discussion/"]').count();
 	const spinnerCount = await page.locator('.loading.loading-spinner').count();
 	expect(discussionsCount, 'discussions must render from layout data').toBeGreaterThan(0);
-	expect(spinnerCount, 'the old spinner must be gone').toBe(0);
+	expect(spinnerCount, 'no spinner renders').toBe(0);
 });
 
 // --- Bug3: on a deep page back-swipe the top tab pill must track the finger

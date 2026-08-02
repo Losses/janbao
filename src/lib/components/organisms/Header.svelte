@@ -21,7 +21,7 @@
 	 * RENDER-ONLY (DV20 step 3): the Header is a reader of the pipeline
 	 * orchestrator's reactive class fields. The orchestrator owns the
 	 * settle ease (the morph + title crossfade during a gesture release,
-	 * a discrete nav, or an idle title change at landing), the root↔search
+	 * a discrete nav, or an idle title change at landing), the root↔search / deep↔search
 	 * tap-scrub ease, and the `searchScrubbing` flag; this component reads
 	 * `orchestrator.settleProgress` (titleView spans),
 	 * `orchestrator.settleMorphFraction` (morph derivation),
@@ -29,7 +29,9 @@
 	 * `orchestrator.settleDirection`, `orchestrator.searchScrubbing`,
 	 * `pager.tapMorph`, `pager.backMorph`, `pager.dragging`,
 	 * `pager.scrubIconEndpoint`, and `pager.transitionTarget`, and derives
-	 * every visual from them.
+	 * every visual from them and the `dragMorphAnchor` / `searchAnchor` /
+	 * `dragSearchAnchor` getters (consumed by the morph / searchProgress
+	 * derivations below).
 	 * No Header-owned rAF, no Header-owned animation state, no CSS transitions
 	 * in this layer. §5: the orchestrator (publication record + pager-store morph
 	 * fields it writes via #republishToPager; synchronous per
@@ -136,7 +138,7 @@
 	// live `currentPath` / `title` / `currentHasTabs` / `isSearch`, and
 	// hands them to `orchestrator.notifyHeaderState`. The orchestrator
 	// owns the detection logic: it arms the settle ease on a title change
-	// and the tap-scrub ease on a root<->search ENTER flip. The drag /
+	// and the tap-scrub ease on an isSearch flip. The drag /
 	// drag-cancel / in-flight-settle guards live in the orchestrator. No
 	// Header-owned animation state; this Effect is a thin sensor channel.
 	$effect.pre(() => {
@@ -152,7 +154,7 @@
 
 	// Morph derivation. Reads `pager.backMorph` while a drag owns the track,
 	// the orchestrator's settle publication while a settle owns the crossfade,
-	// and the static tab-ness at rest. The root↔search tap scrub does not
+	// and the static tab-ness at rest. The tap scrub does not
 	// touch `morph` (the vertical layer group stays out of the horizontal
 	// scrub): tapMorph drives the horizontal track via `trackMorph` below.
 	const morph = $derived.by(() => {
@@ -308,7 +310,9 @@
 	// horizontal track scrub: a tab<->search scrub holds the hamburger
 	// (scrubIconEndpoint = 0), a deep<->search scrub eases the back-arrow
 	// into the hamburger (scrubIconEndpoint = 1). Outside a scrub the
-	// morph reads `isSearch` (hamburger on /search) or `1 - morph` (the
+	// morph is `0` when `isSearch` (hamburger on /search) or during a
+	// tab-root scrub-arm window (`searchScrubbing && currentHasTabs`,
+	// before the first `setTapMorph` tick), else `1 - morph` (the
 	// root<->deep vertical morph at rest / during a drag / settle).
 	const iconProgress = $derived.by(() => {
 		if (searchScrubbing && pager.tapMorph !== null) {

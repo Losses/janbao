@@ -12,11 +12,9 @@ import { prepareContext, swipeBack, openSidebarAndGoto, waitForHydration } from 
  * homepage pager. Pre-fix it collapsed and lost its highlight, then re-expanded
  * - a visible flicker.
  *
- * Current invariant: the orchestrator's publication (NavStateMachine macro
- * state merged with the executor's per-frame rAF-driven `#progress`, exposed
- * to the pager store via the orchestrator's `$derived`) holds the destination
- * tab's `active:true` continuously from the commit slide through the route
- * swap. The route swap rebinds the host's element refs in place without
+ * Current invariant: the orchestrator publishes continuously via
+ * `#republishToPager` from the commit slide through the route swap,
+ * holding the destination tab's `active: true` in the pager store. The route swap rebinds the host's element refs in place without
  * tearing down the executor, so the pager-driving effect never observes a
  * rest/idle gap that could collapse the pill. The test guards against any
  * regression that re-introduces an idle-reset window between commit and
@@ -94,8 +92,7 @@ test.beforeEach(async ({ context }) => {
 
 // CALIBRATION: prove the harness reaches /bookmarks, the gesture commits, and we
 // land on /. If this fails the regression assertion below is meaningless. (We
-// gate on the landing URL + the pill reaching active, not a console log - the
-// old "swipe activated!" log was removed in the Log-removal pass.)
+// gate on the landing URL + the pill reaching active, not a console log.)
 test('CALIBRATION: /bookmarks back-swipe commits and lands on /', async ({ page }) => {
 	await page.goto('/');
 	await waitForHydration(page);

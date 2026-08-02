@@ -10,9 +10,9 @@ import { prepareContext, waitForHydration, openSidebarAndGoto, swipeBack, mintAd
  * the finger on back-swipe and the enter slide on forward nav. At rest on a deep
  * route the atom stays mounted at scale 0 (invisible, non-interactive).
  *
- * Mechanism (see docs/FAB-Deep-Boundary-Fix-Plan.md): the 24 non-FAB
- * NavPipelineHost routes carry `fab: false` in RouteData and `kind: 'deep'` in
- * FabRouteAttributes. The layer's `fabConfig` derivation resolves the `deep` kind
+ * Mechanism (see docs/FAB-Deep-Boundary-Fix-Plan.md): the 12
+ * NavPipelineHost routes with `kind: 'deep'` in FabRouteAttributes carry
+ * `fab: false` in RouteData. The layer's `fabConfig` derivation resolves the `deep` kind
  * into a concrete list kind (for the icon / href) so the atom stays mounted (scale
  * 0 at rest, SSR-safe); the FAB layer drives its scale across the boundary via
  * `computeFabScale`'s default natural branch `fabScale(progress, fromHasFab,

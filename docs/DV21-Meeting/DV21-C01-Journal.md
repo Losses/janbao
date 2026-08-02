@@ -6998,3 +6998,147 @@ clean. Comment-only (orchestrator + nav-executor docstrings); runtime
 unchanged.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R82 fix (deep comment-accuracy sweep: 14 sites across 10 files)
+
+**R82 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+A deeper round: auditor A ran four parallel comment-accuracy sweeps and
+surfaced a backlog (14 findings) the prior 1-2-finding rounds had missed
+(R77's double-PASS was under-thorough at this depth); auditor B found 2
+more. 16 findings total; full per-finding detail in
+`docs/RV21-C01-Audit-82.md`.
+
+**Fixed (14, all verified against code):** F1 Header intro omitted
+`dragMorphAnchor`/`searchAnchor`/`dragSearchAnchor` getters; F4
+playEnterAnimation "easing into deep mode on a thread, compose" (they
+are centerTab tab-mode); F5 "root<->search ENTER flip" (ENTER contradicts
+bidirectional); F6 NavPipelineHost `rightEl` dead binding (removed, code
+change); F7 scroll-chrome comment omitted `override ?? centerEl` (2
+sites); F8 past-state marker; F9 `active`/`$derived` mechanism (active is
+on the pager store via `#republishToPager`); F10 snap values 119deg/-66%
+tied to "destination's at-rest morph" (actually morph ~= 0.34); F11 "24
+non-FAB routes" (actual 12 `kind:'deep'`); F12 `destMorph`
+`outgoingHasTabs` -> `incomingHasTabs`; F13/F14 past-state "old spinner"
+markers; B-F1 BurgerArrowIcon `tapMorph` attributed to `morph` (actually
+`iconProgress`); B-F2 `leftHref` -> `resolvedLeftHref`.
+
+**Deferred (reviewed, not defects -- over-reaches):** F2 (morph-direction
+scoped to "leaving /search", accurate); F3 ("searchProgress reads
+pager-store fields" is true, not an exclusivity claim). Same discipline
+as R75-F2.
+
+**Orchestrator verification.** Independently verified each fixed finding
+against the code before editing (see Audit-82.md for the per-finding
+evidence: centerTab mounts, pill-map counts, `grep rightEl`,
+`scrollChrome.override ?? centerEl`, OrchestratorPublication has no
+`active`, iconProgress = 1 - morph, `grep -c "kind: 'deep'"` = 12,
+Header:155 "tap scrub does not touch morph", NavPipelineHost:157).
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean. F6 was a code change (dead-binding removal); the rest
+comment-only.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R83 fix (Bug2 docstring + R82-F9 completion)
+
+**R83 result: auditor A BLOCK, auditor B BLOCK (same finding). Counter
+0/5.**
+
+Both auditors found the SAME single defect -- a convergence signal that
+R82's 14-finding backlog is cleared.
+
+**A/B-F1.** `e2e/backtarget.spec.ts:86-87` (Bug2 header) said the panel
+"renders the shared LoadingChip", but the test asserts `discussions`
+render from layout data (`discussionsCount > 0`, `spinnerCount === 0`).
+LoadingChip is unreachable here (`+layout.server.ts` always supplies
+`page.data.home.discussions` as an array). Leftover from commit 91530f3
+(rewrote the assertion, left the first sentence); R82-F13 fixed the
+narrow "old spinner" marker here but missed this. Rewrote to "renders
+discussions from SvelteKit layout data, not a spinner".
+
+**Orchestrator-additional.** Completed R82-F9: auditor B flagged
+(out-of-scope) that `swipe-back-pill-flicker:15-18` still attributed
+`active:true` to "the publication" in the main clause (active is on the
+pager store). R82-F9 added a parenthetical but left the misattribution.
+Rewrote so the pager store (written by `#republishToPager`) is the
+subject of "holds active:true". Fixed proactively per "fix thoroughly".
+
+**Orchestrator verification.** Independently verified F1 (test
+assertions :100-103; LoadingChip unreachability). Both auditors'
+sibling sweeps agree: the only "renders the shared LoadingChip" site.
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean. Comment-only (e2e spec docstrings); runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R84 fix (residuals in the orchestrator's own R82/R83 rewrites)
+
+**R84 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+Both findings were residuals in the orchestrator's OWN prior fixes -- a
+rewrite-of-a-rewrite pattern.
+
+**A.** `BurgerArrowIcon.svelte:27-30` (the R82-B-F1 rewrite) said
+"iconProgress is `1 - morph` outside a scrub", but the actual fallback
+(Header.svelte:321) is
+`isSearch || (searchScrubbing && currentHasTabs) ? 0 : 1 - morph`. At
+`/search` the docstring predicted 1 (back-arrow), actual 0 (hamburger) --
+wrong by 180deg. Rewrote to capture the full fallback.
+
+**B.** `swipe-back-pill-flicker.spec.ts:15-18` (the R82-F9 / R83 rewrite)
+still said "the orchestrator's publication (...) is written to the pager
+store by `#republishToPager`" -- conflating the `OrchestratorPublication`
+record (a `$derived` the FAB reads directly) with the pager-store
+field-write (`#republishToPager` writes selected fields, not the record).
+Rewrote to "the orchestrator publishes continuously via
+`#republishToPager` ..., holding `active: true` in the pager store".
+
+**Orchestrator verification.** Re-verified both against the code
+(`iconProgress` body; OrchestratorPublication interface docstring
+`:277-293`).
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean. Comment-only; runtime unchanged.
+
+**Process note.** Both defects were introduced/left by the orchestrator's
+own R82/R83 rewrites. Lesson: a docstring rewrite of a multi-branch
+derivation must capture EVERY branch (verified against the full code
+body); a simplification that drops a reachable branch is a new defect.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R85 fix (tap-scrub "root<->search" scope narrowing + Header iconProgress `currentHasTabs`)
+
+**R85 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A (12 sites, one class).** The tap-scrub arm fires on ANY isSearch flip
+(`currentIsSearch !== prevIsSearch`, `notifyHeaderState:4233-4247`),
+covering root<->search AND deep<->search (`/profile <-> /search`, etc.,
+per the in-source comment `:4190-4222`). 12 docstrings narrowed this to
+"root<->search". Broadened each: F1 BurgerArrowIcon:27 (R84-B-F1
+residual), F2 Header:141 (also dropped "ENTER"), F3 orchestrator:576, F4
+:608, F5 :611, F6 :3934 (R82-F5 residual -- dropped "ENTER" but left
+"root<->search"), F7 :3650 section header, F8 Header:24 intro, F9
+Header:157, F10 orchestrator:4270, F11 `#scrubFromValue` (exit-from-root
+-> non-search page root-or-deep), F12 `#scrubToValue` (enter-to-root ->
+non-search page root-or-deep). A's 6 accurate sites (Fix-C-specific +
+explicit "root<->search AND deep<->search") left unchanged.
+
+**B (1 site).** `Header.svelte:312-314` `iconProgress` docstring omitted
+the `(searchScrubbing && currentHasTabs) => 0` branch (tab-root scrub-arm
+window). Sibling of R84-A's BurgerArrowIcon finding (R84-A's sweep missed
+this Header comment). Broadened to all three cases.
+
+**Orchestrator verification.** Independently verified the core claim
+(`notifyHeaderState:4188-4248` arm condition + deep<->search enumeration;
+`fromValue`/`toValue` = `? 0 : 1` on isSearch, not root). Re-read the
+`iconProgress` body for B-F1.
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean; grep confirms no scope-narrowing phrasing remains in the fixed
+sites. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.

@@ -13,7 +13,7 @@ import { prepareContext, waitForHydration } from './helpers';
  * Without the `#lastDispatchWasDeepToDeep` handshake the DESTINATION host
  * also plays a forward-enter slide: the destination's back-target is the
  * source page, so the generic `shouldEnter` heuristic
- * (`stack[length-2].pathname === leftHref`) is true and
+ * (`stack[length-2].pathname === resolvedLeftHref`) is true and
  * `playEnterAnimation` fires a second slide on the destination track.
  *
  * This spec samples the NavPipelineHost track across the transition,

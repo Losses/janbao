@@ -109,13 +109,13 @@
 	const scrollChrome = getScrollChromeStore();
 
 	// Element refs. The track is the multi-panel container the driver
-	// writes each frame; the centre panel is the scroll-chrome source;
+	// writes each frame; the scroll-chrome source is the centre panel (or
+	// the active scope panel via `scrollChrome.override`);
 	// the viewport is the pointer surface.
 	let viewportEl: HTMLElement | null = $state(null);
 	let trackEl: HTMLElement | null = $state(null);
 	let leftEl: HTMLElement | null = $state(null);
 	let centerEl: HTMLElement | null = $state(null);
-	let rightEl: HTMLElement | null = $state(null);
 
 	// The in-flight publication. toPathname identifies the transition's
 	// target, so the left panel can render that tab's real panel (when its
@@ -263,7 +263,8 @@
 		if (crossTabPanelPath !== null && leftEl) leftEl.scrollTop = 0;
 	});
 
-	// Register the centre panel as the scroll-chrome source on mobile.
+	// Register the scroll-chrome source on mobile (the active scope
+	// panel's `scrollChrome.override`, else the centre panel).
 	// The cleanup reverts the store to window.
 	$effect(() => {
 		if (!isMobile || !centerEl) return;
@@ -667,7 +668,7 @@
 			</div>
 		</section>
 		{#if isMobile}
-			<section bind:this={rightEl} class="shrink-0 scroll-pane md:hidden" style={rightStyle}>
+			<section class="shrink-0 scroll-pane md:hidden" style={rightStyle}>
 				<div class="gpl-card">
 					{#if forwardDeepTarget !== null}
 						<!-- Forward deep-to-deep push: the slide reveals the

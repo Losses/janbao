@@ -573,7 +573,7 @@ export class NavPipelineOrchestrator {
 	#settleAwaitTitle = false;
 
 	// ---------------------------------------------------------------------
-	// tap-scrub ease state. The orchestrator owns the root<->search
+	// tap-scrub ease state. The orchestrator owns the isSearch-flip
 	// horizontal-track scrub on a tap navigation. The rAF below eases
 	// `pager.tapMorph` from `#scrubFromValue` to `#scrubToValue` over
 	// TITLE_CROSSFADE_MS with the constant-deceleration curve the settle
@@ -582,11 +582,11 @@ export class NavPipelineOrchestrator {
 	// null`, i.e. no pipeline transition is in flight). Reduced-motion
 	// snaps.
 	#tapScrubRafId: number | undefined;
-	/** The scrub's start value (1 for an exit-from-root, 0 for an
-	 *  enter-from-search). */
+	/** The scrub's start value (1 when starting from a non-search page
+	 *  (root or deep), 0 when starting from /search). */
 	#scrubFromValue = 0;
-	/** The scrub's terminal value (0 for exit-to-search, 1 for
-	 *  enter-to-root). */
+	/** The scrub's terminal value (0 when ending at /search, 1 when
+	 *  ending at a non-search page (root or deep)). */
 	#scrubToValue = 0;
 	/** Wall-clock start time of the scrub ease. */
 	#scrubStartTs = 0;
@@ -605,10 +605,10 @@ export class NavPipelineOrchestrator {
 	// ---------------------------------------------------------------------
 	// Header-state tracking + detection. The orchestrator owns the
 	// detection logic for the non-gesture settle arm (a title change) and
-	// the root<->search tap-scrub arm. The trigger signals come from two
+	// the tap-scrub arm. The trigger signals come from two
 	// sources: a gesture release is armed directly from
 	// `#interpretIntent` (the orchestrator is the gesture authority); a
-	// non-gesture title change or a root<->search flip is fed by the
+	// non-gesture title change or an isSearch flip is fed by the
 	// Header's `$effect.pre` notification via `notifyHeaderState` (the
 	// Header is in a component scope so SvelteKit's `$app/state` `page`
 	// reactivity reaches it; the orchestrator singleton module does not).
@@ -1232,8 +1232,8 @@ export class NavPipelineOrchestrator {
 		// are derived from `inputs.backTarget` (the source route) and
 		// `inputs.fromPathname` (the host route) so the morph runs from the
 		// source's tab-ness to the host route's tab-ness (e.g. tab mode at
-		// the source tab root easing into deep mode on a thread, compose,
-		// or deep page). The outgoing title uses `resolveDeepHeaderTitle(inputs.backTarget)`
+		// the source tab root easing into deep mode on a deep page like
+		// /profile/*). The outgoing title uses `resolveDeepHeaderTitle(inputs.backTarget)`
 		// (the source/back-target route's STATIC title), NOT `#prevHeaderTitle`:
 		// the Header's `$effect.pre` fires BEFORE `onMount` (where
 		// `playEnterAnimation` runs), so `#prevHeaderTitle` has already been
@@ -3647,7 +3647,7 @@ export class NavPipelineOrchestrator {
 	}
 
 	// -----------------------------------------------------------------------
-	// Root<->search tap-scrub ease.
+	// Tap-scrub ease (root<->search and deep<->search).
 
 	/** Arm the tap-scrub ease from `fromValue` to `toValue` over
 	 *  TITLE_CROSSFADE_MS with the constant-deceleration ease `s(u) = 2u -
@@ -3931,7 +3931,7 @@ export class NavPipelineOrchestrator {
 	 *  from the Header's reactive `$effect.pre` notification. The
 	 *  orchestrator owns the detection: a gesture-release settle is armed
 	 *  directly from `#interpretIntent`; a non-gesture title change arms
-	 *  the settle ease here; a root<->search ENTER flip arms the tap-scrub
+	 *  the settle ease here; an isSearch flip arms the tap-scrub
 	 *  ease here. The Header is in a component scope so SvelteKit's
 	 *  `$app/state` `page` reactivity reaches it; the orchestrator
 	 *  singleton module does not, so the Header is the orchestrator's
@@ -4267,7 +4267,7 @@ export class NavPipelineOrchestrator {
 		// the /search end `isSearch` keeps `iconProgress = 0`
 		// (hamburger) regardless of the morph value, so the morph
 		// animating underneath does not flash the back-arrow; the
-		// tap-scrub arm above owns the root<->search horizontal-track
+		// tap-scrub arm above owns the isSearch-flip horizontal-track
 		// scrub on its own rAF for the no-slide search-button case.
 		if (newTitle !== this.#prevHeaderTitle) {
 			// No preceding gesture owns the morph at an idle title-change

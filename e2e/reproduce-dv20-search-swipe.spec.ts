@@ -77,8 +77,7 @@ test('Bug 3: leftward swipe from /messages/inbox reaches /search with a real ani
 	// matching `startMorph` for a from-rest tab-root source so the morph
 	// holds constant and the search-mode flip is carried by the landing),
 	// never toward the destination's at-rest morph (which would snap the
-	// icon 0deg -> ~119deg and the tab-bar translateY 0% -> -66% in one
-	// rAF frame at release). The multi-signal sampler records rootLayerTy / deepLayerTy
+	// icon and tab-bar in one rAF frame at release). The multi-signal sampler records rootLayerTy / deepLayerTy
 	// / burgerRot every frame; the max frame-to-frame jump of each must
 	// stay small.
 	const rootJumps = maxFrameJumps(frames, (f) => f.rootLayerTy);
