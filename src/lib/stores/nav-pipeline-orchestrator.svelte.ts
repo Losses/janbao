@@ -726,8 +726,8 @@ export class NavPipelineOrchestrator {
 	 *  drag took over (re-grab mid-commit, gesture-during-forward-enter),
 	 *  paired with the publication's raw at that instant. null when no
 	 *  settle was in flight at #beginGesture (drag from rest) or after the
-	 *  drag ends (the next settle's `#armSettleEase` / `#landAtRest`
-	 *  clears it). Read by the Header's morph drag branch to shift the
+	 *  drag ends (the next settle's `#armSettleEase` / `#landAtRest`, or
+	 *  `unmount`, clears it). Read by the Header's morph drag branch to shift the
 	 *  natural drag-morph curve so it passes through the takeover visual
 	 *  (DV21 §5 "following-visual": a drag tracks from the current visual,
 	 *  no jump). Symmetric to how the settle's `startMorph` captures the
@@ -844,9 +844,10 @@ export class NavPipelineOrchestrator {
 	#enterFabAnchor = $state<EnterFabAnchor | null>(null);
 	/** The search-axis lerp anchor for the Header's `searchProgress`
 	 *  derivation. Four reach paths set this anchor (see `SearchAnchor` in
-	 *  `header-probe.ts` for the full rationale): `playEnterAnimation` at a
-	 *  forward-swipe-to-`/search` commit-to-enter handoff (hold at 1 so the
-	 *  search panel stays slid in across the enter settle), the
+	 *  `header-probe.ts` for the full rationale): `playEnterAnimation` at
+	 *  any pipeline-commit-to-enter handoff (hold the stashed terminal
+	 *  searchProgress: 1 for a `/search` commit so the panel stays slid
+	 *  in, 0 for a non-search commit), the
 	 *  `onSvelteKitBeforeNavigate` discrete-nav arm at a non-search
 	 *  interrupt of a forward-swipe-to-`/search` (retreat from the live
 	 *  `bm` to 0 across the discrete-nav settle), `#accelerateInFlight` at
@@ -935,8 +936,10 @@ export class NavPipelineOrchestrator {
 		return this.#publication.settleAwaitTitle;
 	}
 	/** Reactive read of the search-scrub gate flag. The Header reads this
-	 *  to freeze the hamburger icon during a tap scrub. Delegates to the
-	 *  state machine via the publication. */
+	 *  during a tap scrub to hold the hamburger on a tab-root page
+	 *  (scrubIconEndpoint = 0) and ease the back-arrow into the hamburger
+	 *  on a deep page (scrubIconEndpoint = 1). Delegates to the state
+	 *  machine via the publication. */
 	get searchScrubbing(): boolean {
 		return this.#publication.searchScrubbing;
 	}
@@ -1169,8 +1172,8 @@ export class NavPipelineOrchestrator {
 			// the anchor is never set and the FAB layer reads branch 5 (the
 			// natural `fabScale(progress, ...)` formula) end-to-end. The
 			// Header morph during the enter is NOT driven by `backMorph`
-			// (which is read only during a
-			// live drag); it is driven by the settle ease armed at the bottom
+			// (which the morph derivation reads only while `dragging`);
+			// it is driven by the settle ease armed at the bottom
 			// of this method. The latched `startMorph` is the source route's
 			// at-rest morph and `destMorph` is the host route's at-rest
 			// morph; the Header's morph derivation lerps between them across
@@ -2830,7 +2833,8 @@ export class NavPipelineOrchestrator {
 		// Arm the settle ease CONCURRENTLY with the slide when the morph
 		// will visibly change between the live drag's terminal value and
 		// the at-rest value the morph derivation would otherwise resolve
-		// to. Three reach paths:
+		// to. Four reach paths (the first three on the morph axis; the
+		// fourth, a search-axis case, is detailed at the arm below):
 		//  1. The source and target tab-ness differ (the deep↔tab case:
 		//     a tab-click exit, the back-button from a deep page to its
 		//     tab root, a cross-tab bidirectional click). The morph drives
@@ -2859,8 +2863,8 @@ export class NavPipelineOrchestrator {
 		//     (the URL has not changed yet, so `currentHasTabs` is the
 		//     source's), so the morph snaps unless the settle fires.
 		// The condition
-		// `liveDragMorph !== sourceRest || liveDragMorph !== destMorph`
-		// covers all three: case (1) with no live drag has
+		// `liveDragMorph !== sourceRest || liveDragMorph !== destMorph || searchAxisNeedsEase`
+		// covers all four: case (1) with no live drag has
 		// `liveDragMorph === sourceRest === atRestMorph(outgoing)` and
 		// the second clause fires because the at-rests differ; case (2)
 		// fires on the first clause (live !== source) regardless of the
@@ -4707,9 +4711,9 @@ export class NavPipelineOrchestrator {
 	 *      non-bidirectional host and the Header stays in hamburger mode
 	 *      end to end.
 	 *
-	 *  `transitionTarget` carries the in-flight destination so the
-	 *  Header's morph derivation can resolve the back-arrow reveal. The
-	 *  FAB layer does NOT read these pager fields; it reads the
+	 *  `transitionTarget` carries the in-flight destination for the
+	 *  Header's drag-endpoint, track-slide, and search-axis derivations.
+	 *  The FAB layer does NOT read these pager fields; it reads the
 	 *  orchestrator's publication directly. */
 	#republishToPager(rawDragFraction: number): void {
 		const pager = getMobilePagerStore();

@@ -7142,3 +7142,148 @@ clean; grep confirms no scope-narrowing phrasing remains in the fixed
 sites. Comment-only; runtime unchanged.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R86 fix (`#searchAnchor` scope + discrete-nav reach-path count + `detailSearchResolver` scope)
+
+**R86 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+Four findings, three scope-narrowing classes in files the prior sweeps
+had not reached.
+
+**A.** `orchestrator:847-849` (`#searchAnchor` field docstring,
+playEnterAnimation bullet) -- "a forward-swipe-to-`/search` commit-to-
+enter handoff" narrowed; the seed fires for ANY pipeline commit. Sibling
+of R75-A's `header-probe.ts:187` fix (R75-A missed this field docstring).
+Rewrote to "any pipeline-commit-to-enter handoff". `orchestrator:2833,
+2862` (discrete-nav arm summary) -- "Three reach paths" + a 2-clause
+condition restatement; the actual `if` (`:2969`) is 3-clause
+(`|| searchAxisNeedsEase`) with a 4th search-axis case. Stale (written
+before the search-axis clause). Rewrote to "Four reach paths" and the
+full 3-clause condition.
+
+**B.** `nav-resolvers.ts:23` (dispatch table) "thread<->search" and
+`:284` (section header) "Thread/profile to search and back" -- both
+narrow `detailSearchResolver` (selected for all 23 `tag: 'detail'`
+routes). Rewrote to "deep<->search" and "Deep-to-search and back (any
+detail route -- thread, profile, bookmarks, admin, etc.)".
+
+**Orchestrator verification.** Independently verified all four (the seed
+guard `#priorTerminalSearchProgress !== null`; the 3-clause `if` +
+4th-case block at `:2953-2965`; `grep -c "tag: 'detail'"` = 23;
+`'detail-search': detailSearchResolver`).
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R87 fix (`searchScrubbing` getter "freeze" narrows to the tab case)
+
+**R87 result: auditor A BLOCK, auditor B PASS. Counter 0/5.**
+
+**A.** `searchScrubbing` getter docstrings at `nav-state-machine.svelte.ts:
+145-147` and `orchestrator:938-940` both said it is read "to freeze the
+hamburger icon" during a tap scrub. But on a deep<->search scrub the icon
+EASES (`scrubIconEndpoint = 1` -> `iconProgress = tapMorph`, easing 1->0);
+only a tab<->search scrub freezes it (`scrubIconEndpoint = 0`). Same
+scope-narrowing class as R85; R84-A (BurgerArrowIcon) and R85-B (Header)
+sweeps missed these two getter docstrings. Rewrote both to "holds the
+hamburger on a tab-root page (scrubIconEndpoint = 0) and eases the
+back-arrow into the hamburger on a deep page (scrubIconEndpoint = 1)".
+
+**B.** PASS. Exhaustive sampling; verified the R86 fixes; no findings.
+
+**Orchestrator verification.** Independently verified both sites (the
+`iconProgress` body `tapMorph * scrubIconEndpoint`; scrubIconEndpoint = 0
+tab-root, 1 deep). The two getter docstrings are the only "freeze the
+hamburger" sites.
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R88 fix (`#dragMorphAnchor` unmount clear-site + tapMorph consumer + dead scroll-chrome flags)
+
+**R88 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `orchestrator:728-730` (`#dragMorphAnchor` field docstring) listed
+only `#armSettleEase` / `#landAtRest` as clear sites; the field is also
+cleared by `unmount` (`:1429`). Every sibling enumeration lists `unmount`;
+this field docstring was the outlier. Added "`unmount`".
+
+**B.** `mobile-pager.svelte.ts:68-71` (`tapMorph` field docstring)
+referenced a non-existent "search-page Page-slide headroom" consumer (the
+actual readers are the Header's `iconProgress`/`trackMorph`/
+`searchProgress`). Rewrote to name them.
+
+**B (code).** `scroll-chrome.svelte.ts` exported `hidden` and `scrolling`
+flags with zero readers -- dead code in the pipeline. Removed both plus
+the cascading dead machinery (the `scrollTimeoutId`, the `setTimeout`
+maintaining `scrolling`, the `onScrollEnd` function, the `scrollend`
+listener reg/dereg). The live `translateY` / `headerHeight` / `override`
+signals are untouched. (Caught a dangling `removeEventListener` ref;
+fixed; final check 0/0.)
+
+**Orchestrator verification.** Independently verified all three (the
+`unmount` clear-site; the `grep "Page-slide"` = only the docstring; zero
+external readers of `hidden`/`scrolling`, and `scrollTimeoutId` solely
+maintains `scrolling`).
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean. A-F1 + B-F1 comment-only; B-F2 a code change (dead-state removal,
+runtime behavior unchanged).
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R89 fix (`backMorph` readership parenthetical + `transitionTarget` scope/consumers)
+
+**R89 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `orchestrator:1174-1176` (playEnterAnimation) parenthetical "(which
+is read only during a live drag)" about `backMorph` -- false; `trackMorph`
+and `searchProgress` read `backMorph` with no `dragging` gate (during
+commit slides too). The morph derivation gates on `dragging`, not the
+field. Scoped the parenthetical to "(which the morph derivation reads
+only while `dragging`)".
+
+**B.** `mobile-pager.svelte.ts:74-77` (`transitionTarget` field) said
+"pipeline detail-page transition" (narrowed -- published in both
+`#republishToPager` branches, incl. tab-to-tab) and "resolve the
+back-arrow reveal" (one of 4 consumers). Broadened scope + consumers.
+`orchestrator:4714-4715` (`#republishToPager` summary) same
+single-consumer narrowing. Broadened.
+
+**Orchestrator verification.** Independently verified all three
+(`trackMorph`/`searchProgress` read backMorph with no dragging gate;
+`:433-436`/`:894-896` document commit-tick publication; transitionTarget
+in both republish branches + 4 Header readers).
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R90 fix (`settleMorphFraction` "follows it" sibling + phantom `unfreeze()`)
+
+**R90 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `e2e/header-tab-descent-cross-tab-exit.spec.ts:168` -- "the settle
+rAF advances `settleProgress`, the derived `settleMorphFraction` follows
+it" (it = settleProgress). Same inaccuracy R78-B fixed at `:24-25` of this
+file (missed sibling); settleMorphFraction is tracked independently.
+Rewrote to "advances both `settleProgress` and `settleMorphFraction` (the
+eased-timeline fraction ..., tracked independently of `settleProgress`)".
+
+**B.** `scroll-chrome.svelte.ts:97` -- phantom `unfreeze()` function name
+(no `unfreeze` exists; the actual unfreeze is `releaseNavigation()`,
+`:210`). Rewrote to "`releaseNavigation()` re-syncs".
+
+**Orchestrator verification.** Independently verified both (the "it"
+antecedent + `#settleEasedFraction` independence; `grep unfreeze` = only
+the comment, `releaseNavigation` is the unfreeze path).
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.

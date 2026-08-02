@@ -23,10 +23,8 @@ type SetScrollContainerHandler = (el: HTMLElement | null) => void;
 type ReleaseContainerHandler = (el: HTMLElement | null) => void;
 
 interface ScrollChromeStore {
-	readonly hidden: boolean;
 	readonly translateY: number;
 	readonly headerHeight: number;
-	readonly scrolling: boolean;
 	setHeaderHeight: SetHeaderHeightHandler;
 	start: VoidHandler;
 	show: VoidHandler;
@@ -66,16 +64,13 @@ interface ScrollChromeStore {
 
 const TOP_THRESHOLD = 8; // px from top below which chrome always shows
 
-let hidden = $state(false);
 let translateY = $state(0);
-let scrolling = $state(false);
 // Seeded to the mobile header height; Header's ResizeObserver reports the real
 // height (which differs on desktop) via setHeaderHeight on mount.
 let headerHeight = $state(56);
 let lastY = 0;
 let rafId = 0;
 let started = false;
-let scrollTimeoutId = 0;
 // While true, evaluate() holds the header's current translateY and only refreshes
 // lastY. Set by holdThroughNavigation during a navigation that programatically
 // scrolls the window (hash-enter / swipe-back) so the header does not react to
@@ -99,7 +94,7 @@ function evaluate(): void {
 	if (frozen) {
 		// Keep lastY fresh so the post-unfreeze evaluate sees no stale delta, but do
 		// not move the header - the navigation's intermediate scroll is not user
-		// intent. unfreeze() re-syncs the header to the landing position.
+		// intent. `releaseNavigation()` re-syncs the header to the landing position.
 		lastY = y;
 		return;
 	}
@@ -107,9 +102,7 @@ function evaluate(): void {
 	lastY = y;
 	// Pinned to the top: always show so the chrome does not vanish at rest.
 	if (y < TOP_THRESHOLD) {
-		hidden = false;
 		translateY = 0;
-		scrolling = false;
 		return;
 	}
 
@@ -121,18 +114,9 @@ function evaluate(): void {
 	}
 
 	translateY = newTranslateY;
-	hidden = translateY <= -headerHeight;
 }
 
 function onScroll(): void {
-	scrolling = true;
-	if (scrollTimeoutId) {
-		window.clearTimeout(scrollTimeoutId);
-	}
-	scrollTimeoutId = window.setTimeout(() => {
-		scrolling = false;
-	}, 150);
-
 	if (rafId) return;
 	rafId = window.requestAnimationFrame(() => {
 		rafId = 0;
@@ -140,32 +124,17 @@ function onScroll(): void {
 	});
 }
 
-function onScrollEnd(): void {
-	scrolling = false;
-	if (scrollTimeoutId) {
-		window.clearTimeout(scrollTimeoutId);
-		scrollTimeoutId = 0;
-	}
-}
-
 function start(): void {
 	if (started || typeof window === 'undefined') return;
 	started = true;
 	lastY = readY();
 	window.addEventListener('scroll', onScroll, { passive: true });
-	window.addEventListener('scrollend', onScrollEnd, { passive: true });
 }
 
 function show(): void {
-	hidden = false;
 	translateY = 0;
-	scrolling = false;
 	if (typeof window !== 'undefined') {
 		lastY = readY();
-	}
-	if (scrollTimeoutId) {
-		window.clearTimeout(scrollTimeoutId);
-		scrollTimeoutId = 0;
 	}
 }
 
@@ -173,12 +142,10 @@ function setScrollContainer(el: HTMLElement | null): void {
 	if (containerEl === el) return;
 	if (containerEl) {
 		containerEl.removeEventListener('scroll', onScroll);
-		containerEl.removeEventListener('scrollend', onScrollEnd);
 	}
 	containerEl = el;
 	if (el) {
 		el.addEventListener('scroll', onScroll, { passive: true });
-		el.addEventListener('scrollend', onScrollEnd, { passive: true });
 		// Defer the scroll-position seed to the next animation frame. Reading
 		// `el.scrollTop` synchronously here, on a host that just mounted and
 		// wrote a batch of DOM (panels, scope content), forces the browser to
@@ -251,17 +218,11 @@ function releaseNavigation(): void {
 
 export function getScrollChromeStore(): ScrollChromeStore {
 	return {
-		get hidden() {
-			return hidden;
-		},
 		get translateY() {
 			return translateY;
 		},
 		get headerHeight() {
 			return headerHeight;
-		},
-		get scrolling() {
-			return scrolling;
 		},
 		setHeaderHeight,
 		start,

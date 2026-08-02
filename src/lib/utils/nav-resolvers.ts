@@ -20,7 +20,7 @@
  *   - `{search, search}`  searchSearchResolver  reserved (no top-level transition)
  *   - `{tab, detail}`     tabDetailResolver     list<->detail enter/exit slide
  *   - `{tab, search}`     tabSearchResolver     root<->search, DV17 scrub morph
- *   - `{detail, search}`  detailSearchResolver  thread<->search
+ *   - `{detail, search}`  detailSearchResolver  deep<->search
  *
  * The bidirectional pairs share one resolver: `{tab,detail}` and
  * `{detail,tab}` both select `tabDetailResolver`. The resolver reads
@@ -281,7 +281,8 @@ export const tabSearchResolver: Resolver = (input: ResolverInput): TransitionPla
 // ---------------------------------------------------------------------------
 // Resolver 6: {detail, search}.
 //
-// Thread/profile to search and back. Both endpoints are non-tab. Track
+// Deep-to-search and back (any detail route -- thread, profile,
+// bookmarks, admin, etc. -- to /search). Both endpoints are non-tab. Track
 // slides like a cross-tag pair; the Header layer chooses its mode by
 // the to-tag through the pager store.
 

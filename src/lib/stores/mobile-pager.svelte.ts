@@ -65,15 +65,18 @@ interface PagerUpdate {
 	active: boolean;
 	backMorph: number | null;
 	targetIndex?: number | null;
-	/** tap-morph progress 0..1 (DV17): continuous morph signal consumed by the
-	 * search track/Tab group and the search-page Page-slide headroom on a tap.
+	/** tap-morph progress 0..1 (DV17): continuous morph signal consumed by
+	 * the Header's `iconProgress`, `trackMorph`, and `searchProgress`
+	 * derivations on a tap scrub.
 	 * null = no tap scrub in flight (rest, drag). Optional so non-publishing
 	 * writers compile without touching it. */
 	tapMorph?: number | null;
-	/** The target pathname of an in-flight pipeline detail-page transition;
-	 * null at rest. Read by the Header to resolve the back-arrow reveal
-	 * during the slide. Optional so non-pipeline writers compile without
-	 * touching it. */
+	/** The target pathname of an in-flight pipeline transition (any
+	 * centerTab or non-centerTab pipeline slide); null at rest. Read by the
+	 * Header's drag-endpoint resolution (the layer guards / back-arrow
+	 * reveal), the horizontal-track slide (`trackMorph`), and the search-
+	 * axis derivations during the slide. Optional so non-pipeline writers
+	 * compile without touching it. */
 	transitionTarget?: string | null;
 	/** The icon-morph value at the non-search endpoint of an in-flight
 	 * root<->search / deep<->search tap scrub (0 when that endpoint is a

@@ -165,8 +165,10 @@ function landings(snaps: HeaderSnap[], dir: 'in' | 'out'): LandingFlush[] {
  *  `sourcePath`); each run is a settling episode where the morph was
  *  mid-transition. The slide runs concurrently with the page track, so while
  *  `path === sourcePath` (the route has not landed yet) the settle rAF
- *  advances `settleProgress`, the derived `settleMorphFraction` follows it,
- *  and the morph derivation lerps between `settleLatched.startMorph` and
+ *  advances both `settleProgress` and `settleMorphFraction` (the
+ *  eased-timeline fraction the morph derivation reads, tracked independently
+ *  of `settleProgress`), and the morph derivation lerps between
+ *  `settleLatched.startMorph` and
  *  `settleLatched.destMorph`.
  *  `midMorphRange` filters to entries where the morph is genuinely between the
  *  endpoints (not the armed-at-start value), proving the rAF ticked. */

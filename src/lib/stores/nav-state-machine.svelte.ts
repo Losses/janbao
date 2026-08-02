@@ -143,8 +143,10 @@ export class NavStateMachine {
 		return this.#settleAwaitTitle;
 	}
 	/** True while the orchestrator's tap-scrub ease is in flight. Read
-	 *  by the Header's `iconProgress` derivation to freeze the hamburger
-	 *  icon on a tab-root page while the search-layout scrub runs. */
+	 *  by the Header's `iconProgress` derivation during a search-layout
+	 *  scrub: holds the hamburger on a tab-root page (scrubIconEndpoint =
+	 *  0) and eases the back-arrow into the hamburger on a deep page
+	 *  (scrubIconEndpoint = 1). */
 	get searchScrubbing(): boolean {
 		return this.#searchScrubbing;
 	}
