@@ -280,8 +280,8 @@ export interface PipelineMountInputs {
  *  `#republishToPager` (a host calls only `resetPagerStore` for the
  *  at-rest reset). The Header reads the macro morph / FROM-TO fields
  *  (`backMorph`, `tapMorph`, `transitionTarget`) via the pager store,
- *  and reads only the settle / scrub fields directly off this
- *  orchestrator singleton. Per DV20 §13.5 the NavStateMachine is the sole
+ *  and reads the settle / scrub fields and the drag-anchor /
+ *  search-anchor getters directly off this orchestrator singleton. Per DV20 §13.5 the NavStateMachine is the sole
  *  authority for the macro fields (plan, FROM/TO, direction, in-flight)
  *  and the settle + tap-scrub micro animation state; `progress` is the
  *  orchestrator's per-frame contribution (synchronous per pointermove
@@ -4283,8 +4283,8 @@ export class NavPipelineOrchestrator {
 		// tab->tab click has the same title and arms nothing. The icon's
 		// freeze across a `/search` <-> tab-root slide (which DOES arm
 		// via the discrete-nav branch, morph running 0 <-> 1 across the
-		// slide) is owned by the `isSearch || (searchScrubbing &&
-		// currentHasTabs)` clause in the Header's `iconProgress`: at
+		// slide) is owned by the `isSearch` clause in the Header's
+		// `iconProgress` (the `isSearch ? 0` fallback): at
 		// the /search end `isSearch` keeps `iconProgress = 0`
 		// (hamburger) regardless of the morph value, so the morph
 		// animating underneath does not flash the back-arrow; the

@@ -57,9 +57,14 @@ export interface HeaderSettleTransition {
 	 * `translateY` until the flip, so easing toward 1 keeps the
 	 * `translateY` at 0% across the settle and the landing's flip to
 	 * `transform: none` is continuous (R8-A F1). For the no-anchor
-	 * from-rest case `startMorph === destMorph`, so the lerp is a
-	 * constant hold; for a re-grab whose `anchor.morph` differs, the
-	 * ease bridges the gap.
+	 * from-rest case `startMorph === destMorph` on shapes
+	 * where the drag-branch morph is static (targetIsSearch,
+	 * deep-to-deep, non-centerTab tab-to-tab) or on a saturated
+	 * (raw_release = 1) tab-ness-changing commit where
+	 * natural(1) = atRestMorph(destination) by construction;
+	 * for a non-saturated bm-following release (raw_release < 1)
+	 * the lerp eases the morph. For a re-grab whose
+	 * `anchor.morph` differs, the ease bridges the gap.
 	 */
 	readonly destMorph: number;
 }

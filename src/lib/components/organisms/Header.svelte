@@ -281,9 +281,15 @@
 			// tab-root source) so the pre-landing `morph` keeps the bar at
 			// 0% and the landing's flip to `transform: none` is continuous
 			// (R8-A F1 - see `#armSettleEaseFromGesture`). For the no-anchor
-			// from-rest case `startMorph === destMorph`, so the lerp is a
-			// constant hold; for a re-grab whose `anchor.morph` differs,
-			// the ease bridges the gap. Reading `settleProgress` directly
+			// from-rest case `startMorph === destMorph` on shapes
+			// where the drag-branch morph is static (targetIsSearch,
+			// deep-to-deep, non-centerTab tab-to-tab) or on a saturated
+			// (raw_release = 1) tab-ness-changing commit where
+			// natural(1) = atRestMorph(destination) by construction;
+			// for a non-saturated bm-following release (raw_release < 1)
+			// the lerp eases the morph. For a re-grab whose
+			// `anchor.morph` differs, the ease bridges the gap.
+			// Reading `settleProgress` directly
 			// here would collapse to a constant for shapes where
 			// `outgoingHasTabs === incomingHasTabs` (e.g. a centerTab ->
 			// tab-root back-swipe) and snap the icon plus layer translateY
@@ -310,16 +316,15 @@
 	// horizontal track scrub: a tab<->search scrub holds the hamburger
 	// (scrubIconEndpoint = 0), a deep<->search scrub eases the back-arrow
 	// into the hamburger (scrubIconEndpoint = 1). Outside a scrub the
-	// morph is `0` when `isSearch` (hamburger on /search) or during a
-	// tab-root scrub-arm window (`searchScrubbing && currentHasTabs`,
-	// before the first `setTapMorph` tick), else `1 - morph` (the
-	// root<->deep vertical morph at rest / during a drag / settle).
+	// morph is `0` when `isSearch` (hamburger on /search), else
+	// `1 - morph` (the root<->deep vertical morph at rest / during a
+	// drag / settle).
 	const iconProgress = $derived.by(() => {
 		if (searchScrubbing && pager.tapMorph !== null) {
 			const endpoint = pager.scrubIconEndpoint ?? 0;
 			return pager.tapMorph * endpoint;
 		}
-		return isSearch || (searchScrubbing && currentHasTabs) ? 0 : 1 - morph;
+		return isSearch ? 0 : 1 - morph;
 	});
 
 	// Title view model. The drag branch hardcodes direction 'back' (a

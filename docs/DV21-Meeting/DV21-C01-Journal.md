@@ -7372,3 +7372,105 @@ endpoints, the FAB counterparts correctly listing 5). `bun run check`
 0/0; prettier + em-dash clean. Comment-only; runtime unchanged.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R94 fix (dead `(searchScrubbing && currentHasTabs)` clause + phantom comment)
+
+**R94 result: auditor A BLOCK, auditor B PASS. Counter 0/5.**
+
+**A.** `Header.svelte:322` (`iconProgress` fallback) -- the
+`(searchScrubbing && currentHasTabs)` clause was dead code. Every
+`setSearchScrubbing` is paired with `setTapMorph` in the same synchronous
+block (`#armTapScrubEase:3705-3706`, `#finishTapScrubEase:3768-3770`,
+`unmount:1463-1464`), and Svelte 5 batches `$state` writes to the next
+flush, so `searchScrubbing === true && tapMorph === null` is unreachable.
+The R85-B comment documenting a "scrub-arm window before the first
+`setTapMorph` tick" described a phantom state. Simplified the fallback to
+`isSearch ? 0 : 1 - morph` and updated both the Header comment and the
+BurgerArrowIcon docstring.
+
+**B.** PASS. Exhaustive sampling; zero concerns. B noted the
+`(searchScrubbing && currentHasTabs)` reachability question but deferred
+(could not confirm empirically; the clause has no visible effect even if
+reached). A confirmed the unreachability.
+
+**Orchestrator verification.** Independently verified A-F1 (`grep
+setSearchScrubbing|setTapMorph` = 3 paired synchronous blocks; the dead
+clause's removal is safe -- it produces the same value as the simplified
+form in every reachable state). `bun run check` 0/0; prettier + em-dash
+clean; `grep` confirms no `(searchScrubbing && currentHasTabs)` remains.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R95 fix (R94 stale-reference residuals: 4 sites referencing the removed clause)
+
+**R95 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+R94 removed the dead `(searchScrubbing && currentHasTabs)` clause from
+`iconProgress` but R94's grep was too narrow (didn't match line-wrapped
+text, didn't search `e2e/`). Four stale references to the removed clause
+remained.
+
+**A-F1/B-F1** `orchestrator:4286` (line-wrapped reference) -- updated to
+"`isSearch ? 0` fallback".
+**A-F2** `e2e/search-back-hamburger-flash:13` -- quoted old code form,
+updated.
+**A-F3** `e2e:22-25` -- old freeze description, updated.
+**A-F4** `e2e:396-401` -- OVER-FREEZE rationale referencing the removed
+clause, updated.
+
+**Orchestrator verification.** Broad grep
+(`grep -rnE "searchScrubbing && |&& currentHasTabs|isSearch \|\|.*searchScrubbing" src/ e2e/`)
+post-fix: only `orchestrator:4021` (`atTerminal && currentHasTabs ===
+#scrubTargetTabs` -- a different condition, not the iconProgress clause).
+All stale references gone. `bun run check` 0/0; prettier + em-dash clean.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R96 fix (OrchestratorPublication "reads only" stale + startMorph overclaim)
+
+**R96 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+Three pre-existing comment inaccuracies.
+
+**A-F1.** `orchestrator:282-283` (OrchestratorPublication docstring) --
+"reads only the settle/scrub fields" omitted the drag/search-anchor
+getters the Header reads directly (dragMorphAnchor, dragSearchAnchor,
+searchAnchor; added in R8-A/R26-A). Dropped "only", added the getters.
+
+**B-F1/F2.** `Header.svelte:284` + `header-probe.ts:60` -- "For the
+no-anchor from-rest case startMorph === destMorph" overclaim (wrong for
+tab-ness-changing commits: tab descent startMorph=0, destMorph=1).
+Scoped to "cancels and same-tab-ness shapes (constant hold); a
+tab-ness-changing commit animates the morph".
+
+**Orchestrator verification.** Independently verified all three (Header
+reads the anchor getters; tab-descent startMorph=0, destMorph=1).
+`bun run check` 0/0; prettier + em-dash clean. Comment-only; runtime
+unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R97 fix (startMorph === destMorph overclaim: third iteration)
+
+**R97 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+Three iterations on the "startMorph === destMorph" comment. R96 scoped
+to "cancels and same-tab-ness" (too broad for bm-following shapes). R97-A
+scoped to "static-morph shapes only" (still wrong at saturation:
+natural(1) = atRestMorph(dest) by construction for deep↔tab commits).
+R97-B added the saturated-equality exception.
+
+**Final accurate claim:** "startMorph === destMorph on shapes where the
+drag-branch morph is static (targetIsSearch, deep-to-deep, non-centerTab
+tab-to-tab) or on a saturated (raw_release = 1) tab-ness-changing commit
+where natural(1) = atRestMorph(destination) by construction; for a
+non-saturated bm-following release (raw_release < 1) the lerp eases the
+morph."
+
+**Orchestrator verification.** Verified all edge cases: centerTab→tab-root
+cancel at raw=0.3 (0.7 vs 1, animates); deep→tab saturated commit (1 vs
+1, constant hold); centerTab→tab-root saturated commit (0 vs 1,
+animates). The orchestrator's own case-3 docstring (:2855-2866) was the
+authoritative reference. `bun run check` 0/0; prettier + em-dash clean.
+
+**No git mutation.** No commits, no branches, no pushes.

@@ -25,10 +25,9 @@
 	 * published signals (`settleMorphFraction`, `settleLatched`,
 	 * `searchScrubbing`) with the pager store's `backMorph` / `tapMorph` /
 	 * `scrubIconEndpoint`: `iconProgress` is `tapMorph * scrubIconEndpoint`
-	 * during a tap-scrub; otherwise `isSearch ||
-	 * (searchScrubbing && currentHasTabs) ? 0 : 1 - morph` (0 freezes the
-	 * hamburger on /search and holds it during a tab-root scrub; `1 - morph`
-	 * tracks the morph, which lerps the latched `startMorph` / `destMorph`
+	 * during a tap-scrub; otherwise `isSearch ? 0 : 1 - morph` (0 freezes
+	 * the hamburger on /search; `1 - morph` tracks the morph, which lerps
+	 * the latched `startMorph` / `destMorph`
 	 * across `settleMorphFraction` during a settle and reads
 	 * `pager.backMorph` during a drag). The orchestrator
 	 * owns the morph's motion (drag and scrub via the pager-store fields

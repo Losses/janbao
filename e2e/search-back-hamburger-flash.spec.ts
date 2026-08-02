@@ -10,7 +10,7 @@ import { prepareContext, waitForHydration } from './helpers';
  *     if (searchScrubbing && pager.tapMorph !== null) {
  *       return pager.tapMorph * (pager.scrubIconEndpoint ?? 0);
  *     }
- *     return isSearch || (searchScrubbing && currentHasTabs) ? 0 : 1 - morph;
+ *     return isSearch ? 0 : 1 - morph;
  *   });
  *
  * `morph` drives the root<->deep VERTICAL morph (the icon's actual domain,
@@ -20,9 +20,8 @@ import { prepareContext, waitForHydration } from './helpers';
  * button), and the morph derivation's `targetIsSearch` skip excludes that
  * scrub from `morph` during a forward-swipe-to-/search drag. The icon must
  * be inert during the horizontal scrub, so `iconProgress` freezes to 0
- * (hamburger) whenever `isSearch` (search-mode rest) OR
- * (`searchScrubbing` && `currentHasTabs`) (the tap scrub in flight on a
- * tab-root page) holds. Both endpoints of a root<->search transition rest
+ * (hamburger) whenever `isSearch` (search-mode rest)
+ * holds. Both endpoints of a root<->search transition rest
  * the icon at the hamburger, so freezing at 0 is correct for both the
  * enter and the exit direction.
  *
@@ -394,8 +393,6 @@ test.describe('DESTINATIONS: /search -> each tab root keeps the hamburger down',
 // the first sampled frame), so `searchScrubbing` is false at landing and the
 // icon correctly shows the arrow. The over-freeze is therefore practically
 // unreachable through a real navigation, and a discriminator e2e cannot reliably
-// catch the scrub in flight. The `currentHasTabs` gate in the `iconProgress`
-// freeze (`isSearch || (searchScrubbing && currentHasTabs)`) is a defensive
-// correctness refinement: it is sound by static reasoning (deep pages have
-// `currentHasTabs === false`, so the scrub term does not freeze there) and is
-// verified not to regress the DV13 flash fix by the suite above.
+// catch the scrub in flight. The `iconProgress` freeze (`isSearch ? 0`) keeps
+// the hamburger at /search (where `isSearch === true`) by static reasoning, and
+// is verified not to regress the DV13 flash fix by the suite above.
