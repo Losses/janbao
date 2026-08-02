@@ -182,7 +182,7 @@ export interface EnterFabAnchor {
  * `HeaderSettleTransition.startMorph` / `destMorph`; the FAB axis uses
  * `EnterFabAnchor`; the search axis uses `SearchAnchor`).
  *
- * Four reach paths set this anchor, each capturing `start` as the search-axis
+ * Five reach paths set this anchor, each capturing `start` as the search-axis
  * position the Header was rendering the instant before the settle took over:
  *   - `playEnterAnimation` at any pipeline-commit-to-enter handoff: `start`
  *     is the prior commit's terminal searchProgress stashed by
@@ -234,6 +234,14 @@ export interface EnterFabAnchor {
  *     was rendering. Skipped when no search anchor was in flight at the
  *     capture (`prevSearchAnchor === null`) or when the helper returned
  *     null (no transition in flight).
+ *   - `#armSettleEaseFromGesture` at a gesture release (R91): `start`
+ *     is the drag's terminal search-axis value captured via
+ *     `#searchProgressAtSettleInstant` before the arm clears
+ *     `#dragSearchAnchor`; `dest` is the destination's at-rest
+ *     searchProgress. For a re-grab whose `#dragSearchAnchor` shifted
+ *     the gesture formula, the re-seed keeps the settle-anchor lerp
+ *     continuous from the shifted terminal value (no snap at the
+ *     drag-to-settle boundary).
  *
  * The Header reads the anchor via `orchestrator.searchAnchor` and the
  * `searchProgress` derivation lerps between `start` and `dest` while

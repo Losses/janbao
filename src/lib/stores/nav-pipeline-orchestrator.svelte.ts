@@ -843,7 +843,7 @@ export class NavPipelineOrchestrator {
 	 *  `#armSettleEase`), `#landAtRest`, and `unmount`. */
 	#enterFabAnchor = $state<EnterFabAnchor | null>(null);
 	/** The search-axis lerp anchor for the Header's `searchProgress`
-	 *  derivation. Four reach paths set this anchor (see `SearchAnchor` in
+	 *  derivation. Five reach paths set this anchor (see `SearchAnchor` in
 	 *  `header-probe.ts` for the full rationale): `playEnterAnimation` at
 	 *  any pipeline-commit-to-enter handoff (hold the stashed terminal
 	 *  searchProgress: 1 for a `/search` commit so the panel stays slid
@@ -853,9 +853,11 @@ export class NavPipelineOrchestrator {
 	 *  `bm` to 0 across the discrete-nav settle), `#accelerateInFlight` at
 	 *  a discrete-nav interrupt of an in-flight enter settle on `/search`
 	 *  (carry the held-at-1 panel position across the accelerated re-arm),
-	 *  and the `notifyHeaderState` mid-settle absorb when a dynamic-title
+	 *  the `notifyHeaderState` mid-settle absorb when a dynamic-title
 	 *  route resolves a new title mid-enter on a `/search` commit (carry
-	 *  the in-flight search-axis position across the re-arm). The Header's
+	 *  the in-flight search-axis position across the re-arm), and
+	 *  `#armSettleEaseFromGesture` at a gesture release (carry the drag's
+	 *  terminal search-axis value across the settle-arm clear). The Header's
 	 *  `searchProgress` derivation lerps from `start` to `dest` across
 	 *  `settleMorphFraction` while `settleActive && searchAnchor !== null`.
 	 *  Cleared at the next settle arm (canonical single-site reset inside
@@ -983,7 +985,7 @@ export class NavPipelineOrchestrator {
 	}
 	/** Reactive read of the search anchor. Read by the Header's
 	 *  `searchProgress` derivation during any settle that set the anchor
-	 *  (four reach paths; see the `#searchAnchor` field docstring). null
+	 *  (five reach paths; see the `#searchAnchor` field docstring). null
 	 *  when no settle has set the anchor (the canonical clear runs at the
 	 *  top of `#armSettleEase`, plus `#landAtRest` and `unmount`). */
 	get searchAnchor(): SearchAnchor | null {
@@ -3068,7 +3070,7 @@ export class NavPipelineOrchestrator {
 				// landed on the dest, so the post-settle natural
 				// `searchProgress` is the dest's at-rest value, and the
 				// lerp must match it to avoid a snap at the settle end.
-				// For the audit's flagship (F,F,*) shape (a
+				// For the audit's flagship (T,T,F) shape (a
 				// forward-swipe-to-`/search` interrupted by a non-search
 				// `goto`), `capturedSearchProgress` is the drag's live `bm`
 				// (e.g. 0.30) and `dest` is 0, so the lerp retreats the
@@ -3286,13 +3288,13 @@ export class NavPipelineOrchestrator {
 		// `onSvelteKitBeforeNavigate` discrete-nav arm, the
 		// `#accelerateInFlight` discrete-nav interrupt, and the
 		// `notifyHeaderState` mid-settle absorb. The gesture-release site
-		// `#armSettleEaseFromGesture` has no search-axis counterpart: a
-		// live drag drives the search axis via the gesture branch (the
-		// ENTER shape `searchProgress = trackMorph`, the EXIT shape
-		// `searchProgress = 1 - trackMorph`), and the release settles
-		// the morph / FAB / title tiers but does not need a search-axis
-		// anchor because the drag's terminal gesture-branch value
-		// already equals the target's at-rest searchProgress.
+		// `#armSettleEaseFromGesture` captures the drag's terminal
+		// search-axis value via `#searchProgressAtSettleInstant` and
+		// re-seeds `#searchAnchor` after the arm, mirroring the FAB axis:
+		// for a re-grab whose `#dragSearchAnchor` shifted the gesture
+		// formula, the re-seed keeps the settle-anchor lerp continuous
+		// from the shifted terminal value (no snap when the arm clears
+		// `#dragSearchAnchor`).
 		this.#dragMorphAnchor = null;
 		this.#dragFabAnchor = null;
 		this.#dragSearchAnchor = null;
@@ -3533,6 +3535,7 @@ export class NavPipelineOrchestrator {
 		// `settleMorphFraction` (mirroring how the morph tier's settle
 		// branch lerps `startMorph -> destMorph` across the same fraction).
 		const capturedFabScale = this.#fabScaleAtSettleInstant();
+		const capturedSearchProgress = this.#searchProgressAtSettleInstant();
 		this.#armSettleEase(
 			latched,
 			startProgress,
@@ -3566,6 +3569,18 @@ export class NavPipelineOrchestrator {
 			const toHasFab = getRouteData(back).fab;
 			const destFabScale = committed ? (toHasFab ? 1 : 0) : fromHasFab ? 1 : 0;
 			this.#enterFabAnchor = { start: capturedFabScale, dest: destFabScale };
+		}
+		// Re-seed `#searchAnchor` AFTER `#armSettleEase` so the search-axis
+		// settle-anchor lerp continues from the drag's terminal search-axis
+		// value (mirrors the FAB re-seed above). For a re-grab whose
+		// `#dragSearchAnchor` shifted the gesture formula, the re-seed
+		// prevents a one-frame snap when the arm clears `#dragSearchAnchor`
+		// and the searchProgress derivation falls from the shift formula to
+		// the bm-formula (DV21 §5: no snap at the drag-to-settle boundary).
+		if (capturedSearchProgress !== null) {
+			const searchDestPath = committed ? pending.to : inputs.fromPathname;
+			const destSearch = resolveHeaderMode(searchDestPath) === 'search' ? 1 : 0;
+			this.#searchAnchor = { start: capturedSearchProgress, dest: destSearch };
 		}
 	}
 
@@ -4154,9 +4169,11 @@ export class NavPipelineOrchestrator {
 						const destPathname = prevSettleTargetProgress === 1 ? toPathname : fromPathname;
 						const destHasFab = getRouteData(destPathname).fab;
 						this.#enterFabAnchor = { start: capturedFabScale, dest: destHasFab ? 1 : 0 };
-						// Re-seed `#searchAnchor` AFTER the arm alongside
-						// the FAB re-seed (mirrors the FAB pattern and
-						// `playEnterAnimation`'s post-arm seed). `dest`
+						// Re-seed `#searchAnchor` AFTER the arm, nested in
+						// the FAB re-seed's guard (the two helpers share
+						// the `!inFlight` short-circuit, so the nesting
+						// is behaviorally equivalent to a sibling if).
+						// `dest`
 						// is the same endpoint route's at-rest
 						// searchProgress. Skipped when no search anchor
 						// was in flight at the capture
@@ -4382,7 +4399,8 @@ export class NavPipelineOrchestrator {
 	 *  the in-flight search-axis position at a boundary (the discrete-nav
 	 *  interrupt for R23-B F1, the commit slide end for R23-B F2, the
 	 *  accelerate-in-flight re-arm for R24-A, the mid-settle absorb for
-	 *  R24-A, and the `#beginGesture` re-grab capture for R26-A). Returns
+	 *  R24-A, the gesture-release re-seed for R91, and the `#beginGesture`
+	 *  re-grab capture for R26-A). Returns
 	 *  null when `#mountInputs` is null, the publication is not in flight,
 	 *  or `toPathname` is unresolved (the `!inFlight` and `toPathname`
 	 *  short-circuits mirror `#fabScaleAtSettleInstant`; the `#mountInputs`
@@ -4502,8 +4520,10 @@ export class NavPipelineOrchestrator {
 		if (centerTab !== undefined) {
 			// Thread route: the pill stays on centerTab at rest, active:
 			// true so the live fractionalIndex is published, backMorph:
-			// null so the Header stays in root mode end to end (tab bar
-			// visible, hamburger icon) for the thread route.
+			// null at rest (during a drag Fix A publishes rawDragFraction
+			// so the Header eases toward back-arrow mid-swipe). The
+			// Header's at-rest morph reads currentHasTabs (root mode for
+			// the thread route: tab bar visible, hamburger icon).
 			pager.set({
 				fractionalIndex: centerTab,
 				dragging: false,

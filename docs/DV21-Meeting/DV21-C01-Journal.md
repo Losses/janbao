@@ -7287,3 +7287,88 @@ the comment, `releaseNavigation` is the unfreeze path).
 clean. Comment-only; runtime unchanged.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R91 fix (§5 search-axis snap at re-grab-into-release + stale comment + shape notation)
+
+**R91 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A-F1 (§5 violation, CODE FIX).** `#armSettleEaseFromGesture` captured
+the morph and FAB drag-terminals (for settle-anchor re-seed) but had NO
+search-axis counterpart. For a re-grab whose `#dragSearchAnchor` shifted
+the gesture formula, clearing it (via the arm) without re-seeding
+`#searchAnchor` snapped `searchProgress` from the shift-formula value to
+the bm-formula value in one frame at the release (~196px search-track
+jump). Added `capturedSearchProgress = #searchProgressAtSettleInstant()`
+before the arm + `#searchAnchor` re-seed after, mirroring the FAB pattern.
+Updated the docstring rationale. **`messages-back-swipe.spec.ts` 41
+passed** (incl. R24-A/R26-A/R28 search-track continuity).
+
+**A-F2 (comment).** `resetPagerStore` centerTab "stays in root mode end to
+end" -- stale from pre-Fix-A (centerTab now publishes `rawDragFraction`
+during drags) + causation (at-rest morph reads `currentHasTabs`, not
+`backMorph`). Rewrote.
+
+**B-F1 (comment).** `orchestrator:3071` `(F,F,*)` shape notation
+contradicted the layer's hasTabs convention (should be `(T,T,F)`). Fixed.
+
+**Orchestrator verification.** Independently verified all three (the
+structural asymmetry + 4 searchAnchor write sites excluding
+`#armSettleEaseFromGesture`; Fix A's centerTab publication; the hasTabs
+convention + flagship shape). Targeted e2e confirms no regression.
+
+**Verify.** `bun run check` 0 errors / 0 warnings; prettier + em-dash
+clean; `messages-back-swipe.spec.ts` 41 passed. A-F1 a code change;
+A-F2 + B-F1 comment-only.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R92 fix (R91 missed-sibling count enumerations + absorb-path nesting comment)
+
+**R92 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+All 5 count-enumeration findings are the orchestrator's own R91
+missed-siblings (R91 added a 5th `#searchAnchor` seed site but didn't
+update the sibling docstrings that enumerate the count). The FAB
+counterparts correctly say "Five"/"six" at every parallel site.
+
+**A-F1..F5 / B-F1.** Updated 5 sites: `#searchAnchor` field (:846 "Four"
+-> "Five" + added gesture-release), `searchAnchor` getter (:986 "four" ->
+"five"), `SearchAnchor` type (header-probe:186 "Four" -> "Five"),
+`searchProgress` comment (Header:513 "four" -> "five" + R91),
+`#searchProgressAtSettleInstant` (:4396 added gesture-release to the
+capture-site list, now 6).
+
+**B-F2.** `notifyHeaderState` absorb (:4170-4172) said "mirrors the FAB
+pattern" but the search re-seed is NESTED inside the FAB if-block (unlike
+the other 4 sites' sibling-if pattern). Rewrote to accurately describe
+the nesting.
+
+**Orchestrator verification.** Independently verified F1 + F5
+(`#searchAnchor` write count = 5; `#searchProgressAtSettleInstant` call
+count = 6; FAB counterparts accurate). `bun run check` 0/0; prettier +
+em-dash clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R93 fix (R92 missed-sibling: 5th enumeration item at header-probe + Header)
+
+**R93 result: auditor A BLOCK, auditor B BLOCK (same 2 findings). Counter
+0/5.**
+
+Both auditors independently found the SAME 2 defects -- both the
+orchestrator's own R92 residuals (R92 bumped "Four" -> "Five" but didn't
+add the 5th enumeration item at these 2 sites; only the orchestrator
+field at :846 got it).
+
+**A/B-F1.** `header-probe.ts:185` (`SearchAnchor` type) said "Five reach
+paths" but listed 4 bullets. Added the 5th bullet
+(`#armSettleEaseFromGesture` at gesture release / R91).
+
+**A/B-F2.** `Header.svelte:513` (`searchProgress` comment) said "five
+boundary handoffs" but listed 4 items. Added the 5th item.
+
+**Orchestrator verification.** Independently verified both (the 4-bullet
+endpoints, the FAB counterparts correctly listing 5). `bun run check`
+0/0; prettier + em-dash clean. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.

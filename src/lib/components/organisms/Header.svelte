@@ -510,8 +510,8 @@
 	//      clamp to 0; tapMorph drives the slide back to 0 over the scrub.
 	//   2. A settle in flight with a search anchor
 	//      (`orchestrator.searchAnchor !== null`). The orchestrator seeds the
-	//      anchor at four boundary handoffs where the natural switch below
-	//      would snap (R23-B + R24-A): the `playEnterAnimation`
+	//      anchor at five boundary handoffs where the natural switch below
+	//      would snap (R23-B + R24-A + R91): the `playEnterAnimation`
 	//      commit-to-enter handoff (R23-B F2: a forward-swipe-to-`/search`
 	//      commit ends at raw=1 with the panel slid fully in, the enter
 	//      slide's natural `1 - trackMorph = bm` resets 1 -> 0 -> 1 across
@@ -526,11 +526,15 @@
 	//      (R24-A: a non-search `goto` interrupts an in-flight enter settle
 	//      on `/search`, the accelerate's `#armSettleEase` clears the anchor
 	//      that the enter seeded at hold-1; the re-seed carries the held-at-1
-	//      panel position across the accelerated re-arm); and the
+	//      panel position across the accelerated re-arm); the
 	//      `notifyHeaderState` mid-settle absorb (R24-A: a dynamic-title
 	//      route resolves a new title mid-enter on a `/search` commit, the
 	//      re-arm clears the anchor mid-flight; the re-seed carries the
-	//      in-flight search-axis position across the re-arm). The lerp eases
+	//      in-flight search-axis position across the re-arm); and the
+	//      `#armSettleEaseFromGesture` gesture-release re-seed (R91: a
+	//      re-grab whose `#dragSearchAnchor` shifted the gesture formula;
+	//      the re-seed carries the drag's terminal search-axis value
+	//      across the settle-arm clear). The lerp eases
 	//      `start` (the captured pre-boundary value) to `dest` (the dest's
 	//      at-rest searchProgress) across `settleMorphFraction`. At settle
 	//      end (`settleMorphFraction = 1`) the lerp equals `dest`, which
