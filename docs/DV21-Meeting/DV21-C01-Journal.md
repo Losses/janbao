@@ -7474,3 +7474,179 @@ animates). The orchestrator's own case-3 docstring (:2855-2866) was the
 authoritative reference. `bun run check` 0/0; prettier + em-dash clean.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R98 fix (startMorph fourth iteration: fundamental condition + variable rename)
+
+**R98 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** The R97-B fix's "non-saturated bm-following release" clause
+excluded saturated tab-ness-PRESERVING bm-following commits
+(centerTab->tab-root at raw=1: startMorph=0, destMorph=1, lerp eases).
+Fourth iteration: replaced shape enumeration with the fundamental
+condition -- "the lerp eases the morph unless `natural(raw_release) ===
+destMorph` (a constant hold -- e.g. static-morph shapes, or a saturated
+commit where `natural(1) = atRestMorph(destination)` by construction)."
+This approach can't miss an edge case because it states the condition,
+not a list of shapes.
+
+**B.** `Header.svelte:196` local `targetSearchAnchor` (bound to
+`orchestrator.dragMorphAnchor`, a morph-axis anchor) contained "Search"
+(the layer's namespace for search-axis anchors; type `SearchAnchor` at
+header-probe.ts:255). Renamed to `morphAnchor` (axis-clear, matching the
+sibling `anchor` at :249).
+
+**Orchestrator verification.** A: confirmed centerTab->tab-root saturated
+commit animates (0 vs 1). B: confirmed the naming outlier (sibling locals
+follow the convention). `bun run check` 0/0; prettier + em-dash clean.
+A-F1 comment-only; B-F1 a code change (variable rename, no behavior
+change).
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R99 fix (startMorph fifth iteration: trivially-correct condition + "collapse to constant" fix)
+
+**R99 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** The R98-A "fundamental condition" `natural(raw_release) ===
+destMorph` was wrong for static-morph shapes (startMorph ≠ natural for
+those). Fifth iteration: replaced with the trivially-correct condition
+"the lerp is a constant hold when `startMorph === destMorph`; otherwise
+it eases the morph." This references the actual latched values (not a
+formula substitution) and is universally correct.
+
+**B.** `Header.svelte:287` said "Reading settleProgress directly here
+would collapse to a constant for shapes where outgoingHasTabs ===
+incomingHasTabs" -- wrong for the non-saturated case (the lerp starts
+partway, snapping rather than collapsing). Fixed: "start the lerp
+partway (at settleStartProgress, not 0) and snap the icon plus layer
+translateY in one rAF frame."
+
+**Orchestrator verification.** A: confirmed targetIsSearch from-rest at
+raw=0.5 has startMorph=1, destMorph=1 (constant hold) but natural(0.5)≠1.
+B: confirmed centerTab->tab-root at raw=0.7 would snap (0.3->0.79), not
+collapse. `bun run check` 0/0; prettier + em-dash clean. Comment-only;
+runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R100 fix (morph settle-branch: 3 more comment inaccuracies in the same block)
+
+**R100 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+Three findings, all in the morph settle-branch comment block (the R96-R99
+iterations fixed the `startMorph === destMorph` condition + "collapse to
+constant"; these are DIFFERENT sentences in the same block).
+
+**A-F1.** `Header.svelte:274` opening parenthetical said startMorph is
+"the drag's terminal value" -- only true for 1 of 6 arm paths. Generalized
+to 3 arm types (gesture release / enter-idle / re-arm).
+**A-F2.** `orchestrator:3308` same unqualified "drag's terminal value" in
+`#armSettleEase`. Fixed: "prior visual."
+**B-F1.** `header-probe.ts:38-44` (canonical type) grouped "a discrete
+nav" under "source's at-rest" -- wrong for gesture-interrupted discrete-
+nav (startMorph = natural(raw), the drag's terminal). Also missing the
+re-arm paths. Split discrete-nav into gesture-interrupted vs from-rest;
+added re-arm.
+
+**Orchestrator verification.** Verified all 6 arm paths' startMorph
+values. `bun run check` 0/0; prettier + em-dash clean. Comment-only.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R101 fix (Header startMorph omitted discrete-nav + scroll-chrome "only consumer" + mobile-pager "deep-mode branch")
+
+**R101 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+**A.** `Header.svelte:274` -- the R100-A parenthetical classified
+startMorph into 3 buckets but omitted the discrete-nav arm. Added
+(gesture-interrupted -> drag's terminal; from-rest -> source's at-rest).
+
+**B-F1.** `scroll-chrome.svelte.ts:7` -- "only consumer" wrong (Header +
+FAB layer + NavPipelineHost all read it). Rewritten to list all three.
+
+**B-F2.** `mobile-pager.svelte.ts:19` -- "explicit deep-mode branch"
+doesn't exist (one at-rest return `currentHasTabs ? 1 : 0`). Rewritten:
+"returns 0 for deep pages via `currentHasTabs === false`."
+
+**Orchestrator verification.** Verified A (discrete-nav :2999); B-F1
+(FAB :179, NavPipelineHost :271); B-F2 (`grep "deep-mode"` = only this
+docstring). `bun run check` 0/0; prettier + em-dash clean. Comment-only.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R102 fix (searchProgress dragSearchAnchor fallback visual defect)
+
+**R102 result: auditor A BLOCK, auditor B PASS. Counter 0/5.**
+
+**A.** `Header.svelte:613` -- the dragSearchAnchor fallback
+`return dragSearchAnchor.search` returned 1 (from a `/search` commit
+settle captured via R91's `#armSettleEaseFromGesture` re-seed) during a
+tab-to-tab re-grab (backMorph=null), making the search panel fully
+visible during a backward tab-to-tab swipe. The comment claimed "only
+currently-reachable shape (non-search tab-to-tab settle)" -- wrong since
+R91. **Code fix:** changed to `return isSearch ? 1 : 0` (the at-rest
+searchProgress). Comment rewritten to describe both cases.
+
+**B.** PASS. Exhaustive sampling; all R91-R101 fixes verified accurate.
+
+**Orchestrator verification.** Verified A's code path (R91 re-seed can
+produce `#searchAnchor = {1, 1}`; re-grab captures
+`#dragSearchAnchor = {search: 1, ...}`; tab-to-tab backMorph=null triggers
+the fallback). The fix returns the at-rest value (0) instead of the
+anchor (1). `bun run check` 0/0; prettier + em-dash clean. A code change
+
+- comment rewrite.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R103 fix (REVERT R102: restore R26-A hold-at-anchor design)
+
+**R103 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+R102 introduced two snaps (at the re-grab: 1->0; at the release: 0->1
+"snap-in-then-slide-out") and broke the R24-A single-source-of-truth
+invariant. The R26-A hold-at-anchor design (continuity over at-rest
+correctness for the bm===null re-grab) is the intentional lesser-evil
+trade-off.
+
+**A-F1 (correctness).** Reverted line 614 from `return isSearch ? 1 : 0`
+back to `return dragSearchAnchor.search` (the R26-A hold-at-anchor).
+Rewrote the comment to describe the design: for a `/search`-commit settle
+re-grabbed into a tab-to-tab swipe `anchor.search = 1`; the hold keeps
+the panel visible for the drag's duration and the release settle eases
+it back out (the alternative -- snapping to at-rest -- introduces
+discontinuities at both boundaries).
+
+**A-F3 (stale comment).** Helper `:4468-4469` claimed "anchor.search
+=== 0" -- wrong post-R91 (can be 1 via the re-seed). Fixed: "typically
+0 but can be 1."
+
+**B-F1 (contradiction).** R102 left the stale "hold at anchor.search"
+sentence, contradicting the new "return at-rest" text. Resolved by the
+revert (comment now consistently describes hold-at-anchor).
+
+**Orchestrator verification.** Verified A's two snaps (re-grab: 1->0;
+release: helper captures 1 but Header at 0). The R26-A guard passes
+(exercises bm!==null, not the bm===null case). `bun run check` 0/0;
+prettier + em-dash clean. Code revert + comment rewrites.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R104 (DOUBLE PASS, counter 1/5)
+
+**R104 result: auditor A PASS, auditor B PASS. Counter 1/5.**
+
+**First earned double-PASS at the current audit depth** (R77's was
+under-thorough, missing R82's 14-finding backlog). Both auditors did
+exhaustive, independent sweeps: full orchestrator + Header + header-probe
+
+- FAB layer + state machine + resolvers + SearchScopePager +
+  scroll-chrome. Cross-checked every count (5/5/6/6/2), every §5 boundary
+  (three rAF channels, disjoint visual sets), every recent fix (R91-R103),
+  and the R26-A hold-at-anchor design. Zero concerns from both.
+
+**No fix this round.** No code change; `bun run check` 0/0; prettier +
+em-dash clean (unchanged from R103). Gates green. 41 e2e pass (R91
+verification, no behavioral change since).
+
+**No git mutation.** No commits, no branches, no pushes.

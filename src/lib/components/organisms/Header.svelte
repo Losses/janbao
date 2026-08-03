@@ -193,8 +193,8 @@
 			// behaviour: the vertical layer group stays out of the
 			// horizontal scrub end to end).
 			if (targetIsSearch) {
-				const targetSearchAnchor = orchestrator.dragMorphAnchor;
-				if (targetSearchAnchor !== null) return targetSearchAnchor.morph;
+				const morphAnchor = orchestrator.dragMorphAnchor;
+				if (morphAnchor !== null) return morphAnchor.morph;
 				return currentHasTabs ? 1 : 0;
 			}
 			// morph semantics: 1 = tab/root (hamburger), 0 = deep (back-arrow).
@@ -271,8 +271,11 @@
 			return currentHasTabs ? 1 : 0;
 		}
 		if (settleActive && settleLatched) {
-			// Interpolate from the latched `startMorph` (the drag's terminal
-			// value, captured at settle-arm time) to `destMorph` across
+			// Interpolate from the latched `startMorph` (captured at the
+			// settle-arm instant: the drag's terminal for a gesture release
+			// or a gesture-interrupted discrete nav, the source's at-rest
+			// for a from-rest discrete nav, an enter, or an idle arm, or
+			// the in-flight morph for a re-arm) to `destMorph` across
 			// `settleMorphFraction` (the normalized 0..1 fraction of the
 			// eased settle curve traversed so far). For most shapes
 			// `destMorph = atRestMorph(incomingHasTabs)` on a commit or
@@ -281,19 +284,13 @@
 			// tab-root source) so the pre-landing `morph` keeps the bar at
 			// 0% and the landing's flip to `transform: none` is continuous
 			// (R8-A F1 - see `#armSettleEaseFromGesture`). For the no-anchor
-			// from-rest case `startMorph === destMorph` on shapes
-			// where the drag-branch morph is static (targetIsSearch,
-			// deep-to-deep, non-centerTab tab-to-tab) or on a saturated
-			// (raw_release = 1) tab-ness-changing commit where
-			// natural(1) = atRestMorph(destination) by construction;
-			// for a non-saturated bm-following release (raw_release < 1)
-			// the lerp eases the morph. For a re-grab whose
-			// `anchor.morph` differs, the ease bridges the gap.
-			// Reading `settleProgress` directly
-			// here would collapse to a constant for shapes where
-			// `outgoingHasTabs === incomingHasTabs` (e.g. a centerTab ->
-			// tab-root back-swipe) and snap the icon plus layer translateY
-			// in one rAF frame at the release handoff (DV21 §5: every
+			// from-rest case the lerp is a constant hold when
+			// `startMorph === destMorph`; otherwise it eases the
+			// morph. For a re-grab whose `anchor.morph` differs,
+			// the ease bridges the gap. Reading `settleProgress` directly
+			// here would start the lerp partway (at settleStartProgress,
+			// not 0) and snap the icon plus layer translateY in one rAF
+			// frame at the release handoff (DV21 §5: every
 			// visual is a pure function of the one published progress, no
 			// discontinuity at the handoff). The orchestrator owns the
 			// capture (the startMorph / destMorph fields on
@@ -594,14 +591,15 @@
 			// When `backMorph === null` (a tab-to-tab re-grab on a non-
 			// centerTab host) the gesture branch below is skipped because
 			// no live morph is published for that shape; hold at
-			// `anchor.search` instead. For the only currently-reachable
-			// shape (a non-search tab-to-tab settle) `playEnterAnimation`
-			// seeds `#searchAnchor = {0, 0}`, so `anchor.search === 0`,
-			// which equals the at-rest fallback's `isSearch ? 1 : 0 = 0`
-			// for the same non-search source; the hold is a no-op against
-			// the at-rest the fallback would return but keeps the
-			// drag-anchor branch structurally exhaustive (mirrors the
-			// morph axis's `nullBmAnchor` hold branch).
+			// `anchor.search` for the drag's duration so the search axis
+			// stays continuous with the prior settle (R26-A design,
+			// mirrors the morph axis's `nullBmAnchor` hold branch). For
+			// a `/search`-commit settle re-grabbed into a tab-to-tab
+			// swipe `anchor.search = 1` (the panel was fully slid in);
+			// the hold keeps it visible for the drag's duration and the
+			// release settle eases it back out (the alternative --
+			// snapping to at-rest -- would introduce a discontinuity at
+			// both the re-grab and the release boundaries).
 			if (pager.transitionTarget !== null && pager.backMorph !== null) {
 				const anchorTrackMorph =
 					pager.transitionTarget === currentPath ? 1 - dragSearchAnchor.raw : dragSearchAnchor.raw;

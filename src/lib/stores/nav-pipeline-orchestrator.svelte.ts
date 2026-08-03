@@ -3305,7 +3305,7 @@ export class NavPipelineOrchestrator {
 		this.#settleAwaitTitle = awaitTitle;
 		// Seed the eased-fraction at 0 so the morph derivation reads
 		// `startMorph` on the first post-arm flush (continuity with the
-		// drag's terminal value, captured as `latched.startMorph`). The
+		// prior visual, captured as `latched.startMorph`). The
 		// rAF advances this field to 1 across `safeDuration`.
 		this.#settleEasedFraction = 0;
 		this.#stateMachine.setSettleState({
@@ -4466,7 +4466,9 @@ export class NavPipelineOrchestrator {
 			// `anchor.search`; the publication's `progress` is the
 			// raw-scale analog of `backMorph`. For the only shape where the pager
 			// actually nulls `backMorph` mid-publication (a tab-to-tab
-			// transition on a non-centerTab host) `anchor.search === 0`
+			// transition on a non-centerTab host) `anchor.search` is
+			// typically 0 (a non-search settle) but can be 1 (a
+			// `/search`-commit settle re-grabbed via R91's re-seed)
 			// and both `natural(...)` terms resolve to 0, so the shift
 			// collapses to `anchor.search` and matches the Header's hold
 			// without a separate branch.

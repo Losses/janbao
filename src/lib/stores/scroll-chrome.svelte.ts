@@ -3,8 +3,9 @@
  * (top App Bar) should be translated out of view to reclaim vertical space
  * while reading. Driven by scroll direction: scrolling down hides the chrome,
  * scrolling up (or being near the top of the page) reveals it. The same
- * direction/threshold logic runs on all viewports (mobile and desktop) so the
- * single sticky Header in AppShell is the only consumer.
+ * direction/threshold logic runs on all viewports (mobile and desktop);
+ * the reactive outputs are read by the Header (hide-on-scroll), the FAB layer
+ * (hide-on-scroll), and NavPipelineHost (scroll-container override).
  *
  * `headerHeight` is reported live by Header's ResizeObserver
  * (`setHeaderHeight`), so the clamp range adapts to the current viewport's

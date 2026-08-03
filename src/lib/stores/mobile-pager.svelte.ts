@@ -16,8 +16,8 @@
  * page, 1 once committed toward the source), written frame-synced with
  * `fractionalIndex` by the pipeline orchestrator. At rest: null on tab roots
  * and threads (centerTab routes) so the Header's morph derivation falls back
- * to the at-rest branch (`currentHasTabs ? 1 : 0`); 0 on deep pages so it
- * takes the explicit deep-mode branch. During a drag the orchestrator
+ * to the at-rest branch (`currentHasTabs ? 1 : 0`, which returns 0 for deep
+ * pages via `currentHasTabs === false`). During a drag the orchestrator
  * publishes the live raw drag fraction on centerTab thread routes (gesture
  * feedback so the morph / layer derivation tracks the live drag and the
  * settle at release interpolates from the captured `startMorph`), on

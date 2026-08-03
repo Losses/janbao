@@ -36,12 +36,13 @@ export interface HeaderSettleTransition {
 	incomingHasTabs: boolean;
 	/**
 	 * The morph value captured at settle-arm time. For a gesture-release
-	 * settle this is the drag branch's terminal value (the live morph the
-	 * Header was rendering the instant before the settle took over). For a
-	 * non-gesture arm (a discrete nav, an enter, an idle title change) this
-	 * is the source route's at-rest morph (`outgoingHasTabs ? 1 : 0`), so
-	 * the morph holds at the source's tab-ness until the settle's first
-	 * eased step.
+	 * settle or a gesture-interrupted discrete nav this is the drag
+	 * branch's terminal value (the live morph the Header was rendering
+	 * the instant before the settle took over). For a from-rest discrete
+	 * nav, an enter, or an idle title change this is the source route's
+	 * at-rest morph (`outgoingHasTabs ? 1 : 0`). For a re-arm
+	 * (`#accelerateInFlight` or a mid-settle absorb) this is the in-flight
+	 * morph value at the re-arm instant.
 	 */
 	readonly startMorph: number;
 	/**
@@ -57,14 +58,10 @@ export interface HeaderSettleTransition {
 	 * `translateY` until the flip, so easing toward 1 keeps the
 	 * `translateY` at 0% across the settle and the landing's flip to
 	 * `transform: none` is continuous (R8-A F1). For the no-anchor
-	 * from-rest case `startMorph === destMorph` on shapes
-	 * where the drag-branch morph is static (targetIsSearch,
-	 * deep-to-deep, non-centerTab tab-to-tab) or on a saturated
-	 * (raw_release = 1) tab-ness-changing commit where
-	 * natural(1) = atRestMorph(destination) by construction;
-	 * for a non-saturated bm-following release (raw_release < 1)
-	 * the lerp eases the morph. For a re-grab whose
-	 * `anchor.morph` differs, the ease bridges the gap.
+	 * from-rest case the lerp is a constant hold when
+	 * `startMorph === destMorph`; otherwise it eases the
+	 * morph. For a re-grab whose `anchor.morph` differs, the ease
+	 * bridges the gap.
 	 */
 	readonly destMorph: number;
 }
