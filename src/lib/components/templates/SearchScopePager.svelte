@@ -98,8 +98,8 @@
 	// agree on which panel renders content (no hydration mismatch), and only
 	// the active panel's content mounts on the search-APPEAR frame (mounting
 	// all four panels' content eagerly would dominate the click frame under
-	// 4x CPU; the LoAF bar in e2e/reproduce-dv20-search-swipe.spec.ts "Bug 4"
-	// fails at 4x CPU).
+	// 4x CPU; the LoAF bar in scripts/measure-search-jank.ts enforces a
+	// 150ms worst-frame budget at 4x CPU in the production build).
 	let visitedScopes = $state<ReadonlySet<SearchScope>>(
 		untrack(() => new Set<SearchScope>([data.scope]))
 	);

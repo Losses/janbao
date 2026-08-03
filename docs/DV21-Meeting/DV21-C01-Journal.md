@@ -7650,3 +7650,141 @@ em-dash clean (unchanged from R103). Gates green. 41 e2e pass (R91
 verification, no behavioral change since).
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R105 (DOUBLE PASS, counter 2/5)
+
+**R105 result: auditor A PASS, auditor B PASS. Counter 2/5.**
+
+Second consecutive earned double-PASS. Both auditors did exhaustive,
+independent sweeps: full orchestrator + Header + header-probe + FAB +
+state machine + resolvers + SearchScopePager + scroll-chrome +
+BurgerArrowIcon + MobileTabBar + NavPipelineHost/TabHost. Cross-checked
+all counts (5/5/6/6/2), all §5 boundaries, all recent fixes (R82-R103).
+Zero concerns from both.
+
+**No fix this round.** No code change. Gates green.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R106 fix (SearchScopePager LoAF bar comment → wrong file; counter reset to 0/5)
+
+**R106 result: auditor A BLOCK, auditor B PASS. Counter 0/5.**
+
+**A.** `SearchScopePager.svelte:101` -- the comment said "the LoAF bar
+in `e2e/reproduce-dv20-search-swipe.spec.ts` 'Bug 4' fails at 4x CPU."
+Wrong: the LoAF budget was moved to `scripts/measure-search-jank.ts`
+per Fix D; the e2e spec only checks cadence. Fixed: "the LoAF bar in
+`scripts/measure-search-jank.ts` enforces a 150ms worst-frame budget at
+4x CPU in the production build."
+
+**Counter impact:** R104 (1/5) + R105 (2/5) wiped. Counter resets to
+0/5. A pre-existing comment inaccuracy missed by R104/R105 (their sweeps
+focused on the morph block + searchProgress).
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R107 (DOUBLE PASS, counter 1/5)
+
+**R107 result: auditor A PASS, auditor B PASS. Counter 1/5.**
+
+Convergence climb restarts. Both auditors did exhaustive, independent
+sweeps: full orchestrator + Header + header-probe + FAB + state machine +
+resolvers + SearchScopePager + scroll-chrome + BurgerArrowIcon +
+MobileTabBar + NavPipelineHost/TabHost. Cross-checked all counts
+(5/5/6/6/2), all §5 boundaries, all recent fixes (R82-R106). The R106
+SearchScopePager LoAF bar fix verified accurate. Zero concerns from both.
+
+**No fix this round.** No code change. Gates green.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R108 (DOUBLE PASS, counter 2/5)
+
+**R108 result: auditor A PASS, auditor B PASS. Counter 2/5.**
+
+Second consecutive earned double-PASS (R107 + R108). Both auditors did
+exhaustive, independent sweeps. Cross-checked all counts (5/5/6/6/3/2),
+all §5 boundaries, all recent fixes (R82-R106). R108-B ran a targeted
+e2e (3/3 pass). Zero concerns from both.
+
+**No fix this round.** No code change. Gates green.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R109 fix (bm===null morph fallback comments cite unreachable direction; counter reset to 0/5)
+
+**R109 result: auditor A BLOCK, auditor B PASS. Counter 0/5.**
+
+**A.** `Header.svelte:260` + `orchestrator:3631` -- both comments cited
+"a deep->tab settle interrupted by a tab-to-tab re-grab" for the bm===null
+morph-anchor example. But deep->tab is unreachable on any host where
+bm===null fires (NavPipelineTabHost only arms tab->X; offline LIST
+routes' new targets don't pill-map). The reachable shape is the opposite
+(tab->deep prior settle, re-grab to tab-to-tab). Fixed: "deep->tab" →
+"tab->deep" at both sites.
+
+**Counter impact:** R107 (1/5) + R108 (2/5) wiped. Counter resets to
+0/5. A pre-existing comment inaccuracy missed by R107/R108 (their sweeps
+verified the anchor mechanism and the helper/Header consistency but did
+not trace the settle-arm reachability against the bm===null publication
+rule).
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R110 fix (REVERT R109: restore "deep->tab"; cross-host settle persistence)
+
+**R110 result: auditor A (pending), auditor B BLOCK. Counter 0/5.**
+
+**B.** R109's "tab->deep" change was WRONG. The orchestrator is a
+**singleton**: a deep->tab settle armed on NavPipelineHost
+(`/profile/settings`->`/`) persists across the host swap to
+NavPipelineTabHost (configure / releaseInputs explicitly don't cancel
+settle eases). The URL lands on `/` (tab), TabHost mounts, user re-grabs
+tab-to-tab -> `bm === null`. The prior settle (deep->tab, still running)
+provides the morph anchor. R109-A conflated the mounted host with the
+settle-armer.
+
+**Fix:** Reverted R109's "tab->deep" back to "deep->tab" at both sites.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R111 (DOUBLE PASS, counter 1/5)
+
+**R111 result: auditor A PASS, auditor B PASS. Counter 1/5.**
+
+Convergence climb restarts. Both auditors did exhaustive, independent
+sweeps. R110's revert (deep->tab via cross-host settle persistence)
+verified correct by both. Every count (5/5/6/6/3/2), every §5 boundary,
+every R82-R110 fix verified. Zero concerns.
+
+**No fix this round.** No code change. Gates green.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R112 (DOUBLE PASS, counter 2/5)
+
+**R112 result: auditor A PASS, auditor B PASS. Counter 2/5.**
+
+Second consecutive earned double-PASS (R111 + R112). Both auditors did
+exhaustive, independent sweeps. R110 revert verified via singleton
+lifecycle trace. Every count (5/5/6/6/3/2), every §5 boundary, every
+R82-R110 fix verified. Zero concerns.
+
+**No fix this round.** No code change. Gates green.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R113 (DOUBLE PASS, counter 3/5 -- ceiling broken)
+
+**R113 result: auditor A PASS, auditor B PASS. Counter 3/5.**
+
+Third consecutive earned double-PASS. The 2-round ceiling hit by R106
+(SearchScopePager LoAF bar) and R109 (bm===null direction, itself wrong
+and reverted in R110) is broken. Both auditors did exhaustive sweeps.
+Morph continuity verified end-to-end for every handoff shape. R110 revert
+verified. Every count (5/5/6/6/3/2), every §5 boundary, every R82-R110
+fix verified. R113-B ran targeted e2e (Bug 1 + Bug 3 pass). Zero concerns.
+
+**No fix this round.** No code change. Gates green.
+
+**No git mutation.** No commits, no branches, no pushes.
