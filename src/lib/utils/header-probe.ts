@@ -75,7 +75,7 @@ export interface HeaderSettleTransition {
  * morph drag branch to shift the natural drag-morph curve so it passes through
  * the takeover visual (DV21 §5 "following-visual": a drag tracks from the
  * current visual, no jump). Symmetric to how the settle's `startMorph` captures
- * the drag's terminal value at release.
+ * the drag's value at the settle-arm instant.
  */
 export interface DragMorphAnchor {
 	readonly morph: number;

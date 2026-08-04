@@ -8000,3 +8000,89 @@ discrete-nav arm)."
 **Verify.** `bun run check` 0/0; prettier clean; no U+2014. Comment-only.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R122 (DOUBLE PASS, counter 1/5)
+
+**R122 result: auditor A PASS, auditor B PASS. Counter 1/5.**
+
+First earned double-PASS of the R119-R122 run. Both auditors did
+exhaustive independent deep sweeps (A 182 tool uses; B 169) and found
+zero in-scope concerns. Both re-derived the prior fixes against the FULL
+caller set rather than trusting prior-round endorsements:
+
+- R121 `#atRestMorph` fix: both re-walked all 6 listed callers; each
+  passes a route tab-ness, never drag state. Justification holds.
+- drag-terminal class (R119-R120): both re-derived all 39 remaining
+  `terminal`-family hits across `src/lib` + `e2e`; concurred all are
+  gesture-release / saturated-raw=1 / constant-0 / commit-destination /
+  FAB-epsilon. Genuinely exhausted.
+- "no live drag"/"owns the morph" (R121): all 12 remaining hits
+  context-qualified; only the universal claim was the R121 fix.
+
+A additionally traced a latent §5-snap reachability (the Header
+`isDeepToDeep` short-circuit ignores `#dragMorphAnchor`) and proved it
+unreachable from a morph-animating prior settle (the re-grab's target
+resolves to the tab root, making the new drag deep->tab, not deep->deep).
+This is the depth the convergence bar requires.
+
+§5 intact (no CSS transitions / animation-layer setTimeout; 3 disjoint
+rAF channels). Fix A/B/C/D match spec. No dead exports, no past-state
+markers. Gates green.
+
+**No fix this round.** No code change.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R123 (DOUBLE PASS, counter 2/5)
+
+**R123 result: auditor A PASS, auditor B PASS. Counter 2/5.**
+
+Second consecutive earned double-PASS. Both did exhaustive independent
+deep sweeps (A 160 tool uses; B 243) and found zero in-scope concerns.
+Both re-derived the prior fixes against the full caller set (R121
+`#atRestMorph` across 6 callers; drag-terminal class, 39+ hits; "no live
+drag"/"owns the morph" 12+ hits) and the `isDeepToDeep` short-circuit
+reachability. B independently re-derived all caller counts (5/5/6/6/3/2),
+matching the journal.
+
+New depth this round: A ran a universal-claim sweep (`the only`/`never`/
+`always`/`wherever`/`exactly one` -- 60+ hits, none overclaim) and traced
+`#searchProgressAtSettleInstant`'s "tap-scrub clause omitted" justification
+(confirmed `pager.tapMorph` unreachable).
+
+§5 intact; Fix A/B/C/D match spec; no dead exports, no past-state markers.
+Gates green.
+
+**No fix this round.** No code change.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R124 fix (DragMorphAnchor over-narrow startMorph characterization; counter reset 0/5)
+
+**R124 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+A and B INDEPENDENTLY converged on the identical defect: the
+`DragMorphAnchor` symmetric-reference sentence at `orchestrator:734-735`
+and `header-probe.ts:77-78` -- "Symmetric to how the settle's `startMorph`
+captures the drag's terminal value at release" -- characterizes
+`startMorph` by only the gesture-release path. The settle-takes-over-drag
+symmetry has two cases: gesture release (startMorph = drag's terminal at
+release) and discrete-nav interrupt (startMorph = `liveDragMorph` = the
+drag's value at the interrupt instant, drag cut short). "terminal value at
+release" covers only the first. Same class as R120/R121 (multi-path value
+characterized by one path); the DragMorphAnchor sentence kept the pre-R120
+phrasing 5 lines below the R120-fixed `startMorph` docstring.
+
+R122 and R123 double-PASSed (counter reached 2/5) without flagging it --
+their auditors re-derived the `startMorph` field docstrings but not the
+DragMorphAnchor symmetric-reference sentence. R124's auditors took that
+step. The convergence bar corrects the premature PASS: counter resets to
+0/5 (R122 + R123 wiped).
+
+Fixed both sites to "captures the drag's value at the settle-arm instant"
+(covers both release and interrupt; aligns with the R120 characterization).
+Re-grep confirms the only remaining `terminal value at release` hit is
+`header-probe.ts:26` (a different concept -- the drag-branch feedback
+morph's terminal, not startMorph). Gates green; comment-only.
+
+**No git mutation.** No commits, no branches, no pushes.

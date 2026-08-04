@@ -732,7 +732,7 @@ export class NavPipelineOrchestrator {
 	 *  natural drag-morph curve so it passes through the takeover visual
 	 *  (DV21 §5 "following-visual": a drag tracks from the current visual,
 	 *  no jump). Symmetric to how the settle's `startMorph` captures the
-	 *  drag's terminal value at release. Typed by `DragMorphAnchor` in
+	 *  drag's value at the settle-arm instant. Typed by `DragMorphAnchor` in
 	 *  `header-probe.ts` (the shared shape so the Header and the probe
 	 *  snapshot import one definition). */
 	#dragMorphAnchor = $state<DragMorphAnchor | null>(null);
