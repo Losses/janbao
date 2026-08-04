@@ -312,8 +312,9 @@ export interface OrchestratorPublication {
 	 *  reads this directly (the span positions are continuous with the
 	 *  live-drag `pager.backMorph` value because both share the raw
 	 *  scale). The morph derivation reads `settleMorphFraction` instead:
-	 *  the morph must interpolate from the drag's terminal value
-	 *  (captured in `settleLatched.startMorph`) to
+	 *  the morph must interpolate from the prior visual
+	 *  (captured in `settleLatched.startMorph`; see
+	 *  `HeaderSettleTransition.startMorph` for the per-arm-path value) to
 	 *  `settleLatched.destMorph`, a different [0, 1] window than the raw
 	 *  `settleProgress` for a gesture-release settle, and on a saturated
 	 *  commit (`settleStartProgress === settleTargetProgress === 1`) the

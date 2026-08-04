@@ -7788,3 +7788,19 @@ fix verified. R113-B ran targeted e2e (Bug 1 + Bug 3 pass). Zero concerns.
 **No fix this round.** No code change. Gates green.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R114 fix (OrchestratorPublication.settleProgress: missed sibling from R100-A sweep; counter reset to 0/5)
+
+**R114 result: auditor A BLOCK, auditor B PASS. Counter 0/5.**
+
+**A.** `orchestrator:315` (OrchestratorPublication.settleProgress field
+docstring) -- "the morph must interpolate from the drag's terminal value
+(captured in settleLatched.startMorph)" -- unqualified overclaim (same
+class R100-A fixed at 3 sites; this 4th site was missed). Fixed: "the
+prior visual (captured in settleLatched.startMorph; see
+HeaderSettleTransition.startMorph for the per-arm-path value)."
+
+**Counter impact:** R111 (1/5) + R112 (2/5) + R113 (3/5) wiped. The
+4th and final missed sibling from the R100-A sweep.
+
+**No git mutation.** No commits, no branches, no pushes.
