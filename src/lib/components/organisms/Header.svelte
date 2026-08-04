@@ -272,8 +272,8 @@
 		}
 		if (settleActive && settleLatched) {
 			// Interpolate from the latched `startMorph` (captured at the
-			// settle-arm instant: the drag's terminal for a gesture release
-			// or a gesture-interrupted discrete nav, the source's at-rest
+			// settle-arm instant: the drag's terminal for a gesture release,
+			// the interrupt-instant value for a gesture-interrupted discrete nav, the source's at-rest
 			// for a from-rest discrete nav, an enter, or an idle arm, or
 			// the in-flight morph for a re-arm) to `destMorph` across
 			// `settleMorphFraction` (the normalized 0..1 fraction of the
@@ -429,8 +429,9 @@
 	// `lastGestureMorph`, `isSettleMode`, and `prevHasTabs` are kept in the
 	// snapshot shape (the e2e tests mirror the shape) and carry stable
 	// values: `settleActive` is the single settle-mode signal (aliased into
-	// `isSettleMode`); the gesture-terminal morph that drives the §5
-	// continuity lives on the latched record (`settleLatched.startMorph`,
+	// `isSettleMode`); the morph value at the settle-arm instant that
+	// drives the §5 continuity lives on the latched record
+	// (`settleLatched.startMorph`,
 	// captured at arm time by the orchestrator), so the snapshot's
 	// `lastGestureMorph` slot stays 0 (no separate probe-only field);
 	// the Header does not track a previous path (`prevHasTabs` mirrors

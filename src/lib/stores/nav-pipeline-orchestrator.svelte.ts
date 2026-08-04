@@ -1338,10 +1338,10 @@ export class NavPipelineOrchestrator {
 	 *  `#armSettleEaseFromGesture` (gesture-release), the
 	 *  `#dragMorphAtSettleTakeover` from-rest fallback, the
 	 *  `notifyHeaderState` mid-settle absorb re-arm, and the idle
-	 *  title-change arm. The value equals the route's at-rest morph because
-	 *  no live drag owns the morph at these arm instants (a preceding drag
-	 *  hands its terminal morph to the settle via the drag-anchor capture,
-	 *  not via this helper). */
+	 *  title-change arm. The value is the route's at-rest morph by
+	 *  definition (a pure function of tab-ness, independent of any drag
+	 *  state), so it resolves correctly whether the caller arms from rest
+	 *  or interrupts a live drag (the discrete-nav arm). */
 	#atRestMorph(hasTabs: boolean): number {
 		return hasTabs ? 1 : 0;
 	}
@@ -2699,7 +2699,7 @@ export class NavPipelineOrchestrator {
 		// `#armSettleEase` clears `#dragMorphAnchor`. The discrete nav can
 		// arrive during a live drag (including one that took over an
 		// in-flight settle: re-grab, gesture-during-forward-enter): the
-		// drag's terminal morph is computed by `#dragMorphAtSettleTakeover`
+		// morph at the settle-arm instant is computed by `#dragMorphAtSettleTakeover`
 		// from the LIVE `#publication.progress` (the drag's raw on its own
 		// plan scale, which is what `bm` in the Header's drag branch reads
 		// via `pager.backMorph`). The helper returns the anchor-shifted
@@ -2758,7 +2758,7 @@ export class NavPipelineOrchestrator {
 		// Capture the FAB scale the drag was rendering at the interrupt
 		// instant BEFORE the state-machine dispatch and `#progress = 0`
 		// reset below (DV21 §5 sibling-visual rule: the FAB tier needs the
-		// same drag-terminal capture the morph tier made above as
+		// same settle-arm-instant capture the morph tier made above as
 		// `liveDragMorph`). The helper reads the LIVE `#publication` (the
 		// drag's raw on its own plan, the drag's FROM/TO endpoints, the
 		// live `#dragFabAnchor` / `#enterFabAnchor`), so the captured value
@@ -2788,7 +2788,7 @@ export class NavPipelineOrchestrator {
 		// Capture the search-axis position the drag was rendering at the
 		// interrupt instant BEFORE the state-machine dispatch and
 		// `#progress = 0` reset below (DV21 §5 sibling-visual rule: the
-		// search axis needs the same drag-terminal capture the morph and
+		// search axis needs the same settle-arm-instant capture the morph and
 		// FAB tiers made above). Co-located with `liveDragMorph` and
 		// `liveDragFabScale` so the three captures cannot drift apart at
 		// the boundary. The helper mirrors the Header's `searchProgress`
@@ -2834,8 +2834,8 @@ export class NavPipelineOrchestrator {
 		this.#executor?.onCommit(0);
 		this.#stateMachine.onCommit();
 		// Arm the settle ease CONCURRENTLY with the slide when the morph
-		// will visibly change between the live drag's terminal value and
-		// the at-rest value the morph derivation would otherwise resolve
+		// will visibly change between the morph value at the arm instant
+		// and the at-rest value the morph derivation would otherwise resolve
 		// to. Four reach paths (the first three on the morph axis; the
 		// fourth, a search-axis case, is detailed at the arm below):
 		//  1. The source and target tab-ness differ (the deep↔tab case:
@@ -2927,13 +2927,13 @@ export class NavPipelineOrchestrator {
 			// `!(tabsOut || tabsIn)` decides whether the morph-based
 			// `translateY` formula applies (guard false) or the layers freeze
 			// at the dest's at-rest (guard true). During the settle the morph
-			// eases from the drag's terminal value toward `destMorph`, so the
+			// eases from `startMorph` toward `destMorph`, so the
 			// layers must follow morph end-to-end (guard false) whenever the
 			// morph trajectory passes through non-deep-at-rest values. The
 			// trajectory does so when EITHER the drag's target OR the
 			// discrete-nav dest is a tab:
 			//  - Shape (F,F,T) (deep source, deep discrete-nav dest, tab drag
-			//    target): morph eases from the drag's terminal (~0.37) TO
+			//    target): morph eases from the drag's value at the interrupt (~0.37) TO
 			//    `destMorph = 0`; sourcing tabsIn from only the dest (false)
 			//    would freeze the layers at `-100%` while morph is mid-ease
 			//    (~14.66px snap at the first settle frame).
@@ -2992,7 +2992,7 @@ export class NavPipelineOrchestrator {
 				// the from-rest case of every shape; and hardcodes 0 for
 				// deep-to-deep. The settle eases from `startMorph` to
 				// `destMorph = atRestMorph(incomingHasTabs)` so the morph
-				// matches the drag's terminal value at the first settle
+				// matches `startMorph` at the first settle
 				// frame and arrives at the destination's at-rest at u=1.
 				// Symmetric to `#armSettleEaseFromGesture`, which captures
 				// the live raw at release for the same reason (DV21 §5:
@@ -3019,8 +3019,8 @@ export class NavPipelineOrchestrator {
 				// `titleView.progress` during a settle and `pager.backMorph`
 				// during a drag, both on the same raw scale; seeding
 				// `settleStartProgress = startProgress` keeps the first settle
-				// frame's `settleProgress` equal to the drag's terminal
-				// `pager.backMorph`, so the outgoing / incoming title
+				// frame's `settleProgress` equal to the live `pager.backMorph`
+				// at the interrupt, so the outgoing / incoming title
 				// `translateY` is continuous across the drag-to-discrete-nav
 				// handoff (DV21 §5). The from-rest tab-click path collapses to
 				// `startProgress = 0` (no live drag owns the visual), so
@@ -3054,7 +3054,7 @@ export class NavPipelineOrchestrator {
 				const capturedSearchProgress = liveDragSearchProgress;
 				this.#armSettleEase(latched, startProgress, 1, true, settleDirection, commitDurationMs);
 				// Re-seed `#enterFabAnchor` AFTER the arm so the FAB
-				// layer's branch 3 lerps from the captured drag-terminal
+				// layer's branch 3 lerps from the captured settle-arm-instant
 				// value to the destination's at-rest FAB scale across
 				// `settleMorphFraction` (mirrors the gesture-release
 				// re-seed in `#armSettleEaseFromGesture`, R12-B F1).
@@ -3064,7 +3064,7 @@ export class NavPipelineOrchestrator {
 				}
 				// Re-seed `#searchAnchor` AFTER the arm so the Header's
 				// `searchProgress` derivation lerps from the captured
-				// drag-terminal value to the destination's at-rest
+				// settle-arm-instant value to the destination's at-rest
 				// searchProgress across `settleMorphFraction` (R23-B F1).
 				// `dest` is the discrete-nav dest's at-rest searchProgress
 				// (`isSearch(dest) ? 1 : 0`): the settle ends with the URL
@@ -3585,8 +3585,8 @@ export class NavPipelineOrchestrator {
 		}
 	}
 
-	/** The drag's terminal morph at the moment a settle takes over,
-	 *  classified by gesture shape to mirror the Header's drag branch
+	/** The morph value at the settle-arm instant, classified by gesture
+	 *  shape to mirror the Header's drag branch
 	 *  exactly. Used by both drag-to-settle capture sites
 	 *  (`#armSettleEaseFromGesture` at gesture release and the
 	 *  `onSvelteKitBeforeNavigate` discrete-nav arm at a tab-click /
@@ -3649,14 +3649,14 @@ export class NavPipelineOrchestrator {
 		return this.#dragMorphAtAnchorOrRaw(outgoingHasTabs, raw);
 	}
 
-	/** The drag's terminal morph at release, accounting for the
+	/** The morph value at the settle-arm instant, accounting for the
 	 *  `#dragMorphAnchor` if it is set. When a drag took over an in-flight
 	 *  settle (re-grab, gesture-during-forward-enter) the Header's drag
 	 *  branch shifts the natural curve to pass through the anchor's captured
-	 *  morph, so the drag's actual terminal value is the anchor-shifted
+	 *  morph, so the morph value at the settle-arm instant is the anchor-shifted
 	 *  natural(raw), not the natural(raw) alone. Mirrors the Header's
 	 *  `dragMorphAnchor` branch exactly so the new settle's `startMorph`
-	 *  equals the drag's terminal morph (continuity at the drag-to-settle
+	 *  equals the morph value this helper computed (continuity at the
 	 *  handoff, DV21 §5). */
 	#dragMorphAtAnchorOrRaw(currentHasTabs: boolean, raw: number): number {
 		const natural = currentHasTabs ? 1 - raw : raw;
@@ -4353,7 +4353,7 @@ export class NavPipelineOrchestrator {
 	 *     to the destination's at-rest FAB scale across
 	 *     `settleMorphFraction` (R12-B F1).
 	 *   - The `onSvelteKitBeforeNavigate` discrete-nav arm captures the
-	 *     drag-terminal FAB value BEFORE the state-machine dispatch and
+	 *     FAB value at the interrupt BEFORE the state-machine dispatch and
 	 *     `#progress = 0` reset (co-located with the `liveDragMorph`
 	 *     capture) to seed `#enterFabAnchor` at a tab-click / `goto` /
 	 *     popstate interrupt. The capture reads the drag's live raw on

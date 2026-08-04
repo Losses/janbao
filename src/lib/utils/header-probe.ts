@@ -37,7 +37,7 @@ export interface HeaderSettleTransition {
 	/**
 	 * The morph value captured at settle-arm time. For a gesture-release
 	 * settle or a gesture-interrupted discrete nav this is the drag
-	 * branch's terminal value (the live morph the Header was rendering
+	 * branch's value at the settle-arm instant (the live morph the Header was rendering
 	 * the instant before the settle took over). For a from-rest discrete
 	 * nav, an enter, or an idle title change this is the source route's
 	 * at-rest morph (`outgoingHasTabs ? 1 : 0`). For a re-arm

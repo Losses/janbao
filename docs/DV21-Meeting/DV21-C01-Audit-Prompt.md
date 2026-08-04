@@ -48,9 +48,14 @@ one phrasing of a claim and leaves sibling phrasings for the next round.
 
 1. Abstract the defect into a CLASS, not the one string you found.
 2. Grep the whole navigation/animation pipeline (`src/lib/stores`,
-   `src/lib/components`, `src/lib/utils`) with SEVERAL BROAD phrasings that each
-   cover the class differently, never one literal pattern. Union the hits. Add
-   phrasings until a new grep returns nothing you have not already read.
+   `src/lib/components`, `src/lib/utils`, **and `e2e/`**) with SEVERAL BROAD
+   phrasings that each cover the class differently, never one literal pattern.
+   Union the hits. Add phrasings until a new grep returns nothing you have not
+   already read. Two recurring blind spots to avoid: (a) **file-boundary** --
+   the class spans every directory the layer touches, so sweep `src/lib` AND
+   `e2e/`, never just one; (b) **lexical-form** -- grep the CONCEPT in every
+   spelling (e.g. `drag's terminal`, `drag-terminal`, `gesture-terminal`,
+   `drag branch's terminal`, spaced and hyphenated), never just one variant.
 3. Read EVERY hit and classify each: defect (same class, same inaccuracy) or
    legitimate. Do not skip a hit because it "looks fine"; read it.
 4. Report ALL sibling defects in the SAME finding set as the original, each with

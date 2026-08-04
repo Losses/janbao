@@ -2004,7 +2004,7 @@ test.describe('DV20 5b1 pilot back-swipe gesture', () => {
 	// raw scale, shared with `pager.backMorph`). The discrete-nav arm seeds
 	// `settleStartProgress` from the visual-derived `startProgress`
 	// (`#startProgressFromCurrentVisual`) so the first settle frame's
-	// `settleProgress` equals the drag's terminal `pager.backMorph` and the
+	// `settleProgress` equals the live `pager.backMorph` at the interrupt and the
 	// title spans stay continuous at the handoff (DV21 §5). Seeding
 	// `settleStartProgress = 0` instead would publish `settleProgress = 0`
 	// at the first settle frame, snapping the outgoing / incoming
@@ -2828,7 +2828,7 @@ test('back-swipe from /bookmarks to /messages/inbox re-grab+cancel keeps the FAB
 
 // DV21 R14 F1 continuity guard: the discrete-nav arm in
 // `onSvelteKitBeforeNavigate` captures both `liveDragMorph` (for the morph
-// settle's `startMorph`) and the drag-terminal FAB scale (for the
+// settle's `startMorph`) and the FAB scale at the interrupt (for the
 // `#enterFabAnchor.start` re-seed) BEFORE the state-machine dispatch and
 // `#progress = 0` reset. The scenario is the R5 A-F1 / R6 A-F1 shape: a
 // forward-enter to `/messages/<id>` (centerTab=2, has FAB) arms an enter
@@ -2836,14 +2836,14 @@ test('back-swipe from /bookmarks to /messages/inbox re-grab+cancel keeps the FAB
 // interrupted by `__e2eGoto('/')` mid-drag via the SAME CDP session's
 // `Runtime.evaluate` (between `touchMove` and `touchEnd` so the touch /
 // goto ordering is deterministic). The discrete-nav arm captures the
-// drag-terminal FAB value at the LIVE `#publication.progress` (the drag's
+// FAB value at the LIVE `#publication.progress` (the drag's
 // raw on the drag's plan scale and endpoints); the re-seed lerps from
 // that captured value to the destination's at-rest FAB presence across
 // `settleMorphFraction`. The FAB layer's branch 3 reads the seeded
 // `#enterFabAnchor` and stays continuous across the drag-to-discrete-nav
 // handoff. R14 F1: the FAB capture is co-located with `liveDragMorph`
 // because the FAB tier is a sibling visual of the morph tier (DV21 §5)
-// and must read the same drag-terminal state at the takeover instant.
+// and must read the same interrupt-instant state at the takeover instant.
 test('drag-to-discrete-nav handoff keeps the FAB continuous at the interrupt (R14 F1)', async ({
 	page,
 	context
@@ -2879,7 +2879,7 @@ test('drag-to-discrete-nav handoff keeps the FAB continuous at the interrupt (R1
 	const width = page.viewportSize()?.width ?? 393;
 	const startX = Math.round(width * 0.3);
 	// 320px drag saturates past the to-only-FAB midpoint (raw > 0.5) so
-	// the drag's terminal FAB is non-zero (the audit's ~0.34 snap
+	// the drag's interrupt-instant FAB is non-zero (the audit's ~0.34 snap
 	// reproduces only when the FAB has entered mid-drag).
 	const endX = startX + 320;
 	const touch = (
@@ -2899,7 +2899,7 @@ test('drag-to-discrete-nav handoff keeps the FAB continuous at the interrupt (R1
 		// Fire the discrete nav late in the swipe (after the 8th
 		// touchMove, when the drag has crossed the to-only-FAB midpoint
 		// and the FAB has started entering). At i=8 the drag raw is
-		// ~0.65, so the drag's terminal FAB is
+		// ~0.65, so the drag's interrupt-instant FAB is
 		// `max(0, (0.65 - 0.5) * 2) = 0.3` (close to the audit's ~0.34).
 		if (i === 8) {
 			await client.send('Runtime.evaluate', {
@@ -2959,7 +2959,7 @@ test('drag-to-discrete-nav handoff keeps the FAB continuous at the interrupt (R1
 // (outgoing=true, incoming=true, isTabToTab, dragMorphWasStatic) returns
 // `atRestMorph(true) = 1` = `sourceRest` = `destMorph`, the settle-arm
 // condition evaluates false, the settle is SKIPPED, and the morph snaps
-// from the drag's terminal (1 - raw) to the at-rest (1) at the
+// from the drag's interrupt-instant value (1 - raw) to the at-rest (1) at the
 // drag-to-discrete-nav handoff. Sourcing from the drag's target
 // (outgoing=true, incoming=false) returns `dragMorphAtAnchorOrRaw(true,
 // raw) = 1 - raw`; liveDragMorph differs from sourceRest (1) and destMorph
@@ -3038,7 +3038,7 @@ test('drag-to-discrete-nav handoff: shape (T,T,F) tab source, tab discrete-nav d
 // parameters from the discrete-nav destination (outgoing=false,
 // incoming=false, isDeepToDeep) returns the hardcoded 0 = `sourceRest` =
 // `destMorph`, the settle-arm condition evaluates false, the settle is
-// SKIPPED, and the morph snaps from the drag's terminal (raw) to the
+// SKIPPED, and the morph snaps from the drag's interrupt-instant value (raw) to the
 // at-rest (0). Sourcing from the drag's target (outgoing=false,
 // incoming=true) returns `dragMorphAtAnchorOrRaw(false, raw) = raw`;
 // liveDragMorph differs from sourceRest (0) and destMorph (0), the settle
@@ -3209,7 +3209,7 @@ test('drag-to-discrete-nav handoff: shape (F,T,F) deep source, tab discrete-nav 
 // re-seeds `#searchAnchor = { start: bm, dest: 0 }` AFTER the discrete-nav
 // arm. The Header's `searchProgress` derivation's settle-anchor branch
 // lerps `start` -> `dest` across `settleMorphFraction`, keeping the header
-// track continuous with the drag's terminal value. Without the anchor the
+// track continuous with the drag's interrupt-instant value. Without the anchor the
 // at-rest / gesture switch collapses `searchProgress` from `bm` to 0 in
 // one rAF frame at the boundary (targetIsSearch flips to false when
 // `transitionTarget` clears, so the `targetIsSearch ? trackMorph : 0` arm

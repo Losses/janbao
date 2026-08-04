@@ -7804,3 +7804,199 @@ HeaderSettleTransition.startMorph for the per-arm-path value)."
 4th and final missed sibling from the R100-A sweep.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R115 fix (#atRestMorph: 5th missed sibling from R100-A sweep; counter 0/5)
+
+**R115 result: auditor A BLOCK, auditor B (pending). Counter 0/5.**
+
+**A.** `orchestrator:1342-1344` (`#atRestMorph` docstring) -- "a
+preceding drag hands its terminal morph to the settle via the drag-anchor
+capture, not via this helper" -- wrong for from-rest drags
+(`#dragMorphAnchor` null; terminal via natural formula). 5th site in the
+"drag's terminal value / drag-anchor overclaim" class. Fixed: dropped the
+parenthetical (the first clause "no live drag owns the morph" is accurate
+and sufficient).
+
+**B.** 3 more missed siblings in the same class, all in the discrete-nav
+arm block: `orchestrator:2835` "the live drag's terminal value" (wrong
+for from-rest path 1, no live drag), `:2928` "eases from the drag's
+terminal value" (should be `startMorph`), `:2993` "matches the drag's
+terminal value" (should be `startMorph`). Fixed: replaced all 3 with
+accurate variable references (`startMorph` / "the morph value at the arm
+instant"). 8th/9th/10th sites in the class. With all 10 sites fixed
+(R100-A 3 + R114 1 + R115-A 1 + R115-B 3 + the 2 prior), the class
+is fully exhausted.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R116 fix (Header:432 "gesture-terminal morph": 11th site; counter 0/5)
+
+**R116 result: auditor A (pending), auditor B BLOCK. Counter 0/5.**
+
+**B.** `Header.svelte:432` (DEV probe comment) -- "the gesture-terminal
+morph that drives the §5 continuity lives on the latched record
+(`settleLatched.startMorph`)" -- wrong for 4 of 6 arm paths
+(startMorph is gesture-terminal only for gesture-release/gesture-interrupted
+discrete-nav). 11th site in the class. Fixed: "the morph value at the
+settle-arm instant." B's sweep of 50+ "drag's terminal" hits + 1
+"gesture-terminal" hit verified this as the only unfixed sibling. With
+this fix the class should be fully exhausted.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R117 fix (3 helper docstring titles: #dragMorphAtSettleTakeover + #dragMorphAtAnchorOrRaw; counter 0/5)
+
+**R117 result: auditor A BLOCK, auditor B PASS. Counter 0/5.**
+
+**A.** 3 more sites in the "drag's terminal morph" overclaim class, all
+in helper docstring titles (missed by prior sweeps that covered fields,
+publications, probe, arm-block comments, and the Header probe):
+
+- `orchestrator:3586` (`#dragMorphAtSettleTakeover` title) -- "The drag's
+  terminal morph at the moment a settle takes over" -- wrong for from-rest.
+  Fixed: "The morph value at the settle-arm instant."
+- `orchestrator:3650` (`#dragMorphAtAnchorOrRaw` title) -- "The drag's
+  terminal morph at release" -- wrong for discrete-nav interrupt (not release)
+  and from-rest. Fixed: "The morph value at the settle-arm instant."
+- `orchestrator:3657` (body sentence) -- "equals the drag's terminal
+  morph" -- wrong for from-rest. Fixed: "equals the morph value this helper
+  computed."
+
+A's sweep of 26+ hits verified these 3 as the only unfixed siblings. 14
+total sites in the class now fixed.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R118 fix (R117 edit residual: duplicated "classified by gesture"; counter 0/5)
+
+**R118 result: auditor A (pending), auditor B BLOCK. Counter 0/5.**
+
+**B.** `orchestrator:3586` -- R117's edit left "classified by gesture"
+at the end of line 3586 (residual from the old text), immediately
+followed by "classified by gesture shape" on line 3587. Duplicated
+phrase. Fixed: removed the leftover. B's sweep confirmed the "drag's
+terminal value" class fully exhausted (17 remaining hits all properly
+scoped). The R118 finding was a meta-defect from the orchestrator's own
+R117 edit.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R119 fix (drag-terminal / drag's-terminal overclaim: hyphenated sub-class + discrete-nav residuals; counter 0/5)
+
+**R119 result: auditor A BLOCK, auditor B PASS (invalid). Counter 0/5.**
+
+A found a new lexical sub-class: the **hyphenated `drag-terminal`** form,
+which the `drag's terminal` / `gesture-terminal` greps used in R100-R118
+never matched. 3 sites (2759, 2789, 4354). B voted PASS but B's grep used
+the same two patterns, so the hyphenated sites were invisible to it and
+B additionally mis-classified 2934 / 3020 (apostrophe form, discrete-nav
+arm) as qualified. B's PASS invalid; the orchestrator superseded it.
+
+The orchestrator's broad `terminal` grep + per-hit read found the class
+NOT exhausted (R118's "fully exhausted" claim was wrong). 9 sites fixed,
+all in the discrete-nav / takeover path, where the captured value is the
+**settle-arm (interrupt) instant** value, not the drag's terminal (the
+discrete-nav arm fires for a live-drag interrupt -- drag cut short, never
+terminal -- AND for from-rest -- no drag, capture is at-rest / null):
+
+- 2700 (re-introduces the overclaim R117 removed from the helper's own
+  docstring), 2759 (A F1), 2789 (A F2), 2934 (B mis-classified; ~0.37 is
+  the interrupt value, the deep->tab terminal is 1), 3020 (B
+  mis-classified; next sentence documents the from-rest collapse),
+  3055 (A under-counted as scoped), 3066 (A under-counted), 3654 (R117's
+  own docstring rewrite missed this third sentence), 4354 (A F3). All
+  rewritten to "settle-arm instant" / "at the interrupt."
+
+8 remaining `terminal` hits verified gesture-release (`#armSettleEaseFromGesture`,
+where a live drag reaches terminal at release) or constant-0 edge -- not
+defects.
+
+**Root cause of the 5-round tail:** auditor/sweep greps matched literal
+lexical forms (`drag's terminal`, `gesture-terminal`) and never the
+hyphenated `drag-terminal`, so that sub-class survived R114-R118.
+Future rounds grep the CONCEPT (any `terminal` token near a
+drag/settle/takeover capture) and read every hit.
+
+**Verify.** `bun run check` 0/0; prettier clean; no U+2014; `bun test
+src/lib/stores src/lib/utils` 398/0. Comment-only; runtime unchanged.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R120 fix (startMorph overclaim: Header + header-probe + 9 e2e siblings; counter 0/5)
+
+**R120 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+A and B INDEPENDENTLY converged on the same two defects: `startMorph`
+overclaim at Header.svelte:275 (the morph-derivation arm-path list) and
+header-probe.ts:39 (`HeaderSettleTransition.startMorph` docstring). Both
+attribute "the drag's terminal" to the gesture-interrupted-discrete-nav
+case, where the drag is cut short and the captured value is the
+interrupt-instant value. This is the SOURCE SHAPE the orchestrator
+captures `liveDragMorph` for; the orchestrator's own helper docstrings
+were fixed in R117-R119 but this load-bearing interface/type comment was
+missed.
+
+Both auditors applied R119's concept-grep discipline over `src/lib` and
+found only these two src/lib residuals. BUT both confined the sweep to
+`src/lib` and never covered `e2e/`. The orchestrator's cross-directory +
+spec sweep found **9 unfixed siblings** in `e2e/messages-back-swipe.spec.ts`
+(R14 F1 / R22-A F1 / R23-B discrete-nav tests): lines 2007, 2831, 2839,
+2846, 2882, 2902, 2962, 3041, 3212. The clearest is :2902 -- the comment
+computes `max(0,(0.65-0.5)*2)=0.3` and calls it "the drag's terminal FAB,"
+but the actual terminal (raw=1) is 1.0; 0.3 is the interrupt-instant value.
+
+11 sites fixed (Header:275 split release/discrete-nav; header-probe:39
+rewritten to "value at the settle-arm instant"; 9 e2e sites rewritten to
+"interrupt-instant value"). All remaining `terminal` hits verified as
+release / saturated-raw=1 / constant-0 isDeepToDeep / commit-destination
+/ FAB-epsilon -- not defects.
+
+**Root cause (R100-R120):** two compounding blind spots. (1) Lexical-form
+(R100-R119): grepped `drag's terminal` + `gesture-terminal`, never the
+hyphenated `drag-terminal`. (2) File-boundary (R120): even with concept
+grep, both auditors confined to `src/lib`, never `e2e/`. The class spans
+the whole layer; the sweep must too.
+
+**Verify.** `bun run check` 0/0; prettier clean on all 3 edited files;
+no U+2014. Comment-only; runtime + e2e logic unchanged. The
+discrete-nav/takeover overclaim class is now exhausted across `src/lib`
+AND `e2e/`.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R121 fix (#atRestMorph docstring: wrong universal "no live drag" justification; counter 0/5)
+
+**R121 result: auditor A BLOCK, auditor B PASS. Counter 0/5.**
+
+A found a NEW class (the drag-terminal class is exhausted). The
+`#atRestMorph` docstring (orchestrator:1341-1342) justified the value's
+correctness with "because no live drag owns the morph at these arm
+instants" -- a universal claim over the docstring's listed callers. It is
+false for the `onSvelteKitBeforeNavigate` discrete-nav arm (listed without
+a no-drag qualifier): that arm fires during a live-drag interrupt, and at
+that arm instant `#atRestMorph` IS called (lines 2956-2957, for
+`sourceRest`/`destMorph`) while a live drag owns the morph. The return
+value is correct (`hasTabs ? 1 : 0`, a pure route property), but the
+stated REASON is wrong -- the real reason is that at-rest morph is a pure
+function of tab-ness, independent of drag state.
+
+This overturns R115, which explicitly endorsed the "no live drag owns the
+morph" clause as "accurate and sufficient" but verified it only from the
+from-rest perspective. Second prior-round endorsement overturned (after
+R118's "drag's-terminal fully exhausted," overturned by R119-R120).
+Prior-round endorsements are NOT trusted; every claim is re-derived
+against the full caller set.
+
+B PASSed on the drag-terminal class (genuinely exhausted post-R120); B did
+not examine the `#atRestMorph` justification (different class).
+
+Orchestrator grep of `no live drag | owns the morph | live drag in flight`
+confirms 1342 is the ONLY unqualified universal claim (16 other hits all
+context-qualified). Fixed: rewrote the justification to "a pure function
+of tab-ness, independent of any drag state, so it resolves correctly
+whether the caller arms from rest or interrupts a live drag (the
+discrete-nav arm)."
+
+**Verify.** `bun run check` 0/0; prettier clean; no U+2014. Comment-only.
+
+**No git mutation.** No commits, no branches, no pushes.
