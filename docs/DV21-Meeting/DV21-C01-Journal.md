@@ -8086,3 +8086,140 @@ Re-grep confirms the only remaining `terminal value at release` hit is
 morph's terminal, not startMorph). Gates green; comment-only.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R125 fix (#settleStartProgress over-narrow characterization; counter 0/5)
+
+**R125 result: auditor A PASS, auditor B BLOCK. Counter 0/5.**
+
+A PASSed; B BLOCKed on a 5th instance of the over-narrow-characterization
+class. `#settleStartProgress` field docstring (orchestrator:542-544)
+characterized the field by only 2 of its 6 caller paths ("the release
+position for a gesture-release settle, 0 for a non-gesture title-change
+settle"). Paths 2 (discrete-nav arm: visual-derived interrupt raw, non-zero
+for a live-drag interrupt), 4 (`#accelerateInFlight` re-arm: in-flight
+settle progress), 5 (`notifyHeaderState` absorb: in-flight settle progress)
+were unaddressed and can hold non-zero, non-release values. Orchestrator
+independently confirmed path 2 (`#startProgressFromCurrentVisual` at line 2692) and paths 4/5 (`this.#stateMachine.settleProgress`).
+
+Same class as R120/R121/R124, different phrasing -- lexical sweeps of one
+neighborhood (`terminal`/`startMorph`/`DragMorphAnchor`) never matched this
+field. B found it by sweeping parenthetical "X for case Y, Z for case W"
+characterizations across ALL state-field docstrings and re-deriving each
+against its caller set. The orchestrator's R124 proactive sweep missed it
+(targeted startMorph phrasings).
+
+Fixed: parenthetical now covers all 6 paths (release raw / visual-derived
+interrupt raw (0 for from-rest) / in-flight settle progress for re-arm / 0
+for enter or idle). Orchestrator sibling sweep of every settle-arm +
+publication field confirms `#settleStartProgress` was the sole over-narrow
+state field (`#settleTargetProgress` correct; others single-concept or
+comprehensively enumerated). Gates green; comment-only.
+
+**Orchestrator proactive-sweep 2nd fix (rawStart).** A broad grep for the
+same class across field/interface docstrings surfaced
+`PendingGestureTransition.rawStart` (orchestrator:144-145): "the commit's
+last published raw for a re-grab" -- but `rawStart` is
+`#startProgressFromCurrentVisual(plan)`, the NEW plan's progress at the
+current visual (per the inline comment at line 1918); for a
+gesture-during-forward-enter the value is the enter settle's raw, not "the
+commit's." Fixed to "the new plan's progress at the current visual position
+for a re-grab, 0 for from-rest." Neither auditor flagged it (the
+`PendingGestureTransition` interface field was outside both sweeps' focus).
+Gates green; comment-only.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R126 (DOUBLE PASS, counter 1/5)
+
+**R126 result: auditor A PASS, auditor B PASS. Counter 1/5.**
+
+Double-PASS. Both did COMPREHENSIVE multi-path-value re-derivation -- not
+just the R120-R125 fixes, but every field/parameter/interface-property
+docstring set by multiple callers -- and found zero in-scope concerns.
+A re-derived `#settleStartProgress`, `rawStart`, `#atRestMorph`,
+`startMorph`, `DragMorphAnchor`, `destMorph`, `#commitStartRaw` (3 cases),
+`#lastLandWasPipelineCommit` (5 sites), `#lastDispatchWasDeepToDeep` (5),
+`#gestureToTabIndex` (2), the anchor clear sites, `EnterFabAnchor` (5),
+`SearchAnchor` (5), and the helper caller counts. B independently walked
+every state-field docstring + the 6 `#armSettleEase` arm paths. Both
+explicitly grepped the over-narrow-characterization class with multiple
+phrasings (parenthetical "X for case Y", universal "every X"/"always"/
+"never", drag-terminal/interrupt-instant variants) and read every hit --
+no remaining instance.
+
+This is the strongest signal yet that the class is exhausted: prior PASSes
+(R122, R123) missed the R124/R125 residuals because they re-derived a
+narrower field set; R126 broadened to essentially every multi-path field.
+
+R124/R125 fixes verified intact. §5 intact (3 disjoint rAF channels, no
+animation-layer transitions/setTimeout). Fix A/B/C/D match spec. Gates
+green. No code change.
+
+**No fix this round.** No code change.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R127 fix (displayConfig dip-to-0 + #commitStartRaw backMorph over-narrow; counter 0/5)
+
+**R127 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+A and B BLOCKed on TWO DIFFERENT findings (both the over-narrow/overclaim
+class). R126's pass wiped (premature-PASS correction, as in R124).
+
+**A:** `FloatingActionButtonLayer.svelte:118-122` (`displayConfig`) --
+"matching the scale's dip-to-0 at the midpoint" overclaims; the dip-to-0
+is natural-`fabScale`-formula-only (per the layer docstring lines 22-24),
+and the kind-swap is reachable during a branch-3 enterAnchor-lerp release
+(scale ~0.96 at midpoint, not 0). Fixed: qualified to the natural formula
+
+- acknowledged the anchor branches.
+
+**B:** `orchestrator:508` (`#commitStartRaw`) -- "(deep-page /
+backward-to-deep-page Header morph)" defined `backMorph` by 2 of its
+morph-driving paths, omitting centerTab threads (the Header's own comment
+line 207-209 enumerates "deep page, compose, and centerTab threads
+alike"). Fixed: non-enumerative "(the Header morph signal published during
+a drag)."
+
+Why R126 missed both: it re-derived the multi-path fields' VALUE
+enumerations but not (A) the dip-to-0 RATIONALE against the branch set, nor
+(B) the backMorph APPOSITION against its full morph-driving path set. The
+class surfaces one sub-property at a time (value / rationale / apposition).
+
+Orchestrator proactive sweep of signal-definitional parentheticals after
+the fixes: `orchestrator:4792` is context-scoped to `holdPillAtFromIdx`'s
+2 reach paths (accurate, B concurred); `orchestrator:838` /
+`header-probe.ts:166` map settleTargetProgress's 2 values correctly. No
+new over-narrow parentheticals. Gates green; comment-only.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R128 fix (#priorTerminalSearchProgress + #armSettleEase rationale over-narrow; counter 0/5)
+
+**R128 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+Two DIFFERENT findings, both the over-narrow-RATIONALE sub-class.
+
+**A:** `#priorTerminalSearchProgress === 0` (orchestrator:1316-1321 +
+sibling header-probe.ts:189-194) cited `#searchProgressAtSettleInstant`'s
+THIRD (at-rest) clause. That fires for from-rest tab-clicks and deep→deep
+discrete navs, but a gesture-release commit re-seeds `#searchAnchor = {0,0}`,
+so at the `#onExecutorSettle` stash (line 2254) the FIRST clause (line 4455)
+lerps to 0 -- not the third. Value correct for all paths; cited reason holds
+for some. Fixed both sites to the two-mechanism form (at-rest clause OR
+re-seeded `{0,0}` settle-anchor lerp).
+
+**B:** `#armSettleEase` `durationMs` docstring (orchestrator:3208-3210)
+lumped the mid-settle absorb + idle title-change arms under "(200ms; no
+slide to track)." True for the idle arm (nav landed); FALSE for the absorb
+arm, which fires mid-enter while the slide IS in flight (its own inline
+comment at 4122-4124 says so). The parallel comment at 527-540 states the
+parameter for the same arms without that rationale. Fixed to "(200ms; a
+fixed crossfade duration independent of any in-flight slide)."
+
+R127's proactive sweep targeted signal-definitional parentheticals
+(appositions); these two are rationale sub-properties inside multi-line
+explanations. Each sub-property type (value / rationale / apposition) needs
+its own re-derivation pass. Gates green; comment-only.
+
+**No git mutation.** No commits, no branches, no pushes.

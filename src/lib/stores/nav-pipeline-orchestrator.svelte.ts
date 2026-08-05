@@ -141,8 +141,8 @@ type PipelineElementResolver = () => PipelineElementRefs;
 interface PendingGestureTransition {
 	readonly to: string;
 	readonly startProgress: number;
-	/** The raw drag fraction at gesture start (the commit's last
-	 *  published raw for a re-grab, 0 for from-rest). The live-drag's
+	/** The raw drag fraction at gesture start (the new plan's progress
+	 *  at the current visual position for a re-grab, 0 for from-rest). The live-drag's
 	 *  published progress starts from here so the slide (and the FAB
 	 *  scale, derived from this progress via `computeFabScale`) does
 	 *  not jump on a re-grab. */
@@ -505,7 +505,7 @@ export class NavPipelineOrchestrator {
 	/** The raw drag-fraction published at the moment a commit / cancel
 	 *  began. The commit-phase publication lerps from this value to the
 	 *  target (1 commit / 0 cancel) along the executor's eased fraction,
-	 *  so `backMorph` (deep-page / backward-to-deep-page Header morph)
+	 *  so `backMorph` (the Header morph signal published during a drag)
 	 *  and the FAB's `publication.progress` stay continuous across the
 	 *  drag-to-commit boundary for every transition that starts a
 	 *  commit/cancel (gesture from rest, mid-transition interrupt,
@@ -540,8 +540,12 @@ export class NavPipelineOrchestrator {
 	// Reduced-motion snaps (no rAF integration).
 	#settleRafId: number | undefined;
 	/** The settle progress's start value on the publication's raw scale
-	 *  (the release position for a gesture-release settle, 0 for a
-	 *  non-gesture title-change settle). The settle rAF advances
+	 *  (the settle's raw-scale start value at the settle-arm instant:
+	 *  the release raw for a gesture-release; the visual-derived raw at
+	 *  the interrupt for a discrete-nav arm (0 for a from-rest
+	 *  tab-click); the in-flight settle progress for an accelerate /
+	 *  mid-settle-absorb re-arm; 0 for a forward-enter or an idle
+	 *  title-change). The settle rAF advances
 	 *  `stateMachine.settleProgress` from this value toward
 	 *  `#settleTargetProgress`, publishing the raw-scale position the
 	 *  title-view spans read (they share the raw scale with
@@ -1311,8 +1315,10 @@ export class NavPipelineOrchestrator {
 		// reset to 0 at the boundary then re-animate 0 -> 1 across the
 		// enter slide). For a non-search pipeline commit landing
 		// (`#priorTerminalSearchProgress === 0` because
-		// `#searchProgressAtSettleInstant`'s third clause returns 0 when
-		// neither side is search, and at a commit terminal the helper does
+		// `#searchProgressAtSettleInstant` returns 0 (neither side is
+		// search -- via the at-rest clause, or a re-seeded `{0,0}`
+		// settle-anchor lerp for a gesture-release commit), and at a
+		// commit terminal the helper does
 		// not short-circuit to null: it is in-flight with `#mountInputs` set
 		// and `toPathname` resolved) the host route is non-search so `dest = 0`:
 		// the lerp holds at 0 across the enter settle, a no-op against
@@ -3203,7 +3209,7 @@ export class NavPipelineOrchestrator {
 	 *  `#accelerateInFlight`'s accelerated re-arm passes a shortened
 	 *  `acceleratedMs`. The `notifyHeaderState` mid-settle absorb and the
 	 *  idle title-change arm pass the default `TITLE_CROSSFADE_MS` (200ms;
-	 *  no slide to track).
+	 *  a fixed crossfade duration independent of any in-flight slide).
 	 *
 	 *  Cancels any in-flight settle first (a rapid back-to-back nav). */
 	#armSettleEase(

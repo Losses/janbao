@@ -117,8 +117,10 @@
 
 	/** Resolve the FAB kind to display, swapping to the destination's kind
 	 *  at the visual midpoint of an in-flight transition so the
-	 *  destination's icon scales in (matching the scale's dip-to-0 at the
-	 *  midpoint). At rest or before the midpoint, the resting config's kind
+	 *  destination's icon scales in (the natural `fabScale` formula dips
+	 *  to 0 at the midpoint, hiding the swap; the enter-anchor /
+	 *  drag-anchor branches override the natural formula and may leave
+	 *  the swap visible). At rest or before the midpoint, the resting config's kind
 	 *  holds. */
 	const displayConfig = $derived.by<FabConfig | null>(() => {
 		const cfg = fabConfig ?? retainedConfig;

@@ -190,8 +190,10 @@ export interface EnterFabAnchor {
  *     is the prior commit's terminal searchProgress stashed by
  *     `#onExecutorSettle` (1 for a forward-swipe-to-`/search` commit whose
  *     drag slid the panel fully in via `searchProgress = bm`; 0 for a
- *     non-search commit, whose `#searchProgressAtSettleInstant` returns 0
- *     when neither side is search); `dest` is the host route's at-rest
+ *     non-search commit: neither side is search, so
+ *     `#searchProgressAtSettleInstant` returns 0 -- via its at-rest
+ *     clause, or a re-seeded `{0,0}` settle-anchor lerp for a
+ *     gesture-release commit); `dest` is the host route's at-rest
  *     searchProgress (`resolveHeaderMode(host) === 'search' ? 1 : 0`). A
  *     `/search` host thus holds the panel fully in (`start = dest = 1`)
  *     across the enter settle, suppressing the natural
