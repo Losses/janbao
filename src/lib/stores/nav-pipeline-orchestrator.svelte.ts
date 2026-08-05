@@ -238,14 +238,14 @@ export interface PipelineMountInputs {
 	/** The back-target's tag. */
 	readonly toTag: RouteTag;
 	/** The tab-bar pill index the FROM route is associated with; -1
-	 *  when FROM has no tab association. The thread host passes its
-	 *  `centerTab` here so the pill animates from the thread's tab. */
+	 *  when FROM has no tab association. NavPipelineHost (thread and compose) passes its
+	 *  `centerTab` here so the pill animates from the route's tab. */
 	readonly fromTabIndex: number;
 	/** Index of the back-target in the tab-bar's pill order, or -1
 	 *  when TO is not a tab root. */
 	readonly toTabIndex: number;
-	/** The thread host's `centerTab` prop (the tab index the thread
-	 *  page is centered on, e.g. 0 for discussions). When set, the
+	/** The NavPipelineHost `centerTab` prop (the tab index a thread or
+	 *  compose route is centered on, e.g. 0 for discussions). When set, the
 	 *  orchestrator publishes a live `backMorph: rawDragFraction` (the same
 	 *  gesture-feedback signal the deep-page path publishes) plus a
 	 *  `fractionalIndex` that interpolates from `centerTab` toward the
@@ -257,13 +257,12 @@ export interface PipelineMountInputs {
 	 *  the publication holds `fractionalIndex: centerTab`,
 	 *  `targetIndex: null`, `backMorph: null` so the Header's morph
 	 *  derivation falls through to the at-rest branch
-	 *  (`currentHasTabs ? 1 : 0`). The thread route is tab-associated
+	 *  (`currentHasTabs ? 1 : 0`). The centerTab route is tab-associated
 	 *  (`getCurrentTabIndex('/messages/<id>') === 2`, so
 	 *  `currentHasTabs === true`), morph rests at 1 (tab bar visible,
 	 *  hamburger icon) and the published `fractionalIndex = centerTab`
-	 *  matches the tab the thread overlays. When undefined, the deep-page
-	 *  / tab-host publication paths apply (compose route, deep page, or
-	 *  tab host). */
+	 *  matches the tab the route overlays. When undefined, the deep-page
+	 *  / tab-host publication paths apply (deep page or tab host). */
 	readonly centerTab?: number;
 	/** When true the orchestrator claims BOTH rightward and leftward
 	 *  drags (`NavPipelineTabHost`, the three tab roots). Rightward
@@ -624,9 +623,10 @@ export class NavPipelineOrchestrator {
 	/** The live translation dict, fed by the Header's `notifyHeaderState`
 	 *  each time the route changes. The orchestrator does not see SvelteKit's
 	 *  `$app/state` `page.data.t` reactivity from its singleton module scope;
-	 *  the Header (in a component scope) does. Kept current so the
-	 *  gesture-release settle arming can resolve the back-target title via
-	 *  `resolveDeepHeaderTitle`. */
+	 *  the Header (in a component scope) does. Kept current so
+	 *  each settle-arming site that resolves an endpoint title
+	 *  (`playEnterAnimation`, the discrete-nav arm, `#armSettleEaseFromGesture`)
+	 *  sees the current dict for its `resolveDeepHeaderTitle` call. */
 	#headerT: TranslationDict | null = null;
 	/** True when the current in-flight navigation was dispatched by the
 	 *  orchestrator (a gesture commit or a tab-click commit). Set at
@@ -2710,7 +2710,7 @@ export class NavPipelineOrchestrator {
 		// plan scale, which is what `bm` in the Header's drag branch reads
 		// via `pager.backMorph`). The helper returns the anchor-shifted
 		// natural(raw) for shapes where the drag branch follows `bm`
-		// (centerTab thread -> tab-root, deep -> tab, tab -> deep) via
+		// (centerTab route -> tab-root, deep -> tab, tab -> deep) via
 		// `#dragMorphAtAnchorOrRaw`, AND returns `anchor.morph` directly
 		// for the `dragMorphWasStatic` shapes (targetIsSearch, non-centerTab
 		// tab-to-tab) whose drag branch holds the morph at the anchor when
@@ -2851,7 +2851,7 @@ export class NavPipelineOrchestrator {
 		//     title-layer `translateY`, both of which must overlap with
 		//     the page slide per Bug 7 (no sequential gap).
 		//  2. A live drag advanced the morph away from the SOURCE's
-		//     at-rest (a centerTab thread -> tab-root back-swipe
+		//     at-rest (a centerTab route -> tab-root back-swipe
 		//     interrupted by a `__e2eGoto('/')`; the source and
 		//     destination both have `hasTabs = true` so the at-rests
 		//     agree, but the live `liveDragMorph` differs from that
@@ -2985,7 +2985,7 @@ export class NavPipelineOrchestrator {
 				// `startMorph` is the morph captured above from the live
 				// drag. `#dragMorphAtSettleTakeover` returns the
 				// anchor-shifted natural(raw) for shapes where the drag
-				// branch follows `bm` (the audit's centerTab thread ->
+				// branch follows `bm` (the audit's centerTab route ->
 				// tab-root shape, deep -> tab, tab -> deep) via
 				// `#dragMorphAtAnchorOrRaw`; returns `anchor.morph`
 				// directly for the `dragMorphWasStatic` shapes
@@ -3615,7 +3615,7 @@ export class NavPipelineOrchestrator {
 	 *     / F2), the drag branch returns `anchor.morph` and so does
 	 *     this helper; otherwise it returns
 	 *     `atRestMorph(outgoingHasTabs)` (the from-rest case).
-	 *   - everything else (centerTab thread -> tab-root, deep -> tab,
+	 *   - everything else (centerTab route -> tab-root, deep -> tab,
 	 *     tab -> deep): the drag branch follows the anchor-shifted
 	 *     natural(raw) curve via `#dragMorphAtAnchorOrRaw`.
 	 *  Callers supply the live `raw` at the appropriate instant:
@@ -3976,9 +3976,9 @@ export class NavPipelineOrchestrator {
 	): void {
 		if (!browser) return;
 		// Always update the translation dict before the `!#mounted` guard
-		// below so the gesture-release settle arming (which reads
-		// `#headerT` via `resolveDeepHeaderTitle` in
-		// `#armSettleEaseFromGesture`) sees the current dict even after a
+		// below so every settle-arming site that reads `#headerT` via
+		// `resolveDeepHeaderTitle` (`playEnterAnimation`, the discrete-nav
+		// arm, and `#armSettleEaseFromGesture`) sees the current dict even after a
 		// gap-frame call (releaseInputs -> the next configure) that hit the
 		// guard and early-returned.
 		this.#headerT = t;
@@ -4527,12 +4527,12 @@ export class NavPipelineOrchestrator {
 		const inputs = this.#mountInputs;
 		const centerTab = inputs?.centerTab;
 		if (centerTab !== undefined) {
-			// Thread route: the pill stays on centerTab at rest, active:
+			// centerTab route: the pill stays on centerTab at rest, active:
 			// true so the live fractionalIndex is published, backMorph:
 			// null at rest (during a drag Fix A publishes rawDragFraction
 			// so the Header eases toward back-arrow mid-swipe). The
 			// Header's at-rest morph reads currentHasTabs (root mode for
-			// the thread route: tab bar visible, hamburger icon).
+			// a centerTab route: tab bar visible, hamburger icon).
 			pager.set({
 				fractionalIndex: centerTab,
 				dragging: false,
@@ -4602,7 +4602,7 @@ export class NavPipelineOrchestrator {
 	 *  live pathname, not the stale mount pathname). Also refreshes
 	 *  `fromTabIndex` when the new pathname is a tab root so the tab
 	 *  pager's prev/next neighbour computation stays correct across tab
-	 *  swaps. Non-tab-root pathnames (thread detail pages) keep their
+	 *  swaps. Non-tab-root pathnames (thread and compose detail pages) keep their
 	 *  mount-time `fromTabIndex` (the centerTab value). */
 	updateFromPathname(pathname: string): void {
 		const inputs = this.#mountInputs;
@@ -4679,7 +4679,7 @@ export class NavPipelineOrchestrator {
 
 	/** Republish the current publication to the pager store. Three modes:
 	 *
-	 *  Thread mode (centerTab set): publishes `backMorph: rawDragFraction`
+	 *  centerTab mode (centerTab set): publishes `backMorph: rawDragFraction`
 	 *  so the Header's morph / layer derivation tracks the live drag on a
 	 *  centerTab route the same way it tracks a non-centerTab deep route.
 	 *  The morph derivation in the Header (`currentHasTabs ? 1 - bm : bm`)
@@ -4713,7 +4713,7 @@ export class NavPipelineOrchestrator {
 	 *      so the Header morph reveals the back-arrow during the slide
 	 *      (the destination is a deep page, matching NavPipelineHost's
 	 *      backward behaviour). On landing the deep page's `configure`
-	 *      publishes its own pill (`centerTab` for a thread, -1 for a
+	 *      publishes its own pill (`centerTab` for a thread or compose route, -1 for a
 	 *      deep page).
 	 *    - Forward-last-tab-to-`/search` (target is `/search`, reached via
 	 *      `#nextTabTarget` when the active tab is the last tab on the
@@ -4778,7 +4778,7 @@ export class NavPipelineOrchestrator {
 			});
 			return;
 		}
-		// No centerTab: tab host (bidirectional), compose route, or deep page.
+		// No centerTab: tab host (bidirectional) or deep page.
 		// The pill interpolation is shared; the backMorph publication differs
 		// by destination (see the docstring above for the five sub-cases).
 		const fromIdx = inputs?.fromTabIndex ?? -1;

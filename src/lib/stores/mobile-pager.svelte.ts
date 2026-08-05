@@ -15,23 +15,23 @@
  * search page. It is the swipe-back progress 0..1 (0 at rest on the current
  * page, 1 once committed toward the source), written frame-synced with
  * `fractionalIndex` by the pipeline orchestrator. At rest: null on tab roots
- * and threads (centerTab routes) so the Header's morph derivation falls back
+ * and centerTab routes (thread and compose) so the Header's morph derivation falls back
  * to the at-rest branch (`currentHasTabs ? 1 : 0`, which returns 0 for deep
  * pages via `currentHasTabs === false`). During a drag the orchestrator
- * publishes the live raw drag fraction on centerTab thread routes (gesture
+ * publishes the live raw drag fraction on centerTab routes (gesture
  * feedback so the morph / layer derivation tracks the live drag and the
  * settle at release interpolates from the captured `startMorph`), on
  * bidirectional tab-host backward-to-deep and forward-last-tab-to-`/search`
  * drags, and on every NavPipelineHost drag that does NOT pill-map both
- * endpoints to a tab (deep page, compose, `/profile`, `/bookmarks`); the
+ * endpoints to a tab (deep page, `/profile`, `/bookmarks`); the
  * only drag-time null publication is a tab-to-tab swipe on a non-centerTab
  * host type (NavPipelineTabHost tab swipes AND NavPipelineHost offline LIST
  * routes like `/offline`, `/offline/activity`, `/offline/bookmarks` whose
  * `leftHref` pill-maps to the same tab - both endpoints pill-map to a tab
- * AND the source route is not a centerTab thread, so `#republishToPager`'s
+ * AND `centerTab` is undefined, so `#republishToPager`'s
  * non-centerTab branch's `(fromIdx >= 0 && toIdx >= 0)` clause nulls
  * `backMorph` end to end), where both endpoints already root mode and the
- * morph stays at the static `currentHasTabs ? 1 : 0`. A centerTab thread ->
+ * morph stays at the static `currentHasTabs ? 1 : 0`. A centerTab route ->
  * tab-root swipe pill-maps both endpoints to a tab but takes the centerTab
  * branch of `#republishToPager`, which publishes `rawDragFraction` end to
  * end as gesture feedback. The Header falls back to a URL-derived default

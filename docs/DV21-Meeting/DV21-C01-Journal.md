@@ -8223,3 +8223,119 @@ explanations. Each sub-property type (value / rationale / apposition) needs
 its own re-derivation pass. Gates green; comment-only.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R129 fix (compose-centerTab mis-classification + #headerT under-description; counter 0/5)
+
+**R129 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+Largest single-round set: 8 defects across two sub-classes.
+
+**B (6 sites): compose routes mis-classified as non-centerTab.** All three
+compose routes SET `centerTab` (`/post/discussion` =0; `/messages/new` +
+`/messages/add/[userId]` via MessageCompose =2), so they take the
+`#republishToPager` centerTab branch (line 4756), not the non-centerTab
+branch. Fixed 6 sites that placed compose in the non-centerTab /
+"When undefined" / "does NOT pill-map" buckets, or phrased the null
+condition as "not a centerTab thread" instead of "`centerTab` is
+undefined": orchestrator:264-266, 4781, 241-242, 247-248, 260;
+mobile-pager.svelte.ts:21, 25-26, 31; Header.svelte:214. Header.svelte:207
+already correctly groups "deep page, compose, and centerTab threads alike,"
+confirming the mis-classification.
+
+**A (2 sites): `#headerT` rationale under-describes readers.** `#headerT`
+is read via `resolveDeepHeaderTitle` at 3 sites (playEnterAnimation,
+discrete-nav arm, #armSettleEaseFromGesture) but the docstring (627-629)
+and notifyHeaderState inline (3978-3983) named only #armSettleEaseFromGesture
+and called it "the back-target title." Broadened to enumerate all three
+readers and "an endpoint title."
+
+Prior rounds missed these: no round grepped `compose` as a concept or
+re-derived the `centerTab` branch's reach set against the routes that set
+it. Gates green; comment-only.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R130 fix (thread→centerTab-route mirror + e2e backMorph universal; counter 0/5)
+
+**R130 result: auditor A BLOCK, auditor B BLOCK. Counter 0/5.**
+
+Largest round yet: 12 defects.
+
+**A (11 sites): the MIRROR of R129-B.** R129-B fixed the sites placing
+compose in the NON-centerTab bucket; R130-A found the positive
+characterizations of centerTab-branch behavior labeled "thread" alone,
+when compose (also a centerTab route) exercises the same behavior (the
+centerTab-branch publication, the `#dragMorphAtSettleTakeover(isCenterTabRoute=true)`
+shape, the at-rest publication, the case-2 settle-arm). Broadened "thread"
+→ "centerTab route" at orchestrator:264, 2713, 2854, 2988, 3618, 4530,
+4535, 4605; mobile-pager.svelte.ts:18, 34; Header.svelte:218. Header:207
+("deep page, compose, and centerTab threads alike") and e2e "enter thread
+detail" test steps left unchanged (accurate).
+
+**B (1 site): e2e universal.** `reproduce-dv20-drag-sync.spec.ts:95-96`
+stated the `backMorph`-for-every-NavPipelineHost-drag universal without the
+offline LIST null qualifier that Header:206-217 includes. For `/offline`
+-> `/` both endpoints pill-map, so backMorph is nulled. Added the
+qualifier.
+
+R129 swept the NEGATIVE (non-centerTab) sites; R130's mirror is the
+POSITIVE (thread-only) characterizations -- a different lexical
+neighborhood. Each polarity needs its own sweep. Gates green; comment-only.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R131 fix (thread residuals + R130-B regression; 7 over-reaches rejected; counter 0/5)
+
+**R131 result: auditor A BLOCK (10), auditor B BLOCK (3). Counter 0/5.**
+
+Orchestrator independently verified each finding: **4 confirmed + fixed**,
+**7 rejected as verified non-defects**.
+
+Fixed: (a) 3 "thread" residuals of R130-A -- `#republishToPager` docstring
+mode title "Thread mode" (orchestrator:4682), the Tab-host landing
+parenthetical "centerTab for a thread" (orchestrator:4716), and
+`search-enter-exit-asymmetry.spec.ts:55-56` "thread/tab host" -- all
+broadened to include compose (a centerTab route). (b) F3, a regression
+from R130-B: the e2e qualifier "whose endpoints do not both pill-map" was
+wrong (centerTab routes' endpoints DO both pill-map yet they publish
+backMorph via the centerTab branch), contradicting the parenthetical.
+Rewrote to match the Header framing (no pill-map qualifier on the main
+claim; offline LIST null exception separate).
+
+Rejected (A's "Class 2", 7 sites): compact "tab-to-tab on a non-centerTab
+host" phrases. Verified ACCURATE -- the codebase's null-`backMorph`
+condition is `(fromIdx >= 0 && toIdx >= 0)`, so "tab-to-tab" means both
+endpoints pill-map, which offline LIST routes satisfy; the phrase includes
+them, not excludes them. B concurred (did not flag). The orchestrator now
+applies independent verification to reject over-reaches and keep the fix
+set to genuine inaccuracies.
+
+Trajectory: R129=8, R130=12, R131=10 findings (4 confirmed). The
+over-narrow/route-classification tail is long. Gates green; comment-only.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R132 fix (search-enter-exit backMorph first-clause contradiction; counter 0/5)
+
+**R132 result: auditor A PASS, auditor B BLOCK. Counter 0/5.**
+
+A/B DISAGREED on one site; orchestrator verified it a genuine inaccuracy.
+Trajectory sharpening: R130=12, R131=10 (4 confirmed), R132=1 (1
+confirmed). The refined R132 prompt (Class-2 "tab-to-tab includes offline
+LIST" pre-emption + genuine-inaccuracy filter) plus accumulated fixes
+shrank the pool.
+
+B's finding: `e2e/search-enter-exit-asymmetry.spec.ts:54-55` first clause
+"0..1 ... at rest on a NavPipelineHost route" is literally wrong for
+centerTab NavPipelineHost routes (thread/compose) -- `resetPagerStore:4540`
+sets `backMorph: null` at rest for them, not 0..1. Sharpened into a
+contradiction with the R131-broadened second clause. A judged it a
+defensible refinement pattern; orchestrator rejected that (the clause
+states a falsehood for a real subset; bar = no borderline). Fixed:
+"at rest on a NavPipelineHost route" -> "at rest on a non-centerTab
+NavPipelineHost route." A clean PASS otherwise (every multi-path field
+re-derived, Fix A/B/C/D + R120-R131 fixes intact, §5, no dead exports).
+
+Gates green; comment-only.
+
+**No git mutation.** No commits, no branches, no pushes.

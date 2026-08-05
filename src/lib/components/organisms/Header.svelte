@@ -211,11 +211,11 @@
 			// (NavPipelineTabHost tab swipes and NavPipelineHost offline LIST
 			// routes like `/offline`, `/offline/activity`, `/offline/bookmarks`
 			// whose `leftHref` pill-maps to the same tab - both endpoints
-			// pill-map to a tab index AND the source route is not a centerTab
-			// thread, so `#republishToPager`'s non-centerTab branch's
+			// pill-map to a tab index AND `centerTab` is undefined, so
+			// `#republishToPager`'s non-centerTab branch's
 			// `(fromIdx >= 0 && toIdx >= 0)` clause nulls `backMorph` end to
 			// end), where the morph stays at the static
-			// `currentHasTabs ? 1 : 0`. A centerTab thread -> tab-root swipe
+			// `currentHasTabs ? 1 : 0`. A centerTab route -> tab-root swipe
 			// (e.g. `/messages/<id>` -> `/messages/inbox`) pill-maps both
 			// endpoints to Messages but takes the centerTab branch of
 			// `#republishToPager`, which publishes `rawDragFraction` end to

@@ -93,7 +93,10 @@ test('Bug 1: held back-swipe on a thread drives the header morph DURING the drag
 
 	// The gesture engaged: the deep-page track followed the finger. The
 	// orchestrator publishes a live `backMorph` for every claimed drag on a
-	// NavPipelineHost route (deep page, compose, and centerTab threads alike),
+	// NavPipelineHost route (deep page, compose, and centerTab threads alike)
+	// except a non-centerTab tab-to-tab swipe (the offline LIST mirror routes
+	// `/offline`, `/offline/activity`, `/offline/bookmarks` null `backMorph`
+	// end to end),
 	// so the multi-signal sampler's `backMorph` channel is non-null here; the
 	// track translateX is the engagement signal for Bug 1 because the
 	// centerTab route's track reads `publication.progress` directly off the

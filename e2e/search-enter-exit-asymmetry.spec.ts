@@ -52,8 +52,8 @@ interface SearchHdrFrame {
 	/** Search button viewport-left (px). Rightmost at a tab root, leftmost in search. */
 	btnLeft: number | null;
 	/** Primary pager store backMorph: 0..1 during any in-flight non-tab-to-tab
-	 *  transition and at rest on a NavPipelineHost route; null at rest on a
-	 *  thread/tab host and during tab-to-tab transitions. */
+	 *  transition and at rest on a non-centerTab NavPipelineHost route; null at rest on a
+	 *  centerTab route or a tab host and during tab-to-tab transitions. */
 	backMorph: number | null;
 	/** NavPipelineHost (content) track translateX (px) - the page-change signal on /search. */
 	contentTx: number | null;
