@@ -2126,11 +2126,14 @@ export class NavPipelineOrchestrator {
 		// Suppress the track slide (distance = 0) in three cases where
 		// there is no panel in the slide direction on the bidirectional
 		// tab host:
-		// 1. Backward to a deep page from the leftmost tab (panel 0 has
-		//    no left neighbour; the deep-snapshot overlay covers
-		//    activeIndex >= 1). `backMorph` still drives the Header morph
-		//    and `publication.progress` the FAB scale; history.back()
-		//    lands on the deep page on commit.
+		// 1. Backward to a non-tab target (a deep page, or `/search`) from
+		//    the leftmost tab (panel 0 has no left neighbour; the
+		//    deep-snapshot overlay covers activeIndex >= 1). `backMorph`
+		//    still drives the Header morph for a deep target (a `/search`
+		//    target takes the morph's `targetIsSearch` skip and consumes
+		//    `backMorph` via `searchProgress` instead, as in case 3) and
+		//    `publication.progress` the FAB scale; history.back() lands on
+		//    the back-target on commit.
 		// 2. Within-tab pagination (e.g. `/discussions/pN` <-> `/`,
 		//    either direction): both routes share the same spatial tab
 		//    index and the same panel, so the panel does not change
@@ -2754,9 +2757,14 @@ export class NavPipelineOrchestrator {
 		const liveDragMorphIsCenterTabRoute = inputs.centerTab !== undefined;
 		const liveDragMorphTargetIsSearch =
 			dragTargetPathname !== null && resolveHeaderMode(dragTargetPathname) === 'search';
+		const liveDragMorphBackMorphIsNull =
+			dragTargetPathname !== null &&
+			((inputs.bidirectional === true && getRouteData(dragTargetPathname).tag === 'tab') ||
+				(inputs.fromTabIndex >= 0 && isTabRootPath(dragTargetPathname)));
 		const liveDragMorph = this.#dragMorphAtSettleTakeover(
 			liveDragMorphOutgoingHasTabs,
 			liveDragMorphIncomingHasTabs,
+			liveDragMorphBackMorphIsNull,
 			liveDragMorphIsCenterTabRoute,
 			liveDragMorphTargetIsSearch,
 			this.#publication.progress
@@ -3481,9 +3489,15 @@ export class NavPipelineOrchestrator {
 		const targetIsSearch = resolveHeaderMode(back) === 'search';
 		const isDeepToDeep = !outgoingHasTabs && !incomingHasTabs;
 		const isCenterTabRoute = inputs.centerTab !== undefined;
+		// Whether the drag's backMorph was null (morph held at source
+		// at-rest), mirroring `#republishToPager`'s null condition.
+		const backMorphIsNull =
+			(inputs.bidirectional === true && getRouteData(back).tag === 'tab') ||
+			(inputs.fromTabIndex >= 0 && isTabRootPath(back));
 		const startMorph = this.#dragMorphAtSettleTakeover(
 			outgoingHasTabs,
 			incomingHasTabs,
+			backMorphIsNull,
 			isCenterTabRoute,
 			targetIsSearch,
 			raw
@@ -3603,14 +3617,15 @@ export class NavPipelineOrchestrator {
 	 *   - `isDeepToDeep` (both endpoints have no tabs): the drag branch
 	 *     hardcodes 0 regardless of `bm`, so the terminal morph is 0.
 	 *   - `dragMorphWasStatic` shapes - `targetIsSearch` (destination
-	 *     is `/search`) and non-centerTab tab-to-tab (NavPipelineTabHost
-	 *     tab swipe, NavPipelineHost offline LIST routes whose
-	 *     `leftHref` pill-maps to the same tab): the drag branch holds
-	 *     the morph static at the source's at-rest. `targetIsSearch`
-	 *     hits the `targetIsSearch` short-circuit; non-centerTab
-	 *     tab-to-tab hits the null-`backMorph` fallback (because
-	 *     `#republishToPager`'s non-centerTab `(fromIdx >= 0 && toIdx >=
-	 *     0)` clause publishes `backMorph: null` end to end). When a
+	 *     is `/search`) and non-centerTab shapes whose `backMorphIsNull`
+	 *     flag is true (NavPipelineTabHost tab-to-tab, NavPipelineHost
+	 *     offline LIST routes whose `leftHref` resolves to a tab root
+	 *     tab): the drag branch holds the morph static at the source's
+	 *     at-rest. `targetIsSearch` hits the `targetIsSearch`
+	 *     short-circuit; `backMorphIsNull` shapes hit the null-
+	 *     `backMorph` fallback. The caller computes `backMorphIsNull`
+	 *     from `#republishToPager`'s null condition so the
+	 *     classification matches the publication exactly. When a
 	 *     re-grab took over an in-flight settle in either shape (R8-A F1
 	 *     / F2), the drag branch returns `anchor.morph` and so does
 	 *     this helper; otherwise it returns
@@ -3626,13 +3641,13 @@ export class NavPipelineOrchestrator {
 	#dragMorphAtSettleTakeover(
 		outgoingHasTabs: boolean,
 		incomingHasTabs: boolean,
+		backMorphIsNull: boolean,
 		isCenterTabRoute: boolean,
 		targetIsSearch: boolean,
 		raw: number
 	): number {
 		if (!outgoingHasTabs && !incomingHasTabs) return 0;
-		const isTabToTab = outgoingHasTabs && incomingHasTabs;
-		const dragMorphWasStatic = targetIsSearch || (isTabToTab && !isCenterTabRoute);
+		const dragMorphWasStatic = targetIsSearch || (backMorphIsNull && !isCenterTabRoute);
 		if (dragMorphWasStatic) {
 			// R8-A F1 / F2: when a re-grab took over a non-tab-to-tab
 			// settle whose morph was in flight (e.g. a deep->tab settle
@@ -4788,17 +4803,16 @@ export class NavPipelineOrchestrator {
 		const toIdx = this.#gestureToTabIndex ?? inputs?.toTabIndex ?? -1;
 		const bidirectional = inputs?.bidirectional === true;
 		// Non-tab target on a bidirectional host: the in-flight target is
-		// not a tab root. Two reach paths: backward-to-deep-page
-		// (`history.back` to /profile, /bookmarks, etc.) and the
-		// forward-from-last-tab gesture whose target is `/search` (per
-		// `#nextTabTarget`). The resolved `toTabIndex` is `#tabIndexFor(to)`,
-		// which returns -1 for either path, so the pill has no destination
-		// tab to interpolate toward and must HOLD at fromIdx while the
-		// Header reacts to the published `backMorph` (the deep-page morph
-		// for a backward gesture; the root<->search scrub for a forward
-		// last-tab gesture, where the Header's `morph` derivation ignores
-		// `backMorph` and the searchProgress / trackMorph derivation
-		// consumes it).
+		// not a tab root (backward-to-deep-page, backward-to-thread/compose,
+		// backward-to-`/search`, or forward-last-tab-to-`/search`). The
+		// resolved `toTabIndex` is `#tabIndexFor(to)`, which returns -1 for
+		// any non-tab-root target, so the pill has no destination tab to
+		// interpolate toward and must HOLD at fromIdx while the Header
+		// reacts to the published `backMorph` (the morph driven by `bm`
+		// for a deep/thread/compose target; the root<->search scrub for a
+		// `/search` target, where the morph's `targetIsSearch` skip holds
+		// it at the source at-rest and `searchProgress` / `trackMorph`
+		// consume `backMorph`).
 		const targetPath = publication.toPathname;
 		const targetIsDeepPage = targetPath !== null && getRouteData(targetPath).tag !== 'tab';
 		const holdPillAtFromIdx = bidirectional && targetIsDeepPage;
@@ -4807,7 +4821,7 @@ export class NavPipelineOrchestrator {
 			pillToIdx >= 0
 				? Math.max(0, rawDragFraction - PILL_EXPANSION_THRESHOLD) / (1 - PILL_EXPANSION_THRESHOLD)
 				: 0;
-		// backMorph: raw slide fraction when the target is not a tab (deep
+		// backMorph: raw slide fraction when not both endpoints pill-map to a tab (deep
 		// host backward-exit, bidirectional backward-to-deep-page, or
 		// bidirectional forward-last-tab-to-`/search`). null when both
 		// source and target pill-map to a tab index (tab-to-tab on any host

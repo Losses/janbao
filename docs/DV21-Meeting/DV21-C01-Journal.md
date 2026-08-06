@@ -8419,3 +8419,82 @@ class.
 Gates green; comment-only.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R136 fix (backMorph headline + #resolvePlan case-1 description; counter 0/5)
+
+**R136 result: auditor A BLOCK (1), auditor B BLOCK (1). Counter 0/5.**
+
+Two genuine defects in `#republishToPager` / `#resolvePlan` inline comments.
+
+A (`orchestrator:4813`, backMorphValue inline): headline "raw slide fraction
+when the target is not a tab" wrong for `/profile` -> `/` (target `/` IS a
+tab, but backMorph is raw because the source `/profile` doesn't pill-map).
+The comment's own example "deep host backward-exit" is this case,
+contradicting the headline. Fixed: "when not both endpoints pill-map to a
+tab."
+
+B (`orchestrator:2129`, `#resolvePlan` case 1): condition `toData.tag !==
+'tab'` fires for deep AND `/search`, but the description said "deep page"
+with "backMorph drives morph" / "lands on deep page" -- all wrong for the
+`/search` sub-case (targetIsSearch skip; searchProgress consumes backMorph;
+lands on `/search`). Case 3 (forward `/search`) already states the
+backMorph-doesn't-drive-morph fact, so case 1 was internally inconsistent.
+Fixed: "Backward to a non-tab target (a deep page, or `/search`) ...
+backMorph still drives the Header morph for a deep target (a `/search`
+target takes the targetIsSearch skip and consumes backMorph via
+searchProgress instead, as in case 3) ... history.back() lands on the
+back-target."
+
+Gates green; comment-only.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R137 fix (F1: morph snap correctness bug + F2: "Two reach paths" comment; counter 0/5)
+
+**R137 result: auditor A BLOCK (F1+F2), auditor B BLOCK (F2). Counter 0/5.**
+
+**F1 (HIGH, correctness + §5): morph snap at drag-to-settle handoff for
+backward-to-thread/compose.** `#dragMorphAtSettleTakeover`'s
+`dragMorphWasStatic` used loose `isTabToTab` (pill-mapping) but the
+publication's null-backMorph uses strict `#tabIndexFor`/`tag==='tab'`. For
+a thread/compose target (pill-maps but not a tab root, tag='detail'),
+backMorph=raw (morph=1-bm dynamic) but the helper classified static
+→ startMorph=1 → snap from 1-bm_release to 1. Reachable: back-swipe from
+any tab root toward a thread/compose. **Fix:** replaced `isTabToTab` with
+`backMorphIsNull` parameter computed at each call site from
+`#republishToPager`'s actual null condition. Both call sites (gesture-
+release, discrete-nav) + helper signature/body/docstring updated. `bun run
+check` 0/0; 398 tests pass. **First correctness bug of the loop**
+(R100-R136 all comment-accuracy).
+
+**F2 (comment):** `#republishToPager` "Two reach paths" non-exhaustive
+(omits thread/compose//search) + wrong morph attribution for
+backward-to-/search. Fixed: comprehensive reach-path list + per-target
+morph attribution.
+
+Gates green; 398/0.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R138 fix (stale isTabToTab + /offline/bookmarks null-case conflation; counter 0/5)
+
+**R138 result: auditor A BLOCK (1), auditor B BLOCK (1). Counter 0/5.**
+
+Both residuals of the R137 F1 fix. Both auditors verified the F1
+correctness fix is sound (traced both call sites, no snap, no regression).
+
+A: stale `isTabToTab` references in `e2e/offline-back-swipe.spec.ts:21`
+and `e2e/messages-back-swipe.spec.ts:2959` (R137 renamed to
+`backMorphIsNull` but missed the e2e sweep). Fixed.
+
+B: `/offline/bookmarks` listed as null-`backMorph` case in 3 docstrings
+(mobile-pager:29, Header:212, orchestrator:3622). `/offline/bookmarks`'s
+structural back-target `/offline` is `tag: 'tab'` but NOT a tab root
+(`isTabRootPath` = false → `toIdx` = -1 → `backMorph` = raw, not null).
+Same loose-vs-strict conflation R137 fixed in the helper code. Fixed:
+removed `/offline/bookmarks` from the list, changed "pill-maps to the
+same tab" to "resolves to a tab root," clarified strict tab-root target.
+
+Gates green; 398/0.
+
+**No git mutation.** No commits, no branches, no pushes.

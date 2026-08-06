@@ -209,9 +209,9 @@
 			// (backward-to-deep, forward-last-tab-to-`/search`); the only null
 			// publication is a tab-to-tab swipe on a non-centerTab host type
 			// (NavPipelineTabHost tab swipes and NavPipelineHost offline LIST
-			// routes like `/offline`, `/offline/activity`, `/offline/bookmarks`
-			// whose `leftHref` pill-maps to the same tab - both endpoints
-			// pill-map to a tab index AND `centerTab` is undefined, so
+			// routes like `/offline`, `/offline/activity` whose `leftHref`
+			// resolves to a tab root - the source pill-maps and the target
+			// is a strict tab root AND `centerTab` is undefined, so
 			// `#republishToPager`'s non-centerTab branch's
 			// `(fromIdx >= 0 && toIdx >= 0)` clause nulls `backMorph` end to
 			// end), where the morph stays at the static

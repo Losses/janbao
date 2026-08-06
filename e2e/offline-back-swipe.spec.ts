@@ -18,7 +18,7 @@ import {
 // `#republishToPager`), so the drag morph stays at the static at-rest
 // value (hamburger mode) end
 // to end. The settle arm's `dragMorphWasStatic` derivation
-// (`targetIsSearch || (isTabToTab && !isCenterTabRoute)`) matches that
+// (`targetIsSearch || (backMorphIsNull && !isCenterTabRoute)`) matches that
 // publication rule: a non-centerTab tab-to-tab shape captures
 // `startMorph = atRestMorph(outgoingHasTabs)` and the settle holds the
 // morph at that value across the release. (A centerTab tab-to-tab shape

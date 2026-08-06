@@ -2956,7 +2956,7 @@ test('drag-to-discrete-nav handoff keeps the FAB continuous at the interrupt (R1
 // (both T), but the drag's target is F. The helper
 // `#dragMorphAtSettleTakeover` classifies the DRAG's shape from its
 // parameters; sourcing them from the discrete-nav destination
-// (outgoing=true, incoming=true, isTabToTab, dragMorphWasStatic) returns
+// (outgoing=true, incoming=true, backMorphIsNull, dragMorphWasStatic) returns
 // `atRestMorph(true) = 1` = `sourceRest` = `destMorph`, the settle-arm
 // condition evaluates false, the settle is SKIPPED, and the morph snaps
 // from the drag's interrupt-instant value (1 - raw) to the at-rest (1) at the
