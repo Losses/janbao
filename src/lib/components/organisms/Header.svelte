@@ -206,7 +206,8 @@
 			// orchestrator publishes `backMorph` for every claimed drag on a
 			// NavPipelineHost route (deep page, compose, and centerTab threads
 			// alike) and on every non-tab-to-tab NavPipelineTabHost drag
-			// (backward-to-deep, forward-last-tab-to-`/search`); the only null
+			// (backward-to-deep-page, backward-to-thread/compose,
+			// backward-to-`/search`, or forward-last-tab-to-`/search`); the only null
 			// publication is a tab-to-tab swipe on a non-centerTab host type
 			// (NavPipelineTabHost tab swipes, nulled via the bidirectional
 			// `!targetIsDeepPage` clause; and NavPipelineHost offline LIST

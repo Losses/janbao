@@ -8586,3 +8586,37 @@ publication rule uniform across all consumers, no comment/§5/dead-code/spec-dri
 Gates green; 398/0.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R146 fix (2 bidi-backward parenthetical siblings; counter 0/5)
+
+**R146 result: auditor A BLOCK (2), auditor B PASS. Counter 0/5.**
+
+A found 2 sibling residuals from R145's parenthetical broadening: mobile-pager:24 "(deep page or
+/search)" missed by sed (line wrap); Header:209 "(backward-to-deep, forward-last-tab-to-/search)"
+not touched by sed. Both fixed to include thread/compose. B did a 178-tool-use exhaustive sweep
+and found ZERO code defects -- the layer is clean per B. Gates green; 398/0.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R147 (DOUBLE PASS, counter 1/5)
+
+**R147 result: auditor A PASS, auditor B PASS. Counter 1/5.**
+
+First earned double-PASS since R122-R123 (which R124 corrected). Both auditors did exhaustive
+sweeps (A 158 tool uses, B 165) and found zero defects. A verified R137 F1 + R142 F2 correctness
+fixes sound, §5 intact, all R82-R146 comment fixes intact. B verified all parenthetical classes
+fully closed, null-backMorph comments accurate, publication rule uniform. Gates green; 398/0.
+No code change.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R148 (DOUBLE PASS, counter 2/5)
+
+**R148 result: auditor A PASS, auditor B PASS. Counter 2/5.**
+
+Second consecutive earned double-PASS. Both exhaustive (A 174 tool uses, B 139). A verified count
+claims (5/6/2/5 callers), established-fact coverage, §5, sibling searches. B traced publication-
+rule consistency, all edge cases (offline LIST, centerTab, bidi tab-to-tab), R137/R142 correctness
+sound. Gates green; 552/0. No code change.
+
+**No git mutation.** No commits, no branches, no pushes.

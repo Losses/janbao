@@ -21,8 +21,8 @@
  * publishes the live raw drag fraction on centerTab routes (gesture
  * feedback so the morph / layer derivation tracks the live drag and the
  * settle at release interpolates from the captured `startMorph`), on
- * bidirectional tab-host backward-to-non-tab-target (deep page or
- * `/search`) and forward-last-tab-to-`/search` drags, and on every
+ * bidirectional tab-host backward-to-non-tab-target (deep page,
+ * thread/compose, or `/search`) and forward-last-tab-to-`/search` drags, and on every
  * NavPipelineHost drag where the target does not pill-map to a tab
  * (loose `getCurrentTabIndex`; deep page, `/profile`, `/bookmarks`); the
  * only drag-time null publication is a tab-to-tab swipe on a non-centerTab
