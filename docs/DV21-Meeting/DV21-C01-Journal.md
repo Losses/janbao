@@ -8339,3 +8339,83 @@ re-derived, Fix A/B/C/D + R120-R131 fixes intact, §5, no dead exports).
 Gates green; comment-only.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R133 fix (updateFromPathname centerTab-value; F1 route-lists rejected; counter 0/5)
+
+**R133 result: auditor A BLOCK (F1+F2), auditor B PASS. Counter 0/5.**
+
+A found 2; B PASSed and explicitly rejected F1. Orchestrator: F2 fixed
+(confirmed inaccuracy), F1 rejected (B-concurred defensible).
+
+F2 (`orchestrator:4605`, `updateFromPathname`): "Non-tab-root pathnames
+(thread and compose detail pages) keep their mount-time fromTabIndex (the
+centerTab value)." The code preserves fromTabIndex for EVERY non-tab-root
+pathname; deep pages' mount-time value is -1, NOT "the centerTab value."
+The "(thread and compose detail pages)" parenthetical is appositive, not
+scope-limiting, so "(the centerTab value)" overclaims for deep pages.
+Fixed to "(the centerTab for thread/compose routes, -1 for deep pages)."
+
+F1 (5 route-type lists "thread, compose, deep-page" omitting offline LIST
+mirrors): rejected. B's reasoning -- the universals hold for offline LIST
+(they mount NavPipelineHost), the parentheticals are illustrative, offline
+LIST routes are mirrors of named categories, and R130's "thread ->
+thread/compose" broadening was compose-specific (a major category), not a
+general "every category must be enumerated" rule. Orchestrator concurred.
+
+Trajectory: R130=12, R131=4, R132=1, R133=1 confirmed. The refined prompt
+keeps false positives down; only genuinely-inaccurate value/claim comments
+now surface. Gates green; comment-only.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R134 fix (case-1 cross-tab example + Deep-page-mode sub-case enumeration; counter 0/5)
+
+**R134 result: auditor A BLOCK (F1), auditor B BLOCK (Deep-page mode). Counter 0/5.**
+
+Two genuine defects.
+
+A's F1 (`orchestrator:2847-2849`): settle-arm case-1 ("source/target
+tab-ness differ," deep↔tab) listed "a cross-tab bidirectional click" as an
+example -- but that is tab→tab on NavPipelineTabHost (same tab-ness), the
+arm-SKIP case per line 2883. Self-contradiction. Fixed: dropped the example.
+
+B's finding (`orchestrator:4731-4735`, `#republishToPager` Deep-page mode):
+enumerated 2 sub-cases but the code's `backMorphValue`
+(`(fromIdx >= 0 && toIdx >= 0) ? null : raw`) has a 3rd reachable
+combination -- offline LIST source (`fromIdx>=0`) -> non-pill-mapped target
+like `/profile` (`toIdx<0`) -> `rawDragFraction`, uncategorized.
+Fixed: broadened sub-case 1 to "Not both endpoints pill-map to a tab"
+(covering true deep page AND offline LIST -> non-pill-mapped target), so
+the 2 sub-cases partition exhaustively.
+
+Both genuine (self-contradiction + non-exhaustive enumeration), not
+borderline over-reaches. Gates green; comment-only.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R135 fix (DEEP-route mis-classification + 2 offline-LIST value-mapping omissions; counter 0/5)
+
+**R135 result: auditor A BLOCK (1), auditor B BLOCK (2). Counter 0/5.**
+
+Three genuine defects.
+
+A (`orchestrator:2555`): the within-tab-pagination guard comment called
+`/discussion/<id>` (a centerTab thread, hasTabs=true) a "DEEP route," and
+the "DEEP route that shares the tab's index" category is empty (real deep
+routes fail `getCurrentTabIndex(from) >= 0`). Fixed: "a non-tab-root route
+that shares the tab's pill index (e.g. /discussion/<id> -> /, a centerTab
+thread returning to its tab root)."
+
+B (2 sites): offline LIST mirrors have a distinct mount-time
+`fromTabIndex` / landing `fractionalIndex` = the pill index (e.g. 0 for
+`/offline`), not `centerTab` or `-1`. Two value-mapping parentheticals
+(R133's `updateFromPathname:4605` and R131's Tab-host Backward-to-deep
+`:4716` fixes) enumerated only centerTab + -1, omitting the pill-index
+case. Fixed both to add "the pill index for offline LIST mirrors." These
+are value-mappings (claim specific values), so the omission is a genuine
+non-exhaustive enumeration, not the defensible illustrative route-list
+class.
+
+Gates green; comment-only.
+
+**No git mutation.** No commits, no branches, no pushes.

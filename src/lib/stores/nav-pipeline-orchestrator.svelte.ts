@@ -2552,9 +2552,9 @@ export class NavPipelineOrchestrator {
 		// both the discussions tab and both `tag: 'tab'`) is not a
 		// tab-click exit: the panel does not change, only the page content
 		// does, so there is no panel to slide in. Gate on
-		// `getRouteData(from).tag === 'tab'` so a DEEP route that shares
-		// the tab's index (e.g. `/discussion/<id>` -> `/`, a thread back
-		// to the list) still plays its slide. `#tabIndexFor`
+		// `getRouteData(from).tag === 'tab'` so a non-tab-root route that shares
+		// the tab's pill index (e.g. `/discussion/<id>` -> `/`, a centerTab thread
+		// returning to its tab root) still plays its slide. `#tabIndexFor`
 		// (isTabRootPath-based) returns -1 for a non-tab-root pagination
 		// route, so compare via `getCurrentTabIndex` (pill-target-based).
 		if (
@@ -2846,7 +2846,7 @@ export class NavPipelineOrchestrator {
 		// fourth, a search-axis case, is detailed at the arm below):
 		//  1. The source and target tab-ness differ (the deep↔tab case:
 		//     a tab-click exit, the back-button from a deep page to its
-		//     tab root, a cross-tab bidirectional click). The morph drives
+		//     tab root). The morph drives
 		//     the root-layer `translateY` (the tab bar descent) and the
 		//     title-layer `translateY`, both of which must overlap with
 		//     the page slide per Bug 7 (no sequential gap).
@@ -4602,8 +4602,9 @@ export class NavPipelineOrchestrator {
 	 *  live pathname, not the stale mount pathname). Also refreshes
 	 *  `fromTabIndex` when the new pathname is a tab root so the tab
 	 *  pager's prev/next neighbour computation stays correct across tab
-	 *  swaps. Non-tab-root pathnames (thread and compose detail pages) keep their
-	 *  mount-time `fromTabIndex` (the centerTab value). */
+	 *  swaps. Non-tab-root pathnames keep their mount-time `fromTabIndex`
+	 *  (the `centerTab` for thread/compose routes, -1 for deep pages, the
+	 *  pill index for offline LIST mirrors). */
 	updateFromPathname(pathname: string): void {
 		const inputs = this.#mountInputs;
 		if (inputs === null) return;
@@ -4713,8 +4714,9 @@ export class NavPipelineOrchestrator {
 	 *      so the Header morph reveals the back-arrow during the slide
 	 *      (the destination is a deep page, matching NavPipelineHost's
 	 *      backward behaviour). On landing the deep page's `configure`
-	 *      publishes its own pill (`centerTab` for a thread or compose route, -1 for a
-	 *      deep page).
+	 *      publishes its own pill (`centerTab` for a thread or compose
+	 *      route, -1 for a deep page, the pill index for an offline LIST
+	 *      mirror).
 	 *    - Forward-last-tab-to-`/search` (target is `/search`, reached via
 	 *      `#nextTabTarget` when the active tab is the last tab on the
 	 *      bidirectional host): the pill HOLDS at `fromTabIndex` (the
@@ -4728,9 +4730,10 @@ export class NavPipelineOrchestrator {
 	 *  Deep-page mode (no centerTab, not bidirectional): same pill
 	 *  interpolation, plus a `backMorph` publication that splits by
 	 *  pill-mapping:
-	 *    - True deep page (`fromTabIndex === -1`, e.g. `/profile/*`,
-	 *      `/bookmarks`, `/search`): publishes `backMorph: rawDragFraction`
-	 *      so the Header
+	 *    - Not both endpoints pill-map to a tab (a true deep page like
+	 *      `/profile/*`, `/bookmarks`, `/search`, or an offline LIST mirror
+	 *      whose target is a non-pill-mapped deep page like `/offline` ->
+	 *      `/profile`): publishes `backMorph: rawDragFraction` so the Header
 	 *      morph tracks the finger.
 	 *    - Offline LIST mirror whose target is also pill-mapped
 	 *      (`fromTabIndex >= 0 && toIdx >= 0`, e.g. `/offline` -> `/`):
