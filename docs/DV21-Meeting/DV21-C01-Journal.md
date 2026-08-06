@@ -8498,3 +8498,27 @@ same tab" to "resolves to a tab root," clarified strict tab-root target.
 Gates green; 398/0.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R139 fix (6 loose-vs-strict pill-mapping conflation sites; counter 0/5)
+
+**R139 result: auditor A BLOCK (1), auditor B BLOCK (6). Counter 0/5.**
+
+Same class as R137 F1 / R138: comments using loose "pill-map"/"tab-to-tab" where the
+null-backMorph condition uses strict `#tabIndexFor` (isTabRootPath) / `tag==='tab'`.
+Fixed 6 sites: e2e/reproduce-dv20-drag-sync:97 (removed /offline/bookmarks),
+orchestrator:4490/4723/4753/4824 (replaced loose language with "resolve to a tab"),
+Header:258 (same). Both auditors verified the R137 F1 runtime fix correct. Gates green; 398/0.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R140 fix (typo + 5 loose-vs-strict null-backMorph comment sites; counter 0/5)
+
+**R140 result: auditor A BLOCK (4), auditor B BLOCK (3). Counter 0/5.**
+
+Six defects. A's F1: typo "resolves to a tab roottab)" at orchestrator:3622 (R138 edit
+residual, same class as R118 from R117). Fixed. Five loose-vs-strict sites: orchestrator
+4824/4748/4756 (raw-case/explanation "pill-map" → "resolve to a tab"), 4725 (Tab-host
+sub-case 2 broadened for backward-to-/search), Header:208 (null-condition cites both clauses).
+Gates green; 398/0.
+
+**No git mutation.** No commits, no branches, no pushes.

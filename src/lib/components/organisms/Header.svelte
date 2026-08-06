@@ -208,13 +208,11 @@
 			// alike) and on every non-tab-to-tab NavPipelineTabHost drag
 			// (backward-to-deep, forward-last-tab-to-`/search`); the only null
 			// publication is a tab-to-tab swipe on a non-centerTab host type
-			// (NavPipelineTabHost tab swipes and NavPipelineHost offline LIST
+			// (NavPipelineTabHost tab swipes, nulled via the bidirectional
+			// `!targetIsDeepPage` clause; and NavPipelineHost offline LIST
 			// routes like `/offline`, `/offline/activity` whose `leftHref`
-			// resolves to a tab root - the source pill-maps and the target
-			// is a strict tab root AND `centerTab` is undefined, so
-			// `#republishToPager`'s non-centerTab branch's
-			// `(fromIdx >= 0 && toIdx >= 0)` clause nulls `backMorph` end to
-			// end), where the morph stays at the static
+			// resolves to a tab root, nulled via the `(fromIdx >= 0 &&
+			// toIdx >= 0)` clause), where the morph stays at the static
 			// `currentHasTabs ? 1 : 0`. A centerTab route -> tab-root swipe
 			// (e.g. `/messages/<id>` -> `/messages/inbox`) pill-maps both
 			// endpoints to Messages but takes the centerTab branch of
@@ -255,8 +253,8 @@
 				return currentHasTabs ? 1 - bm : bm;
 			}
 			// `bm === null` in a drag means the orchestrator's publication
-			// rule for this shape nulls `backMorph` end to end (a tab-to-tab
-			// swipe on a non-centerTab host). When a re-grab takes over a
+			// rule for this shape nulls `backMorph` end to end (both endpoints
+			// resolve to a tab on a non-centerTab host). When a re-grab takes over a
 			// non-tab-to-tab settle whose morph was in flight (e.g. a
 			// deep->tab settle interrupted by a tab-to-tab re-grab), the
 			// at-rest value would snap from the prior settle's morph to the

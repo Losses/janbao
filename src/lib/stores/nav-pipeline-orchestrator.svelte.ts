@@ -3619,8 +3619,8 @@ export class NavPipelineOrchestrator {
 	 *   - `dragMorphWasStatic` shapes - `targetIsSearch` (destination
 	 *     is `/search`) and non-centerTab shapes whose `backMorphIsNull`
 	 *     flag is true (NavPipelineTabHost tab-to-tab, NavPipelineHost
-	 *     offline LIST routes whose `leftHref` resolves to a tab root
-	 *     tab): the drag branch holds the morph static at the source's
+	 *     offline LIST routes whose `leftHref` resolves to a tab
+	 *     root): the drag branch holds the morph static at the source's
 	 *     at-rest. `targetIsSearch` hits the `targetIsSearch`
 	 *     short-circuit; `backMorphIsNull` shapes hit the null-
 	 *     `backMorph` fallback. The caller computes `backMorphIsNull`
@@ -4487,8 +4487,8 @@ export class NavPipelineOrchestrator {
 			// `pager.backMorph !== null` and otherwise holds at
 			// `anchor.search`; the publication's `progress` is the
 			// raw-scale analog of `backMorph`. For the only shape where the pager
-			// actually nulls `backMorph` mid-publication (a tab-to-tab
-			// transition on a non-centerTab host) `anchor.search` is
+			// actually nulls `backMorph` mid-publication (both endpoints
+			// resolve to a tab on a non-centerTab host) `anchor.search` is
 			// typically 0 (a non-search settle) but can be 1 (a
 			// `/search`-commit settle re-grabbed via R91's re-seed)
 			// and both `natural(...)` terms resolve to 0, so the shift
@@ -4720,15 +4720,16 @@ export class NavPipelineOrchestrator {
 	 *  `fractionalIndex` between `fromTabIndex` and `toTabIndex`
 	 *  (threshold-absorbed by `PILL_EXPANSION_THRESHOLD`) so the pill
 	 *  follows the slide. Three sub-cases by destination:
-	 *    - Tab-to-tab (target is a tab root): publishes `backMorph: null`
+	 *    - Tab-to-tab (target is a tab, `tag: 'tab'`): publishes `backMorph: null`
 	 *      so the Header stays in hamburger mode end to end.
-	 *    - Backward-to-deep-page (target is a deep page reached via
-	 *      `previousEntryPathname`): the pill HOLDS at `fromTabIndex`
-	 *      (the spatial-previous tab the resolver assumed is NOT where
-	 *      the user is going), and publishes `backMorph: rawDragFraction`
-	 *      so the Header morph reveals the back-arrow during the slide
-	 *      (the destination is a deep page, matching NavPipelineHost's
-	 *      backward behaviour). On landing the deep page's `configure`
+	 *    - Backward-to-a-non-tab-target (a deep page or `/search`)
+	 *      reached via `previousEntryPathname`: the pill HOLDS at
+	 *      `fromTabIndex` (the spatial-previous tab the resolver assumed
+	 *      is NOT where the user is going), and publishes
+	 *      `backMorph: rawDragFraction` so the Header morph reveals the
+	 *      back-arrow for a deep target (a `/search` target takes the
+	 *      `targetIsSearch` skip, consuming `backMorph` via
+	 *      `searchProgress` instead). On landing the target's `configure`
 	 *      publishes its own pill (`centerTab` for a thread or compose
 	 *      route, -1 for a deep page, the pill index for an offline LIST
 	 *      mirror).
@@ -4745,16 +4746,16 @@ export class NavPipelineOrchestrator {
 	 *  Deep-page mode (no centerTab, not bidirectional): same pill
 	 *  interpolation, plus a `backMorph` publication that splits by
 	 *  pill-mapping:
-	 *    - Not both endpoints pill-map to a tab (a true deep page like
+	 *    - Not both endpoints resolve to a tab (a true deep page like
 	 *      `/profile/*`, `/bookmarks`, `/search`, or an offline LIST mirror
 	 *      whose target is a non-pill-mapped deep page like `/offline` ->
 	 *      `/profile`): publishes `backMorph: rawDragFraction` so the Header
 	 *      morph tracks the finger.
-	 *    - Offline LIST mirror whose target is also pill-mapped
+	 *    - Offline LIST mirror whose target is also a tab root
 	 *      (`fromTabIndex >= 0 && toIdx >= 0`, e.g. `/offline` -> `/`):
 	 *      publishes `backMorph: null` (the `(fromIdx >= 0 && toIdx >= 0)`
-	 *      clause in `backMorphValue` below). Both endpoints pill-map to
-	 *      a tab via `TAB_BAR_CONFIG`, so the drag is tab-to-tab on a
+	 *      clause in `backMorphValue` below). Both endpoints resolve to
+	 *      a tab via `#tabIndexFor`, so the drag is tab-to-tab on a
 	 *      non-bidirectional host and the Header stays in hamburger mode
 	 *      end to end.
 	 *
@@ -4821,13 +4822,11 @@ export class NavPipelineOrchestrator {
 			pillToIdx >= 0
 				? Math.max(0, rawDragFraction - PILL_EXPANSION_THRESHOLD) / (1 - PILL_EXPANSION_THRESHOLD)
 				: 0;
-		// backMorph: raw slide fraction when not both endpoints pill-map to a tab (deep
+		// backMorph: raw slide fraction when not both endpoints resolve to a tab (deep
 		// host backward-exit, bidirectional backward-to-deep-page, or
 		// bidirectional forward-last-tab-to-`/search`). null when both
-		// source and target pill-map to a tab index (tab-to-tab on any host
-		// type: the Header stays in hamburger mode throughout, including
-		// offline LIST routes on NavPipelineHost that pill-map to a tab via
-		// TAB_BAR_CONFIG).
+		// source and target resolve to a tab (the target via `#tabIndexFor`,
+		// i.e. a strict tab root on a non-bidirectional host).
 		const backMorphValue =
 			(bidirectional && !targetIsDeepPage) || (fromIdx >= 0 && toIdx >= 0) ? null : rawDragFraction;
 		// targetIndex: null when the pill is held at fromIdx (a held pill
