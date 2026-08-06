@@ -8522,3 +8522,67 @@ sub-case 2 broadened for backward-to-/search), Header:208 (null-condition cites 
 Gates green; 398/0.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R141 fix (6 loose-vs-strict null-backMorph comment sites; counter 0/5)
+
+**R141 result: auditor A BLOCK (4), auditor B BLOCK (2). Counter 0/5.**
+
+Same class as R137-R140. B: mobile-pager:27-33 + offline-back-swipe:14-18 null-clause citation
+(both clauses per host type). A: mobile-pager:24-25 (RAW enumeration broadened for
+backward-to-/search + strict target language), orchestrator:4490 (dual-clause citation),
+orchestrator:4829 (null-case qualifier broadened for bidirectional). All fixed. Gates green; 398/0.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R142 fix (F2 correctness: backMorphIsNull loose/strict divergence + 3 comment fixes; counter 0/5)
+
+**R142 result: auditor A BLOCK (2), auditor B BLOCK (2). Counter 0/5.**
+
+**F2 (HIGH, correctness + §5):** `#beginGesture` (line 1978) uses loose `inputs.toTabIndex`
+for non-bidi backward `#gestureToTabIndex`, but the R137 F1 fix's `backMorphIsNull` used strict
+`isTabRootPath(back)`. They diverge for pill-mapped-but-not-tab-root targets (e.g.
+`/offline/bookmarks`→`/offline`): publication nulls backMorph (loose toIdx=0), settle-arm says
+backMorphIsNull=false (strict) → morph snap. **Fix:** gesture-release call site uses
+`#gestureToTabIndex` (the publication's actual toIdx); discrete-nav reconstructs the drag's
+toIdx (non-bidi → loose `inputs.toTabIndex`, bidi → strict `#tabIndexFor`). This is the second
+correctness bug of the loop (after R137 F1).
+
+Three comment fixes: typo "roottab)" (R138 residual), #tabIndexFor scoped to target only,
+publication's toIdx described as `#gestureToTabIndex` (loose/strict per direction). Gates green; 398/0.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R143 fix (8 strict-framing null-backMorph comment residuals; counter 0/5)
+
+**R143 result: auditor A BLOCK (8), auditor B BLOCK (7). Counter 0/5.**
+
+Same class as R137-R142: comments describing the null-backMorph condition use strict "tab root" /
+"#tabIndexFor" framing while the publication uses loose `#gestureToTabIndex` for non-bidi backward.
+All sites fixed: "tab root" → "tab," "#tabIndexFor" → "#gestureToTabIndex" across orchestrator,
+mobile-pager, Header. Both auditors verified the R142 F2 correctness fix is sound. Gates green; 398/0.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R144 fix (3 strict-framing null-backMorph residuals + em-dash; counter 0/5)
+
+**R144 result: auditor A BLOCK (3), auditor B BLOCK (3). Counter 0/5.**
+
+Same class. F1: mobile-pager:24-27 regression (R143 sed over-corrected loose pill-map → strict
+#tabIndexFor; restored to loose getCurrentTabIndex). F2: orchestrator:4845 retained "i.e. a
+strict tab root" after #gestureToTabIndex rename; dropped, added loose-for-non-bidi-backward
+qualifier. F3: orchestrator:3635 "tab root" → "tab" (missed by R143 sweep). Em-dash in
+Audit-143.md fixed. Both auditors verified R142 F2 correctness fix sound. Gates green; 398/0.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R145 fix (5 comment + 1 em-dash; counter 0/5)
+
+**R145 result: auditor A BLOCK (6), B BLOCK (1). Counter 0/5.**
+
+A: F1 prettier in Audit-144.md (fixed), F2-F5 bidi backward parentheticals omit thread/compose
+(fixed: broadened to "(deep page, thread/compose, or /search)"). B: em-dash in Audit-144.md:24
+(fixed). B's exhaustive code sweep found ZERO code defects -- R137/R142 correctness fixes sound,
+publication rule uniform across all consumers, no comment/§5/dead-code/spec-drift issues.
+Gates green; 398/0.
+
+**No git mutation.** No commits, no branches, no pushes.

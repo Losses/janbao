@@ -21,16 +21,15 @@
  * publishes the live raw drag fraction on centerTab routes (gesture
  * feedback so the morph / layer derivation tracks the live drag and the
  * settle at release interpolates from the captured `startMorph`), on
- * bidirectional tab-host backward-to-deep and forward-last-tab-to-`/search`
- * drags, and on every NavPipelineHost drag that does NOT pill-map both
- * endpoints to a tab (deep page, `/profile`, `/bookmarks`); the
+ * bidirectional tab-host backward-to-non-tab-target (deep page or
+ * `/search`) and forward-last-tab-to-`/search` drags, and on every
+ * NavPipelineHost drag where the target does not pill-map to a tab
+ * (loose `getCurrentTabIndex`; deep page, `/profile`, `/bookmarks`); the
  * only drag-time null publication is a tab-to-tab swipe on a non-centerTab
- * host type (NavPipelineTabHost tab swipes AND NavPipelineHost offline LIST
- * routes like `/offline`, `/offline/activity` whose `leftHref` resolves
- * to a tab root - the source pill-maps and the target is a strict tab
- * root AND `centerTab` is undefined, so `#republishToPager`'s
- * non-centerTab branch's `(fromIdx >= 0 && toIdx >= 0)` clause nulls
- * `backMorph` end to end), where both endpoints already root mode and the
+ * host type (NavPipelineTabHost tab swipes, nulled via the bidirectional
+ * `!targetIsDeepPage` clause; AND NavPipelineHost offline LIST routes like
+ * `/offline`, `/offline/activity` whose `leftHref` resolves to a tab,
+ * nulled via the `(fromIdx >= 0 && toIdx >= 0)` clause), where the
  * morph stays at the static `currentHasTabs ? 1 : 0`. A centerTab route ->
  * tab-root swipe pill-maps both endpoints to a tab but takes the centerTab
  * branch of `#republishToPager`, which publishes `rawDragFraction` end to

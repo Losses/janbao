@@ -211,7 +211,7 @@
 			// (NavPipelineTabHost tab swipes, nulled via the bidirectional
 			// `!targetIsDeepPage` clause; and NavPipelineHost offline LIST
 			// routes like `/offline`, `/offline/activity` whose `leftHref`
-			// resolves to a tab root, nulled via the `(fromIdx >= 0 &&
+			// resolves to a tab, nulled via the `(fromIdx >= 0 &&
 			// toIdx >= 0)` clause), where the morph stays at the static
 			// `currentHasTabs ? 1 : 0`. A centerTab route -> tab-root swipe
 			// (e.g. `/messages/<id>` -> `/messages/inbox`) pill-maps both
