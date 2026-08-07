@@ -8620,3 +8620,64 @@ rule consistency, all edge cases (offline LIST, centerTab, bidi tab-to-tab), R13
 sound. Gates green; 552/0. No code change.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R149 fix (8 tap-scrub icon-value "tab root" -> "route with tabs" sites; counter 0/5)
+
+**R149 result: auditor A BLOCK (1), auditor B BLOCK (7). Counter 0/5.**
+
+New lexical neighborhood: tap-scrub icon-value docstrings use "tab root" (strict) where the
+criterion is loose pill-map (`getCurrentTabIndex >= 0`). B found 7 publisher/state-machine/store
+sites; A found 1 consumer-side Header site (sibling-sweep miss). All 8 fixed: "tab root" ->
+"route with tabs" / "has tabs" across orchestrator (600, 946, 3716, 4272), mobile-pager (82),
+nav-state-machine (147), Header (308). Counter resets from 2/5 to 0/5.
+
+Gates green; 398/0. Comment-only. **No git mutation.**
+
+### R150 fix (2 sites: trajectory misclassification + definite-list omission; counter 0/5)
+
+**R150 result: auditor A BLOCK (1), auditor B BLOCK (1). Counter 0/5.**
+
+B: orchestrator:4250 classified `/messages/<id> <-> /search` as deep<->search, but `/messages/<id>`
+pill-maps (getCurrentTabIndex=2), so resolveHeaderMode returns 'root'; it is root<->search.
+Removed from the deep<->search parenthetical. A: e2e:97 definite-article list "the offline LIST
+mirror routes" omitted `/offline/bookmarks`, which DOES null backMorph per R142's loose toIdx fix
+(R139 removed it under the wrong strict assumption). Re-added.
+
+Gates green; 398/0. Comment-only. **No git mutation.**
+
+### R151 fix (4 sites: em dash + RAW criterion + resolver docstrings + duplicate word; counter 0/5)
+
+**R151 result: auditor A BLOCK (3), auditor B BLOCK (1). Counter 0/5.**
+
+A: F1 em dash in journal (fixed), F2 mobile-pager:25 RAW criterion target-only instead of
+"not both endpoints" (fixed), F3 nav-resolvers:140 "tab root" overclaim in ResolverInput
+docstrings (fixed to "has no tab association"). B: duplicated "descent descent" at
+e2e/search-enter-exit-asymmetry.spec.ts:60 (fixed). All same loose-vs-strict class or typo
+residuals. Gates green; 398/0.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R152 fix (3 sites: non-centerTab qualifier + 2 atRestMorph tab-root parentheticals; counter 0/5)
+
+**R152 result: auditor A BLOCK (1), auditor B BLOCK (2). Counter 0/5.**
+
+A: e2e/search-enter-exit-asymmetry:56 "during tab-to-tab transitions" missing non-centerTab
+qualifier (centerTab tab-to-tab drags publish raw, not null; R132 sibling miss). Fixed.
+B: orchestrator:4723 "(1 for a tab-root target)" and Header:237 "(1 for a tab-root destination)"
+use strict "tab-root" where atRestMorph uses loose hasTabs. Fixed to "target/destination with
+tabs." Gates green; 398/0. **No git mutation.**
+
+### R153 fix (2 sites: 0..1 clause inconsistency + /offline/bookmarks runtime RAW; counter 0/5)
+
+**R153 result: auditor A BLOCK (1), auditor B BLOCK (1). Counter 0/5.**
+
+A: e2e/search-enter-exit-asymmetry:54 0..1 clause "non-tab-to-tab" left in-flight centerTab
+tab-to-tab unclassified after R152's NULL-clause "non-centerTab" narrowing. Fixed to "any
+in-flight transition except non-centerTab tab-to-tab." B: e2e/reproduce-dv20-drag-sync:97
+`/offline/bookmarks` in null list is wrong at runtime — `updateBackTarget` (NavPipelineHost
+post-mount $effect) overwrites `inputs.toTabIndex` to strict `#tabIndexFor('/offline') = -1`
+before the gesture, so `#gestureToTabIndex = -1` → backMorph = RAW, not null. R150 re-added
+it based on R142's settle-arm reasoning, but R142's fix didn't account for updateBackTarget's
+strict overwrite. Removed `/offline/bookmarks` from the list. Gates green; 398/0.
+
+**No git mutation.** No commits, no branches, no pushes.

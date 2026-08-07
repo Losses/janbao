@@ -597,7 +597,7 @@ export class NavPipelineOrchestrator {
 	/** The pathname the scrub started on. The clear watch clears tapMorph
 	 *  when the route leaves it (mid-scrub redirect recovery). */
 	#scrubSource = '';
-	/** Whether the scrub's destination route has tabs (true = a tab root).
+	/** Whether the scrub's destination route has tabs (true = a route with tabs).
 	 *  The clear watch clears tapMorph when currentHasTabs === scrubTarget
 	 *  AND the eased value reached its terminal (the scrub completed at
 	 *  the destination). */
@@ -943,7 +943,7 @@ export class NavPipelineOrchestrator {
 		return this.#publication.settleAwaitTitle;
 	}
 	/** Reactive read of the search-scrub gate flag. The Header reads this
-	 *  during a tap scrub to hold the hamburger on a tab-root page
+	 *  during a tap scrub to hold the hamburger on a route with tabs
 	 *  (scrubIconEndpoint = 0) and ease the back-arrow into the hamburger
 	 *  on a deep page (scrubIconEndpoint = 1). Delegates to the state
 	 *  machine via the publication. */
@@ -2758,8 +2758,8 @@ export class NavPipelineOrchestrator {
 		const liveDragMorphTargetIsSearch =
 			dragTargetPathname !== null && resolveHeaderMode(dragTargetPathname) === 'search';
 		// Reconstruct the drag's toIdx (matching `#beginGesture`'s logic:
-		// loose `inputs.toTabIndex` for non-bidi backward (all non-bidi
-		// hosts claim only backward drags), strict `#tabIndexFor`
+		// strict `#tabIndexFor` (updateBackTarget overwrites
+		// inputs.toTabIndex before any gesture), strict `#tabIndexFor`
 		// otherwise) so `backMorphIsNull` matches the publication's null
 		// condition.
 		const liveDragMorphToIdx =
@@ -3503,7 +3503,7 @@ export class NavPipelineOrchestrator {
 		// Whether the drag's backMorph was null (morph held at source
 		// at-rest), mirroring `#republishToPager`'s null condition. Uses
 		// `#gestureToTabIndex` (the publication's actual toIdx, which is
-		// loose for non-bidi backward and strict otherwise).
+		// strict (updateBackTarget overwrites inputs.toTabIndex to strict before any gesture)).
 		const backMorphIsNull =
 			(inputs.bidirectional === true && getRouteData(back).tag === 'tab') ||
 			(inputs.fromTabIndex >= 0 && (this.#gestureToTabIndex ?? -1) >= 0);
@@ -3713,7 +3713,7 @@ export class NavPipelineOrchestrator {
 	 *  watch in `notifyHeaderState`.
 	 *
 	 *  `nonSearchIconValue` is the icon-morph value at the scrub's
-	 *  non-search endpoint (0 for a tab root, 1 for a deep page). Published
+	 *  non-search endpoint (0 for a route with tabs, 1 for a deep page). Published
 	 *  to the pager store as `scrubIconEndpoint` so the Header's
 	 *  `iconProgress` derivation lerps the hamburger <-> back-arrow morph
 	 *  continuously across the URL swap frame (`iconProgress = tapMorph *
@@ -4248,7 +4248,7 @@ export class NavPipelineOrchestrator {
 		// dispatch, and has no pipeline slide in flight
 		// (`pager.transitionTarget === null`). Covers root<->search (the
 		// search-button tap), deep<->search (/profile <-> /search,
-		// /messages/<id> <-> /search, /search <-> /bookmarks, etc.). A
+		// /search <-> /bookmarks, etc.). A
 		// forward nav whose destination runs `playEnterAnimation` (which
 		// sets `transitionTarget` synchronously in `onMount`) skips the
 		// scrub; the enter settle ease drives the morph instead (the
@@ -4269,7 +4269,7 @@ export class NavPipelineOrchestrator {
 		//
 		// The icon-morph endpoint (`nonSearchIconValue`) is the icon
 		// value at the non-search side of the scrub: 0 when that side is
-		// a tab root (icon = hamburger at both endpoints, so the morph
+		// a route with tabs (icon = hamburger at both endpoints, so the morph
 		// holds at hamburger throughout), 1 when it is a deep page (icon
 		// = back-arrow at the deep endpoint, hamburger at /search, so the
 		// morph eases between them across the scrub). The non-search
@@ -4720,7 +4720,7 @@ export class NavPipelineOrchestrator {
 	 *  and the tab bar stays visible at rest; the drag-time morph is the
 	 *  gesture-feedback signal, not the destination state, and the
 	 *  settle ease armed at release returns morph to the destination's
-	 *  tab-ness (1 for a tab-root target, 0 for a deep target). The
+	 *  tab-ness (1 for a target with tabs, 0 for a deep target). The
 	 *  tab-bar pill interpolates from `centerTab` toward the gesture's
 	 *  target tab (a tab-click exit to a different tab) so the highlight
 	 *  tracks the slide; for a same-tab back-swipe the target equals
@@ -4771,7 +4771,7 @@ export class NavPipelineOrchestrator {
 	 *      clause in `backMorphValue` below). Both endpoints resolve to a
 	 *      tab (the source via loose `getCurrentTabIndex` at mount, the
 	 *      target via `#gestureToTabIndex`, which is strict for bidi/
-	 *      forward and loose for non-bidi backward), so the drag is
+	 *      forward and for non-bidi backward (both strict via updateBackTarget)), so the drag is
 	 *      tab-to-tab on a
 	 *      non-bidirectional host and the Header stays in hamburger mode
 	 *      end to end.

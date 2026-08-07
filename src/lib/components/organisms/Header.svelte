@@ -234,7 +234,7 @@
 				// forward-enter): it agrees with the settle at the release
 				// instant but diverges mid-flight because the settle
 				// interpolates toward `destMorph = atRestMorph(incoming)`
-				// (1 for a tab-root destination) while the drag formula
+				// (1 for a destination with tabs) while the drag formula
 				// `1 - bm` travels toward 0. Shift the natural curve so it
 				// passes through the anchor instead: shifted(bm) =
 				// anchor.morph + natural(bm) - natural(anchor.raw). The
@@ -305,8 +305,8 @@
 
 	// The icon morph (hamburger <-> back-arrow) during a tap scrub.
 	// `iconProgress` is 0 (hamburger) at the search endpoint of the scrub;
-	// at the non-search endpoint it is `scrubIconEndpoint` (0 for a tab
-	// root, 1 for a deep page). `pager.tapMorph` eases 1 -> 0 across the
+	// at the non-search endpoint it is `scrubIconEndpoint` (0 for a
+	// route with tabs, 1 for a deep page). `pager.tapMorph` eases 1 -> 0 across the
 	// scrub (1 = non-search side, 0 = search side), so lerping by tapMorph
 	// (`tapMorph * scrubIconEndpoint`) keeps the morph continuous with the
 	// horizontal track scrub: a tab<->search scrub holds the hamburger

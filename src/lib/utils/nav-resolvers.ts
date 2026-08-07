@@ -137,11 +137,11 @@ export interface ResolverInput {
 	readonly direction: TransitionDirection;
 	readonly fromPathname: string;
 	readonly toPathname: string;
-	/** Index of the FROM route in the spatial tab order, or -1 when
-	 *  FROM is not a tab root. The {tab, tab} resolver reads this. */
+	/** Index of the FROM route in the tab-bar pill order, or -1 when
+	 *  FROM has no tab association. The {tab, tab} resolver reads this. */
 	readonly fromTabIndex: number;
-	/** Index of the TO route in the spatial tab order, or -1 when TO
-	 *  is not a tab root. */
+	/** Index of the TO route in the tab-bar pill order, or -1 when TO
+	 *  has no tab association. */
 	readonly toTabIndex: number;
 	readonly viewportWidth: number;
 	readonly reducedMotion: boolean;

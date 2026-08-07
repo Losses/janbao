@@ -51,13 +51,13 @@ interface SearchHdrFrame {
 	tabMaxH: number | null;
 	/** Search button viewport-left (px). Rightmost at a tab root, leftmost in search. */
 	btnLeft: number | null;
-	/** Primary pager store backMorph: 0..1 during any in-flight non-tab-to-tab
-	 *  transition and at rest on a non-centerTab NavPipelineHost route; null at rest on a
-	 *  centerTab route or a tab host and during tab-to-tab transitions. */
+	/** Primary pager store backMorph: 0..1 during any in-flight transition except
+	 *  non-centerTab tab-to-tab, and at rest on a non-centerTab NavPipelineHost route; null at rest on a
+	 *  centerTab route or a tab host and during non-centerTab tab-to-tab transitions. */
 	backMorph: number | null;
 	/** NavPipelineHost (content) track translateX (px) - the page-change signal on /search. */
 	contentTx: number | null;
-	/** Header rootLayer translateY (px) - the MobileTabBar Tab descent descent signal (DV17 NB27). */
+	/** Header rootLayer translateY (px) - the MobileTabBar Tab descent signal (DV17 NB27). */
 	rootLayerY: number | null;
 }
 

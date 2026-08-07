@@ -144,7 +144,7 @@ export class NavStateMachine {
 	}
 	/** True while the orchestrator's tap-scrub ease is in flight. Read
 	 *  by the Header's `iconProgress` derivation during a search-layout
-	 *  scrub: holds the hamburger on a tab-root page (scrubIconEndpoint =
+	 *  scrub: holds the hamburger on a route with tabs (scrubIconEndpoint =
 	 *  0) and eases the back-arrow into the hamburger on a deep page
 	 *  (scrubIconEndpoint = 1). */
 	get searchScrubbing(): boolean {

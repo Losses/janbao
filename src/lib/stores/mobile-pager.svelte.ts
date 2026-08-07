@@ -23,8 +23,9 @@
  * settle at release interpolates from the captured `startMorph`), on
  * bidirectional tab-host backward-to-non-tab-target (deep page,
  * thread/compose, or `/search`) and forward-last-tab-to-`/search` drags, and on every
- * NavPipelineHost drag where the target does not pill-map to a tab
- * (loose `getCurrentTabIndex`; deep page, `/profile`, `/bookmarks`); the
+ * NavPipelineHost drag where not both endpoints resolve to a tab
+ * (loose `getCurrentTabIndex`; deep-page source like `/profile`,
+ * `/bookmarks`, or non-pill-mapped target); the
  * only drag-time null publication is a tab-to-tab swipe on a non-centerTab
  * host type (NavPipelineTabHost tab swipes, nulled via the bidirectional
  * `!targetIsDeepPage` clause; AND NavPipelineHost offline LIST routes like
@@ -79,7 +80,7 @@ interface PagerUpdate {
 	transitionTarget?: string | null;
 	/** The icon-morph value at the non-search endpoint of an in-flight
 	 * root<->search / deep<->search tap scrub (0 when that endpoint is a
-	 * tab root, 1 when it is a deep page). Published once at scrub arm
+	 * route with tabs, 1 when it is a deep page). Published once at scrub arm
 	 * time and cleared when the scrub finishes. Read by the Header's
 	 * `iconProgress` derivation so the hamburger <-> back-arrow morph is
 	 * continuous with the track scrub: `iconProgress = tapMorph *
