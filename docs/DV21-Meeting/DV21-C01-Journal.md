@@ -8731,3 +8731,51 @@ source via loose getCurrentTabIndex at mount, the target via strict #gestureToTa
 target that does not resolve to a tab)." A PASSed the post-R156 state. Gates green; 552/0.
 
 **No git mutation.** No commits, no branches, no pushes.
+
+### R158 fix (2 sites: holdPillAtFromIdx "tab root" + liveDragMorphToIdx mechanism; counter 0/5)
+
+**R158 result: auditor A BLOCK (1), auditor B BLOCK (1). Counter 0/5.**
+
+B: orchestrator:4826 "not a tab root" in holdPillAtFromIdx branch -- actual condition is
+`tag !== 'tab'` (tag-based), not `!isTabRootPath`. Fixed: "not a tab." A: orchestrator:2760
+liveDragMorphToIdx reconstruction comment said "strict `#tabIndexFor`" for non-bidi branch lead,
+but code reads `inputs.toTabIndex` directly (not `#tabIndexFor`). Fixed to canonical form:
+"non-bidi reads `inputs.toTabIndex` (strict via updateBackTarget's overwrite), bidi uses
+`#tabIndexFor` directly." Gates green; 552/0. **No git mutation.**
+
+### R159 (DOUBLE PASS, counter 1/5)
+
+**R159 result: auditor A PASS, auditor B PASS. Counter 1/5.**
+
+First double-PASS since R148. Both exhaustive (A 123 tool uses, B 120). A re-derived publication
+rule against every reachable drag shape; verified all canonical forms (mechanism attribution, RAW
+criterion, null-condition, icon-value, atRestMorph, resolver types, bidi parentheticals). B
+verified R137/R142 correctness at both call sites; full sibling search for every lexical
+neighborhood; all borderline cases classified defensible. Gates green; 552/0. No code change.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R160 (DOUBLE PASS, counter 2/5)
+
+**R160 result: auditor A PASS, auditor B PASS. Counter 2/5.**
+
+Second consecutive earned double-PASS (R159 + R160). Both exhaustive (A 158 tool uses, B 154). A
+re-derived publication rule against every reachable drag shape; full terminology sweep. B
+re-derived publication rule line-by-line; route classification spot-checked at runtime via bun -e;
+full sibling sweep; R137/R142 correctness sound at both call sites. Gates green; 552/0. No code
+change.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R161 (DOUBLE PASS, counter 3/5)
+
+**R161 result: auditor A PASS, auditor B PASS. Counter 3/5.**
+
+Third consecutive earned double-PASS (R159 + R160 + R161). Both exhaustive (A 185 tool uses,
+B 165). A performed runtime route classification via bun -e, publication-rule derivation for 11
+gesture shapes, full mechanism-attribution and terminology sweeps, Fix A/B/C/D wiring checks. B
+verified R137/R142 correctness at both call sites, publication rule consistency across all
+consumers, holdPillAtFromIdx R158 fix, all canonical forms, §5 intact. Gates green; 552/0. No
+code change.
+
+**No git mutation.** No commits, no branches, no pushes.
