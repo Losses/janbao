@@ -52,7 +52,7 @@ export interface HeaderSettleTransition {
 	 * (targetProgress = 0) ends at the outgoing route's at-rest morph
 	 * (the gesture returns to rest on the source route). The
 	 * `targetIsSearch` shape eases toward `atRestMorph(outgoingHasTabs)`
-	 * (= 1 for a tab-root source): at landing `isSearch` flips to true
+	 * (= 1 for a source with tabs): at landing `isSearch` flips to true
 	 * and `iconProgress` / `rootLayerStyle` switch to the search-mode
 	 * branch, but the pre-landing `morph` drives `rootLayerStyle`'s
 	 * `translateY` until the flip, so easing toward 1 keeps the

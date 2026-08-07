@@ -167,8 +167,8 @@
 			// source's tab-ness so the bar slides off-screen with panel 0
 			// (no diagonal motion). The settle that takes over at release
 			// EASEs the morph from the captured `startMorph` toward
-			// `destMorph = atRestMorph(outgoingHasTabs)` (= 1 for a tab-root
-			// source) across `settleMorphFraction`: the pre-landing `morph`
+			// `destMorph = atRestMorph(outgoingHasTabs)` (= 1 for a source with
+			// tabs) across `settleMorphFraction`: the pre-landing `morph`
 			// drives `rootLayerStyle`'s `translateY`, so holding at 1 keeps
 			// the bar at 0% across the settle and the landing's flip to
 			// `transform: none` (search mode) is continuous (R8-A F1: a
@@ -280,7 +280,7 @@
 			// `destMorph = atRestMorph(incomingHasTabs)` on a commit or
 			// `atRestMorph(outgoingHasTabs)` on a cancel; the `targetIsSearch`
 			// shape eases toward `atRestMorph(outgoingHasTabs)` (= 1 for a
-			// tab-root source) so the pre-landing `morph` keeps the bar at
+			// source with tabs) so the pre-landing `morph` keeps the bar at
 			// 0% and the landing's flip to `transform: none` is continuous
 			// (R8-A F1 - see `#armSettleEaseFromGesture`). For the no-anchor
 			// from-rest case the lerp is a constant hold when

@@ -24,8 +24,9 @@
  * bidirectional tab-host backward-to-non-tab-target (deep page,
  * thread/compose, or `/search`) and forward-last-tab-to-`/search` drags, and on every
  * NavPipelineHost drag where not both endpoints resolve to a tab
- * (loose `getCurrentTabIndex`; deep-page source like `/profile`,
- * `/bookmarks`, or non-pill-mapped target); the
+ * (the source via loose `getCurrentTabIndex` at mount, the target via
+ * strict `#gestureToTabIndex`; deep-page source like `/profile`,
+ * `/bookmarks`, or target that does not resolve to a tab); the
  * only drag-time null publication is a tab-to-tab swipe on a non-centerTab
  * host type (NavPipelineTabHost tab swipes, nulled via the bidirectional
  * `!targetIsDeepPage` clause; AND NavPipelineHost offline LIST routes like

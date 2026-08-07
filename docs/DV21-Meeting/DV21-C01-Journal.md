@@ -8674,10 +8674,60 @@ tabs." Gates green; 398/0. **No git mutation.**
 A: e2e/search-enter-exit-asymmetry:54 0..1 clause "non-tab-to-tab" left in-flight centerTab
 tab-to-tab unclassified after R152's NULL-clause "non-centerTab" narrowing. Fixed to "any
 in-flight transition except non-centerTab tab-to-tab." B: e2e/reproduce-dv20-drag-sync:97
-`/offline/bookmarks` in null list is wrong at runtime — `updateBackTarget` (NavPipelineHost
+`/offline/bookmarks` in null list is wrong at runtime ; `updateBackTarget` (NavPipelineHost
 post-mount $effect) overwrites `inputs.toTabIndex` to strict `#tabIndexFor('/offline') = -1`
 before the gesture, so `#gestureToTabIndex = -1` → backMorph = RAW, not null. R150 re-added
 it based on R142's settle-arm reasoning, but R142's fix didn't account for updateBackTarget's
 strict overwrite. Removed `/offline/bookmarks` from the list. Gates green; 398/0.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R154 fix (4 "loose for non-bidi" + 4 "tab-root source" + em dash; counter 0/5)
+
+**R154 result: auditor A BLOCK (4), auditor B BLOCK (5). Counter 0/5.**
+
+A: 4 orchestrator docstrings still said "loose for non-bidi backward" -- the R142 framing R153-B
+contradicted (updateBackTarget overwrites inputs.toTabIndex to strict before any gesture). Fixed:
+"loose" -> "strict (updateBackTarget overwrites inputs.toTabIndex before any gesture)." B: em dash
+in journal R153 entry (fixed); 4 "tab-root source" sites in targetIsSearch destMorph docstrings
+(R152 sibling miss -- atRestMorph uses loose hasTabs, not strict tab root). Fixed: "tab-root
+source" -> "source with tabs." Gates green; 552/0.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R155 fix (3 sites: 2 "loose non-bidi"/"tab-root source" siblings + 1 wrong-mechanism; counter 0/5)
+
+**R155 result: auditor A BLOCK (2), auditor B BLOCK (1). Counter 0/5.**
+
+A: orchestrator:4846 still said "loose pill-map for non-bidi backward" (R154 sed miss);
+Header:170 still said "tab-root source" (R154 sed miss). Both fixed. B: orchestrator:4774
+R154 sed introduced "(both strict via updateBackTarget)" -- wrong for bidi/forward (those use
+`#tabIndexFor(to)` directly, not `updateBackTarget`). Only non-bidi backward goes through
+updateBackTarget. Fixed: "strict for bidi/forward (via `#tabIndexFor`) and for non-bidi
+backward (via `updateBackTarget`'s overwrite)." Gates green; 552/0.
+
+**No git mutation.** No commits, no branches, no pushes.
+
+### R156 fix (2 mechanism-attribution sites; counter 0/5)
+
+**R156 result: auditor A PASS, auditor B BLOCK (2). Counter 0/5.**
+
+B found 2 sites that attributed strictness solely to `updateBackTarget` without distinguishing
+bidi/forward (via `#tabIndexFor` directly) from non-bidi backward (via `updateBackTarget`).
+orchestrator:3505 (gesture-release backMorphIsNull comment) and orchestrator:4847 (backMorphValue
+inline). Both fixed to R155-B canonical form: "strict for bidi/forward (via `#tabIndexFor`) and
+for non-bidi backward (via `updateBackTarget`'s overwrite)." A PASSed the post-fix state.
+Gates green; 552/0. **No git mutation.**
+
+### R157 fix (2 sibling residuals: e2e tab-root source + mobile-pager parenthetical; counter 0/5)
+
+**R157 result: auditor A PASS, auditor B BLOCK (2). Counter 0/5.**
+
+B: F1 e2e/reproduce-dv20-search-swipe.spec.ts:77 "tab-root source" (R154/R155 e2e sweep miss)
+fixed to "source with tabs." F2 mobile-pager:25-28 parenthetical "(loose getCurrentTabIndex;
+... non-pill-mapped target)" missing source/target distinction -- the source IS loose
+(getCurrentTabIndex at mount) but the target is strict (#gestureToTabIndex). Fixed to "(the
+source via loose getCurrentTabIndex at mount, the target via strict #gestureToTabIndex; ...
+target that does not resolve to a tab)." A PASSed the post-R156 state. Gates green; 552/0.
 
 **No git mutation.** No commits, no branches, no pushes.

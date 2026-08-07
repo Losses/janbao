@@ -74,7 +74,7 @@ test('Bug 3: leftward swipe from /messages/inbox reaches /search with a real ani
 	// tab-ness for a `targetIsSearch` forward swipe; the settle that takes
 	// over at release latches `startMorph` at that held value and eases
 	// toward the SOURCE's at-rest morph (`destMorph = atRestMorph(outgoing)`,
-	// matching `startMorph` for a from-rest tab-root source so the morph
+	// matching `startMorph` for a from-rest source with tabs so the morph
 	// holds constant and the search-mode flip is carried by the landing),
 	// never toward the destination's at-rest morph (which would snap the
 	// icon and tab-bar in one rAF frame at release). The multi-signal sampler records rootLayerTy / deepLayerTy

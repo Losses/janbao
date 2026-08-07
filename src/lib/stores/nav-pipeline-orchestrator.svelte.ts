@@ -2758,10 +2758,9 @@ export class NavPipelineOrchestrator {
 		const liveDragMorphTargetIsSearch =
 			dragTargetPathname !== null && resolveHeaderMode(dragTargetPathname) === 'search';
 		// Reconstruct the drag's toIdx (matching `#beginGesture`'s logic:
-		// strict `#tabIndexFor` (updateBackTarget overwrites
-		// inputs.toTabIndex before any gesture), strict `#tabIndexFor`
-		// otherwise) so `backMorphIsNull` matches the publication's null
-		// condition.
+		// non-bidi reads `inputs.toTabIndex` (strict via updateBackTarget's
+		// overwrite), bidi uses `#tabIndexFor` directly) so
+		// `backMorphIsNull` matches the publication's null condition.
 		const liveDragMorphToIdx =
 			dragTargetPathname !== null
 				? inputs.bidirectional !== true
@@ -3503,7 +3502,8 @@ export class NavPipelineOrchestrator {
 		// Whether the drag's backMorph was null (morph held at source
 		// at-rest), mirroring `#republishToPager`'s null condition. Uses
 		// `#gestureToTabIndex` (the publication's actual toIdx, which is
-		// strict (updateBackTarget overwrites inputs.toTabIndex to strict before any gesture)).
+		// strict for bidi/forward (via `#tabIndexFor`) and for non-bidi
+		// backward (via `updateBackTarget`'s overwrite)).
 		const backMorphIsNull =
 			(inputs.bidirectional === true && getRouteData(back).tag === 'tab') ||
 			(inputs.fromTabIndex >= 0 && (this.#gestureToTabIndex ?? -1) >= 0);
@@ -3527,14 +3527,14 @@ export class NavPipelineOrchestrator {
 		// `translateY` until the flip. Easing toward the `/search` at-rest
 		// morph (0) during the settle would rotate the icon to back-arrow
 		// then snap it back to hamburger at landing; easing toward the
-		// SOURCE's at-rest morph (1 for a tab-root source) keeps the
+		// SOURCE's at-rest morph (1 for a source with tabs) keeps the
 		// `translateY` at 0% across the whole settle so the flip to
 		// `transform: none` is continuous (R8-A F1: a re-grab whose
 		// `anchor.morph` differs from the source's at-rest must ease
 		// toward the source's at-rest, not hold at `anchor.morph`, or the
 		// landing snaps). For the no-anchor from-rest case
 		// `startMorph === atRestMorph(outgoing)`, so easing toward the
-		// same value is a constant hold (the from-rest tab-root source
+		// same value is a constant hold (the from-rest source with tabs
 		// holds at 1 across the settle and the landing's flip to
 		// `transform: none` is a no-op for the translateY).
 		const destMorph = isDeepToDeep
@@ -4771,7 +4771,8 @@ export class NavPipelineOrchestrator {
 	 *      clause in `backMorphValue` below). Both endpoints resolve to a
 	 *      tab (the source via loose `getCurrentTabIndex` at mount, the
 	 *      target via `#gestureToTabIndex`, which is strict for bidi/
-	 *      forward and for non-bidi backward (both strict via updateBackTarget)), so the drag is
+	 *      forward (via `#tabIndexFor`) and for non-bidi backward (via
+	 *      `updateBackTarget`'s overwrite)), so the drag is
 	 *      tab-to-tab on a
 	 *      non-bidirectional host and the Header stays in hamburger mode
 	 *      end to end.
@@ -4821,7 +4822,7 @@ export class NavPipelineOrchestrator {
 		const toIdx = this.#gestureToTabIndex ?? inputs?.toTabIndex ?? -1;
 		const bidirectional = inputs?.bidirectional === true;
 		// Non-tab target on a bidirectional host: the in-flight target is
-		// not a tab root (backward-to-deep-page, backward-to-thread/compose,
+		// not a tab (backward-to-deep-page, backward-to-thread/compose,
 		// backward-to-`/search`, or forward-last-tab-to-`/search`). The
 		// resolved `toTabIndex` is `#tabIndexFor(to)`, which returns -1 for
 		// any non-tab-root target, so the pill has no destination tab to
@@ -4843,8 +4844,9 @@ export class NavPipelineOrchestrator {
 		// host backward-exit, bidirectional backward-to-non-tab-target, or
 		// bidirectional forward-last-tab-to-`/search`). null when both
 		// source and target resolve to a tab (the target via
-		// `#gestureToTabIndex`, which is strict for bidi/forward and loose
-		// pill-map for non-bidi backward; on a bidirectional host `!targetIsDeepPage`
+		// `#gestureToTabIndex`, which is strict for bidi/forward (via
+		// `#tabIndexFor`) and for non-bidi backward (via `updateBackTarget`'s
+		// overwrite); on a bidirectional host `!targetIsDeepPage`
 		// also nulls tag-`'tab'` targets like `/offline`).
 		const backMorphValue =
 			(bidirectional && !targetIsDeepPage) || (fromIdx >= 0 && toIdx >= 0) ? null : rawDragFraction;
