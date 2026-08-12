@@ -661,14 +661,15 @@
 	let lastUrlQ = untrack(() => urlQ);
 	let composing = $state(false);
 	let debounceId: ReturnType<typeof setTimeout> | 0 = 0;
+	let commitRevision = 0;
 	$effect(() => {
-		if (composing) return;
-		if (urlQ !== lastUrlQ && urlQ !== inputValue) {
-			lastUrlQ = urlQ;
-			inputValue = urlQ;
-		}
+		if (urlQ === lastUrlQ) return;
+		const previousUrlQ = lastUrlQ;
+		lastUrlQ = urlQ;
+		if (!composing && inputValue === previousUrlQ) inputValue = urlQ;
 	});
-	function commitQuery(q: string): void {
+	function commitQuery(q: string, revision: number): void {
+		if (revision !== commitRevision) return;
 		if (composing) return;
 		const params = new SvelteURLSearchParams();
 		if (q) params.set('q', q);
@@ -684,12 +685,16 @@
 	function scheduleCommit(): void {
 		if (composing) return;
 		if (debounceId) clearTimeout(debounceId);
+		const revision = ++commitRevision;
 		// Search-input debounce (coalesce rapid keystrokes), not an
 		// animation-alignment timer; the §5 "no setTimeout in the
 		// animation layer" bar targets the Header's morph / title
 		// animation (publication-driven, not setTimeout), not input
 		// handling.
-		debounceId = setTimeout(() => commitQuery(inputValue), 400);
+		debounceId = setTimeout(() => {
+			debounceId = 0;
+			commitQuery(inputValue, revision);
+		}, 400);
 	}
 	function onInput(): void {
 		scheduleCommit();
@@ -705,7 +710,8 @@
 	function onInputKeydown(event: KeyboardEvent): void {
 		if (event.key === 'Enter' && !composing) {
 			if (debounceId) clearTimeout(debounceId);
-			commitQuery(inputValue);
+			debounceId = 0;
+			commitQuery(inputValue, ++commitRevision);
 		}
 	}
 
