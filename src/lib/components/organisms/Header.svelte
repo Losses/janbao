@@ -1,8 +1,11 @@
 <script lang="ts">
 	/**
-	 * Header Organism - the global sticky App Bar (rendered once in AppShell).
+	 * Header Organism - the global App Bar (rendered once in AppShell).
 	 *
-	 * Desktop: logo + navigation links (Activity / Messages / Search).
+	 * Desktop: logo + navigation links (Activity / Messages / Search). In flow
+	 * (`md:static`); hide-on-scroll does not run.
+	 *
+	 * Mobile: sticky (fixed under `html.fixed-viewport`) with hide-on-scroll.
 	 *
 	 * Mobile: a 2-panel horizontal track (root panel + search panel, mirrors the
 	 * NavPipelineTabHost pattern). The search button is a SINGLE
@@ -770,8 +773,8 @@
 
 <header
 	bind:this={headerEl}
-	class="sticky top-0 z-40 mx-auto w-full max-w-[960px] px-0 md:mt-6 md:px-6"
-	style:transform="translateY({translateY}px)"
+	class="sticky top-0 z-40 mx-auto w-full max-w-[960px] px-0 md:static md:mt-6 md:px-6"
+	style:transform={translateY === 0 ? undefined : `translateY(${translateY}px)`}
 >
 	<div class="bg-neutral text-neutral-content shadow-md md:shadow-none">
 		<!-- Desktop nav -->

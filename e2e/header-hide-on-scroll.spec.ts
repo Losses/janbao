@@ -129,3 +129,39 @@ test('REGRESSION: hash deep-link lands with the Header visible (no landing twitc
 	});
 	expect(ty, 'Header must be visible (translateY === 0) after a hash landing').toBe(0);
 });
+
+/**
+ * Desktop: hide-on-scroll is mobile-only. The Header is in document flow
+ * (`md:static`) and scroll-chrome pins translateY at 0, so window scroll
+ * must not slide it off-screen.
+ */
+test('desktop: Header stays put on window scroll (no hide-on-scroll translateY)', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await page.goto('/');
+	await waitForHydration(page);
+	await page.waitForTimeout(200);
+
+	const before = await page.evaluate(() => {
+		const h = document.querySelector('header');
+		if (!h) return { ty: NaN, position: '' };
+		const m = h.style.transform.match(/translateY\(([-0-9.]+)px\)/);
+		return {
+			ty: m ? Number(m[1]) : 0,
+			position: getComputedStyle(h).position
+		};
+	});
+	expect(before.position, 'desktop Header must not be sticky').toBe('static');
+	expect(before.ty, 'desktop Header rests at translateY 0').toBe(0);
+
+	await page.evaluate(() => window.scrollTo(0, 800));
+	await page.waitForTimeout(200);
+
+	const afterTy = await page.evaluate(() => {
+		const h = document.querySelector('header');
+		const m = h ? h.style.transform.match(/translateY\(([-0-9.]+)px\)/) : null;
+		return m ? Number(m[1]) : 0;
+	});
+	expect(afterTy, 'desktop Header must not hide (translateY stays 0)').toBe(0);
+});
