@@ -124,7 +124,7 @@
  			     Opening a fly-out from inside the drawer stacks overlays and
  			     muddies the page hierarchy, so on mobile each icon navigates
  			     straight to its page. -->
-			<div class="flex items-center gap-1 md:hidden">
+			<div class="flex -translate-x-[6px] items-center gap-1 md:hidden">
 				<a
 					href="/notifications"
 					class="btn btn-ghost btn-xs sidebar-icon-btn relative"
