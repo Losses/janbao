@@ -412,9 +412,7 @@
 				}%); pointer-events: ${morph > 0.5 && tabsIn ? 'auto' : 'none'}`
 	);
 	const layerDownStyle = $derived(
-		`transform: translateY(${(!tabsOut && !tabsIn ? 0 : morph) * 100}%); pointer-events: ${
-			morph < 0.5 ? 'auto' : 'none'
-		}`
+		`transform: translateY(${(!tabsOut && !tabsIn ? 0 : morph) * 100}%); pointer-events: none;`
 	);
 
 	// DEV-ONLY probe. Reads every morph-state dep so Svelte re-runs it on each
@@ -810,58 +808,56 @@
 			<div class="flex w-[200%]" style={trackStyle}>
 				<!-- Panel 0: root/deep content (no search button here; the absolute
 				     <a> below covers the right area in root mode). -->
-				<div class="flex w-1/2 shrink-0 items-center overflow-hidden px-2 py-2">
+				<div class="relative flex h-14 w-1/2 shrink-0 items-center overflow-hidden px-2 py-2">
 					<button
 						type="button"
-						class="flex size-10 shrink-0 items-center justify-center text-neutral-content/80 hover:bg-neutral-content/10 hover:text-neutral-content"
+						class="absolute left-2 top-1/2 z-20 flex size-10 -translate-y-1/2 items-center justify-center text-neutral-content/80 hover:bg-neutral-content/10 hover:text-neutral-content"
 						onclick={onLeftButton}
 						aria-label={isDeep ? tNav['back'] : tNav['menu']}
 					>
 						<BurgerArrowIcon progress={iconProgress} />
 					</button>
-					<div class="relative h-10 flex-1">
-						<div class="absolute inset-0 flex items-center justify-center" style={rootLayerStyle}>
-							<MobileTabBar {t} />
-						</div>
-						<div
-							class="absolute inset-0 flex items-center justify-center px-2"
-							style={layerDownStyle}
-						>
-							{#if titleView.outgoing === titleView.incoming}
-								<!-- Static title (at rest) -->
-								<div class="absolute inset-0 flex items-center justify-center px-2">
-									<span class="w-full truncate text-center font-medium text-neutral-content">
-										{titleView.incoming}
-									</span>
-								</div>
-							{:else}
-								{@const fwd = titleView.direction === 'forward'}
-								<!-- Outgoing title. Transform follows titleView.progress
+					<div class="absolute inset-0 flex items-center justify-center" style={rootLayerStyle}>
+						<MobileTabBar {t} />
+					</div>
+					<div
+						class="absolute inset-0 flex items-center justify-center px-2"
+						style={layerDownStyle}
+					>
+						{#if titleView.outgoing === titleView.incoming}
+							<!-- Static title (at rest) -->
+							<div class="absolute inset-0 flex items-center justify-center px-2">
+								<span class="w-full truncate text-center font-medium text-neutral-content">
+									{titleView.incoming}
+								</span>
+							</div>
+						{:else}
+							{@const fwd = titleView.direction === 'forward'}
+							<!-- Outgoing title. Transform follows titleView.progress
 								     (settleProgress during a settle, backMorph during a drag) frame
 								     by frame; no CSS transition is involved. -->
-								<div
-									class="absolute inset-0 flex items-center justify-center px-2"
-									style="transform: translateY({(fwd ? -titleView.progress : titleView.progress) *
-										100}%);"
-								>
-									<span class="w-full truncate text-center font-medium text-neutral-content">
-										{titleView.outgoing}
-									</span>
-								</div>
+							<div
+								class="absolute inset-0 flex items-center justify-center px-2"
+								style="transform: translateY({(fwd ? -titleView.progress : titleView.progress) *
+									100}%);"
+							>
+								<span class="w-full truncate text-center font-medium text-neutral-content">
+									{titleView.outgoing}
+								</span>
+							</div>
 
-								<!-- Incoming title -->
-								<div
-									class="absolute inset-0 flex items-center justify-center px-2"
-									style="transform: translateY({(fwd
-										? 1 - titleView.progress
-										: -(1 - titleView.progress)) * 100}%);"
-								>
-									<span class="w-full truncate text-center font-medium text-neutral-content">
-										{titleView.incoming}
-									</span>
-								</div>
-							{/if}
-						</div>
+							<!-- Incoming title -->
+							<div
+								class="absolute inset-0 flex items-center justify-center px-2"
+								style="transform: translateY({(fwd
+									? 1 - titleView.progress
+									: -(1 - titleView.progress)) * 100}%);"
+							>
+								<span class="w-full truncate text-center font-medium text-neutral-content">
+									{titleView.incoming}
+								</span>
+							</div>
+						{/if}
 					</div>
 				</div>
 
