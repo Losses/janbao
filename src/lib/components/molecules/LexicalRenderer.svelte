@@ -26,6 +26,11 @@
 		displayName?: string;
 	}
 
+	interface TextPart {
+		kind: 'text' | 'linebreak';
+		value: string;
+	}
+
 	interface LexicalRendererProps {
 		contentJson?: string | null;
 		class?: string;
@@ -110,6 +115,14 @@
 		return segments;
 	}
 
+	function splitTextLinebreaks(text: string): TextPart[] {
+		return text
+			.split(/(\r\n|\r|\n)/u)
+			.map((value) =>
+				/^(\r\n|\r|\n)$/u.test(value) ? { kind: 'linebreak', value } : { kind: 'text', value }
+			);
+	}
+
 	const rootNode = $derived.by(() => {
 		if (!contentJson) return null;
 		try {
@@ -155,32 +168,40 @@
 </script>
 
 {#snippet renderNode(node: LexicalNode)}
-	{#if node.type === 'text'}
-		{#each parseMentions(node.text || '') as segment, idx (idx)}
-			{#if segment.kind === 'mention' && mentionedUsers?.[segment.username]}
-				{@const user = mentionedUsers[segment.username]}
-				<a
-					href="/profile/{user.id}/{generateSlug(user.username)}"
-					class="inline-flex items-center gap-0.5 px-1.5 py-0 mx-0.5 -my-0.5 rounded bg-primary/15 text-primary font-medium hover:bg-primary/25 transition-colors no-underline"
-				>
-					@{user.displayName}
-				</a>
+	{#if node.type === 'linebreak'}
+		<br />
+	{:else if node.type === 'text'}
+		{#each splitTextLinebreaks(node.text || '') as textPart, textPartIndex (textPartIndex)}
+			{#if textPart.kind === 'linebreak'}
+				<br />
 			{:else}
-				{@const hasSpoiler = (node.style ?? '').includes('--janbao-spoiler')}
-				{#if hasSpoiler}
-					<span class={formatTextClasses(node.format, true)}>
-						{segment.text}
-					</span>
-				{:else}
-					<span
-						class="{formatTextClasses(node.format, false)} {(node.format ?? 0) & 16
-							? 'bg-base-300 px-1.5 py-0.5 rounded text-secondary-content'
-							: ''}"
-						style={node.style || undefined}
-					>
-						{segment.text}
-					</span>
-				{/if}
+				{#each parseMentions(textPart.value) as segment, idx (idx)}
+					{#if segment.kind === 'mention' && mentionedUsers?.[segment.username]}
+						{@const user = mentionedUsers[segment.username]}
+						<a
+							href="/profile/{user.id}/{generateSlug(user.username)}"
+							class="inline-flex items-center gap-0.5 px-1.5 py-0 mx-0.5 -my-0.5 rounded bg-primary/15 text-primary font-medium hover:bg-primary/25 transition-colors no-underline"
+						>
+							@{user.displayName}
+						</a>
+					{:else}
+						{@const hasSpoiler = (node.style ?? '').includes('--janbao-spoiler')}
+						{#if hasSpoiler}
+							<span class={formatTextClasses(node.format, true)}>
+								{segment.text}
+							</span>
+						{:else}
+							<span
+								class="{formatTextClasses(node.format, false)} {(node.format ?? 0) & 16
+									? 'bg-base-300 px-1.5 py-0.5 rounded text-secondary-content'
+									: ''}"
+								style={node.style || undefined}
+							>
+								{segment.text}
+							</span>
+						{/if}
+					{/if}
+				{/each}
 			{/if}
 		{/each}
 	{:else if node.type === 'linebreak'}

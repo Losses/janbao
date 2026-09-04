@@ -3,7 +3,8 @@
  * (top App Bar) should be translated out of view to reclaim vertical space
  * while reading. Driven by scroll direction: scrolling down hides the chrome,
  * scrolling up (or being near the top of the page) reveals it. The same
- * direction/threshold logic runs on all viewports (mobile and desktop);
+ * direction/threshold logic is mobile-only (`max-width: 767px`). Desktop
+ * keeps the Header in flow (`md:static`) with `translateY` pinned at 0;
  * the reactive outputs are read by the Header (hide-on-scroll), the FAB layer
  * (hide-on-scroll), and NavPipelineHost (scroll-container override).
  *
@@ -64,6 +65,8 @@ interface ScrollChromeStore {
 }
 
 const TOP_THRESHOLD = 8; // px from top below which chrome always shows
+// Same query as DualColumnLayout / NavPipelineHost / viewport-lock callers.
+const MOBILE_BREAKPOINT = '(max-width: 767px)';
 
 let translateY = $state(0);
 // Seeded to the mobile header height; Header's ResizeObserver reports the real
@@ -84,6 +87,10 @@ let containerEl: HTMLElement | null = null;
 // A nested scroller that claimed the scroll source. Read by the pipeline host's
 // sole setScrollContainer $effect as `override ?? centerEl`.
 let overrideEl = $state<HTMLElement | null>(null);
+// Seeded false (SSR / pre-start). `start()` syncs from matchMedia and
+// re-syncs on viewport resize so a mobile→desktop flip cannot leave a
+// leftover hide translateY on the Header.
+let mobile = false;
 
 /** Current scroll position from whichever element is the active scroll source. */
 function readY(): number {
@@ -92,6 +99,11 @@ function readY(): number {
 
 function evaluate(): void {
 	const y = readY();
+	if (!mobile) {
+		lastY = y;
+		if (translateY !== 0) translateY = 0;
+		return;
+	}
 	if (frozen) {
 		// Keep lastY fresh so the post-unfreeze evaluate sees no stale delta, but do
 		// not move the header - the navigation's intermediate scroll is not user
@@ -128,6 +140,13 @@ function onScroll(): void {
 function start(): void {
 	if (started || typeof window === 'undefined') return;
 	started = true;
+	const mq = window.matchMedia(MOBILE_BREAKPOINT);
+	const syncMobile = () => {
+		mobile = mq.matches;
+		if (!mobile && translateY !== 0) translateY = 0;
+	};
+	syncMobile();
+	mq.addEventListener('change', syncMobile);
 	lastY = readY();
 	window.addEventListener('scroll', onScroll, { passive: true });
 }
