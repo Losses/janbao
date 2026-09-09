@@ -72,7 +72,7 @@
 			</a>
 
 			<!-- Icon Button Row (desktop): tooltip popovers -->
-			<div class="hidden items-center gap-1 md:flex">
+			<div class="hidden -translate-x-[6px] items-center gap-1 md:flex">
 				<!-- Notifications -->
 				<NotificationTooltip
 					isOpen={openTooltip === 'notifications'}
