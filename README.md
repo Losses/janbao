@@ -91,6 +91,31 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
+## Server operations
+
+The bare-metal Bun deployment can install `scripts/janbaoctl` as
+`/usr/local/sbin/janbaoctl`. Run it as root:
+
+```sh
+janbaoctl status
+janbaoctl backup
+janbaoctl stop
+janbaoctl start
+janbaoctl restart
+janbaoctl deploy                   # origin/master
+janbaoctl deploy <commit-or-tag>
+janbaoctl rollback <commit-or-tag>
+janbaoctl rollback <commit-or-tag> <database-backup>
+janbaoctl backups
+janbaoctl restore <database-backup>
+```
+
+Deployments create a verified SQLite snapshot before changing revisions. Local snapshots
+are stored in `/var/backups/janbao`, with the newest 14 retained by default. They contain
+the database only; pCloud `/Janbao/avatars` and `/Janbao/attachments` require a separate
+backup. Configuration paths and retention can be overridden with the `JANBAO_*`
+environment variables declared at the top of the script.
+
 ## Data import
 
 Configure pCloud credentials first:
