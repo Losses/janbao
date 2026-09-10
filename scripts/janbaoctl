@@ -1,0 +1,330 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+APP_DIR=${JANBAO_APP_DIR:-/var/www/janbao}
+APP_USER=${JANBAO_APP_USER:-www-data}
+SERVICE=${JANBAO_SERVICE:-in.huox.service}
+DB_PATH=${JANBAO_DB_PATH:-$APP_DIR/.local.db}
+BACKUP_DIR=${JANBAO_BACKUP_DIR:-/var/backups/janbao}
+BACKUP_KEEP=${JANBAO_BACKUP_KEEP:-14}
+BUN=${JANBAO_BUN:-/var/www/.bun/bin/bun}
+HEALTH_URL=${JANBAO_HEALTH_URL:-http://127.0.0.1:3000/}
+LOCK_FILE=${JANBAO_LOCK_FILE:-/run/lock/janbaoctl.lock}
+LAST_BACKUP=''
+
+usage() {
+	cat <<'EOF'
+Usage: janbaoctl <command> [arguments]
+
+Commands:
+  status                       Show service, revision, database, and HTTP status
+  backup                       Create and verify a local SQLite snapshot
+  backups                      List local database snapshots
+  start                        Start the application
+  stop                         Stop the application
+  restart                      Restart and health-check the application
+  deploy [git-ref]             Deploy a ref (default: origin/master)
+  rollback <git-ref> [backup]  Deploy an old ref, optionally restoring a DB snapshot
+  restore <backup>             Restore a DB snapshot and restart the application
+  logs [lines]                 Show recent service logs (default: 100 lines)
+
+Environment overrides use the JANBAO_* variables defined at the top of this script.
+Database snapshots do not contain pCloud avatars or attachments.
+EOF
+}
+
+die() {
+	printf 'error: %s\n' "$*" >&2
+	exit 1
+}
+
+require_root() {
+	[[ $EUID -eq 0 ]] || die 'run this command as root'
+}
+
+as_app() {
+	runuser -u "$APP_USER" -- "$@"
+}
+
+lock_operations() {
+	require_root
+	exec 9>"$LOCK_FILE"
+	flock -n 9 || die 'another janbaoctl operation is running'
+}
+
+ensure_paths() {
+	[[ -d $APP_DIR/.git ]] || die "not a Git repository: $APP_DIR"
+	[[ -f $DB_PATH ]] || die "database not found: $DB_PATH"
+	[[ -x $BUN ]] || die "Bun not found or not executable: $BUN"
+}
+
+ensure_clean_tree() {
+	local changes
+	changes=$(as_app git -C "$APP_DIR" status --porcelain)
+	if [[ -n $changes ]]; then
+		printf 'error: Git worktree is not clean:\n%s\n' "$changes" >&2
+		exit 1
+	fi
+}
+
+ensure_backup_dir() {
+	install -d -m 700 -o "$APP_USER" -g "$APP_USER" "$BACKUP_DIR"
+}
+
+prune_backups() {
+	local -a files
+	local remove_count file excluded=${1:-}
+	shopt -s nullglob
+	files=("$BACKUP_DIR"/janbao-*.db)
+	shopt -u nullglob
+	remove_count=$((${#files[@]} - BACKUP_KEEP))
+	if ((remove_count > 0)); then
+		for file in "${files[@]}"; do
+			[[ $file == "$excluded" ]] && continue
+			rm -f -- "$file"
+			((--remove_count == 0)) && break
+		done
+	fi
+}
+
+backup_db() {
+	local stamp revision destination temporary result
+	ensure_paths
+	ensure_backup_dir
+	stamp=$(date -u +%Y%m%d-%H%M%S)
+	revision=$(as_app git -C "$APP_DIR" rev-parse --short=12 HEAD 2>/dev/null || printf 'unknown')
+	destination="$BACKUP_DIR/janbao-$stamp-$revision.db"
+	[[ ! -e $destination ]] || destination="${destination%.db}-$$.db"
+	temporary="$destination.tmp"
+
+	printf 'Creating database snapshot: %s\n' "$destination"
+	rm -f -- "$temporary"
+	if ! as_app sqlite3 "$DB_PATH" ".backup '$temporary'"; then
+		rm -f -- "$temporary"
+		die 'SQLite backup failed'
+	fi
+	result=$(as_app sqlite3 "$temporary" 'PRAGMA integrity_check;')
+	if [[ $result != ok ]]; then
+		rm -f -- "$temporary"
+		die "snapshot integrity check failed: $result"
+	fi
+	mv -- "$temporary" "$destination"
+	chmod 600 "$destination"
+	chown "$APP_USER:$APP_USER" "$destination"
+	prune_backups "${1:-}"
+	LAST_BACKUP=$destination
+	printf '%s\n' "$destination"
+}
+
+resolve_backup() {
+	local requested=$1 candidate resolved
+	if [[ $requested == */* ]]; then
+		candidate=$requested
+	else
+		candidate=$BACKUP_DIR/$requested
+	fi
+	resolved=$(realpath -e -- "$candidate") || die "backup not found: $requested"
+	case "$resolved" in
+		"$BACKUP_DIR"/janbao-*.db) printf '%s\n' "$resolved" ;;
+		*) die "backup must be a janbao snapshot under $BACKUP_DIR" ;;
+	esac
+}
+
+restore_db_file() {
+	local snapshot=$1 result staging
+	result=$(as_app sqlite3 "$snapshot" 'PRAGMA integrity_check;') || return 1
+	[[ $result == ok ]] || die "backup integrity check failed: $result"
+	staging="$DB_PATH.restore"
+	install -m 600 -o "$APP_USER" -g "$APP_USER" "$snapshot" "$staging" || return 1
+	rm -f -- "$DB_PATH-wal" "$DB_PATH-shm" || return 1
+	mv -f -- "$staging" "$DB_PATH" || return 1
+}
+
+health_check() {
+	local attempt
+	for attempt in {1..20}; do
+		if curl --fail --silent --output /dev/null "$HEALTH_URL"; then
+			printf 'Health check passed: %s\n' "$HEALTH_URL"
+			return 0
+		fi
+		sleep 1
+	done
+	return 1
+}
+
+build_revision() {
+	local revision=$1
+	printf 'Checking out %s\n' "$revision"
+	as_app git -C "$APP_DIR" checkout --detach --force "$revision" || return 1
+	(
+		cd "$APP_DIR" || exit 1
+		runuser -u "$APP_USER" -- env HOME="$(getent passwd "$APP_USER" | cut -d: -f6)" "$BUN" install --frozen-lockfile &&
+		runuser -u "$APP_USER" -- env HOME="$(getent passwd "$APP_USER" | cut -d: -f6)" "$BUN" run build
+	)
+}
+
+resolve_revision() {
+	local ref=$1
+	as_app git -C "$APP_DIR" rev-parse --verify "$ref^{commit}"
+}
+
+recover_deployment() {
+	local previous=$1 snapshot=$2
+	printf 'Deployment failed; restoring revision %s and %s\n' "$previous" "$snapshot" >&2
+	systemctl stop "$SERVICE" || true
+	build_revision "$previous"
+	restore_db_file "$snapshot"
+	systemctl start "$SERVICE"
+	health_check || die 'automatic rollback completed, but the service is still unhealthy'
+}
+
+deploy_revision() {
+	local requested=$1 previous target snapshot
+	ensure_paths
+	ensure_clean_tree
+	previous=$(resolve_revision HEAD)
+	printf 'Fetching origin...\n'
+	as_app git -C "$APP_DIR" fetch --prune origin
+	target=$(resolve_revision "$requested") || die "Git ref not found: $requested"
+	if [[ $target == "$previous" ]]; then
+		printf 'Revision is already deployed: %s\n' "$target"
+		return
+	fi
+	backup_db
+	snapshot=$LAST_BACKUP
+
+	if ! build_revision "$target"; then
+		printf 'Build failed; restoring previous working tree. Service was not restarted.\n' >&2
+		build_revision "$previous" || die 'failed to rebuild the previous revision'
+		exit 1
+	fi
+
+	if ! systemctl restart "$SERVICE" || ! health_check; then
+		recover_deployment "$previous" "$snapshot"
+		die "deployment of $target failed and was rolled back"
+	fi
+	printf 'Deployed %s (previous: %s, database snapshot: %s)\n' "$target" "$previous" "$snapshot"
+}
+
+rollback_revision() {
+	local requested=$1 requested_backup=${2:-} previous target safety_snapshot snapshot
+	ensure_paths
+	ensure_clean_tree
+	previous=$(resolve_revision HEAD)
+	as_app git -C "$APP_DIR" fetch --prune origin
+	target=$(resolve_revision "$requested") || die "Git ref not found: $requested"
+	if [[ -n $requested_backup ]]; then
+		snapshot=$(resolve_backup "$requested_backup")
+	fi
+	backup_db "${snapshot:-}"
+	safety_snapshot=$LAST_BACKUP
+
+	if ! build_revision "$target"; then
+		build_revision "$previous" || die 'rollback build failed and previous revision could not be rebuilt'
+		die "failed to build rollback revision: $target"
+	fi
+
+	if [[ -n $requested_backup ]]; then
+		systemctl stop "$SERVICE"
+		if ! restore_db_file "$snapshot" || ! systemctl start "$SERVICE"; then
+			recover_deployment "$previous" "$safety_snapshot"
+			die "rollback to $target failed; restored $previous"
+		fi
+	else
+		if ! systemctl restart "$SERVICE"; then
+			recover_deployment "$previous" "$safety_snapshot"
+			die "rollback to $target failed; restored $previous"
+		fi
+	fi
+
+	if ! health_check; then
+		recover_deployment "$previous" "$safety_snapshot"
+		die "rollback to $target failed; restored $previous"
+	fi
+	printf 'Rolled back to %s (safety snapshot: %s)\n' "$target" "$safety_snapshot"
+}
+
+show_status() {
+	local revision db_size http_status
+	revision=$(as_app git -C "$APP_DIR" rev-parse HEAD 2>/dev/null || printf 'unknown')
+	db_size=$(du -h "$DB_PATH" 2>/dev/null | cut -f1 || printf 'unknown')
+	http_status=$(curl --silent --output /dev/null --write-out '%{http_code}' "$HEALTH_URL" || printf 'unreachable')
+	printf 'Service:  %s\n' "$(systemctl is-active "$SERVICE" 2>/dev/null || true)"
+	printf 'Revision: %s\n' "$revision"
+	printf 'Database: %s (%s)\n' "$DB_PATH" "$db_size"
+	printf 'HTTP:     %s (%s)\n' "$http_status" "$HEALTH_URL"
+}
+
+command=${1:-help}
+case "$command" in
+	help | -h | --help)
+		usage
+		;;
+	status)
+		require_root
+		ensure_paths
+		show_status
+		;;
+	backup)
+		lock_operations
+		backup_db
+		;;
+	backups)
+		require_root
+		ensure_backup_dir
+		printf 'Local database snapshots (oldest first):\n'
+		shopt -s nullglob
+		printf '%s\n' "$BACKUP_DIR"/janbao-*.db
+		shopt -u nullglob
+		;;
+	start)
+		lock_operations
+		systemctl start "$SERVICE"
+		health_check || die 'service started but health check failed'
+		;;
+	stop)
+		lock_operations
+		systemctl stop "$SERVICE"
+		;;
+	restart)
+		lock_operations
+		systemctl restart "$SERVICE"
+		health_check || die 'service restarted but health check failed'
+		;;
+	deploy | update)
+		lock_operations
+		deploy_revision "${2:-origin/master}"
+		;;
+	rollback)
+		[[ -n ${2:-} ]] || die 'rollback requires a Git ref or commit'
+		lock_operations
+		rollback_revision "$2" "${3:-}"
+		;;
+	restore)
+		[[ -n ${2:-} ]] || die 'restore requires a backup filename or path'
+		lock_operations
+		ensure_paths
+		snapshot=$(resolve_backup "$2")
+		backup_db "$snapshot"
+		safety_snapshot=$LAST_BACKUP
+		systemctl stop "$SERVICE"
+		if ! restore_db_file "$snapshot" || ! systemctl start "$SERVICE" || ! health_check; then
+			printf 'Restore failed; restoring safety snapshot %s\n' "$safety_snapshot" >&2
+			systemctl stop "$SERVICE" || true
+			restore_db_file "$safety_snapshot"
+			systemctl start "$SERVICE"
+			health_check || die 'safety snapshot restored, but the service is still unhealthy'
+			die 'database restore failed and was rolled back'
+		fi
+		;;
+	logs)
+		require_root
+		lines=${2:-100}
+		[[ $lines =~ ^[0-9]+$ ]] || die 'log line count must be an integer'
+		journalctl -u "$SERVICE" -n "$lines" --no-pager
+		;;
+	*)
+		die "unknown command: $command"
+		;;
+esac
