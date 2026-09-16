@@ -160,7 +160,9 @@ build_revision() {
 	(
 		cd "$APP_DIR" || exit 1
 		runuser -u "$APP_USER" -- env HOME="$(getent passwd "$APP_USER" | cut -d: -f6)" "$BUN" install --frozen-lockfile &&
-		runuser -u "$APP_USER" -- env HOME="$(getent passwd "$APP_USER" | cut -d: -f6)" "$BUN" run build
+		runuser -u "$APP_USER" -- rm -rf build &&
+		runuser -u "$APP_USER" -- env HOME="$(getent passwd "$APP_USER" | cut -d: -f6)" "$BUN" run build:node &&
+		[[ -f build/index.js ]]
 	)
 }
 
@@ -188,8 +190,7 @@ deploy_revision() {
 	as_app git -C "$APP_DIR" fetch --prune origin
 	target=$(resolve_revision "$requested") || die "Git ref not found: $requested"
 	if [[ $target == "$previous" ]]; then
-		printf 'Revision is already deployed: %s\n' "$target"
-		return
+		printf 'Revision is already checked out; rebuilding %s\n' "$target"
 	fi
 	backup_db
 	snapshot=$LAST_BACKUP
