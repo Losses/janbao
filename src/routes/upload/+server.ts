@@ -1,135 +1,100 @@
 import { json } from '@sveltejs/kit';
-import { jsonError } from '$lib/server/errors';
-import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
-import { eq } from 'drizzle-orm';
-import { attachments, users } from '$lib/server/db/schema';
-import {
-	resolvePcloudConfig,
-	pcloudUploadStream,
-	pcloudMove,
-	pcloudDelete,
-	pcloudMkcol,
-	pcloudIsConfigured
-} from '$lib/server/pcloud';
-import { detectImageFormat, mimeForFormat, type ImageFormat } from '$lib/server/image';
-import { buildAvatarUrl, extFromMime } from '$lib/utils/image';
+import { and, eq, isNull } from 'drizzle-orm';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
-import { commitUploadedFile } from '$lib/server/utils/upload-commit';
+import type { RequestHandler } from './$types';
+import { jsonError } from '$lib/server/errors';
+import { attachments, users } from '$lib/server/db/schema';
+import {
+	attachmentStoragePath,
+	avatarStoragePath,
+	mediaStorageConfigurationError,
+	resolveMediaStorageConfig
+} from '$lib/server/media-storage';
+import {
+	createAvatarUploadLock,
+	isValidAvatarFileId,
+	detectImageFormat,
+	mimeForFormat,
+	publicAvatarFileId
+} from '$lib/server/image';
+import { buildAvatarUrl, extFromMime } from '$lib/utils/image';
+import { publishMediaUpload } from '$lib/server/media-upload';
 
 const MAX_AVATAR = 1 * 1024 * 1024;
 const MAX_ATTACHMENT = 5 * 1024 * 1024;
 
-// Per-isolate flag: the /tmp upload folder is ensured once and reused.
-let tmpEnsured = false;
+class UploadTooLargeError extends Error {}
+
+async function readUpload(body: ReadableStream<Uint8Array>, maxSize: number): Promise<Uint8Array> {
+	const reader = body.getReader();
+	const chunks: Uint8Array[] = [];
+	let size = 0;
+	while (true) {
+		const result = await reader.read();
+		if (result.done) break;
+		size += result.value.byteLength;
+		if (size > maxSize) {
+			await reader.cancel();
+			throw new UploadTooLargeError('upload exceeds size limit');
+		}
+		chunks.push(result.value);
+	}
+	const bytes = new Uint8Array(size);
+	let offset = 0;
+	for (const chunk of chunks) {
+		bytes.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return bytes;
+}
 
 /**
- * Streaming image upload (raw request body, not multipart). The body is piped
- * through a TransformStream that counts bytes (aborts on size limit), sniffs the
- * real type from the first chunk (the client Content-Type is not trusted), and
- * hashes incrementally - all while forwarding bytes straight to pCloud with no
- * full buffering. The file lands in /Janbao/tmp/<uuid> first, then MOVEs to its
- * final path once the sha/type are known (so a rejected upload never overwrites
- * an existing file). Avatars → /avatars/<userId>; attachments → /attachments/<sha>.
- *
- * The publish (DB write) and the MOVE are coordinated via commitUploadedFile
- * (DB-first, MOVE-second, with compensating rollback of the row on MOVE
- * failure). DB-first avoids the failure mode where a MOVE succeeds and the DB
- * write then throws, leaving storage and the DB out of sync; the compensation
- * always undoes our own DB write, never a content-addressed file that may be
- * referenced by a pre-existing row for the same sha.
+ * Accept a raw image body, validate its real format and size, hash it, then
+ * publish it to the configured media provider. Uploads are bounded to 5 MB, so
+ * buffering gives S3 SigV4 a stable payload while keeping memory usage capped.
+ * Avatar publication locks the user's DB row with a token that still names the
+ * previous content hash, replaces the fixed user-ID object, then publishes the
+ * new hash after storage succeeds. Pending locks cannot be taken over by uploads.
  */
 export const POST: RequestHandler = async (event) => {
 	const user = event.locals.user;
 	const t = event.locals.t;
-	if (!user) {
-		return jsonError(t, 'common.unauthorized', 401);
-	}
-	const db = event.locals.db;
+	if (!user) return jsonError(t, 'common.unauthorized', 401);
 
 	const isAvatar = event.request.headers.get('x-upload-type') === 'avatar';
 	const maxSize = isAvatar ? MAX_AVATAR : MAX_ATTACHMENT;
-
-	// Early size gate via Content-Length (rejects oversized uploads before streaming).
 	const declared = Number(event.request.headers.get('content-length') ?? 0);
-	if (declared && declared > maxSize) {
-		return jsonError(t, 'upload.fileTooLarge', 400);
-	}
+	if (declared && declared > maxSize) return jsonError(t, 'upload.fileTooLarge', 400);
+	if (!event.request.body) return jsonError(t, 'upload.noFile', 400);
 
-	const cfg = resolvePcloudConfig({ ...env, ...(event.platform?.env ?? {}) });
-	if (!pcloudIsConfigured(cfg)) {
-		return jsonError(t, 'upload.uploadFailed', 502);
-	}
-	if (!event.request.body) {
-		return jsonError(t, 'upload.noFile', 400);
-	}
-
-	const hasher = sha256.create();
-	let seen = 0;
-	let format: ImageFormat = 'other';
-	let tooBig = false;
-	// Accumulate up to 12 bytes before type-sniffing: webp/avif magic needs all
-	// 12, and a sub-12-byte first chunk would otherwise mis-detect as 'other'.
-	const sniff = new Uint8Array(12);
-	let sniffFill = 0;
-	const transform = new TransformStream<Uint8Array, Uint8Array>({
-		transform(chunk, controller) {
-			seen += chunk.byteLength;
-			if (seen > maxSize) {
-				tooBig = true;
-				controller.error(new Error('upload exceeds size limit'));
-				return;
-			}
-			if (format === 'other' && sniffFill < sniff.byteLength) {
-				const take = Math.min(sniff.byteLength - sniffFill, chunk.byteLength);
-				sniff.set(chunk.subarray(0, take), sniffFill);
-				sniffFill += take;
-				if (sniffFill >= sniff.byteLength) {
-					format = detectImageFormat(sniff);
-				}
-			}
-			hasher.update(chunk);
-			controller.enqueue(chunk);
-		}
-	});
-	const piped = event.request.body.pipeThrough(transform);
-
-	const tmpName = crypto.randomUUID();
-	try {
-		// /tmp is created once and never removed; skip the WebDAV round-trip on
-		// every subsequent upload in this isolate.
-		if (!tmpEnsured) {
-			await pcloudMkcol(cfg, '/tmp');
-			tmpEnsured = true;
-		}
-		await pcloudUploadStream(cfg, '/tmp', tmpName, piped);
-	} catch (err) {
-		console.error('[Upload API Error - stream]:', err);
-		await pcloudDelete(cfg, `/tmp/${tmpName}`).catch(() => {});
-		if (tooBig) return jsonError(t, 'upload.fileTooLarge', 400);
+	const cfg = resolveMediaStorageConfig({ ...env, ...(event.platform?.env ?? {}) });
+	const configurationError = mediaStorageConfigurationError(cfg);
+	if (configurationError) {
+		console.error(`[media-storage] ${configurationError}`);
 		return jsonError(t, 'upload.uploadFailed', 502);
 	}
 
-	// Stream finished  - verify the real type (reject without touching the final file).
-	const mime = mimeForFormat(format);
-	if (!mime) {
-		await pcloudDelete(cfg, `/tmp/${tmpName}`).catch(() => {});
-		return jsonError(t, 'upload.invalidType', 400);
+	let bytes: Uint8Array;
+	try {
+		bytes = await readUpload(event.request.body, maxSize);
+	} catch (error) {
+		if (error instanceof UploadTooLargeError) return jsonError(t, 'upload.fileTooLarge', 400);
+		console.error('[Upload API Error - read]:', error);
+		return jsonError(t, 'upload.uploadFailed', 502);
 	}
 
+	const mime = mimeForFormat(detectImageFormat(bytes.subarray(0, 12)));
+	if (!mime) return jsonError(t, 'upload.invalidType', 400);
+
+	const sha = bytesToHex(sha256(bytes));
+	const db = event.locals.db;
+
 	try {
-		const sha = bytesToHex(hasher.digest());
 		if (isAvatar) {
-			// avatarFileId is the pure content sha; avatarUrl is built server-side
-			// here and returned ready for the client to render (the client never
-			// constructs avatar URLs itself). The URL extension is derived from the
-			// freshly-detected MIME, so the type info is not coupled into the id.
-			// Capture the prior avatar columns so the MOVE-failure rollback can
-			// restore them; the prior file at /avatars/<userId> is untouched by a
-			// failed MOVE, so restoring the columns also restores DB/file
-			// consistency.
-			const [prev] = await db
+			const path = avatarStoragePath(user.id);
+			const [previous] = await db
 				.select({
 					avatarFileId: users.avatarFileId,
 					avatarContentType: users.avatarContentType
@@ -137,35 +102,76 @@ export const POST: RequestHandler = async (event) => {
 				.from(users)
 				.where(eq(users.id, user.id))
 				.limit(1);
-			await commitUploadedFile({
+			if (!previous) throw new Error('avatar user not found');
+			if (previous.avatarFileId && !isValidAvatarFileId(previous.avatarFileId)) {
+				return jsonError(t, 'upload.uploadFailed', 409);
+			}
+			const publishedFileId = publicAvatarFileId(previous.avatarFileId);
+			const pendingFileId = createAvatarUploadLock(publishedFileId);
+			await publishMediaUpload(cfg, {
+				path,
+				bytes,
+				contentType: mime,
+				hasPreviousObject: previous.avatarFileId !== null,
+				previousContentType: previous.avatarContentType,
+				ownsLock: async () => {
+					const [current] = await db
+						.select({ fileId: users.avatarFileId })
+						.from(users)
+						.where(eq(users.id, user.id))
+						.limit(1);
+					return current?.fileId === pendingFileId;
+				},
 				dbWrite: async () => {
-					await db
+					const previousAvatarMatches = previous.avatarFileId
+						? eq(users.avatarFileId, previous.avatarFileId)
+						: isNull(users.avatarFileId);
+					const prepared = await db
+						.update(users)
+						.set({ avatarFileId: pendingFileId })
+						.where(and(eq(users.id, user.id), previousAvatarMatches))
+						.returning({ id: users.id });
+					if (prepared.length === 0) throw new Error('avatar changed during upload');
+				},
+				finalizeDbWrite: async () => {
+					const finalized = await db
 						.update(users)
 						.set({ avatarFileId: sha, avatarContentType: mime })
-						.where(eq(users.id, user.id));
+						.where(and(eq(users.id, user.id), eq(users.avatarFileId, pendingFileId)))
+						.returning({ id: users.id });
+					if (finalized.length === 0) {
+						const [current] = await db
+							.select({ avatarFileId: users.avatarFileId })
+							.from(users)
+							.where(eq(users.id, user.id))
+							.limit(1);
+						if (current?.avatarFileId !== sha) {
+							throw new Error('avatar publication token was lost');
+						}
+					}
 				},
-				move: () => pcloudMove(cfg, `/tmp/${tmpName}`, `/avatars/${user.id}`),
 				rollbackDbWrite: async () => {
-					await db
+					const rolledBack = await db
 						.update(users)
 						.set({
-							avatarFileId: prev?.avatarFileId ?? null,
-							avatarContentType: prev?.avatarContentType ?? null
+							avatarFileId: publishedFileId,
+							avatarContentType: previous.avatarContentType
 						})
-						.where(eq(users.id, user.id));
+						.where(and(eq(users.id, user.id), eq(users.avatarFileId, pendingFileId)))
+						.returning({ id: users.id });
+					return rolledBack.length > 0;
 				}
 			});
 			const avatarUrl = buildAvatarUrl(user.id, sha, mime);
 			return json({ fileId: sha, url: `/avatar/${user.id}/${sha}`, avatarUrl });
 		}
-		// Attachment URLs carry a real extension (baked into post content here) so
-		// CDN edge caches treat them as static assets without a cache-everything
-		// rule. The attachment route strips this cosmetic suffix to recover the sha.
-		// Track whether THIS request actually inserted the row (vs an existing row
-		// for the same sha from a prior or concurrent upload of identical bytes);
-		// the rollback only deletes what we added, never a row another upload owns.
+
+		const path = attachmentStoragePath(sha);
 		let insertedSha: string | null = null;
-		await commitUploadedFile({
+		await publishMediaUpload(cfg, {
+			path,
+			bytes,
+			contentType: mime,
 			dbWrite: async () => {
 				const inserted = await db
 					.insert(attachments)
@@ -174,7 +180,6 @@ export const POST: RequestHandler = async (event) => {
 					.returning({ fileId: attachments.fileId });
 				if (inserted.length > 0) insertedSha = sha;
 			},
-			move: () => pcloudMove(cfg, `/tmp/${tmpName}`, `/attachments/${sha}`),
 			rollbackDbWrite: async () => {
 				if (insertedSha !== null) {
 					await db.delete(attachments).where(eq(attachments.fileId, insertedSha));
@@ -183,14 +188,8 @@ export const POST: RequestHandler = async (event) => {
 		});
 		const ext = extFromMime(mime) ?? 'webp';
 		return json({ fileId: sha, url: `/attachment/${sha}.${ext}` });
-	} catch (err) {
-		console.error('[Upload API Error - move/db]:', err);
-		// commitUploadedFile has already undone the DB write on a MOVE failure, so
-		// no destination cleanup is needed here. The only leftover is the tmp file
-		// (present whenever dbWrite threw before the MOVE consumed it); delete it
-		// defensively. After a successful MOVE it is already gone and this is a
-		// no-op.
-		await pcloudDelete(cfg, `/tmp/${tmpName}`).catch(() => {});
+	} catch (error) {
+		console.error('[Upload API Error - storage/db]:', error);
 		return jsonError(t, 'upload.uploadFailed', 502);
 	}
 };

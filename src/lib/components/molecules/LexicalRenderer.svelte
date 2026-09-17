@@ -204,8 +204,6 @@
 				{/each}
 			{/if}
 		{/each}
-	{:else if node.type === 'linebreak'}
-		<br />
 	{:else if node.type === 'mention'}
 		{@const mentionUser = mentionedUsers?.[node.username ?? '']}
 		{#if mentionUser}

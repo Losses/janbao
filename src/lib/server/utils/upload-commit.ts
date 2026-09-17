@@ -3,6 +3,8 @@
  * rollback. Named (not inline) per the no-inline-typing rule.
  */
 export type AsyncVoid = () => Promise<void>;
+/** `false` means another writer already took the lock, so storage must not be restored. */
+export type AsyncRollback = () => Promise<boolean | void>;
 
 /**
  * Commit plan for {@link commitUploadedFile}: the DB publish, the storage MOVE,
@@ -14,7 +16,7 @@ export interface UploadCommitPlan {
 	/** MOVE the streamed tmp file to its final content-addressed pCloud path. */
 	move: AsyncVoid;
 	/** Undo the DB write on MOVE failure (restore prior values, or delete the row). */
-	rollbackDbWrite: AsyncVoid;
+	rollbackDbWrite: AsyncRollback;
 }
 
 /**

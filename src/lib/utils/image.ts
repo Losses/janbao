@@ -40,6 +40,6 @@ export function buildAvatarUrl(
 	avatarFileId: string | null,
 	contentType: string | null
 ): string | null {
-	if (!avatarFileId) return null;
+	if (!avatarFileId || avatarFileId.startsWith('upload:')) return null;
 	return `/avatar/${userId}/${avatarFileId}.${extFromMime(contentType) ?? 'webp'}`;
 }

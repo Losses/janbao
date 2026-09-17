@@ -15,14 +15,14 @@
  *          on-disk state each run, skip ids already done / known-deleted.
  *          Never touches any DB.
  *
- *   sql    Parse the recrawled profiles, upload their avatars to pCloud, and
+ *   sql    Parse the recrawled profiles, upload their avatars to media storage, and
  *          emit recrawl-profiles.sql (INSERT OR IGNORE for new users, guarded
  *          UPDATE for placeholders / avatar gaps). The local .local.db is read
  *          ONLY to classify INSERT-vs-UPDATE; the .sql is applied to prod.
  *
  *   avatars  Convert (cwebp/gif2webp) + upload EVERY crawled user's avatar to
- *          pCloud /avatars/<id>, mirroring import-data §4.7. Idempotent (lists
- *          pCloud /avatars first, skips what's there). Safe to run in PARALLEL
+ *          media storage, mirroring import-data section 4.7. Replaces files at
+ *          their existing user-ID paths. Safe to run in PARALLEL
  *          with a `crawl` (own log file) and to re-run after it for new avatars.
  *
  * Usage:
@@ -35,7 +35,7 @@
  *   JANBAO_CONCURRENCY (4), JANBAO_DELAY (500), JANBAO_DRY=1, JANBAO_NO_AVATARS=1,
  *   JANBAO_PROFILE_PATH (default '/profile/{id}/activities'), JANBAO_SANITY_LIVE_ID (default 9),
  *   JANBAO_LIMIT (0 = no cap; cap targets to first N, for test slices).
- * Env (sql):   LOCAL_DB_PATH (default .local.db) + PCLOUD_* (uploads; skip if unset).
+ * Env (sql):   LOCAL_DB_PATH (default .local.db) + media provider config.
  */
 import {
 	readdirSync,
@@ -51,13 +51,17 @@ import { createHash, randomUUID } from 'crypto';
 import { createClient } from '@libsql/client';
 import {
 	parseProfileHtml,
-	convertToWebp,
 	ensureWebpTools,
 	mapPool,
 	getErrorMessage,
 	type PoolTask
 } from './import-shared';
-import { resolvePcloudConfig, pcloudUploadBytes, pcloudListFolder } from '../src/lib/server/pcloud';
+import {
+	mediaListFolder,
+	mediaStorageConfigurationError,
+	resolveMediaStorageConfig
+} from '../src/lib/server/media-storage';
+import { importAvatar } from './media-import';
 
 const BASE = 'https://janbao.net';
 // Separate log per mode so a parallel `avatars` run can't interleave with a
@@ -290,11 +294,14 @@ function loadDeleted(dataDir: string): Set<number> {
 function avatarFileFor(dataDir: string, userId: number): string | null {
 	const dir = join(dataDir, 'profile-avatars');
 	if (!existsSync(dir)) return null;
-	const prefix = `${userId}-`;
-	for (const f of readdirSync(dir)) {
-		if (f.startsWith(prefix)) return join(dir, f);
+	const matches = readdirSync(dir)
+		.filter((file) => Number(file.match(/^(\d+)-/)?.[1]) === userId)
+		.sort();
+	if (matches.length > 1) {
+		log(`  [avatar-source-conflict] user ${userId}: ${matches.join(', ')}`);
+		return null;
 	}
-	return null;
+	return matches[0] ? join(dir, matches[0]) : null;
 }
 
 /** Parse the sha out of a profile-avatars/<id>-<sha>.<ext> filename. */
@@ -406,8 +413,8 @@ async function processId(userId: number, st: CrawlState): Promise<RecrawlRecord>
 	const src = extractProfilePhoto(html);
 	if (!src) {
 		// No custom avatar: reuse the canonical noicon file (the source noicon.png
-		// is no longer downloadable) so the user gets avatar_file_id='1' + the
-		// noicon on pCloud, matching existing imported noicon users. Falls back to
+		// is no longer downloadable) so the user gets a hashed avatar ID and the
+		// noicon in media storage. Falls back to
 		// NULL (letter fallback) only if the canonical noicon is somehow missing.
 		if (existsSync(st.noiconCanonical)) {
 			const avatarsDir = join(st.dataDir, 'profile-avatars');
@@ -622,7 +629,8 @@ interface SqlEmit {
 function emitForUser(
 	userId: number,
 	profile: ReturnType<typeof parseProfileHtml>,
-	hasAvatar: boolean,
+	avatarFileId: string | null,
+	avatarContentType: string | null,
 	dbUser: DbUserRow | undefined,
 	nowEpoch: number,
 	out: SqlEmit
@@ -633,8 +641,8 @@ function emitForUser(
 	const signup = toEpoch(profile.signupTime, nowEpoch);
 	const lastActive = toEpoch(profile.lastActiveTime, signup);
 	const views = profile.viewCount ?? 0;
-	const avatarFid = hasAvatar ? "'1'" : 'NULL';
-	const avatarCt = hasAvatar ? "'image/webp'" : 'NULL';
+	const avatarFid = sqlVal(avatarFileId);
+	const avatarCt = sqlVal(avatarContentType);
 	const placeholderEmail = `email LIKE '%@placeholder.janbao.net'`;
 	const incomplete = `(bio IS NULL OR bio = '' OR ${placeholderEmail} OR avatar_file_id IS NULL OR avatar_file_id = '')`;
 
@@ -696,47 +704,49 @@ async function runSql(dataDir: string): Promise<void> {
 	const recIds = loadRecrawlIds(dataDir);
 	log(`sql: ${recIds.size} recrawled ids to emit SQL for; local DB has ${dbUsers.size} users.`);
 
-	// pCloud avatar upload (skip cleanly if not configured).
-	const cfg = resolvePcloudConfig(process.env as Record<string, string>);
-	const pcloudOn = cfg.username.length > 0 && cfg.password.length > 0;
-	const onCloud = pcloudOn ? await pcloudListFolder(cfg, '/avatars') : new Set<string>();
-	if (!pcloudOn)
-		log('sql: PCLOUD_* not set → skipping avatar upload (SQL still references /avatars/<id>).');
-	const uploadList: number[] = [];
+	// Media upload is optional in SQL mode so SQL can still be generated offline.
+	const mediaStorage = resolveMediaStorageConfig(process.env);
+	const storageError = mediaStorageConfigurationError(mediaStorage);
+	const storageOn = storageError === null;
+	const onCloud = storageOn ? await mediaListFolder(mediaStorage, 'avatars') : new Set<string>();
+	if (storageError) {
+		log(`sql: media storage unavailable (${storageError}); skipping avatar upload.`);
+	}
 
 	const out: SqlEmit = { statements: [], inserts: 0, updates: 0 };
 	const nowEpoch = Math.floor(Date.now() / 1000);
 
-	for (const userId of [...recIds].sort((a, b) => a - b)) {
-		const profilePath = join(dataDir, 'profiles', String(userId), 'profile.html');
-		if (!existsSync(profilePath)) continue; // deleted/unexpected - no SQL
-		const html = readFileSync(profilePath, 'utf-8');
-		const profile = parseProfileHtml(html);
-		const avFile = avatarFileFor(dataDir, userId);
-		const hasAvatar = !!avFile;
-		if (hasAvatar && pcloudOn && !onCloud.has(String(userId))) uploadList.push(userId);
-		emitForUser(userId, profile, hasAvatar, dbUsers.get(userId), nowEpoch, out);
-	}
-
-	// Upload new avatars (32-way). Idempotent via the onCloud set.
-	if (uploadList.length > 0 && pcloudOn) {
-		log(`sql: uploading ${uploadList.length} avatars to pCloud /avatars (32-way)...`);
-		let uploaded = 0;
-		await mapPool(uploadList, 32, async (userId) => {
+	await mapPool(
+		[...recIds].sort((a, b) => a - b),
+		32,
+		async (userId) => {
+			const profilePath = join(dataDir, 'profiles', String(userId), 'profile.html');
+			if (!existsSync(profilePath)) return; // deleted/unexpected - no SQL
+			const html = readFileSync(profilePath, 'utf-8');
+			const profile = parseProfileHtml(html);
 			const avFile = avatarFileFor(dataDir, userId);
-			if (!avFile) return;
-			try {
-				const webp = convertToWebp(avFile);
-				await pcloudUploadBytes(cfg, '/avatars', String(userId), webp);
-				onCloud.add(String(userId));
-			} catch (e: unknown) {
-				log(`  [avatar-upload-fail] user ${userId}: ${getErrorMessage(e)}`);
+			let avatarFileId: string | null = null;
+			let avatarContentType: string | null = null;
+			if (avFile && storageOn) {
+				try {
+					const importedAvatar = await importAvatar(mediaStorage, userId, avFile, onCloud);
+					avatarFileId = importedAvatar.fileId;
+					avatarContentType = importedAvatar.contentType;
+				} catch (e: unknown) {
+					log(`  [avatar-upload-fail] user ${userId}: ${getErrorMessage(e)}`);
+				}
 			}
-			uploaded++;
-			if (uploaded % 200 === 0) log(`  avatars uploaded: ${uploaded}/${uploadList.length}`);
-		});
-		log(`sql: avatar upload complete (${uploaded ? uploaded : 0}).`);
-	}
+			emitForUser(
+				userId,
+				profile,
+				avatarFileId,
+				avatarContentType,
+				dbUsers.get(userId),
+				nowEpoch,
+				out
+			);
+		}
+	);
 
 	const header =
 		`-- recrawl-profiles.sql (generated ${RUN_TIMESTAMP})\n` +
@@ -772,22 +782,23 @@ async function runPool<T>(items: T[], concurrency: number, fn: PoolTask<T>): Pro
 }
 
 /**
- * Convert + upload EVERY crawled user's avatar to pCloud /avatars/<id> (webp),
+ * Convert and upload every crawled user's avatar to the configured media store,
  * mirroring import-data §4.7: read the profile-avatars/ files, cwebp/gif2webp
- * each, PUT to WebDAV, 32-way. Idempotent via a pCloud /avatars listing (skip
+ * each, upload 32-way. Idempotent via an avatar object listing (skip
  * what's already there), so it's safe to run in parallel with a `crawl` and to
  * re-run after the crawl to pick up newly-fetched avatars. Logs to its own file
  * (recrawl-avatars.log) to avoid interleaving with a concurrent crawl's log.
  */
 async function runAvatars(dataDir: string): Promise<void> {
 	ensureWebpTools();
-	const cfg = resolvePcloudConfig(process.env as Record<string, string>);
-	if (!cfg.username || !cfg.password) {
-		log('avatars: PCLOUD_* not set - cannot upload. Aborting.');
+	const mediaStorage = resolveMediaStorageConfig(process.env);
+	const storageError = mediaStorageConfigurationError(mediaStorage);
+	if (storageError) {
+		log(`avatars: media storage unavailable (${storageError}). Aborting.`);
 		process.exit(1);
 	}
-	log(`avatars: listing pCloud ${cfg.basePath}/avatars (to skip already-uploaded)...`);
-	const onCloud = await pcloudListFolder(cfg, '/avatars');
+	log(`avatars: listing ${mediaStorage.provider} avatars (to skip already-uploaded)...`);
+	const onCloud = await mediaListFolder(mediaStorage, 'avatars');
 	const avIds = [...scanAvatarIds(dataDir)].sort((a, b) => a - b);
 	const uploadList = avIds.filter((id) => !onCloud.has(String(id)));
 	log(
@@ -805,14 +816,10 @@ async function runAvatars(dataDir: string): Promise<void> {
 		const avFile = avatarFileFor(dataDir, userId);
 		if (!avFile) return;
 		try {
-			const webp = convertToWebp(avFile);
-			// pCloud WebDAV closes sockets under concurrent PUT load; retry the
-			// (transient) upload failures so a burst of 4xx/socket-close doesn't
-			// leave a user avatarless.
+			// Retry transient provider failures so a burst does not leave users avatarless.
 			for (let attempt = 1; attempt <= 3; attempt++) {
 				try {
-					await pcloudUploadBytes(cfg, '/avatars', String(userId), webp);
-					onCloud.add(String(userId));
+					await importAvatar(mediaStorage, userId, avFile, onCloud);
 					break;
 				} catch (e: unknown) {
 					if (attempt === 3) throw e;

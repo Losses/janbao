@@ -28,7 +28,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	}
 
 	const body: ProfileEditBody = await request.json();
-	const { displayName, email, showEmail, languagePreference, username, avatarFileId, bio } = body;
+	const { displayName, email, showEmail, languagePreference, username, bio } = body;
 
 	const updates: Partial<ProfileEditBody> = {};
 
@@ -116,11 +116,15 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		updates.username = trimmed;
 	}
 
-	if (avatarFileId !== undefined) {
-		updates.avatarFileId = avatarFileId;
-	}
-
 	if (Object.keys(updates).length === 0) {
+		if ('avatarFileId' in body) {
+			const [current] = await locals.db
+				.select({ fileId: users.avatarFileId })
+				.from(users)
+				.where(eq(users.id, user.id))
+				.limit(1);
+			if (current?.fileId && current.fileId === body.avatarFileId) return json({ success: true });
+		}
 		return jsonError(t, 'common.noFieldsToUpdate', 400);
 	}
 

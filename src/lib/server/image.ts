@@ -9,6 +9,49 @@
  */
 export type ImageFormat = 'gif' | 'png' | 'jpeg' | 'webp' | 'avif' | 'bmp' | 'other';
 
+/** Uploaded SHA-256 IDs plus the legacy imported-avatar marker. */
+export function isValidAvatarFileId(value: unknown): value is string {
+	return typeof value === 'string' && /^(?:[a-f0-9]{64}|1)$/.test(value);
+}
+
+const AVATAR_UPLOAD_LOCK_PREFIX = 'upload:';
+const AVATAR_UPLOAD_LOCK_PATTERN =
+	/^upload:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):([a-f0-9]{64}|1|-)$/i;
+
+export interface AvatarUploadLock {
+	token: string;
+	previousFileId: string | null;
+}
+
+/** CAS lock stored in `avatarFileId` while the user-ID object is being replaced. */
+export function createAvatarUploadLock(previousFileId: string | null): string {
+	const previous = previousFileId && isValidAvatarFileId(previousFileId) ? previousFileId : '-';
+	return `${AVATAR_UPLOAD_LOCK_PREFIX}${crypto.randomUUID()}:${previous}`;
+}
+
+const LEGACY_AVATAR_UPLOAD_LOCK_PATTERN =
+	/^upload:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+export function parseAvatarUploadLock(value: unknown): AvatarUploadLock | null {
+	if (typeof value !== 'string') return null;
+	const match = AVATAR_UPLOAD_LOCK_PATTERN.exec(value);
+	if (match) {
+		return {
+			token: match[1],
+			previousFileId: match[2] === '-' ? null : match[2]
+		};
+	}
+	const legacy = LEGACY_AVATAR_UPLOAD_LOCK_PATTERN.exec(value);
+	if (!legacy) return null;
+	return { token: legacy[1], previousFileId: null };
+}
+
+/** Pending publication states must never be exposed as public avatar versions. */
+export function publicAvatarFileId(value: unknown): string | null {
+	if (isValidAvatarFileId(value)) return value;
+	return null;
+}
+
 export function detectImageFormat(head: Uint8Array): ImageFormat {
 	if (head.length >= 3 && head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46) {
 		return 'gif'; // GIF8

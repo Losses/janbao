@@ -5,7 +5,14 @@ import { getLocalDb } from '../src/lib/server/db';
 import * as schema from '../src/lib/server/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { GHOST_USER_ID, SYSTEM_USER_ID } from '../src/lib/server/constants';
-import { resolvePcloudConfig, pcloudUploadBytes, pcloudListFolder } from '../src/lib/server/pcloud';
+import {
+	attachmentStoragePath,
+	mediaListFolder,
+	mediaStorageConfigurationError,
+	mediaUploadBytes,
+	resolveMediaStorageConfig
+} from '../src/lib/server/media-storage';
+import { importAvatar, type ImportedAvatar } from './media-import';
 import { ensureAndBackfillAll } from '../src/lib/server/search/backfill';
 import {
 	decodeHtmlEntities,
@@ -1133,22 +1140,18 @@ async function main() {
 	const mentionMap = buildMentionMap(dataDir);
 	const imageMaps = buildImageMaps(dataDir);
 
-	// pCloud config (WebDAV). Avatars + attachments are stored under
-	// cfg.basePath (e.g. /Janbao) and served by the /avatar and /attachment
-	// reverse-proxy routes.
-	const pcloudCfg = resolvePcloudConfig(process.env as Record<string, string>);
-	if (!pcloudCfg.username || !pcloudCfg.password) {
-		console.error(
-			'pCloud credentials not configured. Run: bun scripts/setup-pcloud.ts (writes PCLOUD_* to .env).'
-		);
+	const mediaStorage = resolveMediaStorageConfig(process.env);
+	const storageError = mediaStorageConfigurationError(mediaStorage);
+	if (storageError) {
+		console.error(`Media storage is not configured: ${storageError}`);
 		process.exit(1);
 	}
-	console.log(`pCloud: ${pcloudCfg.host}${pcloudCfg.basePath}`);
+	console.log(`Media storage: ${mediaStorage.provider}`);
 
-	// "ls before migration": the sets already on pCloud, so a re-run skips
+	// List existing objects before migration so a re-run skips
 	// re-converting/re-uploading them. Refreshed as we upload.
-	const attachmentsOnCloud = await pcloudListFolder(pcloudCfg, '/attachments');
-	const avatarsOnCloud = await pcloudListFolder(pcloudCfg, '/avatars');
+	const attachmentsOnCloud = await mediaListFolder(mediaStorage, 'attachments');
+	const avatarsOnCloud = await mediaListFolder(mediaStorage, 'avatars');
 
 	// Image src URLs referenced by imported content. The converter records them
 	// without uploading; a bulk parallel upload phase runs after all content is
@@ -1873,7 +1876,12 @@ async function main() {
 			try {
 				const rel = entry.file.startsWith('data/') ? entry.file.slice(5) : entry.file;
 				const webp = convertToWebp(join(dataDir, rel));
-				await pcloudUploadBytes(pcloudCfg, '/attachments', entry.sha256, webp);
+				await mediaUploadBytes(
+					mediaStorage,
+					attachmentStoragePath(entry.sha256),
+					webp,
+					'image/webp'
+				);
 				attachmentsOnCloud.add(entry.sha256);
 			} catch (e: unknown) {
 				conflicts.push({
@@ -1902,47 +1910,69 @@ async function main() {
 	});
 
 	// 4.7 Upload avatars in parallel (32-way). Filename = userId; sets the
-	// avatarFileId flag + avatarContentType. Already-on-cloud avatars still get
-	// their DB flag set (covers re-runs after a schema change).
+	// content hash + avatarContentType after the user-ID object is refreshed.
 	//
 	// Avatar source: the `profile-avatars/` directory itself - each file is named
 	// `<userId>-<hash>.<ext>`, so readdir + parse the filename gives every crawled
 	// user's avatar directly (one file per user). No JSON index needed.
-	const avatarEntries: AvatarEntry[] = [];
+	const avatarEntriesByUser = new Map<string, AvatarEntry>();
+	const duplicateAvatarUsers = new Set<string>();
 	const profileAvatarsDir = join(dataDir, 'profile-avatars');
 	if (existsSync(profileAvatarsDir)) {
-		for (const fname of readdirSync(profileAvatarsDir)) {
+		for (const fname of readdirSync(profileAvatarsDir).sort()) {
 			const m = fname.match(/^(\d+)-/);
 			if (!m) continue;
-			avatarEntries.push({ userId: m[1], file: `profile-avatars/${fname}`, contentType: null });
+			m[1] = String(Number(m[1]));
+			if (!Number.isSafeInteger(Number(m[1]))) continue;
+			if (avatarEntriesByUser.has(m[1])) {
+				duplicateAvatarUsers.add(m[1]);
+				avatarEntriesByUser.delete(m[1]);
+				continue;
+			}
+			if (!duplicateAvatarUsers.has(m[1])) {
+				avatarEntriesByUser.set(m[1], {
+					userId: m[1],
+					file: `profile-avatars/${fname}`,
+					contentType: null
+				});
+			}
 		}
 	}
+	for (const userId of duplicateAvatarUsers) {
+		conflicts.push({ type: 'duplicate_avatar_sources', userId });
+	}
+	const avatarEntries = [...avatarEntriesByUser.values()];
 	console.log(`Uploading avatars (32-way parallel): ${avatarEntries.length}...`);
 	if (avatarEntries.length > 0) {
 		let avatarDone = 0;
 		await mapPool(avatarEntries, 32, async (rec) => {
-			if (!avatarsOnCloud.has(rec.userId)) {
-				try {
-					const rel = rec.file.startsWith('data/') ? rec.file.slice(5) : rec.file;
-					const webp = convertToWebp(join(dataDir, rel));
-					await pcloudUploadBytes(pcloudCfg, '/avatars', rec.userId, webp);
-					avatarsOnCloud.add(rec.userId);
-				} catch (e: unknown) {
-					conflicts.push({
-						type: 'avatar_upload_error',
-						userId: rec.userId,
-						error: getErrorMessage(e)
-					});
-					avatarDone++;
-					return;
-				}
+			let importedAvatar: ImportedAvatar;
+			try {
+				const rel = rec.file.startsWith('data/') ? rec.file.slice(5) : rec.file;
+				importedAvatar = await importAvatar(
+					mediaStorage,
+					rec.userId,
+					join(dataDir, rel),
+					avatarsOnCloud
+				);
+			} catch (e: unknown) {
+				conflicts.push({
+					type: 'avatar_upload_error',
+					userId: rec.userId,
+					error: getErrorMessage(e)
+				});
+				avatarDone++;
+				return;
 			}
 			const avatarUserId = Number(rec.userId);
 			if (Number.isFinite(avatarUserId) && existingUserIds.has(avatarUserId)) {
 				try {
 					await db
 						.update(schema.users)
-						.set({ avatarFileId: '1', avatarContentType: 'image/webp' })
+						.set({
+							avatarFileId: importedAvatar.fileId,
+							avatarContentType: importedAvatar.contentType
+						})
 						.where(eq(schema.users.id, avatarUserId));
 				} catch (e: unknown) {
 					conflicts.push({

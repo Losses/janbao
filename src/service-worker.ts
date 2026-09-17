@@ -74,7 +74,7 @@ self.addEventListener('fetch', (event: FetchEvent) => {
 	const { request } = event;
 	if (request.method !== 'GET') return;
 	const url = new URL(request.url);
-	// Only handle same-origin GETs; cross-origin (avatars, pCloud media, push
+	// Only handle same-origin GETs; cross-origin (CDN media, push
 	// services) passes through untouched.
 	if (url.origin !== self.location.origin) return;
 	// Never cache API responses.
@@ -159,6 +159,7 @@ async function focusOrOpenClient(targetUrl: string): Promise<void> {
 // SW stays alive until the write finishes without blocking the response.
 async function cacheResponse(request: Request, response: Response): Promise<void> {
 	if (!response.ok || response.type !== 'basic') return;
+	if (/\b(?:no-store|private)\b/i.test(response.headers.get('cache-control') ?? '')) return;
 	const cache = await caches.open(CACHE);
 	await cache.put(request, response);
 }

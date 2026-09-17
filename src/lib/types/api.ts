@@ -178,7 +178,6 @@ export interface ProfileEditBody {
 	showEmail?: boolean;
 	languagePreference?: string;
 	username?: string;
-	avatarFileId?: string;
 	bio?: string;
 }
 
