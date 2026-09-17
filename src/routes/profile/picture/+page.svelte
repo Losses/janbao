@@ -71,20 +71,8 @@
 				return;
 			}
 
-			// Update user's avatarFileId via profile edit endpoint
-			const editRes = await fetch('/api/profile/edit', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ avatarFileId: uploadResult.fileId })
-			});
-
-			const editResult: ApiResult = await editRes.json();
-			if (editResult.success) {
-				avatarUrl = uploadResult.avatarUrl ?? null;
-				message = { type: 'success', text: t.common.success };
-			} else {
-				message = { type: 'error', text: editResult.error || t.common.error };
-			}
+			avatarUrl = uploadResult.avatarUrl ?? null;
+			message = { type: 'success', text: t.common.success };
 		} catch {
 			message = { type: 'error', text: t.auth.networkError };
 		}

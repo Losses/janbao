@@ -9,6 +9,8 @@
  * Region endpoints: US `webdav.pcloud.com`, EU `ewebdav.pcloud.com`.
  */
 
+import type { StorageObjectResult } from './storage-types';
+
 export interface PcloudConfig {
 	username: string;
 	password: string;
@@ -59,13 +61,6 @@ function webdavUrl(cfg: PcloudConfig, path: string): string {
 	return `https://${cfg.host}${fullPath(cfg, path)}`;
 }
 
-export interface PcloudStreamResult {
-	/** Streaming body, passed straight through to the client. */
-	body: ReadableStream<Uint8Array>;
-	/** Upstream response headers (e.g. content-length) the caller may forward. */
-	headers: Headers;
-}
-
 /**
  * GET a file from pCloud and return its streaming body plus the upstream
  * response headers for reverse-proxying. Streams straight through (pCloud →
@@ -75,7 +70,7 @@ export interface PcloudStreamResult {
  * other validators onto their own response. WebDAV serves the file in a single
  * request in both local and Worker runtimes.
  */
-export async function pcloudStream(cfg: PcloudConfig, path: string): Promise<PcloudStreamResult> {
+export async function pcloudStream(cfg: PcloudConfig, path: string): Promise<StorageObjectResult> {
 	const res = await fetch(webdavUrl(cfg, path), { headers: { Authorization: basicAuth(cfg) } });
 	if (!res.ok) throw new Error(`pCloud WebDAV GET ${path} -> HTTP ${res.status}`);
 	if (!res.body) throw new Error(`pCloud WebDAV GET ${path} -> empty body`);
@@ -191,7 +186,9 @@ export async function pcloudExists(
 		method: 'HEAD',
 		headers: { Authorization: basicAuth(cfg) }
 	});
-	return res.ok;
+	if (res.status === 404) return false;
+	if (!res.ok) throw new Error(`pCloud WebDAV HEAD ${path} -> HTTP ${res.status}`);
+	return true;
 }
 
 /**

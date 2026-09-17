@@ -20,6 +20,16 @@ interface PlatformEnv {
 	PCLOUD_PASSWORD?: string;
 	PCLOUD_WEBDAV_HOST?: string;
 	PCLOUD_BASE_PATH?: string;
+	MEDIA_STORAGE_PROVIDER?: string;
+	S3_ENDPOINT?: string;
+	S3_BUCKET?: string;
+	S3_ACCESS_KEY_ID?: string;
+	S3_SECRET_ACCESS_KEY?: string;
+	S3_REGION?: string;
+	S3_SESSION_TOKEN?: string;
+	S3_FORCE_PATH_STYLE?: string;
+	S3_PREFIX?: string;
+	S3_CDN_BASE_URL?: string;
 	DISCUSSIONS_LIMIT?: string;
 	PAGINATION_LIMIT?: string;
 	ACTIVITIES_LIMIT?: string;
