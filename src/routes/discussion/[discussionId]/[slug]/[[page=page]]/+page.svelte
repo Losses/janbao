@@ -238,8 +238,25 @@
 		}
 	});
 
-	function handlePageChange(newPage: number) {
-		goto(`/discussion/${discussion.id}/${discussion.slug}/p${newPage}`);
+	async function handlePageChange(newPage: number) {
+		if (newPage === currentPage) return;
+		cancelLanding?.();
+		cancelLanding = null;
+		const pathname = `/discussion/${discussion.id}/${discussion.slug}/p${newPage}`;
+		// A reused host must not schedule restoration of this page's old offset.
+		pageCache.capture(pathname, undefined, { scrollTop: 0 });
+		await goto(pathname, {
+			noScroll: true
+		});
+		if (window.matchMedia(MOBILE_BREAKPOINT).matches) {
+			const pane = document.querySelector('.detail-scroll-pane');
+			pane?.scrollTo({ top: 0, behavior: 'instant' });
+			detailScrollTop = 0;
+			pageCache.capture(page.url.pathname, undefined, { scrollTop: 0 });
+		} else {
+			window.scrollTo({ top: 0, behavior: 'instant' });
+		}
+		getScrollChromeStore().show();
 	}
 
 	/**
@@ -415,8 +432,17 @@
 
 	function quickReply(username: string, displayName: string) {
 		if (replyEditor) {
+			// Position the mobile pane before focus opens the keyboard. Starting a
+			// smooth scroll after focus competes with native caret scrolling while
+			// the visual viewport is shrinking.
+			const isMobile = window.matchMedia(MOBILE_BREAKPOINT).matches;
+			if (isMobile) {
+				cancelLanding?.();
+				cancelLanding = null;
+				if (replyComposerElem) scrollToElement(replyComposerElem, 'instant');
+			}
 			replyEditor.insertMention(username, displayName);
-			if (replyComposerElem) {
+			if (!isMobile && replyComposerElem) {
 				scrollToElement(replyComposerElem);
 			}
 		}

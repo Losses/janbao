@@ -901,8 +901,8 @@
 		<!-- Editor Area -->
 		<div
 			bind:this={editorAreaElem}
-			class="relative overflow-y-auto {disabled ? 'opacity-60 pointer-events-none' : ''}"
-			style="max-height: {editorMaxHeight}"
+			class="editor-scroll-area relative {disabled ? 'opacity-60 pointer-events-none' : ''}"
+			style="--editor-max-height: {editorMaxHeight}"
 		>
 			<ContentEditable
 				ariaLabel={resolvedPlaceholder}
@@ -963,6 +963,19 @@
 </div>
 
 <style>
+	.editor-scroll-area {
+		overflow-y: auto;
+		max-height: var(--editor-max-height);
+	}
+
+	@media (max-width: 767px) {
+		/* The page pane owns mobile scrolling, including long editor content. */
+		.editor-scroll-area {
+			overflow: visible;
+			max-height: none;
+		}
+	}
+
 	.janbao-rich-editor {
 		border-radius: var(--radius-field, 0.5rem);
 	}

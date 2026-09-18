@@ -876,7 +876,7 @@
 						oncompositionend={onCompositionEnd}
 						onkeydown={onInputKeydown}
 						placeholder={t.search.placeholder}
-						class="input input-sm h-9 flex-1 border-0 bg-neutral-content/10 text-neutral-content placeholder:text-neutral-content/50 focus:outline-none"
+						class="header-search-input input input-sm h-9 min-w-0 flex-1 border-0 bg-neutral-content/10 text-neutral-content placeholder:text-neutral-content/50 focus:outline-none"
 						autocomplete="off"
 					/>
 					<button
@@ -922,3 +922,15 @@
 	onSelect={onSelectSort}
 	onClose={() => (filterOpen = false)}
 />
+
+<style>
+	.header-search-input {
+		font-size: 14px;
+		-webkit-text-size-adjust: 100%;
+		text-size-adjust: 100%;
+	}
+
+	.header-search-input::placeholder {
+		font-size: inherit;
+	}
+</style>
