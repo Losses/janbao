@@ -9,7 +9,7 @@
 	// (next tab) gestures; tab taps are pipeline commits intercepted by
 	// `onSvelteKitBeforeNavigate`.
 
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, untrack } from 'svelte';
 	import { browser } from '$app/environment';
 	import { page } from '$app/state';
 	import { afterNavigate } from '$app/navigation';
@@ -140,16 +140,20 @@
 	$effect(() => {
 		const el = activeIndex === 0 ? section0El : activeIndex === 1 ? section1El : section2El;
 		if (!el) return;
-		const saved = pageCache.get(MOBILE_TABS[activeIndex].href)?.scrollTop ?? 0;
+		const pathname = MOBILE_TABS[activeIndex].href;
+		// Cache writes from onscroll must not trigger another scroll restoration.
+		const saved = untrack(() => pageCache.get(pathname)?.scrollTop ?? 0);
+		let restoreFrame = 0;
 		if (saved > 0) {
 			el.scrollTop = saved;
-			requestAnimationFrame(() => {
+			restoreFrame = requestAnimationFrame(() => {
 				const current =
 					activeIndex === 0 ? section0El : activeIndex === 1 ? section1El : section2El;
 				if (current === el) el.scrollTop = saved;
 			});
 		}
 		scrollChrome.setScrollContainer(el);
+		return () => cancelAnimationFrame(restoreFrame);
 	});
 
 	// Sync activeIndex from the URL.

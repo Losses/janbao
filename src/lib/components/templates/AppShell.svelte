@@ -54,7 +54,7 @@
 	});
 </script>
 
-<div class="flex min-h-screen flex-col" class:appbar-title={appbarHasTitle}>
+<div class="app-shell flex min-h-screen flex-col" class:appbar-title={appbarHasTitle}>
 	<Header {t} onToggleDrawer={drawer.toggle} />
 	<FloatingActionButtonLayer {t} />
 	<div class="flex min-w-0 flex-1 flex-col app-shell-content">{@render children()}</div>
