@@ -18,7 +18,7 @@
 
 	import type { Snippet } from 'svelte';
 	import type { VoidHandler } from '$lib/types/handlers';
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, untrack } from 'svelte';
 	import { browser } from '$app/environment';
 	import { page } from '$app/state';
 	import { getRouteData } from '$lib/utils/route-data';
@@ -217,12 +217,6 @@
 	// the slide reveals a different tab (crossTabPanelPath), that panel
 	// is fresh content, so the back-target's cached scroll does not apply.
 	const pageCache = getPageCacheStore();
-	const leftScrollTop = $derived(
-		crossTabPanelPath === null ? (pageCache.get(resolvedLeftHref)?.scrollTop ?? 0) : 0
-	);
-	const currentScrollTop = $derived(
-		page.url.pathname ? (pageCache.get(page.url.pathname)?.scrollTop ?? 0) : 0
-	);
 
 	// The track is always 3 panels: LEFT (the back-target's panel, or
 	// another tab's real panel / skeleton), CENTER (the conversation), and
@@ -239,8 +233,7 @@
 	const discussionsBuildPageUrl: PageUrlBuilder = (p) => (p === 1 ? '/' : `/discussions/p${p}`);
 
 	// Restore a panel's cached scroll position: set it immediately and
-	// again on the next frame. Setting scrollTop programmatically
-	// does not fire `onscroll`, so this cannot loop. Returns a rAF cleanup
+	// again on the next frame. Returns a rAF cleanup
 	// so an `$effect` can use it directly.
 	const restoreScroll = (el: HTMLElement | null, top: number): VoidHandler => {
 		if (el && top > 0) {
@@ -252,8 +245,22 @@
 		}
 		return () => {};
 	};
-	$effect(() => restoreScroll(leftEl, leftScrollTop));
-	$effect(() => restoreScroll(centerEl, currentScrollTop));
+	// Restore on element/route changes only. Scroll events update the cache;
+	// subscribing to those writes would reset scrollTop during native momentum
+	// and abort smooth scrolling on its first frame.
+	$effect(() => {
+		const pathname = resolvedLeftHref;
+		const top =
+			crossTabPanelPath === null ? untrack(() => pageCache.get(pathname)?.scrollTop ?? 0) : 0;
+		return restoreScroll(leftEl, top);
+	});
+	$effect(() => {
+		const pathname = page.url.pathname;
+		return restoreScroll(
+			centerEl,
+			untrack(() => pageCache.get(pathname)?.scrollTop ?? 0)
+		);
+	});
 	// When the slide reveals a different tab's panel (crossTabPanelPath),
 	// the `<section>` element is stable across the content swap, so its
 	// scrollTop would otherwise inherit the inbox preview's restored

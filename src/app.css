@@ -159,6 +159,12 @@ header nav {
    SSR-correct (no flash of the duplicate). Desktop keeps the in-page title
    because the bar shows the logo + nav there, not the title. */
 @media (max-width: 767px) {
+	/* Keep native panning while disabling pinch and double-tap page zoom. */
+	html,
+	body {
+		touch-action: pan-x pan-y;
+	}
+
 	.appbar-title .page-title {
 		display: none;
 	}
@@ -245,15 +251,17 @@ header nav {
 		left: 0;
 		right: 0;
 		bottom: 0;
-		overflow: hidden;
+		overflow: clip;
 		width: 100%;
 		height: 100%;
 	}
 
-	html.fixed-viewport .min-h-screen {
+	/* Clip does not create a second scroll container that focus can move. */
+	html.fixed-viewport .app-shell {
+		position: relative;
 		height: 100% !important;
 		min-height: 100% !important;
-		overflow: hidden;
+		overflow: clip;
 	}
 
 	html.fixed-viewport .app-shell-content {
@@ -282,7 +290,7 @@ header nav {
 	   away as the user scrolls down, so the thread fills the space the Header
 	   vacated: no gap. */
 	html.fixed-viewport header {
-		position: fixed;
+		position: absolute;
 		top: 0;
 		left: 0;
 		right: 0;
